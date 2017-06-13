@@ -14,6 +14,7 @@ module SK.Core.Lexer
   , SP(..)
   , SPState(..)
   , runSP
+  , runSP'
   , evalSP
   , showErrorSP
   ) where
@@ -21,6 +22,8 @@ module SK.Core.Lexer
 -- From 'base'
 import Control.Monad (ap, liftM)
 import Data.Maybe (fromMaybe)
+
+import Control.Monad.Trans.Except
 
 -- Internal
 import SK.Core.SPState
@@ -208,6 +211,12 @@ runSP :: SP a -> Maybe FilePath -> String -> Either String (a, SPState)
 runSP sp target input =
   let st = initialSPState { targetFile = target }
   in  runAlex input (unSP sp st)
+
+runSP' :: Monad m => SP a -> Maybe FilePath -> String
+      -> ExceptT String m (a, SPState)
+runSP' sp target input = case runSP sp target input of
+  Right (a, st) -> return (a, st)
+  Left err      -> throwE err
 
 evalSP :: SP a -> Maybe FilePath -> String -> Either String a
 evalSP sp target input = fmap fst (runSP sp target input)

@@ -2,17 +2,12 @@
 -- | Module for macros.
 module SK.Core.Macro
   ( macroexpand
-  , evalExpanded
-  , returnE
+  , setExpanderSettings
+  , specialForms
   ) where
 
 -- base
 import Unsafe.Coerce
-
--- transformers
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.State
 
 -- ghc-paths
 import GHC.Paths (libdir)
@@ -21,6 +16,7 @@ import GHC.Paths (libdir)
 import SK.Core.Form
 import SK.Core.GHC
 import SK.Core.FormParser (evalBuilder, p_expr, showLoc)
+import SK.Core.SKC
 
 -- Macro expansion
 -- ~~~~~~~~~~~~~~~
@@ -32,82 +28,6 @@ import SK.Core.FormParser (evalBuilder, p_expr, showLoc)
 --
 -- Hy separates the loading of modules for runtime with `import',
 -- between the loading of modules for macro expansion with `require'.
-
-newtype Expanded a = Expanded {
-  unExpanded :: StateT [(String, LMacro)] (ExceptT String Ghc) a
-} deriving (Functor, Applicative, Monad, MonadIO)
-
-runExpanded :: Expanded a -> [(String, LMacro)]
-            -> Ghc (Either String (a, [(String, LMacro)]))
-runExpanded m st = runExceptT (runStateT (unExpanded m) st)
-
-setExpanderSettings :: GhcMonad m => m ()
-setExpanderSettings = do
-  flags <- getSessionDynFlags
-  _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
-                                 , ghcLink = LinkInMemory })
-  let decl = IIDecl . simpleImportDecl . mkModuleName
-  setContext (map decl ["Prelude", "SK.Core.Form", "SK.Core.Macro"])
-
-evalExpanded :: Expanded a -> IO (Either String a)
-evalExpanded m =
-  defaultErrorHandler
-    defaultFatalMessager
-    defaultFlushOut
-    (runGhc
-       (Just libdir)
-       (do setExpanderSettings
-           ret <- runExpanded m builtinMacros
-           case ret of
-             Right (a, _) -> return (Right a)
-             Left err     -> return (Left err)))
-
-returnE :: a -> Expanded a
-returnE = return
-
-failE :: String -> Expanded a
-failE msg = Expanded (lift (throwE msg))
-
-getMacroEnv :: Expanded [(String, LMacro)]
-getMacroEnv = Expanded get
-
-extendMacroEnv :: String -> LMacro -> Expanded ()
-extendMacroEnv name mac = Expanded go
-  where
-    go = do
-      env <- get
-      put ((name, mac) : env)
-
-instance ExceptionMonad Expanded where
-  gcatch m h =
-    Expanded
-      (StateT
-         (\st ->
-            (ExceptT
-               (runExpanded m st `gcatch` \e -> runExpanded (h e) st))))
-  gmask f =
-    Expanded
-      (StateT
-         (\st ->
-            (ExceptT
-               (gmask
-                  (\r ->
-                     let g m =
-                           Expanded
-                             (StateT
-                                (\st' ->
-                                   ExceptT (r (runExpanded m st'))))
-                     in  runExpanded (f g) st)))))
-
-instance HasDynFlags Expanded where
-   getDynFlags = Expanded (lift getDynFlags)
-
-instance GhcMonad Expanded where
-   getSession = Expanded (lift (lift getSession))
-   setSession s = Expanded (lift (lift (setSession s)))
-
--- | Macro transformer with location information preserved.
-type LMacro = LTForm Atom -> Expanded (LTForm Atom)
 
 tSym :: SrcSpan -> String -> LTForm Atom
 tSym l s = L l (TAtom (ASymbol s))
@@ -175,10 +95,11 @@ quasiquote orig@(L l form) =
              | otherwise -> acc ++ [tHsList l (map quasiquote pre)]
 
 -- Using `unsafeCoerce'.
-compileMT :: LHsExpr RdrName -> Expanded LMacro
+compileMT :: LHsExpr RdrName -> Skc LMacro
 compileMT = fmap unsafeCoerce . compileParsedExpr
+{-# INLINE compileMT #-}
 
-m_defMacroTransformer :: LTForm Atom -> Expanded (LTForm Atom)
+m_defMacroTransformer :: LMacro
 m_defMacroTransformer form =
   case form of
     L l (TList [_,L _ (TAtom (ASymbol name)),body]) -> do
@@ -192,20 +113,20 @@ m_defMacroTransformer form =
           newMacro <- compileMT hexpr
           extendMacroEnv name newMacro
           return (tList l [tSym l "=", tSym l name, body])
-        Left err -> failE err
-    _ -> failE "malformed macro"
+        Left err -> failS err
+    _ -> failS "malformed macro"
 
 m_quote :: LMacro
 m_quote form =
   case form of
     L _ (TList [_,body]) -> return (quote body)
-    _ -> failE ("malformed quote at " ++ showLoc form)
+    _ -> failS ("malformed quote at " ++ showLoc form)
 
 m_quasiquote :: LMacro
 m_quasiquote form =
     case form of
       L _ (TList [_,body]) -> return (quasiquote body)
-      _ -> failE ("malformed quasiquote at " ++ showLoc form)
+      _ -> failS ("malformed quasiquote at " ++ showLoc form)
 
 -- | Alias for @=@.
 m_defn :: LMacro
@@ -213,7 +134,7 @@ m_defn form =
   case form of
     L l0 (TList [L l1 _, lhs, body]) ->
       return (L l0 (TList [ L l1 (TAtom (ASymbol "=")), lhs, body ]))
-    _ -> failE ("macroexpand error at " ++ showLoc form ++ ", `defn'")
+    _ -> failS ("macroexpand error at " ++ showLoc form ++ ", `defn'")
 
 m_varArgBinOp :: String -> LMacro
 m_varArgBinOp sym = \form ->
@@ -224,7 +145,7 @@ m_varArgBinOp sym = \form ->
                                       (TList [mkOp op, arg1, arg2]))
     TList (_:rest) -> return (go rest)
     TList _        -> return form
-    _              -> failE ("macroexpand error at " ++
+    _              -> failS ("macroexpand error at " ++
                                 showLoc form ++ ", `" ++ sym ++ "'")
   where
     go [x,y] = combine x y
@@ -234,10 +155,10 @@ m_varArgBinOp sym = \form ->
     combine x y = L (getLoc x) (TList [mkOp x, x, y])
 
 -- m_defmacro :: LMacro
--- m_defmacro _ = failE "defmacro not yet supported."
+-- m_defmacro _ = failS "defmacro not yet supported."
 
-builtinMacros :: [(String, LMacro)]
-builtinMacros =
+specialForms :: [(String, LMacro)]
+specialForms =
   [("quote", m_quote)
   ,("quasiquote", m_quasiquote)
   ,("defn", m_defn)
@@ -255,10 +176,19 @@ builtinMacros =
   ,("__*", m_varArgBinOp "*")
   ]
 
+-- | Add modules used during macro expansion to current context.
+setExpanderSettings :: GhcMonad m => m ()
+setExpanderSettings = do
+  flags <- getSessionDynFlags
+  _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
+                                 , ghcLink = LinkInMemory })
+  let decl = IIDecl . simpleImportDecl . mkModuleName
+  setContext (map decl ["Prelude", "SK.Core.Form", "SK.Core.SKC"])
+
 -- This function recursively expand the result. Without recursively
 -- calling macroexpand on the result, cannot expand macro-generating
 -- macros.
-macroexpand :: LTForm Atom -> Expanded (LTForm Atom)
+macroexpand :: LTForm Atom -> Skc (LTForm Atom)
 macroexpand form = do
   -- liftIO (putStrLn ("expanding:\n" ++ show (pprForm (lTFormToForm form))))
   case form of

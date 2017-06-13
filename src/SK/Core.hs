@@ -3,55 +3,54 @@ module SK.Core
   ( sExpression
   , compile
   , compileAndEmit
-  , emit
+  , runSkc
   ) where
 
-import GHC (HsModule, RdrName)
+import GHC.Paths (libdir)
+
+import Control.Monad.Trans.Class
 
 import SK.Core.Emit
-import qualified SK.Core.Form as F
+import SK.Core.Form
+import SK.Core.GHC
+import SK.Core.SKC
 import qualified SK.Core.FormParser as FP
 import qualified SK.Core.Lexer as L
 import qualified SK.Core.SPState as SP
 import qualified SK.Core.TokenParser as TP
 import qualified SK.Core.Macro as M
 
+runSkc :: Skc a -> Env -> IO (Either String a)
+runSkc m env =
+  defaultErrorHandler
+    defaultFatalMessager
+    defaultFlushOut
+    (runGhc
+       (Just libdir)
+       (do M.setExpanderSettings
+           ret <- toGhc m env
+           return (fmap fst ret)))
+
 sExpression :: String -> IO ()
 sExpression input =
   case L.evalSP TP.sexprs Nothing input of
     Right forms ->
       do putStrLn "=== pform ==="
-         mapM_ (print . F.pForm) (map F.lTFormToForm forms)
+         mapM_ (print . pForm) (map lTFormToForm forms)
          putStrLn "=== pprForm ==="
-         print (F.pprForms (map F.lTFormToForm forms))
+         print (pprForms (map lTFormToForm forms))
     Left err -> putStrLn err
 
 compileAndEmit :: Maybe FilePath -> String -> IO (Either String String)
-compileAndEmit target input = do
-  ret <- compile target input
-  case ret of
-    Right (mdl, st) -> emit mdl st
-    Left err        -> return (Left err)
+compileAndEmit target input = runSkc go M.specialForms
+  where
+    go = do (mdl, st) <- compile target input
+            genHsSrc st mdl
 
 compile :: Maybe FilePath -> String
-        -> IO (Either String (HsModule RdrName, SP.SPState))
-compile target input =
-  -- do (forms, st) <- L.runSP TP.sexprs target input
-  --    expanded <- mapM M.macroexpand forms
-  --    mdl <- FP.evalBuilder FP.parse_module expanded
-  --    return (mdl, st)
-  do let form = L.runSP TP.sexprs target input
-     case form of
-       Right (form', st) -> do
-         expanded <- M.evalExpanded (mapM M.macroexpand form')
-         case expanded of
-           Right expanded' -> do
-             let mdl = FP.evalBuilder FP.parse_module expanded'
-             case mdl of
-               Right mdl' -> return (Right (mdl', st))
-               Left  err  -> return (Left err)
-           Left err -> return (Left err)
-       Left err -> return (Left err)
-
-emit :: HsModule RdrName -> SP.SPState -> IO (Either String String)
-emit mdl st = Right <$> genHsSrc st mdl
+        -> Skc (HsModule RdrName, SP.SPState)
+compile target input = do
+  (form', st) <- Skc (lift (L.runSP' TP.sexprs target input))
+  expanded <- mapM M.macroexpand form'
+  mdl <- Skc (lift (FP.evalBuilder' FP.parse_module expanded))
+  return (mdl, st)

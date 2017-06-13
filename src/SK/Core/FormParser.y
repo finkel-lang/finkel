@@ -10,6 +10,7 @@ module SK.Core.FormParser
   ( Builder(..)
   , runBuilder
   , evalBuilder
+  , evalBuilder'
   , parse_module
   , p_decl
   , p_expr
@@ -21,6 +22,7 @@ import Data.Char (isUpper)
 import Data.List (foldl1')
 
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 
 import SK.Core.Form
@@ -235,7 +237,13 @@ runBuilder bld toks =
       Right (a, st) -> Right (a, inputs st)
 
 evalBuilder :: Builder a -> [LTForm Atom] -> Either String a
-evalBuilder bld toks  = fmap fst (runBuilder bld toks)
+evalBuilder bld toks = fmap fst (runBuilder bld toks)
+
+evalBuilder' :: Monad m => Builder a -> [LTForm Atom]
+             -> ExceptT String m a
+evalBuilder' bld toks = case evalBuilder bld toks of
+  Right a -> return a
+  Left err -> throwE err
 
 failB :: String -> Builder a
 failB err = Builder (StateT (\_ -> Left err))

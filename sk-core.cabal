@@ -25,6 +25,7 @@ library
                        SK.Core.Lexer
                        SK.Core.Macro
                        SK.Core.SPState
+                       SK.Core.SKC
                        SK.Core.TokenParser
                        SK.Core.Typecheck
   build-depends:       base >= 4.7 && < 5

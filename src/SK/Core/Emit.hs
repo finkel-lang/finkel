@@ -131,14 +131,10 @@ lookupNextDoc = undefined
 class HsSrc a where
   toHsSrc :: SPState -> a -> SDoc
 
-genHsSrc :: HsSrc a => SPState -> a -> IO String
+genHsSrc :: (GhcMonad m, HsSrc a) => SPState -> a -> m String
 genHsSrc st x =
-  defaultErrorHandler defaultFatalMessager
-                      defaultFlushOut
-                      (runGhc (Just libdir) p)
-  where
-    p = do flags <- getSessionDynFlags
-           return (showSDocForUser flags neverQualify (toHsSrc st x))
+  do flags <- getSessionDynFlags
+     return (showSDocForUser flags neverQualify (toHsSrc st x))
 
 unAnnotateComment :: AnnotationComment -> SDoc
 unAnnotateComment c =
