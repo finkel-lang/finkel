@@ -1,0 +1,63 @@
+name:                sk-core
+version:             0.1.0.0
+synopsis:            SK language compiler and core library
+description:         SK is a variant of Haskell in S-expression.
+homepage:            https://github.com/githubuser/sk-core#readme
+license:             BSD3
+license-file:        LICENSE
+author:              8c6794b6
+maintainer:          example@example.com
+copyright:           2017 8c6794b6
+category:            Language
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  if impl (ghc == 8.0.*)
+     hs-source-dirs:   src/ghc802
+  exposed-modules:     SK.Core
+                       SK.Core.Emit
+                       SK.Core.Form
+                       SK.Core.FormParser
+                       SK.Core.GHC
+                       SK.Core.Lexer
+                       SK.Core.Macro
+                       SK.Core.SPState
+                       SK.Core.TokenParser
+                       SK.Core.Typecheck
+  build-depends:       base >= 4.7 && < 5
+                     , array
+                     , containers
+                     , ghc == 8.0.*
+                     , ghc-boot
+                     , ghc-paths
+                     , transformers
+  build-tools:         alex
+                     , happy
+  default-language:    Haskell2010
+
+executable sk
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , sk-core
+  default-language:    Haskell2010
+
+test-suite sk-core-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , sk-core
+                     , filepath
+                     , directory
+                     , hspec
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/githubuser/sk-core
