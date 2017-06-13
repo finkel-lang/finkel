@@ -30,8 +30,8 @@ tcHsModule mdl = do
   preflags <- getSessionDynFlags
   _ <- setSessionDynFlags
          (foldl xopt_set
-                (preflags { hscTarget = HscInterpreted
-                          , ghcLink = LinkInMemory })
+                (preflags { hscTarget = HscNothing
+                          , ghcLink = NoLink })
                 langExts)
   flags <- getSessionDynFlags
   timestamp <- liftIO getCurrentTime
