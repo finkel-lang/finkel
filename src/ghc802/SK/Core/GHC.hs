@@ -25,9 +25,11 @@ module SK.Core.GHC
     LImportDecl,
     LPat,
     ImportDecl(..),
+    ParsedModule(..),
     Pat(..),
     RdrName,
     Sig(..),
+    TypecheckedModule,
 
     compileParsedExpr,
     defaultErrorHandler,
@@ -54,17 +56,26 @@ module SK.Core.GHC
     setSessionDynFlags,
     srcSpanStartCol,
     srcSpanStartLine,
+    typecheckModule,
 
     -- * BasicTypes
     Boxity(..),
+
+    -- * DriverPhases
+    HscSource(..),
 
     -- * DynFlags
     DynFlags(..),
     GhcLink(..),
     HasDynFlags(..),
     HscTarget(..),
+    Language(..),
+    languageExtensions,
     xopt_set,
     xopt_unset,
+
+    -- * ErrUtils
+    pprErrMsgBagWithLoc,
 
     -- * FastString
     fsLit,
@@ -75,6 +86,7 @@ module SK.Core.GHC
 
     -- * Outputable
     ppr,
+    showSDoc,
 
     -- * OrdList
     toOL,
@@ -86,6 +98,17 @@ module SK.Core.GHC
     HsConDetails(..),
     HsTupleSort(..),
     InteractiveImport(..),
+    ModSummary(..),
+    handleSourceError,
+    srcErrorMessages,
+
+    -- * Module
+    ModLocation(..),
+    mainUnitId,
+    mkModule,
+
+    -- * MonadUtils
+    MonadIO(..),
 
     -- * RdrHsSyn
     cvTopDecls,
@@ -103,6 +126,8 @@ module SK.Core.GHC
 
     mkRealSrcLoc,
     mkRealSrcSpan,
+    mkSrcLoc,
+    mkSrcSpan,
     unLoc,
 
     -- * Internal
@@ -112,8 +137,12 @@ module SK.Core.GHC
 import GHC
 import BasicTypes
 import DynFlags
+import ErrUtils
 import Exception
 import FastString
+import HscTypes
+import Module
+import MonadUtils
 import OccName
 import OrdList
 import Outputable

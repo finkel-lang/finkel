@@ -6,7 +6,7 @@ module SK.Core.Macro
   , returnE
   ) where
 
-import Control.Monad.IO.Class
+-- base
 import Unsafe.Coerce
 
 -- transformers
@@ -16,9 +16,6 @@ import Control.Monad.Trans.State
 
 -- ghc-paths
 import GHC.Paths (libdir)
--- import qualified Outputable
-
-import qualified GHC.LanguageExtensions as LangExt
 
 -- Internal
 import SK.Core.Form
@@ -44,6 +41,14 @@ runExpanded :: Expanded a -> [(String, LMacro)]
             -> Ghc (Either String (a, [(String, LMacro)]))
 runExpanded m st = runExceptT (runStateT (unExpanded m) st)
 
+setExpanderSettings :: GhcMonad m => m ()
+setExpanderSettings = do
+  flags <- getSessionDynFlags
+  _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
+                                 , ghcLink = LinkInMemory })
+  let decl = IIDecl . simpleImportDecl . mkModuleName
+  setContext (map decl ["Prelude", "SK.Core.Form", "SK.Core.Macro"])
+
 evalExpanded :: Expanded a -> IO (Either String a)
 evalExpanded m =
   defaultErrorHandler
@@ -51,21 +56,10 @@ evalExpanded m =
     defaultFlushOut
     (runGhc
        (Just libdir)
-       (do origFlags <- getSessionDynFlags
-           _ <- setSessionDynFlags
-                  (origFlags { hscTarget = HscInterpreted
-                             , ghcLink = LinkInMemory })
-           let decl = IIDecl . simpleImportDecl . mkModuleName
-           setContext
-             (map decl ["Prelude", "SK.Core.Form", "SK.Core.Macro"])
-
-           -- Run the macroexpansion computation.
+       (do setExpanderSettings
            ret <- runExpanded m builtinMacros
-
            case ret of
-             Right (a, _) -> do
-               _ <- setSessionDynFlags origFlags
-               return (Right a)
+             Right (a, _) -> return (Right a)
              Left err     -> return (Left err)))
 
 returnE :: a -> Expanded a

@@ -1,6 +1,5 @@
 module Main where
-import SExpr.Form3
-{-# LINE 9 "test/data/0002-literal.lisp" #-}
+{-# LINE 7 "test/data/0002-literal.lisp" #-}
 main
   = do { print "string literal";
          print 42;

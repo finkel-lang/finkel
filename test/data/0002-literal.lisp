@@ -4,8 +4,6 @@
 
 (module Main)
 
-(import SExpr.Form3)
-
 (= main
   (do (print "string literal") ;; Simple string
       ;; (print "string\" with \escapes.")

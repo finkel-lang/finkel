@@ -33,6 +33,7 @@ library
                      , ghc == 8.0.*
                      , ghc-boot
                      , ghc-paths
+                     , time
                      , transformers
   build-tools:         alex
                      , happy
