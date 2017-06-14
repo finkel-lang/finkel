@@ -95,7 +95,7 @@ quasiquote orig@(L l form) =
              | otherwise -> acc ++ [tHsList l (map quasiquote pre)]
 
 -- Using `unsafeCoerce'.
-compileMT :: LHsExpr RdrName -> Skc LMacro
+compileMT :: LHsExpr RdrName -> Skc (Form Atom -> Skc (Form Atom))
 compileMT = fmap unsafeCoerce . compileParsedExpr
 {-# INLINE compileMT #-}
 
@@ -104,14 +104,16 @@ m_defMacroTransformer form =
   case form of
     L l (TList [_,L _ (TAtom (ASymbol name)),body]) -> do
       expanded <- macroexpand body
-      -- liftIO (print (pForm (lTFormToForm expanded)))
-      case evalBuilder p_expr [expanded] of
+      let expr = tList l [tSym l "::", expanded, tSym l "Macro"]
+      -- liftIO (do putStrLn "=== m_defmacrotransformer ==="
+      --            print (pForm (lTFormToForm expr)))
+      case evalBuilder p_expr [expr] of
         Right hexpr -> do
           -- flags <- getSessionDynFlags
-          -- liftIO (putStrLn
-          --           (Outputable.showSDoc flags (Outputable.ppr hexpr)))
-          newMacro <- compileMT hexpr
-          extendMacroEnv name newMacro
+          -- liftIO (putStrLn (showSDoc flags (ppr hexpr)))
+          macro <- compileMT hexpr
+          let wrap f form = fmap nlForm (f (cdr (lTFormToForm form)))
+          extendMacroEnv name (wrap macro)
           return (tList l [tSym l "=", tSym l name, body])
         Left err -> failS err
     _ -> failS "malformed macro"

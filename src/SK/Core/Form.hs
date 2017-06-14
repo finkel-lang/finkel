@@ -14,6 +14,8 @@ module SK.Core.Form
   , nlForm
   , fTail
   , fHead
+  , car
+  , cdr
   , pprForm
   , pprForms
   , pprTForm
@@ -84,13 +86,19 @@ nlForm form =
     Atom x -> noLoc (TAtom x)
     List xs -> noLoc (TList (map nlForm xs))
 
-fTail :: LTForm a -> LTForm a
-fTail (L l (TList (_:xs))) = L l (TList xs)
-fTail _ = error "fTail"
+car :: Form a -> Form a
+car (List (x:_)) = x
+car _ = List []
 
-fHead :: LTForm a -> LTForm a
-fHead (L l (TList (x:_))) = x
-fHead _ = error "fHead"
+cdr :: Form a -> Form a
+cdr (List (_:xs)) = List xs
+cdr _ = List []
+
+fHead :: Form a -> Form a
+fHead = car
+
+fTail :: Form a -> Form a
+fTail = cdr
 
 pprForm :: Form Atom -> P.Doc
 pprForm form =

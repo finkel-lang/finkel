@@ -3,6 +3,7 @@
 
 module SK.Core.SKC
   ( Skc(..)
+  , Macro
   , LMacro
   , Env
   , toGhc
@@ -42,6 +43,9 @@ instance HasDynFlags Skc where
 instance GhcMonad Skc where
    getSession = Skc (lift (lift getSession))
    setSession s = Skc (lift (lift (setSession s)))
+
+-- | Macro transformer function.
+type Macro = Form Atom -> Skc (Form Atom)
 
 -- | Macro transformer with location information preserved.
 type LMacro = LTForm Atom -> Skc (LTForm Atom)
