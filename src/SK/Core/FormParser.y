@@ -76,7 +76,7 @@ import SK.Core.GHC
 
 mbdoc :: { Maybe LHsDocString }
       : {- empty -} { Nothing }
-      | 'comment' { Just (b_commentString $1) }
+      | 'comment' { Just (b_commentStringE $1) }
 
 
 --- ------
@@ -105,7 +105,7 @@ import_form :: { HImportDecl }
             : 'import_form' {% parse p_import $1 }
 
 import :: { HImportDecl }
-       : 'import' 'symbol' { b_import $2 }
+       : 'import' 'symbol' { b_importD $2 }
 
 
 --- ------------
@@ -123,7 +123,7 @@ decl_with_doc :: { HDecl }
 
 decl :: { HDecl }
      : '=' decl_lhs expr  { b_funD $1 $2 $3 }
-     | '::' 'symbol' type { b_typeSig $2 $3 }
+     | '::' 'symbol' type { b_tsigD $2 $3 }
 
 decl_lhs :: { HExpr -> HsBind RdrName }
          : 'list'   {% b_declLhsB $1 }
@@ -133,8 +133,8 @@ decl_lhs :: { HExpr -> HsBind RdrName }
 --- Type
 
 type :: { HType }
-     : 'symbol' { b_symType $1 }
-     | 'unit'   { b_unitType $1 }
+     : 'symbol' { b_symT $1 }
+     | 'unit'   { b_unitT $1 }
      | 'hslist' {% b_listT $1 }
      | 'list'   {% parse p_types $1 }
 
@@ -165,9 +165,9 @@ rpats0 :: { [HPat] }
        | rpats0 pat  { $2 : $1 }
 
 pat :: { HPat }
-    : 'integer' { b_intPat $1 }
-    | 'symbol'  { b_symPat $1 }
-    | 'list'    {% b_listPat $1 }
+    : 'integer' { b_intP $1 }
+    | 'symbol'  { b_symP $1 }
+    | 'list'    {% b_listP $1 }
 
 
 --- -----------
@@ -175,21 +175,21 @@ pat :: { HPat }
 
 expr :: { HExpr }
      : atom     { $1 }
-     | 'hslist' {% b_hsList $1 }
+     | 'hslist' {% b_hsListB $1 }
      | 'list'   {% parse p_exprs $1 }
 
 atom :: { HExpr }
-     : 'string'  { b_string $1 }
-     | 'integer' { b_integer $1 }
-     | 'symbol'  { b_symbol $1 }
-     | 'unit'    { b_unit $1 }
+     : 'string'  { b_stringE $1 }
+     | 'integer' { b_integerE $1 }
+     | 'symbol'  { b_varE $1 }
+     | 'unit'    { b_unitE $1 }
 
 exprs :: { HExpr }
-      : 'if' expr expr expr { b_if $1 $2 $3 $4 }
-      | 'do' do_stmts       { b_do $1 $2 }
-      | 'lambda' pats expr  { b_lambda $1 $2 $3 }
+      : 'if' expr expr expr { b_ifE $1 $2 $3 $4 }
+      | 'do' do_stmts       { b_doE $1 $2 }
+      | 'lambda' pats expr  { b_lamE $1 $2 $3 }
       | '::' expr type      { b_tsigE $1 $2 $3 }
-      | app                 { b_app $1 }
+      | app                 { b_appE $1 }
 
 app :: { [HExpr] }
     : rapp { reverse $1 }
@@ -208,12 +208,12 @@ rdo_stmts :: { [HExprLStmt] }
           | rdo_stmts do_stmt { $2 : $1 }
 
 do_stmt :: { HExprLStmt }
-        : atom   { b_bodyStmt $1 }
+        : atom   { b_bodyS $1 }
         | 'list' {% parse p_do_stmt1 $1 }
 
 do_stmt1 :: { HExprLStmt }
-         : '<-' pat expr { b_bindStmt $1 $2 $3 }
-         | exprs         { b_bodyStmt $1 }
+         : '<-' pat expr { b_bindS $1 $2 $3 }
+         | exprs         { b_bodyS $1 }
 
 
 {
@@ -353,8 +353,8 @@ b_module (L l (TAtom (ASymbol name))) mbdoc imports decls =
              , hsmodDeprecMessage = Nothing
              , hsmodHaddockModHeader = mbdoc }
 
-b_import :: LTForm Atom -> HImportDecl
-b_import (L l (TAtom (ASymbol m))) =
+b_importD :: LTForm Atom -> HImportDecl
+b_importD (L l (TAtom (ASymbol m))) =
     L l (simpleImportDecl (mkModuleName m))
 
 b_funD :: Located a -> (HExpr -> HsBind RdrName) -> HExpr -> HDecl
@@ -369,17 +369,17 @@ b_declLhsB ((L l (TAtom (ASymbol name))):forms) = do
 
 -- Types
 
-b_typeSig :: LTForm Atom -> HType -> HDecl
-b_typeSig (L l (TAtom (ASymbol name))) typ =
+b_tsigD :: LTForm Atom -> HType -> HDecl
+b_tsigD (L l (TAtom (ASymbol name))) typ =
   let typ' = mkLHsSigWcType typ
   in  L l (SigD (TypeSig [L l (mkRdrName name)] typ'))
 
-b_symType :: LTForm Atom -> HType
-b_symType (L l (TAtom (ASymbol name))) =
+b_symT :: LTForm Atom -> HType
+b_symT (L l (TAtom (ASymbol name))) =
     L l (HsTyVar (L l (mkUnqual tcClsName (fsLit name))))
 
-b_unitType :: LTForm Atom -> HType
-b_unitType (L l _) = L l (HsTupleTy HsBoxedTuple [])
+b_unitT :: LTForm Atom -> HType
+b_unitT (L l _) = L l (HsTupleTy HsBoxedTuple [])
 
 b_funT :: Located a -> HType -> HType -> HType
 b_funT (L l _) a b = L l (HsFunTy a b)
@@ -395,69 +395,69 @@ b_listT (L l (THsList ty)) = do
 
 -- Pattern
 
-b_intPat :: LTForm Atom -> HPat
-b_intPat (L l (TAtom (AInteger n))) =
+b_intP :: LTForm Atom -> HPat
+b_intP (L l (TAtom (AInteger n))) =
     let lit = (mkHsIntegral (show n) n placeHolderType)
     in  L l (mkNPat (L l lit) Nothing)
 
-b_symPat :: LTForm Atom -> HPat
-b_symPat (L l (TAtom (ASymbol name@(x:xs))))
+b_symP :: LTForm Atom -> HPat
+b_symP (L l (TAtom (ASymbol name@(x:xs))))
    | name == "_" = L l (WildPat placeHolderType)
    | isUpper x = L l (ConPatIn (L l (mkRdrName name)) (PrefixCon []))
    | otherwise = L l (VarPat (L l (mkRdrName name)))
 
-b_listPat :: [LTForm Atom] -> Builder HPat
-b_listPat (L l x:rest) =
+b_listP :: [LTForm Atom] -> Builder HPat
+b_listP (L l x:rest) =
     case x of
       TAtom (ASymbol name)
         | isUpper (head name) -> do
             pats <- parse p_pats0 rest
             let ps = PrefixCon pats
             return (L l (ConPatIn (L l (mkRdrName name)) ps))
-        | otherwise -> failB "b_listPat: not yet supported"
-      _ -> failB "b_listPat: non-symbol in head of list."
+        | otherwise -> failB "b_listP: not yet supported"
+      _ -> failB "b_listP: non-symbol in head of list."
 
 -- Expression
 
-b_if :: LTForm Atom -> HExpr -> HExpr -> HExpr -> HExpr
-b_if (L l (TAtom _)) p t f = L l (mkHsIf p t f)
+b_ifE :: LTForm Atom -> HExpr -> HExpr -> HExpr -> HExpr
+b_ifE (L l (TAtom _)) p t f = L l (mkHsIf p t f)
 
-b_lambda :: Located a -> [HPat] -> HExpr -> HExpr
-b_lambda ref pats body = mkHsLam pats body
+b_lamE :: Located a -> [HPat] -> HExpr -> HExpr
+b_lamE ref pats body = mkHsLam pats body
 
 b_tsigE :: Located a -> HExpr -> HType -> HExpr
 b_tsigE (L l _) e t = L l (ExprWithTySig e (mkLHsSigWcType t))
 
-b_do :: Located a -> [HExprLStmt] -> HExpr
-b_do l exprs = L (getLoc l) (mkHsDo DoExpr exprs)
+b_doE :: Located a -> [HExprLStmt] -> HExpr
+b_doE l exprs = L (getLoc l) (mkHsDo DoExpr exprs)
 
-b_app :: [HExpr] -> HExpr
-b_app = foldl1' (\a b -> L (getLoc a) (HsApp a b))
+b_appE :: [HExpr] -> HExpr
+b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))
 
-b_bodyStmt :: HExpr -> HExprLStmt
-b_bodyStmt expr = L (getLoc expr) (mkBodyStmt expr)
+b_bodyS :: HExpr -> HExprLStmt
+b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
 
-b_bindStmt :: Located a -> HPat -> HExpr -> HExprLStmt
-b_bindStmt ref pat expr = L (getLoc ref) (mkBindStmt pat expr)
+b_bindS :: Located a -> HPat -> HExpr -> HExprLStmt
+b_bindS ref pat expr = L (getLoc ref) (mkBindStmt pat expr)
 
-b_hsList :: LTForm Atom -> Builder HExpr
-b_hsList (L l (THsList xs)) = do
+b_hsListB :: LTForm Atom -> Builder HExpr
+b_hsListB (L l (THsList xs)) = do
     xs' <- mapM (\x -> parse p_expr [x]) xs
     return (L l (ExplicitList placeHolderType Nothing xs'))
 
-b_string :: LTForm Atom -> HExpr
-b_string (L l (TAtom (AString x))) = L l (HsLit (HsString x (fsLit x)))
+b_stringE :: LTForm Atom -> HExpr
+b_stringE (L l (TAtom (AString x))) = L l (HsLit (HsString x (fsLit x)))
 
-b_integer :: LTForm Atom -> HExpr
-b_integer (L l (TAtom (AInteger x))) =
+b_integerE :: LTForm Atom -> HExpr
+b_integerE (L l (TAtom (AInteger x))) =
     L l (HsOverLit (mkHsIntegral (show x) x placeHolderType))
 
-b_symbol :: LTForm Atom -> HExpr
-b_symbol (L l (TAtom (ASymbol x))) = L l (HsVar (L l (mkRdrName x)))
+b_varE :: LTForm Atom -> HExpr
+b_varE (L l (TAtom (ASymbol x))) = L l (HsVar (L l (mkRdrName x)))
 
-b_unit :: Located a -> HExpr
-b_unit (L l _) = L l (ExplicitTuple [] Boxed)
+b_unitE :: Located a -> HExpr
+b_unitE (L l _) = L l (ExplicitTuple [] Boxed)
 
-b_commentString :: LTForm Atom -> Located HsDocString
-b_commentString (L l (TAtom (AComment x))) = L l (HsDocString (fsLit x))
+b_commentStringE :: LTForm Atom -> Located HsDocString
+b_commentStringE (L l (TAtom (AComment x))) = L l (HsDocString (fsLit x))
 }
