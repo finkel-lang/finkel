@@ -20,30 +20,32 @@ import SK.Core.Form
 %lexer { tokenLexer } { L _ TEOF }
 
 %token
-'('       { L _ TOparen }
-')'       { L _ TCparen }
-'['       { L _ TObracket }
-']'       { L _ TCbracket }
-quote     { L _ (TSymbol "quote") }
-qquote    { L _ (TSymbol "quasiquote") }
-unquote   { L _ (TSymbol "unquote") }
-unquotesp { L _ (TSymbol "unquote-splice") }
-symbol    { L _ (TSymbol _) }
-string    { L _ (TString _) }
-integer   { L _ (TInteger _) }
-comment   { L _ (TDocCommentNext _) }
-unit      { L _ TUnit }
+'('         { L _ TOparen }
+')'         { L _ TCparen }
+'['         { L _ TObracket }
+']'         { L _ TCbracket }
+
+'quote'     { L _ (TSymbol "quote") }
+'qquote'    { L _ (TSymbol "quasiquote") }
+'unquote'   { L _ (TSymbol "unquote") }
+'unquotesp' { L _ (TSymbol "unquote-splice") }
+
+'symbol'    { L _ (TSymbol _) }
+'string'    { L _ (TString _) }
+'integer'   { L _ (TInteger _) }
+'comment'   { L _ (TDocCommentNext _) }
+'unit'      { L _ TUnit }
 
 %%
 
 sexp :: { LTForm Atom }
-     : atom           { $1 }
-     | quote sexp     { L (getLoc $1) (TList [mkQuote $1, $2]) }
-     | qquote sexp    { L (getLoc $1) (TList [mkQuasiQuote $1, $2]) }
-     | unquote sexp   { L (getLoc $1) (TList [mkUnquote $1, $2]) }
-     | unquotesp sexp { L (getLoc $1) (TList [mkUnquoteSplice $1, $2]) }
-     | '[' sexps ']'  { L (getLoc $1) (THsList $2) }
-     | '(' sexps ')'  { L (getLoc $1) (TList $2) }
+     : atom             { $1 }
+     | 'quote' sexp     { L (getLoc $1) (TList [mkQuote $1, $2]) }
+     | 'qquote' sexp    { L (getLoc $1) (TList [mkQuasiQuote $1, $2]) }
+     | 'unquote' sexp   { L (getLoc $1) (TList [mkUnquote $1, $2]) }
+     | 'unquotesp' sexp { L (getLoc $1) (TList [mkUnquoteSplice $1, $2]) }
+     | '[' sexps ']'    { L (getLoc $1) (THsList $2) }
+     | '(' sexps ')'    { L (getLoc $1) (TList $2) }
 
 sexps :: { [LTForm Atom] }
       : rsexps { reverse $1 }
@@ -53,11 +55,11 @@ rsexps :: { [LTForm Atom] }
        | rsexps sexp { $2 : $1 }
 
 atom :: { LTForm Atom }
-     : symbol  { mkASymbol $1 }
-     | string  { mkAString $1 }
-     | integer { mkAInteger $1 }
-     | comment { mkAComment $1 }
-     | unit    { mkAUnit $1 }
+     : 'symbol'  { mkASymbol $1 }
+     | 'string'  { mkAString $1 }
+     | 'integer' { mkAInteger $1 }
+     | 'comment' { mkAComment $1 }
+     | 'unit'    { mkAUnit $1 }
 
 {
 mkQuote :: Located Token -> LTForm Atom
