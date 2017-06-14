@@ -51,6 +51,6 @@ compile :: Maybe FilePath -> String
         -> Skc (HsModule RdrName, SP.SPState)
 compile target input = do
   (form', st) <- Skc (lift (L.runSP' TP.sexprs target input))
-  expanded <- mapM M.macroexpand form'
+  expanded <- M.macroexpands form'
   mdl <- Skc (lift (FP.evalBuilder' FP.parse_module expanded))
   return (mdl, st)

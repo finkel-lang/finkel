@@ -2,11 +2,13 @@
 -- | Module for macros.
 module SK.Core.Macro
   ( macroexpand
+  , macroexpands
   , setExpanderSettings
   , specialForms
   ) where
 
 -- base
+import Control.Monad (foldM)
 import Unsafe.Coerce
 
 -- ghc-paths
@@ -99,6 +101,7 @@ compileMT :: LHsExpr RdrName -> Skc (Form Atom -> Skc (Form Atom))
 compileMT = fmap unsafeCoerce . compileParsedExpr
 {-# INLINE compileMT #-}
 
+-- Cannot define recursive macro yet. Add `let' syntax.
 m_defMacroTransformer :: LMacro
 m_defMacroTransformer form =
   case form of
@@ -114,7 +117,11 @@ m_defMacroTransformer form =
           macro <- compileMT hexpr
           let wrap f form = fmap nlForm (f (cdr (lTFormToForm form)))
           extendMacroEnv name (wrap macro)
-          return (tList l [tSym l "=", tSym l name, body])
+          return
+            (tList l [ tSym l "begin"
+                     , tList l [tSym l "::", tSym l name, tSym l "Macro"]
+                     , tList l [tSym l "=", tSym l name, body]])
+          -- return (tList l [tSym l "=", tSym l name, body])
         Left err -> failS err
     _ -> failS "malformed macro"
 
@@ -148,7 +155,7 @@ m_varArgBinOp sym = \form ->
     TList (_:rest) -> return (go rest)
     TList _        -> return form
     _              -> failS ("macroexpand error at " ++
-                                showLoc form ++ ", `" ++ sym ++ "'")
+                             showLoc form ++ ", `" ++ sym ++ "'")
   where
     go [x,y] = combine x y
     go (x:xs) = combine x (go xs)
@@ -186,6 +193,20 @@ setExpanderSettings = do
                                  , ghcLink = LinkInMemory })
   let decl = IIDecl . simpleImportDecl . mkModuleName
   setContext (map decl ["Prelude", "SK.Core.Form", "SK.Core.SKC"])
+
+-- | Expands form, with taking care of @begin@ special form.
+macroexpands :: [LTForm Atom] -> Skc [LTForm Atom]
+macroexpands forms = do
+    -- Get rid of unnecessary reverses.
+    forms' <- mapM macroexpand forms
+    fmap reverse (foldM f [] forms')
+  where
+    f acc orig@(L l form) =
+      case form of
+        TList (L _ (TAtom (ASymbol "begin")) : rest) -> do
+          rest' <- macroexpands rest
+          return (reverse rest' ++ acc)
+        _ -> return (orig : acc)
 
 -- This function recursively expand the result. Without recursively
 -- calling macroexpand on the result, cannot expand macro-generating
