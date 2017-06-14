@@ -1,7 +1,15 @@
 module Main where
 import SK.Core.Form
-import SK.Core.Macro
-{-# LINE 15 "test/data/0011-macro.lisp" #-}
-f0 = (\ str -> putStrLn ((++) "Hello, " str))
-{-# LINE 19 "test/data/0011-macro.lisp" #-}
-main = do { putStrLn "hello, macro" }
+import SK.Core.SKC
+m1 :: Macro
+{-# LINE 8 "test/data/0011-macro.lisp" #-}
+m1
+  = (\ form
+       -> return
+            (List
+               [Atom (ASymbol "putStrLn"),
+                List
+                  [Atom (ASymbol "++"), Atom (AString "Hello, "),
+                   toForm (car form)]]))
+{-# LINE 12 "test/data/0011-macro.lisp" #-}
+main = putStrLn ((++) "Hello, " "macro")
