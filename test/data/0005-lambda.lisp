@@ -16,7 +16,22 @@
       (+ (f2 (- n 1))
          (f2 (- n 2)))))
 
-;;; Pass lambda to function `foo'.
+;; Expression with empty 'let'
+(= (f3 n)
+  (let ()
+    (+ n 35)))
+
+;; Expression with 'let'. In bindings of `let', 'a' is a integer value
+;; 14, and `f' is a function taking two arguments.
+(= (f4 n)
+  (let ((a 14)
+        ((f x y) (+ x y))
+        (g (\ (x) (* x 2))))
+    (g (f n a))))
+
+;;; Main entry point.
 (= main
   (do (print (f1 (\ (a b) (* a (+ a b)))))
-      (print (f2 10))))
+      (print (f2 10))
+      (print (f3 7))
+      (print (f4 7))))

@@ -58,6 +58,9 @@ module SK.Core.GHC
     srcSpanStartLine,
     typecheckModule,
 
+    -- * Bag
+    listToBag,
+
     -- * BasicTypes
     Boxity(..),
 
@@ -90,6 +93,11 @@ module SK.Core.GHC
 
     -- * OrdList
     toOL,
+
+    -- * HsBinds
+    HsLocalBinds,
+    HsLocalBindsLR(..),
+    HsValBindsLR(..),
 
     -- * HsImpExp
     simpleImportDecl,
@@ -135,12 +143,14 @@ module SK.Core.GHC
   ) where
 
 import GHC
+import Bag
 import BasicTypes
 import DynFlags
 import ErrUtils
 import Exception
 import FastString
 import HscTypes
+import HsBinds
 import Module
 import MonadUtils
 import OccName

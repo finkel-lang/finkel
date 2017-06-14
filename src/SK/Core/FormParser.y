@@ -33,13 +33,15 @@ import SK.Core.GHC
 %name p_mod_header mod_header
 %name p_import import
 %name p_decl decl
+%name p_type type
+%name p_types types
 %name p_pats pats
 %name p_pats0 pats0
 %name p_expr expr
 %name p_exprs exprs
 %name p_do_stmt1 do_stmt1
-%name p_type type
-%name p_types types
+%name p_lbinds0 lbinds0
+%name p_lbind lbind
 
 %tokentype { LTForm Atom }
 %monad { Builder }
@@ -51,6 +53,7 @@ import SK.Core.GHC
 'import' { L _ (TAtom (ASymbol "import")) }
 'if'     { L _ (TAtom (ASymbol "if")) }
 'lambda' { L _ (TAtom (ASymbol "\\")) }
+'let'    { L _ (TAtom (ASymbol "let")) }
 'do'     { L _ (TAtom (ASymbol "do")) }
 
 '='  { L _ (TAtom (ASymbol "=")) }
@@ -188,6 +191,7 @@ exprs :: { HExpr }
       : 'if' expr expr expr { b_ifE $1 $2 $3 $4 }
       | 'do' do_stmts       { b_doE $1 $2 }
       | 'lambda' pats expr  { b_lamE $1 $2 $3 }
+      | 'let' lbinds expr   { b_letE $1 $2 $3 }
       | '::' expr type      { b_tsigE $1 $2 $3 }
       | app                 { b_appE $1 }
 
@@ -197,6 +201,20 @@ app :: { [HExpr] }
 rapp :: { [HExpr] }
      : expr { [$1] }
      | rapp expr { $2 : $1 }
+
+lbinds :: { [HBind] }
+       : 'unit' { [] }
+       | 'list' {% parse p_lbinds0 $1 }
+
+lbinds0 :: { [HBind] }
+        : rlbinds0 { reverse $1 }
+
+rlbinds0 :: { [HBind] }
+         : 'list'          {% fmap (:[]) (parse p_lbind $1) }
+         | rlbinds0 'list' {% fmap (:$1) (parse p_lbind $2) }
+
+lbind :: { HBind }
+      : decl_lhs expr { b_lbindB $1 $2 }
 
 -- do expression
 
@@ -321,6 +339,8 @@ type HPat = LPat RdrName
 
 type HExprLStmt = ExprLStmt RdrName
 
+type HLocalBinds = Located (HsLocalBinds RdrName)
+
 type HImportDecl = LImportDecl RdrName
 
 -- XXX: Currently, cannot tell the difference between 'Qualified.fun'
@@ -425,6 +445,13 @@ b_ifE (L l (TAtom _)) p t f = L l (mkHsIf p t f)
 b_lamE :: Located a -> [HPat] -> HExpr -> HExpr
 b_lamE ref pats body = mkHsLam pats body
 
+b_letE :: Located a -> [HBind] -> HExpr -> HExpr
+b_letE (L l _) binds body = L l (HsLet binds' body)
+  where
+    binds' = case binds of
+      [] -> L l emptyLocalBinds
+      _  -> L l (HsValBinds (ValBindsIn (listToBag binds) []))
+
 b_tsigE :: Located a -> HExpr -> HType -> HExpr
 b_tsigE (L l _) e t = L l (ExprWithTySig e (mkLHsSigWcType t))
 
@@ -434,16 +461,8 @@ b_doE l exprs = L (getLoc l) (mkHsDo DoExpr exprs)
 b_appE :: [HExpr] -> HExpr
 b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))
 
-b_bodyS :: HExpr -> HExprLStmt
-b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
-
-b_bindS :: Located a -> HPat -> HExpr -> HExprLStmt
-b_bindS ref pat expr = L (getLoc ref) (mkBindStmt pat expr)
-
-b_hsListB :: LTForm Atom -> Builder HExpr
-b_hsListB (L l (THsList xs)) = do
-    xs' <- mapM (\x -> parse p_expr [x]) xs
-    return (L l (ExplicitList placeHolderType Nothing xs'))
+b_lbindB :: (HExpr -> HsBind RdrName) -> HExpr -> HBind
+b_lbindB f e = L (getLoc e) (f e)
 
 b_stringE :: LTForm Atom -> HExpr
 b_stringE (L l (TAtom (AString x))) = L l (HsLit (HsString x (fsLit x)))
@@ -460,4 +479,18 @@ b_unitE (L l _) = L l (ExplicitTuple [] Boxed)
 
 b_commentStringE :: LTForm Atom -> Located HsDocString
 b_commentStringE (L l (TAtom (AComment x))) = L l (HsDocString (fsLit x))
+
+--- Statement
+
+b_bodyS :: HExpr -> HExprLStmt
+b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
+
+b_bindS :: Located a -> HPat -> HExpr -> HExprLStmt
+b_bindS ref pat expr = L (getLoc ref) (mkBindStmt pat expr)
+
+b_hsListB :: LTForm Atom -> Builder HExpr
+b_hsListB (L l (THsList xs)) = do
+    xs' <- mapM (\x -> parse p_expr [x]) xs
+    return (L l (ExplicitList placeHolderType Nothing xs'))
+
 }
