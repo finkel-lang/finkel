@@ -73,8 +73,8 @@ quasiquote :: LTForm Atom -> LTForm Atom
 quasiquote orig@(L l form) =
   case form of
    TList [L _ (TAtom (ASymbol "unquote")), rest] ->
-     rest
-     -- tList l [ tSym l "toForm", rest ]
+     -- rest
+     tList l [ tSym l "toForm", rest ]
    TList forms' | any isUnquoteSplice forms' ->
      tList l [ tSym l "List"
              , tList l [tSym l "concat", tHsList l (go [] forms')]]

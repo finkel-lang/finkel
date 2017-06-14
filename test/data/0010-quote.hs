@@ -8,7 +8,8 @@ f1 arg
 f2 arg
   = print
       (List
-         [Atom (ASymbol "a"), Atom (ASymbol "b"), arg, Atom (ASymbol "d")])
+         [Atom (ASymbol "a"), Atom (ASymbol "b"), toForm arg,
+          Atom (ASymbol "d")])
 {-# LINE 13 "test/data/0010-quote.lisp" #-}
 f3 arg
   = print

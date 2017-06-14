@@ -188,6 +188,7 @@ exprs :: { HExpr }
       : 'if' expr expr expr { b_if $1 $2 $3 $4 }
       | 'do' do_stmts       { b_do $1 $2 }
       | 'lambda' pats expr  { b_lambda $1 $2 $3 }
+      | '::' expr type      { b_tsigE $1 $2 $3 }
       | app                 { b_app $1 }
 
 app :: { [HExpr] }
@@ -423,6 +424,9 @@ b_if (L l (TAtom _)) p t f = L l (mkHsIf p t f)
 
 b_lambda :: Located a -> [HPat] -> HExpr -> HExpr
 b_lambda ref pats body = mkHsLam pats body
+
+b_tsigE :: Located a -> HExpr -> HType -> HExpr
+b_tsigE (L l _) e t = L l (ExprWithTySig e (mkLHsSigWcType t))
 
 b_do :: Located a -> [HExprLStmt] -> HExpr
 b_do l exprs = L (getLoc l) (mkHsDo DoExpr exprs)
