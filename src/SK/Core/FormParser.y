@@ -3,8 +3,8 @@
 -- | Module for parsing form data.
 --
 -- Unlike the lexer for reading source code, parser defined in this
--- module expects list of 'Form' data as input and converting to Haskell
--- syntax defined in GHC.
+-- module expects list of 'Form' data as input, converts to Haskell
+-- AST defined in GHC.
 --
 module SK.Core.FormParser
   ( Builder(..)

@@ -8,10 +8,10 @@
   (print ['a 'b arg 'd]))
 
 (= (f2 arg)
-  (print `(a b ~arg d)))
+  (print `(a b ,arg d)))
 
 (= (f3 arg)
-  (print `(a b ~@arg d)))
+  (print `(a b ,@arg d)))
 
 (:: main (IO ()))
 (= main

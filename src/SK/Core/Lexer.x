@@ -71,9 +71,9 @@ $whitechar+  ;
 \'               { tok_quote }
 \`               { tok_quasiquote }
 
-"~ "             { tok_tilde }
-"~@"             { tok_unquote_splice }
-\~               { tok_unquote }
+", "             { tok_comma }
+",@"             { tok_unquote_splice }
+\,               { tok_unquote }
 
 --- Literal values
 
@@ -150,8 +150,8 @@ tok_quote _ _ = return (TSymbol "quote")
 tok_quasiquote :: Action
 tok_quasiquote _ _ = return (TSymbol "quasiquote")
 
-tok_tilde :: Action
-tok_tilde _ _ = return (TSymbol "~")
+tok_comma :: Action
+tok_comma _ _ = return (TSymbol ",")
 
 tok_unquote :: Action
 tok_unquote _ _ = return (TSymbol "unquote")

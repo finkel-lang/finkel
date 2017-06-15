@@ -102,13 +102,15 @@ compileMT = fmap unsafeCoerce . compileParsedExpr
 {-# INLINE compileMT #-}
 
 -- Cannot define recursive macro yet. Add `let' syntax.
-m_defMacroTransformer :: LMacro
-m_defMacroTransformer form =
+m_defineMacro :: LMacro
+m_defineMacro form =
   case form of
-    L l (TList [_,L _ (TAtom (ASymbol name)),body]) -> do
+    L l (TList [_, self@(L _ (TAtom (ASymbol name))),body]) -> do
       expanded <- macroexpand body
-      let expr = tList l [tSym l "::", expanded, tSym l "Macro"]
-      -- liftIO (do putStrLn "=== m_defmacrotransformer ==="
+      let expr = tList l [tSym l "let"
+                         ,tList l [tList l [self ,expanded]]
+                         ,tList l [tSym l "::", self, tSym l "Macro"]]
+      -- liftIO (do putStrLn "=== m_defineMacro ==="
       --            print (pForm (lTFormToForm expr)))
       case evalBuilder p_expr [expr] of
         Right hexpr -> do
@@ -163,15 +165,12 @@ m_varArgBinOp sym = \form ->
     mkOp x = L (getLoc x) (TAtom (ASymbol sym))
     combine x y = L (getLoc x) (TList [mkOp x, x, y])
 
--- m_defmacro :: LMacro
--- m_defmacro _ = failS "defmacro not yet supported."
-
 specialForms :: [(String, LMacro)]
 specialForms =
   [("quote", m_quote)
   ,("quasiquote", m_quasiquote)
   ,("defn", m_defn)
-  ,("defmacro-transformer", m_defMacroTransformer)
+  ,("define-macro", m_defineMacro)
 
   -- Binary operators defined in Prelude are hard coded, to support
   -- forms with variable number of arguments. In general, better not to
