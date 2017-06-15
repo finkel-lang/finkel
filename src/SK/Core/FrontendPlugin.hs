@@ -26,22 +26,35 @@ frontendPlugin =
   }
 
 skFrontend :: [String] -> [(String, Maybe Phase)] -> Ghc ()
-skFrontend flags args =
-  case args of
-    [(file,_)] ->
-      do ret <- toGhc (work file) specialForms
-         case ret of
-           Left err -> liftIO (putStrLn err)
-           Right _  -> return ()
-    _ -> liftIO (putStrLn ("Unknown args: " ++ show args))
+skFrontend flags args = do
+  case reverse flags of
+    ["-pgmF", orig, input, output] ->
+      doWork input (Just output) >>= showRet
+    [input] ->
+      doWork input Nothing >>= showRet
+    _ -> case args of
+           [(file,_)] ->
+             doWork file Nothing >>= showRet
+           _          ->
+             liftIO (putStrLn ("Unknown args: " ++ show args))
+  where
+    doWork input mbout =
+      toGhc (work input mbout) specialForms
+    showRet ret =
+      case ret of
+        Left err -> liftIO (putStrLn err)
+        Right _  -> return ()
 
-work :: FilePath -> Skc ()
-work file = do
+work :: FilePath -> Maybe FilePath -> Skc ()
+work file mbout = do
    contents <- liftIO (readFile file)
    setExpanderSettings
    (mdl, sp) <- compile (Just file) contents
    tc <- tcHsModule (Just file) False mdl
-   genHsSrc sp mdl >>= liftIO . putStrLn
+   hssrc <- genHsSrc sp mdl
+   case mbout of
+      Nothing -> liftIO (putStrLn hssrc)
+      Just out -> liftIO (writeFile out hssrc)
    -- ds <- desugarModule tc
    -- _ <- loadModule ds
    -- return ()
