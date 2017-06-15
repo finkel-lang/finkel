@@ -27,26 +27,21 @@ frontendPlugin =
 
 skFrontend :: [String] -> [(String, Maybe Phase)] -> Ghc ()
 skFrontend flags args =
-  do hsc_env <- getSession
-     let df = hsc_dflags hsc_env
-     case args of
-       [(file,_)] ->
-         do ret <- toGhc (work file) specialForms
-            case ret of
-              Left err -> liftIO (putStrLn err)
-              Right _  -> return ()
-       _ -> liftIO (putStrLn ("Unknown args: " ++ show args))
+  case args of
+    [(file,_)] ->
+      do ret <- toGhc (work file) specialForms
+         case ret of
+           Left err -> liftIO (putStrLn err)
+           Right _  -> return ()
+    _ -> liftIO (putStrLn ("Unknown args: " ++ show args))
 
 work :: FilePath -> Skc ()
 work file = do
    contents <- liftIO (readFile file)
    setExpanderSettings
    (mdl, sp) <- compile (Just file) contents
+   tc <- tcHsModule (Just file) False mdl
    genHsSrc sp mdl >>= liftIO . putStrLn
-   tc <- tcHsModule (Just file) mdl
-   case tc of
-     Left err -> failS err
-     Right tc' -> do
-       ds <- desugarModule tc'
-       _ <- loadModule ds
-       return ()
+   -- ds <- desugarModule tc
+   -- _ <- loadModule ds
+   -- return ()

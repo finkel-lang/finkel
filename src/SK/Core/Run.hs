@@ -29,9 +29,15 @@ runSkc m env =
     defaultFlushOut
     (runGhc
        (Just libdir)
-       (do M.setExpanderSettings
-           ret <- toGhc m env
-           return (fmap fst ret)))
+       (handleSourceError
+          (\se -> do
+            flags <- getSessionDynFlags
+            return (Left (unlines (map (showSDoc flags)
+                                       (pprErrMsgBagWithLoc
+                                         (srcErrorMessages se))))))
+          (do M.setExpanderSettings
+              ret <- toGhc m env
+              return (fmap fst ret))))
 
 sExpression :: String -> IO ()
 sExpression input =

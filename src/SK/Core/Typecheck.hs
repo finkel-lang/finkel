@@ -20,26 +20,23 @@ import SK.Core.GHC
 -- precisely with S-expression source code and helpful.
 ---
 tcHsModule :: GhcMonad m
-           => Maybe FilePath   -- ^ Source of the module.
+           => Maybe FilePath -- ^ Source of the module.
+           -> Bool -- ^ True to generate files, otherwise False.
            -> HsModule RdrName -- ^ Module to typecheck.
-           -> m (Either String TypecheckedModule)
-tcHsModule mbfile mdl = do
+           -> m TypecheckedModule
+tcHsModule mbfile genFile mdl = do
   let modName = case hsmodName mdl of
          Nothing -> error "no module name"
          Just name -> unLoc name
       fn = maybe "anon" id mbfile
       langExts = languageExtensions (Just Haskell2010)
   preflags <- getSessionDynFlags
-  -- _ <- setSessionDynFlags
-  --        (foldl xopt_set
-  --               (preflags { hscTarget = HscNothing
-  --                         , ghcLink = NoLink })
-  --               langExts)
-  _ <- setSessionDynFlags
-           (foldl xopt_set
-                  (preflags { hscTarget = HscAsm
-                            , ghcLink = LinkBinary })
-                  langExts)
+  -- XXX: Does not take care of user specified DynFlags settings.
+  let preflags' =
+       if genFile
+          then preflags {hscTarget = HscAsm, ghcLink = LinkBinary}
+          else preflags {hscTarget = HscNothing, ghcLink = NoLink}
+  _ <- setSessionDynFlags (foldl xopt_set preflags' langExts)
   flags <- getSessionDynFlags
   -- timestamp <- liftIO getCurrentTime
   timestamp <- liftIO (maybe getCurrentTime
@@ -71,9 +68,4 @@ tcHsModule mbfile mdl = do
                         , pm_parsed_source = L r_s_span mdl
                         , pm_extra_src_files = [fn]
                         , pm_annotations = ann }
-  handleSourceError
-    (\se -> return (Left (unlines
-                            (map (showSDoc flags)
-                                 (pprErrMsgBagWithLoc
-                                    (srcErrorMessages se))))))
-    (fmap Right (typecheckModule pm))
+  typecheckModule pm
