@@ -4,7 +4,7 @@ import Control.Monad (when)
 import System.Environment (getArgs)
 import System.IO (IOMode(..), hPutStrLn, withFile)
 
-import SK.Core
+import SK.Core.Run
 
 headerLine :: String -> IO ()
 headerLine str = putStrLn ("========== " ++ str ++ " ==========")

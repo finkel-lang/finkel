@@ -24,6 +24,7 @@ library
                        SK.Core.GHC
                        SK.Core.Lexer
                        SK.Core.Macro
+                       SK.Core.Run
                        SK.Core.SPState
                        SK.Core.SKC
                        SK.Core.TokenParser

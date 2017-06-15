@@ -191,7 +191,7 @@ setExpanderSettings = do
   _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
                                  , ghcLink = LinkInMemory })
   let decl = IIDecl . simpleImportDecl . mkModuleName
-  setContext (map decl ["Prelude", "SK.Core.Form", "SK.Core.SKC"])
+  setContext [decl "Prelude", decl "SK.Core"]
 
 -- | Expands form, with taking care of @begin@ special form.
 macroexpands :: [LTForm Atom] -> Skc [LTForm Atom]
