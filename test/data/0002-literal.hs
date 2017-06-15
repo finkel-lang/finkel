@@ -1,5 +1,5 @@
+{-# LINE 1 "test/data/0002-literal.hs" #-}
 module Main where
-{-# LINE 7 "test/data/0002-literal.lisp" #-}
 main
   = do { print "string literal";
          print 42;

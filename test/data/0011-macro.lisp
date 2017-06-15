@@ -2,8 +2,7 @@
 
 (module Main)
 
-(import SK.Core.Form)
-(import SK.Core.SKC)
+(import SK.Core)
 
 (define-macro m1
   (\ (form)

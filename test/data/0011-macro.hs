@@ -1,8 +1,7 @@
+{-# LINE 1 "test/data/0011-macro.hs" #-}
 module Main where
-import SK.Core.Form
-import SK.Core.SKC
+import SK.Core
 m1 :: Macro
-{-# LINE 8 "test/data/0011-macro.lisp" #-}
 m1
   = (\ form
        -> return
@@ -11,5 +10,4 @@ m1
                 List
                   [Atom (ASymbol "++"), Atom (AString "Hello, "),
                    toForm (car form)]]))
-{-# LINE 12 "test/data/0011-macro.lisp" #-}
 main = putStrLn ((++) "Hello, " "macro")

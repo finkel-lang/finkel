@@ -1,16 +1,14 @@
+{-# LINE 1 "test/data/0010-quote.hs" #-}
 module Main where
 import SK.Core.Form
-{-# LINE 7 "test/data/0010-quote.lisp" #-}
 f1 arg
   = print
       [Atom (ASymbol "a"), Atom (ASymbol "b"), arg, Atom (ASymbol "d")]
-{-# LINE 10 "test/data/0010-quote.lisp" #-}
 f2 arg
   = print
       (List
          [Atom (ASymbol "a"), Atom (ASymbol "b"), toForm arg,
           Atom (ASymbol "d")])
-{-# LINE 13 "test/data/0010-quote.lisp" #-}
 f3 arg
   = print
       (List
@@ -18,7 +16,6 @@ f3 arg
             [[Atom (ASymbol "a"), Atom (ASymbol "b")], splice arg,
              [Atom (ASymbol "d")]]))
 main :: IO ()
-{-# LINE 17 "test/data/0010-quote.lisp" #-}
 main
   = do { print (Atom (ASymbol "foo"));
          print (Atom (ASymbol "foo"));

@@ -20,7 +20,6 @@ module SK.Core.Emit
 
 -- From 'base'
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
 
 -- From 'ghc'
 import GHC
@@ -169,14 +168,18 @@ hsSrc_nonnull st xs =
     _  -> vcat (map (toHsSrc st) xs)
 
 linePragma :: SPState -> Located a -> SDoc
-linePragma st ref =
+linePragma st ref = linePragma' st (spanStartLine (getLoc ref))
+
+linePragma' :: SPState -> Int -> SDoc
+linePragma' st linum =
   text "{-# LINE" <+>
-  text line <+>
+  int linum <+>
   doubleQuotes (text file) <+>
   text "#-}"
     where
-      line = show (spanStartLine (getLoc ref))
-      file = fromMaybe "s-expression" (targetFile st)
+      file = maybe "s-expression" replaceExtension (targetFile st)
+      replaceExtension name =
+        reverse ("sh" ++ dropWhile (/= '.') (reverse name))
 
 emitPrevDoc :: SPState -> Located a -> SDoc
 emitPrevDoc = emitPrevDocWithOffset 1
@@ -208,7 +211,8 @@ instance (HsSrc a, OutputableBndr a, HasOccName a)
         $$ pp_nonnull imports
         $$ hsSrc_nonnull st decls
     HsModule (Just name) exports imports decls deprec mbDoc ->
-      vcat [ mbHeaderComment st mbDoc
+      vcat [ linePragma' st 1
+           , mbHeaderComment st mbDoc
            , case exports of
                Nothing ->
                  pp_header (text "where")
@@ -251,16 +255,9 @@ instance (OutputableBndr a, HsSrc a) => HsSrc (HsBindLR a a) where
            -- Additional operation to `ppr' for `toHsSrc'. Find
            -- corresponding haddock comment for function binding, and
            -- print it out.
-           $$ linePragma st fun
+           -- $$ linePragma st fun
            $$ emitPrevDoc st fun
 
            $$ pprFunBind (unLoc fun) matches
            $$ ifPprDebug (ppr wrap)
-      -- VarBind { var_id = var
-      --         , var_rhs = rhs }
-      --   -- In GHC HEAD src, CaseBind is replaced with CasePatBind.
-      --   -> linePragma st rhs
-      --      $$ emitPrevDocWithOffset 2 st rhs
-      --      $$ sep [ pprBndr CaseBind var
-      --             , nest 2 $ equals <+> pprExpr (unLoc rhs)]
       _ -> ppr binds
