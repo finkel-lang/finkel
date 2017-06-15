@@ -46,7 +46,8 @@ module SK.Core.GHC
     mkHsIntegral,
     mkHsLam,
     mkLHsSigWcType,
-    mkMatch,
+    mkMatch, -- signature changed in git HEAD
+    mkMatchGroup,
     mkModuleName,
     mkNPat,
     noLoc,
@@ -63,6 +64,7 @@ module SK.Core.GHC
 
     -- * BasicTypes
     Boxity(..),
+    Origin(..),
 
     -- * DriverPhases
     HscSource(..),
@@ -83,6 +85,9 @@ module SK.Core.GHC
     -- * FastString
     fsLit,
 
+    -- * Finder
+    mkHomeModLocation,
+
     -- * OccName
     srcDataName,
     tcClsName,
@@ -98,6 +103,9 @@ module SK.Core.GHC
     HsLocalBinds,
     HsLocalBindsLR(..),
     HsValBindsLR(..),
+
+    -- * HsExpr
+    MatchGroup(..),
 
     -- * HsImpExp
     simpleImportDecl,
@@ -138,6 +146,9 @@ module SK.Core.GHC
     mkSrcSpan,
     unLoc,
 
+    -- * Util
+    getModificationUTCTime,
+
     -- * Internal
     setInterpretDynFlags
   ) where
@@ -149,6 +160,7 @@ import DynFlags
 import ErrUtils
 import Exception
 import FastString
+import Finder
 import HscTypes
 import HsBinds
 import Module
@@ -159,6 +171,7 @@ import Outputable
 import RdrHsSyn
 import RdrName
 import SrcLoc
+import Util
 
 setInterpretDynFlags :: GhcMonad m => DynFlags -> m ()
 setInterpretDynFlags flags = do

@@ -52,9 +52,10 @@ import SK.Core.GHC
 'module' { L _ (TAtom (ASymbol "module")) }
 'import' { L _ (TAtom (ASymbol "import")) }
 'if'     { L _ (TAtom (ASymbol "if")) }
+'do'     { L _ (TAtom (ASymbol "do")) }
 'lambda' { L _ (TAtom (ASymbol "\\")) }
 'let'    { L _ (TAtom (ASymbol "let")) }
-'do'     { L _ (TAtom (ASymbol "do")) }
+'case'   { L _ (TAtom (ASymbol "case")) }
 
 '='  { L _ (TAtom (ASymbol "=")) }
 '<-' { L _ (TAtom (ASymbol "<-")) }
@@ -192,15 +193,9 @@ exprs :: { HExpr }
       | 'do' do_stmts       { b_doE $1 $2 }
       | 'lambda' pats expr  { b_lamE $1 $2 $3 }
       | 'let' lbinds expr   { b_letE $1 $2 $3 }
+      | 'case' expr pes     { b_caseE $1 $2 $3 }
       | '::' expr type      { b_tsigE $1 $2 $3 }
       | app                 { b_appE $1 }
-
-app :: { [HExpr] }
-    : rapp { reverse $1 }
-
-rapp :: { [HExpr] }
-     : expr { [$1] }
-     | rapp expr { $2 : $1 }
 
 lbinds :: { [HBind] }
        : 'unit' { [] }
@@ -215,6 +210,17 @@ rlbinds0 :: { [HBind] }
 
 lbind :: { HBind }
       : decl_lhs expr { b_lbindB $1 $2 }
+
+pes :: { [(HPat, HExpr)] }
+    : pat expr     { [($1, $2)] }
+    | pat expr pes { ($1, $2) : $3 }
+
+app :: { [HExpr] }
+    : rapp { reverse $1 }
+
+rapp :: { [HExpr] }
+     : expr { [$1] }
+     | rapp expr { $2 : $1 }
 
 -- do expression
 
@@ -451,6 +457,14 @@ b_letE (L l _) binds body = L l (HsLet binds' body)
     binds' = case binds of
       [] -> L l emptyLocalBinds
       _  -> L l (HsValBinds (ValBindsIn (listToBag binds) []))
+
+b_caseE :: Located a -> HExpr -> [(HPat, HExpr)] -> HExpr
+b_caseE (L l _) expr pes = L l (HsCase expr mg)
+  where
+    matches = map f pes
+    f (p,e) = mkMatch [p] e (L l emptyLocalBinds)
+    mg = mkMatchGroup Generated matches
+    -- mg' = mg {mg_alts = L l (concat $ replicate 2 matches)}
 
 b_tsigE :: Located a -> HExpr -> HType -> HExpr
 b_tsigE (L l _) e t = L l (ExprWithTySig e (mkLHsSigWcType t))
