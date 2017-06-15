@@ -20,6 +20,7 @@ library
   exposed-modules:     SK.Core
                        SK.Core.Emit
                        SK.Core.Form
+                       SK.Core.FrontendPlugin
                        SK.Core.FormParser
                        SK.Core.GHC
                        SK.Core.Lexer

@@ -19,28 +19,37 @@ import SK.Core.GHC
 -- Error location are derived from 'HsModule', locations match
 -- precisely with S-expression source code and helpful.
 ---
-tcHsModule :: GhcMonad m => HsModule RdrName
+tcHsModule :: GhcMonad m
+           => Maybe FilePath   -- ^ Source of the module.
+           -> HsModule RdrName -- ^ Module to typecheck.
            -> m (Either String TypecheckedModule)
-tcHsModule mdl = do
+tcHsModule mbfile mdl = do
   let modName = case hsmodName mdl of
          Nothing -> error "no module name"
          Just name -> unLoc name
-      fn = "tcHsModule"
+      fn = maybe "anon" id mbfile
       langExts = languageExtensions (Just Haskell2010)
   preflags <- getSessionDynFlags
+  -- _ <- setSessionDynFlags
+  --        (foldl xopt_set
+  --               (preflags { hscTarget = HscNothing
+  --                         , ghcLink = NoLink })
+  --               langExts)
   _ <- setSessionDynFlags
-         (foldl xopt_set
-                (preflags { hscTarget = HscNothing
-                          , ghcLink = NoLink })
-                langExts)
+           (foldl xopt_set
+                  (preflags { hscTarget = HscAsm
+                            , ghcLink = LinkBinary })
+                  langExts)
   flags <- getSessionDynFlags
-  timestamp <- liftIO getCurrentTime
+  -- timestamp <- liftIO getCurrentTime
+  timestamp <- liftIO (maybe getCurrentTime
+                             getModificationUTCTime
+                             mbfile)
+  mloc <- liftIO (mkHomeModLocation flags modName fn)
+  -- liftIO (do putStrLn ("hi:  " ++ ml_hi_file mloc)
+  --            putStrLn ("obj: " ++ ml_obj_file mloc))
   let unitId = mainUnitId
       mmod = mkModule unitId modName
-      mloc =
-        ModLocation { ml_hs_file = Nothing
-                    , ml_hi_file = "generated_by_typecheck.hi"
-                    , ml_obj_file = "generated_by_typecheck.o" }
       prelude = L r_s_span (mkModuleName "Prelude")
       -- XXX: Have not tested with complex module importing modules
       -- from non-standard packages.
