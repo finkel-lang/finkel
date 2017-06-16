@@ -255,7 +255,7 @@ instance (OutputableBndr a, HsSrc a) => HsSrc (HsBindLR a a) where
            -- Additional operation to `ppr' for `toHsSrc'. Find
            -- corresponding haddock comment for function binding, and
            -- print it out.
-           -- $$ linePragma st fun
+           --- $$ linePragma st fun
            $$ emitPrevDoc st fun
 
            $$ pprFunBind (unLoc fun) matches

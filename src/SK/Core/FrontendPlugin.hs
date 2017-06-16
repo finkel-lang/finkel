@@ -9,7 +9,7 @@ module SK.Core.FrontendPlugin
   ) where
 
 -- From ghc
-import GHC
+import GHC (Phase, Ghc)
 import GhcPlugins
 
 -- Internal
@@ -18,6 +18,8 @@ import SK.Core.Emit
 import SK.Core.Macro
 import SK.Core.Run
 import SK.Core.Typecheck
+
+import System.Exit
 
 frontendPlugin :: FrontendPlugin
 frontendPlugin =
@@ -29,6 +31,8 @@ skFrontend :: [String] -> [(String, Maybe Phase)] -> Ghc ()
 skFrontend flags args = do
   case reverse flags of
     ["-pgmF", orig, input, output] ->
+      doWork input (Just output) >>= showRet
+    ["-o", output, input] ->
       doWork input (Just output) >>= showRet
     [input] ->
       doWork input Nothing >>= showRet
@@ -42,7 +46,7 @@ skFrontend flags args = do
       toGhc (work input mbout) specialForms
     showRet ret =
       case ret of
-        Left err -> liftIO (putStrLn err)
+        Left err -> liftIO (putStrLn err) >> liftIO exitFailure
         Right _  -> return ()
 
 work :: FilePath -> Maybe FilePath -> Skc ()
@@ -50,7 +54,7 @@ work file mbout = do
    contents <- liftIO (readFile file)
    setExpanderSettings
    (mdl, sp) <- compile (Just file) contents
-   tc <- tcHsModule (Just file) False mdl
+   -- tc <- tcHsModule (Just file) False mdl
    hssrc <- genHsSrc sp mdl
    case mbout of
       Nothing -> liftIO (putStrLn hssrc)
