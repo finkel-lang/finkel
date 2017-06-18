@@ -2,7 +2,10 @@
 --
 -- Not used in exposed modules yet.
 --
-module SK.Core.Typecheck where
+module SK.Core.Typecheck
+  ( mkModSummary
+  , tcHsModule )
+   where
 
 -- containers
 import qualified Data.Map as Map
@@ -12,6 +15,38 @@ import Data.Time (getCurrentTime)
 
 -- Internal
 import SK.Core.GHC
+
+-- | Make 'ModSummary'. 'UnitId' is main unit.
+mkModSummary :: GhcMonad m => Maybe FilePath -> HsModule RdrName
+             -> m ModSummary
+mkModSummary mbfile mdl = do
+  let modName = case hsmodName mdl of
+                      Just name -> unLoc name
+                      Nothing   -> mkModuleName "Main"
+      fn = maybe "anonymous" id mbfile
+      mmod = mkModule mainUnitId modName
+      prelude = noLoc (mkModuleName "Prelude")
+  flags <- getSessionDynFlags
+  mloc <- liftIO (mkHomeModLocation flags modName fn)
+  timestamp <- liftIO (maybe getCurrentTime
+                             getModificationUTCTime
+                             mbfile)
+  let imports = map importedName (hsmodImports mdl)
+      importedName lm = ideclName (unLoc lm)
+      imported = map (\x -> (Nothing, x)) imports
+  -- XXX: Have not tested with complex module importing modules from
+  -- non-standard packages.
+  return ModSummary { ms_mod = mmod
+                    , ms_hsc_src = HsSrcFile
+                    , ms_location = mloc
+                    , ms_hs_date = timestamp
+                    , ms_obj_date = Nothing
+                    , ms_iface_date = Nothing
+                    , ms_srcimps = []
+                    , ms_textual_imps = (Nothing, prelude) : imported
+                    , ms_hspp_file = fn
+                    , ms_hspp_opts = flags
+                    , ms_hspp_buf = Nothing }
 
 
 -- | Action to type check module.
@@ -38,29 +73,14 @@ tcHsModule mbfile genFile mdl = do
           else preflags {hscTarget = HscNothing, ghcLink = NoLink}
   _ <- setSessionDynFlags (foldl xopt_set preflags' langExts)
   flags <- getSessionDynFlags
-  -- timestamp <- liftIO getCurrentTime
   timestamp <- liftIO (maybe getCurrentTime
                              getModificationUTCTime
                              mbfile)
   mloc <- liftIO (mkHomeModLocation flags modName fn)
-  -- liftIO (do putStrLn ("hi:  " ++ ml_hi_file mloc)
-  --            putStrLn ("obj: " ++ ml_obj_file mloc))
+  ms <- mkModSummary mbfile mdl
   let unitId = mainUnitId
       mmod = mkModule unitId modName
       prelude = L r_s_span (mkModuleName "Prelude")
-      -- XXX: Have not tested with complex module importing modules
-      -- from non-standard packages.
-      ms = ModSummary { ms_mod = mmod
-                      , ms_hsc_src = HsSrcFile
-                      , ms_location = mloc
-                      , ms_hs_date = timestamp
-                      , ms_obj_date = Nothing
-                      , ms_iface_date = Nothing
-                      , ms_srcimps = []
-                      , ms_textual_imps = [(Nothing, prelude)]
-                      , ms_hspp_file = fn
-                      , ms_hspp_opts = flags
-                      , ms_hspp_buf = Nothing }
       ann = (Map.empty, Map.empty)
       r_s_loc = mkSrcLoc (fsLit fn) 1 1
       r_s_span = mkSrcSpan r_s_loc r_s_loc

@@ -4,6 +4,7 @@ module SK.Core.Macro
   ( macroexpand
   , macroexpands
   , setExpanderSettings
+  , withExpanderSettings
   , specialForms
   ) where
 
@@ -193,10 +194,20 @@ setExpanderSettings = do
   let decl = IIDecl . simpleImportDecl . mkModuleName
   setContext [decl "Prelude", decl "SK.Core"]
 
+-- | Perform given action with DynFlags set for macroexpansion, used
+-- this to preserve original DynFlags.
+withExpanderSettings :: GhcMonad m => m a -> m a
+withExpanderSettings act = do
+  origFlags <- getSessionDynFlags
+  setExpanderSettings
+  ret <- act
+  setSessionDynFlags origFlags
+  return ret
+
 -- | Expands form, with taking care of @begin@ special form.
 macroexpands :: [LTForm Atom] -> Skc [LTForm Atom]
 macroexpands forms = do
-    -- Get rid of unnecessary reverses.
+    -- XXX: Get rid of unnecessary reverses.
     forms' <- mapM macroexpand forms
     fmap reverse (foldM f [] forms')
   where

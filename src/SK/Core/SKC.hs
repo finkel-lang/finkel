@@ -7,6 +7,7 @@ module SK.Core.SKC
   , LMacro
   , Env
   , toGhc
+  , fromGhc
   , skc
   , failS
   , extendMacroEnv
@@ -55,6 +56,9 @@ type Env = [(String, LMacro)]
 
 toGhc :: Skc a -> Env -> Ghc (Either String (a, Env))
 toGhc m st = runExceptT (runStateT (unSkc m) st)
+
+fromGhc :: Ghc a -> Skc a
+fromGhc m = Skc (lift (lift m))
 
 skc :: a -> Skc a
 skc = return
