@@ -132,6 +132,7 @@ module SK.Core.GHC
     -- * RdrName
     mkUnqual,
     mkVarUnqual,
+    nameRdrName,
 
     -- * SrcLoc
     GenLocated(..),
@@ -145,6 +146,9 @@ module SK.Core.GHC
     mkSrcLoc,
     mkSrcSpan,
     unLoc,
+
+    -- TyWiredIn
+    consDataConName,
 
     -- * Util
     getModificationUTCTime,
@@ -171,6 +175,7 @@ import Outputable
 import RdrHsSyn
 import RdrName
 import SrcLoc
+import TysWiredIn
 import Util
 
 setInterpretDynFlags :: GhcMonad m => DynFlags -> m ()

@@ -222,7 +222,7 @@ rapp :: { [HExpr] }
      : expr { [$1] }
      | rapp expr { $2 : $1 }
 
--- do expression
+-- do statement
 
 do_stmts :: { [HExprLStmt] }
          : rdo_stmts { reverse $1 }
@@ -353,7 +353,14 @@ type HImportDecl = LImportDecl RdrName
 -- and 'DataConstr'.
 mkRdrName :: String -> RdrName
 mkRdrName name@(x:_)
-  | isUpper x = mkUnqual srcDataName (fsLit name)
+  -- ':' is special syntax. It is defined in module GHC.Types in
+  -- ghc-prim package, not exported.
+  | name == [':'] = nameRdrName consDataConName
+
+  -- Data constructor starts from capital letter or ':'.
+  | isUpper x || x == ':' = mkUnqual srcDataName (fsLit name)
+
+  -- Variable.
   | otherwise = mkVarUnqual (fsLit name)
 
 
@@ -429,7 +436,8 @@ b_intP (L l (TAtom (AInteger n))) =
 b_symP :: LTForm Atom -> HPat
 b_symP (L l (TAtom (ASymbol name@(x:xs))))
    | name == "_" = L l (WildPat placeHolderType)
-   | isUpper x = L l (ConPatIn (L l (mkRdrName name)) (PrefixCon []))
+   | isUpper x || x == ':'
+    = L l (ConPatIn (L l (mkRdrName name)) (PrefixCon []))
    | otherwise = L l (VarPat (L l (mkRdrName name)))
 
 b_listP :: [LTForm Atom] -> Builder HPat

@@ -80,7 +80,6 @@ tcHsModule mbfile genFile mdl = do
   ms <- mkModSummary mbfile mdl
   let unitId = mainUnitId
       mmod = mkModule unitId modName
-      prelude = L r_s_span (mkModuleName "Prelude")
       ann = (Map.empty, Map.empty)
       r_s_loc = mkSrcLoc (fsLit fn) 1 1
       r_s_span = mkSrcSpan r_s_loc r_s_loc

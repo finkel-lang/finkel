@@ -5,6 +5,7 @@ main
          print 42;
          print ();
          print [1, 2, 3, 4, 5];
+         print ((:) True ((:) False []));
          print
            [if (>) 2 3 then
                 do { x <- return 100;

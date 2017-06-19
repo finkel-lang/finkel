@@ -22,6 +22,7 @@
 
       ;; List literals.
       (print [1 2 3 4 5])
+      (print (: True (: False [])))
 
       ;; List containing expressions.
       (print [(if (> 2 3)
