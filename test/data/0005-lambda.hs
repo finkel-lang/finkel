@@ -6,8 +6,11 @@ f2 n
 f3 n = let in (+) n 35
 f4 n
   = let
+      a :: Int
       a = 14
+      f :: Int -> Int -> Int
       f x y = (+) x y
+      g :: Int -> Int
       g = (\ x -> (*) x 2)
     in g (f n a)
 main

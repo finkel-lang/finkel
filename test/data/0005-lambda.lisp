@@ -24,9 +24,13 @@
 ;; Expression with 'let'. In bindings of `let', 'a' is a integer value
 ;; 14, and `f' is a function taking two arguments.
 (= (f4 n)
-  (let ((a 14)
-        ((f x y) (+ x y))
-        (g (\ (x) (* x 2))))
+  (let ((:: a Int)
+        (= a 14)
+        (:: f (-> Int (-> Int Int)))
+        (= (f x y)
+          (+ x y))
+        (:: g (-> Int Int))
+        (= g (\ (x) (* x 2))))
     (g (f n a))))
 
 ;;; Main entry point.

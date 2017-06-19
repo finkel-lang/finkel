@@ -41,7 +41,6 @@ import SK.Core.GHC
 %name p_exprs exprs
 %name p_do_stmt1 do_stmt1
 %name p_lbinds0 lbinds0
-%name p_lbind lbind
 
 %tokentype { LTForm Atom }
 %monad { Builder }
@@ -197,19 +196,16 @@ exprs :: { HExpr }
       | '::' expr type      { b_tsigE $1 $2 $3 }
       | app                 { b_appE $1 }
 
-lbinds :: { [HBind] }
+lbinds :: { [HDecl] }
        : 'unit' { [] }
        | 'list' {% parse p_lbinds0 $1 }
 
-lbinds0 :: { [HBind] }
+lbinds0 :: { [HDecl] }
         : rlbinds0 { reverse $1 }
 
-rlbinds0 :: { [HBind] }
-         : 'list'          {% fmap (:[]) (parse p_lbind $1) }
-         | rlbinds0 'list' {% fmap (:$1) (parse p_lbind $2) }
-
-lbind :: { HBind }
-      : decl_lhs expr { b_lbindB $1 $2 }
+rlbinds0 :: { [HDecl] }
+         : 'list'          {% fmap (:[]) (parse p_decl $1) }
+         | rlbinds0 'list' {% fmap (:$1) (parse p_decl $2) }
 
 pes :: { [(HPat, HExpr)] }
     : pat expr     { [($1, $2)] }
@@ -222,7 +218,9 @@ rapp :: { [HExpr] }
      : expr { [$1] }
      | rapp expr { $2 : $1 }
 
--- do statement
+
+--- ------------
+--- Do statement
 
 do_stmts :: { [HExprLStmt] }
          : rdo_stmts { reverse $1 }
@@ -459,12 +457,19 @@ b_ifE (L l (TAtom _)) p t f = L l (mkHsIf p t f)
 b_lamE :: Located a -> [HPat] -> HExpr -> HExpr
 b_lamE ref pats body = mkHsLam pats body
 
-b_letE :: Located a -> [HBind] -> HExpr -> HExpr
-b_letE (L l _) binds body = L l (HsLet binds' body)
+b_letE :: Located a -> [HDecl] -> HExpr -> HExpr
+b_letE (L l _) decls body = L l (HsLet binds' body)
   where
-    binds' = case binds of
+    binds' = case decls of
       [] -> L l emptyLocalBinds
-      _  -> L l (HsValBinds (ValBindsIn (listToBag binds) []))
+      _  -> L l (HsValBinds (ValBindsIn (listToBag binds) sigs))
+    (binds, sigs) = go ([], []) decls
+    go (bs,ss) ds =
+      case ds of
+        [] -> (bs, ss)
+        d:ds' -> case d of
+          L ld (ValD b) -> go (L ld b:bs,ss) ds'
+          L ld (SigD s) -> go (bs,L ld s:ss) ds'
 
 b_caseE :: Located a -> HExpr -> [(HPat, HExpr)] -> HExpr
 b_caseE (L l _) expr pes = L l (HsCase expr mg)
@@ -472,7 +477,6 @@ b_caseE (L l _) expr pes = L l (HsCase expr mg)
     matches = map f pes
     f (p,e) = mkMatch [p] e (L l emptyLocalBinds)
     mg = mkMatchGroup Generated matches
-    -- mg' = mg {mg_alts = L l (concat $ replicate 2 matches)}
 
 b_tsigE :: Located a -> HExpr -> HType -> HExpr
 b_tsigE (L l _) e t = L l (ExprWithTySig e (mkLHsSigWcType t))

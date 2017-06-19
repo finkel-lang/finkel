@@ -109,7 +109,7 @@ m_defineMacro form =
     L l (TList [_, self@(L _ (TAtom (ASymbol name))),body]) -> do
       expanded <- macroexpand body
       let expr = tList l [tSym l "let"
-                         ,tList l [tList l [self ,expanded]]
+                         ,tList l [tList l [tSym l "=", self ,expanded]]
                          ,tList l [tSym l "::", self, tSym l "Macro"]]
       -- liftIO (do putStrLn "=== m_defineMacro ==="
       --            print (pForm (lTFormToForm expr)))
