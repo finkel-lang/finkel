@@ -3,9 +3,9 @@
 
 module SK.Core.SKC
   ( Skc(..)
+  , SkEnv
   , Macro
   , LMacro
-  , Env
   , toGhc
   , fromGhc
   , failS
@@ -24,7 +24,7 @@ import SK.Core.GHC
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
 newtype Skc a = Skc {
-  unSkc :: StateT Env (ExceptT String Ghc) a
+  unSkc :: StateT SkEnv (ExceptT String Ghc) a
 } deriving (Functor, Applicative, Monad, MonadIO)
 
 instance ExceptionMonad Skc where
@@ -51,9 +51,9 @@ type Macro = Form Atom -> Skc (Form Atom)
 type LMacro = LTForm Atom -> Skc (LTForm Atom)
 
 -- | Type of state in 'SKC'.
-type Env = [(String, LMacro)]
+type SkEnv = [(String, LMacro)]
 
-toGhc :: Skc a -> Env -> Ghc (Either String (a, Env))
+toGhc :: Skc a -> SkEnv -> Ghc (Either String (a, SkEnv))
 toGhc m st = runExceptT (runStateT (unSkc m) st)
 
 fromGhc :: Ghc a -> Skc a

@@ -5,6 +5,7 @@ module SK.Core.Run
   , compile
   , compileAndEmit
   , runSkc
+  , initialSkEnv
   ) where
 
 import GHC.Paths (libdir)
@@ -22,7 +23,7 @@ import qualified SK.Core.TokenParser as TP
 import qualified SK.Core.Macro as M
 
 -- | Run @Skc@ with given environment.
-runSkc :: Skc a -> Env -> IO (Either String a)
+runSkc :: Skc a -> SkEnv -> IO (Either String a)
 runSkc m env =
   defaultErrorHandler
     defaultFatalMessager
@@ -38,6 +39,10 @@ runSkc m env =
           (do M.setExpanderSettings
               ret <- toGhc m env
               return (fmap fst ret))))
+
+-- | Initial 'SkEnv' for performing computation with 'Skc'.
+initialSkEnv :: SkEnv
+initialSkEnv = M.specialForms
 
 sExpression :: String -> IO ()
 sExpression input =

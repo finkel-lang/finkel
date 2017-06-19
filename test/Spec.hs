@@ -10,7 +10,9 @@ import System.FilePath
 import System.Directory
 import Test.Hspec
 
+import SK.Core.Emit
 import SK.Core.Run
+import SK.Core.Typecheck
 
 getTestFiles :: IO [FilePath]
 getTestFiles =
@@ -25,7 +27,10 @@ readCode name = do
   let input = "test" </> "data" </> name <.> "lisp"
   contents <- readFile input
   expected <- readFile ("test" </> "data" </> name <.> "hs")
-  compiled <- compileAndEmit (Just input) contents
+  let go = do (mdl, st) <- compile (Just input) contents
+              _ <- tcHsModule (Just input) False mdl
+              genHsSrc st mdl
+  compiled <- runSkc go initialSkEnv
   case compiled of
     Right code -> return (code, expected)
     Left e -> putStrLn e >> return ("", expected)
