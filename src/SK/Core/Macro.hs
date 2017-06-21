@@ -190,7 +190,8 @@ setExpanderSettings :: GhcMonad m => m ()
 setExpanderSettings = do
   flags <- getSessionDynFlags
   _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
-                                 , ghcLink = LinkInMemory })
+                                 , ghcLink = LinkInMemory
+                                 , optLevel = 0 })
   let decl = IIDecl . simpleImportDecl . mkModuleName
   setContext [decl "Prelude", decl "SK.Core"]
 
