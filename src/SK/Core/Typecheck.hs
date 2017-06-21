@@ -16,6 +16,9 @@ import Data.Time (getCurrentTime)
 -- Internal
 import SK.Core.GHC
 
+import DynFlags (parseDynamicFilePragma)
+import HeaderInfo (getOptionsFromFile)
+
 -- | Make 'ModSummary'. 'UnitId' is main unit.
 mkModSummary :: GhcMonad m => Maybe FilePath -> HsModule RdrName
              -> m ModSummary
@@ -26,14 +29,22 @@ mkModSummary mbfile mdl = do
       fn = maybe "anonymous" id mbfile
       mmod = mkModule mainUnitId modName
       prelude = noLoc (mkModuleName "Prelude")
-  flags <- getSessionDynFlags
-  mloc <- liftIO (mkHomeModLocation flags modName fn)
-  timestamp <- liftIO (maybe getCurrentTime
-                             getModificationUTCTime
-                             mbfile)
-  let imports = map importedName (hsmodImports mdl)
+      imports = map importedName (hsmodImports mdl)
       importedName lm = ideclName (unLoc lm)
       imported = map (\x -> (Nothing, x)) imports
+
+  dflags0 <- getSessionDynFlags
+  mloc <- liftIO (mkHomeModLocation dflags0 modName fn)
+  timestamp <-
+    liftIO (maybe getCurrentTime getModificationUTCTime mbfile)
+  dflags1 <-
+    if isHsSource fn
+      then do
+        opts <- liftIO (getOptionsFromFile dflags0 fn)
+        (dflags1,_,_) <- liftIO (parseDynamicFilePragma dflags0 opts)
+        return dflags1
+      else return dflags0
+
   -- XXX: Have not tested with complex module importing modules from
   -- non-standard packages.
   return ModSummary { ms_mod = mmod
@@ -45,13 +56,18 @@ mkModSummary mbfile mdl = do
                     , ms_srcimps = []
                     , ms_textual_imps = (Nothing, prelude) : imported
                     , ms_hspp_file = fn
-                    , ms_hspp_opts = flags
+                    , ms_hspp_opts = dflags1
                     , ms_hspp_buf = Nothing }
+
+isHsSource :: FilePath -> Bool
+isHsSource path = "hs" == suffix
+  where
+    suffix = reverse (takeWhile (/= '.') (reverse path))
 
 -- | Action to type check module.
 --
--- Error location are derived from 'HsModule', locations match
--- precisely with S-expression source code and helpful.
+-- Error location are derived from 'HsModule', locations precisely match
+-- with S-expression source code, pretty much helpful.
 ---
 tcHsModule :: GhcMonad m
            => Maybe FilePath -- ^ Source of the module.
@@ -72,8 +88,7 @@ tcHsModule mbfile genFile mdl = do
           else dflags0 {hscTarget = HscNothing, ghcLink = NoLink}
   _ <- setSessionDynFlags (foldl xopt_set dflags1 langExts)
   ms <- mkModSummary mbfile mdl
-  let unitId = mainUnitId
-      mmod = mkModule unitId modName
+  let mmod = mkModule mainUnitId modName
       ann = (Map.empty, Map.empty)
       r_s_loc = mkSrcLoc (fsLit fn) 1 1
       r_s_span = mkSrcSpan r_s_loc r_s_loc
