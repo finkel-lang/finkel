@@ -76,6 +76,7 @@ module SK.Core.GHC
     HscTarget(..),
     Language(..),
     languageExtensions,
+    parseDynamicFilePragma,
     xopt_set,
     xopt_unset,
 
@@ -98,6 +99,9 @@ module SK.Core.GHC
 
     -- * OrdList
     toOL,
+
+    -- * HeaderInfo
+    getOptionsFromFile,
 
     -- * HsBinds
     HsLocalBinds,
@@ -165,6 +169,7 @@ import ErrUtils
 import Exception
 import FastString
 import Finder
+import HeaderInfo
 import HscTypes
 import HsBinds
 import Module

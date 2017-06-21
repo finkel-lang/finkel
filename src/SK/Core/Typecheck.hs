@@ -4,8 +4,8 @@
 --
 module SK.Core.Typecheck
   ( mkModSummary
-  , tcHsModule )
-   where
+  , tcHsModule
+  ) where
 
 -- containers
 import qualified Data.Map as Map
@@ -15,9 +15,6 @@ import Data.Time (getCurrentTime)
 
 -- Internal
 import SK.Core.GHC
-
-import DynFlags (parseDynamicFilePragma)
-import HeaderInfo (getOptionsFromFile)
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.
 mkModSummary :: GhcMonad m => Maybe FilePath -> HsModule RdrName
