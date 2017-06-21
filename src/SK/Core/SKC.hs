@@ -3,9 +3,10 @@
 
 module SK.Core.SKC
   ( Skc(..)
-  , SkEnv
+  , SkEnv(..)
   , Macro
   , LMacro
+  , debugIO
   , toGhc
   , fromGhc
   , failS
@@ -51,7 +52,12 @@ type Macro = Form Atom -> Skc (Form Atom)
 type LMacro = LTForm Atom -> Skc (LTForm Atom)
 
 -- | Type of state in 'SKC'.
-type SkEnv = [(String, LMacro)]
+data SkEnv = SkEnv
+   { -- | Association list of macros.
+     envMacros :: [(String, LMacro)]
+     -- | Flag to hold debug setting.
+   , envDebug :: Bool
+   }
 
 toGhc :: Skc a -> SkEnv -> Ghc (Either String (a, SkEnv))
 toGhc m st = runExceptT (runStateT (unSkc m) st)
@@ -62,12 +68,21 @@ fromGhc m = Skc (lift (lift m))
 failS :: String -> Skc a
 failS msg = Skc (lift (throwE msg))
 
+-- | Perform given IO action iff debug flag is turned on.
+debugIO :: IO () -> Skc ()
+debugIO act = Skc go
+  where
+    go = do
+      sk_env <- get
+      if envDebug sk_env
+         then liftIO act
+         else return ()
+
 getMacroEnv :: Skc [(String, LMacro)]
-getMacroEnv = Skc get
+getMacroEnv = Skc (envMacros <$> get)
 
 extendMacroEnv :: String -> LMacro -> Skc ()
 extendMacroEnv name mac = Skc go
   where
-    go = do
-      env <- get
-      put ((name, mac) : env)
+    go = modify (\env ->
+                    env {envMacros = (name, mac) : envMacros env})

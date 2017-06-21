@@ -42,7 +42,10 @@ runSkc m env =
 
 -- | Initial 'SkEnv' for performing computation with 'Skc'.
 initialSkEnv :: SkEnv
-initialSkEnv = M.specialForms
+initialSkEnv = SkEnv
+  { envMacros = M.specialForms
+  , envDebug = False
+  }
 
 sExpression :: String -> IO ()
 sExpression input =
@@ -55,7 +58,7 @@ sExpression input =
     Left err -> putStrLn err
 
 compileAndEmit :: Maybe FilePath -> String -> IO (Either String String)
-compileAndEmit target input = runSkc go M.specialForms
+compileAndEmit target input = runSkc go initialSkEnv
   where
     go = do (mdl, st) <- compile target input
             genHsSrc st mdl

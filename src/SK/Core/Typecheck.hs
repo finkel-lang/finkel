@@ -48,7 +48,6 @@ mkModSummary mbfile mdl = do
                     , ms_hspp_opts = flags
                     , ms_hspp_buf = Nothing }
 
-
 -- | Action to type check module.
 --
 -- Error location are derived from 'HsModule', locations match
@@ -65,18 +64,13 @@ tcHsModule mbfile genFile mdl = do
          Just name -> unLoc name
       fn = maybe "anon" id mbfile
       langExts = languageExtensions (Just Haskell2010)
-  preflags <- getSessionDynFlags
+  dflags0 <- getSessionDynFlags
   -- XXX: Does not take care of user specified DynFlags settings.
-  let preflags' =
+  let dflags1 =
        if genFile
-          then preflags {hscTarget = HscAsm, ghcLink = LinkBinary}
-          else preflags {hscTarget = HscNothing, ghcLink = NoLink}
-  _ <- setSessionDynFlags (foldl xopt_set preflags' langExts)
-  flags <- getSessionDynFlags
-  timestamp <- liftIO (maybe getCurrentTime
-                             getModificationUTCTime
-                             mbfile)
-  mloc <- liftIO (mkHomeModLocation flags modName fn)
+          then dflags0 {hscTarget = HscAsm, ghcLink = LinkBinary}
+          else dflags0 {hscTarget = HscNothing, ghcLink = NoLink}
+  _ <- setSessionDynFlags (foldl xopt_set dflags1 langExts)
   ms <- mkModSummary mbfile mdl
   let unitId = mainUnitId
       mmod = mkModule unitId modName
@@ -87,4 +81,6 @@ tcHsModule mbfile genFile mdl = do
                         , pm_parsed_source = L r_s_span mdl
                         , pm_extra_src_files = [fn]
                         , pm_annotations = ann }
-  typecheckModule pm
+  tc <- typecheckModule pm
+  _ <- setSessionDynFlags dflags0
+  return tc
