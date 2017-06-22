@@ -23,6 +23,7 @@ import qualified Data.Map as Map
 
 -- From 'ghc'
 import GHC
+import HsBinds
 import OccName
 import Outputable
 import SrcLoc
@@ -31,7 +32,7 @@ import SrcLoc
 import GHC.Paths
 
 -- Internal
-import SK.Core.SPState
+import SK.Core.Lexer
 import SK.Core.GHC
 
 --
@@ -238,6 +239,7 @@ instance (OutputableBndr a, HsSrc a) => HsSrc (HsDecl a) where
   toHsSrc st decl =
     case decl of
       ValD binds -> toHsSrc st binds
+      SigD sigd  -> toHsSrc st sigd
       _          -> ppr decl
 
 instance (OutputableBndr a, HsSrc a) => HsSrc (HsBindLR a a) where
@@ -261,3 +263,13 @@ instance (OutputableBndr a, HsSrc a) => HsSrc (HsBindLR a a) where
            $$ pprFunBind (unLoc fun) matches
            $$ ifPprDebug (ppr wrap)
       _ -> ppr binds
+
+instance (OutputableBndr a, HsSrc a) => HsSrc (Sig a) where
+  toHsSrc st sig =
+    case sig of
+      TypeSig vars ty ->
+        (case vars of
+           [] -> empty
+           var:_ -> emitPrevDoc st var)
+        $$ pprVarSig (map unLoc vars) (ppr ty)
+      _               -> ppr sig
