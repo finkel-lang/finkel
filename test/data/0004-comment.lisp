@@ -14,13 +14,13 @@
 
 ;;; | Main entry function.
 (= main
-   ;; This is not a documentation comment.
-   (foo "Module with doc comments."))
+  ;; This is not a documentation comment.
+  (foo "Module with doc comments."))
 
 ;;; | Comment for function foo.
 (= (foo str)
-   (>> (putStrLn str)
-       (bar 15 27)))
+  (>> (putStrLn str)
+      (bar 15 27)))
 
 ;;; | Comment for function bar.
 ;;;
@@ -32,4 +32,13 @@
 ;;; bar bar bar.
 ;;;
 (= (bar a b)
-   (putStrLn (++ "From bar: " (show (+ a b)))))
+  (putStrLn (++ "From bar: " (show (+ a b)))))
+
+
+;;; | Comment for function buzz.
+;;;
+;;; This comment is written on the line above type signature of buzz.
+;;;
+(:: buzz (-> Int Int))
+(= (buzz n)
+  (+ n n))

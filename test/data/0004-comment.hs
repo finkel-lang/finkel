@@ -23,3 +23,9 @@ foo str = (>>) (putStrLn str) (bar 15 27)
 -- bar bar bar.
 --
 bar a b = putStrLn ((++) "From bar: " (show ((+) a b)))
+-- | Comment for function buzz.
+--
+-- This comment is written on the line above type signature of buzz.
+--
+buzz :: Int -> Int
+buzz n = (+) n n
