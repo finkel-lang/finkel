@@ -20,6 +20,7 @@ module SK.Core.FormParser
 import Control.Monad (foldM, liftM, ap)
 import Data.Char (isUpper)
 import Data.List (foldl1')
+import Data.Maybe (fromMaybe)
 
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -245,6 +246,8 @@ data BState = BState
       inputs :: [LTForm Atom]
       -- | Last token, for error message.
     , lastToken :: Maybe (LTForm Atom)
+      -- | File path of input, if any.
+    , inputPath :: Maybe FilePath
     }
 
 -- | Newtype wrapper for parsing form data with Happy.
@@ -252,19 +255,23 @@ newtype Builder a = Builder {
     unBuilder :: StateT BState (Either String) a
 }
 
-runBuilder :: Builder a -> [LTForm Atom]
+runBuilder :: Builder a
+           -> Maybe FilePath
+           -> [LTForm Atom]
            -> Either String (a, [LTForm Atom])
-runBuilder bld toks =
-    case runStateT (unBuilder bld) (BState toks Nothing) of
+runBuilder bld mbpath toks =
+    case runStateT (unBuilder bld) (BState toks Nothing mbpath) of
       Left e -> Left e
       Right (a, st) -> Right (a, inputs st)
 
-evalBuilder :: Builder a -> [LTForm Atom] -> Either String a
-evalBuilder bld toks = fmap fst (runBuilder bld toks)
+evalBuilder :: Builder a -> Maybe FilePath
+            -> [LTForm Atom] -> Either String a
+evalBuilder bld mbpath toks = fmap fst (runBuilder bld mbpath toks)
 
-evalBuilder' :: Monad m => Builder a -> [LTForm Atom]
+evalBuilder' :: Monad m => Builder a
+             -> Maybe FilePath -> [LTForm Atom]
              -> ExceptT String m a
-evalBuilder' bld toks = case evalBuilder bld toks of
+evalBuilder' bld mbpath toks = case evalBuilder bld mbpath toks of
   Right a -> return a
   Left err -> throwE err
 
@@ -297,7 +304,8 @@ putBState = Builder . put
 -- parse.
 parse :: Builder a -> [LTForm Atom] -> Builder a
 parse bld toks = do
-  case runBuilder bld toks of
+  st <- getBState
+  case runBuilder bld (inputPath st) toks of
     Right (a, _) -> return a
     Left err -> failB err
 
@@ -313,7 +321,9 @@ happyError = do
   st <- getBState
   case lastToken st of
     Nothing -> failB "no location"
-    Just x -> failB ("parse error at " ++ showLoc x ++ ": " ++
+    Just x  ->
+      let path = fromMaybe "unknown input" (inputPath st)
+      in  failB (path ++ ": parse error at " ++ showLoc x ++ ": " ++
                        (show (lTFormToForm x)))
 
 -- | Simple lexer to parse forms.
@@ -322,7 +332,9 @@ formLexer cont = do
     st <- getBState
     case inputs st of
       [] -> cont (L undefined TEnd)
-      x:xs -> putBState (BState xs (Just x)) >> cont x
+      x:xs -> do
+        putBState (st {inputs = xs, lastToken = Just x})
+        cont x
 
 
 ---
@@ -351,8 +363,8 @@ type HImportDecl = LImportDecl RdrName
 -- and 'DataConstr'.
 mkRdrName :: String -> RdrName
 mkRdrName name@(x:_)
-  -- ':' is special syntax. It is defined in module GHC.Types in
-  -- ghc-prim package, not exported.
+  -- ':' is special syntax. It is defined in module "GHC.Types" in
+  -- package "ghc-prim", but not exported.
   | name == [':'] = nameRdrName consDataConName
 
   -- Data constructor starts from capital letter or ':'.

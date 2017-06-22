@@ -25,7 +25,6 @@ library
                        SK.Core.Lexer
                        SK.Core.Macro
                        SK.Core.Run
-                       SK.Core.SPState
                        SK.Core.SKC
                        SK.Core.TokenParser
                        SK.Core.Typecheck

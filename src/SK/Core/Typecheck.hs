@@ -72,10 +72,7 @@ tcHsModule :: GhcMonad m
            -> HsModule RdrName -- ^ Module to typecheck.
            -> m TypecheckedModule
 tcHsModule mbfile genFile mdl = do
-  let modName = case hsmodName mdl of
-         Nothing -> error "no module name"
-         Just name -> unLoc name
-      fn = maybe "anon" id mbfile
+  let fn = maybe "anon" id mbfile
       langExts = languageExtensions (Just Haskell2010)
   dflags0 <- getSessionDynFlags
   -- XXX: Does not take care of user specified DynFlags settings.
@@ -85,8 +82,7 @@ tcHsModule mbfile genFile mdl = do
           else dflags0 {hscTarget = HscNothing, ghcLink = NoLink}
   _ <- setSessionDynFlags (foldl xopt_set dflags1 langExts)
   ms <- mkModSummary mbfile mdl
-  let mmod = mkModule mainUnitId modName
-      ann = (Map.empty, Map.empty)
+  let ann = (Map.empty, Map.empty)
       r_s_loc = mkSrcLoc (fsLit fn) 1 1
       r_s_span = mkSrcSpan r_s_loc r_s_loc
       pm = ParsedModule { pm_mod_summary = ms

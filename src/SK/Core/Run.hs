@@ -1,11 +1,11 @@
 -- | Module exporting the @runSkc@, Haskell compiler, and some utility
 -- functions.
 module SK.Core.Run
-  ( sExpression
+  ( runSkc
+  , initialSkEnv
+  , sExpression
   , compile
   , compileAndEmit
-  , runSkc
-  , initialSkEnv
   ) where
 
 import GHC.Paths (libdir)
@@ -18,7 +18,6 @@ import SK.Core.GHC
 import SK.Core.SKC
 import qualified SK.Core.FormParser as FP
 import qualified SK.Core.Lexer as L
-import qualified SK.Core.SPState as SP
 import qualified SK.Core.TokenParser as TP
 import qualified SK.Core.Macro as M
 
@@ -36,8 +35,7 @@ runSkc m env =
             return (Left (unlines (map (showSDoc flags)
                                        (pprErrMsgBagWithLoc
                                          (srcErrorMessages se))))))
-          (do M.setExpanderSettings
-              ret <- toGhc m env
+          (do ret <- toGhc m env
               return (fmap fst ret))))
 
 -- | Initial 'SkEnv' for performing computation with 'Skc'.
@@ -64,9 +62,9 @@ compileAndEmit target input = runSkc go initialSkEnv
             genHsSrc st mdl
 
 compile :: Maybe FilePath -> String
-        -> Skc (HsModule RdrName, SP.SPState)
+        -> Skc (HsModule RdrName, L.SPState)
 compile target input = do
   (form', st) <- Skc (lift (L.runSP' TP.sexprs target input))
   expanded <- M.withExpanderSettings (M.macroexpands form')
-  mdl <- Skc (lift (FP.evalBuilder' FP.parse_module expanded))
+  mdl <- Skc (lift (FP.evalBuilder' FP.parse_module target expanded))
   return (mdl, st)

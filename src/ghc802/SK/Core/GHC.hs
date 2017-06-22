@@ -155,10 +155,8 @@ module SK.Core.GHC
     consDataConName,
 
     -- * Util
-    getModificationUTCTime,
+    getModificationUTCTime
 
-    -- * Internal
-    setInterpretDynFlags
   ) where
 
 import GHC
@@ -182,9 +180,3 @@ import RdrName
 import SrcLoc
 import TysWiredIn
 import Util
-
-setInterpretDynFlags :: GhcMonad m => DynFlags -> m ()
-setInterpretDynFlags flags = do
-  _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
-                                 , ghcLink = LinkInMemory })
-  return ()

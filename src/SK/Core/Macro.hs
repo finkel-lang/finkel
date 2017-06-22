@@ -113,7 +113,7 @@ m_defineMacro form =
                          ,tList l [tSym l "::", self, tSym l "Macro"]]
       -- liftIO (do putStrLn "=== m_defineMacro ==="
       --            print (pForm (lTFormToForm expr)))
-      case evalBuilder p_expr [expr] of
+      case evalBuilder p_expr (Just ("macro:" ++ name)) [expr] of
         Right hexpr -> do
           -- flags <- getSessionDynFlags
           -- liftIO (putStrLn (showSDoc flags (ppr hexpr)))

@@ -26,7 +26,6 @@ import Data.Maybe (fromMaybe)
 import Control.Monad.Trans.Except
 
 -- Internal
-import SK.Core.SPState
 import SK.Core.GHC
 
 }
@@ -192,6 +191,17 @@ lc2hc str = '-':'-':dropWhile (== ';') str
 --
 -- Parser monad
 --
+
+-- | Data type to hold comments found in source code.
+data SPState = SPState {
+  comments :: [Located AnnotationComment],
+  annotation_comments :: [(SrcSpan, [Located AnnotationComment])],
+  targetFile :: Maybe FilePath
+}
+
+-- | Initial empty state for 'SP'.
+initialSPState :: SPState
+initialSPState = SPState [] [] Nothing
 
 -- | A data type for State monad which wraps 'Alex' with 'SPstate'.
 newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
