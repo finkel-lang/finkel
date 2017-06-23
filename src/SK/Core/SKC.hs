@@ -10,7 +10,9 @@ module SK.Core.SKC
   , toGhc
   , fromGhc
   , failS
-  , extendMacroEnv
+  , getSkEnv
+  , putSkEnv
+  , addMacro
   , getMacroEnv
   ) where
 
@@ -78,11 +80,17 @@ debugIO act = Skc go
          then liftIO act
          else return ()
 
-getMacroEnv :: Skc [(String, LMacro)]
-getMacroEnv = Skc (envMacros <$> get)
+getSkEnv :: Skc SkEnv
+getSkEnv = Skc get
 
-extendMacroEnv :: String -> LMacro -> Skc ()
-extendMacroEnv name mac = Skc go
+putSkEnv :: SkEnv -> Skc ()
+putSkEnv = Skc . put
+
+getMacroEnv :: Skc [(String, LMacro)]
+getMacroEnv = envMacros <$> getSkEnv
+
+addMacro :: String -> LMacro -> Skc ()
+addMacro name mac = Skc go
   where
     go = modify (\env ->
                     env {envMacros = (name, mac) : envMacros env})
