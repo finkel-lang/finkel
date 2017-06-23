@@ -171,6 +171,7 @@ rpats0 :: { [HPat] }
 pat :: { HPat }
     : 'integer' { b_intP $1 }
     | 'symbol'  { b_symP $1 }
+    | 'hslist'  {% b_hsListP $1 }
     | 'list'    {% b_listP $1 }
 
 
@@ -410,16 +411,21 @@ b_declLhsB ((L l (TAtom (ASymbol name))):forms) = do
              let match = mkMatch args body (L l emptyLocalBinds)
              in  mkFunBind (L l (mkRdrName name)) [match])
 
--- Types
-
 b_tsigD :: LTForm Atom -> HType -> HDecl
 b_tsigD (L l (TAtom (ASymbol name))) typ =
   let typ' = mkLHsSigWcType typ
   in  L l (SigD (TypeSig [L l (mkRdrName name)] typ'))
 
+-- Types
+
 b_symT :: LTForm Atom -> HType
-b_symT (L l (TAtom (ASymbol name))) =
-    L l (HsTyVar (L l (mkUnqual tcClsName (fsLit name))))
+b_symT (L l (TAtom (ASymbol name))) = L l (HsTyVar (L l ty))
+  where
+    ty = mkUnqual namespace (fsLit name)
+    namespace =
+      case name of
+        (x:_) | isUpper x || ':' == x -> tcName
+        _ -> tvName
 
 b_unitT :: LTForm Atom -> HType
 b_unitT (L l _) = L l (HsTupleTy HsBoxedTuple [])
@@ -449,6 +455,11 @@ b_symP (L l (TAtom (ASymbol name@(x:xs))))
    | isUpper x || x == ':'
     = L l (ConPatIn (L l (mkRdrName name)) (PrefixCon []))
    | otherwise = L l (VarPat (L l (mkRdrName name)))
+
+b_hsListP :: LTForm Atom -> Builder HPat
+b_hsListP (L l (THsList xs)) = do
+    pats <- parse p_pats0 xs
+    return (L l (ListPat pats placeHolderType Nothing))
 
 b_listP :: [LTForm Atom] -> Builder HPat
 b_listP (L l x:rest) =

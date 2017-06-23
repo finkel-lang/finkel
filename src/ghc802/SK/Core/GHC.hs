@@ -90,8 +90,11 @@ module SK.Core.GHC
     mkHomeModLocation,
 
     -- * OccName
+    clsName,
     srcDataName,
+    tcName,
     tcClsName,
+    tvName,
 
     -- * Outputable
     ppr,
