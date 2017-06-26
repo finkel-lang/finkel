@@ -11,9 +11,11 @@
 
     ;; Decimal integer.
     (print 42)
+    (print -24)
 
-    ;; Floating point number.
-    ;; (print 4.2)
+    ;; Fractional number.
+    (print 1.234567)
+    (print -8.9)
 
     ;; 2.6 Character and String Literals.
     (print \a) (print \0) (print \+) (print \')

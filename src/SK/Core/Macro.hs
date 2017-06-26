@@ -44,6 +44,9 @@ tString l s = L l (TAtom (AString s))
 tInteger :: SrcSpan -> Integer -> LTForm Atom
 tInteger l n = L l (TAtom (AInteger n))
 
+tFractional :: SrcSpan -> FractionalLit -> LTForm Atom
+tFractional l n = L l (TAtom (AFractional n))
+
 tList :: SrcSpan -> [LTForm Atom] -> LTForm Atom
 tList l forms = L l (TList forms)
 
@@ -57,6 +60,8 @@ quoteAtom orig@(L l form) =
     TAtom (AChar c) -> atom [tSym l "AChar", tChar l c]
     TAtom (AString s) -> atom [tSym l "AString", tString l s]
     TAtom (AInteger n) -> atom [tSym l "AInteger", tInteger l n]
+    TAtom (AFractional n) ->
+      atom [tSym l "aFractional", tFractional l n]
     TAtom AUnit -> atom [tSym l "AUnit"]
     _ -> orig
   where

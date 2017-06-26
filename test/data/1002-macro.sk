@@ -7,13 +7,26 @@
 (defmacro m1 (x)
   (return `(putStrLn (++ "Hello, " ,x))))
 
+;; Simple macrolet.
 (macrolet ((m2 (a b c)
              (return `(,a (+ ,b ,c)))))
   (:: f1 (-> Int (-> Int (IO ()))))
   (= (f1 x y)
     (m2 print x y)))
 
+;;; Macro taking fractional value as argument.
+(macrolet ((m1 (n)
+             (case (fromForm n)
+               (Just d) (if (<= 1.0 (:: d Double))
+                            (return '"more or eq")
+                            (return '"less"))
+               Nothing (failS "m1: error"))))
+  (= fracmac
+    (do (putStrLn (m1 1.1))
+        (putStrLn (m1 0.9)))))
+
 (:: main (IO ()))
 (= main
   (do (m1 "macro")
-      (f1 11 31)))
+      (f1 11 31)
+      fracmac))

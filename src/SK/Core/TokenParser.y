@@ -10,6 +10,8 @@ import SrcLoc
 import SK.Core.Lexer
 import SK.Core.Form
 
+import BasicTypes (FractionalLit(..))
+
 }
 
 %name sexpr sexp
@@ -30,12 +32,13 @@ import SK.Core.Form
 'unquote'   { L _ (TSymbol "unquote") }
 'unquotesp' { L _ (TSymbol "unquote-splice") }
 
-'symbol'    { L _ (TSymbol _) }
-'char'      { L _ (TChar _) }
-'string'    { L _ (TString _) }
-'integer'   { L _ (TInteger _) }
-'comment'   { L _ (TDocCommentNext _) }
-'unit'      { L _ TUnit }
+'symbol'  { L _ (TSymbol _) }
+'char'    { L _ (TChar _) }
+'string'  { L _ (TString _) }
+'integer' { L _ (TInteger _) }
+'frac'    { L _ (TFractional _) }
+'comment' { L _ (TDocCommentNext _) }
+'unit'    { L _ TUnit }
 
 %%
 
@@ -60,6 +63,7 @@ atom :: { LTForm Atom }
      | 'char'    { mkAChar $1 }
      | 'string'  { mkAString $1 }
      | 'integer' { mkAInteger $1 }
+     | 'frac'   { mkAFractional $1 }
      | 'comment' { mkAComment $1 }
      | 'unit'    { mkAUnit $1 }
 
@@ -90,6 +94,9 @@ mkAString (L l (TString x)) = L l (TAtom (AString x))
 
 mkAInteger :: Located Token -> LTForm Atom
 mkAInteger (L l (TInteger x)) = L l (TAtom (AInteger x))
+
+mkAFractional :: Located Token -> LTForm Atom
+mkAFractional (L l (TFractional x)) = L l (TAtom (AFractional x))
 
 mkAComment :: Located Token -> LTForm Atom
 mkAComment (L l (TDocCommentNext x)) = L l (TAtom (AComment x))

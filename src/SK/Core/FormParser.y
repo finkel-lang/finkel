@@ -66,6 +66,7 @@ import SK.Core.GHC
 'char'    { L _ (TAtom (AChar _)) }
 'string'  { L _ (TAtom (AString _)) }
 'integer' { L _ (TAtom (AInteger _)) }
+'frac'    { L _ (TAtom (AFractional _)) }
 'comment' { L _ (TAtom (AComment _)) }
 'unit'    { L _ (TAtom AUnit) }
 
@@ -185,10 +186,11 @@ expr :: { HExpr }
      | 'list'   {% parse p_exprs $1 }
 
 atom :: { HExpr }
-     : 'char'    { b_charE $1 }
+     : 'symbol'  { b_varE $1 }
+     | 'char'    { b_charE $1 }
      | 'string'  { b_stringE $1 }
      | 'integer' { b_integerE $1 }
-     | 'symbol'  { b_varE $1 }
+     | 'frac'    { b_floatE $1 }
      | 'unit'    { b_unitE $1 }
 
 exprs :: { HExpr }
@@ -524,7 +526,11 @@ b_stringE (L l (TAtom (AString x))) = L l (HsLit (HsString x (fsLit x)))
 
 b_integerE :: LTForm Atom -> HExpr
 b_integerE (L l (TAtom (AInteger x))) =
-    L l (HsOverLit (mkHsIntegral (show x) x placeHolderType))
+    L l (HsOverLit $! (mkHsIntegral (show x) x placeHolderType))
+
+b_floatE :: LTForm Atom -> HExpr
+b_floatE (L l (TAtom (AFractional x))) =
+   L l (HsOverLit $! (mkHsFractional x placeHolderType))
 
 b_varE :: LTForm Atom -> HExpr
 b_varE (L l (TAtom (ASymbol x))) = L l (HsVar (L l (mkRdrName x)))

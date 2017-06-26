@@ -42,6 +42,7 @@ module SK.Core.GHC
     mkBodyStmt,
     mkHsDo,
     mkFunBind,
+    mkHsFractional,
     mkHsIf,
     mkHsIntegral,
     mkHsLam,
@@ -65,6 +66,7 @@ module SK.Core.GHC
 
     -- * BasicTypes
     Boxity(..),
+    FractionalLit(..),
     Origin(..),
 
     -- * DriverPhases
@@ -159,7 +161,8 @@ module SK.Core.GHC
     consDataConName,
 
     -- * Util
-    getModificationUTCTime
+    getModificationUTCTime,
+    readRational
 
   ) where
 

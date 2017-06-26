@@ -28,18 +28,25 @@ import Control.Monad.Trans.Except
 
 -- Internal
 import SK.Core.GHC
-
 }
 
 %wrapper "monad"
-
-$digit = 0-9
-$alpha = [a-zA-Z]
 
 $unispace    = \x05
 $nl          = [\n\r\f]
 $whitechar   = [$nl\v\ $unispace]
 $white_no_nl = $whitechar # \n
+
+$alpha = [a-zA-Z]
+
+$negative = \-
+$digit    = [0-9]
+
+@signed   = $negative ?
+@decimal  = $digit+
+@exponent = [eE] [\-\+]? @decimal
+@frac     = @decimal \. @decimal @exponent ? | @decimal @exponent
+
 
 tokens :-
 
@@ -79,7 +86,8 @@ $whitechar+  ;
 
 \\[~$white][A-Za-z]* { tok_char }
 \"[^\"]*\"           { tok_string }
-$digit+              { tok_integer }
+@signed @decimal     { tok_integer }
+@signed @frac        { tok_fractional }
 
 
 -- Binary operators
@@ -121,7 +129,9 @@ data Token
   | TString String
   -- ^ Literal string data.
   | TInteger Integer
-  -- ^ Literal integer.
+  -- ^ Literal integer number.
+  | TFractional FractionalLit
+  -- ^ Literal fractional number.
   | TUnit
   -- ^ Unit type, i.e. @()@.
   | TEOF
@@ -203,6 +213,12 @@ tok_string (_,_,_,s) l = return (TString (tail (take (l-1) s)))
 
 tok_integer :: Action
 tok_integer (_,_,_,s) l = return (TInteger (read (take l s)))
+
+tok_fractional :: Action
+tok_fractional (_,_,_,s) l = do
+  let str = take l s
+      rat = readRational (take l s)
+  return (TFractional (FL str rat))
 
 tok_plus :: Action
 tok_plus _ _ = return (TSymbol "__+")

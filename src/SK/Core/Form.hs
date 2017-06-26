@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
--- | Data type for form, take 3.
+-- | Data type for form.
 
 module SK.Core.Form
   ( Form(..)
@@ -9,6 +9,7 @@ module SK.Core.Form
   , TForm(..)
   , LTForm
   , Code(..)
+  , aFractional
   , splice
   , lTFormToForm
   , nlForm
@@ -51,6 +52,7 @@ data Atom
   | AChar Char
   | AString String
   | AInteger Integer
+  | AFractional FractionalLit
   | AComment String
   deriving (Eq, Show, Data, Typeable)
 
@@ -69,6 +71,11 @@ instance Show a => Show (TForm a) where
   show TEnd = "TEnd"
 
 type LTForm a = Located (TForm a)
+
+-- | Auxiliary function to construct an 'Atom' containing
+-- 'FractionalLit' value from literal fractional numbers.
+aFractional :: (Real a, Show a) => a -> Atom
+aFractional x = AFractional $! FL (show x) (toRational x)
 
 -- | Converts located token form to bare 'Form'. Location information,
 -- token end constructor, and Haskell list constructor disappears.
@@ -119,6 +126,7 @@ pprAtom atom =
     AChar x -> P.text "AChar" P.<+> P.char x
     AString x -> P.text "AString" P.<+> P.doubleQuotes (P.text x)
     AInteger x -> P.text "AInteger" P.<+> (P.text (show x))
+    AFractional x -> P.text "AFractional" P.<+> (P.text (fl_text x))
     AComment x -> P.text "AComment" P.<+> (P.doubleQuotes (P.text x))
 
 pprTForm :: LTForm Atom -> P.Doc
@@ -152,6 +160,7 @@ pAtom atom =
     AChar x -> P.char '\\' P.<+> P.char x
     AString x -> P.doubleQuotes (P.text x)
     AInteger x -> P.text (show x)
+    AFractional x -> P.text (fl_text x)
     AUnit -> P.text "()"
     AComment _ -> P.empty
 
@@ -180,6 +189,20 @@ instance Code () where
       Atom AUnit -> Just ()
       _          -> Nothing
 
+instance Code Char where
+  toForm = Atom . AChar
+  fromForm a =
+    case a of
+      Atom (AChar x) -> Just x
+      _              -> Nothing
+
+instance Code String where
+  toForm a = Atom (AString a)
+  fromForm a =
+    case a of
+      Atom (AString s) -> Just s
+      _                -> Nothing
+
 instance Code Int where
   toForm a = Atom (AInteger (fromIntegral a))
   fromForm a =
@@ -194,20 +217,12 @@ instance Code Integer where
       Atom (AInteger n) -> Just n
       _                 -> Nothing
 
-instance Code Char where
-  -- Need another constructor for Char in Atom.
-  toForm = Atom . AChar
+instance Code Double where
+  toForm a = let r = toRational a in Atom (AFractional (FL (show a) r))
   fromForm a =
     case a of
-      Atom (AChar x) -> Just x
-      _              -> Nothing
-
-instance Code String where
-  toForm a = Atom (AString a)
-  fromForm a =
-    case a of
-      Atom (AString s) -> Just s
-      _                -> Nothing
+      Atom (AFractional x) -> Just (fromRational (fl_value x))
+      _                    -> Nothing
 
 instance Code a => Code (Form a) where
   toForm form =
