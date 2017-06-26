@@ -1,8 +1,7 @@
 -- | Test for S-expression.
 --
--- All files under test data directory with '.lisp' extension (i.e.:
--- "test/data/*.lisp") are read and compiled, then compare the resulting
--- Haskell code with the file with '.out' extension.
+-- All files under test data directory with '.sk' extension (i.e.:
+-- "test/data/*.lisp") are read and compiled, then type checked.
 --
 module Main where
 
@@ -16,18 +15,18 @@ import SK.Core.Typecheck
 
 getTestFiles :: IO [FilePath]
 getTestFiles =
-  let f = (\x acc -> if takeExtension x == ".lisp"
-                         then dropExtension x : acc
-                         else acc)
-      files = getDirectoryContents ("test" </> "data")
+  let dir = "test" </> "data"
+      f = (\x acc -> if takeExtension x == ".sk"
+                                 then (dir </> x) : acc
+                                 else acc)
+      files = getDirectoryContents dir
   in  foldr f [] <$> files
 
-readCode :: String -> IO Bool
-readCode name = do
-  let input = "test" </> "data" </> name <.> "lisp"
-  contents <- readFile input
-  let go = do (mdl, st) <- compile (Just input) contents
-              tcHsModule (Just input) False mdl
+readCode :: FilePath -> IO Bool
+readCode src = do
+  contents <- readFile src
+  let go = do (mdl, st) <- compile (Just src) contents
+              tcHsModule (Just src) False mdl
   compiled <- runSkc go initialSkEnv
   case compiled of
     Right _tc -> return True
@@ -45,5 +44,5 @@ mkTest name =
 
 main :: IO ()
 main = do
-     files <- getTestFiles
-     hspec (mapM_ mkTest files)
+  files <- getTestFiles
+  hspec (mapM_ mkTest files)
