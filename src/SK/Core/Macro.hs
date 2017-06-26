@@ -102,31 +102,55 @@ compileMT :: LHsExpr RdrName -> Skc (Form Atom -> Skc (Form Atom))
 compileMT = fmap unsafeCoerce . compileParsedExpr
 {-# INLINE compileMT #-}
 
--- Cannot define recursive macro yet. Add `let' syntax.
-m_defineMacro :: LMacro
-m_defineMacro form =
+putMacro :: LTForm Atom -> Skc [LTForm Atom]
+putMacro form =
   case form of
-    L l (TList [_, self@(L _ (TAtom (ASymbol name))),body]) -> do
+    L l (TList [self@(L _ (TAtom (ASymbol name))),args,body]) -> do
       expanded <- macroexpand body
-      let expr = tList l [tSym l "let"
-                         ,tList l [tList l [tSym l "=", self ,expanded]]
-                         ,tList l [tSym l "::", self, tSym l "Macro"]]
-      -- liftIO (do putStrLn "=== m_defineMacro ==="
-      --            print (pForm (lTFormToForm expr)))
-      case evalBuilder p_expr (Just ("macro:" ++ name)) [expr] of
+      let tsig = tList l [tSym l "::", self, tSym l "Macro"]
+          self' = tList l [ tSym l "=", self
+                          , wrapArgs name args expanded]
+          expr = tList l [ tSym l "let", tList l [tsig, self']
+                         , self]
+      case evalBuilder p_expr (Just ("macro:"++ name)) [expr] of
         Right hexpr -> do
-          -- flags <- getSessionDynFlags
-          -- liftIO (putStrLn (showSDoc flags (ppr hexpr)))
           macro <- compileMT hexpr
           let wrap f form = fmap nlForm (f (cdr (lTFormToForm form)))
-          extendMacroEnv name (wrap macro)
-          return
-            (tList l [ tSym l "begin"
-                     , tList l [tSym l "::", tSym l name, tSym l "Macro"]
-                     , tList l [tSym l "=", tSym l name, body]])
-          -- return (tList l [tSym l "=", tSym l name, body])
+          addMacro name (wrap macro)
+          return [tsig, self']
         Left err -> failS err
-    _ -> failS "malformed macro"
+    _ -> failS ("malformed macro: " ++ show (pForm (lTFormToForm form)))
+
+wrapArgs :: String -> LTForm Atom -> LTForm Atom -> LTForm Atom
+wrapArgs name args@(L l1 _) body0=
+  let sym = tSym l1
+      list = tList l1
+      form = sym "form"
+      message =
+        list [ sym "failS"
+             , list [ sym "++"
+                    , tString l1
+                              (concat [ "macroexpand error with `"
+                                      , name, "' at "
+                                      , showLoc form, "\n"
+                                      , "arg mismatch: "])
+                    , list [sym "show", list [sym "pForm", form]]]]
+      body1 =  list [ sym "case", form
+                    , mkPat args, body0
+                    , sym "_", message ]
+      mkPat (L l x) =
+        case x of
+          TList xs -> list [sym "List", tHsList l (map mkPat xs)]
+          s@(TAtom (ASymbol y)) -> L l s
+  in  list [sym  "\\", list [form], body1]
+
+m_defmacro :: LMacro
+m_defmacro form =
+  case form of
+    L l (TList (_:self@(L _ (TAtom (ASymbol name))):rest)) -> do
+      decls <- putMacro (L l (TList (self:rest)))
+      return (tList l (tSym l "begin":decls))
+    _ -> failS "defmacro: malformed macro"
 
 m_quote :: LMacro
 m_quote form =
@@ -166,12 +190,28 @@ m_varArgBinOp sym = \form ->
     mkOp x = L (getLoc x) (TAtom (ASymbol sym))
     combine x y = L (getLoc x) (TList [mkOp x, x, y])
 
+-- XXX: Does not preserve macros defined with `defmacro' inside
+-- `macrolet' body. Need to update the SkEnv to hold the contents of
+-- currently defined macros.
+m_macrolet :: LMacro
+m_macrolet form =
+  case form of
+    L l1 (TList (_:L l2 (TList forms):rest)) -> do
+      sk_env <- getSkEnv
+      mapM_ putMacro forms
+      expanded <- macroexpands rest
+      putSkEnv sk_env
+      return (tList l1 (tSym l2 "begin":expanded))
+    _ -> failS ("macrolet: malformed macro: " ++
+               show (pForm (lTFormToForm form)))
+
 specialForms :: [(String, LMacro)]
 specialForms =
   [("quote", m_quote)
   ,("quasiquote", m_quasiquote)
+  ,("macrolet", m_macrolet)
   ,("defn", m_defn)
-  ,("define-macro", m_defineMacro)
+  ,("defmacro", m_defmacro)
 
   -- Binary operators defined in Prelude are hard coded, to support
   -- forms with variable number of arguments. In general, better not to

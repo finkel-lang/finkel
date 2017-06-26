@@ -55,6 +55,7 @@ module SK.Core.GHC
     runGhc,
     setContext,
     setSessionDynFlags,
+    srcSpanFile,
     srcSpanStartCol,
     srcSpanStartLine,
     typecheckModule,
