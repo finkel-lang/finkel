@@ -35,6 +35,9 @@ import SK.Core.SKC
 tSym :: SrcSpan -> String -> LTForm Atom
 tSym l s = L l (TAtom (ASymbol s))
 
+tChar :: SrcSpan -> Char -> LTForm Atom
+tChar l c = L l (TAtom (AChar c))
+
 tString :: SrcSpan -> String -> LTForm Atom
 tString l s = L l (TAtom (AString s))
 
@@ -51,6 +54,7 @@ quoteAtom :: LTForm Atom -> LTForm Atom
 quoteAtom orig@(L l form) =
   case form of
     TAtom (ASymbol s) -> atom [tSym l "ASymbol", tString l s]
+    TAtom (AChar c) -> atom [tSym l "AChar", tChar l c]
     TAtom (AString s) -> atom [tSym l "AString", tString l s]
     TAtom (AInteger n) -> atom [tSym l "AInteger", tInteger l n]
     TAtom AUnit -> atom [tSym l "AUnit"]

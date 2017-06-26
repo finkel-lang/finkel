@@ -48,6 +48,7 @@ data Form a
 data Atom
   = AUnit
   | ASymbol String
+  | AChar Char
   | AString String
   | AInteger Integer
   | AComment String
@@ -115,6 +116,7 @@ pprAtom atom =
   case atom of
     AUnit     -> P.text "AUnit"
     ASymbol x -> P.text "ASymbol" P.<+> P.text x
+    AChar x -> P.text "AChar" P.<+> P.char x
     AString x -> P.text "AString" P.<+> P.doubleQuotes (P.text x)
     AInteger x -> P.text "AInteger" P.<+> (P.text (show x))
     AComment x -> P.text "AComment" P.<+> (P.doubleQuotes (P.text x))
@@ -147,6 +149,7 @@ pAtom :: Atom -> P.Doc
 pAtom atom =
   case atom of
     ASymbol x -> P.text x
+    AChar x -> P.char '\\' P.<+> P.char x
     AString x -> P.doubleQuotes (P.text x)
     AInteger x -> P.text (show x)
     AUnit -> P.text "()"
@@ -193,8 +196,11 @@ instance Code Integer where
 
 instance Code Char where
   -- Need another constructor for Char in Atom.
-  toForm = undefined
-  fromForm = undefined
+  toForm = Atom . AChar
+  fromForm a =
+    case a of
+      Atom (AChar x) -> Just x
+      _              -> Nothing
 
 instance Code String where
   toForm a = Atom (AString a)

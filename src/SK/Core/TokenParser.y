@@ -31,6 +31,7 @@ import SK.Core.Form
 'unquotesp' { L _ (TSymbol "unquote-splice") }
 
 'symbol'    { L _ (TSymbol _) }
+'char'      { L _ (TChar _) }
 'string'    { L _ (TString _) }
 'integer'   { L _ (TInteger _) }
 'comment'   { L _ (TDocCommentNext _) }
@@ -56,6 +57,7 @@ rsexps :: { [LTForm Atom] }
 
 atom :: { LTForm Atom }
      : 'symbol'  { mkASymbol $1 }
+     | 'char'    { mkAChar $1 }
      | 'string'  { mkAString $1 }
      | 'integer' { mkAInteger $1 }
      | 'comment' { mkAComment $1 }
@@ -79,6 +81,9 @@ mkAUnit (L l TUnit) = L l (TAtom AUnit)
 
 mkASymbol :: Located Token -> LTForm Atom
 mkASymbol (L l (TSymbol x)) = L l (TAtom (ASymbol x))
+
+mkAChar :: Located Token -> LTForm Atom
+mkAChar (L l (TChar x)) = L l (TAtom (AChar x))
 
 mkAString :: Located Token -> LTForm Atom
 mkAString (L l (TString x)) = L l (TAtom (AString x))

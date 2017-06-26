@@ -1,33 +1,46 @@
 ;;; -*- mode: sk -*-
 ;;;
-;;; Tests for tokens and literal values.
+;;; Tests for tokens and literal values. Unlike Haskell, lines starting
+;;; with `;' are comments.
 
 (module Main)
 
 (= main
-  (do (print "string literal") ;; Simple string
-      ;; (print "string\" with \escapes.")
+  (do
+    ;; 2.5 Numeric Literals
 
-      ;; Integer.
-      (print 42)
+    ;; Decimal integer.
+    (print 42)
 
-      ;; Floating point number.
-      ;; (print 4.2)
+    ;; Floating point number.
+    ;; (print 4.2)
 
-      ;; Characters.
-      ;; (print \a) (print \space) (print \newline)
+    ;; 2.6 Character and String Literals.
+    (print \a) (print \0) (print \+) (print \')
+    (print \)) (print \[) (print \;) (print \\)
 
-      ;; Unit.
-      (print ())
+    (putChar \a)
+    (putChar \sp)               ; space
+    (putChar \b)
+    (putChar \ht)               ; horizontal tab
+    (putChar \c)
+    (putChar \nul)              ; \NUL
+    (putChar \lf)               ; line feed
 
-      ;; List literals.
-      (print [1 2 3 4 5])
-      (print (: True (: False [])))
+    (print "string literal") ;; Simple string
+    ;; (print "string\" with \escapes.")
 
-      ;; List containing expressions.
-      (print [(if (> 2 3)
-                  (do (<- x (return 100))
-                      (<- y (return 23))
-                      (return (+ x y)))
-                  (return 123))
-              (Left "foo")])))
+    ;; Unit.
+    (print ())
+
+    ;; List literals.
+    (print [1 2 3 4 5])
+    (print (: True (: False [])))
+
+    ;; List containing expressions.
+    (print [(if (> 2 3)
+                (do (<- x (return 100))
+                    (<- y (return 23))
+                    (return (+ x y)))
+                (return 123))
+            (Left "foo")])))

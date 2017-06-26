@@ -63,6 +63,7 @@ import SK.Core.GHC
 '::' { L _ (TAtom (ASymbol "::")) }
 
 'symbol'  { L _ (TAtom (ASymbol _)) }
+'char'    { L _ (TAtom (AChar _)) }
 'string'  { L _ (TAtom (AString _)) }
 'integer' { L _ (TAtom (AInteger _)) }
 'comment' { L _ (TAtom (AComment _)) }
@@ -184,7 +185,8 @@ expr :: { HExpr }
      | 'list'   {% parse p_exprs $1 }
 
 atom :: { HExpr }
-     : 'string'  { b_stringE $1 }
+     : 'char'    { b_charE $1 }
+     | 'string'  { b_stringE $1 }
      | 'integer' { b_integerE $1 }
      | 'symbol'  { b_varE $1 }
      | 'unit'    { b_unitE $1 }
@@ -513,6 +515,9 @@ b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))
 
 b_lbindB :: (HExpr -> HsBind RdrName) -> HExpr -> HBind
 b_lbindB f e = L (getLoc e) (f e)
+
+b_charE :: LTForm Atom -> HExpr
+b_charE (L l (TAtom (AChar x))) = L l (HsLit (HsChar (show x) x))
 
 b_stringE :: LTForm Atom -> HExpr
 b_stringE (L l (TAtom (AString x))) = L l (HsLit (HsString x (fsLit x)))

@@ -21,6 +21,7 @@ module SK.Core.Lexer
 
 -- From 'base'
 import Control.Monad (ap, liftM)
+import Data.Char (toUpper)
 import Data.Maybe (fromMaybe)
 
 import Control.Monad.Trans.Except
@@ -76,8 +77,9 @@ $whitechar+  ;
 
 --- Literal values
 
-\"[^\"]*\"       { tok_string }
-$digit+          { tok_integer }
+\\[~$white][A-Za-z]* { tok_char }
+\"[^\"]*\"           { tok_string }
+$digit+              { tok_integer }
 
 
 -- Binary operators
@@ -114,6 +116,8 @@ data Token
   -- ^ Non-documentation line comment string.
   | TSymbol String
   -- ^ Symbol data.
+  | TChar Char
+  -- ^ Character data.
   | TString String
   -- ^ Literal string data.
   | TInteger Integer
@@ -168,6 +172,31 @@ tok_line_comment (_,_,_,s) l =
 
 tok_symbol :: Action
 tok_symbol (_,_,_,s) l = return (TSymbol (take l s))
+
+tok_char :: Action
+tok_char (_,_,_,s) l =
+  case take l s of
+    ['\\',c] -> return (TChar c)
+    '\\':cs | Just c' <- lookup (map toUpper cs) charTable
+             -> return (TChar c')
+    _        -> do
+     (AlexPn _ lno cno, _, _, _) <- alexGetInput
+     alexError ("unknown character token `" ++ s' ++ "' at line " ++
+                show lno ++ ", column " ++ show cno)
+  where
+    s' = take l s
+    charTable =
+      [ ("NUL", '\NUL'), ("SOH", '\SOH'), ("STX", '\STX')
+      , ("ETX", '\ETX'), ("EOT", '\EOT'), ("ENQ", '\ENQ')
+      , ("ACK", '\ACK'), ("BEL", '\BEL'), ("BS", '\BS')
+      , ("HT", '\HT'), ("LF", '\LF'), ("VT", '\VT'), ("FF", '\FF')
+      , ("CR", '\CR'), ("SO", '\SO'), ("SI", '\SI'), ("DLE", '\DLE')
+      , ("DC1", '\DC1'), ("DC2", '\DC2'), ("DC3", '\DC3')
+      , ("DC4", '\DC4'), ("NAK", '\NAK'), ("SYN", '\SYN')
+      , ("ETB", '\ETB'), ("CAN", '\CAN'), ("EM", '\EM')
+      , ("SUB", '\SUB'), ("ESC", '\ESC'), ("FS", '\FS')
+      , ("GS", '\GS'), ("RS", '\RS'), ("US", '\US'), ("SP", '\SP')
+      , ("DEL", '\DEL')]
 
 tok_string :: Action
 tok_string (_,_,_,s) l = return (TString (tail (take (l-1) s)))
