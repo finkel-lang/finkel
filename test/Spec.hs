@@ -22,18 +22,16 @@ getTestFiles =
       files = getDirectoryContents ("test" </> "data")
   in  foldr f [] <$> files
 
-readCode :: String -> IO (String, String)
+readCode :: String -> IO Bool
 readCode name = do
   let input = "test" </> "data" </> name <.> "lisp"
   contents <- readFile input
-  expected <- readFile ("test" </> "data" </> name <.> "hs")
   let go = do (mdl, st) <- compile (Just input) contents
-              _ <- tcHsModule (Just input) False mdl
-              genHsSrc st mdl
+              tcHsModule (Just input) False mdl
   compiled <- runSkc go initialSkEnv
   case compiled of
-    Right code -> return (code, expected)
-    Left e -> putStrLn e >> return ("", expected)
+    Right _tc -> return True
+    Left e -> putStrLn e >> return False
 
 stripTrailingNewlines :: String -> String
 stripTrailingNewlines str = reverse (dropWhile (== '\n') (reverse str))
@@ -42,9 +40,8 @@ mkTest :: String -> Spec
 mkTest name =
   before (readCode name) $ do
     describe name $ do
-      it "compiles to expected"
-         (\(code,expected) ->
-            code `shouldBe` stripTrailingNewlines expected)
+      it "should compile and type check"
+         (\result -> result `shouldBe` True)
 
 main :: IO ()
 main = do
