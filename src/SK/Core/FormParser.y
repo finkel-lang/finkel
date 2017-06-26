@@ -53,7 +53,7 @@ import SK.Core.GHC
 'import' { L _ (TAtom (ASymbol "import")) }
 'if'     { L _ (TAtom (ASymbol "if")) }
 'do'     { L _ (TAtom (ASymbol "do")) }
-'lambda' { L _ (TAtom (ASymbol "\\")) }
+'\\' { L _ (TAtom (ASymbol "\\")) }
 'let'    { L _ (TAtom (ASymbol "let")) }
 'case'   { L _ (TAtom (ASymbol "case")) }
 
@@ -190,11 +190,11 @@ atom :: { HExpr }
      | 'unit'    { b_unitE $1 }
 
 exprs :: { HExpr }
-      : 'if' expr expr expr { b_ifE $1 $2 $3 $4 }
-      | 'do' do_stmts       { b_doE $1 $2 }
-      | 'lambda' pats expr  { b_lamE $1 $2 $3 }
+      : '\\' pats expr      { b_lamE $1 $2 $3 }
       | 'let' lbinds expr   { b_letE $1 $2 $3 }
+      | 'if' expr expr expr { b_ifE $1 $2 $3 $4 }
       | 'case' expr pes     { b_caseE $1 $2 $3 }
+      | 'do' do_stmts       { b_doE $1 $2 }
       | '::' expr type      { b_tsigE $1 $2 $3 }
       | app                 { b_appE $1 }
 
@@ -313,6 +313,7 @@ parse bld toks = do
 showLoc :: Located a -> String
 showLoc x = case getLoc x of
       RealSrcSpan r ->
+        show (srcSpanFile r) ++ ":" ++
         "line " ++ show (srcSpanStartLine r) ++ ", " ++
         "column " ++ show (srcSpanStartCol r)
       UnhelpfulSpan _ -> "unknown location"
