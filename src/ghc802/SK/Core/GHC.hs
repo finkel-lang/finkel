@@ -16,6 +16,7 @@ module SK.Core.GHC
     HsStmtContext(..),
     HsType(..),
     HValue,
+    LConDecl,
     LHsBind,
     LHsExpr,
     LHsDecl,
@@ -53,6 +54,7 @@ module SK.Core.GHC
     mkNPat,
     noLoc,
     placeHolderType,
+    placeHolderNames,
     runGhc,
     setContext,
     setSessionDynFlags,
@@ -109,6 +111,12 @@ module SK.Core.GHC
     -- * HeaderInfo
     getOptionsFromFile,
 
+    -- * HsDecls
+    ConDecl(..),
+    HsDataDefn(..),
+    NewOrData(..),
+    TyClDecl(..),
+
     -- * HsBinds
     HsLocalBinds,
     HsLocalBindsLR(..),
@@ -135,6 +143,7 @@ module SK.Core.GHC
     InteractiveImport(..),
     ModSummary(..),
     handleSourceError,
+    mkHsQTvs,
     srcErrorMessages,
 
     -- * Module
@@ -144,6 +153,9 @@ module SK.Core.GHC
 
     -- * MonadUtils
     MonadIO(..),
+
+    -- * PlaceHolder
+    PlaceHolder(..),
 
     -- * RdrHsSyn
     cvTopDecls,
@@ -187,11 +199,13 @@ import Finder
 import HeaderInfo
 import HscTypes
 import HsBinds
+import HsDecls
 import Module
 import MonadUtils
 import OccName
 import OrdList
 import Outputable
+import PlaceHolder
 import RdrHsSyn
 import RdrName
 import SrcLoc

@@ -33,20 +33,25 @@ import SK.Core.GHC
 %name parse_module module
 %name p_mod_header mod_header
 %name p_import import
+%name p_top_decl top_decl
 %name p_decl decl
 %name p_type type
 %name p_types0 types0
+%name p_lconst lconst
+
 %name p_pats pats
 %name p_pats0 pats0
 %name p_pats1 pats1
+
 %name p_expr expr
 %name p_exprs exprs
 %name p_match match
 %name p_guards0 guards0
 %name p_guards1 guards1
 %name p_guard guard
-%name p_stmt1 stmt1
 %name p_lbinds0 lbinds0
+
+%name p_stmt1 stmt1
 
 %tokentype { LTForm Atom }
 %monad { Builder }
@@ -57,6 +62,7 @@ import SK.Core.GHC
 'module' { L _ (TAtom (ASymbol "module")) }
 'import' { L _ (TAtom (ASymbol "import")) }
 'if'     { L _ (TAtom (ASymbol "if")) }
+'data'   { L _ (TAtom (ASymbol "data")) }
 'do'     { L _ (TAtom (ASymbol "do")) }
 '\\'     { L _ (TAtom (ASymbol "\\")) }
 'let'    { L _ (TAtom (ASymbol "let")) }
@@ -132,7 +138,11 @@ rdecls :: { [HDecl] }
       | rdecls decl_with_doc { $2 : $1 }
 
 decl_with_doc :: { HDecl }
-              : mbdoc 'list' {% parse p_decl $2 }
+              : mbdoc 'list' {% parse p_top_decl $2 }
+
+top_decl :: { HDecl }
+         : 'data' 'symbol' consts { b_dataD $2 $3 }
+         | decl { $1 }
 
 decl :: { HDecl }
      : '=' decl_lhs expr  { b_funD $1 $2 $3 }
@@ -141,6 +151,19 @@ decl :: { HDecl }
 decl_lhs :: { HExpr -> HsBind RdrName }
          : 'list'   {% b_declLhsB $1 }
          | 'symbol' {% b_declLhsB [$1] }
+
+consts :: { [HConDecl] }
+       : rconsts { reverse $1 }
+
+rconsts :: { [HConDecl] }
+        : {- empty -}   { [] }
+        | rconsts const { $2 : $1 }
+
+const :: { HConDecl }
+      : 'list' {% parse p_lconst $1 }
+
+lconst :: { HConDecl }
+       : 'symbol' types { b_conD $1 $2 }
 
 --- ----
 --- Type
@@ -397,6 +420,8 @@ type HExpr = LHsExpr RdrName
 
 type HDecl = LHsDecl RdrName
 
+type HConDecl = LConDecl RdrName
+
 type HBind = LHsBind RdrName
 
 type HSigWcType = LHsSigWcType RdrName
@@ -472,6 +497,34 @@ b_module (L l (TAtom (ASymbol name))) mbdoc imports decls =
 b_importD :: LTForm Atom -> HImportDecl
 b_importD (L l (TAtom (ASymbol m))) =
     L l (simpleImportDecl (mkModuleName m))
+
+b_dataD :: LTForm Atom -> [HConDecl] -> HDecl
+b_dataD (L l (TAtom (ASymbol name))) cs = L l (TyClD decl)
+  where
+    decl = DataDecl { tcdLName = L l (mkUnqual tcName (fsLit name))
+                    , tcdTyVars = tvs
+                    , tcdDataDefn = defn
+                    , tcdDataCusk = PlaceHolder
+                    , tcdFVs = placeHolderNames }
+    tvs = mkHsQTvs []  -- need more info.
+    defn = HsDataDefn { dd_ND = DataType
+                      , dd_ctxt = noLoc []
+                      , dd_cType = Nothing
+                      , dd_kindSig = Nothing
+                      , dd_cons = cs
+                      -- The field `dd_derivs' changed from ghc-8.0.2.
+                      , dd_derivs = Nothing
+                      }
+
+b_conD :: LTForm Atom -> [HType] -> HConDecl
+b_conD (L l1 (TAtom (ASymbol s1))) types =
+    L l1 (ConDeclH98 { con_name = L l1 (mkUnqual srcDataName (fsLit s1))
+                     , con_qvars = Nothing
+                     , con_cxt = Nothing
+                     , con_details = details
+                     , con_doc = Nothing })
+  where
+    details = PrefixCon types
 
 b_funD :: Located a -> (HExpr -> HsBind RdrName) -> HExpr -> HDecl
 b_funD (L l _) f e = L l (ValD (f e))

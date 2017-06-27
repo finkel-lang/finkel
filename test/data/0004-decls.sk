@@ -2,6 +2,16 @@
 
 (module Main)
 
+;;; 4.2 User-Defined Datatypes
+
+;;; 4.1.1 Algebraic Datatype Declarations
+
+(data MyData1
+  (MyConst1 Int Bool)
+  (MyConst2 [(, Int Int)] Double Char))
+
+;;; 4.4 Nested Declarations
+
 ;; Unit type.
 (:: foo ())
 (= foo
@@ -29,7 +39,7 @@
 (= (listy xs)
   (mapM_ print xs))
 
-;;; Function with type variable.
+;;; Function with type variables.
 (:: tv01 (-> a (-> [b] Int)))
 (= (tv01 x ys)
   (length ys))
