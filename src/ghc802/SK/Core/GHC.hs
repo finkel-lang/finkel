@@ -116,6 +116,7 @@ module SK.Core.GHC
 
     -- * HsExpr
     MatchGroup(..),
+    HsTupArg (..),
 
     -- * HsImpExp
     simpleImportDecl,

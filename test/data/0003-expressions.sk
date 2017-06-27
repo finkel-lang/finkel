@@ -36,6 +36,15 @@
 (= lamexprs
   lam2)
 
+;;; 3.8 Tuples
+
+(:: tup1 (-> a (-> b (-> c (, a b c)))))
+(= (tup1 a b c)
+  (, a b c))
+
+(= tupexprs
+  (print (tup1 \x \y \z)))
+
 ;;; 3.12 Let Expressions
 
 ;;; Expression with empty 'let'.
@@ -134,14 +143,28 @@
       (print (lp1 [(Just 28) (Just 14)]))
       (print (lp1 [Nothing (Just 1) Nothing]))))
 
+(:: tupp1 (-> (, a b) a))
+(= (tupp1 (, a _)) a)
+
+(:: tupp2 (-> (, Char Char Char) Char))
+(= (tupp2 x)
+  (case x
+    (, _ _ c) c))
+
+(= patexprs2
+  (do (print (tupp1 (, True False)))
+      (print (tupp2 (, \a \b \c)))))
+
 (= patexprs
-  (do patexprs1))
+  (do patexprs1
+      patexprs2))
 
 ;;; Main
 
 (= main
   (do simples
       lamexprs
+      tupexprs
       letexprs
       doexpres
       tsigexprs

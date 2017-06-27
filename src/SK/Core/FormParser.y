@@ -35,9 +35,10 @@ import SK.Core.GHC
 %name p_import import
 %name p_decl decl
 %name p_type type
-%name p_types types
+%name p_types0 types0
 %name p_pats pats
 %name p_pats0 pats0
+%name p_pats1 pats1
 %name p_expr expr
 %name p_exprs exprs
 %name p_do_stmt1 do_stmt1
@@ -53,7 +54,7 @@ import SK.Core.GHC
 'import' { L _ (TAtom (ASymbol "import")) }
 'if'     { L _ (TAtom (ASymbol "if")) }
 'do'     { L _ (TAtom (ASymbol "do")) }
-'\\' { L _ (TAtom (ASymbol "\\")) }
+'\\'     { L _ (TAtom (ASymbol "\\")) }
 'let'    { L _ (TAtom (ASymbol "let")) }
 'case'   { L _ (TAtom (ASymbol "case")) }
 
@@ -61,6 +62,7 @@ import SK.Core.GHC
 '<-' { L _ (TAtom (ASymbol "<-")) }
 '->' { L _ (TAtom (ASymbol "->")) }
 '::' { L _ (TAtom (ASymbol "::")) }
+','  { L _ (TAtom (ASymbol ",")) }
 
 'symbol'  { L _ (TAtom (ASymbol _)) }
 'char'    { L _ (TAtom (AChar _)) }
@@ -142,18 +144,19 @@ type :: { HType }
      : 'symbol' { b_symT $1 }
      | 'unit'   { b_unitT $1 }
      | 'hslist' {% b_listT $1 }
-     | 'list'   {% parse p_types $1 }
+     | 'list'   {% parse p_types0 $1 }
 
-types :: { HType }
-      : '->' type type { b_funT $1 $2 $3 }
-      | appty          { b_appT $1 }
+types0 :: { HType }
+       : '->' type type { b_funT $1 $2 $3 }
+       | ',' types      { b_tupT $1 $2 }
+       | types          { b_appT $1 }
 
-appty :: { [HType] }
-      : rappty { reverse $1 }
+types :: { [HType] }
+      : rtypes { reverse $1 }
 
-rappty :: { [HType] }
-       : type       { [$1] }
-       | rappty type { $2 : $1 }
+rtypes :: { [HType] }
+       : type        { [$1] }
+       | rtypes type { $2 : $1 }
 
 
 --- --------
@@ -174,7 +177,11 @@ pat :: { HPat }
     : 'integer' { b_intP $1 }
     | 'symbol'  { b_symP $1 }
     | 'hslist'  {% b_hsListP $1 }
-    | 'list'    {% b_listP $1 }
+    | 'list'    {% parse p_pats1 $1 }
+
+pats1 :: { HPat }
+      : ',' pats0 { b_tupP $1 $2 }
+      | 'symbol' pats0 { b_conP $1 $2 }
 
 
 --- -----------
@@ -195,6 +202,7 @@ atom :: { HExpr }
 
 exprs :: { HExpr }
       : '\\' pats expr      { b_lamE $1 $2 $3 }
+      | ',' app             { b_tupE $1 $2 }
       | 'let' lbinds expr   { b_letE $1 $2 $3 }
       | 'if' expr expr expr { b_ifE $1 $2 $3 $4 }
       | 'case' expr pes     { b_caseE $1 $2 $3 }
@@ -328,6 +336,9 @@ happyError = do
   case lastToken st of
     Nothing -> failB "no location"
     Just x  ->
+      -- XXX: 'x' is a 'Located' data, it should contain source file
+      -- path information, so 'inputPath' field in 'st' is not
+      -- necessary.
       let path = fromMaybe "unknown input" (inputPath st)
       in  failB (path ++ ": parse error at " ++ showLoc x ++ ": " ++
                        (show (lTFormToForm x)))
@@ -447,6 +458,9 @@ b_listT (L l (THsList ty)) = do
   ty' <- parse p_type [L l (TList ty)]
   return (L l (HsListTy ty'))
 
+b_tupT :: Located a -> [HType] -> HType
+b_tupT (L l _) ts = L l (HsTupleTy HsBoxedTuple ts)
+
 -- Pattern
 
 b_intP :: LTForm Atom -> HPat
@@ -466,16 +480,12 @@ b_hsListP (L l (THsList xs)) = do
     pats <- parse p_pats0 xs
     return (L l (ListPat pats placeHolderType Nothing))
 
-b_listP :: [LTForm Atom] -> Builder HPat
-b_listP (L l x:rest) =
-    case x of
-      TAtom (ASymbol name)
-        | isUpper (head name) -> do
-            pats <- parse p_pats0 rest
-            let ps = PrefixCon pats
-            return (L l (ConPatIn (L l (mkRdrName name)) ps))
-        | otherwise -> failB "b_listP: not yet supported"
-      _ -> failB "b_listP: non-symbol in head of list."
+b_tupP :: Located a -> [HPat] -> HPat
+b_tupP (L l _) ps = L l (TuplePat ps Boxed [])
+
+b_conP :: LTForm Atom -> [HPat] -> HPat
+b_conP (L l (TAtom (ASymbol con))) rest =
+    L l (ConPatIn (L l (mkRdrName con)) (PrefixCon rest))
 
 -- Expression
 
@@ -484,6 +494,10 @@ b_ifE (L l (TAtom _)) p t f = L l (mkHsIf p t f)
 
 b_lamE :: Located a -> [HPat] -> HExpr -> HExpr
 b_lamE ref pats body = mkHsLam pats body
+
+b_tupE :: Located a -> [HExpr] -> HExpr
+b_tupE (L l _) args = L l (ExplicitTuple (map mkArg args) Boxed)
+  where mkArg x@(L l n) = L l (Present x)
 
 b_letE :: Located a -> [HDecl] -> HExpr -> HExpr
 b_letE (L l _) decls body = L l (HsLet binds' body)
