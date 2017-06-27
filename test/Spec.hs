@@ -5,6 +5,7 @@
 --
 module Main where
 
+import Data.List
 import System.FilePath
 import System.Directory
 import Test.Hspec
@@ -20,7 +21,7 @@ getTestFiles =
                                  then (dir </> x) : acc
                                  else acc)
       files = getDirectoryContents dir
-  in  foldr f [] <$> files
+  in  sort <$> foldr f [] <$> files
 
 readCode :: FilePath -> IO Bool
 readCode src = do
