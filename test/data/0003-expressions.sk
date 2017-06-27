@@ -75,9 +75,26 @@
     ((Just n) (+ n 1))
     (_ 0)))
 
+(= (case2 x)
+  (case x
+    ((Right (Just _)) 1)
+    ((Right Nothing) 2)
+    ((Left (Just _)) 3)
+    ((Left Nothing) 4)))
+
+(= (case3 x y)
+  (case x
+    ((Just n) (| ((even n) "even")
+                 ((odd n) "odd")
+                 (otherwise "impossible")))
+    (Nothing (| ((even y) "y is even")
+                (otherwise "y is odd")))))
+
 (= caseexprs
   (do (print (case1 (Just 41)))
-      (print (case1 Nothing))))
+      (print (case1 Nothing))
+      (print (case2 (Right (Just ()))))
+      (print (case3 (Just 42) 12))))
 
 ;;; 3.14 Do Expressions
 
@@ -131,8 +148,8 @@
 
 (= (lp1 []) 0)
 (= (lp1 [a]) 1)
-(= (lp1 [a b]) 2)
 (= (lp1 [(Just x) (Just y)]) (+ x y))
+(= (lp1 [a b]) 2)
 (= (lp1 _) 999)
 
 (= patexprs1

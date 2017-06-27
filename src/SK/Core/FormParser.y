@@ -41,7 +41,10 @@ import SK.Core.GHC
 %name p_pats1 pats1
 %name p_expr expr
 %name p_exprs exprs
-%name p_pes0 pes0
+%name p_match match
+%name p_guards0 guards0
+%name p_guards1 guards1
+%name p_guard guard
 %name p_do_stmt1 do_stmt1
 %name p_lbinds0 lbinds0
 
@@ -64,6 +67,7 @@ import SK.Core.GHC
 '->' { L _ (TAtom (ASymbol "->")) }
 '::' { L _ (TAtom (ASymbol "::")) }
 ','  { L _ (TAtom (ASymbol ",")) }
+'|'  { L _ (TAtom (ASymbol "|")) }
 
 'symbol'  { L _ (TAtom (ASymbol _)) }
 'char'    { L _ (TAtom (AChar _)) }
@@ -206,7 +210,7 @@ exprs :: { HExpr }
       | ',' app             { b_tupE $1 $2 }
       | 'let' lbinds expr   { b_letE $1 $2 $3 }
       | 'if' expr expr expr { b_ifE $1 $2 $3 $4 }
-      | 'case' expr pes     { b_caseE $1 $2 $3 }
+      | 'case' expr alts    { b_caseE $1 $2 $3 }
       | 'do' do_stmts       { b_doE $1 $2 }
       | '::' expr type      { b_tsigE $1 $2 $3 }
       | app                 { b_appE $1 }
@@ -222,15 +226,40 @@ rlbinds0 :: { [HDecl] }
          : 'list'          {% fmap (:[]) (parse p_decl $1) }
          | rlbinds0 'list' {% fmap (:$1) (parse p_decl $2) }
 
-pes :: { [(HPat, HExpr)] }
-    : rpes { reverse $1 }
+alts :: { [HMatch] }
+     : ralts { reverse $1 }
 
-rpes :: { [(HPat, HExpr)] }
-     : 'list'       {% fmap (:[]) (parse p_pes0 $1) }
-     | rpes 'list'  {% fmap (:$1) (parse p_pes0 $2) }
+ralts :: { [HMatch] }
+      : 'list'       {% fmap (:[]) (parse p_match $1)  }
+      | ralts 'list' {% fmap (:$1) (parse p_match $2) }
 
-pes0 :: { (HPat, HExpr) }
-     : pat expr      { ($1, $2) }
+match :: { HMatch }
+      : pat guards { b_match $1 $2 }
+
+-- Parsing list form for guards
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Separating the rule for 'list' and atom, so that the 'guards0' rule
+-- can try matching the symbol '|' before 'expr' rule, to differentiate
+-- the entire form from function application of reserved symbol '|'.
+
+guards :: { [HGRHS] }
+       : 'list' {% parse p_guards0 $1 }
+       | atom   { [noLoc (GRHS [] $1)] }
+
+guards0 :: { [HGRHS] }
+      : '|' guards1 { $2 }
+      | exprs { [noLoc (GRHS [] $1)] }
+
+guards1 :: { [HGRHS] }
+        : 'list'         {% fmap (:[]) (parse p_guard $1) }
+        | 'list' guards1 {% fmap (:$2) (parse p_guard $1) }
+
+-- guard :: { HGRHS }
+--       : expr expr { b_grhs $1 $2 let l = getLoc $1 in L l (GRHS [L l (mkBodyStmt $1)] $2) }
+
+guard :: { HGRHS }
+      : expr expr { b_grhs $1 $2 }
 
 app :: { [HExpr] }
     : rapp { reverse $1 }
@@ -381,6 +410,12 @@ type HExprLStmt = ExprLStmt RdrName
 
 type HLocalBinds = Located (HsLocalBinds RdrName)
 
+type HMatch = LMatch RdrName HExpr
+
+type HGRHS = LGRHS RdrName HExpr
+
+type HGuardLStmt = GuardLStmt RdrName
+
 type HImportDecl = LImportDecl RdrName
 
 -- XXX: Currently, cannot tell the difference between 'Qualified.fun'
@@ -520,12 +555,18 @@ b_letE (L l _) decls body = L l (HsLet binds' body)
           L ld (ValD b) -> go (L ld b:bs,ss) ds'
           L ld (SigD s) -> go (bs,L ld s:ss) ds'
 
-b_caseE :: Located a -> HExpr -> [(HPat, HExpr)] -> HExpr
-b_caseE (L l _) expr pes = L l (HsCase expr mg)
+b_caseE :: Located a -> HExpr -> [HMatch] -> HExpr
+b_caseE (L l _) expr matches = L l (HsCase expr mg)
+  where mg = mkMatchGroup FromSource matches
+
+b_match :: HPat -> [HGRHS] -> HMatch
+b_match pat@(L l _) grhss =
+    L l (Match NonFunBindMatch [pat] Nothing grhss')
   where
-    matches = map f pes
-    f (p,e) = mkMatch [p] e (L l emptyLocalBinds)
-    mg = mkMatchGroup Generated matches
+    grhss' = GRHSs grhss (noLoc emptyLocalBinds)
+
+b_grhs :: HExpr -> HExpr -> HGRHS
+b_grhs guard@(L l _) body = L l (GRHS [L l (mkBodyStmt guard)] body)
 
 b_tsigE :: Located a -> HExpr -> HType -> HExpr
 b_tsigE (L l _) e t = L l (ExprWithTySig e (mkLHsSigWcType t))

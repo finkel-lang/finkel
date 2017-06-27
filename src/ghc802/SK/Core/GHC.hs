@@ -115,8 +115,15 @@ module SK.Core.GHC
     HsValBindsLR(..),
 
     -- * HsExpr
+    GRHSs(..),
+    GRHS(..),
+    GuardLStmt,
+    Match(..),
+    MatchFixity(..),
     MatchGroup(..),
     HsTupArg (..),
+    LGRHS,
+    LMatch,
 
     -- * HsImpExp
     simpleImportDecl,
