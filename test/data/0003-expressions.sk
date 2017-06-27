@@ -68,6 +68,16 @@
   (do (print (let1 7))
       (print (let2 7))))
 
+;;; 3.13 Case Expressions
+
+(= (case1 x)
+  (case x
+    ((Just n) (+ n 1))
+    (_ 0)))
+
+(= caseexprs
+  (do (print (case1 (Just 41)))
+      (print (case1 Nothing))))
 
 ;;; 3.14 Do Expressions
 
@@ -149,7 +159,7 @@
 (:: tupp2 (-> (, Char Char Char) Char))
 (= (tupp2 x)
   (case x
-    (, _ _ c) c))
+    ((, _ _ c) c)))
 
 (= patexprs2
   (do (print (tupp1 (, True False)))
@@ -166,6 +176,7 @@
       lamexprs
       tupexprs
       letexprs
+      caseexprs
       doexpres
       tsigexprs
       patexprs))

@@ -145,8 +145,8 @@ wrapArgs name args@(L l1 _) body0=
                                       , "arg mismatch: "])
                     , list [sym "show", list [sym "pForm", form]]]]
       body1 =  list [ sym "case", form
-                    , mkPat args, body0
-                    , sym "_", message ]
+                    , list [mkPat args, body0]
+                    , list [sym "_", message ]]
       mkPat (L l x) =
         case x of
           TList xs -> list [sym "List", tHsList l (map mkPat xs)]

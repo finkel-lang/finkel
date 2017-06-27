@@ -17,10 +17,10 @@
 ;;; Macro taking fractional value as argument.
 (macrolet ((m1 (n)
              (case (fromForm n)
-               (Just d) (if (<= 1.0 (:: d Double))
-                            (return '"more or eq")
-                            (return '"less"))
-               Nothing (failS "m1: error"))))
+               ((Just d) (if (<= 1.0 (:: d Double))
+                             (return '"more or eq")
+                             (return '"less")))
+               (Nothing (failS "m1: error")))))
   (= fracmac
     (do (putStrLn (m1 1.1))
         (putStrLn (m1 0.9)))))

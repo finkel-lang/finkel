@@ -41,6 +41,7 @@ import SK.Core.GHC
 %name p_pats1 pats1
 %name p_expr expr
 %name p_exprs exprs
+%name p_pes0 pes0
 %name p_do_stmt1 do_stmt1
 %name p_lbinds0 lbinds0
 
@@ -222,8 +223,14 @@ rlbinds0 :: { [HDecl] }
          | rlbinds0 'list' {% fmap (:$1) (parse p_decl $2) }
 
 pes :: { [(HPat, HExpr)] }
-    : pat expr     { [($1, $2)] }
-    | pat expr pes { ($1, $2) : $3 }
+    : rpes { reverse $1 }
+
+rpes :: { [(HPat, HExpr)] }
+     : 'list'       {% fmap (:[]) (parse p_pes0 $1) }
+     | rpes 'list'  {% fmap (:$1) (parse p_pes0 $2) }
+
+pes0 :: { (HPat, HExpr) }
+     : pat expr      { ($1, $2) }
 
 app :: { [HExpr] }
     : rapp { reverse $1 }
