@@ -45,7 +45,7 @@ import SK.Core.GHC
 %name p_guards0 guards0
 %name p_guards1 guards1
 %name p_guard guard
-%name p_do_stmt1 do_stmt1
+%name p_stmt1 stmt1
 %name p_lbinds0 lbinds0
 
 %tokentype { LTForm Atom }
@@ -185,7 +185,7 @@ pat :: { HPat }
     | 'list'    {% parse p_pats1 $1 }
 
 pats1 :: { HPat }
-      : ',' pats0 { b_tupP $1 $2 }
+      : ',' pats0      { b_tupP $1 $2 }
       | 'symbol' pats0 { b_conP $1 $2 }
 
 
@@ -226,6 +226,13 @@ rlbinds0 :: { [HDecl] }
          : 'list'          {% fmap (:[]) (parse p_decl $1) }
          | rlbinds0 'list' {% fmap (:$1) (parse p_decl $2) }
 
+app :: { [HExpr] }
+    : rapp { reverse $1 }
+
+rapp :: { [HExpr] }
+     : expr      { [$1] }
+     | rapp expr { $2 : $1 }
+
 alts :: { [HMatch] }
      : ralts { reverse $1 }
 
@@ -249,24 +256,15 @@ guards :: { [HGRHS] }
 
 guards0 :: { [HGRHS] }
       : '|' guards1 { $2 }
-      | exprs { [noLoc (GRHS [] $1)] }
+      | exprs       { [noLoc (GRHS [] $1)] }
 
 guards1 :: { [HGRHS] }
-        : 'list'         {% fmap (:[]) (parse p_guard $1) }
-        | 'list' guards1 {% fmap (:$2) (parse p_guard $1) }
+        : 'list'         {% b_hgrhs $1 [] }
+        | 'list' guards1 {% b_hgrhs $1 $2 }
 
--- guard :: { HGRHS }
---       : expr expr { b_grhs $1 $2 let l = getLoc $1 in L l (GRHS [L l (mkBodyStmt $1)] $2) }
-
-guard :: { HGRHS }
-      : expr expr { b_grhs $1 $2 }
-
-app :: { [HExpr] }
-    : rapp { reverse $1 }
-
-rapp :: { [HExpr] }
-     : expr { [$1] }
-     | rapp expr { $2 : $1 }
+guard :: { (HExpr, [GuardLStmt RdrName]) }
+      : expr       { ($1, []) }
+      | stmt guard { fmap ($1:) $2 }
 
 
 --- ------------
@@ -276,15 +274,16 @@ do_stmts :: { [HExprLStmt] }
          : rdo_stmts { reverse $1 }
 
 rdo_stmts :: { [HExprLStmt] }
-          : do_stmt           { [$1] }
-          | rdo_stmts do_stmt { $2 : $1 }
+          : stmt           { [$1] }
+          | rdo_stmts stmt { $2 : $1 }
 
-do_stmt :: { HExprLStmt }
+stmt :: { HExprLStmt }
         : atom   { b_bodyS $1 }
-        | 'list' {% parse p_do_stmt1 $1 }
+        | 'list' {% parse p_stmt1 $1 }
 
-do_stmt1 :: { HExprLStmt }
+stmt1 :: { HExprLStmt }
          : '<-' pat expr { b_bindS $1 $2 $3 }
+         | 'let' lbinds  { b_letS $1 $2 }
          | exprs         { b_bodyS $1 }
 
 
@@ -433,6 +432,21 @@ mkRdrName name@(x:_)
   | otherwise = mkVarUnqual (fsLit name)
 
 
+-- | Build 'HLocalBinds' from list of 'HDecl's.
+declsToBinds :: Located a -> [HDecl] -> HLocalBinds
+declsToBinds (L l _) decls = L l binds'
+  where
+    binds' = case decls of
+      [] -> emptyLocalBinds
+      _  -> HsValBinds (ValBindsIn (listToBag binds) sigs)
+    (binds, sigs) = go ([],[]) decls
+    go (bs,ss) ds =
+      case ds of
+        [] -> (bs, ss)
+        d:ds' -> case d of
+          L ld (ValD b) -> go (L ld b:bs,ss) ds'
+          L ld (SigD s) -> go (bs,L ld s:ss) ds'
+
 ---
 --- Builder functions
 ---
@@ -542,18 +556,8 @@ b_tupE (L l _) args = L l (ExplicitTuple (map mkArg args) Boxed)
   where mkArg x@(L l n) = L l (Present x)
 
 b_letE :: Located a -> [HDecl] -> HExpr -> HExpr
-b_letE (L l _) decls body = L l (HsLet binds' body)
-  where
-    binds' = case decls of
-      [] -> L l emptyLocalBinds
-      _  -> L l (HsValBinds (ValBindsIn (listToBag binds) sigs))
-    (binds, sigs) = go ([], []) decls
-    go (bs,ss) ds =
-      case ds of
-        [] -> (bs, ss)
-        d:ds' -> case d of
-          L ld (ValD b) -> go (L ld b:bs,ss) ds'
-          L ld (SigD s) -> go (bs,L ld s:ss) ds'
+b_letE ref@(L l _) decls body =
+    L l (HsLet (declsToBinds ref decls) body)
 
 b_caseE :: Located a -> HExpr -> [HMatch] -> HExpr
 b_caseE (L l _) expr matches = L l (HsCase expr mg)
@@ -564,6 +568,15 @@ b_match pat@(L l _) grhss =
     L l (Match NonFunBindMatch [pat] Nothing grhss')
   where
     grhss' = GRHSs grhss (noLoc emptyLocalBinds)
+
+b_hgrhs :: [LTForm Atom] -> [HGRHS] -> Builder [HGRHS]
+b_hgrhs forms rhss = do
+  (body, gs) <- parse p_guard forms
+  let rhs = GRHS gs body
+      lrhs = case gs of
+        [] -> noLoc rhs
+        _  -> L (combineLocs (head gs) (last gs)) rhs
+  return (lrhs:rhss)
 
 b_grhs :: HExpr -> HExpr -> HGRHS
 b_grhs guard@(L l _) body = L l (GRHS [L l (mkBodyStmt guard)] body)
@@ -605,11 +618,14 @@ b_commentStringE (L l (TAtom (AComment x))) = L l (HsDocString (fsLit x))
 
 --- Statement
 
-b_bodyS :: HExpr -> HExprLStmt
-b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
-
 b_bindS :: Located a -> HPat -> HExpr -> HExprLStmt
 b_bindS ref pat expr = L (getLoc ref) (mkBindStmt pat expr)
+
+b_letS :: Located a -> [HDecl] -> HExprLStmt
+b_letS lref@(L l _) decls = L l (LetStmt (declsToBinds lref decls))
+
+b_bodyS :: HExpr -> HExprLStmt
+b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
 
 b_hsListB :: LTForm Atom -> Builder HExpr
 b_hsListB (L l (THsList xs)) = do

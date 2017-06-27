@@ -124,6 +124,7 @@ module SK.Core.GHC
     HsTupArg (..),
     LGRHS,
     LMatch,
+    StmtLR(..),
 
     -- * HsImpExp
     simpleImportDecl,
@@ -159,6 +160,7 @@ module SK.Core.GHC
     RealSrcSpan,
     SrcSpan(..),
 
+    combineLocs,
     mkRealSrcLoc,
     mkRealSrcSpan,
     mkSrcLoc,

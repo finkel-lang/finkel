@@ -82,11 +82,26 @@
     ((Left (Just _)) 3)
     ((Left Nothing) 4)))
 
+(:: mbeven (-> Int (Maybe Int)))
+(= (mbeven n)
+  (if (even n)
+      (Just n)
+      Nothing))
+
+(:: case3 (-> (Maybe Int) (-> Int String)))
 (= (case3 x y)
   (case x
-    ((Just n) (| ((even n) "even")
-                 ((odd n) "odd")
-                 (otherwise "impossible")))
+    ((Just n) (| ((odd n) (> n 100)
+                  "small odd number")
+                 ((odd n)
+                  "big odd number")
+                 ((<- (Just m) (mbeven n))
+                  (let ((:: k Int)
+                        (= k (+ m 1))))
+                  (< k 101)
+                  "small even number")
+                 (otherwise
+                  "big even number")))
     (Nothing (| ((even y) "y is even")
                 (otherwise "y is odd")))))
 
@@ -105,11 +120,12 @@
 (= doexpres
   (do (putStrLn "foo")
       (<- buzz (showBar "buzz"))
-      (putStrLn buzz)))
+      (let ((:: buzz3 String)
+            (= buzz3 (concat [buzz buzz buzz]))))
+      (putStrLn buzz3)))
 
 ;;; 3.16 Expression Type-Signatures
 
-;; Expression with explicit type signature
 (= (f2 n)
   (if (< n (:: 2 Int))
       n
