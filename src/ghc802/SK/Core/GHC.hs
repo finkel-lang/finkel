@@ -115,10 +115,12 @@ module SK.Core.GHC
 
     -- * HsDecls
     ConDecl(..),
+    ConDeclField(..),
     HsConDeclDetails,
     HsDataDefn(..),
     HsDeriving,
     HsTyVarBndr(..),
+    LConDeclField,
     LHsQTyVars,
     LHsTyVarBndr,
     NewOrData(..),
@@ -150,6 +152,7 @@ module SK.Core.GHC
     InteractiveImport(..),
     ModSummary(..),
     handleSourceError,
+    mkFieldOcc,
     mkHsQTvs,
     srcErrorMessages,
 

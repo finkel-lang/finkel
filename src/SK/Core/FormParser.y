@@ -19,6 +19,7 @@ module SK.Core.FormParser
 
 import Control.Monad (foldM, liftM, ap)
 import Data.Char (isUpper)
+import Data.Either (partitionEithers)
 import Data.List (foldl1')
 import Data.Maybe (fromMaybe)
 
@@ -54,6 +55,8 @@ import SK.Core.GHC
 %name p_lbinds0 lbinds0
 
 %name p_stmt1 stmt1
+
+%name p_symbols1 symbols1
 
 %tokentype { LTForm Atom }
 %monad { Builder }
@@ -163,25 +166,39 @@ constr :: { HConDecl }
        : 'list' {% parse p_lconstr $1 }
 
 lconstr :: { HConDecl }
-        : 'symbol' types { b_conD $1 $2 }
-        -- : 'symbol' condetails { b_conD $1 $2 }
+        : 'symbol' condetails { b_conD $1 $2 }
 
-condetails :: { [HsConDeclDetails RdrName] }
-           : rcondetails { reverse $1 }
+condetails :: { HsConDeclDetails RdrName }
+           : condetails1 {% b_conDeclDetails $1 }
 
-rcondetails :: { [HsConDeclDetails RdrName] }
+condetails1 :: { [Either HType HConDeclField] }
+            : rcondetails { reverse $1 }
+
+rcondetails :: { [Either HType HConDeclField] }
             : condetail             { [$1] }
             | rcondetails condetail { ($2:$1) }
 
-condetail :: { (HsConDeclDetails RdrName) }
-          : 'symbol' { b_typeD (b_symT $1) }
-          | 'unit'   { b_typeD (b_unitT $1) }
-          | 'hslist' {% b_typeD `fmap` b_listT $1 }
+condetail :: { Either HType HConDeclField }
+          : 'symbol' { Left (b_symT $1) }
+          | 'unit'   { Left (b_unitT $1) }
+          | 'hslist' {% Left `fmap` b_listT $1 }
           | 'list'   {% parse p_lcondetail $1 }
 
-lcondetail :: { (HsConDeclDetails RdrName) }
-           : '::' 'symbol' type { b_recFieldD $2 $3 }
-           | types0             { b_typeD $1 }
+lcondetail :: { Either HType HConDeclField }
+           : '::' 'symbol' type { Right (b_recFieldD [$2] $3) }
+           | '::' symbols type  { Right (b_recFieldD $2 $3) }
+           | types0             { Left $1 }
+
+
+symbols :: { [LTForm Atom] }
+        : 'list' {% parse p_symbols1 $1 }
+
+symbols1 :: { [LTForm Atom] }
+         : rsymbols { reverse $1 }
+
+rsymbols :: { [LTForm Atom] }
+         : 'symbol'          { [$1] }
+         | rsymbols 'symbol' { $2:$1 }
 
 
 decl :: { HDecl }
@@ -467,6 +484,10 @@ declsToBinds (L l _) decls = L l binds'
           L ld (ValD b) -> go (L ld b:bs,ss) ds'
           L ld (SigD s) -> go (bs,L ld s:ss) ds'
 
+-- Function defined in 'HsUtils', not exported.
+mkLocatedList ::  [Located a] -> Located [Located a]
+mkLocatedList [] = noLoc []
+mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
 
 ---
 --- Type synonyms
@@ -477,6 +498,8 @@ type HExpr = LHsExpr RdrName
 type HDecl = LHsDecl RdrName
 
 type HConDecl = LConDecl RdrName
+
+type HConDeclField = LConDeclField RdrName
 
 type HsQTyVars = LHsQTyVars RdrName
 
@@ -555,21 +578,33 @@ b_simpletypeD ((L l (TAtom (ASymbol name))):tvs) = (name, tvs')
     f (L l (TAtom (ASymbol name))) =
         L l (UserTyVar (L l (mkUnqual tvName (fsLit name))))
 
-b_conD :: LTForm Atom -> [HType] -> HConDecl
-b_conD (L l1 (TAtom (ASymbol s1))) types =
+b_conD :: LTForm Atom -> HsConDeclDetails RdrName -> HConDecl
+b_conD (L l1 (TAtom (ASymbol s1))) details =
     L l1 (ConDeclH98 { con_name = L l1 (mkUnqual srcDataName (fsLit s1))
                      , con_qvars = Nothing
                      , con_cxt = Nothing
                      , con_details = details
                      , con_doc = Nothing })
+
+b_conDeclDetails :: [Either HType HConDeclField]
+                 -> Builder (HsConDeclDetails RdrName)
+b_conDeclDetails args =
+   -- XXX: Infix data constructor not supported.
+   case partitionEithers args of
+     (tys, [])  -> return (PrefixCon tys)
+     ([], recs) -> return (RecCon (mkLocatedList recs))
+     _          -> happyError
+
+b_recFieldD :: [LTForm Atom] -> HType -> HConDeclField
+b_recFieldD names ty = L loc field
   where
-    details = PrefixCon types
-
-b_recFieldD :: LTForm Atom -> HType -> HsConDeclDetails RdrName
-b_recFieldD = error "b_fieldD"
-
-b_typeD :: HType -> HsConDeclDetails RdrName
-b_typeD ty = error "b_typeD"
+    field = ConDeclField { cd_fld_names = names'
+                         , cd_fld_type = ty
+                         , cd_fld_doc = Nothing }
+    loc = getLoc (mkLocatedList names)
+    names' = map f names
+    f (L l (TAtom (ASymbol name))) =
+        L l (mkFieldOcc (L l (mkRdrName name)))
 
 -- 'HsDeriving' changed in git head since ghc-8.0.2 release.
 b_derivD :: (HsDeriving RdrName, [HConDecl])

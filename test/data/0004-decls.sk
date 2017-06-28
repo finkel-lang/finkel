@@ -7,8 +7,8 @@
 ;;; 4.2.1 Algebraic Datatype Declarations
 
 (data MyData1
-  (MyConst1 Int Bool)
-  (MyConst2 [(, Int Int)] Double Char)
+  (MyD1Con1 Int Bool)
+  (MyD1Con2 [(, Int Int)] Double Char)
   (deriving (Eq Show)))
 
 (data (MyData2 a b)
@@ -16,12 +16,23 @@
   (MyD2Con2 a a Bool)
   (deriving (Eq Show)))
 
+(data (MyData3 a)
+  (MyD3Con1 (:: d3f1 a)
+            (:: d3f2 (Maybe FilePath)))
+  (MyD3Con2 Int Int Int)
+  (MyD3Con3 (:: (d3f1 d3f1b d3f1c) a)
+            (:: d3f4 (Either Bool Char)))
+  (deriving (Eq Show)))
+
 (:: s4_2_1 (IO ()))
 (= s4_2_1
-  (do (print (MyConst1 123 True))
-      (print (MyConst2 [(, 1 2) (, 3 4)] 1.23 \z))
+  (do (print (MyD1Con1 123 True))
+      (print (MyD1Con2 [(, 1 2) (, 3 4)] 1.23 \z))
       (print [(MyD2Con1 (:: 123 Int) \z)
-              (MyD2Con2 (:: 789 Int) 0 False)])))
+              (MyD2Con2 (:: 789 Int) 0 False)])
+      (print (MyD3Con1 \x (Just "/foo/bar")))
+      (print (:: (MyD3Con2 1 2 3) (MyData3 Double)))
+      (print (MyD3Con3 \a \b \c (Right \z)))))
 
 (:: s4_2 (IO ()))
 (= s4_2
