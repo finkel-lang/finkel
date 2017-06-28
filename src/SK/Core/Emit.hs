@@ -23,17 +23,13 @@ import qualified Data.Map as Map
 
 -- From 'ghc'
 import GHC
-import HsBinds
 import OccName
 import Outputable
 import SrcLoc
 
--- From 'ghc-paths'
-import GHC.Paths
-
 -- Internal
 import SK.Core.Lexer
-import SK.Core.GHC
+-- import SK.Core.GHC
 
 --
 -- Annotation dictionary
@@ -167,9 +163,6 @@ hsSrc_nonnull st xs =
   case xs of
     [] -> empty
     _  -> vcat (map (toHsSrc st) xs)
-
-linePragma :: SPState -> Located a -> SDoc
-linePragma st ref = linePragma' st (spanStartLine (getLoc ref))
 
 linePragma' :: SPState -> Int -> SDoc
 linePragma' st linum =

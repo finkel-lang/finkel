@@ -41,6 +41,7 @@ import SK.Core.GHC
 data Form a
   = Atom a
   | List [Form a]
+  | HsList [Form a]
   deriving (Eq, Show, Data, Typeable)
 
 -- | Atom in tokens.
@@ -82,8 +83,8 @@ lTFormToForm form =
    case unLoc form of
      TAtom a    -> Atom a
      TList xs   -> List (map lTFormToForm xs)
-     THsList xs -> List (map lTFormToForm xs)
-     TEnd       -> Atom undefined
+     THsList xs -> HsList (map lTFormToForm xs)
+     TEnd       -> List []
 
 -- | Make a token form with no location information.
 nlForm :: Form a -> LTForm a
@@ -91,6 +92,7 @@ nlForm form =
   case form of
     Atom x -> noLoc (TAtom x)
     List xs -> noLoc (TList (map nlForm xs))
+    HsList xs -> noLoc (THsList (map nlForm xs))
 
 car :: Form a -> Form a
 car (List (x:_)) = x
@@ -105,6 +107,7 @@ pprForm form =
   case form of
     Atom x -> P.text "Atom" P.<+> P.parens (pprAtom x)
     List xs -> P.text "List" P.<+> P.nest 2 (pprForms xs)
+    HsList xs -> P.text "HsList" P.<+> P.nest 2 (pprForms xs)
 
 pprForms :: [Form Atom] -> P.Doc
 pprForms forms =
@@ -137,13 +140,14 @@ pForm :: Form Atom -> P.Doc
 pForm form =
   case form of
     Atom a -> pAtom a
-    List forms -> pForms forms
+    List forms -> pForms P.parens forms
+    HsList forms -> pForms P.brackets forms
 
-pForms :: [Form Atom] -> P.Doc
-pForms forms =
+pForms :: (P.Doc -> P.Doc) -> [Form Atom] -> P.Doc
+pForms f forms =
   case forms of
     [] -> P.empty
-    _  -> P.parens (P.sep (map pForm forms))
+    _  -> f (P.sep (map pForm forms))
 
 pAtom :: Atom -> P.Doc
 pAtom atom =
@@ -221,10 +225,12 @@ instance Code a => Code (Form a) where
     case form of
       Atom a  -> toForm a
       List as -> List (map toForm as)
+      HsList as -> HsList (map toForm as)
   fromForm a =
     case a of
       Atom _  -> fromForm a
       List as -> List <$> mapM fromForm as
+      HsList as -> HsList <$> mapM fromForm as
 
 splice :: Code a => a -> [Form Atom]
 splice form =

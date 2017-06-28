@@ -4,10 +4,11 @@
 
 (import SK.Core)
 
+;;; Simple `defmacro'
 (defmacro m1 (x)
   (return `(putStrLn (++ "Hello, " ,x))))
 
-;; Simple macrolet.
+;; Simple `macrolet'.
 (macrolet ((m2 (a b c)
              (return `(,a (+ ,b ,c)))))
   (:: f1 (-> Int (-> Int (IO ()))))
@@ -25,8 +26,27 @@
     (do (putStrLn (m1 1.1))
         (putStrLn (m1 0.9)))))
 
+;;; Macro returning haskell list.
+(macrolet ((m2 (a b c)
+             (let ((= f
+                     (case (do (<- x (fromForm a))
+                               (<- y (fromForm b))
+                               (<- z (fromForm c))
+                               (return (:: (, x y z)
+                                           (, Int Int Int))))
+                       ((Just (, x y z))
+                        (return `[,(toForm (* x 100))
+                                  ,(toForm (* y 100))
+                                  ,(toForm (* z 100))]))
+                       (_ (failS "error: m2")))))
+               f)))
+  (:: hslistmac (IO ()))
+  (= hslistmac
+    (print (m2 1 2 3))))
+
 (:: main (IO ()))
 (= main
   (do (m1 "macro")
       (f1 11 31)
-      fracmac))
+      fracmac
+      hslistmac))

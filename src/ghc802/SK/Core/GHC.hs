@@ -73,7 +73,7 @@ module SK.Core.GHC
 
     -- * DriverPhases
     HscSource(..),
-    Phase(..),
+    Phase,
 
     -- * DynFlags
     DynFlags(..),
@@ -211,14 +211,11 @@ import FastString
 import Finder
 import HeaderInfo
 import HscTypes
-import HsBinds
-import HsDecls
 import Module
 import MonadUtils
 import OccName
 import OrdList
 import Outputable
-import PlaceHolder
 import RdrHsSyn
 import RdrName
 import SrcLoc

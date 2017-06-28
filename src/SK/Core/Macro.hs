@@ -10,10 +10,7 @@ module SK.Core.Macro
 
 -- base
 import Control.Monad (foldM)
-import Unsafe.Coerce
-
--- ghc-paths
-import GHC.Paths (libdir)
+import Unsafe.Coerce (unsafeCoerce)
 
 -- Internal
 import SK.Core.Form
@@ -53,26 +50,26 @@ tList l forms = L l (TList forms)
 tHsList :: SrcSpan -> [LTForm Atom] -> LTForm Atom
 tHsList l forms = L l (THsList forms)
 
-quoteAtom :: LTForm Atom -> LTForm Atom
-quoteAtom orig@(L l form) =
+quoteAtom :: SrcSpan -> Atom -> LTForm Atom
+quoteAtom l form =
   case form of
-    TAtom (ASymbol s) -> atom [tSym l "ASymbol", tString l s]
-    TAtom (AChar c) -> atom [tSym l "AChar", tChar l c]
-    TAtom (AString s) -> atom [tSym l "AString", tString l s]
-    TAtom (AInteger n) -> atom [tSym l "AInteger", tInteger l n]
-    TAtom (AFractional n) ->
+    ASymbol s -> atom [tSym l "ASymbol", tString l s]
+    AChar c -> atom [tSym l "AChar", tChar l c]
+    AString s -> atom [tSym l "AString", tString l s]
+    AInteger n -> atom [tSym l "AInteger", tInteger l n]
+    AFractional n ->
       atom [tSym l "aFractional", tFractional l n]
-    TAtom AUnit -> atom [tSym l "AUnit"]
-    _ -> orig
+    AUnit -> atom [tSym l "AUnit"]
+    _ -> L l (TAtom form)
   where
     atom vals = tList l [tSym l "Atom", tList l vals]
 
 quote :: LTForm Atom -> LTForm Atom
 quote orig@(L l form) =
   case form of
-    TAtom _ -> quoteAtom orig
-    TList xs ->
-      tList l [tSym l "List", (tHsList l (map quote xs)) ]
+    TAtom atom -> quoteAtom l atom
+    TList xs -> tList l [tSym l "List", tHsList l (map quote xs)]
+    THsList xs -> tList l [tSym l "HsList", tHsList l (map quote xs)]
     _ -> orig
 
 isUnquoteSplice :: LTForm Atom -> Bool
@@ -84,17 +81,18 @@ isUnquoteSplice form =
 quasiquote :: LTForm Atom -> LTForm Atom
 quasiquote orig@(L l form) =
   case form of
-   TList [L _ (TAtom (ASymbol "unquote")), rest] ->
-     -- rest
-     tList l [ tSym l "toForm", rest ]
-   TList forms' | any isUnquoteSplice forms' ->
-     tList l [ tSym l "List"
-             , tList l [tSym l "concat", tHsList l (go [] forms')]]
-   TList forms' ->
-     tList l [ tSym l "List"
-             , tHsList l (map quasiquote forms')]
-   TAtom _ -> quoteAtom orig
-   _       -> orig
+    TList [L _ (TAtom (ASymbol "unquote")), rest] ->
+      tList l [ tSym l "toForm", rest ]
+    TList forms'
+       | any isUnquoteSplice forms' ->
+          tList l [ tSym l "List"
+                  , tList l [tSym l "concat", tHsList l (go [] forms')]]
+       | otherwise ->
+          tList l [ tSym l "List", tHsList l (map quasiquote forms')]
+    THsList forms' ->
+      tList l [tSym l "HsList", tHsList l (map quasiquote forms')]
+    TAtom atom -> quoteAtom l atom
+    _       -> orig
   where
    go acc forms =
      let (pre, post) = span (not . isUnquoteSplice) forms
@@ -124,7 +122,7 @@ putMacro form =
       case evalBuilder p_expr [expr] of
         Right hexpr -> do
           macro <- compileMT hexpr
-          let wrap f form = fmap nlForm (f (cdr (lTFormToForm form)))
+          let wrap f xs = fmap nlForm (f (cdr (lTFormToForm xs)))
           addMacro name (wrap macro)
           return [tsig, self']
         Left err -> failS err
@@ -150,13 +148,14 @@ wrapArgs name args@(L l1 _) body0=
       mkPat (L l x) =
         case x of
           TList xs -> list [sym "List", tHsList l (map mkPat xs)]
-          s@(TAtom (ASymbol y)) -> L l s
+          s@(TAtom (ASymbol _)) -> L l s
+          _ -> error "wrapArgs:mkPat"
   in  list [sym  "\\", list [form], body1]
 
 m_defmacro :: LMacro
 m_defmacro form =
   case form of
-    L l (TList (_:self@(L _ (TAtom (ASymbol name))):rest)) -> do
+    L l (TList (_:self:rest)) -> do
       decls <- putMacro (L l (TList (self:rest)))
       return (tList l (tSym l "begin":decls))
     _ -> failS "defmacro: malformed macro"
@@ -251,7 +250,7 @@ withExpanderSettings act = do
   origFlags <- getSessionDynFlags
   setExpanderSettings
   ret <- act
-  setSessionDynFlags origFlags
+  _ <- setSessionDynFlags origFlags
   return ret
 
 -- | Expands form, with taking care of @begin@ special form.
@@ -261,7 +260,7 @@ macroexpands forms = do
     forms' <- mapM macroexpand forms
     fmap reverse (foldM f [] forms')
   where
-    f acc orig@(L l form) =
+    f acc orig@(L _ form) =
       case form of
         TList (L _ (TAtom (ASymbol "begin")) : rest) -> do
           rest' <- macroexpands rest
