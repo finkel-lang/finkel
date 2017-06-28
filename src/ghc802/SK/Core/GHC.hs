@@ -114,6 +114,7 @@ module SK.Core.GHC
     -- * HsDecls
     ConDecl(..),
     HsDataDefn(..),
+    HsDeriving,
     NewOrData(..),
     TyClDecl(..),
 
@@ -145,6 +146,9 @@ module SK.Core.GHC
     handleSourceError,
     mkHsQTvs,
     srcErrorMessages,
+
+    -- * HsUtils
+    mkLHsSigType,
 
     -- * Module
     ModLocation(..),
@@ -179,7 +183,7 @@ module SK.Core.GHC
     mkSrcSpan,
     unLoc,
 
-    -- TyWiredIn
+    -- * TyWiredIn
     consDataConName,
 
     -- * Util

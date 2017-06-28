@@ -8,7 +8,17 @@
 
 (data MyData1
   (MyConst1 Int Bool)
-  (MyConst2 [(, Int Int)] Double Char))
+  (MyConst2 [(, Int Int)] Double Char)
+  (deriving (Eq Show)))
+
+(:: s4_1_1 (IO ()))
+(= s4_1_1
+  (do (print (MyConst1 123 True))
+      (print (MyConst2 [(, 1 2) (, 3 4)] 1.23 \z))))
+
+(:: s4_1 (IO ()))
+(= s4_1
+  s4_1_1)
 
 ;;; 4.4 Nested Declarations
 
@@ -47,7 +57,8 @@
 ;;; Main.
 (:: main (IO ()))
 (= main
-  (do (print foo)
+  (do s4_1
+      (print foo)
       (bar "BAR")
       (buzz 1 True "buzz")
       (print (quux (\ (n) (* (+ n 1) n))))

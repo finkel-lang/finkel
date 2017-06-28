@@ -36,6 +36,7 @@ import SK.Core.GHC
 %name p_top_decl top_decl
 %name p_decl decl
 %name p_type type
+%name p_types types
 %name p_types0 types0
 %name p_lconst lconst
 
@@ -83,9 +84,10 @@ import SK.Core.GHC
 'comment' { L _ (TAtom (AComment _)) }
 'unit'    { L _ (TAtom AUnit) }
 
-'import_form' { L _ (TList $$@((L _ (TAtom (ASymbol "import"))):_)) }
-'list'        { L _ (TList $$) }
-'hslist'      { L _ (THsList _) }
+'f_import'   { L _ (TList $$@((L _ (TAtom (ASymbol "import"))):_)) }
+'f_deriving' { L _ (TList $$@((L _ (TAtom (ASymbol "deriving"))):_)) }
+'list'       { L _ (TList $$) }
+'hslist'     { L _ (THsList _) }
 
 
 %%
@@ -121,7 +123,7 @@ rimports :: { [HImportDecl] }
          | rimports import_form { $2 : $1 }
 
 import_form :: { HImportDecl }
-            : 'import_form' {% parse p_import $1 }
+            : 'f_import' {% parse p_import $1 }
 
 import :: { HImportDecl }
        : 'import' 'symbol' { b_importD $2 }
@@ -142,7 +144,7 @@ decl_with_doc :: { HDecl }
 
 top_decl :: { HDecl }
          : 'data' 'symbol' consts { b_dataD $2 $3 }
-         | decl { $1 }
+         | decl                   { $1 }
 
 decl :: { HDecl }
      : '=' decl_lhs expr  { b_funD $1 $2 $3 }
@@ -152,18 +154,20 @@ decl_lhs :: { HExpr -> HsBind RdrName }
          : 'list'   {% b_declLhsB $1 }
          | 'symbol' {% b_declLhsB [$1] }
 
-consts :: { [HConDecl] }
-       : rconsts { reverse $1 }
+consts :: { (HsDeriving RdrName, [HConDecl]) }
+       : rconsts { let (m,d) = $1 in (m, reverse d) }
 
-rconsts :: { [HConDecl] }
-        : {- empty -}   { [] }
-        | rconsts const { $2 : $1 }
+rconsts :: { (HsDeriving RdrName, [HConDecl]) }
+        : {- empty -}          { (Nothing, []) }
+        | rconsts 'f_deriving' {% b_derivD $1 $2 }
+        | rconsts const        { fmap ($2:) $1 }
 
 const :: { HConDecl }
       : 'list' {% parse p_lconst $1 }
 
 lconst :: { HConDecl }
        : 'symbol' types { b_conD $1 $2 }
+
 
 --- ----
 --- Type
@@ -498,8 +502,10 @@ b_importD :: LTForm Atom -> HImportDecl
 b_importD (L l (TAtom (ASymbol m))) =
     L l (simpleImportDecl (mkModuleName m))
 
-b_dataD :: LTForm Atom -> [HConDecl] -> HDecl
-b_dataD (L l (TAtom (ASymbol name))) cs = L l (TyClD decl)
+b_dataD :: LTForm Atom
+        -> (HsDeriving RdrName, [HConDecl])
+        -> HDecl
+b_dataD (L l (TAtom (ASymbol name))) (derivs,cs) = L l (TyClD decl)
   where
     decl = DataDecl { tcdLName = L l (mkUnqual tcName (fsLit name))
                     , tcdTyVars = tvs
@@ -513,8 +519,7 @@ b_dataD (L l (TAtom (ASymbol name))) cs = L l (TyClD decl)
                       , dd_kindSig = Nothing
                       , dd_cons = cs
                       -- The field `dd_derivs' changed from ghc-8.0.2.
-                      , dd_derivs = Nothing
-                      }
+                      , dd_derivs = derivs }
 
 b_conD :: LTForm Atom -> [HType] -> HConDecl
 b_conD (L l1 (TAtom (ASymbol s1))) types =
@@ -525,6 +530,15 @@ b_conD (L l1 (TAtom (ASymbol s1))) types =
                      , con_doc = Nothing })
   where
     details = PrefixCon types
+
+-- 'HsDeriving' changed in git head since ghc-8.0.2 release.
+b_derivD :: (HsDeriving RdrName, [HConDecl])
+         -> [LTForm Atom]
+         -> Builder (HsDeriving RdrName, [HConDecl])
+b_derivD (_, cs) [(L l _), L _ (TList rest)] = do
+  tys <- parse p_types rest
+  let derivs = Just (L l (map mkLHsSigType tys))
+  return (derivs, cs)
 
 b_funD :: Located a -> (HExpr -> HsBind RdrName) -> HExpr -> HDecl
 b_funD (L l _) f e = L l (ValD (f e))
