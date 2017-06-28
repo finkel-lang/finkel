@@ -115,8 +115,12 @@ module SK.Core.GHC
 
     -- * HsDecls
     ConDecl(..),
+    HsConDeclDetails,
     HsDataDefn(..),
     HsDeriving,
+    HsTyVarBndr(..),
+    LHsQTyVars,
+    LHsTyVarBndr,
     NewOrData(..),
     TyClDecl(..),
 

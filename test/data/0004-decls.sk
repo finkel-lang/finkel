@@ -4,21 +4,30 @@
 
 ;;; 4.2 User-Defined Datatypes
 
-;;; 4.1.1 Algebraic Datatype Declarations
+;;; 4.2.1 Algebraic Datatype Declarations
 
 (data MyData1
   (MyConst1 Int Bool)
   (MyConst2 [(, Int Int)] Double Char)
   (deriving (Eq Show)))
 
-(:: s4_1_1 (IO ()))
-(= s4_1_1
-  (do (print (MyConst1 123 True))
-      (print (MyConst2 [(, 1 2) (, 3 4)] 1.23 \z))))
+(data (MyData2 a b)
+  (MyD2Con1 a b)
+  (MyD2Con2 a a Bool)
+  (deriving (Eq Show)))
 
-(:: s4_1 (IO ()))
-(= s4_1
-  s4_1_1)
+(:: s4_2_1 (IO ()))
+(= s4_2_1
+  (do (print (MyConst1 123 True))
+      (print (MyConst2 [(, 1 2) (, 3 4)] 1.23 \z))
+      (print [(MyD2Con1 (:: 123 Int) \z)
+              (MyD2Con2 (:: 789 Int) 0 False)])))
+
+(:: s4_2 (IO ()))
+(= s4_2
+  s4_2_1)
+
+
 
 ;;; 4.4 Nested Declarations
 
@@ -57,7 +66,7 @@
 ;;; Main.
 (:: main (IO ()))
 (= main
-  (do s4_1
+  (do s4_2
       (print foo)
       (bar "BAR")
       (buzz 1 True "buzz")

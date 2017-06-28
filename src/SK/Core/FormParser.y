@@ -38,7 +38,8 @@ import SK.Core.GHC
 %name p_type type
 %name p_types types
 %name p_types0 types0
-%name p_lconst lconst
+%name p_lconstr lconstr
+%name p_lcondetail lcondetail
 
 %name p_pats pats
 %name p_pats0 pats0
@@ -143,8 +144,45 @@ decl_with_doc :: { HDecl }
               : mbdoc 'list' {% parse p_top_decl $2 }
 
 top_decl :: { HDecl }
-         : 'data' 'symbol' consts { b_dataD $2 $3 }
-         | decl                   { $1 }
+         : 'data' simpletype constrs { b_dataD $1 $2 $3 }
+         | decl                      { $1 }
+
+simpletype :: { (String, [HTyVarBndr])}
+           : 'symbol' { b_simpletypeD [$1] }
+           | 'list'   { b_simpletypeD $1 }
+
+constrs :: { (HsDeriving RdrName, [HConDecl]) }
+        : rconstrs { let (m,d) = $1 in (m, reverse d) }
+
+rconstrs :: { (HsDeriving RdrName, [HConDecl]) }
+         : {- empty -}            { (Nothing, []) }
+         | rconstrs 'f_deriving'  {% b_derivD $1 $2 }
+         | rconstrs constr        { fmap ($2:) $1 }
+
+constr :: { HConDecl }
+       : 'list' {% parse p_lconstr $1 }
+
+lconstr :: { HConDecl }
+        : 'symbol' types { b_conD $1 $2 }
+        -- : 'symbol' condetails { b_conD $1 $2 }
+
+condetails :: { [HsConDeclDetails RdrName] }
+           : rcondetails { reverse $1 }
+
+rcondetails :: { [HsConDeclDetails RdrName] }
+            : condetail             { [$1] }
+            | rcondetails condetail { ($2:$1) }
+
+condetail :: { (HsConDeclDetails RdrName) }
+          : 'symbol' { b_typeD (b_symT $1) }
+          | 'unit'   { b_typeD (b_unitT $1) }
+          | 'hslist' {% b_typeD `fmap` b_listT $1 }
+          | 'list'   {% parse p_lcondetail $1 }
+
+lcondetail :: { (HsConDeclDetails RdrName) }
+           : '::' 'symbol' type { b_recFieldD $2 $3 }
+           | types0             { b_typeD $1 }
+
 
 decl :: { HDecl }
      : '=' decl_lhs expr  { b_funD $1 $2 $3 }
@@ -153,20 +191,6 @@ decl :: { HDecl }
 decl_lhs :: { HExpr -> HsBind RdrName }
          : 'list'   {% b_declLhsB $1 }
          | 'symbol' {% b_declLhsB [$1] }
-
-consts :: { (HsDeriving RdrName, [HConDecl]) }
-       : rconsts { let (m,d) = $1 in (m, reverse d) }
-
-rconsts :: { (HsDeriving RdrName, [HConDecl]) }
-        : {- empty -}          { (Nothing, []) }
-        | rconsts 'f_deriving' {% b_derivD $1 $2 }
-        | rconsts const        { fmap ($2:) $1 }
-
-const :: { HConDecl }
-      : 'list' {% parse p_lconst $1 }
-
-lconst :: { HConDecl }
-       : 'symbol' types { b_conD $1 $2 }
 
 
 --- ----
@@ -221,8 +245,8 @@ pats1 :: { HPat }
 
 expr :: { HExpr }
      : atom     { $1 }
-     | 'hslist' {% b_hsListB $1 }
      | 'list'   {% parse p_exprs $1 }
+     | 'hslist' {% b_hsListE $1 }
 
 atom :: { HExpr }
      : 'symbol'  { b_varE $1 }
@@ -413,32 +437,6 @@ formLexer cont = do
 --- Auxiliary
 ---
 
-type HExpr = LHsExpr RdrName
-
-type HDecl = LHsDecl RdrName
-
-type HConDecl = LConDecl RdrName
-
-type HBind = LHsBind RdrName
-
-type HSigWcType = LHsSigWcType RdrName
-
-type HType = LHsType RdrName
-
-type HPat = LPat RdrName
-
-type HExprLStmt = ExprLStmt RdrName
-
-type HLocalBinds = Located (HsLocalBinds RdrName)
-
-type HMatch = LMatch RdrName HExpr
-
-type HGRHS = LGRHS RdrName HExpr
-
-type HGuardLStmt = GuardLStmt RdrName
-
-type HImportDecl = LImportDecl RdrName
-
 -- XXX: Currently, cannot tell the difference between 'Qualified.fun'
 -- and 'DataConstr'.
 mkRdrName :: String -> RdrName
@@ -469,6 +467,41 @@ declsToBinds (L l _) decls = L l binds'
           L ld (ValD b) -> go (L ld b:bs,ss) ds'
           L ld (SigD s) -> go (bs,L ld s:ss) ds'
 
+
+---
+--- Type synonyms
+---
+
+type HExpr = LHsExpr RdrName
+
+type HDecl = LHsDecl RdrName
+
+type HConDecl = LConDecl RdrName
+
+type HsQTyVars = LHsQTyVars RdrName
+
+type HTyVarBndr = LHsTyVarBndr RdrName
+
+type HBind = LHsBind RdrName
+
+type HSigWcType = LHsSigWcType RdrName
+
+type HType = LHsType RdrName
+
+type HPat = LPat RdrName
+
+type HExprLStmt = ExprLStmt RdrName
+
+type HLocalBinds = Located (HsLocalBinds RdrName)
+
+type HMatch = LMatch RdrName HExpr
+
+type HGRHS = LGRHS RdrName HExpr
+
+type HGuardLStmt = GuardLStmt RdrName
+
+type HImportDecl = LImportDecl RdrName
+
 ---
 --- Builder functions
 ---
@@ -495,24 +528,32 @@ b_importD :: LTForm Atom -> HImportDecl
 b_importD (L l (TAtom (ASymbol m))) =
     L l (simpleImportDecl (mkModuleName m))
 
-b_dataD :: LTForm Atom
+b_dataD :: Located a
+        -> (String, [HTyVarBndr])
         -> (HsDeriving RdrName, [HConDecl])
         -> HDecl
-b_dataD (L l (TAtom (ASymbol name))) (derivs,cs) = L l (TyClD decl)
+b_dataD (L l _) (name, tvs) (derivs,cs) = L l (TyClD decl)
   where
     decl = DataDecl { tcdLName = L l (mkUnqual tcName (fsLit name))
-                    , tcdTyVars = tvs
+                    , tcdTyVars = mkHsQTvs tvs
                     , tcdDataDefn = defn
                     , tcdDataCusk = PlaceHolder
                     , tcdFVs = placeHolderNames }
-    tvs = mkHsQTvs []  -- need more info.
     defn = HsDataDefn { dd_ND = DataType
                       , dd_ctxt = noLoc []
                       , dd_cType = Nothing
                       , dd_kindSig = Nothing
                       , dd_cons = cs
-                      -- The field `dd_derivs' changed from ghc-8.0.2.
+                      -- This `dd_derivs' field changed from ghc-8.0.2.
                       , dd_derivs = derivs }
+
+b_simpletypeD :: [LTForm Atom] -> (String, [HTyVarBndr])
+b_simpletypeD ((L l (TAtom (ASymbol name))):tvs) = (name, tvs')
+  -- XXX: Kind signatures not supported.
+  where
+    tvs' = map f tvs
+    f (L l (TAtom (ASymbol name))) =
+        L l (UserTyVar (L l (mkUnqual tvName (fsLit name))))
 
 b_conD :: LTForm Atom -> [HType] -> HConDecl
 b_conD (L l1 (TAtom (ASymbol s1))) types =
@@ -523,6 +564,12 @@ b_conD (L l1 (TAtom (ASymbol s1))) types =
                      , con_doc = Nothing })
   where
     details = PrefixCon types
+
+b_recFieldD :: LTForm Atom -> HType -> HsConDeclDetails RdrName
+b_recFieldD = error "b_fieldD"
+
+b_typeD :: HType -> HsConDeclDetails RdrName
+b_typeD ty = error "b_typeD"
 
 -- 'HsDeriving' changed in git head since ghc-8.0.2 release.
 b_derivD :: (HsDeriving RdrName, [HConDecl])
@@ -676,6 +723,11 @@ b_unitE (L l _) = L l (ExplicitTuple [] Boxed)
 b_commentStringE :: LTForm Atom -> Located HsDocString
 b_commentStringE (L l (TAtom (AComment x))) = L l (HsDocString (fsLit x))
 
+b_hsListE :: LTForm Atom -> Builder HExpr
+b_hsListE (L l (THsList xs)) = do
+    xs' <- mapM (\x -> parse p_expr [x]) xs
+    return (L l (ExplicitList placeHolderType Nothing xs'))
+
 --- Statement
 
 b_bindS :: Located a -> HPat -> HExpr -> HExprLStmt
@@ -686,10 +738,5 @@ b_letS lref@(L l _) decls = L l (LetStmt (declsToBinds lref decls))
 
 b_bodyS :: HExpr -> HExprLStmt
 b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
-
-b_hsListB :: LTForm Atom -> Builder HExpr
-b_hsListB (L l (THsList xs)) = do
-    xs' <- mapM (\x -> parse p_expr [x]) xs
-    return (L l (ExplicitList placeHolderType Nothing xs'))
 
 }
