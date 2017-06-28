@@ -73,6 +73,7 @@ module SK.Core.GHC
 
     -- * DriverPhases
     HscSource(..),
+    Phase(..),
 
     -- * DynFlags
     DynFlags(..),
