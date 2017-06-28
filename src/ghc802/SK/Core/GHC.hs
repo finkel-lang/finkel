@@ -90,6 +90,7 @@ module SK.Core.GHC
 
     -- * FastString
     fsLit,
+    unpackFS,
 
     -- * Finder
     mkHomeModLocation,

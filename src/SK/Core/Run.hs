@@ -66,5 +66,5 @@ compile :: Maybe FilePath -> String
 compile target input = do
   (form', st) <- Skc (lift (L.runSP' TP.sexprs target input))
   expanded <- M.withExpanderSettings (M.macroexpands form')
-  mdl <- Skc (lift (FP.evalBuilder' FP.parse_module target expanded))
+  mdl <- Skc (lift (FP.evalBuilder' FP.parse_module expanded))
   return (mdl, st)

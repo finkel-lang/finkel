@@ -121,7 +121,7 @@ putMacro form =
                           , wrapArgs name args expanded]
           expr = tList l [ tSym l "let", tList l [tsig, self']
                          , self]
-      case evalBuilder p_expr (Just ("macro:"++ name)) [expr] of
+      case evalBuilder p_expr [expr] of
         Right hexpr -> do
           macro <- compileMT hexpr
           let wrap f form = fmap nlForm (f (cdr (lTFormToForm form)))

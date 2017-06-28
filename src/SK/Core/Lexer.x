@@ -279,8 +279,8 @@ evalSP sp target input = fmap fst (runSP sp target input)
 showErrorSP :: SP a
 showErrorSP =
   let go = do (AlexPn _ lno cno, _, _, _) <- alexGetInput
-              alexError ("parse error at line " ++ show lno ++
-                         ", column " ++ show cno)
+              alexError ("lexer error at line " ++
+                          show lno ++ ", column " ++ show cno)
   in  SP (\_ -> go)
 
 

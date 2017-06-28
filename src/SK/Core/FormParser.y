@@ -264,14 +264,14 @@ alts :: { [HMatch] }
      : ralts { reverse $1 }
 
 ralts :: { [HMatch] }
-      : 'list'       {% fmap (:[]) (parse p_match $1)  }
+      : 'list'       {% fmap (:[]) (parse p_match $1) }
       | ralts 'list' {% fmap (:$1) (parse p_match $2) }
 
 match :: { HMatch }
       : pat guards { b_match $1 $2 }
 
--- Parsing list form for guards
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Parsing form for guards
+-- ~~~~~~~~~~~~~~~~~~~~~~~
 --
 -- Separating the rule for 'list' and atom, so that the 'guards0' rule
 -- can try matching the symbol '|' before 'expr' rule, to differentiate
@@ -321,8 +321,6 @@ data BState = BState
       inputs :: [LTForm Atom]
       -- | Last token, for error message.
     , lastToken :: Maybe (LTForm Atom)
-      -- | File path of input, if any.
-    , inputPath :: Maybe FilePath
     }
 
 -- | Newtype wrapper for parsing form data with Happy.
@@ -331,22 +329,21 @@ newtype Builder a = Builder {
 }
 
 runBuilder :: Builder a
-           -> Maybe FilePath
            -> [LTForm Atom]
            -> Either String (a, [LTForm Atom])
-runBuilder bld mbpath toks =
-    case runStateT (unBuilder bld) (BState toks Nothing mbpath) of
+runBuilder bld toks =
+    case runStateT (unBuilder bld) (BState toks Nothing) of
       Left e -> Left e
       Right (a, st) -> Right (a, inputs st)
 
-evalBuilder :: Builder a -> Maybe FilePath
-            -> [LTForm Atom] -> Either String a
-evalBuilder bld mbpath toks = fmap fst (runBuilder bld mbpath toks)
+evalBuilder :: Builder a -> [LTForm Atom] -> Either String a
+evalBuilder bld toks = fmap fst (runBuilder bld toks)
 
-evalBuilder' :: Monad m => Builder a
-             -> Maybe FilePath -> [LTForm Atom]
+evalBuilder' :: Monad m
+             => Builder a
+             -> [LTForm Atom]
              -> ExceptT String m a
-evalBuilder' bld mbpath toks = case evalBuilder bld mbpath toks of
+evalBuilder' bld toks = case evalBuilder bld toks of
   Right a -> return a
   Left err -> throwE err
 
@@ -380,16 +377,16 @@ putBState = Builder . put
 parse :: Builder a -> [LTForm Atom] -> Builder a
 parse bld toks = do
   st <- getBState
-  case runBuilder bld (inputPath st) toks of
+  case runBuilder bld toks of
     Right (a, _) -> return a
     Left err -> failB err
 
 showLoc :: Located a -> String
 showLoc x = case getLoc x of
       RealSrcSpan r ->
-        show (srcSpanFile r) ++ ":" ++
-        "line " ++ show (srcSpanStartLine r) ++ ", " ++
-        "column " ++ show (srcSpanStartCol r)
+        unpackFS (srcSpanFile r) ++ ":" ++
+        show (srcSpanStartLine r) ++ ":" ++
+        show (srcSpanStartCol r) ++ ": "
       UnhelpfulSpan _ -> "unknown location"
 
 happyError :: Builder a
@@ -398,12 +395,8 @@ happyError = do
   case lastToken st of
     Nothing -> failB "no location"
     Just x  ->
-      -- XXX: 'x' is a 'Located' data, it should contain source file
-      -- path information, so 'inputPath' field in 'st' is not
-      -- necessary.
-      let path = fromMaybe "unknown input" (inputPath st)
-      in  failB (path ++ ": parse error at " ++ showLoc x ++ ": " ++
-                       (show (lTFormToForm x)))
+      failB (showLoc x ++ "parse error on input `" ++
+             (show (pForm (lTFormToForm x))) ++ "'")
 
 -- | Simple lexer to parse forms.
 formLexer :: (LTForm Atom -> Builder a) -> Builder a
