@@ -110,9 +110,7 @@ isHsFile path = elem suffix [".hs", ".lhs"]
    where suffix = takeExtension path
 
 compileSkFile :: FilePath -> Skc (HsModule RdrName)
-compileSkFile source = do
-  contents <- liftIO (readFile source)
-  fmap fst (compile (Just source) contents)
+compileSkFile source = fmap fst (compileSkModule source)
 
 compileHsFile :: FilePath -> Maybe Phase -> Skc (HsModule RdrName)
 compileHsFile source mbphase = do

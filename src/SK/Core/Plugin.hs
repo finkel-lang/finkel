@@ -133,8 +133,7 @@ hsrc o = do
     [(x, _)] -> return x
     []  -> failS "hsrc: No input file"
     _   -> failS "hsrc: Multiple input files not supported."
-  contents <- liftIO (readFile file)
-  (mdl, sp) <- compile (Just file) contents
+  (mdl, sp) <- compileSkModule file
   when (performTypecheck o)
        (void (tcHsModule (Just file) False mdl))
   hssrc <- genHsSrc sp mdl

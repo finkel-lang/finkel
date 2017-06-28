@@ -4,7 +4,7 @@ module SK.Core.Run
   ( runSkc
   , initialSkEnv
   , sExpression
-  , compile
+  , compileSkModule
   , compileAndEmit
   ) where
 
@@ -55,16 +55,17 @@ sExpression input =
          print (pprForms (map lTFormToForm forms))
     Left err -> putStrLn err
 
-compileAndEmit :: Maybe FilePath -> String -> IO (Either String String)
-compileAndEmit target input = runSkc go initialSkEnv
+compileAndEmit :: FilePath -> IO (Either String String)
+compileAndEmit file = runSkc go initialSkEnv
   where
-    go = do (mdl, st) <- compile target input
+    go = do (mdl, st) <- compileSkModule file
             genHsSrc st mdl
 
-compile :: Maybe FilePath -> String
-        -> Skc (HsModule RdrName, L.SPState)
-compile target input = do
-  (form', st) <- Skc (lift (L.runSP' TP.sexprs target input))
+-- | Compile a file containing SK module.
+compileSkModule :: FilePath -> Skc (HsModule RdrName, L.SPState)
+compileSkModule file = do
+  contents <- liftIO (readFile file)
+  (form', st) <- Skc (lift (L.runSP' TP.sexprs (Just file) contents))
   expanded <- M.withExpanderSettings (M.macroexpands form')
   mdl <- Skc (lift (FP.evalBuilder' FP.parse_module expanded))
   return (mdl, st)

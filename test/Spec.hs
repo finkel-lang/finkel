@@ -25,8 +25,7 @@ getTestFiles =
 
 readCode :: FilePath -> IO Bool
 readCode src = do
-  contents <- readFile src
-  let go = do (mdl, st) <- compile (Just src) contents
+  let go = do (mdl, st) <- compileSkModule src
               tcHsModule (Just src) False mdl
   compiled <- runSkc go initialSkEnv
   case compiled of
