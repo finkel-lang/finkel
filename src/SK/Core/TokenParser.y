@@ -28,9 +28,9 @@ import BasicTypes (FractionalLit(..))
 ']'         { L _ TCbracket }
 
 'quote'     { L _ (TSymbol "quote") }
-'qquote'    { L _ (TSymbol "quasiquote") }
-'unquote'   { L _ (TSymbol "unquote") }
-'unquotesp' { L _ (TSymbol "unquote-splice") }
+'`'         { L _ (TSymbol "quasiquote") }
+','         { L _ (TSymbol "unquote") }
+',@'        { L _ (TSymbol "unquote-splice") }
 
 'symbol'  { L _ (TSymbol _) }
 'char'    { L _ (TChar _) }
@@ -43,13 +43,13 @@ import BasicTypes (FractionalLit(..))
 %%
 
 sexp :: { LTForm Atom }
-     : atom             { $1 }
-     | 'quote' sexp     { L (getLoc $1) (TList [mkQuote $1, $2]) }
-     | 'qquote' sexp    { L (getLoc $1) (TList [mkQuasiQuote $1, $2]) }
-     | 'unquote' sexp   { L (getLoc $1) (TList [mkUnquote $1, $2]) }
-     | 'unquotesp' sexp { L (getLoc $1) (TList [mkUnquoteSplice $1, $2]) }
-     | '[' sexps ']'    { L (getLoc $1) (THsList $2) }
-     | '(' sexps ')'    { L (getLoc $1) (TList $2) }
+     : atom          { $1 }
+     | 'quote' sexp  { L (getLoc $1) (TList [mkQuote $1, $2]) }
+     | '`' sexp      { L (getLoc $1) (TList [mkQuasiQuote $1, $2]) }
+     | ',' sexp      { L (getLoc $1) (TList [mkUnquote $1, $2]) }
+     | ',@' sexp     { L (getLoc $1) (TList [mkUnquoteSplice $1, $2]) }
+     | '[' sexps ']' { L (getLoc $1) (THsList $2) }
+     | '(' sexps ')' { L (getLoc $1) (TList $2) }
 
 sexps :: { [LTForm Atom] }
       : rsexps { reverse $1 }
