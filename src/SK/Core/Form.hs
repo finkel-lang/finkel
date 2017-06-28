@@ -13,8 +13,6 @@ module SK.Core.Form
   , splice
   , lTFormToForm
   , nlForm
-  , fTail
-  , fHead
   , car
   , cdr
   , pprForm
@@ -101,12 +99,6 @@ car _ = List []
 cdr :: Form a -> Form a
 cdr (List (_:xs)) = List xs
 cdr _ = List []
-
-fHead :: Form a -> Form a
-fHead = car
-
-fTail :: Form a -> Form a
-fTail = cdr
 
 pprForm :: Form Atom -> P.Doc
 pprForm form =
