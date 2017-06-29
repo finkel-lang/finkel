@@ -15,7 +15,7 @@ import Unsafe.Coerce (unsafeCoerce)
 -- Internal
 import SK.Core.Form
 import SK.Core.GHC
-import SK.Core.FormParser (evalBuilder, p_expr, showLoc)
+import SK.Core.Syntax (evalBuilder, p_expr, showLoc)
 import SK.Core.SKC
 
 -- Macro expansion

@@ -21,7 +21,6 @@ library
                        SK.Core.Builder
                        SK.Core.Emit
                        SK.Core.Form
-                       SK.Core.FormParser
                        SK.Core.GHC
                        SK.Core.Lexer
                        SK.Core.Macro
@@ -29,6 +28,7 @@ library
                        SK.Core.Plugin
                        SK.Core.Run
                        SK.Core.SKC
+                       SK.Core.Syntax
                        SK.Core.TokenParser
                        SK.Core.Typecheck
   build-depends:       base >= 4.7 && < 5

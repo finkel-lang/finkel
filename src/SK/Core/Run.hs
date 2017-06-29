@@ -16,7 +16,7 @@ import SK.Core.Emit
 import SK.Core.Form
 import SK.Core.GHC
 import SK.Core.SKC
-import qualified SK.Core.FormParser as FP
+import qualified SK.Core.Syntax as S
 import qualified SK.Core.Lexer as L
 import qualified SK.Core.TokenParser as TP
 import qualified SK.Core.Macro as M
@@ -67,5 +67,5 @@ compileSkModule file = do
   contents <- liftIO (readFile file)
   (form', st) <- Skc (lift (L.runSP' TP.sexprs (Just file) contents))
   expanded <- M.withExpanderSettings (M.macroexpands form')
-  mdl <- Skc (lift (FP.evalBuilder' FP.parse_module expanded))
+  mdl <- Skc (lift (S.evalBuilder' S.parse_module expanded))
   return (mdl, st)

@@ -6,7 +6,7 @@
 -- module expects list of 'Form' data as input, converts to Haskell
 -- AST defined in GHC.
 --
-module SK.Core.FormParser
+module SK.Core.Syntax
   ( Builder(..)
   , runBuilder
   , evalBuilder
