@@ -18,6 +18,7 @@ library
   if impl (ghc == 8.0.*)
      hs-source-dirs:   src/ghc802
   exposed-modules:     SK.Core
+                       SK.Core.Builder
                        SK.Core.Emit
                        SK.Core.Form
                        SK.Core.FormParser

@@ -7,7 +7,7 @@
 ;;; 4.2.1 Algebraic Datatype Declarations
 
 (data MyData1
-  (MyD1Con1 Int Bool)
+  (MyD1Con1 Int Bool ())
   (MyD1Con2 [(, Int Int)] Double Char)
   (deriving (Eq Show)))
 
@@ -26,7 +26,7 @@
 
 (:: s4_2_1 (IO ()))
 (= s4_2_1
-  (do (print (MyD1Con1 123 True))
+  (do (print (MyD1Con1 123 True ()))
       (print (MyD1Con2 [(, 1 2) (, 3 4)] 1.23 \z))
       (print [(MyD2Con1 (:: 123 Int) \z)
               (MyD2Con2 (:: 789 Int) 0 False)])

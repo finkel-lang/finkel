@@ -12,7 +12,10 @@ module SK.Core.Form
   , aFractional
   , splice
   , lTFormToForm
+
   , symbolNameL
+  , toListL
+
   , nlForm
   , car
   , cdr
@@ -108,6 +111,13 @@ cdr _ = List []
 symbolNameL :: LTForm Atom -> String
 symbolNameL (L _ (TAtom (ASymbol name))) = name
 symbolNameL x = error ("symbolNameL: got " ++ show (pprTForm x))
+
+toListL :: LTForm Atom -> LTForm Atom
+toListL orig@(L l form) =
+  case form of
+    TList _ -> orig
+    THsList xs -> L l (TList xs)
+    _ -> L l (TList [orig])
 
 pprForm :: Form Atom -> P.Doc
 pprForm form =
