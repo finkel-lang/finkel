@@ -146,6 +146,12 @@ module SK.Core.GHC
     -- * HsImpExp
     simpleImportDecl,
 
+    -- * HsPat
+    HsRecFields(..),
+    LHsRecField,
+    LHsRecField',
+    HsRecField'(..),
+
     -- * HsTypes
     HsConDetails(..),
     HsTupleSort(..),
@@ -172,6 +178,8 @@ module SK.Core.GHC
 
     -- * RdrHsSyn
     cvTopDecls,
+    mkRdrRecordCon,
+    mkRdrRecordUpd,
 
     -- * RdrName
     mkUnqual,

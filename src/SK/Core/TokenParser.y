@@ -26,6 +26,8 @@ import BasicTypes (FractionalLit(..))
 ')'         { L _ TCparen }
 '['         { L _ TObracket }
 ']'         { L _ TCbracket }
+'{'         { L _ TOcurly }
+'}'         { L _ TCcurly }
 
 'quote'     { L _ (TSymbol "quote") }
 '`'         { L _ (TSymbol "quasiquote") }
@@ -66,6 +68,8 @@ atom :: { LTForm Atom }
      | 'frac'   { mkAFractional $1 }
      | 'comment' { mkAComment $1 }
      | 'unit'    { mkAUnit $1 }
+     | '{'       { mkOcSymbol $1 }
+     | '}'       { mkCcSymbol $1 }
 
 {
 mkQuote :: Located Token -> LTForm Atom
@@ -79,9 +83,6 @@ mkUnquote (L l _) = L l (TAtom (ASymbol "unquote"))
 
 mkUnquoteSplice :: Located Token -> LTForm Atom
 mkUnquoteSplice (L l _) = L l (TAtom (ASymbol "unquote-splice"))
-
-mkAUnit :: Located Token -> LTForm Atom
-mkAUnit (L l TUnit) = L l (TAtom AUnit)
 
 mkASymbol :: Located Token -> LTForm Atom
 mkASymbol (L l (TSymbol x)) = L l (TAtom (ASymbol x))
@@ -100,6 +101,15 @@ mkAFractional (L l (TFractional x)) = L l (TAtom (AFractional x))
 
 mkAComment :: Located Token -> LTForm Atom
 mkAComment (L l (TDocCommentNext x)) = L l (TAtom (AComment x))
+
+mkAUnit :: Located Token -> LTForm Atom
+mkAUnit (L l TUnit) = L l (TAtom AUnit)
+
+mkOcSymbol :: Located Token -> LTForm Atom
+mkOcSymbol (L l _) = L l (TAtom (ASymbol "{"))
+
+mkCcSymbol :: Located Token -> LTForm Atom
+mkCcSymbol (L l _) = L l (TAtom (ASymbol "}"))
 
 happyError :: SP a
 happyError = showErrorSP

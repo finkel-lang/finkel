@@ -16,9 +16,11 @@
 (:: main (IO ()))
 (= main
   (do
-    ;; Quotes can nest.
+    ;; Character "'foo" is same as "(quote foo)".
     (print 'foo)
     (print (quote foo))
+
+    ;; Quotes can nest.
     (print ''foo)
     (print '''foo)
 

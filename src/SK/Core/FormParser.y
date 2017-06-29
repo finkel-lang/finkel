@@ -80,6 +80,15 @@ import SK.Core.GHC
 ','  { L _ (TAtom (ASymbol ",")) }
 '|'  { L _ (TAtom (ASymbol "|")) }
 
+-- For `as' pattern
+-- '@'  { L _ (TAtom (ASymbol "@")) }
+
+-- For `irrefutable' pattern
+-- '~'  { L _ (TAtom (ASymbol "~")) }
+
+'{'  { L _ (TAtom (ASymbol "{")) }
+'}'  { L _ (TAtom (ASymbol "}")) }
+
 'symbol'  { L _ (TAtom (ASymbol _)) }
 'char'    { L _ (TAtom (AChar _)) }
 'string'  { L _ (TAtom (AString _)) }
@@ -88,8 +97,11 @@ import SK.Core.GHC
 'comment' { L _ (TAtom (AComment _)) }
 'unit'    { L _ (TAtom AUnit) }
 
-'f_import'   { L _ (TList $$@((L _ (TAtom (ASymbol "import"))):_)) }
-'f_deriving' { L _ (TList $$@((L _ (TAtom (ASymbol "deriving"))):_)) }
+'f_import'
+    { L _ (TList $$@((L _ (TAtom (ASymbol "import"))):_)) }
+'deriving'
+    { L _ (TList [L _ (TAtom (ASymbol "deriving")), L _ (TList $$)])}
+
 'list'       { L _ (TList $$) }
 'hslist'     { L _ (THsList _) }
 
@@ -159,11 +171,14 @@ constrs :: { (HsDeriving RdrName, [HConDecl]) }
 
 rconstrs :: { (HsDeriving RdrName, [HConDecl]) }
          : {- empty -}            { (Nothing, []) }
-         | rconstrs 'f_deriving'  {% b_derivD $1 $2 }
+         | rconstrs deriving      { b_derivD $1 $2 }
          | rconstrs constr        { fmap ($2:) $1 }
 
 constr :: { HConDecl }
        : 'list' {% parse p_lconstr $1 }
+
+deriving :: { [HType] }
+         : 'deriving' {% parse p_types $1 }
 
 lconstr :: { HConDecl }
         : 'symbol' condetails { b_conD $1 $2 }
@@ -274,14 +289,16 @@ atom :: { HExpr }
      | 'unit'    { b_unitE $1 }
 
 exprs :: { HExpr }
-      : '\\' pats expr      { b_lamE $1 $2 $3 }
-      | ',' app             { b_tupE $1 $2 }
-      | 'let' lbinds expr   { b_letE $1 $2 $3 }
-      | 'if' expr expr expr { b_ifE $1 $2 $3 $4 }
-      | 'case' expr alts    { b_caseE $1 $2 $3 }
-      | 'do' do_stmts       { b_doE $1 $2 }
-      | '::' expr type      { b_tsigE $1 $2 $3 }
-      | app                 { b_appE $1 }
+      : '\\' pats expr          { b_lamE $1 $2 $3 }
+      | ',' app                 { b_tupE $1 $2 }
+      | 'let' lbinds expr       { b_letE $1 $2 $3 }
+      | 'if' expr expr expr     { b_ifE $1 $2 $3 $4 }
+      | 'case' expr alts        { b_caseE $1 $2 $3 }
+      | 'do' do_stmts           { b_doE $1 $2 }
+      | '::' expr type          { b_tsigE $1 $2 $3 }
+      | 'symbol' '{' fbinds '}' { b_recConOrUpdE $1 $3 }
+      | 'list' '{' fbinds '}'   {% b_recUpdE (parse p_exprs $1) $3 }
+      | app                     { b_appE $1 }
 
 lbinds :: { [HDecl] }
        : 'unit' { [] }
@@ -293,6 +310,13 @@ lbinds0 :: { [HDecl] }
 rlbinds0 :: { [HDecl] }
          : 'list'          {% fmap (:[]) (parse p_decl $1) }
          | rlbinds0 'list' {% fmap (:$1) (parse p_decl $2) }
+
+fbinds :: { [(String, HExpr)] }
+       : rfbinds { reverse $1 }
+
+rfbinds :: { [(String, HExpr)] }
+        : {- empty -}           { [] }
+        | rfbinds 'symbol' expr { (symbolNameL $2, $3):$1 }
 
 app :: { [HExpr] }
     : rapp { reverse $1 }
@@ -567,7 +591,7 @@ b_dataD (L l _) (name, tvs) (derivs,cs) = L l (TyClD decl)
                       , dd_cType = Nothing
                       , dd_kindSig = Nothing
                       , dd_cons = cs
-                      -- This `dd_derivs' field changed from ghc-8.0.2.
+                      -- `dd_derivs' field changed since ghc-8.0.2.
                       , dd_derivs = derivs }
 
 b_simpletypeD :: [LTForm Atom] -> (String, [HTyVarBndr])
@@ -608,12 +632,10 @@ b_recFieldD names ty = L loc field
 
 -- 'HsDeriving' changed in git head since ghc-8.0.2 release.
 b_derivD :: (HsDeriving RdrName, [HConDecl])
-         -> [LTForm Atom]
-         -> Builder (HsDeriving RdrName, [HConDecl])
-b_derivD (_, cs) [(L l _), L _ (TList rest)] = do
-  tys <- parse p_types rest
-  let derivs = Just (L l (map mkLHsSigType tys))
-  return (derivs, cs)
+         -> [HType]
+         -> (HsDeriving RdrName, [HConDecl])
+b_derivD (_, cs) tys = (Just (L l (map mkLHsSigType tys)), cs)
+  where l = getLoc (mkLocatedList tys)
 
 b_funD :: Located a -> (HExpr -> HsBind RdrName) -> HExpr -> HDecl
 b_funD (L l _) f e = L l (ValD (f e))
@@ -723,11 +745,32 @@ b_hgrhs forms rhss = do
 b_grhs :: HExpr -> HExpr -> HGRHS
 b_grhs guard@(L l _) body = L l (GRHS [L l (mkBodyStmt guard)] body)
 
+b_doE :: Located a -> [HExprLStmt] -> HExpr
+b_doE l exprs = L (getLoc l) (mkHsDo DoExpr exprs)
+
 b_tsigE :: Located a -> HExpr -> HType -> HExpr
 b_tsigE (L l _) e t = L l (ExprWithTySig e (mkLHsSigWcType t))
 
-b_doE :: Located a -> [HExprLStmt] -> HExpr
-b_doE l exprs = L (getLoc l) (mkHsDo DoExpr exprs)
+b_recConOrUpdE :: LTForm Atom -> [(String,HExpr)] -> HExpr
+b_recConOrUpdE sym@(L l _) flds = L l expr
+  where
+    expr =
+      case name of
+        x:_ | isUpper x -> mkRdrRecordCon rName cflds
+        _  -> mkRdrRecordUpd undefined (error "b_recConOrUpdE: upd")
+    name = symbolNameL sym
+    rName = L l (mkRdrName name)
+    cflds = HsRecFields { rec_flds = map mkcfld flds
+                        , rec_dotdot = Nothing }
+    mkcfld (n,e@(L l _)) =
+        L l (HsRecField { hsRecFieldLbl = fname
+                        , hsRecFieldArg = e
+                        , hsRecPun = False })
+      where
+        fname = L l (mkFieldOcc (L l (mkRdrName n)))
+
+b_recUpdE :: Builder HExpr -> [(String,HExpr)] -> Builder HExpr
+b_recUpdE = error "b_recUpdE"
 
 b_appE :: [HExpr] -> HExpr
 b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))

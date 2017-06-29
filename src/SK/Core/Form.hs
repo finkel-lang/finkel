@@ -12,6 +12,7 @@ module SK.Core.Form
   , aFractional
   , splice
   , lTFormToForm
+  , symbolNameL
   , nlForm
   , car
   , cdr
@@ -101,6 +102,12 @@ car _ = List []
 cdr :: Form a -> Form a
 cdr (List (_:xs)) = List xs
 cdr _ = List []
+
+-- | Extract string from given atom when the atom was 'ASymbol',
+-- otherwise error.
+symbolNameL :: LTForm Atom -> String
+symbolNameL (L _ (TAtom (ASymbol name))) = name
+symbolNameL x = error ("symbolNameL: got " ++ show (pprTForm x))
 
 pprForm :: Form Atom -> P.Doc
 pprForm form =

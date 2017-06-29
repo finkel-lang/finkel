@@ -57,9 +57,7 @@ $whitechar+  ;
 \;+ $whitechar \| .* { tok_doc_comment_next }
 \; .*                { tok_line_comment }
 
---- Haskell style pragmas
----
---- Currently ignored.
+--- Haskell style pragmas, currently ignored.
 
 "{-#".*          { skip }
 
@@ -72,6 +70,9 @@ $whitechar+  ;
 
 \[               { tok_obracket }
 \]               { tok_cbracket }
+
+\{               { tok_ocurly }
+\}               { tok_ccurly }
 
 -- Quote and unquote
 
@@ -89,7 +90,6 @@ $whitechar+  ;
 @signed @decimal     { tok_integer }
 @signed @frac        { tok_fractional }
 
-
 -- Binary operators
 --
 -- Some of the binary operators defined in Prelude are converted to
@@ -104,7 +104,7 @@ $whitechar+  ;
 
 --- Symbols
 
-[^\(\)\[\]\;\'\`\,\~$white]+ { tok_symbol }
+[^\(\)\[\]\{\}\;\'\`\,\~$white]+ { tok_symbol }
 
 
 {
@@ -118,6 +118,10 @@ data Token
   -- ^ Open bracket.
   | TCbracket
   -- ^ Close bracket.
+  | TOcurly
+  -- ^ Open curly.
+  | TCcurly
+  -- ^ Close curly.
   | TDocCommentNext String
   -- ^ Comment string starting with @-- |@.
   | TLineComment String
@@ -156,6 +160,12 @@ tok_obracket _ _ = return TObracket
 
 tok_cbracket :: Action
 tok_cbracket _ _ = return TCbracket
+
+tok_ocurly :: Action
+tok_ocurly _ _ = return TOcurly
+
+tok_ccurly :: Action
+tok_ccurly _ _ = return TCcurly
 
 tok_quote :: Action
 tok_quote _ _ = return (TSymbol "quote")
