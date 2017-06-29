@@ -11,13 +11,12 @@ import System.Exit (exitFailure)
 -- ghc
 import GhcPlugins (FrontendPlugin(..), defaultFrontendPlugin)
 
--- sk-core
+-- Internal
 import SK.Core.Emit
 import SK.Core.GHC
 import SK.Core.Make
 import SK.Core.Run
 import SK.Core.SKC
-import SK.Core.Typecheck
 
 
 ---

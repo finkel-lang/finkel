@@ -12,7 +12,6 @@ import Test.Hspec
 
 import SK.Core.Emit
 import SK.Core.Run
-import SK.Core.Typecheck
 
 getTestFiles :: IO [FilePath]
 getTestFiles =

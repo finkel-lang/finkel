@@ -30,7 +30,6 @@ library
                        SK.Core.SKC
                        SK.Core.Syntax
                        SK.Core.TokenParser
-                       SK.Core.Typecheck
   build-depends:       base >= 4.7 && < 5
                      , array
                      , containers

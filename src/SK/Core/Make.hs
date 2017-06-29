@@ -42,7 +42,6 @@ import SK.Core.GHC
 import SK.Core.Macro
 import SK.Core.Run
 import SK.Core.SKC
-import SK.Core.Typecheck
 
 
 -- | SK variant of @ghc --make@.
