@@ -134,8 +134,11 @@
 (= fieldexprs
   (do (let ((:: r1 R1)
             (= r1 (Con1 {field2 False
-                         field1 42}))))
-      (print r1)))
+                         field1 42}))
+            (:: r2 R1)
+            (= r2 (r1 {field1 (* (field1 r1) 2)}))))
+      (print r1)
+      (print r2)))
 
 ;;; 3.16 Expression Type-Signatures
 

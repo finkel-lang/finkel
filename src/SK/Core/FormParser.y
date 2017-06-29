@@ -339,7 +339,7 @@ guards0 :: { [HGRHS] }
     | exprs       { [L (getLoc $1) (GRHS [] $1)] }
 
 guards1 :: { [HGRHS] }
-    : 'list' {% b_hgrhs [] `fmap` parse p_guard $1 }
+    : 'list'         {% b_hgrhs [] `fmap` parse p_guard $1 }
     | 'list' guards1 {% b_hgrhs $2 `fmap` parse p_guard $1 }
 
 guard :: { (HExpr, [GuardLStmt RdrName]) }

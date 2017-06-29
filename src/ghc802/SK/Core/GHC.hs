@@ -153,8 +153,12 @@ module SK.Core.GHC
     HsRecField'(..),
 
     -- * HsTypes
+    AmbiguousFieldOcc(..),
+    FieldOcc(..),
     HsConDetails(..),
     HsTupleSort(..),
+    HsRecField,
+    HsRecUpdField,
     InteractiveImport(..),
     ModSummary(..),
     handleSourceError,

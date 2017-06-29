@@ -414,17 +414,22 @@ b_recConOrUpdE sym@(L l _) flds = L l expr
     expr =
       case name of
         x:_ | isUpper x -> mkRdrRecordCon rName cflds
-        _  -> mkRdrRecordUpd undefined (error "b_recConOrUpdE: upd")
+        _  -> mkRdrRecordUpd (b_varE sym) uflds
     name = symbolNameL sym
     rName = L l (mkRdrName name)
     cflds = HsRecFields { rec_flds = map mkcfld flds
                         , rec_dotdot = Nothing }
     mkcfld (n,e@(L fl _)) =
-        L fl (HsRecField { hsRecFieldLbl = fname
+        L fl (HsRecField { hsRecFieldLbl = mkfname fl n
                          , hsRecFieldArg = e
                          , hsRecPun = False })
-      where
-        fname = L fl (mkFieldOcc (L fl (mkRdrName n)))
+    mkfname fl n = L fl (mkFieldOcc (L fl (mkRdrName n)))
+    uflds = map mkufld flds
+    mkufld  = cfld2ufld . mkcfld
+    cfld2ufld :: Located (HsRecField RdrName (LHsExpr RdrName))
+              -> Located (HsRecUpdField RdrName)
+    cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
+      L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
 
 b_recUpdE :: Builder HExpr -> [(String,HExpr)] -> Builder HExpr
 b_recUpdE = error "b_recUpdE"
