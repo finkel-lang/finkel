@@ -246,6 +246,8 @@ rpats0 :: { [HPat] }
 
 pat :: { HPat }
     : 'integer' { b_intP $1 }
+    | 'string'  { b_stringP $1 }
+    | 'char'    { b_charP $1 }
     | 'symbol'  { b_symP $1 }
     | 'hslist'  {% b_hsListP `fmap` parse p_pats0 (unwrapListL $1) }
     | 'list'    {% parse p_pats1 $1 }

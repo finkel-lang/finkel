@@ -348,9 +348,17 @@ b_tupT (L l _) ts = L l (HsTupleTy HsBoxedTuple ts)
 -- -------
 
 b_intP :: LTForm Atom -> HPat
-b_intP (L l (TAtom (AInteger n))) =
-    let lit = mkHsIntegral (show n) n placeHolderType
-    in  L l (mkNPat (L l lit) Nothing)
+b_intP (L l (TAtom (AInteger n))) = L l (mkNPat (L l lit) Nothing)
+  where lit = mkHsIntegral (show n) n placeHolderType
+
+b_stringP :: LTForm Atom -> HPat
+b_stringP (L l (TAtom (AString s))) = L l (mkNPat (L l lit) Nothing)
+  where lit = mkHsIsString s (fsLit s) placeHolderType
+
+b_charP :: LTForm Atom -> HPat
+b_charP (L l (TAtom (AChar c))) =
+  let lit = HsChar (show c) c
+  in  L l (LitPat lit)
 
 b_symP :: LTForm Atom -> HPat
 b_symP (L l (TAtom (ASymbol name@(x:_))))

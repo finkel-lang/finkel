@@ -6,6 +6,8 @@ module SK.Core.Run
   , sExpression
   , compileSkModule
   , compileAndEmit
+  , parseSexprs
+  , buildHsSyn
   , mkModSummary
   , tcHsModule
   ) where
@@ -51,8 +53,7 @@ runSkc m env =
 initialSkEnv :: SkEnv
 initialSkEnv = SkEnv
   { envMacros = M.specialForms
-  , envDebug = False
-  }
+  , envDebug = False }
 
 sExpression :: String -> IO ()
 sExpression input =
@@ -70,13 +71,20 @@ compileAndEmit file = runSkc go initialSkEnv
     go = do (mdl, st) <- compileSkModule file
             genHsSrc st mdl
 
+parseSexprs :: Maybe FilePath -> String -> Skc ([LTForm Atom], L.SPState)
+parseSexprs mb_file contents =
+  Skc (lift (L.runSP' TP.sexprs mb_file contents))
+
+buildHsSyn :: S.Builder a -> [LTForm Atom] -> Skc a
+buildHsSyn bldr forms = Skc (lift (S.evalBuilder' bldr forms))
+
 -- | Compile a file containing SK module.
 compileSkModule :: FilePath -> Skc (HsModule RdrName, L.SPState)
 compileSkModule file = do
   contents <- liftIO (readFile file)
-  (form', st) <- Skc (lift (L.runSP' TP.sexprs (Just file) contents))
+  (form', st) <- parseSexprs (Just file) contents
   expanded <- M.withExpanderSettings (M.macroexpands form')
-  mdl <- Skc (lift (S.evalBuilder' S.parse_module expanded))
+  mdl <- buildHsSyn S.parse_module expanded
   return (mdl, st)
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.

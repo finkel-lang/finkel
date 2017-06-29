@@ -215,9 +215,38 @@
   (case x
     ((, _ _ c) c)))
 
+(:: intpat (-> Int String))
+(= (intpat x)
+  (case x
+    (1 "one")
+    (2 "two")
+    (_ "unknown")))
+
+(:: strpat (-> String String))
+(= (strpat x)
+  (case x
+    ("foo" "GOT FOO")
+    ("bar" "GOT BAR")
+    (_ "UNKNOWN")))
+
+(:: charpat (-> Char String))
+(= (charpat x)
+  (case x
+    (\a "GOT A")
+    (\b "GOT B")
+    (_ "UNKNOWN")))
+
 (= patexprs2
   (do (print (tupp1 (, True False)))
-      (print (tupp2 (, \a \b \c)))))
+      (print (tupp2 (, \a \b \c)))
+      (print (intpat 1))
+      (print (intpat 2))
+      (print (intpat 3))
+      (print (strpat "foo"))
+      (print (strpat "bar"))
+      (print (strpat "buzz"))
+      (print (charpat \a))
+      (print (charpat \X))))
 
 (= patexprs
   (do patexprs1
