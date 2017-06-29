@@ -17,11 +17,15 @@
   (deriving (Eq Show)))
 
 (data (MyData3 a)
-  (MyD3Con1 (:: d3f1 a)
-            (:: d3f2 (Maybe FilePath)))
+  (MyD3Con1 {d3f1 a
+             d3f2 (Maybe FilePath)})
   (MyD3Con2 Int Int Int)
-  (MyD3Con3 (:: (d3f1 d3f1b d3f1c) a)
-            (:: d3f4 (Either Bool Char)))
+  (MyD3Con3 {(d3f1 d3f1b d3f1c) a
+             d3f4 (Either Bool Char)})
+  (deriving (Eq Show)))
+
+(data MyData4
+  M4A M4B M4C M4D
   (deriving (Eq Show)))
 
 (:: s4_2_1 (IO ()))
@@ -32,12 +36,12 @@
               (MyD2Con2 (:: 789 Int) 0 False)])
       (print (MyD3Con1 \x (Just "/foo/bar")))
       (print (:: (MyD3Con2 1 2 3) (MyData3 Double)))
-      (print (MyD3Con3 \a \b \c (Right \z)))))
+      (print (MyD3Con3 \a \b \c (Right \z)))
+      (print [M4A M4B M4C])))
 
 (:: s4_2 (IO ()))
 (= s4_2
   s4_2_1)
-
 
 
 ;;; 4.4 Nested Declarations

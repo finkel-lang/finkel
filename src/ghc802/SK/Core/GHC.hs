@@ -138,6 +138,7 @@ module SK.Core.GHC
     Match(..),
     MatchFixity(..),
     MatchGroup(..),
+    HsRecordBinds,
     HsTupArg (..),
     LGRHS,
     LMatch,

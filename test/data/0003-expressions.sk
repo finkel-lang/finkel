@@ -127,17 +127,23 @@
 ;;; 3.15 Datatypes with Field Labels
 
 (data R1
-  (Con1 (:: field1 Int)
-        (:: field2 Bool))
+  (Con1 {field1 Int
+         field2 Bool})
   (deriving (Eq Show)))
+
+(:: mkR1 (-> Int (-> Bool R1)))
+(= (mkR1 a b)
+  (Con1 {field1 a field2 b}))
 
 (= fieldexprs
   (do (let ((:: (r1 r2) R1)
             (= r1 (Con1 {field2 False
                          field1 42}))
-            (= r2 (r1 {field1 (* (field1 r1) 2)}))))
+            (= r2 (r1 {field1 (* (field1 r1) 2)}))
+            (= r3 ((mkR1 21 True) {field1 12}))))
       (print r1)
-      (print r2)))
+      (print r2)
+      (print r3)))
 
 ;;; 3.16 Expression Type-Signatures
 

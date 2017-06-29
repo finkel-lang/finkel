@@ -174,7 +174,6 @@ mkRdrName name@(x:_)
   -- Variable.
   | otherwise = mkVarUnqual (fsLit name)
 
-
 -- | Build 'HLocalBinds' from list of 'HDecl's.
 declsToBinds :: Located a -> [HDecl] -> HLocalBinds
 declsToBinds (L l _) decls = L l binds'
@@ -195,6 +194,13 @@ mkLocatedList ::  [Located a] -> Located [Located a]
 mkLocatedList [] = noLoc []
 mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
 
+-- | Convert record field constructor expression to record field update
+-- expression.
+cfld2ufld :: Located (HsRecField RdrName (LHsExpr RdrName))
+          -> Located (HsRecUpdField RdrName)
+-- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
+cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
+  L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
 
 ---
 --- Builder functions
@@ -262,14 +268,15 @@ b_conD (L l1 (TAtom (ASymbol s1))) details =
                      , con_details = details
                      , con_doc = Nothing })
 
-b_conDeclDetails :: [Either HType HConDeclField]
-                 -> Builder (HsConDeclDetails RdrName)
-b_conDeclDetails args =
-   -- XXX: Infix data constructor not supported.
-   case partitionEithers args of
-     (tys, [])  -> return (PrefixCon tys)
-     ([], recs) -> return (RecCon (mkLocatedList recs))
-     _          -> builderError
+b_conOnlyD :: LTForm Atom -> HConDecl
+b_conOnlyD name = b_conD name (PrefixCon [])
+
+-- XXX: Infix data constructor not supported.
+b_conDeclDetails :: [HType] -> HsConDeclDetails RdrName
+b_conDeclDetails = PrefixCon
+
+b_recFieldsD :: [HConDeclField] -> HsConDeclDetails RdrName
+b_recFieldsD flds = RecCon (mkLocatedList flds)
 
 b_recFieldD :: [LTForm Atom] -> HType -> HConDeclField
 b_recFieldD names ty = L loc field
@@ -421,20 +428,23 @@ b_recConOrUpdE sym@(L l _) flds = L l expr
     rName = L l (mkRdrName name)
     cflds = HsRecFields { rec_flds = map mkcfld flds
                         , rec_dotdot = Nothing }
-    mkcfld (n,e@(L fl _)) =
-        L fl (HsRecField { hsRecFieldLbl = mkfname fl n
-                         , hsRecFieldArg = e
-                         , hsRecPun = False })
-    mkfname fl n = L fl (mkFieldOcc (L fl (mkRdrName n)))
     uflds = map mkufld flds
     mkufld  = cfld2ufld . mkcfld
-    cfld2ufld :: Located (HsRecField RdrName (LHsExpr RdrName))
-              -> Located (HsRecUpdField RdrName)
-    cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
-      L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
+
+mkcfld :: (String,HExpr) -> LHsRecField RdrName HExpr
+mkcfld (n,e@(L fl _)) =
+  L fl (HsRecField { hsRecFieldLbl = mkfname fl n
+                   , hsRecFieldArg = e
+                   , hsRecPun = False })
+  where
+    mkfname fl n = L fl (mkFieldOcc (L fl (mkRdrName n)))
 
 b_recUpdE :: Builder HExpr -> [(String,HExpr)] -> Builder HExpr
-b_recUpdE = error "b_recUpdE"
+b_recUpdE expr flds = do
+   expr' <- expr
+   let uflds = map (cfld2ufld . mkcfld) flds
+       l = getLoc expr'
+   return (L l (mkRdrRecordUpd expr' uflds))
 
 b_appE :: [HExpr] -> HExpr
 b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))

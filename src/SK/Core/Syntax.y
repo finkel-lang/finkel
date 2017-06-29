@@ -31,7 +31,6 @@ import SK.Core.GHC
 %name p_types types
 %name p_types0 types0
 %name p_lconstr lconstr
-%name p_lcondetail lcondetail
 
 %name p_pats pats
 %name p_pats0 pats0
@@ -170,35 +169,32 @@ rconstrs :: { (HsDeriving RdrName, [HConDecl]) }
     | rconstrs constr        { fmap ($2:) $1 }
 
 constr :: { HConDecl }
-    : 'list' {% parse p_lconstr $1 }
+    : 'symbol' { b_conOnlyD $1 }
+    | 'list'   {% parse p_lconstr $1 }
 
 deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }
 
 lconstr :: { HConDecl }
-    : 'symbol' condetails { b_conD $1 $2 }
+    : 'symbol' condetails        { b_conD $1 $2 }
+    | 'symbol' '{' fielddecls '}' { b_conD $1 $3 }
 
 condetails :: { HsConDeclDetails RdrName }
-    : condetails1 {% b_conDeclDetails $1 }
+    : types { b_conDeclDetails $1 }
 
-condetails1 :: { [Either HType HConDeclField] }
-    : rcondetails { reverse $1 }
+fielddecls :: { HsConDeclDetails RdrName }
+    : fielddecls1 { b_recFieldsD $1 }
 
-rcondetails :: { [Either HType HConDeclField] }
-    : condetail             { [$1] }
-    | rcondetails condetail { ($2:$1) }
+fielddecls1 :: { [HConDeclField] }
+    : rfielddecls { reverse $1 }
 
-condetail :: { Either HType HConDeclField }
-    : 'symbol' { Left (b_symT $1) }
-    | 'unit'   { Left (b_unitT $1) }
-    | 'hslist' {% (Left .  b_listT) `fmap` parse p_type [toListL $1] }
-    | 'list'   {% parse p_lcondetail $1 }
+rfielddecls :: { [HConDeclField] }
+    : fielddecl             { [$1] }
+    | rfielddecls fielddecl { $2:$1 }
 
-lcondetail :: { Either HType HConDeclField }
-    : '::' 'symbol' type { Right (b_recFieldD [$2] $3) }
-    | '::' symbols type  { Right (b_recFieldD $2 $3) }
-    | types0             { Left $1 }
-
+fielddecl :: { HConDeclField }
+    : 'symbol' type { b_recFieldD [$1] $2 }
+    | symbols  type { b_recFieldD $1 $2 }
 
 decl :: { HDecl }
     : '=' decl_lhs expr  { b_funD $1 $2 $3 }
