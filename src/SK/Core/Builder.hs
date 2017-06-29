@@ -298,10 +298,12 @@ b_declLhsB (L l (TAtom (ASymbol name))) args =
               let match = mkMatch args body (L l emptyLocalBinds)
               in  mkFunBind (L l (mkRdrName name)) [match])
 
-b_tsigD :: LTForm Atom -> HType -> HDecl
-b_tsigD (L l (TAtom (ASymbol name))) typ =
+b_tsigD :: [LTForm Atom] -> HType -> HDecl
+b_tsigD names typ =
   let typ' = mkLHsSigWcType typ
-  in  L l (SigD (TypeSig [L l (mkRdrName name)] typ'))
+      mkName (L l (TAtom (ASymbol name))) = L l (mkRdrName name)
+      l = getLoc (mkLocatedList names)
+  in  L l (SigD (TypeSig (map mkName names) typ'))
 
 
 -- -----

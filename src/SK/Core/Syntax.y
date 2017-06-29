@@ -202,7 +202,8 @@ lcondetail :: { Either HType HConDeclField }
 
 decl :: { HDecl }
     : '=' decl_lhs expr  { b_funD $1 $2 $3 }
-    | '::' 'symbol' type { b_tsigD $2 $3 }
+    | '::' 'symbol' type { b_tsigD [$2] $3 }
+    | '::' symbols type  { b_tsigD $2 $3 }
 
 decl_lhs :: { HExpr -> HsBind RdrName }
     : 'list'   {% parse p_pats0 (tail $1) >>= b_declLhsB (head $1) }
