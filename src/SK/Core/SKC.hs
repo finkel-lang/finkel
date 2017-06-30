@@ -19,7 +19,7 @@ module SK.Core.SKC
 -- transformers
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.State
+import Control.Monad.Trans.State.Strict
 
 -- Internal
 import SK.Core.Form
