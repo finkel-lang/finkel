@@ -43,6 +43,20 @@
 (= s4_2
   s4_2_1)
 
+;;; 4.3 Type Classes and Overloading
+
+;;; 4.3.2 Instance Declarations
+
+(data (MyFnct a)
+  (MyFnct {unMyFnct a})
+  (deriving (Eq Show)))
+
+(instance (Functor MyFnct)
+  (= (fmap f (MyFnct a)) (MyFnct (f a))))
+
+(:: s4_3 (IO ()))
+(= s4_3
+  (do (print (fmap (* 2) (MyFnct 21)))))
 
 ;;; 4.4 Nested Declarations
 
@@ -82,6 +96,7 @@
 (:: main (IO ()))
 (= main
   (do s4_2
+      s4_3
       (print foo)
       (bar "BAR")
       (buzz 1 True "buzz")

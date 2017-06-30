@@ -296,6 +296,23 @@ b_derivD :: (HsDeriving RdrName, [HConDecl])
 b_derivD (_, cs) tys = (Just (L l (map mkLHsSigType tys)), cs)
   where l = getLoc (mkLocatedList tys)
 
+b_instD :: [a] -> HType -> [HDecl] -> HDecl
+b_instD _ ty@(L l _) decls = L l (InstD (ClsInstD decl))
+  where
+    decl = ClsInstDecl { cid_poly_ty = mkLHsSigType qty
+                       , cid_binds = listToBag binds
+                       , cid_sigs = mkClassOpSigs []
+                       , cid_tyfam_insts = []
+                       , cid_datafam_insts = []
+                       , cid_overlap_mode = Nothing }
+    qty = L l (HsQualTy { hst_ctxt = noLoc []
+                        , hst_body = ty })
+    binds = foldr declToBind [] decls
+    declToBind decl acc =
+      case decl of
+        L l (ValD bind) -> L l bind : acc
+        _  -> acc
+
 b_funD :: Located a -> (HExpr -> HsBind RdrName) -> HExpr -> HDecl
 b_funD (L l _) f e = L l (ValD (f e))
 

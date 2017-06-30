@@ -55,21 +55,24 @@ import SK.Core.GHC
 
 %token
 
-'module' { L _ (TAtom (ASymbol "module")) }
-'import' { L _ (TAtom (ASymbol "import")) }
-'if'     { L _ (TAtom (ASymbol "if")) }
-'data'   { L _ (TAtom (ASymbol "data")) }
-'do'     { L _ (TAtom (ASymbol "do")) }
-'\\'     { L _ (TAtom (ASymbol "\\")) }
-'let'    { L _ (TAtom (ASymbol "let")) }
-'case'   { L _ (TAtom (ASymbol "case")) }
+'case'     { L _ (TAtom (ASymbol "case")) }
+'data'     { L _ (TAtom (ASymbol "data")) }
+'do'       { L _ (TAtom (ASymbol "do")) }
+'if'       { L _ (TAtom (ASymbol "if")) }
+'import'   { L _ (TAtom (ASymbol "import")) }
+'instance' { L _ (TAtom (ASymbol "instance")) }
+'let'      { L _ (TAtom (ASymbol "let")) }
+'module'   { L _ (TAtom (ASymbol "module")) }
 
-'='  { L _ (TAtom (ASymbol "=")) }
-'<-' { L _ (TAtom (ASymbol "<-")) }
+','  { L _ (TAtom (ASymbol ",")) }
 '->' { L _ (TAtom (ASymbol "->")) }
 '::' { L _ (TAtom (ASymbol "::")) }
-','  { L _ (TAtom (ASymbol ",")) }
+'<-' { L _ (TAtom (ASymbol "<-")) }
+'='  { L _ (TAtom (ASymbol "=")) }
+'\\' { L _ (TAtom (ASymbol "\\")) }
+'{'  { L _ (TAtom (ASymbol "{")) }
 '|'  { L _ (TAtom (ASymbol "|")) }
+'}'  { L _ (TAtom (ASymbol "}")) }
 
 -- For `as' pattern
 -- '@'  { L _ (TAtom (ASymbol "@")) }
@@ -77,8 +80,6 @@ import SK.Core.GHC
 -- For `irrefutable' pattern
 -- '~'  { L _ (TAtom (ASymbol "~")) }
 
-'{'  { L _ (TAtom (ASymbol "{")) }
-'}'  { L _ (TAtom (ASymbol "}")) }
 
 'symbol'  { L _ (TAtom (ASymbol _)) }
 'char'    { L _ (TAtom (AChar _)) }
@@ -90,6 +91,7 @@ import SK.Core.GHC
 
 'f_import'
     { L _ (TList $$@((L _ (TAtom (ASymbol "import"))):_)) }
+
 'deriving'
     { L _ (TList [L _ (TAtom (ASymbol "deriving")), L _ (TList $$)])}
 
@@ -153,8 +155,9 @@ top_decl_with_doc :: { HDecl }
     : mbdoc 'list' {% parse p_top_decl $2 }
 
 top_decl :: { HDecl }
-    : 'data' simpletype constrs { b_dataD $1 $2 $3 }
-    | decl                      { $1 }
+    : 'data' simpletype constrs   { b_dataD $1 $2 $3 }
+    | 'instance' ctxt tycl idecls { b_instD $2 $3 $4 }
+    | decl                        { $1 }
 
 simpletype :: { (String, [HTyVarBndr])}
     : 'symbol' { b_simpletypeD [$1] }
@@ -196,10 +199,26 @@ fielddecl :: { HConDeclField }
     : 'symbol' type { b_recFieldD [$1] $2 }
     | symbols  type { b_recFieldD $1 $2 }
 
+ctxt :: { [a] }
+    : {- empty -} { [] }
+
+tycl :: { HType }
+    : type { $1 }
+
+idecls :: { [HDecl] }
+    : decls { $1 }
+
 decl :: { HDecl }
     : '=' decl_lhs expr  { b_funD $1 $2 $3 }
     | '::' 'symbol' type { b_tsigD [$2] $3 }
     | '::' symbols type  { b_tsigD $2 $3 }
+
+decls :: { [HDecl] }
+   : rdecls { reverse $1 }
+
+rdecls :: { [HDecl] }
+   : {- empty -}   { [] }
+   | rdecls 'list' {% (:$1) `fmap` parse p_decl $2 }
 
 decl_lhs :: { HExpr -> HsBind RdrName }
     : 'list'   {% parse p_pats0 (tail $1) >>= b_declLhsB (head $1) }

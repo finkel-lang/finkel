@@ -114,23 +114,25 @@ module SK.Core.GHC
     -- * HeaderInfo
     getOptionsFromFile,
 
+    -- * HsBinds
+    HsLocalBinds,
+    HsLocalBindsLR(..),
+    HsValBindsLR(..),
+
     -- * HsDecls
+    ClsInstDecl(..),
     ConDecl(..),
     ConDeclField(..),
     HsConDeclDetails,
     HsDataDefn(..),
     HsDeriving,
     HsTyVarBndr(..),
+    InstDecl(..),
     LConDeclField,
     LHsQTyVars,
     LHsTyVarBndr,
     NewOrData(..),
     TyClDecl(..),
-
-    -- * HsBinds
-    HsLocalBinds,
-    HsLocalBindsLR(..),
-    HsValBindsLR(..),
 
     -- * HsExpr
     GRHSs(..),
@@ -169,6 +171,7 @@ module SK.Core.GHC
     srcErrorMessages,
 
     -- * HsUtils
+    mkClassOpSigs,
     mkLHsSigType,
     mkHsIsString,
 
