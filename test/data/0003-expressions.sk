@@ -31,7 +31,7 @@
 ;;; Calls `lam1' defined above.
 (= lam2
   (print (lam1 (\ (a b)
-                  (* a (+ a b))))))
+                 (* a (+ a b))))))
 
 (= lamexprs
   lam2)

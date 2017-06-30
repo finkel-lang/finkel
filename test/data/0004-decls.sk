@@ -39,9 +39,37 @@
       (print (MyD3Con3 \a \b \c (Right \z)))
       (print [M4A M4B M4C])))
 
+;;; 4.2.3 Datatype Renamings
+
+(newtype (N1 a) (N1 a))
+
+(instance (=> (Show a) (Show (N1 a)))
+  (= (show (N1 a))
+    (++ "N1 " (show a))))
+
+(newtype (N2 a) (N2 a)
+  (deriving (Eq Show)))
+
+(newtype (N3 a) (N3 {unN3 a}))
+
+(instance (=> (Show a) (Show (N3 a)))
+  (= (show (N3 a))
+    (++ "N3 " (show a))))
+
+(newtype (N4 a) (N4 {unN4 a})
+  (deriving (Eq Show)))
+
+(:: s4_2_3 (IO ()))
+(= s4_2_3
+  (do (print (N1 1))
+      (print (N2 2))
+      (print (N3 3))
+      (print (N4 4))))
+
 (:: s4_2 (IO ()))
 (= s4_2
-  s4_2_1)
+  (do s4_2_1
+      s4_2_3))
 
 ;;; 4.3 Type Classes and Overloading
 

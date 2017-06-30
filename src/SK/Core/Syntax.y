@@ -27,6 +27,8 @@ import SK.Core.GHC
 %name p_import import
 %name p_top_decl top_decl
 %name p_decl decl
+%name p_lqtycl lqtycl
+
 %name p_type type
 %name p_types types
 %name p_types0 types0
@@ -63,12 +65,14 @@ import SK.Core.GHC
 'instance' { L _ (TAtom (ASymbol "instance")) }
 'let'      { L _ (TAtom (ASymbol "let")) }
 'module'   { L _ (TAtom (ASymbol "module")) }
+'newtype'  { L _ (TAtom (ASymbol "newtype")) }
 
 ','  { L _ (TAtom (ASymbol ",")) }
 '->' { L _ (TAtom (ASymbol "->")) }
 '::' { L _ (TAtom (ASymbol "::")) }
 '<-' { L _ (TAtom (ASymbol "<-")) }
 '='  { L _ (TAtom (ASymbol "=")) }
+'=>' { L _ (TAtom (ASymbol "=>")) }
 '\\' { L _ (TAtom (ASymbol "\\")) }
 '{'  { L _ (TAtom (ASymbol "{")) }
 '|'  { L _ (TAtom (ASymbol "|")) }
@@ -155,9 +159,10 @@ top_decl_with_doc :: { HDecl }
     : mbdoc 'list' {% parse p_top_decl $2 }
 
 top_decl :: { HDecl }
-    : 'data' simpletype constrs   { b_dataD $1 $2 $3 }
-    | 'instance' ctxt tycl idecls { b_instD $2 $3 $4 }
-    | decl                        { $1 }
+    : 'data' simpletype constrs    { b_dataD $1 $2 $3 }
+    | 'newtype' simpletype constrs { b_newtypeD $1 $2 $3 }
+    | 'instance' qtycl idecls      { b_instD $2 $3 }
+    | decl                         { $1 }
 
 simpletype :: { (String, [HTyVarBndr])}
     : 'symbol' { b_simpletypeD [$1] }
@@ -179,7 +184,7 @@ deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }
 
 lconstr :: { HConDecl }
-    : 'symbol' condetails        { b_conD $1 $2 }
+    : 'symbol' condetails         { b_conD $1 $2 }
     | 'symbol' '{' fielddecls '}' { b_conD $1 $3 }
 
 condetails :: { HsConDeclDetails RdrName }
@@ -199,11 +204,12 @@ fielddecl :: { HConDeclField }
     : 'symbol' type { b_recFieldD [$1] $2 }
     | symbols  type { b_recFieldD $1 $2 }
 
-ctxt :: { [a] }
-    : {- empty -} { [] }
+qtycl :: { ([HType], HType) }
+    : 'list' {% parse p_lqtycl $1 }
 
-tycl :: { HType }
-    : type { $1 }
+lqtycl :: { ([HType], HType) }
+    : '=>' types {% b_qtyclC $2 }
+    | types0     { ([], $1) }
 
 idecls :: { [HDecl] }
     : decls { $1 }

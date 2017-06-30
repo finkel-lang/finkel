@@ -9,9 +9,6 @@ import SrcLoc
 
 import SK.Core.Lexer
 import SK.Core.Form
-
-import BasicTypes (FractionalLit(..))
-
 }
 
 %name sexpr sexp
@@ -65,7 +62,7 @@ atom :: { LTForm Atom }
      | 'char'    { mkAChar $1 }
      | 'string'  { mkAString $1 }
      | 'integer' { mkAInteger $1 }
-     | 'frac'   { mkAFractional $1 }
+     | 'frac'    { mkAFractional $1 }
      | 'comment' { mkAComment $1 }
      | 'unit'    { mkAUnit $1 }
      | '{'       { mkOcSymbol $1 }

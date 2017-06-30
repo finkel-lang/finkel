@@ -237,14 +237,26 @@ b_dataD :: Located a
         -> (String, [HTyVarBndr])
         -> (HsDeriving RdrName, [HConDecl])
         -> HDecl
-b_dataD (L l _) (name, tvs) (derivs,cs) = L l (TyClD decl)
+b_dataD = mkNewtypeOrDataD DataType
+
+b_newtypeD :: Located a -> (String, [HTyVarBndr])
+           -> (HsDeriving RdrName, [HConDecl])
+           -> HDecl
+b_newtypeD = mkNewtypeOrDataD NewType
+
+mkNewtypeOrDataD :: NewOrData -> Located a
+                 -> (String, [HTyVarBndr])
+                 -> (HsDeriving RdrName, [HConDecl])
+                 -> HDecl
+mkNewtypeOrDataD newOrData (L l _) (name, tvs) (derivs, cs) =
+  L l (TyClD decl)
   where
     decl = DataDecl { tcdLName = L l (mkUnqual tcName (fsLit name))
                     , tcdTyVars = mkHsQTvs tvs
                     , tcdDataDefn = defn
                     , tcdDataCusk = PlaceHolder
                     , tcdFVs = placeHolderNames }
-    defn = HsDataDefn { dd_ND = DataType
+    defn = HsDataDefn { dd_ND = newOrData
                       , dd_ctxt = noLoc []
                       , dd_cType = Nothing
                       , dd_kindSig = Nothing
@@ -296,8 +308,8 @@ b_derivD :: (HsDeriving RdrName, [HConDecl])
 b_derivD (_, cs) tys = (Just (L l (map mkLHsSigType tys)), cs)
   where l = getLoc (mkLocatedList tys)
 
-b_instD :: [a] -> HType -> [HDecl] -> HDecl
-b_instD _ ty@(L l _) decls = L l (InstD (ClsInstD decl))
+b_instD :: ([HType], HType) -> [HDecl] -> HDecl
+b_instD (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
   where
     decl = ClsInstDecl { cid_poly_ty = mkLHsSigType qty
                        , cid_binds = listToBag binds
@@ -305,13 +317,23 @@ b_instD _ ty@(L l _) decls = L l (InstD (ClsInstD decl))
                        , cid_tyfam_insts = []
                        , cid_datafam_insts = []
                        , cid_overlap_mode = Nothing }
-    qty = L l (HsQualTy { hst_ctxt = noLoc []
+    qty = L l (HsQualTy { hst_ctxt = mkLocatedList ctxts
                         , hst_body = ty })
     binds = foldr declToBind [] decls
+    -- XXX: Skipping non-functional bindings.
     declToBind decl acc =
       case decl of
         L l (ValD bind) -> L l bind : acc
         _  -> acc
+
+b_qtyclC :: [HType] -> Builder ([HType], HType)
+b_qtyclC ts =
+  case ts of
+    []  -> builderError
+    [_] -> builderError
+    _   -> do
+      let (ctxt,t) = splitAt ((length ts) - 1) ts
+      return (ctxt, head t)
 
 b_funD :: Located a -> (HExpr -> HsBind RdrName) -> HExpr -> HDecl
 b_funD (L l _) f e = L l (ValD (f e))
