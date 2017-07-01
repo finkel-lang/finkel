@@ -42,10 +42,14 @@ $alpha = [a-zA-Z]
 $negative = \-
 $digit    = [0-9]
 
+$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\~$white]
+$hsymtail = [$hsymhead\']
+
 @signed   = $negative ?
 @decimal  = $digit+
 @exponent = [eE] [\-\+]? @decimal
 @frac     = @decimal \. @decimal @exponent ? | @decimal @exponent
+@hsymbol  = $hsymhead $hsymtail*
 
 
 tokens :-
@@ -104,8 +108,7 @@ $whitechar+  ;
 
 --- Symbols
 
-[^\(\)\[\]\{\}\;\'\`\,\~$white]+ { tok_symbol }
-
+@hsymbol         { tok_symbol }
 
 {
 -- | Data type for token.

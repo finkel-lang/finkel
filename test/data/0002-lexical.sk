@@ -45,4 +45,12 @@
                     (<- y (return 23))
                     (return (+ x y)))
                 (return 123))
-            (Left "foo")])))
+            (Left "foo")])
+
+    (let ((:: (x x' x'') Int)
+          (= x 100)
+          (= x' 200)
+          (= x'' 300)))
+    (print x)
+    (print x')
+    (print x'')))
