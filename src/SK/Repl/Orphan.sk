@@ -1,0 +1,37 @@
+;;;; | Module containing orphan instance declarations.
+
+(module SK.Repl.Orphan)
+
+(import Control.Monad.Trans.Except)
+(import GhcMonad)
+(import SK.Core)
+(import System.Console.Haskeline)
+
+(instance (=> (MonadException m) (MonadException (ExceptT e m)))
+  (= (controlIO f)
+    (ExceptT (controlIO
+              (\ ((RunIO run0))
+                (let ((= run1 (RunIO (. (fmap ExceptT)
+                                        (. run0 runExceptT)))))
+                  (fmap runExceptT (f run1))))))))
+
+;;; Instance declaration for `Ghc' is defined in cabal package ghc, in a
+;;; module used by ghci. This package does not expose its codes as
+;;; library.
+(instance (MonadException Ghc)
+  (= (controlIO f)
+    (Ghc (\ (s)
+           (controlIO
+            (\ ((RunIO run0))
+              (let ((= run1 (RunIO
+                             (\ (m)
+                               (fmap (. Ghc const)
+                                     (run0 (unGhc m s)))))))
+                (fmap (flip unGhc s) (f run1)))))))))
+
+(instance (MonadException Skc)
+  (= (controlIO f)
+    (Skc (controlIO
+          (\ ((RunIO run0))
+            (let ((= run1 (RunIO (. (fmap Skc) (. run0 unSkc)))))
+              (fmap unSkc (f run1))))))))

@@ -1,0 +1,171 @@
+;;;; | Main module for SK Read-Eval-Print-Loop.
+;;;;
+;;;; This module contains main function for SK REPL.
+
+(module SK.Repl)
+
+(import Control.Monad)          ; base
+(import Control.Monad.IO.Class)
+(import System.IO)
+
+(import GHCi)                   ; ghci
+(import GhcMonad)
+(import HscMain)
+(import HscTypes)
+
+(import System.Console.Haskeline) ; haskeline
+
+(import SK.Core)                ; sk-core
+(import SK.Core.Builder)
+(import SK.Core.GHC)
+(import SK.Core.Run)
+(import SK.Core.Lexer)
+(import SK.Core.Macro)
+(import SK.Core.Syntax)
+(import SK.Core.TokenParser)
+
+(import Control.Monad.Trans.Class) ; transformers
+(import Control.Monad.Trans.State.Strict)
+
+(import SK.Repl.Orphan)         ; Internal
+
+
+;;; Types
+;;; -----
+
+;;; At the moment, there is no support for
+;;; `GeneralizedNewtypeDeriving'. Adding support for generalized newtype
+;;; deriving means adding support for pragmas, and inspecting the
+;;; pragmas from SK module source code during compilation.
+
+;;; State for repl.
+(data ReplState
+  (ReplState {pendingInput String
+              inputCount Int})
+  (deriving (Eq Show)))
+
+(:: initialReplState ReplState)
+(= initialReplState
+  (ReplState {pendingInput ""
+              inputCount 0}))
+
+;; Newtype wrapper to hold repl state.
+(newtype (Repl a) (Repl {unRepl (StateT ReplState Skc a)}))
+
+(:: runRepl (-> (Repl a) (-> ReplState (Skc a))))
+(= (runRepl repl st)
+  (evalStateT (unRepl repl) st))
+
+(:: putReplState (-> ReplState (Repl ())))
+(= (putReplState st) (Repl (put st)))
+
+(:: getReplState (Repl ReplState))
+(= getReplState (Repl get))
+
+(:: liftRepl (-> (Skc a) (Repl a)))
+(= (liftRepl m) (Repl (lift m)))
+
+(instance (Functor Repl)
+  (= (fmap f (Repl a)) (Repl (fmap f a))))
+
+(instance (Applicative Repl)
+  (= (pure a) (Repl (pure a)))
+  (= (<*> (Repl f) (Repl a)) (Repl (<*> f a))))
+
+(instance (Monad Repl)
+  (= return pure)
+  (= (>>= (Repl a) k) (Repl (>>= a (. unRepl k)))))
+
+(instance (MonadIO Repl)
+  (= (liftIO io) (Repl (liftIO io))))
+
+(instance (MonadException Repl)
+  (= (controlIO f)
+    (Repl (controlIO
+           (\ ((RunIO run0))
+             (let ((= run1 (RunIO (. (fmap Repl) (. run0 unRepl)))))
+               (fmap unRepl (f run1))))))))
+
+
+;;; Read, eval, and loop
+;;; --------------------
+
+(:: readForms (-> String (Repl (Maybe (LTForm Atom)))))
+(= (readForms input0)
+  (do (<- st1 getReplState)
+      (let ((= input1 (++ (pendingInput st1) (: \lf input0)))
+            (= count (succ (inputCount st1)))
+            (= st2 (st1 {inputCount (succ (inputCount st1))}))
+            (= (putAndReturn pending ret)
+              (do (putReplState (st2 {pendingInput pending}))
+                  (return ret)))))
+      (case (evalSP sexpr (Just "<<repl>>") input1)
+        ((Right forms) (putAndReturn "" (Just forms)))
+        ((Left err) (putAndReturn input1 Nothing)))))
+
+(:: evalForms (-> [LTForm Atom] (Repl ())))
+(= (evalForms forms0)
+  ;;; See `runStmt' in "ghc/GHCi/UI.hs".
+  (let ((= work
+          (do (<- forms1 (macroexpands forms0))
+              (case (evalBuilder parseStmt forms1)
+                ((Left err) (liftIO (putStrLn err)))
+                ((Right stmt)
+                 (do (<- hscenv getSession)
+                     (<- ret (liftIO (hscParsedStmt hscenv stmt)))
+                     (case ret
+                       (Nothing (liftIO (putStrLn "no ret")))
+                       ((Just (, ids fhv fixity))
+                        (liftIO (evalIO hscenv fhv))))))))))
+    (liftRepl work)))
+
+;; Doing similar things as `runInteractiveHsc' in module HscTypes.
+(:: initRepl (Repl ()))
+(= initRepl
+  (liftRepl
+   (do (<- hsc_env getSession)
+       (void (setSessionDynFlags (ic_dflags (hsc_IC hsc_env))))
+       (let ((= decl (. IIDecl (. simpleImportDecl mkModuleName)))))
+       (setContext [(decl "Prelude") (decl "SK.Core")]))))
+
+;; (= initRepl
+;;   (liftRepl setExpanderSettings))
+
+(:: loop (InputT Repl ()))
+(= loop
+  (do (<- st (lift getReplState))
+      (let ((= prompt (if (null (pendingInput st))
+                          "sk> "
+                          ""))))
+      (<- minput (getInputLine prompt))
+      (case minput
+        (Nothing (return ()))
+        ((Just str)
+         (| ((== str "(quit)") (return ()))
+            ((null str) loop)
+            (otherwise
+             (do (<- mbform (lift (readForms str)))
+                 (case mbform
+                   (Nothing (return ()))
+                   ((Just form) (lift (evalForms [form]))))
+                 loop)))))))
+
+(:: skcRepl (InputT Repl ()))
+(= skcRepl
+  (>> (lift initRepl) loop))
+
+
+;;; Main
+;;; ----
+
+(:: replMain (IO ()))
+(= replMain
+  (let ((= go
+          (do (let ((= repl (runInputT defaultSettings skcRepl))
+                    (= skc (runRepl repl initialReplState))))
+              (<- ret (runSkc skc initialSkEnv))
+              (case ret
+                ((Right a) (return ()))
+                ((Left err) (>> (putStrLn err) go))))))
+    (do (putStrLn "SK repl version 0.0.1, hit `Ctrl-d to exit.")
+        go)))
