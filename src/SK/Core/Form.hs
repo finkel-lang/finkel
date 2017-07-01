@@ -30,6 +30,7 @@ module SK.Core.Form
 
 -- From base
 import Data.Data
+import Data.List (intersperse)
 
 -- Pretty module from ghc.
 import qualified Pretty as P
@@ -46,7 +47,17 @@ data Form a
   = Atom a
   | List [Form a]
   | HsList [Form a]
-  deriving (Eq, Show, Data, Typeable)
+  deriving (Eq, Data, Typeable)
+
+instance Show a => Show (Form a) where
+  show form =
+    case form of
+      Atom a -> show a
+      List xs -> mkList "(" xs ")"
+      HsList xs -> mkList "[" xs "]"
+    where
+      mkList open xs close =
+        open ++ concat (intersperse " " (map show xs)) ++ close
 
 -- | Atom in tokens.
 data Atom
@@ -57,7 +68,27 @@ data Atom
   | AInteger Integer
   | AFractional FractionalLit
   | AComment String
-  deriving (Eq, Show, Data, Typeable)
+  deriving (Eq, Data, Typeable)
+
+instance Show Atom where
+  show x =
+    case x of
+      AUnit -> "()"
+      ASymbol s -> s
+      AChar c -> case c of
+        '\a' -> "\\bel"
+        '\b' -> "\\bs"
+        '\f' -> "\\ff"
+        '\n' -> "\\lf"
+        '\r' -> "\\CR"
+        '\t' -> "\\ht"
+        '\v' -> "\\vt"
+        ' '  -> "\\sp"
+        _    -> ['\\',c]
+      AString s -> show s
+      AInteger i -> show i
+      AFractional f -> fl_text f
+      AComment _ -> ""
 
 -- | Token form. Contains location information.
 data TForm a
