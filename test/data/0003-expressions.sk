@@ -117,12 +117,18 @@
   (do (putStrLn "String `bar' from showBar.")
       (return x)))
 
+(= listdo
+  (do (<- x [1 2 3])
+      (<- y [4 5 6])
+      [x y]))
+
 (= doexpres
   (do (putStrLn "foo")
       (<- buzz (showBar "buzz"))
       (let ((:: buzz3 String)
             (= buzz3 (concat [buzz buzz buzz]))))
-      (putStrLn buzz3)))
+      (putStrLn buzz3)
+      (print listdo)))
 
 ;;; 3.15 Datatypes with Field Labels
 

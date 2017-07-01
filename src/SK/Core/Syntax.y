@@ -45,6 +45,7 @@ import SK.Core.GHC
 
 %name p_expr expr
 %name p_exprs exprs
+%name p_hlist hlist
 %name p_match match
 %name p_guards0 guards0
 %name p_guards1 guards1
@@ -294,8 +295,7 @@ pats1 :: { HPat }
 expr :: { HExpr }
     : atom     { $1 }
     | 'list'   {% parse p_exprs $1 }
-    | 'hslist' {% b_hsListE `fmap`
-                  mapM (parse p_expr . (:[])) (unwrapListL $1) }
+    | 'hslist' {% b_hsListE `fmap` parse p_hlist (unwrapListL $1) }
 
 atom :: { HExpr }
     : 'symbol'  { b_varE $1 }
@@ -352,6 +352,13 @@ ralts :: { [HMatch] }
 match :: { HMatch }
     : pat guards { b_match $1 $2 }
 
+hlist :: { [HExpr] }
+    : rhlist { reverse $1 }
+
+rhlist :: { [HExpr] }
+    : {- empty -} { [] }
+    | rhlist expr { $2:$1 }
+
 -- Parsing form for guards
 -- ~~~~~~~~~~~~~~~~~~~~~~~
 --
@@ -388,8 +395,10 @@ rdo_stmts :: { [HExprLStmt] }
     | rdo_stmts stmt { $2 : $1 }
 
 stmt :: { HExprLStmt }
-    : atom   { b_bodyS $1 }
-    | 'list' {% parse p_stmt1 $1 }
+    : atom     { b_bodyS $1 }
+    | 'list'   {% parse p_stmt1 $1 }
+    | 'hslist' {% (b_bodyS . b_hsListE) `fmap`
+                 parse p_hlist (unwrapListL $1) }
 
 stmt1 :: { HExprLStmt }
     : '<-' pat expr { b_bindS $1 $2 $3 }
