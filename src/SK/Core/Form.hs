@@ -11,7 +11,7 @@ module SK.Core.Form
   , Code(..)
   , aFractional
   , splice
-  , lTFormToForm
+  , unLocForm
 
   , symbolNameL
   , toListL
@@ -82,12 +82,12 @@ aFractional x = AFractional $! FL (show x) (toRational x)
 
 -- | Converts located token form to bare 'Form'. Location information,
 -- token end constructor, and Haskell list constructor disappears.
-lTFormToForm :: LTForm a -> Form a
-lTFormToForm form =
+unLocForm :: LTForm a -> Form a
+unLocForm form =
    case unLoc form of
      TAtom a    -> Atom a
-     TList xs   -> List (map lTFormToForm xs)
-     THsList xs -> HsList (map lTFormToForm xs)
+     TList xs   -> List (map unLocForm xs)
+     THsList xs -> HsList (map unLocForm xs)
      TEnd       -> List []
 
 -- | Make a token form with no location information.

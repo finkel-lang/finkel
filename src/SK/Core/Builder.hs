@@ -149,7 +149,7 @@ builderError = do
     Nothing -> failB "no location"
     Just x  ->
       failB (showLoc x ++ "parse error on input `" ++
-             (show (pForm (lTFormToForm x))) ++ "'")
+             (show (pForm (unLocForm x))) ++ "'")
 
 
 -- | Unwrap the element of 'TList' and 'THsList', otherwise returns '[]'.

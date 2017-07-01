@@ -122,11 +122,11 @@ putMacro form =
       case evalBuilder parseExpr [expr] of
         Right hexpr -> do
           macro <- compileMT hexpr
-          let wrap f xs = fmap nlForm (f (cdr (lTFormToForm xs)))
+          let wrap f xs = fmap nlForm (f (cdr (unLocForm xs)))
           addMacro name (wrap macro)
           return [tsig, self']
         Left err -> failS err
-    _ -> failS ("malformed macro: " ++ show (pForm (lTFormToForm form)))
+    _ -> failS ("malformed macro: " ++ show (pForm (unLocForm form)))
 
 wrapArgs :: String -> LTForm Atom -> LTForm Atom -> LTForm Atom
 wrapArgs name args@(L l1 _) body0=
@@ -211,7 +211,7 @@ m_macrolet form =
       putSkEnv sk_env
       return (tList l1 (tSym l2 "begin":expanded))
     _ -> failS ("macrolet: malformed macro: " ++
-               show (pForm (lTFormToForm form)))
+               show (pForm (unLocForm form)))
 
 specialForms :: [(String, LMacro)]
 specialForms =
@@ -272,7 +272,7 @@ macroexpands forms = do
 -- macros.
 macroexpand :: LTForm Atom -> Skc (LTForm Atom)
 macroexpand form = do
-  -- liftIO (putStrLn ("expanding:\n" ++ show (pprForm (lTFormToForm form))))
+  -- liftIO (putStrLn ("expanding:\n" ++ show (pprForm (unLocForm form))))
   case form of
     -- Expand list of forms with preserving the constructor.
     L l (TList forms) -> expandList l TList forms

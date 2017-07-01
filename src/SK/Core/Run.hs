@@ -60,9 +60,9 @@ sExpression input =
   case L.evalSP TP.sexprs Nothing input of
     Right forms ->
       do putStrLn "=== pform ==="
-         mapM_ (print . pForm) (map lTFormToForm forms)
+         mapM_ (print . pForm) (map unLocForm forms)
          putStrLn "=== pprForm ==="
-         print (pprForms (map lTFormToForm forms))
+         print (pprForms (map unLocForm forms))
     Left err -> putStrLn err
 
 compileAndEmit :: FilePath -> IO (Either String String)
