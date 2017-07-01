@@ -78,6 +78,8 @@ module SK.Core.GHC
 
     -- * DynFlags
     DynFlags(..),
+    FatalMessager,
+    FlushOut(..),
     GhcLink(..),
     HasDynFlags(..),
     HscTarget(..),
@@ -89,6 +91,10 @@ module SK.Core.GHC
 
     -- * ErrUtils
     pprErrMsgBagWithLoc,
+    fatalErrorMsg'',
+
+    -- * Exception
+    ghandle,
 
     -- * FastString
     fsLit,
@@ -110,6 +116,10 @@ module SK.Core.GHC
 
     -- * OrdList
     toOL,
+
+    -- * Panic
+    GhcException(..),
+    handleGhcException,
 
     -- * HeaderInfo
     getOptionsFromFile,
@@ -234,6 +244,7 @@ import MonadUtils
 import OccName
 import OrdList
 import Outputable
+import Panic
 import RdrHsSyn
 import RdrName
 import SrcLoc

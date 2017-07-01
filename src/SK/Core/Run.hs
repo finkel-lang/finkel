@@ -1,8 +1,11 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | Module exporting the @runSkc@, Haskell compiler, and some utility
 -- functions.
 module SK.Core.Run
   ( runSkc
+  , runSkcWithoutHandler
   , initialSkEnv
+  , skErrorHandler
   , sExpression
   , compileSkModule
   , compileAndEmit
@@ -13,6 +16,10 @@ module SK.Core.Run
   ) where
 
 import GHC.Paths (libdir)
+
+-- base
+import Control.Exception
+import System.Exit
 
 -- containers
 import qualified Data.Map as Map
@@ -32,22 +39,62 @@ import qualified SK.Core.Lexer as L
 import qualified SK.Core.TokenParser as TP
 import qualified SK.Core.Macro as M
 
--- | Run @Skc@ with given environment.
+-- | Run 'Skc' with given environment and 'skcErrrorHandler'.
 runSkc :: Skc a -> SkEnv -> IO (Either String a)
 runSkc m env =
-  defaultErrorHandler
+  skErrorHandler
     defaultFatalMessager
     defaultFlushOut
-    (runGhc
-       (Just libdir)
-       (handleSourceError
-          (\se -> do
-            flags <- getSessionDynFlags
-            return (Left (unlines (map (showSDoc flags)
-                                       (pprErrMsgBagWithLoc
-                                         (srcErrorMessages se))))))
-          (do ret <- toGhc m env
-              return (fmap fst ret))))
+    (runSkcWithoutHandler m env)
+
+-- | Run 'Skc' without exception handler.
+runSkcWithoutHandler :: Skc a -> SkEnv -> IO (Either String a)
+runSkcWithoutHandler m env =
+   runGhc
+     (Just libdir)
+     (handleSourceError
+        (\se -> do
+          flags <- getSessionDynFlags
+          return (Left (unlines (map (showSDoc flags)
+                                     (pprErrMsgBagWithLoc
+                                       (srcErrorMessages se))))))
+        (do ret <- toGhc m env
+            return (fmap fst ret)))
+
+-- | Similar to 'defaultErrorHandler', but won't exit with 'ExitFailure'
+-- in exception handler.
+skErrorHandler :: ExceptionMonad m
+               => FatalMessager -> FlushOut
+               -> m (Either String a) -> m (Either String a)
+skErrorHandler fm (FlushOut flushOut) work =
+  ghandle
+    (\e ->
+       liftIO
+         (do flushOut
+             case fromException e of
+               Just (ioe :: IOException) ->
+                 fatalErrorMsg'' fm (show ioe)
+               _ -> case fromException e of
+                      Just UserInterrupt ->
+                        (throwIO UserInterrupt)
+                      Just StackOverflow ->
+                        fatalErrorMsg'' fm "stack overflow"
+                      _ ->
+                        case fromException e of
+                          Just (ec :: ExitCode) ->
+                            (throwIO ec)
+                          _ -> fatalErrorMsg'' fm (show e)
+             return (Left (show e))))
+    (handleGhcException
+      (\ge ->
+         do liftIO
+              (do flushOut
+                  case ge of
+                    Signal _ -> fatalErrorMsg'' fm "GhcException signal"
+                    _ -> fatalErrorMsg'' fm (show ge))
+            return (Left (show ge)))
+      work)
+
 
 -- | Initial 'SkEnv' for performing computation with 'Skc'.
 initialSkEnv :: SkEnv
