@@ -11,9 +11,11 @@ module SK.Core.Syntax
   , runBuilder
   , evalBuilder
   , evalBuilder'
-  , parse_module
-  , p_decl
-  , p_expr
+  , parseModule
+  , parseImport
+  , parseStmt
+  , parseDecl
+  , parseExpr
   , showLoc
   ) where
 
@@ -24,7 +26,10 @@ import SK.Core.GHC
 
 %name parse_module module
 %name p_mod_header mod_header
+
+%name p_import_form import_form
 %name p_import import
+
 %name p_top_decl top_decl
 %name p_decl decl
 %name p_lqtycl lqtycl
@@ -47,6 +52,7 @@ import SK.Core.GHC
 %name p_lbinds0 lbinds0
 %name p_app app
 
+%name p_stmt stmt
 %name p_stmt1 stmt1
 
 %name p_symbols1 symbols1
@@ -83,7 +89,6 @@ import SK.Core.GHC
 
 -- For `irrefutable' pattern
 -- '~'  { L _ (TAtom (ASymbol "~")) }
-
 
 'symbol'  { L _ (TAtom (ASymbol _)) }
 'char'    { L _ (TAtom (AChar _)) }
@@ -410,4 +415,19 @@ rsymbols :: { [LTForm Atom] }
 {
 happyError :: Builder a
 happyError = builderError
+
+parseModule :: Builder (HsModule RdrName)
+parseModule = parse_module
+
+parseImport :: Builder HImportDecl
+parseImport = p_import_form
+
+parseStmt :: Builder HExprLStmt
+parseStmt = p_stmt
+
+parseDecl :: Builder HDecl
+parseDecl = p_decl
+
+parseExpr :: Builder HExpr
+parseExpr = p_expr
 }

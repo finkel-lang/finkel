@@ -84,7 +84,7 @@ compileSkModule file = do
   contents <- liftIO (readFile file)
   (form', st) <- parseSexprs (Just file) contents
   expanded <- M.withExpanderSettings (M.macroexpands form')
-  mdl <- buildHsSyn S.parse_module expanded
+  mdl <- buildHsSyn S.parseModule expanded
   return (mdl, st)
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.

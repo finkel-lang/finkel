@@ -15,7 +15,7 @@ import Unsafe.Coerce (unsafeCoerce)
 -- Internal
 import SK.Core.Form
 import SK.Core.GHC
-import SK.Core.Syntax (evalBuilder, p_expr, showLoc)
+import SK.Core.Syntax (evalBuilder, parseExpr, showLoc)
 import SK.Core.SKC
 
 -- Macro expansion
@@ -26,8 +26,8 @@ import SK.Core.SKC
 -- functions to imported module in current target file. Need to take
 -- some kind of GHC environment value to expand macros.
 --
--- Hy separates the loading of modules for runtime with `import',
--- between the loading of modules for macro expansion with `require'.
+-- Hy separates the loading of modules. For runtime, it's done with
+-- `import', for macro expansion time, done with `require'.
 
 tSym :: SrcSpan -> String -> LTForm Atom
 tSym l s = L l (TAtom (ASymbol s))
@@ -119,7 +119,7 @@ putMacro form =
                           , wrapArgs name args expanded]
           expr = tList l [ tSym l "let", tList l [tsig, self']
                          , self]
-      case evalBuilder p_expr [expr] of
+      case evalBuilder parseExpr [expr] of
         Right hexpr -> do
           macro <- compileMT hexpr
           let wrap f xs = fmap nlForm (f (cdr (lTFormToForm xs)))
