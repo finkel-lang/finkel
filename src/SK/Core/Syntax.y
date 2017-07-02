@@ -248,9 +248,9 @@ type :: { HType }
     | 'list'   {% parse p_types0 $1 }
 
 types0 :: { HType }
-    : '->' type type { b_funT $1 $2 $3 }
-    | ',' types      { b_tupT $1 $2 }
-    | types          { b_appT $1 }
+    : '->' types {% b_funT $2 }
+    | ',' types  { b_tupT $1 $2 }
+    | types      { b_appT $1 }
 
 types :: { [HType] }
     : rtypes { reverse $1 }

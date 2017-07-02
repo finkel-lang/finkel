@@ -367,8 +367,13 @@ b_symT (L l (TAtom (ASymbol name))) = L l (HsTyVar (L l ty))
 b_unitT :: LTForm Atom -> HType
 b_unitT (L l _) = L l (HsTupleTy HsBoxedTuple [])
 
-b_funT :: Located a -> HType -> HType -> HType
-b_funT (L l _) a b = L l (HsFunTy a b)
+b_funT :: [HType] -> Builder HType
+b_funT ts =
+  case ts of
+    [] -> builderError
+    _  -> return (foldr1 f ts)
+  where
+    f a@(L l1 _) b = L l1 (HsFunTy a b)
 
 b_appT :: [HType] -> HType
 b_appT (x:xs) = foldl f x xs

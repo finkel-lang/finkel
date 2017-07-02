@@ -105,6 +105,14 @@
       (putStrLn (++ "Bool: " (show b)))
       (putStrLn (++ "String: " (show s)))))
 
+;;; Function type operator '->' takes variable arguments, explicit
+;;; parentheses are optional.
+(:: buzz2 (-> Int Bool String (IO ())))
+(= (buzz2 i b s)
+  (do (putStrLn (++ "Int: " (show i)))
+      (putStrLn (++ "Bool: " (show b)))
+      (putStrLn (++ "String: " (show s)))))
+
 ;;; Function taking higher order function.
 (:: quux (-> (-> Int Int) Int))
 (= (quux f)
@@ -116,7 +124,7 @@
   (mapM_ print xs))
 
 ;;; Function with type variables.
-(:: tv01 (-> a (-> [b] Int)))
+(:: tv01 (-> a [b] Int))
 (= (tv01 x ys)
   (length ys))
 
