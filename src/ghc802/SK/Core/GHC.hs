@@ -185,6 +185,9 @@ module SK.Core.GHC
     mkLHsSigType,
     mkHsIsString,
 
+    -- * InteractiveEval
+    getContext,
+
     -- * Module
     ModLocation(..),
     mainUnitId,

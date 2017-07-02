@@ -12,9 +12,9 @@ module SK.Core.Syntax
   , evalBuilder
   , evalBuilder'
   , parseModule
-  , parseImport
+  , parseImports
   , parseStmt
-  , parseDecl
+  , parseDecls
   , parseExpr
   , showLoc
   ) where
@@ -27,9 +27,11 @@ import SK.Core.GHC
 %name parse_module module
 %name p_mod_header mod_header
 
+%name p_imports imports
 %name p_import_form import_form
 %name p_import import
 
+%name p_top_decls top_decls
 %name p_top_decl top_decl
 %name p_decl decl
 %name p_lqtycl lqtycl
@@ -214,8 +216,9 @@ qtycl :: { ([HType], HType) }
     : 'list' {% parse p_lqtycl $1 }
 
 lqtycl :: { ([HType], HType) }
-    : '=>' types {% b_qtyclC $2 }
-    | types0     { ([], $1) }
+    : '=>' 'unit' type { ([], $3) }
+    | '=>' types       {% b_qtyclC $2 }
+    | types0           { ([], $1) }
 
 idecls :: { [HDecl] }
     : decls { $1 }
@@ -428,14 +431,14 @@ happyError = builderError
 parseModule :: Builder (HsModule RdrName)
 parseModule = parse_module
 
-parseImport :: Builder HImportDecl
-parseImport = p_import_form
+parseImports :: Builder [HImportDecl]
+parseImports = p_imports
 
 parseStmt :: Builder HExprLStmt
 parseStmt = p_stmt
 
-parseDecl :: Builder HDecl
-parseDecl = p_decl
+parseDecls :: Builder [HDecl]
+parseDecls = p_top_decls
 
 parseExpr :: Builder HExpr
 parseExpr = p_expr

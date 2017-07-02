@@ -82,9 +82,21 @@
 (instance (Functor MyFnct)
   (= (fmap f (MyFnct a)) (MyFnct (f a))))
 
+(data (EmptyContext a) (EmptyContext Int))
+
+(instance (=> () (Show (EmptyContext a)))
+  (= (show (EmptyContext n)) (++ "EmptyContext " (show n))))
+
+(data (MCs a b) (MCs a b))
+
+(instance (=> (Show a) (Show b) (Show (MCs a b)))
+  (= (show (MCs a b)) (concat ["MCs " (show a) " " (show b)])))
+
 (:: s4_3 (IO ()))
 (= s4_3
-  (do (print (fmap (* 2) (MyFnct 21)))))
+  (do (print (fmap (* 2) (MyFnct 21)))
+      (print (EmptyContext 42))
+      (print (MCs True \a))))
 
 ;;; 4.4 Nested Declarations
 
