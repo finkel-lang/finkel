@@ -4,6 +4,7 @@
 module SK.Core.Run
   ( runSkc
   , runSkcWithoutHandler
+  , withSourceErrorHandling
   , initialSkEnv
   , skErrorHandler
   , sExpression
@@ -52,14 +53,22 @@ runSkcWithoutHandler :: Skc a -> SkEnv -> IO (Either String a)
 runSkcWithoutHandler m env =
    runGhc
      (Just libdir)
-     (handleSourceError
-        (\se -> do
-          flags <- getSessionDynFlags
-          return (Left (unlines (map (showSDoc flags)
-                                     (pprErrMsgBagWithLoc
-                                       (srcErrorMessages se))))))
+     (withSourceErrorHandling
         (do ret <- toGhc m env
             return (fmap fst ret)))
+
+-- | Run action with source error handling.
+withSourceErrorHandling :: (ExceptionMonad m, GhcMonad m)
+                        => m (Either String a) -> m (Either String a)
+withSourceErrorHandling m =
+  handleSourceError
+    (\se -> do
+      flags <- getSessionDynFlags
+      return (Left (unlines (map (showSDoc flags)
+                                 (pprErrMsgBagWithLoc
+                                   (srcErrorMessages se))))))
+    m
+
 
 -- | Similar to 'defaultErrorHandler', but won't exit with 'ExitFailure'
 -- in exception handler.
@@ -74,16 +83,17 @@ skErrorHandler fm (FlushOut flush) work =
              case fromException e of
                Just (ioe :: IOException) ->
                  fatalErrorMsg'' fm (show ioe)
-               _ -> case fromException e of
-                      Just UserInterrupt ->
-                        (throwIO UserInterrupt)
-                      Just StackOverflow ->
-                        fatalErrorMsg'' fm "stack overflow"
-                      _ ->
-                        case fromException e of
-                          Just (ec :: ExitCode) ->
-                            (throwIO ec)
-                          _ -> fatalErrorMsg'' fm (show e)
+               _ ->
+                 case fromException e of
+                   Just UserInterrupt ->
+                     (throwIO UserInterrupt)
+                   Just StackOverflow ->
+                     fatalErrorMsg'' fm "stack overflow"
+                   _ ->
+                     case fromException e of
+                       Just (ec :: ExitCode) ->
+                         (throwIO ec)
+                       _ -> fatalErrorMsg'' fm (show e)
              return (Left (show e))))
     (handleGhcException
       (\ge ->
