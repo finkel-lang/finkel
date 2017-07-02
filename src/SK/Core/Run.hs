@@ -66,11 +66,11 @@ runSkcWithoutHandler m env =
 skErrorHandler :: ExceptionMonad m
                => FatalMessager -> FlushOut
                -> m (Either String a) -> m (Either String a)
-skErrorHandler fm (FlushOut flushOut) work =
+skErrorHandler fm (FlushOut flush) work =
   ghandle
     (\e ->
        liftIO
-         (do flushOut
+         (do flush
              case fromException e of
                Just (ioe :: IOException) ->
                  fatalErrorMsg'' fm (show ioe)
@@ -88,7 +88,7 @@ skErrorHandler fm (FlushOut flushOut) work =
     (handleGhcException
       (\ge ->
          do liftIO
-              (do flushOut
+              (do flush
                   case ge of
                     Signal _ -> fatalErrorMsg'' fm "GhcException signal"
                     _ -> fatalErrorMsg'' fm (show ge))

@@ -5,7 +5,6 @@ module SK.Core.Builder where
 -- base
 import Control.Monad (liftM, ap)
 import Data.Char (isUpper)
-import Data.Either (partitionEithers)
 import Data.List (foldl1')
 
 -- transformers
@@ -321,9 +320,9 @@ b_instD (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
                         , hst_body = ty })
     binds = foldr declToBind [] decls
     -- XXX: Skipping non-functional bindings.
-    declToBind decl acc =
-      case decl of
-        L l (ValD bind) -> L l bind : acc
+    declToBind d acc =
+      case d of
+        L l1 (ValD bind) -> L l1 bind : acc
         _  -> acc
 
 b_qtyclC :: [HType] -> Builder ([HType], HType)
@@ -347,7 +346,7 @@ b_declLhsB (L l (TAtom (ASymbol name))) args =
 b_tsigD :: [LTForm Atom] -> HType -> HDecl
 b_tsigD names typ =
   let typ' = mkLHsSigWcType typ
-      mkName (L l (TAtom (ASymbol name))) = L l (mkRdrName name)
+      mkName (L l1 (TAtom (ASymbol name))) = L l1 (mkRdrName name)
       l = getLoc (mkLocatedList names)
   in  L l (SigD (TypeSig (map mkName names) typ'))
 
@@ -479,12 +478,12 @@ b_recConOrUpdE sym@(L l _) flds = L l expr
     mkufld  = cfld2ufld . mkcfld
 
 mkcfld :: (String,HExpr) -> LHsRecField RdrName HExpr
-mkcfld (n,e@(L fl _)) =
-  L fl (HsRecField { hsRecFieldLbl = mkfname fl n
+mkcfld (name, e@(L fl _)) =
+  L fl (HsRecField { hsRecFieldLbl = mkfname fl name
                    , hsRecFieldArg = e
                    , hsRecPun = False })
   where
-    mkfname fl n = L fl (mkFieldOcc (L fl (mkRdrName n)))
+    mkfname nl n = L nl (mkFieldOcc (L nl (mkRdrName n)))
 
 b_recUpdE :: Builder HExpr -> [(String,HExpr)] -> Builder HExpr
 b_recUpdE expr flds = do

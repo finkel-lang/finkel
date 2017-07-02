@@ -15,7 +15,7 @@ import System.Environment (getArgs)
 import System.Process (rawSystem)
 import System.Exit (exitWith)
 
-import SK.Core.Plugin
+import SK.Core.Plugin ()
 
 main :: IO ()
 main = do

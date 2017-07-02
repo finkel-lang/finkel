@@ -5,7 +5,7 @@ module SK.Core.Make
   ) where
 
 -- base
-import Control.Monad (foldM_, mapAndUnzipM, zipWithM, when)
+import Control.Monad (foldM_, mapAndUnzipM, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Graph (flattenSCCs)
 import Data.List (find)
@@ -39,7 +39,6 @@ import System.FilePath ( dropExtension
 
 -- sk-core
 import SK.Core.GHC
-import SK.Core.Macro
 import SK.Core.Run
 import SK.Core.SKC
 
@@ -84,7 +83,7 @@ make inputs no_link mb_output = do
 
 compileInput :: (FilePath, Maybe Phase)
              -> Skc (Maybe ModSummary, Maybe (HsModule RdrName))
-compileInput input@(modName, mbphase) = do
+compileInput (modName, mbphase) = do
   dflags <- getSessionDynFlags
   inputPath <- findFileInImportPaths (importPaths dflags) modName
   mb_module <- compileToHsModule (inputPath, mbphase)
@@ -113,7 +112,6 @@ compileSkFile source = fmap fst (compileSkModule source)
 
 compileHsFile :: FilePath -> Maybe Phase -> Skc (HsModule RdrName)
 compileHsFile source mbphase = do
-  hsc_env <- getSession
   (source', dflags) <- maybePreprocess source mbphase
   contents <- liftIO (readFile source')
   let location = mkRealSrcLoc (fsLit source) 1 1
@@ -146,7 +144,7 @@ compileOtherFile path = do
 findFileInImportPaths :: [FilePath]
                       -> String
                       -> Skc FilePath
-findFileInImportPaths dirs moduleName = do
+findFileInImportPaths dirs modName = do
   -- Current approach for source code lookup is search for file with
   -- '*.sk' suffix first. If found return it, otherwise search file with
   -- '*.hs' suffix.
@@ -154,14 +152,14 @@ findFileInImportPaths dirs moduleName = do
   -- This searching strategy can used when compiling cabal package
   -- containing mixed codes with '*.sk' and '*.hs' suffixes.
   --
-  let suffix = takeExtension moduleName
-      moduleFileName = moduleNameSlashes (mkModuleName moduleName)
+  let suffix = takeExtension modName
+      moduleFileName = moduleNameSlashes (mkModuleName modName)
       moduleFileName'
-        | elem suffix [".sk", ".hs", ".c"] = moduleName
+        | elem suffix [".sk", ".hs", ".c"] = modName
         | otherwise = moduleFileName <.> "sk"
       search ds =
         case ds of
-          [] -> failS ("Cannot find source for: " ++ moduleName)
+          [] -> failS ("Cannot find source for: " ++ modName)
           d:ds' -> do
             -- Extension not yet sure for `aPath'.
             let aPath = d </> moduleFileName'
@@ -176,7 +174,7 @@ findFileInImportPaths dirs moduleName = do
                     else search ds'
       dirs' | elem "." dirs = dirs
             | otherwise     = dirs ++ ["."]
-  debugIO (putStrLn ("moduleName: " ++ show moduleName))
+  debugIO (putStrLn ("moduleName: " ++ show modName))
   found <- search dirs'
   debugIO (putStrLn ("File found: " ++ found))
   return found

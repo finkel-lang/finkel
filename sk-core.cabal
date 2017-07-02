@@ -43,6 +43,7 @@ library
   build-tools:         alex
                      , happy
   default-language:    Haskell2010
+  ghc-options:         -Wall
 
 flag static
   description:         Link statically
@@ -52,9 +53,9 @@ executable skc
   hs-source-dirs:      app
   main-is:             skc.hs
   if flag(static)
-    ghc-options:       -threaded -rtsopts -with-rtsopts=-N
+    ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N
   else
-    ghc-options:       -threaded -rtsopts -with-rtsopts=-N -dynamic
+    ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N -dynamic
   build-depends:       base
                      , ghc-paths
                      , process

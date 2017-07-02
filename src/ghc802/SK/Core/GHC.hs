@@ -70,7 +70,7 @@ module SK.Core.GHC
     Boxity(..),
     FractionalLit(..),
     Origin(..),
-    SourceText(..),
+    SourceText,
 
     -- * DriverPhases
     HscSource(..),

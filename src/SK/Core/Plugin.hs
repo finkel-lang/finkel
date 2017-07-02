@@ -34,7 +34,6 @@ skFrontend flags args = do
                   chooseAction (action options) o
       debug = skDebug options
       sk_env = initialSkEnv {envDebug = debug}
-  dflags <- getSessionDynFlags
   ret <- toGhc (act options) sk_env
   case ret of
     Left err -> liftIO (putStrLn err >> exitFailure)
