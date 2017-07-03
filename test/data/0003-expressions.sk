@@ -125,9 +125,11 @@
 (= doexpres
   (do (putStrLn "foo")
       (<- buzz (showBar "buzz"))
-      (let ((:: buzz3 String)
-            (= buzz3 (concat [buzz buzz buzz]))))
+      (let ((:: (buzz3 buzz4) String)
+            (= buzz3 (concat [buzz buzz buzz]))
+            (= buzz4 "buzz4")))
       (putStrLn buzz3)
+      (putStrLn buzz4)
       (print listdo)))
 
 ;;; 3.15 Datatypes with Field Labels

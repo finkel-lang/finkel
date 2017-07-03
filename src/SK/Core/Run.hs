@@ -35,10 +35,10 @@ import SK.Core.Emit
 import SK.Core.Form
 import SK.Core.GHC
 import SK.Core.SKC
-import qualified SK.Core.Syntax as S
-import qualified SK.Core.Lexer as L
-import qualified SK.Core.TokenParser as TP
-import qualified SK.Core.Macro as M
+import SK.Core.Syntax
+import SK.Core.Lexer as L
+import SK.Core.TokenParser
+import SK.Core.Macro
 
 -- | Run 'Skc' with given environment and 'skcErrrorHandler'.
 runSkc :: Skc a -> SkEnv -> IO (Either String a)
@@ -109,12 +109,12 @@ skErrorHandler fm (FlushOut flush) work =
 -- | Initial 'SkEnv' for performing computation with 'Skc'.
 initialSkEnv :: SkEnv
 initialSkEnv = SkEnv
-  { envMacros = M.specialForms
+  { envMacros = specialForms
   , envDebug = False }
 
 sExpression :: String -> IO ()
 sExpression input =
-  case L.evalSP TP.sexprs Nothing input of
+  case evalSP sexprs Nothing input of
     Right forms ->
       do putStrLn "=== pform ==="
          mapM_ (print . pForm) (map unLocForm forms)
@@ -128,20 +128,20 @@ compileAndEmit file = runSkc go initialSkEnv
     go = do (mdl, st) <- compileSkModule file
             genHsSrc st mdl
 
-parseSexprs :: Maybe FilePath -> String -> Skc ([LTForm Atom], L.SPState)
+parseSexprs :: Maybe FilePath -> String -> Skc ([LTForm Atom], SPState)
 parseSexprs mb_file contents =
-  Skc (lift (L.runSP' TP.sexprs mb_file contents))
+  Skc (lift (runSP' sexprs mb_file contents))
 
-buildHsSyn :: S.Builder a -> [LTForm Atom] -> Skc a
-buildHsSyn bldr forms = Skc (lift (S.evalBuilder' bldr forms))
+buildHsSyn :: Builder a -> [LTForm Atom] -> Skc a
+buildHsSyn bldr forms = Skc (lift (evalBuilder' bldr forms))
 
 -- | Compile a file containing SK module.
-compileSkModule :: FilePath -> Skc (HsModule RdrName, L.SPState)
+compileSkModule :: FilePath -> Skc (HsModule RdrName, SPState)
 compileSkModule file = do
   contents <- liftIO (readFile file)
   (form', st) <- parseSexprs (Just file) contents
-  expanded <- M.withExpanderSettings (M.macroexpands form')
-  mdl <- buildHsSyn S.parseModule expanded
+  expanded <- withExpanderSettings (macroexpands form')
+  mdl <- buildHsSyn parseModule expanded
   return (mdl, st)
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.
