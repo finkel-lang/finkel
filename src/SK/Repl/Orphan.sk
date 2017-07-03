@@ -3,17 +3,9 @@
 (module SK.Repl.Orphan)
 
 (import Control.Monad.Trans.Except)
+(import System.Console.Haskeline)
 (import GhcMonad)
 (import SK.Core)
-(import System.Console.Haskeline)
-
-(instance (=> (MonadException m) (MonadException (ExceptT e m)))
-  (= (controlIO f)
-    (ExceptT (controlIO
-              (\ ((RunIO run0))
-                (let ((= run1 (RunIO (. (fmap ExceptT)
-                                        (. run0 runExceptT)))))
-                  (fmap runExceptT (f run1))))))))
 
 ;;; Instance declaration for `Ghc' is defined in cabal package ghc, in a
 ;;; module used by ghci. This package does not expose its codes as
@@ -29,9 +21,31 @@
                                      (run0 (unGhc m s)))))))
                 (fmap (flip unGhc s) (f run1)))))))))
 
-(instance (MonadException Skc)
-  (= (controlIO f)
-    (Skc (controlIO
-          (\ ((RunIO run0))
-            (let ((= run1 (RunIO (. (fmap Skc) (. run0 unSkc)))))
-              (fmap unSkc (f run1))))))))
+(macrolet ((derive-monad-exception (ctxs ty con unCon)
+             (return
+               `(instance (=> ,ctxs (MonadException ,ty))
+                  (= (controlIO f)
+                    (,con (controlIO
+                           (\ ((RunIO run0))
+                             (let ((= run1 (RunIO
+                                            (. (fmap ,con)
+                                               (. run0 ,unCon)))))
+                               (fmap ,unCon (f run1)))))))))))
+  (derive-monad-exception
+   (MonadException m) (ExceptT e m) ExceptT runExceptT)
+  (derive-monad-exception
+   () Skc Skc unSkc))
+
+;; (instance (=> (MonadException m) (MonadException (ExceptT e m)))
+;;   (= controlIO (mkControlIO ExceptT runExceptT)))
+
+;; (instance (MonadException Skc)
+;;   (= controlIO (mkControlIO Skc unSkc)))
+
+;; (= (mkControlIO con unCon f)
+;;   (con (controlIO
+;;          (\ ((RunIO run0))
+;;            (let ((= run1 (RunIO
+;;                           (. (fmap con)
+;;                              (. run0 unCon)))))
+;;              (fmap unCon (f run1)))))))

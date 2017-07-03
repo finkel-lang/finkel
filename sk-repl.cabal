@@ -11,7 +11,8 @@ copyright:           2017 Author name here
 category:            Language
 build-type:          Custom
 extra-source-files:  README.md
-                     src/SK/Repl.sk
+                     src/SK/*.sk
+                     src/SK/Repl/*.sk
 cabal-version:       >=1.10
 
 custom-setup
@@ -27,6 +28,7 @@ library
   build-depends:       base >= 4.7 && < 5
                      , haskeline
                      , ghc
+                     , ghci
                      , transformers
                      , sk-core
   default-language:    Haskell2010
