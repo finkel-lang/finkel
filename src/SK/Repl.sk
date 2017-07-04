@@ -1,13 +1,30 @@
-;;;; | Main module for SK Read-Eval-Print-Loop.
+;;;; | Main module for SK read-eval-print-loop.
 ;;;;
-;;;; This module contains main function for SK REPL.
+;;;; This module contains `replMain', the main entry point for SK REPL.
+;;;; Most of the functionality of SK REPL is borrowed from modules from
+;;;; GHC, and a few form GHCi.
+;;;;
+;;;; Since ghc 8.0.1, implementation of GHCi has changed to RemoteGHCi,
+;;;; described in detail below:
+;;;;
+;;;;   https://ghc.haskell.org/trac/ghc/wiki/RemoteGHCi
+;;;;
+;;;; It might worth understanding the detail of the implementation to
+;;;; support implementing some unusual functionalities such as `apply',
+;;;; `compile-file', qload', ...etc.
 
 (module SK.Repl)
 
-(import Control.Exception)      ; base
+(import Control.Concurrent)     ; base
+(import Control.Exception)
 (import Control.Monad)
 (import Control.Monad.IO.Class)
+(import Data.List)
+(import Data.IORef)
+(import Data.Version)
+(import System.Exit)
 (import System.IO)
+(import Unsafe.Coerce)
 
 (import GhcMonad)               ; ghc
 (import HscMain)
@@ -16,8 +33,12 @@
 (import InteractiveEval)
 (import Linker)
 (import Name)
+(import Outputable)
+(import TcRnDriver)
+(import Var)
 
 (import GHCi)                   ; ghci
+(import GHCi.Message)
 (import GHCi.RemoteTypes)
 
 (import System.Console.Haskeline) ; haskeline
@@ -34,7 +55,9 @@
 (import Control.Monad.Trans.Class) ; transformers
 (import Control.Monad.Trans.State.Strict)
 
-(import SK.Repl.Orphan)         ; Internal
+(import Paths_sk_repl)          ; internal
+(import SK.Repl.Orphan)
+(import SK.Repl.Apply)
 
 
 ;;; Types
@@ -57,7 +80,8 @@
               inputCount 0}))
 
 ;; Newtype wrapper to hold repl state.
-(newtype (Repl a) (Repl {unRepl (StateT ReplState Skc a)}))
+(newtype (Repl a)
+  (Repl {unRepl (StateT ReplState Skc a)}))
 
 (:: runRepl (-> (Repl a) ReplState (Skc a)))
 (= (runRepl repl st) (evalStateT (unRepl repl) st))
@@ -80,7 +104,7 @@
 
 (instance (Monad Repl)
   (= return pure)
-  (= (>>= (Repl a) k) (Repl (>>= a (. unRepl k)))))
+  (= (>>= a k) (Repl (>>= (unRepl a) (. unRepl k)))))
 
 (instance (MonadIO Repl)
   (= (liftIO io) (Repl (liftIO io))))
@@ -93,11 +117,40 @@
                (fmap unRepl (f run1))))))))
 
 
+;;; Auxiliary
+;;; ---------
+
+(:: bodyp (-> HExprLStmt Bool))
+(= (bodyp (L _ stmt))
+  (case stmt
+    ((BodyStmt _ _ _ _) True)
+    (_ False)))
+
+(:: vald-or-sigd (-> HDecl Bool))
+(= (vald-or-sigd (L _ d))
+  (case d
+    ((ValD _) True)
+    ((SigD _) True)
+    (_ False)))
+
+(:: print-names-and-types (-> DynFlags [Name] [Var] (IO ())))
+(= (print-names-and-types dflags names vars)
+  (mapM_ (\ ((, name var))
+           (let ((= nstr (occNameString (nameOccName name)))
+                 (= typ (showPpr dflags (varType var))))
+             (unless (== nstr "it")
+               (putStrLn (concat [";;; " nstr " :: " typ])))))
+         (zip names vars)))
+
+
+
 ;;; Read
 ;;; ----
 
-(:: readForms (-> String (Repl (Maybe (LTForm Atom)))))
-(= (readForms input0)
+;;; | Read a form. Keeps its previous input string, repeatedly consumes
+;;; inputs until concatenated inputs is a valid S-expression.
+(:: readForm (-> String (Repl (Maybe (LTForm Atom)))))
+(= (readForm input0)
   (do (<- st getReplState)
       (let ((= input1 (++ (pendingInput st) (: \lf input0)))
             (= count (succ (inputCount st)))
@@ -113,11 +166,11 @@
 ;;; Eval
 ;;; ----
 
+;; See `runStmt' in "ghc/GHCi/UI.hs". It handles statement, import
+;; declaration, and other declarations by testing whether parser
+;; succeeded or not.
 (:: evalForms (-> [LTForm Atom] (Repl ())))
 (= (evalForms forms0)
-  ;; See `runStmt' in "ghc/GHCi/UI.hs". It handles statement, import
-  ;; declaration, and other declarations by testing whether parser
-  ;; succeeded or not.
   (let ((= work
           (do (<- forms1 (macroexpands forms0))
               (<- ret (withHandler (evalStatement forms1)))
@@ -135,39 +188,87 @@
      (do (<- hscenv getSession)
          (<- stmt1 (liftIO (hscParsedStmt hscenv stmt0)))
          (case stmt1
-           (Nothing (liftIO (putStrLn "no ret")))
+           (Nothing (return (Left "evalStatement: no ret")))
            ((Just (, ids fhv fixity))
-            ;; (liftIO (evalIO hscenv fhv))
-            (eval-stmt-inner hscenv ids fhv fixity)))
-         (return (Right ()))))
+            (update-hsc-env hscenv (bodyp stmt0) ids fhv fixity)))))
     ((Left _) (evalImport forms))))
 
-(:: eval-stmt-inner (-> HscEnv [Id] ForeignHValue FixityEnv (Skc ())))
-(= (eval-stmt-inner hsc-env ids hvals-io fixity-env)
+(:: update-hsc-env (-> HscEnv Bool [Id] ForeignHValue FixityEnv
+                       (Skc (Either String ()))))
+(= (update-hsc-env hsc-env is-body ids hvals-io fixity-env)
+  ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
+  ;; `iservCmd' in its body.
   (do (<- status (liftIO (evalStmt hsc-env False (EvalThis hvals-io))))
-      ;; (updateFixityEnv fixity-env)
-      (let ((= ic (hsc_IC hsc-env))
-            (= bindings (, (ic_tythings ic) (ic_rn_gbl_env ic)))
-            (= size 10)
-            (= final-ic (extendInteractiveContextWithIds ic ids))
-            (= final-names (map getName ids))
-            (= hsc-env-2 (hsc-env {hsc_IC final-ic}))))
+      (<- dflags getSessionDynFlags)
       (case status
-        ((EvalComplete _ (EvalSuccess hvals))
-         (liftIO
-          (do (extendLinkEnv (zip final-names hvals))
-              (mapM_ (. putStrLn
-                        (. (++ ";;; ") nameStableString))
-                     final-names))))
-        (_ (return ())))
+        ((EvalComplete _ (EvalSuccess fhvals))
+         (do (let ((= ic (hsc_IC hsc-env))
+                   (= bindings (, (ic_tythings ic) (ic_rn_gbl_env ic)))
+                   (= size 10)
+                   (= ic2 (extendInteractiveContextWithIds ic ids))
+                   (= ic3 (ic2 {ic_fix_env fixity-env}))
+                   (= final-names (map getName ids))
+                   (= hsc-env-2 (hsc-env {hsc_IC ic3}))))
+             (liftIO
+              (do (let ((= name-alist (zip final-names fhvals))))
+                  (extendLinkEnv name-alist)
+                  (print-names-and-types dflags final-names ids)))
+             (when is-body
+               (case ids
+                 ([] (return ()))
+                 ((: var _)
+                  (do (let ((= tystr (showPpr dflags (varType var)))))
+                      (when (isPrefixOf "ReplIO" tystr)
+                        (evalApply hsc-env-2 fhvals))))))
 
-      ;; InteractiveEval does not export rttiEnvironment ...
-      ;;
-      ;; (<- hsc-env-3
-      ;;     (liftIO
-      ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
+             ;; InteractiveEval does not export rttiEnvironment ...
+             ;;
+             ;; (<- hsc-env-3
+             ;;     (liftIO
+             ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
 
-      (setSession hsc-env-2)))
+             (setSession hsc-env-2)
+             (return (Right ()))))
+        ((EvalComplete _ (EvalException serialized))
+         (case serialized
+           ((EOtherException str) (return (Left str)))
+           ((EExitCode ecode) (liftIO (exitWith ecode)))
+           (EUserInterrupt (return (Right ())))))
+        (_ (return (Left "update-hsc-env failed."))))))
+
+(:: evalApply (-> HscEnv [ForeignHValue] (Skc ())))
+(= (evalApply hsc-env replio-frefs)
+  (do (<- session (fromGhc (Ghc return)))
+      (case replio-frefs
+        ([replio-fref]
+         (do (<- hval (liftIO (withForeignRef replio-fref localRef)))
+             (let ((= replio (unsafeCoerce hval))))
+             (liftIO (void (forkIO (runReplIO session replio))))))
+        (_
+         (liftIO (putStrLn "evalApply: ambiguous ForeignHValue."))))))
+
+(:: runReplIO (-> Session (ReplIO a) (IO ())))
+(= (runReplIO (Session session) replio)
+  (do (<- hsc-env (readIORef session))
+      (let ((= lrdr-name (noLoc (mkRdrName (replIoName replio))))))
+      (<- (: name _) (hscTcRnLookupRdrName hsc-env lrdr-name))
+      (<- f-fref (getHValue hsc-env name))
+      (<- f-hv (withForeignRef f-fref localRef))
+      ;; Signature of `tcRnExpr' changed since ghc-8.0.2 release.
+      (<- (, msg f-ty) (tcRnExpr hsc-env (noLoc (HsVar lrdr-name))))
+      (case f-ty
+        ((Just ty)
+         (do (let ((= tystr (showPpr (hsc_dflags hsc-env) ty))))
+             ;; XXX: Adhoc detection of ReplIO type.
+             (if (isSuffixOf "(ReplIO Int)" tystr)
+                 ;; Run the body of `f', then recursively run
+                 ;; `runReplIO' with the returned value of `f'.
+                 (do (let ((= f (unsafeCoerce f-hv))))
+                     (<- replio' (f (replIoArgs replio)))
+                     (runReplIO (Session session) replio'))
+                 ;; Not a ReplIO, run once and done.
+                 ((unsafeCoerce f-hv) (replIoArgs replio)))))
+        (Nothing (putStrLn "runReplIO: no type info.")))))
 
 (:: evalImport (-> [LTForm Atom] (Skc (Either String ()))))
 (= (evalImport forms)
@@ -181,22 +282,43 @@
          (return (Right ()))))
     ((Left err) (evalDecls forms))))
 
+;;; Some relevant codes:
+;;;
+;;;  * ghc/GHCi/UI/Monad.hs: runDecls
+;;;
+;;;  * compiler/main/InteractiveEval.hs: runDeclsWithLocaton,
+;;;    rttinvironment, handleRunstatus
+;;;
+;;;  * compiler/main/HscMain.hs: hscDeclsWithLocation
+;;;
+;;;  * compiler/main/HscTypes.hs: extendInteractiveContextWithIds
+;;;
+;;;  * libraries/ghci/GHCi/Run.hs: various command responding to
+;;;    messages, extensively using RemoteRef.
+;;;
 (:: evalDecls (-> [LTForm Atom] (Skc (Either String ()))))
 (= (evalDecls forms)
-  ;; Some relevant codes:
-  ;;
-  ;;  * ghc/GHCi/UI/Monad.hs: runDecls
-  ;;  * compiler/main/InteractiveEval.hs: runDeclsWithLocaton,
-  ;;    rttinvironment, handleRunstatus
-  ;;  * compiler/main/HscMain.hs: hscDeclsWithLocation
-  ;;  * compiler/main/HscTypes.hs: extendInteractiveContextWithIds
-  ;;
   (case (evalBuilder parseDecls forms)
-    ((Right _)
-     (do (liftIO (putStrLn
-                  (++ ";;; decl " (show (map unLocForm forms)))))
-         (return (Right ()))))
+    ((Right decls)
+     ;; Currently non-toplevel decls are converted as `let' statement
+     ;; and passed to `hscParsedStmt'. Support for `data', `newtype',
+     ;; `class' .. etc are not yet implemented.
+     (| ((all vald-or-sigd decls)
+         (do (let ((= l (mkLocatedList decls))
+                   (= stmt (b_letS l decls))))
+             (<- hsc-env getSession)
+             (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
+             (case ret
+               (Nothing
+                (return (Left (++ "evalDecls: "
+                                  (show (map unLocForm forms))))))
+               ((Just (, ids hvals fixity))
+                (update-hsc-env hsc-env False ids hvals fixity)))))
+        (otherwise
+         (return (Left (++ "evalDecls: unsupported forms: "
+                           (show (map unLocForm forms))))))))
     ((Left err) (return (Left err)))))
+
 
 
 ;;; Loop
@@ -209,7 +331,9 @@
    (do (<- hsc_env getSession)
        (void (setSessionDynFlags (ic_dflags (hsc_IC hsc_env))))
        (let ((= decl (. IIDecl (. simpleImportDecl mkModuleName)))))
-       (setContext [(decl "Prelude") (decl "SK.Core")]))))
+       (setContext [(decl "Prelude")
+                    (decl "SK.Core")
+                    (decl "SK.Repl.Apply")]))))
 
 ;; (= initRepl
 ;;   (liftRepl setExpanderSettings))
@@ -220,15 +344,15 @@
       (let ((= prompt (if (null (pendingInput st))
                           "sk> "
                           ""))))
-      (<- minput (getInputLine prompt))
-      (case minput
+      (<- mb-input (getInputLine prompt))
+      (case mb-input
         (Nothing (return ()))
         ((Just str)
          (| ((== str "(quit)") (return ()))
             ((null str) loop)
             (otherwise
-             (do (<- mbform (lift (readForms str)))
-                 (case mbform
+             (do (<- mb-form (lift (readForm str)))
+                 (case mb-form
                    (Nothing (return ()))
                    ((Just form) (lift (evalForms [form]))))
                  loop)))))))
@@ -236,10 +360,10 @@
 (:: skRepl (InputT Repl ()))
 (= skRepl
   (let ((= lp
-          (handleInterrupt
-           (>> (outputStrLn "Cancelled.") lp)
-           loop)))
-    (>> (lift initRepl) (withInterrupt lp))))
+          (handleInterrupt (>> (outputStrLn "Cancelled.") lp)
+                           loop)))
+    (do (lift initRepl)
+        (withInterrupt lp))))
 
 
 ;;; Main
@@ -253,6 +377,9 @@
               (<- ret (runSkc skc initialSkEnv))
               (case ret
                 ((Right a) (return ()))
-                ((Left err) (>> (putStrLn (++ "ERR:" err)) go))))))
-    (do (putStrLn "SK repl version 0.0.1, hit `Ctrl-d to exit.")
+                ((Left err)
+                 (>> (putStrLn (++ "replMain: error:" err)) go))))))
+    (do (putStrLn
+         (concat ["SK repl version " (showVersion version) ", "
+                  "hit `Ctrl-d to exit."]))
         go)))
