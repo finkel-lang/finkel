@@ -16,14 +16,15 @@ module SK.Core.Run
   , tcHsModule
   ) where
 
-import GHC.Paths (libdir)
-
 -- base
 import Control.Exception
 import System.Exit
 
 -- containers
 import qualified Data.Map as Map
+
+-- ghc-paths
+import GHC.Paths (libdir)
 
 -- time
 import Data.Time (getCurrentTime)

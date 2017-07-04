@@ -47,8 +47,7 @@
   (= (show (N1 a))
     (++ "N1 " (show a))))
 
-(newtype (N2 a) (N2 a)
-  (deriving (Eq Show)))
+(newtype (N2 a) (N2 a) (deriving (Eq Show)))
 
 (newtype (N3 a) (N3 {unN3 a}))
 
@@ -56,8 +55,7 @@
   (= (show (N3 a))
     (++ "N3 " (show a))))
 
-(newtype (N4 a) (N4 {unN4 a})
-  (deriving (Eq Show)))
+(newtype (N4 a) (N4 {unN4 a}) (deriving (Eq Show)))
 
 (:: s4_2_3 (IO ()))
 (= s4_2_3

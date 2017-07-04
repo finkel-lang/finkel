@@ -80,7 +80,7 @@ instance Show Atom where
         '\b' -> "\\bs"
         '\f' -> "\\ff"
         '\n' -> "\\lf"
-        '\r' -> "\\CR"
+        '\r' -> "\\cr"
         '\t' -> "\\ht"
         '\v' -> "\\vt"
         ' '  -> "\\sp"
