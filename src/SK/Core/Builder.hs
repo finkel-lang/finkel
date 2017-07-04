@@ -15,6 +15,13 @@ import Control.Monad.Trans.State
 import SK.Core.GHC
 import SK.Core.Form
 
+
+-- -------------------------------------------------------------------
+--
+-- Builder data type
+--
+-- -------------------------------------------------------------------
+
 -- | State for 'Builder'.
 data BState = BState
     { -- | Input tokens to parse.
@@ -100,9 +107,11 @@ formLexer cont = do
         cont x
 
 
----
---- Type synonyms
----
+-- ---------------------------------------------------------------------
+--
+-- Type synonyms
+--
+-- ---------------------------------------------------------------------
 
 type HExpr = LHsExpr RdrName
 
@@ -137,9 +146,11 @@ type HGuardLStmt = GuardLStmt RdrName
 type HImportDecl = LImportDecl RdrName
 
 
+-- ---------------------------------------------------------------------
 --
 -- Auxiliary
 --
+-- ---------------------------------------------------------------------
 
 builderError :: Builder a
 builderError = do
@@ -201,9 +212,12 @@ cfld2ufld :: Located (HsRecField RdrName (LHsExpr RdrName))
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
   L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
 
----
---- Builder functions
----
+
+-- ---------------------------------------------------------------------
+--
+-- Module
+--
+-- ---------------------------------------------------------------------
 
 -- In GHC source code, there is a file "compiler/hsSyn/Convert.hs".
 -- This module contains codes converting Template Haskell data types to
@@ -224,9 +238,11 @@ b_module (L l (TAtom (ASymbol name))) mbdoc imports decls =
              , hsmodHaddockModHeader = mbdoc }
 
 
--- ------------
+-- ---------------------------------------------------------------------
+--
 -- Declarations
--- ------------
+--
+-- ---------------------------------------------------------------------
 
 b_importD :: LTForm Atom -> HImportDecl
 b_importD (L l (TAtom (ASymbol m))) =
@@ -351,9 +367,11 @@ b_tsigD names typ =
   in  L l (SigD (TypeSig (map mkName names) typ'))
 
 
--- -----
+-- ---------------------------------------------------------------------
+--
 -- Types
--- -----
+--
+-- ---------------------------------------------------------------------
 
 b_symT :: LTForm Atom -> HType
 b_symT (L l (TAtom (ASymbol name))) = L l (HsTyVar (L l ty))
@@ -386,9 +404,11 @@ b_tupT :: Located a -> [HType] -> HType
 b_tupT (L l _) ts = L l (HsTupleTy HsBoxedTuple ts)
 
 
--- -------
+-- ---------------------------------------------------------------------
+--
 -- Pattern
--- -------
+--
+-- ---------------------------------------------------------------------
 
 b_intP :: LTForm Atom -> HPat
 b_intP (L l (TAtom (AInteger n))) = L l (mkNPat (L l lit) Nothing)
@@ -423,9 +443,11 @@ b_conP (L l (TAtom (ASymbol con))) rest =
     L l (ConPatIn (L l (mkRdrName con)) (PrefixCon rest))
 
 
--- ---------
+-- ---------------------------------------------------------------------
+--
 -- Expression
--- ----------
+--
+-- ---------------------------------------------------------------------
 
 b_ifE :: LTForm Atom -> HExpr -> HExpr -> HExpr -> HExpr
 b_ifE (L l (TAtom _)) p t f = L l (mkHsIf p t f)
@@ -531,9 +553,11 @@ b_hsListE exprs = L l (ExplicitList placeHolderType Nothing exprs)
   where l = getLoc (mkLocatedList exprs)
 
 
--- ---------
+-- ---------------------------------------------------------------------
+--
 -- Statement
--- ---------
+--
+-- ---------------------------------------------------------------------
 
 b_bindS :: Located a -> HPat -> HExpr -> HExprLStmt
 b_bindS ref pat expr = L (getLoc ref) (mkBindStmt pat expr)

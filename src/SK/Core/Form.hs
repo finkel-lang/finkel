@@ -38,9 +38,12 @@ import qualified Pretty as P
 -- Internal
 import SK.Core.GHC
 
----
---- Form data type
----
+
+-- -------------------------------------------------------------------
+--
+-- Form data type
+--
+-- -------------------------------------------------------------------
 
 -- | Simple form type.
 data Form a
@@ -208,8 +211,12 @@ pAtom atom =
     AUnit -> P.text "()"
     AComment _ -> P.empty
 
---- -------------------
---- Code type class
+
+-- -------------------------------------------------------------------
+--
+-- Code type class
+--
+-- -------------------------------------------------------------------
 
 --- Instance data types of Formable class could be inserted to
 --- S-expression form with `unquote' and `unquote-splice'.

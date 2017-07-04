@@ -19,9 +19,11 @@ import SK.Core.Run
 import SK.Core.SKC
 
 
----
---- The frontend plugin
----
+-- ---------------------------------------------------------------------
+--
+-- The frontend plugin
+--
+-- ---------------------------------------------------------------------
 
 frontendPlugin :: FrontendPlugin
 frontendPlugin = defaultFrontendPlugin {frontend = skFrontend}
@@ -39,9 +41,12 @@ skFrontend flags args = do
     Left err -> liftIO (putStrLn err >> exitFailure)
     Right _  -> return ()
 
----
---- Command line option
----
+
+-- ---------------------------------------------------------------------
+--
+-- Command line option
+--
+-- ---------------------------------------------------------------------
 
 -- | Action to perform in modal manner.
 data SkAction
@@ -114,9 +119,12 @@ hiddenDescrs =
            "Intercept '-c'"
   ]
 
----
---- Actions
----
+
+-- ---------------------------------------------------------------------
+--
+-- Actions
+--
+-- ---------------------------------------------------------------------
 
 chooseAction :: SkAction -> SkcOptions -> Skc ()
 chooseAction act o =

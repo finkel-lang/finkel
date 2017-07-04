@@ -111,6 +111,65 @@ $whitechar+  ;
 @hsymbol         { tok_symbol }
 
 {
+-- ---------------------------------------------------------------------
+--
+-- Parser monad
+--
+-- ---------------------------------------------------------------------
+
+-- | Data type to hold comments found in source code.
+data SPState = SPState {
+  comments :: [Located AnnotationComment],
+  annotation_comments :: [(SrcSpan, [Located AnnotationComment])],
+  targetFile :: Maybe FilePath
+}
+
+-- | Initial empty state for 'SP'.
+initialSPState :: SPState
+initialSPState = SPState [] [] Nothing
+
+-- | A data type for State monad which wraps 'Alex' with 'SPstate'.
+newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
+
+instance Functor SP where
+  fmap = liftM
+
+instance Applicative SP where
+  pure = return
+  (<*>) = ap
+
+instance Monad SP where
+  return a = a `seq` SP (\st -> return (a, st))
+  m >>= k = SP (\st -> unSP m st >>= \(a, st') -> unSP (k a) st')
+
+runSP :: SP a -> Maybe FilePath -> String -> Either String (a, SPState)
+runSP sp target input =
+  let st = initialSPState { targetFile = target }
+  in  runAlex input (unSP sp st)
+
+runSP' :: Monad m => SP a -> Maybe FilePath -> String
+      -> ExceptT String m (a, SPState)
+runSP' sp target input = case runSP sp target input of
+  Right (a, st) -> return (a, st)
+  Left err      -> throwE err
+
+evalSP :: SP a -> Maybe FilePath -> String -> Either String a
+evalSP sp target input = fmap fst (runSP sp target input)
+
+showErrorSP :: SP a
+showErrorSP =
+  let go = do (AlexPn _ lno cno, _, _, _) <- alexGetInput
+              alexError ("lexer error at line " ++
+                          show lno ++ ", column " ++ show cno)
+  in  SP (\_ -> go)
+
+
+-- ---------------------------------------------------------------------
+--
+-- Lexer
+--
+-- ---------------------------------------------------------------------
+
 -- | Data type for token.
 data Token
   = TOparen
@@ -245,61 +304,6 @@ alexEOF = return TEOF
 -- | Lisp comment to Haskell comment.
 lc2hc :: String -> String
 lc2hc str = '-':'-':dropWhile (== ';') str
-
---
--- Parser monad
---
-
--- | Data type to hold comments found in source code.
-data SPState = SPState {
-  comments :: [Located AnnotationComment],
-  annotation_comments :: [(SrcSpan, [Located AnnotationComment])],
-  targetFile :: Maybe FilePath
-}
-
--- | Initial empty state for 'SP'.
-initialSPState :: SPState
-initialSPState = SPState [] [] Nothing
-
--- | A data type for State monad which wraps 'Alex' with 'SPstate'.
-newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
-
-instance Functor SP where
-  fmap = liftM
-
-instance Applicative SP where
-  pure = return
-  (<*>) = ap
-
-instance Monad SP where
-  return a = a `seq` SP (\st -> return (a, st))
-  m >>= k = SP (\st -> unSP m st >>= \(a, st') -> unSP (k a) st')
-
-runSP :: SP a -> Maybe FilePath -> String -> Either String (a, SPState)
-runSP sp target input =
-  let st = initialSPState { targetFile = target }
-  in  runAlex input (unSP sp st)
-
-runSP' :: Monad m => SP a -> Maybe FilePath -> String
-      -> ExceptT String m (a, SPState)
-runSP' sp target input = case runSP sp target input of
-  Right (a, st) -> return (a, st)
-  Left err      -> throwE err
-
-evalSP :: SP a -> Maybe FilePath -> String -> Either String a
-evalSP sp target input = fmap fst (runSP sp target input)
-
-showErrorSP :: SP a
-showErrorSP =
-  let go = do (AlexPn _ lno cno, _, _, _) <- alexGetInput
-              alexError ("lexer error at line " ++
-                          show lno ++ ", column " ++ show cno)
-  in  SP (\_ -> go)
-
-
---
--- Lexer
---
 
 annotateComment :: Token -> AnnotationComment
 annotateComment tok = case tok of

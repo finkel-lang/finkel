@@ -31,9 +31,12 @@ import SrcLoc
 import SK.Core.Lexer
 -- import SK.Core.GHC
 
+
+-- ---------------------------------------------------------------------
 --
 -- Annotation dictionary
 --
+-- ---------------------------------------------------------------------
 
 type DocMap = Map.Map SrcSpan [AnnotationComment]
 
@@ -120,9 +123,11 @@ lookupNextDoc :: SrcLoc -> DocMap -> Maybe [AnnotationComment]
 lookupNextDoc = undefined
 
 
----
---- HsSrc class
----
+-- ---------------------------------------------------------------------
+--
+-- HsSrc class
+--
+-- ---------------------------------------------------------------------
 
 class HsSrc a where
   toHsSrc :: SPState -> a -> SDoc
@@ -184,9 +189,12 @@ emitPrevDocWithOffset offset st ref =
     Nothing -> empty
     Just as -> vcat (map unAnnotateComment as)
 
----
---- Instances
----
+
+-- ---------------------------------------------------------------------
+--
+-- Instances
+--
+-- ---------------------------------------------------------------------
 
 instance HsSrc RdrName where
   toHsSrc _ = ppr
