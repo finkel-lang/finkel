@@ -115,54 +115,103 @@
 
 ;;; 4.4 Nested Declarations
 
+;;; 4.4.1 Type signatures
+
 ;; Unit type.
-(:: foo ())
-(= foo
-  ())
+(:: ts1 ())
+(= ts1 ())
 
 ;;; Simple function type.
-(:: bar (-> String (IO ())))
-(= (bar str)
-  (putStrLn (++ "From bar: " str)))
+(:: ts2 (-> String (IO ())))
+(= (ts2 str)
+  (putStrLn (++ "From ts2: " str)))
 
 ;;; Another function type, taking multiple arguments.
-(:: buzz (-> Int (-> Bool (-> String (IO ())))))
-(= (buzz i b s)
+(:: ts3 (-> Int (-> Bool (-> String (IO ())))))
+(= (ts3 i b s)
   (do (putStrLn (++ "Int: " (show i)))
       (putStrLn (++ "Bool: " (show b)))
       (putStrLn (++ "String: " (show s)))))
 
 ;;; Function type operator '->' takes variable arguments, explicit
 ;;; parentheses are optional.
-(:: buzz2 (-> Int Bool String (IO ())))
-(= (buzz2 i b s)
+(:: ts3b (-> Int Bool String (IO ())))
+(= (ts3b i b s)
   (do (putStrLn (++ "Int: " (show i)))
       (putStrLn (++ "Bool: " (show b)))
       (putStrLn (++ "String: " (show s)))))
 
 ;;; Function taking higher order function.
-(:: quux (-> (-> Int Int) Int))
-(= (quux f)
+(:: ts4 (-> (-> Int Int) Int))
+(= (ts4 f)
   (f 6))
 
 ;;; Function taking list.
-(:: listy (-> [Int] (IO ())))
-(= (listy xs)
+(:: ts5 (-> [Int] (IO ())))
+(= (ts5 xs)
   (mapM_ print xs))
 
 ;;; Function with type variables.
-(:: tv01 (-> a [b] Int))
-(= (tv01 x ys)
+(:: ts6 (-> a [b] Int))
+(= (ts6 x ys)
   (length ys))
+
+(:: s4_4_1 (IO ()))
+(= s4_4_1
+  (do (print ts1)
+      (ts2 "BAR")
+      (ts3 1 True "buzz")
+      (ts3b 2 False "buzzz")
+      (print (ts4 (\ (n) (* (+ n 1) n))))
+      (ts5 [1 2 3])
+      (print (ts6 True [1 2 3]))))
+
+;;; 4.4.3 Function and Pattern Bindinds
+
+;;; Function without guards.
+(:: fpb0 (-> Int String))
+(= (fpb0 n)
+  (++ "f0 got " (show n)))
+
+;;; Function with guards.
+(:: fpb1 (-> Int String))
+(= (fpb1 n)
+  (| ((even n) "even")
+     (otherwise "odd")))
+
+;;; Function with pattern guards.
+(:: fpb2 (-> (Maybe Int) (Maybe Int) String))
+(= (fpb2 a b)
+  (| ((<- (Just n) a) (<- (Just m) b) (even n) (even m)
+      "f2: got two even numbers.")
+     ((<- (Just n) a) (<- (Just m) b)
+      (++ "f2: got two numbers, sum = " (show (+ n m))))
+     ((<- (Just n) a)
+      "f2: b was nothing.")
+     ((<- (Just n) b)
+      "f2: a was nothing")
+     (otherwise
+      "f2: no numbers.")))
+
+(:: s4_4_3 (IO ()))
+(= s4_4_3
+  (do (putStrLn (fpb0 42))
+      (putStrLn (fpb1 10))
+      (putStrLn (fpb1 11))
+      (putStrLn (fpb2 (Just 2) (Just 4)))
+      (putStrLn (fpb2 (Just 2) (Just 5)))
+      (putStrLn (fpb2 (Just 100) Nothing))
+      (putStrLn (fpb2 (Nothing) (Just 8)))
+      (putStrLn (fpb2 Nothing Nothing))))
+
+(:: s4_4 (IO ()))
+(= s4_4
+  (do s4_4_1
+      s4_4_3))
 
 ;;; Main.
 (:: main (IO ()))
 (= main
   (do s4_2
       s4_3
-      (print foo)
-      (bar "BAR")
-      (buzz 1 True "buzz")
-      (print (quux (\ (n) (* (+ n 1) n))))
-      (listy [1 2 3])
-      (print (tv01 True [1 2 3]))))
+      s4_4))

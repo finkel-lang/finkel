@@ -357,13 +357,16 @@ b_qtyclC ts =
       let (ctxt,t) = splitAt ((length ts) - 1) ts
       return (ctxt, head t)
 
-b_funD :: Located a -> (HExpr -> HsBind RdrName) -> HExpr -> HDecl
+b_funD :: Located a -> ([HGRHS] -> HsBind RdrName) -> [HGRHS] -> HDecl
 b_funD (L l _) f e = L l (ValD (f e))
 
-b_declLhsB :: LCode -> [HPat] -> Builder (HExpr -> HsBind RdrName)
+b_declLhsB :: LCode -> [HPat] -> Builder ([HGRHS] -> HsBind RdrName)
 b_declLhsB (L l (TAtom (ASymbol name))) args =
-    return (\body ->
-              let match = mkMatch args body (L l emptyLocalBinds)
+    return (\grhs ->
+              -- Fields in Match changed since ghc-8.0.2.
+              let match = L l (Match ctxt args Nothing body)
+                  body = GRHSs grhs (noLoc emptyLocalBinds)
+                  ctxt = NonFunBindMatch
               in  mkFunBind (L l (mkRdrName name)) [match])
 
 b_tsigD :: [LCode] -> HType -> HDecl

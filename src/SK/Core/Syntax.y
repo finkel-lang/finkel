@@ -34,6 +34,7 @@ import SK.Core.GHC
 %name p_top_decls top_decls
 %name p_top_decl top_decl
 %name p_decl decl
+%name p_decls decls
 %name p_lqtycl lqtycl
 
 %name p_type type
@@ -232,9 +233,9 @@ idecls :: { [HDecl] }
     : decls { $1 }
 
 decl :: { HDecl }
-    : '=' decl_lhs expr  { b_funD $1 $2 $3 }
-    | '::' 'symbol' type { b_tsigD [$2] $3 }
-    | '::' symbols type  { b_tsigD $2 $3 }
+    : '=' decl_lhs guards { b_funD $1 $2 $3 }
+    | '::' 'symbol' type  { b_tsigD [$2] $3 }
+    | '::' symbols type   { b_tsigD $2 $3 }
 
 decls :: { [HDecl] }
    : rdecls { reverse $1 }
@@ -243,8 +244,8 @@ rdecls :: { [HDecl] }
    : {- empty -}   { [] }
    | rdecls 'list' {% (:$1) `fmap` parse p_decl $2 }
 
-decl_lhs :: { HExpr -> HsBind RdrName }
-    : 'list'   {% parse p_pats0 (tail $1) >>= b_declLhsB (head $1) }
+decl_lhs :: { [HGRHS] -> HsBind RdrName }
+    : 'list'   {% b_declLhsB (head $1) =<< parse p_pats0 (tail $1) }
     | 'symbol' {% b_declLhsB $1 [] }
 
 
@@ -456,7 +457,7 @@ parseStmt :: Builder HStmt
 parseStmt = p_stmt
 
 parseDecls :: Builder [HDecl]
-parseDecls = p_top_decls
+parseDecls = p_decls
 
 parseExpr :: Builder HExpr
 parseExpr = p_expr
