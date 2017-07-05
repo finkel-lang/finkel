@@ -39,6 +39,22 @@
       (print (MyD3Con3 \a \b \c (Right \z)))
       (print [M4A M4B M4C])))
 
+;;; 4.2.2 Type Synonym Declarations
+
+(type (Synonym1 a) (Maybe (Either String a)))
+(type Synonym2 (Synonym1 Int))
+
+(:: syn1a (Synonym1 Bool))
+(= syn1a (Just (Left "syn1a")))
+
+(:: syn2a Synonym2)
+(= syn2a Nothing)
+
+(:: s4_2_2 (IO ()))
+(= s4_2_2
+  (do (print syn1a)
+      (print syn2a)))
+
 ;;; 4.2.3 Datatype Renamings
 
 (newtype (N1 a) (N1 a))
@@ -67,6 +83,7 @@
 (:: s4_2 (IO ()))
 (= s4_2
   (do s4_2_1
+      s4_2_2
       s4_2_3))
 
 ;;; 4.3 Type Classes and Overloading

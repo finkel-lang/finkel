@@ -75,6 +75,7 @@ import SK.Core.GHC
 'let'      { L _ (TAtom (ASymbol "let")) }
 'module'   { L _ (TAtom (ASymbol "module")) }
 'newtype'  { L _ (TAtom (ASymbol "newtype")) }
+'type'     { L _ (TAtom (ASymbol "type")) }
 
 ','  { L _ (TAtom (ASymbol ",")) }
 '->' { L _ (TAtom (ASymbol "->")) }
@@ -113,9 +114,11 @@ import SK.Core.GHC
 
 %%
 
--- -------------
+-- ---------------------------------------------------------------------
+--
 -- Documentation
--- -------------
+--
+-- ---------------------------------------------------------------------
 
 mbdoc :: { Maybe LHsDocString }
     : {- empty -} { Nothing }
@@ -172,6 +175,7 @@ top_decl_with_doc :: { HDecl }
 
 top_decl :: { HDecl }
     : 'data' simpletype constrs    { b_dataD $1 $2 $3 }
+    | 'type' simpletype type       { b_typeD $1 $2 $3 }
     | 'newtype' simpletype constrs { b_newtypeD $1 $2 $3 }
     | 'instance' qtycl idecls      { b_instD $2 $3 }
     | decl                         { $1 }

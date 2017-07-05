@@ -277,6 +277,15 @@ mkNewtypeOrDataD newOrData (L l _) (name, tvs) (derivs, cs) =
                       -- `dd_derivs' field changed since ghc-8.0.2.
                       , dd_derivs = derivs }
 
+b_typeD :: Located a -> (String, [HTyVarBndr]) -> HType -> HDecl
+b_typeD (L l _) (name, tvs) ty = L l (TyClD synonym)
+  where
+    -- Fields in 'SynDecl' changed since ghc-8.0.2.
+    synonym = SynDecl { tcdLName = L l (mkUnqual tcName (fsLit name))
+                      , tcdTyVars = mkHsQTvs tvs
+                      , tcdRhs = ty
+                      , tcdFVs = placeHolderNames }
+
 b_simpletypeD :: [LCode] -> (String, [HTyVarBndr])
 b_simpletypeD ((L _ (TAtom (ASymbol name))):tvs) = (name, tvs')
   -- XXX: Kind signatures not supported.
