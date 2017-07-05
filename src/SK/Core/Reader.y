@@ -1,6 +1,6 @@
 -- Happy parser for S-expression tokens.
 {
-module SK.Core.TokenParser
+module SK.Core.Reader
   ( sexpr
   , sexprs
   ) where

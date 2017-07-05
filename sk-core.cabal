@@ -26,10 +26,10 @@ library
                        SK.Core.Macro
                        SK.Core.Make
                        SK.Core.Plugin
+                       SK.Core.Reader
                        SK.Core.Run
                        SK.Core.SKC
                        SK.Core.Syntax
-                       SK.Core.TokenParser
   build-depends:       base >= 4.7 && < 5
                      , array
                      , containers

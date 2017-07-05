@@ -38,8 +38,8 @@ import SK.Core.GHC
 import SK.Core.SKC
 import SK.Core.Syntax
 import SK.Core.Lexer as L
-import SK.Core.TokenParser
 import SK.Core.Macro
+import SK.Core.Reader
 
 -- | Run 'Skc' with given environment and 'skcErrrorHandler'.
 runSkc :: Skc a -> SkEnv -> IO (Either String a)
