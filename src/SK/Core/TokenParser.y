@@ -26,10 +26,10 @@ import SK.Core.Form
 '{'         { L _ TOcurly }
 '}'         { L _ TCcurly }
 
-'quote'     { L _ (TSymbol "quote") }
-'`'         { L _ (TSymbol "quasiquote") }
-','         { L _ (TSymbol "unquote") }
-',@'        { L _ (TSymbol "unquote-splice") }
+'quote'     { L _ TQuote }
+'`'         { L _ TQuasiQuote }
+','         { L _ TUnquote }
+',@'        { L _ TUnquoteSplice }
 
 'symbol'  { L _ (TSymbol _) }
 'char'    { L _ (TChar _) }

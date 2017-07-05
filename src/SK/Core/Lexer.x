@@ -19,12 +19,13 @@ module SK.Core.Lexer
   , showErrorSP
   ) where
 
--- From 'base'
+-- base
 import Control.Monad (ap, liftM)
 import Data.Char (toUpper)
 import Data.Maybe (fromMaybe)
 
-import Control.Monad.Trans.Except
+-- transformers
+import Control.Monad.Trans.Except (ExceptT(..), throwE)
 
 -- Internal
 import SK.Core.GHC
@@ -184,6 +185,14 @@ data Token
   -- ^ Open curly.
   | TCcurly
   -- ^ Close curly.
+  | TQuote
+  -- ^ Quote.
+  | TQuasiQuote
+  -- ^ Quasi-quote.
+  | TUnquote
+  -- ^ Unquote.
+  | TUnquoteSplice
+  -- ^ Unquote-splice.
   | TDocCommentNext String
   -- ^ Comment string starting with @-- |@.
   | TLineComment String
@@ -199,7 +208,7 @@ data Token
   | TFractional FractionalLit
   -- ^ Literal fractional number.
   | TUnit
-  -- ^ Unit type, i.e. @()@.
+  -- ^ Unit type, i.e. Haskell's @()@.
   | TEOF
   -- ^ End of form.
   deriving (Eq, Show)
@@ -230,19 +239,19 @@ tok_ccurly :: Action
 tok_ccurly _ _ = return TCcurly
 
 tok_quote :: Action
-tok_quote _ _ = return (TSymbol "quote")
+tok_quote _ _ = return TQuote
 
 tok_quasiquote :: Action
-tok_quasiquote _ _ = return (TSymbol "quasiquote")
+tok_quasiquote _ _ = return TQuasiQuote
 
 tok_comma :: Action
 tok_comma _ _ = return (TSymbol ",")
 
 tok_unquote :: Action
-tok_unquote _ _ = return (TSymbol "unquote")
+tok_unquote _ _ = return TUnquote
 
 tok_unquote_splice :: Action
-tok_unquote_splice _ _ = return (TSymbol "unquote-splice")
+tok_unquote_splice _ _ = return TUnquoteSplice
 
 tok_doc_comment_next :: Action
 tok_doc_comment_next (_,_,_,s) l =

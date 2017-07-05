@@ -75,7 +75,7 @@ quote orig@(L l form) =
 isUnquoteSplice :: LCode -> Bool
 isUnquoteSplice form =
   case form of
-    (L _ (TList (L _ (TAtom (ASymbol "unquote-splice")):_))) -> True
+    L _ (TList (L _ (TAtom (ASymbol "unquote-splice")):_)) -> True
     _ -> False
 
 quasiquote :: LCode -> LCode
