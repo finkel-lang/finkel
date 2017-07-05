@@ -49,8 +49,8 @@
 (import SK.Core.Run)
 (import SK.Core.Lexer)
 (import SK.Core.Macro)
+(import SK.Core.Reader)
 (import SK.Core.Syntax)
-(import SK.Core.TokenParser)
 
 (import Control.Monad.Trans.Class) ; transformers
 (import Control.Monad.Trans.State.Strict)
@@ -60,13 +60,12 @@
 (import SK.Repl.Apply)
 
 
-;;; Types
-;;; -----
+;;;; Types
 
-;;; At the moment, there is no support for
-;;; `GeneralizedNewtypeDeriving'. Adding support for generalized newtype
-;;; deriving means adding support for pragmas, and inspecting the
-;;; pragmas from SK module source code during compilation.
+;;; At the moment, there is no support for GeneralizedNewtypeDeriving.
+;;; Adding support for generalized newtype deriving means adding support
+;;; for pragmas, and inspecting the pragmas from SK module source code
+;;; during compilation.
 
 ;;; State for repl.
 (data ReplState
@@ -117,10 +116,9 @@
                (fmap unRepl (f run1))))))))
 
 
-;;; Auxiliary
-;;; ---------
+;;;; Auxiliary
 
-(:: bodyp (-> HExprLStmt Bool))
+(:: bodyp (-> HStmt Bool))
 (= (bodyp (L _ stmt))
   (case stmt
     ((BodyStmt _ _ _ _) True)
@@ -144,8 +142,7 @@
 
 
 
-;;; Read
-;;; ----
+;;;; Read
 
 ;;; | Read a form. Keeps its previous input string, repeatedly consumes
 ;;; inputs until concatenated inputs is a valid S-expression.
@@ -163,8 +160,7 @@
         ((Left err) (putAndReturn input1 Nothing)))))
 
 
-;;; Eval
-;;; ----
+;;;; Eval
 
 ;; See `runStmt' in "ghc/GHCi/UI.hs". It handles statement, import
 ;; declaration, and other declarations by testing whether parser
@@ -321,12 +317,11 @@
 
 
 
-;;; Loop
-;;; ----
+;;;; Loop
 
+;;; See `HscTypes.runInteractiveHsc'.
 (:: initRepl (Repl ()))
 (= initRepl
-  ;; See `HscTypes.runInteractiveHsc'.
   (liftRepl
    (do (<- hsc_env getSession)
        (void (setSessionDynFlags (ic_dflags (hsc_IC hsc_env))))
@@ -366,8 +361,7 @@
         (withInterrupt lp))))
 
 
-;;; Main
-;;; ----
+;;;; Main
 
 (:: replMain (IO ()))
 (= replMain

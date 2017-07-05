@@ -19,7 +19,6 @@ custom-setup
   setup-depends:       base >= 4.7 && < 5
                      , Cabal >= 1.10
                      , sk-core
-                     , sk-setup
 
 library
   hs-source-dirs:      src

@@ -1,2 +1,2 @@
-import Distribution.Simple.SK
+import SK.Core.Setup
 main = defaultMainWithHooks skcHooks
