@@ -402,20 +402,20 @@ guard :: { (HExpr, [GuardLStmt RdrName]) }
 --
 -- ---------------------------------------------------------------------
 
-do_stmts :: { [HExprLStmt] }
+do_stmts :: { [HStmt] }
     : rdo_stmts { reverse $1 }
 
-rdo_stmts :: { [HExprLStmt] }
+rdo_stmts :: { [HStmt] }
     : stmt           { [$1] }
     | rdo_stmts stmt { $2 : $1 }
 
-stmt :: { HExprLStmt }
+stmt :: { HStmt }
     : atom     { b_bodyS $1 }
     | 'list'   {% parse p_stmt1 $1 }
     | 'hslist' {% (b_bodyS . b_hsListE) `fmap`
                  parse p_hlist (unwrapListL $1) }
 
-stmt1 :: { HExprLStmt }
+stmt1 :: { HStmt }
     : '<-' pat expr { b_bindS $1 $2 $3 }
     | 'let' lbinds  { b_letS $1 $2 }
     | exprs         { b_bodyS $1 }
@@ -448,7 +448,7 @@ parseModule = parse_module
 parseImports :: Builder [HImportDecl]
 parseImports = p_imports
 
-parseStmt :: Builder HExprLStmt
+parseStmt :: Builder HStmt
 parseStmt = p_stmt
 
 parseDecls :: Builder [HDecl]

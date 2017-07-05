@@ -133,7 +133,7 @@ type HType = LHsType RdrName
 
 type HPat = LPat RdrName
 
-type HExprLStmt = ExprLStmt RdrName
+type HStmt = ExprLStmt RdrName
 
 type HLocalBinds = Located (HsLocalBinds RdrName)
 
@@ -484,7 +484,7 @@ b_hgrhs rhss (body, gs) =
 b_grhs :: HExpr -> HExpr -> HGRHS
 b_grhs guard@(L l _) body = L l (GRHS [L l (mkBodyStmt guard)] body)
 
-b_doE :: Located a -> [HExprLStmt] -> HExpr
+b_doE :: Located a -> [HStmt] -> HExpr
 b_doE l exprs = L (getLoc l) (mkHsDo DoExpr exprs)
 
 b_tsigE :: Located a -> HExpr -> HType -> HExpr
@@ -559,11 +559,11 @@ b_hsListE exprs = L l (ExplicitList placeHolderType Nothing exprs)
 --
 -- ---------------------------------------------------------------------
 
-b_bindS :: Located a -> HPat -> HExpr -> HExprLStmt
+b_bindS :: Located a -> HPat -> HExpr -> HStmt
 b_bindS ref pat expr = L (getLoc ref) (mkBindStmt pat expr)
 
-b_letS :: Located a -> [HDecl] -> HExprLStmt
+b_letS :: Located a -> [HDecl] -> HStmt
 b_letS lref@(L l _) decls = L l (LetStmt (declsToBinds lref decls))
 
-b_bodyS :: HExpr -> HExprLStmt
+b_bodyS :: HExpr -> HStmt
 b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
