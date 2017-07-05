@@ -41,7 +41,7 @@ import SK.Core.Form
 
 %%
 
-sexp :: { LTForm Atom }
+sexp :: { LCode }
      : atom          { $1 }
      | 'quote' sexp  { L (getLoc $1) (TList [mkQuote $1, $2]) }
      | '`' sexp      { L (getLoc $1) (TList [mkQuasiQuote $1, $2]) }
@@ -50,14 +50,14 @@ sexp :: { LTForm Atom }
      | '[' sexps ']' { L (getLoc $1) (THsList $2) }
      | '(' sexps ')' { L (getLoc $1) (TList $2) }
 
-sexps :: { [LTForm Atom] }
+sexps :: { [LCode] }
       : rsexps { reverse $1 }
 
-rsexps :: { [LTForm Atom] }
+rsexps :: { [LCode] }
        : {- empty -} { [] }
        | rsexps sexp { $2 : $1 }
 
-atom :: { LTForm Atom }
+atom :: { LCode }
      : 'symbol'  { mkASymbol $1 }
      | 'char'    { mkAChar $1 }
      | 'string'  { mkAString $1 }
@@ -69,43 +69,43 @@ atom :: { LTForm Atom }
      | '}'       { mkCcSymbol $1 }
 
 {
-mkQuote :: Located Token -> LTForm Atom
+mkQuote :: Located Token -> LCode
 mkQuote (L l _) = L l (TAtom (ASymbol "quote"))
 
-mkQuasiQuote :: Located Token -> LTForm Atom
+mkQuasiQuote :: Located Token -> LCode
 mkQuasiQuote (L l _) = L l (TAtom (ASymbol "quasiquote"))
 
-mkUnquote :: Located Token -> LTForm Atom
+mkUnquote :: Located Token -> LCode
 mkUnquote (L l _) = L l (TAtom (ASymbol "unquote"))
 
-mkUnquoteSplice :: Located Token -> LTForm Atom
+mkUnquoteSplice :: Located Token -> LCode
 mkUnquoteSplice (L l _) = L l (TAtom (ASymbol "unquote-splice"))
 
-mkASymbol :: Located Token -> LTForm Atom
+mkASymbol :: Located Token -> LCode
 mkASymbol (L l (TSymbol x)) = L l (TAtom (ASymbol x))
 
-mkAChar :: Located Token -> LTForm Atom
+mkAChar :: Located Token -> LCode
 mkAChar (L l (TChar x)) = L l (TAtom (AChar x))
 
-mkAString :: Located Token -> LTForm Atom
+mkAString :: Located Token -> LCode
 mkAString (L l (TString x)) = L l (TAtom (AString x))
 
-mkAInteger :: Located Token -> LTForm Atom
+mkAInteger :: Located Token -> LCode
 mkAInteger (L l (TInteger x)) = L l (TAtom (AInteger x))
 
-mkAFractional :: Located Token -> LTForm Atom
+mkAFractional :: Located Token -> LCode
 mkAFractional (L l (TFractional x)) = L l (TAtom (AFractional x))
 
-mkAComment :: Located Token -> LTForm Atom
+mkAComment :: Located Token -> LCode
 mkAComment (L l (TDocCommentNext x)) = L l (TAtom (AComment x))
 
-mkAUnit :: Located Token -> LTForm Atom
+mkAUnit :: Located Token -> LCode
 mkAUnit (L l TUnit) = L l (TAtom AUnit)
 
-mkOcSymbol :: Located Token -> LTForm Atom
+mkOcSymbol :: Located Token -> LCode
 mkOcSymbol (L l _) = L l (TAtom (ASymbol "{"))
 
-mkCcSymbol :: Located Token -> LTForm Atom
+mkCcSymbol :: Located Token -> LCode
 mkCcSymbol (L l _) = L l (TAtom (ASymbol "}"))
 
 happyError :: SP a

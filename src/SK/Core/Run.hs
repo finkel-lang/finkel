@@ -129,11 +129,11 @@ compileAndEmit file = runSkc go initialSkEnv
     go = do (mdl, st) <- compileSkModule file
             genHsSrc st mdl
 
-parseSexprs :: Maybe FilePath -> String -> Skc ([LTForm Atom], SPState)
+parseSexprs :: Maybe FilePath -> String -> Skc ([LCode], SPState)
 parseSexprs mb_file contents =
   Skc (lift (runSP' sexprs mb_file contents))
 
-buildHsSyn :: Builder a -> [LTForm Atom] -> Skc a
+buildHsSyn :: Builder a -> [LCode] -> Skc a
 buildHsSyn bldr forms = Skc (lift (evalBuilder' bldr forms))
 
 -- | Compile a file containing SK module.

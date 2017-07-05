@@ -48,10 +48,10 @@ instance GhcMonad Skc where
    setSession s = Skc (lift (lift (setSession s)))
 
 -- | Macro transformer function.
-type Macro = Form Atom -> Skc (Form Atom)
+type Macro = Code -> Skc Code
 
 -- | Macro transformer with location information preserved.
-type LMacro = LTForm Atom -> Skc (LTForm Atom)
+type LMacro = LCode -> Skc LCode
 
 -- | Type of state in 'SKC'.
 data SkEnv = SkEnv

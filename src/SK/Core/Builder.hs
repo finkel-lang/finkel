@@ -25,9 +25,9 @@ import SK.Core.Form
 -- | State for 'Builder'.
 data BState = BState
     { -- | Input tokens to parse.
-      inputs :: [LTForm Atom]
+      inputs :: [LCode]
       -- | Last token, for error message.
-    , lastToken :: Maybe (LTForm Atom)
+    , lastToken :: Maybe LCode
     }
 
 -- | Newtype wrapper for parsing form data with Happy.
@@ -36,19 +36,19 @@ newtype Builder a = Builder {
 }
 
 runBuilder :: Builder a
-           -> [LTForm Atom]
-           -> Either String (a, [LTForm Atom])
+           -> [LCode]
+           -> Either String (a, [LCode])
 runBuilder bld toks =
     case runStateT (unBuilder bld) (BState toks Nothing) of
       Left e -> Left e
       Right (a, st) -> Right (a, inputs st)
 
-evalBuilder :: Builder a -> [LTForm Atom] -> Either String a
+evalBuilder :: Builder a -> [LCode] -> Either String a
 evalBuilder bld toks = fmap fst (runBuilder bld toks)
 
 evalBuilder' :: Monad m
              => Builder a
-             -> [LTForm Atom]
+             -> [LCode]
              -> ExceptT String m a
 evalBuilder' bld toks = case evalBuilder bld toks of
   Right a -> return a
@@ -81,7 +81,7 @@ putBState = Builder . put
 
 -- | Parse with builder using given tokens, continue on successful
 -- parse.
-parse :: Builder a -> [LTForm Atom] -> Builder a
+parse :: Builder a -> [LCode] -> Builder a
 parse bld toks = do
   case runBuilder bld toks of
     Right (a, _) -> return a
@@ -97,7 +97,7 @@ showLoc x = case getLoc x of
       UnhelpfulSpan _ -> "unknown location"
 
 -- | Simple lexer to parse forms.
-formLexer :: (LTForm Atom -> Builder a) -> Builder a
+formLexer :: (LCode -> Builder a) -> Builder a
 formLexer cont = do
     st <- getBState
     case inputs st of
@@ -120,8 +120,6 @@ type HDecl = LHsDecl RdrName
 type HConDecl = LConDecl RdrName
 
 type HConDeclField = LConDeclField RdrName
-
-type HsQTyVars = LHsQTyVars RdrName
 
 type HTyVarBndr = LHsTyVarBndr RdrName
 
@@ -163,7 +161,7 @@ builderError = do
 
 
 -- | Unwrap the element of 'TList' and 'THsList', otherwise returns '[]'.
-unwrapListL :: LTForm Atom -> [LTForm Atom]
+unwrapListL :: LCode -> [LCode]
 unwrapListL (L _ form) =
     case form of
       TList xs -> xs
@@ -224,7 +222,7 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
 -- GHC's internal data type, which is a helpful resource for
 -- understanding the values and types for constructing Haskell AST data.
 
-b_module :: LTForm Atom -> Maybe LHsDocString -> [HImportDecl]
+b_module :: LCode -> Maybe LHsDocString -> [HImportDecl]
          -> [HDecl] -> HsModule RdrName
 b_module (L l (TAtom (ASymbol name))) mbdoc imports decls =
     HsModule { hsmodName = Just (L l (mkModuleName name))
@@ -244,7 +242,7 @@ b_module (L l (TAtom (ASymbol name))) mbdoc imports decls =
 --
 -- ---------------------------------------------------------------------
 
-b_importD :: LTForm Atom -> HImportDecl
+b_importD :: LCode -> HImportDecl
 b_importD (L l (TAtom (ASymbol m))) =
     L l (simpleImportDecl (mkModuleName m))
 
@@ -279,7 +277,7 @@ mkNewtypeOrDataD newOrData (L l _) (name, tvs) (derivs, cs) =
                       -- `dd_derivs' field changed since ghc-8.0.2.
                       , dd_derivs = derivs }
 
-b_simpletypeD :: [LTForm Atom] -> (String, [HTyVarBndr])
+b_simpletypeD :: [LCode] -> (String, [HTyVarBndr])
 b_simpletypeD ((L _ (TAtom (ASymbol name))):tvs) = (name, tvs')
   -- XXX: Kind signatures not supported.
   where
@@ -287,7 +285,7 @@ b_simpletypeD ((L _ (TAtom (ASymbol name))):tvs) = (name, tvs')
     f (L l (TAtom (ASymbol tname))) =
         L l (UserTyVar (L l (mkUnqual tvName (fsLit tname))))
 
-b_conD :: LTForm Atom -> HsConDeclDetails RdrName -> HConDecl
+b_conD :: LCode -> HsConDeclDetails RdrName -> HConDecl
 b_conD (L l1 (TAtom (ASymbol s1))) details =
     L l1 (ConDeclH98 { con_name = L l1 (mkUnqual srcDataName (fsLit s1))
                      , con_qvars = Nothing
@@ -295,7 +293,7 @@ b_conD (L l1 (TAtom (ASymbol s1))) details =
                      , con_details = details
                      , con_doc = Nothing })
 
-b_conOnlyD :: LTForm Atom -> HConDecl
+b_conOnlyD :: LCode -> HConDecl
 b_conOnlyD name = b_conD name (PrefixCon [])
 
 -- XXX: Infix data constructor not supported.
@@ -305,7 +303,7 @@ b_conDeclDetails = PrefixCon
 b_recFieldsD :: [HConDeclField] -> HsConDeclDetails RdrName
 b_recFieldsD flds = RecCon (mkLocatedList flds)
 
-b_recFieldD :: [LTForm Atom] -> HType -> HConDeclField
+b_recFieldD :: [LCode] -> HType -> HConDeclField
 b_recFieldD names ty = L loc field
   where
     field = ConDeclField { cd_fld_names = names'
@@ -353,13 +351,13 @@ b_qtyclC ts =
 b_funD :: Located a -> (HExpr -> HsBind RdrName) -> HExpr -> HDecl
 b_funD (L l _) f e = L l (ValD (f e))
 
-b_declLhsB :: LTForm Atom -> [HPat] -> Builder (HExpr -> HsBind RdrName)
+b_declLhsB :: LCode -> [HPat] -> Builder (HExpr -> HsBind RdrName)
 b_declLhsB (L l (TAtom (ASymbol name))) args =
     return (\body ->
               let match = mkMatch args body (L l emptyLocalBinds)
               in  mkFunBind (L l (mkRdrName name)) [match])
 
-b_tsigD :: [LTForm Atom] -> HType -> HDecl
+b_tsigD :: [LCode] -> HType -> HDecl
 b_tsigD names typ =
   let typ' = mkLHsSigWcType typ
       mkName (L l1 (TAtom (ASymbol name))) = L l1 (mkRdrName name)
@@ -373,7 +371,7 @@ b_tsigD names typ =
 --
 -- ---------------------------------------------------------------------
 
-b_symT :: LTForm Atom -> HType
+b_symT :: LCode -> HType
 b_symT (L l (TAtom (ASymbol name))) = L l (HsTyVar (L l ty))
   where
     ty = mkUnqual namespace (fsLit name)
@@ -382,7 +380,7 @@ b_symT (L l (TAtom (ASymbol name))) = L l (HsTyVar (L l ty))
         (x:_) | isUpper x || ':' == x -> tcName
         _ -> tvName
 
-b_unitT :: LTForm Atom -> HType
+b_unitT :: LCode -> HType
 b_unitT (L l _) = L l (HsTupleTy HsBoxedTuple [])
 
 b_funT :: [HType] -> Builder HType
@@ -410,20 +408,20 @@ b_tupT (L l _) ts = L l (HsTupleTy HsBoxedTuple ts)
 --
 -- ---------------------------------------------------------------------
 
-b_intP :: LTForm Atom -> HPat
+b_intP :: LCode -> HPat
 b_intP (L l (TAtom (AInteger n))) = L l (mkNPat (L l lit) Nothing)
   where lit = mkHsIntegral (show n) n placeHolderType
 
-b_stringP :: LTForm Atom -> HPat
+b_stringP :: LCode -> HPat
 b_stringP (L l (TAtom (AString s))) = L l (mkNPat (L l lit) Nothing)
   where lit = mkHsIsString s (fsLit s) placeHolderType
 
-b_charP :: LTForm Atom -> HPat
+b_charP :: LCode -> HPat
 b_charP (L l (TAtom (AChar c))) =
   let lit = HsChar (show c) c
   in  L l (LitPat lit)
 
-b_symP :: LTForm Atom -> HPat
+b_symP :: LCode -> HPat
 b_symP (L l (TAtom (ASymbol name@(x:_))))
    | name == "_" = L l (WildPat placeHolderType)
    | isUpper x || x == ':'
@@ -438,7 +436,7 @@ b_hsListP pats = L l (ListPat pats placeHolderType Nothing)
 b_tupP :: Located a -> [HPat] -> HPat
 b_tupP (L l _) ps = L l (TuplePat ps Boxed [])
 
-b_conP :: LTForm Atom -> [HPat] -> HPat
+b_conP :: LCode -> [HPat] -> HPat
 b_conP (L l (TAtom (ASymbol con))) rest =
     L l (ConPatIn (L l (mkRdrName con)) (PrefixCon rest))
 
@@ -449,7 +447,7 @@ b_conP (L l (TAtom (ASymbol con))) rest =
 --
 -- ---------------------------------------------------------------------
 
-b_ifE :: LTForm Atom -> HExpr -> HExpr -> HExpr -> HExpr
+b_ifE :: LCode -> HExpr -> HExpr -> HExpr -> HExpr
 b_ifE (L l (TAtom _)) p t f = L l (mkHsIf p t f)
 
 b_lamE ::  [HPat] -> HExpr -> HExpr
@@ -490,7 +488,7 @@ b_doE l exprs = L (getLoc l) (mkHsDo DoExpr exprs)
 b_tsigE :: Located a -> HExpr -> HType -> HExpr
 b_tsigE (L l _) e t = L l (ExprWithTySig e (mkLHsSigWcType t))
 
-b_recConOrUpdE :: LTForm Atom -> [(String,HExpr)] -> HExpr
+b_recConOrUpdE :: LCode -> [(String,HExpr)] -> HExpr
 b_recConOrUpdE sym@(L l _) flds = L l expr
   where
     expr =
@@ -525,27 +523,27 @@ b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))
 b_lbindB :: (HExpr -> HsBind RdrName) -> HExpr -> HBind
 b_lbindB f e = L (getLoc e) (f e)
 
-b_charE :: LTForm Atom -> HExpr
+b_charE :: LCode -> HExpr
 b_charE (L l (TAtom (AChar x))) = L l (HsLit (HsChar (show x) x))
 
-b_stringE :: LTForm Atom -> HExpr
+b_stringE :: LCode -> HExpr
 b_stringE (L l (TAtom (AString x))) = L l (HsLit (HsString x (fsLit x)))
 
-b_integerE :: LTForm Atom -> HExpr
+b_integerE :: LCode -> HExpr
 b_integerE (L l (TAtom (AInteger x))) =
     L l (HsOverLit $! (mkHsIntegral (show x) x placeHolderType))
 
-b_floatE :: LTForm Atom -> HExpr
+b_floatE :: LCode -> HExpr
 b_floatE (L l (TAtom (AFractional x))) =
    L l (HsOverLit $! (mkHsFractional x placeHolderType))
 
-b_varE :: LTForm Atom -> HExpr
+b_varE :: LCode -> HExpr
 b_varE (L l (TAtom (ASymbol x))) = L l (HsVar (L l (mkRdrName x)))
 
 b_unitE :: Located a -> HExpr
 b_unitE (L l _) = L l (ExplicitTuple [] Boxed)
 
-b_commentStringE :: LTForm Atom -> Located HsDocString
+b_commentStringE :: LCode -> Located HsDocString
 b_commentStringE (L l (TAtom (AComment x))) = L l (HsDocString (fsLit x))
 
 b_hsListE :: [HExpr] -> HExpr

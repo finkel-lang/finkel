@@ -1,24 +1,18 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
--- | Data type for form.
-
+-- | Form and Atom data.
 module SK.Core.Form
   ( Form(..)
   , Atom(..)
   , TForm(..)
   , LTForm
-  , Code(..)
+  , Code
+  , LCode
   , aFractional
-  , splice
   , unLocForm
-
+  , nlForm
   , symbolNameL
   , toListL
 
-  , nlForm
-  , car
-  , cdr
   , pprForm
   , pprForms
   , pprTForm
@@ -26,6 +20,11 @@ module SK.Core.Form
   , pForm
   , pForms
   , pAtom
+
+  , Codish(..)
+  , splice
+  , car
+  , cdr
   ) where
 
 -- From base
@@ -109,6 +108,10 @@ instance Show a => Show (TForm a) where
 
 type LTForm a = Located (TForm a)
 
+type Code = Form Atom
+
+type LCode = LTForm Atom
+
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.
 aFractional :: (Real a, Show a) => a -> Atom
@@ -132,35 +135,27 @@ nlForm form =
     List xs -> noLoc (TList (map nlForm xs))
     HsList xs -> noLoc (THsList (map nlForm xs))
 
-car :: Form a -> Form a
-car (List (x:_)) = x
-car _ = List []
-
-cdr :: Form a -> Form a
-cdr (List (_:xs)) = List xs
-cdr _ = List []
-
 -- | Extract string from given atom when the atom was 'ASymbol',
 -- otherwise error.
-symbolNameL :: LTForm Atom -> String
+symbolNameL :: LCode -> String
 symbolNameL (L _ (TAtom (ASymbol name))) = name
 symbolNameL x = error ("symbolNameL: got " ++ show (pprTForm x))
 
-toListL :: LTForm Atom -> LTForm Atom
+toListL :: LCode -> LCode
 toListL orig@(L l form) =
   case form of
     TList _ -> orig
     THsList xs -> L l (TList xs)
     _ -> L l (TList [orig])
 
-pprForm :: Form Atom -> P.Doc
+pprForm :: Code -> P.Doc
 pprForm form =
   case form of
     Atom x -> P.text "Atom" P.<+> P.parens (pprAtom x)
     List xs -> P.text "List" P.<+> P.nest 2 (pprForms xs)
     HsList xs -> P.text "HsList" P.<+> P.nest 2 (pprForms xs)
 
-pprForms :: [Form Atom] -> P.Doc
+pprForms :: [Code] -> P.Doc
 pprForms forms =
   P.brackets (P.sep (P.punctuate P.comma (map pprForm forms)))
 
@@ -175,7 +170,7 @@ pprAtom atom =
     AFractional x -> P.text "AFractional" P.<+> (P.text (fl_text x))
     AComment x -> P.text "AComment" P.<+> (P.doubleQuotes (P.text x))
 
-pprTForm :: LTForm Atom -> P.Doc
+pprTForm :: LCode -> P.Doc
 pprTForm (L _ form) =
   case form of
     TAtom x -> P.text "TAtom" P.<+> P.parens (pprAtom x)
@@ -183,18 +178,18 @@ pprTForm (L _ form) =
     THsList xs -> P.text "THsList" P.<+> P.nest 2 (pprTForms xs)
     TEnd -> P.text "TEnd"
 
-pprTForms :: [LTForm Atom] -> P.Doc
+pprTForms :: [LCode] -> P.Doc
 pprTForms forms =
   P.brackets (P.sep (P.punctuate P.comma (map pprTForm forms)))
 
-pForm :: Form Atom -> P.Doc
+pForm :: Code -> P.Doc
 pForm form =
   case form of
     Atom a -> pAtom a
     List forms -> pForms P.parens forms
     HsList forms -> pForms P.brackets forms
 
-pForms :: (P.Doc -> P.Doc) -> [Form Atom] -> P.Doc
+pForms :: (P.Doc -> P.Doc) -> [Code] -> P.Doc
 pForms f forms =
   case forms of
     [] -> P.empty
@@ -214,81 +209,99 @@ pAtom atom =
 
 -- -------------------------------------------------------------------
 --
--- Code type class
+-- Codish type class
 --
 -- -------------------------------------------------------------------
 
 --- Instance data types of Formable class could be inserted to
 --- S-expression form with `unquote' and `unquote-splice'.
 
-class Code a where
-  toForm :: a -> Form Atom
-  fromForm :: Form Atom -> Maybe a
-  fromForm _ = Nothing
+class Codish a where
+  toCode :: a -> Code
 
-instance Code Atom where
-  toForm a = Atom a
-  fromForm a =
+  fromCode :: Code -> Maybe a
+  fromCode _ = Nothing
+
+  listToCode :: [a] -> Code
+  listToCode = HsList . map toCode
+
+  listFromCode :: Code -> Maybe [a]
+  listFromCode xs = case xs of
+                      HsList as -> mapM fromCode as
+                      _         -> Nothing
+
+instance Codish Atom where
+  toCode a = Atom a
+  fromCode a =
     case a of
       Atom x -> Just x
       _      -> Nothing
 
-instance Code () where
-  toForm _ = Atom AUnit
-  fromForm a =
+instance Codish () where
+  toCode _ = Atom AUnit
+  fromCode a =
     case a of
       Atom AUnit -> Just ()
       _          -> Nothing
 
-instance Code Char where
-  toForm = Atom . AChar
-  fromForm a =
+instance Codish Char where
+  toCode = Atom . AChar
+  fromCode a =
     case a of
       Atom (AChar x) -> Just x
       _              -> Nothing
+  listToCode = Atom . AString
+  listFromCode a = case a of
+                     Atom (AString s) -> Just s
+                     _ -> Nothing
 
-instance Code String where
-  toForm a = Atom (AString a)
-  fromForm a =
-    case a of
-      Atom (AString s) -> Just s
-      _                -> Nothing
-
-instance Code Int where
-  toForm a = Atom (AInteger (fromIntegral a))
-  fromForm a =
+instance Codish Int where
+  toCode a = Atom (AInteger (fromIntegral a))
+  fromCode a =
     case a of
       Atom (AInteger n) -> Just (fromIntegral n)
       _                 -> Nothing
 
-instance Code Integer where
-  toForm a = Atom (AInteger a)
-  fromForm a =
+instance Codish Integer where
+  toCode a = Atom (AInteger a)
+  fromCode a =
     case a of
       Atom (AInteger n) -> Just n
       _                 -> Nothing
 
-instance Code Double where
-  toForm a = let r = toRational a in Atom (AFractional (FL (show a) r))
-  fromForm a =
+instance Codish Double where
+  toCode a = let r = toRational a in Atom (AFractional (FL (show a) r))
+  fromCode a =
     case a of
       Atom (AFractional x) -> Just (fromRational (fl_value x))
       _                    -> Nothing
 
-instance Code a => Code (Form a) where
-  toForm form =
-    case form of
-      Atom a  -> toForm a
-      List as -> List (map toForm as)
-      HsList as -> HsList (map toForm as)
-  fromForm a =
-    case a of
-      Atom _  -> fromForm a
-      List as -> List <$> mapM fromForm as
-      HsList as -> HsList <$> mapM fromForm as
+instance Codish a => Codish [a] where
+  toCode = listToCode
+  fromCode = listFromCode
 
-splice :: Code a => a -> [Form Atom]
+instance Codish a => Codish (Form a) where
+  toCode form =
+    case form of
+      Atom a  -> toCode a
+      List as -> List (map toCode as)
+      HsList as -> HsList (map toCode as)
+  fromCode a =
+    case a of
+      Atom _  -> fromCode a
+      List as -> List <$> mapM fromCode as
+      HsList as -> HsList <$> mapM fromCode as
+
+splice :: Codish a => a -> [Code]
 splice form =
-  case toForm form of
+  case toCode form of
     List xs -> xs
     _       -> []
+
+car :: Form a -> Form a
+car (List (x:_)) = x
+car _ = List []
+
+cdr :: Form a -> Form a
+cdr (List (_:xs)) = List xs
+cdr _ = List []

@@ -60,7 +60,7 @@ import SK.Core.GHC
 
 %name p_symbols1 symbols1
 
-%tokentype { LTForm Atom }
+%tokentype { LCode }
 %monad { Builder }
 %lexer { formLexer } { L _ TEnd }
 
@@ -427,13 +427,13 @@ stmt1 :: { HStmt }
 --
 -- ---------------------------------------------------------------------
 
-symbols :: { [LTForm Atom] }
+symbols :: { [LCode] }
     : 'list' {% parse p_symbols1 $1 }
 
-symbols1 :: { [LTForm Atom] }
+symbols1 :: { [LCode] }
     : rsymbols { reverse $1 }
 
-rsymbols :: { [LTForm Atom] }
+rsymbols :: { [LCode] }
     : 'symbol'          { [$1] }
     | rsymbols 'symbol' { $2:$1 }
 

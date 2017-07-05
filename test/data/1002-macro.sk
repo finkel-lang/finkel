@@ -1,4 +1,4 @@
-;;; File containing forms using macros.
+;;; Tests for macros.
 
 (module Main)
 
@@ -11,35 +11,34 @@
 ;; Simple `macrolet'.
 (macrolet ((m2 (a b c)
              (return `(,a (+ ,b ,c)))))
-  (:: f1 (-> Int (-> Int (IO ()))))
+  (:: f1 (-> Int Int (IO ())))
   (= (f1 x y)
     (m2 print x y)))
 
 ;;; Macro taking fractional value as argument.
 (macrolet ((m1 (n)
-             (case (fromForm n)
+             (case (fromCode n)
                ((Just d) (if (<= 1.0 (:: d Double))
                              (return '"more or eq")
                              (return '"less")))
                (Nothing (failS "m1: error")))))
+  (:: fracmac (IO ()))
   (= fracmac
     (do (putStrLn (m1 1.1))
         (putStrLn (m1 0.9)))))
 
 ;;; Macro returning haskell list.
 (macrolet ((m2 (a b c)
-             (let ((= f
-                     (case (do (<- x (fromForm a))
-                               (<- y (fromForm b))
-                               (<- z (fromForm c))
-                               (return (:: (, x y z)
-                                           (, Int Int Int))))
-                       ((Just (, x y z))
-                        (return `[,(toForm (* x 100))
-                                  ,(toForm (* y 100))
-                                  ,(toForm (* z 100))]))
-                       (_ (failS "error: m2")))))
-               f)))
+             (let ((:: mbints (Maybe (, Int Int Int)))
+                   (= mbints
+                     (do (<- x (fromCode a))
+                         (<- y (fromCode b))
+                         (<- z (fromCode c))
+                         (return (, x y z)))))
+               (case mbints
+                 ((Just (, x y z))
+                  (return `[,(* x 100) ,(* y 100) ,(* z 100)]))
+                 (_ (failS "error: m2"))))))
   (:: hslistmac (IO ()))
   (= hslistmac
     (print (m2 1 2 3))))
