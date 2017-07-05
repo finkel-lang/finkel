@@ -115,6 +115,8 @@
              (let ((= run1 (RunIO (. (fmap Repl) (. run0 unRepl)))))
                (fmap unRepl (f run1))))))))
 
+(type (Result a) (Either String a))
+
 
 ;;;; Auxiliary
 
@@ -122,13 +124,6 @@
 (= (bodyp (L _ stmt))
   (case stmt
     ((BodyStmt _ _ _ _) True)
-    (_ False)))
-
-(:: vald-or-sigd (-> HDecl Bool))
-(= (vald-or-sigd (L _ d))
-  (case d
-    ((ValD _) True)
-    ((SigD _) True)
     (_ False)))
 
 (:: print-names-and-types (-> DynFlags [Name] [Var] (IO ())))
@@ -146,7 +141,7 @@
 
 ;;; | Read a form. Keeps its previous input string, repeatedly consumes
 ;;; inputs until concatenated inputs is a valid S-expression.
-(:: readForm (-> String (Repl (Maybe (LTForm Atom)))))
+(:: readForm (-> String (Repl (Maybe LCode))))
 (= (readForm input0)
   (do (<- st getReplState)
       (let ((= input1 (++ (pendingInput st) (: \lf input0)))
@@ -177,7 +172,7 @@
           (withSourceErrorHandling m)))
     (liftRepl work)))
 
-(:: evalStatement (-> [LTForm Atom] (Skc (Either String ()))))
+(:: evalStatement (-> [LTForm Atom] (Skc (Result ()))))
 (= (evalStatement forms)
   (case (evalBuilder parseStmt forms)
     ((Right stmt0)
@@ -190,7 +185,7 @@
     ((Left _) (evalImport forms))))
 
 (:: update-hsc-env (-> HscEnv Bool [Id] ForeignHValue FixityEnv
-                       (Skc (Either String ()))))
+                       (Skc (Result ()))))
 (= (update-hsc-env hsc-env is-body ids hvals-io fixity-env)
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its body.
@@ -266,7 +261,7 @@
                  ((unsafeCoerce f-hv) (replIoArgs replio)))))
         (Nothing (putStrLn "runReplIO: no type info.")))))
 
-(:: evalImport (-> [LTForm Atom] (Skc (Either String ()))))
+(:: evalImport (-> [LTForm Atom] (Skc (Result ()))))
 (= (evalImport forms)
   (case (evalBuilder parseImports forms)
     ((Right imports)
@@ -278,6 +273,9 @@
          (return (Right ()))))
     ((Left err) (evalDecls forms))))
 
+;;; Evaluate declarations. Can handle multiple declarations wrapped as
+;;; `begin' form.
+;;;
 ;;; Some relevant codes:
 ;;;
 ;;;  * ghc/GHCi/UI/Monad.hs: runDecls
@@ -292,27 +290,22 @@
 ;;;  * libraries/ghci/GHCi/Run.hs: various command responding to
 ;;;    messages, extensively using RemoteRef.
 ;;;
-(:: evalDecls (-> [LTForm Atom] (Skc (Either String ()))))
+(:: evalDecls (-> [LTForm Atom] (Skc (Result ()))))
 (= (evalDecls forms)
   (case (evalBuilder parseDecls forms)
     ((Right decls)
-     ;; Currently non-toplevel decls are converted as `let' statement
-     ;; and passed to `hscParsedStmt'. Support for `data', `newtype',
-     ;; `class' .. etc are not yet implemented.
-     (| ((all vald-or-sigd decls)
-         (do (let ((= l (mkLocatedList decls))
-                   (= stmt (b_letS l decls))))
-             (<- hsc-env getSession)
-             (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
-             (case ret
-               (Nothing
-                (return (Left (++ "evalDecls: "
-                                  (show (map unLocForm forms))))))
-               ((Just (, ids hvals fixity))
-                (update-hsc-env hsc-env False ids hvals fixity)))))
-        (otherwise
-         (return (Left (++ "evalDecls: unsupported forms: "
-                           (show (map unLocForm forms))))))))
+     ;; Currently decls are converted as `let' statement and passed to
+     ;; `hscParsedStmt'. Support for `data', `newtype', `class' .. etc
+     ;; are not yet implemented.
+     (do (let ((= l (mkLocatedList decls))
+               (= stmt (b_letS l decls))))
+         (<- hsc-env getSession)
+         (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
+         (case ret
+           (Nothing (return (Left (++ "evalDecls: "
+                                      (show (map unLocForm forms))))))
+           ((Just (, ids hvals fixity))
+            (update-hsc-env hsc-env False ids hvals fixity)))))
     ((Left err) (return (Left err)))))
 
 
