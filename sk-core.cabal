@@ -29,8 +29,10 @@ library
                        SK.Core.Reader
                        SK.Core.Run
                        SK.Core.SKC
+                       SK.Core.Setup
                        SK.Core.Syntax
   build-depends:       base >= 4.7 && < 5
+                     , Cabal >= 1.10
                      , array
                      , containers
                      , directory
