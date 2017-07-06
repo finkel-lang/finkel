@@ -11,6 +11,12 @@ copyright:           2017 8c6794b6
 category:            Language
 build-type:          Simple
 extra-source-files:  README.md
+                     test/data/syntax/*.sk
+                     test/data/build/p01/*.cabal
+                     test/data/build/p01/*.yaml
+                     test/data/build/p01/*.hs
+                     test/data/build/p01/src/*.sk
+                     test/data/build/p01/test/*.hs
 cabal-version:       >=1.10
 
 library
@@ -48,17 +54,16 @@ library
   default-language:    Haskell2010
   ghc-options:         -Wall
 
-flag static
-  description:         Link statically
+flag dynamic
+  description:         Link dynamically
   default:             False
 
 executable skc
   hs-source-dirs:      app
   main-is:             skc.hs
-  if flag(static)
-    ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N
-  else
-    ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N -dynamic
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  if flag(dynamic)
+    ghc-options:       -dynamic
   build-depends:       base
                      , ghc-paths
                      , process
@@ -68,12 +73,15 @@ executable skc
 test-suite sk-core-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
-  main-is:             Spec.hs
+  main-is:             Main.hs
+  other-modules:       SyntaxTest
+                       BuildTest
   build-depends:       base
                      , sk-core
                      , filepath
                      , directory
                      , hspec
+                     , process
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

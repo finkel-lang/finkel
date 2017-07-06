@@ -193,6 +193,9 @@
      (otherwise
       "f2: no numbers.")))
 
+(:: fpb3 [String])
+(= fpb3 ["string" "expression" "without" "guards"])
+
 (:: s4_4_3 (IO ()))
 (= s4_4_3
   (do (putStrLn (fpb0 42))
@@ -202,7 +205,8 @@
       (putStrLn (fpb2 (Just 2) (Just 5)))
       (putStrLn (fpb2 (Just 100) Nothing))
       (putStrLn (fpb2 (Nothing) (Just 8)))
-      (putStrLn (fpb2 Nothing Nothing))))
+      (putStrLn (fpb2 Nothing Nothing))
+      (print fpb3)))
 
 (:: s4_4 (IO ()))
 (= s4_4

@@ -1,0 +1,7 @@
+(module P01A)
+
+(import P01B)
+(import P01C)
+
+(:: p01a Int)
+(= p01a (* (p01b 5) (p01c 3)))

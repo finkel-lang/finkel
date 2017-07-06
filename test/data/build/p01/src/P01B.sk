@@ -1,0 +1,4 @@
+(module P01B)
+
+(:: p01b (-> Int Int))
+(= p01b (\ (n) (+ n 2)))

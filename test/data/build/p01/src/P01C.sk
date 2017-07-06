@@ -1,0 +1,4 @@
+(module P01C)
+
+(:: p01c (-> Int Int))
+(= (p01c n) (+ n 3))
