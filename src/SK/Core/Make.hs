@@ -82,9 +82,9 @@ make inputs no_link mb_output = do
   when (not (null requiredHomePkgMods))
        (liftIO (putStrLn (";;; required home package modules: "
                            ++ show requiredHomePkgMods)))
-  (mb_summaries, mb_modules)
-    <- mapAndUnzipM compileInput requiredHomePkgMods
-  let mms = zip (catMaybes mb_summaries) (catMaybes mb_modules)
+  (req_summaries, req_modules)
+   <- mapAndUnzipM compileInput requiredHomePkgMods
+  let mms = zip (catMaybes req_summaries) (catMaybes req_modules)
       mmtotal = length mms
       mk i (ms,mm) = makeOne i mmtotal ms mm >> return (i+1)
   foldM_ mk 1 mms
@@ -136,8 +136,8 @@ data TargetSource
 
 instance Show TargetSource where
   show s = case s of
-    SkSource path mod _ reqs ->
-      concat ["SkSource ", show path, " ", mod, " ", show reqs]
+    SkSource path mdl _ reqs ->
+      concat ["SkSource ", show path, " ", mdl, " ", show reqs]
     HsSource path -> "HsSource " ++ path
     OtherSource path -> "OtherSource " ++ path
 
