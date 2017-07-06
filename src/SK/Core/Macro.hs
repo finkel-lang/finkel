@@ -298,10 +298,13 @@ m_require form =
       contexts <- getContext
       setContext (mkIIDecl mname : contexts)
       mdl <- lookupModule (mkModuleName mname) Nothing
-      Just minfo <- getModuleInfo mdl
-      dflags <- getSessionDynFlags
-      mapM_ (pTyThing dflags) (modInfoTyThings minfo)
-      return emptyForm
+      mb_minfo <- getModuleInfo mdl
+      case mb_minfo of
+        Just minfo ->
+          do dflags <- getSessionDynFlags
+             mapM_ (pTyThing dflags) (modInfoTyThings minfo)
+             return emptyForm
+        Nothing -> failS ("require: cannot find modinfo for " ++ mname)
     _ -> failS "require: malformed syntax."
 
 specialForms :: [(String, LMacro)]

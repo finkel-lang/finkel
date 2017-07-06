@@ -34,6 +34,12 @@ import SK.Core.Lexer
 import SK.Core.Run
 import SK.Core.SKC
 
+-- From ghc, currently unused.
+--
+-- import HscTypes (FindResult(..))
+-- import Finder (findHomeModule)
+
+
 -- ---------------------------------------------------------------------
 --
 -- Exported main interface
@@ -54,29 +60,47 @@ make inputs no_link mb_output = do
 
   -- Decide the kind of sources of the inputs.
   sources <- mapM findTargetSource inputs
-  let compileTimeImports = foldr add_reqs [] sources
+  let dup_compileTimeImports = foldr add_reqs [] sources
       add_reqs (targetSource,_) acc =
         case targetSource of
-          SkSource _ _ reqs -> reqs ++ acc
+          SkSource _ _ _ reqs -> reqs ++ acc
           _ -> acc
+      compileTimeImports = nub dup_compileTimeImports
 
   when (not (null compileTimeImports))
-       (liftIO (do putStrLn ";;; required modules: "
-                   mapM_ (\m -> putStrLn (";;; " ++ m))
-                         (nub compileTimeImports)))
+       (liftIO (putStrLn (";;; required modules: " ++
+                         show compileTimeImports)))
+
+  -- If required modules are found in argument, compile them first.
+  let lkupReqs (source,mbphase) acc =
+        case source of
+          SkSource _ mn _ _
+            | elem mn compileTimeImports ->
+              (source, mbphase) : acc
+          _ -> acc
+      requiredHomePkgMods = foldr lkupReqs [] sources
+  when (not (null requiredHomePkgMods))
+       (liftIO (putStrLn (";;; required home package modules: "
+                           ++ show requiredHomePkgMods)))
+  (mb_summaries, mb_modules)
+    <- mapAndUnzipM compileInput requiredHomePkgMods
+  let mms = zip (catMaybes mb_summaries) (catMaybes mb_modules)
+      mmtotal = length mms
+      mk i (ms,mm) = makeOne i mmtotal ms mm >> return (i+1)
+  foldM_ mk 1 mms
 
   -- Compile to ModSummary and HsModule. Input could be SK source code
   -- or something else. If SK source code or Haskell source code,
   -- get ModSummary to resolve the dependencies.
   (mb_summaries, mb_modules) <- mapAndUnzipM compileInput sources
 
-  -- Analyze dependency.
+  -- Analyze dependency, then update current module graph.
   let mgraph = topSortModuleGraph True (catMaybes mb_summaries) Nothing
       mgraph_flattened = flattenSCCs mgraph
       total = length mgraph
       modules = catMaybes mb_modules
       work i msum = do
-        let name = (moduleName (ms_mod msum))
+        let name = moduleName (ms_mod msum)
         case findHsModuleByModName name modules of
           Just hsmdl -> makeOne i total msum hsmdl >> return (i + 1)
           Nothing -> return i
@@ -97,19 +121,30 @@ make inputs no_link mb_output = do
 --
 -- ---------------------------------------------------------------------
 
+-- | Data type to differentiate target sources.
 data TargetSource
-  = SkSource FilePath [LCode] [String]
-  -- ^ SK source. Holds file path of the source code, parsed form data,
-  -- and required module names.
+  -- XXX: Original input string in SkSource is assumed as module name at
+  -- the moment, but it could be a file path.
+  = SkSource FilePath String [LCode] [String]
+  -- ^ SK source. Holds file path of the source code, original string
+  -- input, parsed form data, and required module names.
   | HsSource FilePath
   -- ^ Haskell source with file path of the source code.
   | OtherSource FilePath
   -- ^ Other source with file path of other contents.
+  deriving (Eq)
+
+instance Show TargetSource where
+  show s = case s of
+    SkSource path mod _ reqs ->
+      concat ["SkSource ", show path, " ", mod, " ", show reqs]
+    HsSource path -> "HsSource " ++ path
+    OtherSource path -> "OtherSource " ++ path
 
 targetSourcePath :: TargetSource -> FilePath
 targetSourcePath mt =
   case mt of
-    SkSource path _ _ -> path
+    SkSource path _ _ _ -> path
     HsSource path -> path
     OtherSource path -> path
 
@@ -122,7 +157,7 @@ findTargetSource (modName, a) = do
           do contents <- liftIO (readFile path)
              (forms, sp) <- parseSexprs (Just path) contents
              let reqs = requiredModuleNames sp
-             return (SkSource path forms reqs, a)
+             return (SkSource path modName forms reqs, a)
         | isHsFile path = return (HsSource path, a)
         | otherwise = return (OtherSource path, a)
   detectSource inputPath
@@ -141,7 +176,7 @@ compileToHsModule :: (TargetSource, Maybe Phase)
                   -> Skc (Maybe (HsModule RdrName))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
-    SkSource _ form _ -> Just <$> compileSkModuleForm form
+    SkSource _ _ form _ -> Just <$> compileSkModuleForm form
     HsSource path -> Just <$> compileHsFile path mbphase
     OtherSource path -> compileOtherFile path >> return Nothing
 
@@ -220,6 +255,22 @@ findFileInImportPaths dirs modName = do
   found <- search dirs'
   debugIO (putStrLn ("File found: " ++ found))
   return found
+
+-- Failed attempt to avoid recompilation. Haskell source code cache
+-- management not working properly. See below for details of how GHC
+-- avoid recompilation:
+--
+--   https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/RecompilationAvoidance
+--
+-- makeOne :: GhcMonad m => Int -> Int -> ModSummary
+--         -> HsModule RdrName -> m ()
+-- makeOne i total ms hmdl = do
+--   hsc_env <- getSession
+--   findResult <- liftIO (findHomeModule hsc_env (ms_mod_name ms))
+--   case findResult of
+--     Found _ _ -> return ()
+--     -- The `makeOne' function defined below.
+--     _ -> makeOne' i total ms hmdl
 
 -- | Compile single module.
 makeOne :: GhcMonad m => Int -> Int -> ModSummary
