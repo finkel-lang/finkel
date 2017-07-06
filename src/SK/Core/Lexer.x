@@ -17,6 +17,7 @@ module SK.Core.Lexer
   , runSP'
   , evalSP
   , showErrorSP
+  , addRequiredModuleName
   ) where
 
 -- base
@@ -118,16 +119,17 @@ $whitechar+  ;
 --
 -- ---------------------------------------------------------------------
 
--- | Data type to hold comments found in source code.
+-- | Data type to hold states while reading source code.
 data SPState = SPState {
   comments :: [Located AnnotationComment],
   annotation_comments :: [(SrcSpan, [Located AnnotationComment])],
-  targetFile :: Maybe FilePath
+  targetFile :: Maybe FilePath,
+  requiredModuleNames :: [String]
 }
 
 -- | Initial empty state for 'SP'.
 initialSPState :: SPState
-initialSPState = SPState [] [] Nothing
+initialSPState = SPState [] [] Nothing []
 
 -- | A data type for State monad which wraps 'Alex' with 'SPstate'.
 newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
@@ -164,10 +166,17 @@ showErrorSP =
                           show lno ++ ", column " ++ show cno)
   in  SP (\_ -> go)
 
+addRequiredModuleName :: String -> SP ()
+addRequiredModuleName name =
+  SP (\st ->
+       let names = requiredModuleNames st
+           st' = st {requiredModuleNames = name : names}
+       in  return ((), st'))
+
 
 -- ---------------------------------------------------------------------
 --
--- Lexer
+-- Token data and actions
 --
 -- ---------------------------------------------------------------------
 
@@ -320,8 +329,12 @@ annotateComment tok = case tok of
   TLineComment s    -> AnnLineComment s
   _                 -> error ("annotateComment: " ++ show tok)
 
-pushComment :: Located AnnotationComment -> SPState -> SPState
-pushComment comment st = st { comments = comment : comments st }
+
+-- ---------------------------------------------------------------------
+--
+-- Lexer
+--
+-- ---------------------------------------------------------------------
 
 -- | Lexical analyzer for S-expression. Intended to be used with a
 -- parser made from Happy. This functions will not pass comment tokens
@@ -339,6 +352,9 @@ tokenLexer cont = SP go where
         unSP (cont (L (RealSrcSpan span) tok))
              (pushComment comment st1)
       _ -> unSP (cont (L (RealSrcSpan span) tok)) st1
+
+pushComment :: Located AnnotationComment -> SPState -> SPState
+pushComment comment st = st { comments = comment : comments st }
 
 scanToken :: SP (RealLocated Token)
 scanToken = SP go where

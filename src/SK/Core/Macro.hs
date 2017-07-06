@@ -9,7 +9,7 @@ module SK.Core.Macro
   ) where
 
 -- base
-import Control.Monad (foldM)
+import Control.Monad (foldM, when)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- Internal
@@ -122,12 +122,17 @@ putMacro form =
       case evalBuilder parseExpr [expr] of
         Right hexpr -> do
           macro <- compileMT hexpr
-          let wrap f xs = fmap nlForm (f (cdr (unLocForm xs)))
-          addMacro name (wrap macro)
+          addMacro name (wrapMacro macro)
           return [tsig, self']
         Left err -> failS err
     _ -> failS ("malformed macro: " ++ show (pForm (unLocForm form)))
 
+-- | Convert 'Macro' to 'LMacro'. Location information are discarded
+-- with this function.
+wrapMacro :: Macro -> LMacro
+wrapMacro macro = fmap nlForm . macro . cdr . unLocForm
+
+-- | Wrap arguments for function body of macro.
 wrapArgs :: String -> LCode -> LCode -> LCode
 wrapArgs name args@(L l1 _) body0 =
   let sym = tSym l1
@@ -151,6 +156,78 @@ wrapArgs name args@(L l1 _) body0 =
           s@(TAtom (ASymbol _)) -> L l s
           _ -> error "wrapArgs:mkPat"
   in  list [sym  "\\", list [form], body1]
+
+mkIIDecl :: String -> InteractiveImport
+mkIIDecl = IIDecl . simpleImportDecl . mkModuleName
+
+emptyForm :: LCode
+emptyForm = tList l0 [tSym l0 "begin"]
+  where l0 = getLoc (noLoc ())
+
+pTyThing :: DynFlags -> TyThing -> Skc ()
+pTyThing dflags ty_thing@(AnId var) = do
+  let str :: Outputable p => p -> String
+      str = showPpr dflags
+      prn = liftIO . putStrLn
+      name = str (varName var)
+      typ = str (varType var)
+  when (typ == "Macro")
+       (do (prn (";;; adding macro `" ++
+                 name ++
+                 "' to current compiler session."))
+           (addImportedMacro ty_thing))
+pTyThing dflags tt = pTyThing' dflags tt
+
+-- Currently unused for adding macro, just for printing out information.
+--
+-- Using 'IfaceDecl' to detect the SK.Core.SKC.Macro type. This way is
+-- more safe than comparing the Type of Var, since IfaceDecl contains
+-- more detailed information.
+pTyThing' :: DynFlags -> TyThing -> Skc ()
+pTyThing' dflags tt@(AnId _) = do
+  let ifd = tyThingToIfaceDecl tt
+      name = ifName ifd
+      typ = ifType ifd
+      prn = liftIO . putStrLn
+      str :: Outputable p => p -> String
+      str = showPpr dflags
+  prn (concat [";;; an id: name=", str name , " type=", str typ])
+  case typ of
+    -- Constructor name 'IfaceTyVar' changed sinde ghc 8.0.2 release.
+    IfaceTyVar _ -> prn "free ty var"
+    IfaceLitTy _ -> prn "lit ty"
+    IfaceAppTy _ _ -> prn "app ty"
+    IfaceFunTy _ _ -> prn "fun ty"
+    IfaceDFunTy _ _ -> prn "dfun ty"
+    IfaceForAllTy _ _ -> prn "for all ty"
+    IfaceTyConApp con arg -> do
+      let conName = str (ifaceTyConName con)
+      prn (concat [ ";;; ty con app,"
+                  , " tyConName=", conName
+                  , " tyConArg=", str arg])
+      -- when (conName == "Macro")
+      --      (do (prn ("Found macro: " ++ str name))
+      --          (addImportedMacro tt))
+    IfaceCastTy _ _ -> prn "cast ty"
+    IfaceCoercionTy _ -> prn "coercion ty"
+    IfaceTupleTy _ _ _ -> prn "tuple ty"
+
+pTyThing' dflags tt =
+  -- Arguments of `pprTyThing' changed since ghc-8.0.2 release.
+  liftIO (putStrLn (";;; " ++ (showSDocUnqual dflags (pprTyThing tt))))
+
+addImportedMacro :: TyThing -> Skc ()
+addImportedMacro ty_thing =
+  case ty_thing of
+    AnId var -> do
+      hsc_env <- getSession
+      let name = varName var
+      fhv <- liftIO (getHValue hsc_env name)
+      hv <- liftIO (withForeignRef fhv localRef)
+      let macro = wrapMacro (unsafeCoerce hv)
+      addMacro (showPpr (hsc_dflags hsc_env) name) macro
+      return ()
+    _ -> error "addImportedmacro"
 
 m_defmacro :: LMacro
 m_defmacro form =
@@ -205,12 +282,35 @@ m_macrolet form =
     _ -> failS ("macrolet: malformed macro: " ++
                show (pForm (unLocForm form)))
 
+m_require :: LMacro
+m_require form =
+  case form of
+    L _l1 (TList [_,L _l2 (TAtom (ASymbol mname))]) -> do
+      -- Modify the HscEnv at this moment. Updating the compile time
+      -- module dependency mapping in SkEnv.
+      --
+      -- Need to manage the context par file, but not yet done. Reason
+      -- to clean up the context is, if not cleaned, all files passed
+      -- via "--make" command will use the required module, which could
+      -- cause unwanted name conflicts.
+      --
+      liftIO (putStrLn (";;; requiring " ++ mname))
+      contexts <- getContext
+      setContext (mkIIDecl mname : contexts)
+      mdl <- lookupModule (mkModuleName mname) Nothing
+      Just minfo <- getModuleInfo mdl
+      dflags <- getSessionDynFlags
+      mapM_ (pTyThing dflags) (modInfoTyThings minfo)
+      return emptyForm
+    _ -> failS "require: malformed syntax."
+
 specialForms :: [(String, LMacro)]
 specialForms =
   [("quote", m_quote)
   ,("quasiquote", m_quasiquote)
   ,("macrolet", m_macrolet)
   ,("defmacro", m_defmacro)
+  ,("require", m_require)
 
   -- Binary operators defined in Prelude are hard coded, to support
   -- forms with variable number of arguments. In general, better not to
@@ -231,8 +331,7 @@ setExpanderSettings = do
   _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
                                  , ghcLink = LinkInMemory
                                  , optLevel = 0 })
-  let decl = IIDecl . simpleImportDecl . mkModuleName
-  setContext [decl "Prelude", decl "SK.Core"]
+  setContext [mkIIDecl "Prelude", mkIIDecl "SK.Core"]
 
 -- | Perform given action with DynFlags set for macroexpansion, used
 -- this to preserve original DynFlags.

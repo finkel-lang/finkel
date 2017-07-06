@@ -8,24 +8,14 @@ module SK.Core.Make
 import Control.Monad (foldM_, mapAndUnzipM, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Graph (flattenSCCs)
-import Data.List (find)
+import Data.List (find, nub)
 import Data.Maybe (catMaybes)
 
 -- ghc
-import GHC
-import GhcMonad (modifySession)
-import DriverPhases (Phase(..), startPhase)
-import DriverPipeline (compileFile, link, oneShot)
-import DynFlags (parseDynamicFilePragma, xopt)
-import Finder (addHomeModuleToFinder)
-import HeaderInfo (getOptionsFromFile)
-import HscTypes (HscEnv(..))
-import Module (moduleNameSlashes)
-import Panic (throwGhcException)
-import StringBuffer (stringToStringBuffer)
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
 
+-- ghc-boot
 import qualified GHC.LanguageExtensions as LangExt
 
 -- directory
@@ -37,11 +27,18 @@ import System.FilePath ( dropExtension
                        , takeExtension
                        , (<.>), (</>))
 
--- sk-core
+-- internal
+import SK.Core.Form
 import SK.Core.GHC
+import SK.Core.Lexer
 import SK.Core.Run
 import SK.Core.SKC
 
+-- ---------------------------------------------------------------------
+--
+-- Exported main interface
+--
+-- --------------------------------------------------------------------------
 
 -- | SK variant of @ghc --make@.
 make :: [(FilePath, Maybe Phase)] -- ^ List of input file and phase
@@ -55,50 +52,98 @@ make inputs no_link mb_output = do
   _ <- setSessionDynFlags (dflags { ghcMode = CompManager
                                   , outputFile = mb_output })
 
+  -- Decide the kind of sources of the inputs.
+  sources <- mapM findTargetSource inputs
+  let compileTimeImports = foldr add_reqs [] sources
+      add_reqs (targetSource,_) acc =
+        case targetSource of
+          SkSource _ _ reqs -> reqs ++ acc
+          _ -> acc
+
+  when (not (null compileTimeImports))
+       (liftIO (do putStrLn ";;; required modules: "
+                   mapM_ (\m -> putStrLn (";;; " ++ m))
+                         (nub compileTimeImports)))
+
   -- Compile to ModSummary and HsModule. Input could be SK source code
   -- or something else. If SK source code or Haskell source code,
   -- get ModSummary to resolve the dependencies.
-  (mb_summaries, mb_modules) <- mapAndUnzipM compileInput inputs
+  (mb_summaries, mb_modules) <- mapAndUnzipM compileInput sources
 
   -- Analyze dependency.
   let mgraph = topSortModuleGraph True (catMaybes mb_summaries) Nothing
       mgraph_flattened = flattenSCCs mgraph
       total = length mgraph
       modules = catMaybes mb_modules
+      work i msum = do
+        let name = (moduleName (ms_mod msum))
+        case findHsModuleByModName name modules of
+          Just hsmdl -> makeOne i total msum hsmdl >> return (i + 1)
+          Nothing -> return i
 
   modifySession (\env -> env {hsc_mod_graph = mgraph_flattened})
   debugIO (mapM_ (putStrLn . showSDoc dflags . ppr) mgraph)
 
   -- Compile to '*.hi' and '*.o' files.
-  foldM_ (\i ms -> do
-         let mname = moduleName (ms_mod ms)
-         case findHsModuleByModName mname modules of
-           Nothing -> return i
-           Just hsmdl -> makeOne i total ms hsmdl >> return (i + 1))
-         1
-         mgraph_flattened
+  foldM_ work 1 mgraph_flattened
 
   -- Delegate linking work to driver pipeline's "link".
   when (not no_link) (doLink mgraph_flattened)
 
-compileInput :: (FilePath, Maybe Phase)
-             -> Skc (Maybe ModSummary, Maybe (HsModule RdrName))
-compileInput (modName, mbphase) = do
+
+-- ---------------------------------------------------------------------
+--
+-- Internal
+--
+-- ---------------------------------------------------------------------
+
+data TargetSource
+  = SkSource FilePath [LCode] [String]
+  -- ^ SK source. Holds file path of the source code, parsed form data,
+  -- and required module names.
+  | HsSource FilePath
+  -- ^ Haskell source with file path of the source code.
+  | OtherSource FilePath
+  -- ^ Other source with file path of other contents.
+
+targetSourcePath :: TargetSource -> FilePath
+targetSourcePath mt =
+  case mt of
+    SkSource path _ _ -> path
+    HsSource path -> path
+    OtherSource path -> path
+
+findTargetSource :: (String, a) -> Skc (TargetSource, a)
+findTargetSource (modName, a) = do
   dflags <- getSessionDynFlags
   inputPath <- findFileInImportPaths (importPaths dflags) modName
-  mb_module <- compileToHsModule (inputPath, mbphase)
+  let detectSource path
+        | isSkFile path =
+          do contents <- liftIO (readFile path)
+             (forms, sp) <- parseSexprs (Just path) contents
+             let reqs = requiredModuleNames sp
+             return (SkSource path forms reqs, a)
+        | isHsFile path = return (HsSource path, a)
+        | otherwise = return (OtherSource path, a)
+  detectSource inputPath
+
+compileInput :: (TargetSource, Maybe Phase)
+              -> Skc (Maybe ModSummary, Maybe (HsModule RdrName))
+compileInput (tsrc, mbphase) = do
+  mb_module <- compileToHsModule (tsrc, mbphase)
   mb_summary <-
-     case mb_module of
-       Nothing -> return Nothing
-       Just mdl' -> Just <$> mkModSummary (Just inputPath) mdl'
+    case mb_module of
+      Nothing -> return Nothing
+      Just m -> Just <$> mkModSummary (Just (targetSourcePath tsrc)) m
   return (mb_summary, mb_module)
 
-compileToHsModule :: (FilePath, Maybe Phase)
+compileToHsModule :: (TargetSource, Maybe Phase)
                   -> Skc (Maybe (HsModule RdrName))
-compileToHsModule (file, mbphase)
-  | isSkFile file = Just <$> compileSkFile file
-  | isHsFile file = Just <$> compileHsFile file mbphase
-  | otherwise     = compileOtherFile file >> return Nothing
+compileToHsModule (tsrc, mbphase) =
+  case tsrc of
+    SkSource _ form _ -> Just <$> compileSkModuleForm form
+    HsSource path -> Just <$> compileHsFile path mbphase
+    OtherSource path -> compileOtherFile path >> return Nothing
 
 isSkFile :: FilePath -> Bool
 isSkFile path = takeExtension path == ".sk"
@@ -106,9 +151,6 @@ isSkFile path = takeExtension path == ".sk"
 isHsFile :: FilePath -> Bool
 isHsFile path = elem suffix [".hs", ".lhs"]
    where suffix = takeExtension path
-
-compileSkFile :: FilePath -> Skc (HsModule RdrName)
-compileSkFile source = fmap fst (compileSkModule source)
 
 compileHsFile :: FilePath -> Maybe Phase -> Skc (HsModule RdrName)
 compileHsFile source mbphase = do
@@ -188,7 +230,7 @@ makeOne i total ms hmdl = do
       loc = ms_location ms
   liftIO
     (putStrLn
-       (concat [ "[make ", show i, " of ", show total,  "] Compiling "
+       (concat [ ";;; [", show i, "/", show total,  "] compiling "
                , p (ms_mod_name ms)
                , " (", maybe "unknown input" id (ml_hs_file loc)
                , ", ", ml_obj_file loc, ")"

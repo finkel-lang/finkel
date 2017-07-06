@@ -9,6 +9,7 @@ module SK.Core.Run
   , skErrorHandler
   , sExpression
   , compileSkModule
+  , compileSkModuleForm
   , compileAndEmit
   , parseSexprs
   , buildHsSyn
@@ -136,13 +137,17 @@ parseSexprs mb_file contents =
 buildHsSyn :: Builder a -> [LCode] -> Skc a
 buildHsSyn bldr forms = Skc (lift (evalBuilder' bldr forms))
 
+compileSkModuleForm :: [LCode] -> Skc (HsModule RdrName)
+compileSkModuleForm form = do
+  expanded <- withExpanderSettings (macroexpands form)
+  buildHsSyn parseModule expanded
+
 -- | Compile a file containing SK module.
 compileSkModule :: FilePath -> Skc (HsModule RdrName, SPState)
 compileSkModule file = do
   contents <- liftIO (readFile file)
   (form', st) <- parseSexprs (Just file) contents
-  expanded <- withExpanderSettings (macroexpands form')
-  mdl <- buildHsSyn parseModule expanded
+  mdl <- compileSkModuleForm form'
   return (mdl, st)
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.

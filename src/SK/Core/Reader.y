@@ -31,6 +31,7 @@ import SK.Core.Form
 ','         { L _ TUnquote }
 ',@'        { L _ TUnquoteSplice }
 
+'require' { L _ (TSymbol "require") }
 'symbol'  { L _ (TSymbol _) }
 'char'    { L _ (TChar _) }
 'string'  { L _ (TString _) }
@@ -50,8 +51,14 @@ sexp :: { LCode }
      | '[' sexps ']' { L (getLoc $1) (THsList $2) }
      | '(' sexps ')' { L (getLoc $1) (TList $2) }
 
+-- Required modules are added to SPState here. This is to support
+-- requuring modules in home package when compiling multiple modules
+-- with "--make" command, to get the required modules before macro
+-- expansion.
+
 sexps :: { [LCode] }
-      : rsexps { reverse $1 }
+      : 'require' 'symbol' {% mkRequire $1 $2 }
+      | rsexps             { reverse $1 }
 
 rsexps :: { [LCode] }
        : {- empty -} { [] }
@@ -107,6 +114,11 @@ mkOcSymbol (L l _) = L l (TAtom (ASymbol "{"))
 
 mkCcSymbol :: Located Token -> LCode
 mkCcSymbol (L l _) = L l (TAtom (ASymbol "}"))
+
+mkRequire :: Located Token -> Located Token -> SP [LCode]
+mkRequire t1 t2@(L _ (TSymbol modName)) = do
+  addRequiredModuleName modName
+  return [mkASymbol t1, mkASymbol t2]
 
 happyError :: SP a
 happyError = showErrorSP

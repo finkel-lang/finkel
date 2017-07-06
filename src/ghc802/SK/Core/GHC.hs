@@ -36,9 +36,13 @@ module SK.Core.GHC
     defaultErrorHandler,
     defaultFatalMessager,
     defaultFlushOut,
+    desugarModule,
     emptyLocalBinds,
     getLoc,
+    getModuleInfo,
     getSessionDynFlags,
+    loadModule,
+    lookupModule,
     mkBindStmt,
     mkBodyStmt,
     mkHsDo,
@@ -52,6 +56,7 @@ module SK.Core.GHC
     mkMatchGroup,
     mkModuleName,
     mkNPat,
+    modInfoTyThings,
     noLoc,
     placeHolderType,
     placeHolderNames,
@@ -71,21 +76,32 @@ module SK.Core.GHC
     FractionalLit(..),
     Origin(..),
     SourceText,
+    SuccessFlag(..),
 
     -- * DriverPhases
     HscSource(..),
-    Phase,
+    Phase(..),
+    startPhase,
+
+    -- * DriverPipeline
+    compileFile,
+    link,
+    oneShot,
 
     -- * DynFlags
     DynFlags(..),
     FatalMessager,
     FlushOut(..),
+    GeneralFlag(..),
     GhcLink(..),
+    GhcMode(..),
     HasDynFlags(..),
     HscTarget(..),
     Language(..),
+    gopt,
     languageExtensions,
     parseDynamicFilePragma,
+    xopt,
     xopt_set,
     xopt_unset,
 
@@ -101,25 +117,14 @@ module SK.Core.GHC
     unpackFS,
 
     -- * Finder
+    addHomeModuleToFinder,
     mkHomeModLocation,
 
-    -- * OccName
-    clsName,
-    srcDataName,
-    tcName,
-    tcClsName,
-    tvName,
+    -- * GhcMake
+    topSortModuleGraph,
 
-    -- * Outputable
-    ppr,
-    showSDoc,
-
-    -- * OrdList
-    toOL,
-
-    -- * Panic
-    GhcException(..),
-    handleGhcException,
+    -- * GhcMonad
+    modifySession,
 
     -- * HeaderInfo
     getOptionsFromFile,
@@ -185,19 +190,64 @@ module SK.Core.GHC
     mkLHsSigType,
     mkHsIsString,
 
+    -- * HscTypes
+    HscEnv(..),
+    TyThing(..),
+    ms_mod_name,
+
+    -- * IfaceSyn
+    IfaceDecl(..),
+
+    -- * IfaceType
+    IfaceType(..),
+    IfaceTyCon(..),
+
     -- * InteractiveEval
     getContext,
 
+    -- * Linker
+    getHValue,
+
+    -- * MkIface
+    tyThingToIfaceDecl,
+
     -- * Module
+    Module(..),
     ModLocation(..),
+    ModuleName,
     mainUnitId,
     mkModule,
+    moduleNameSlashes,
 
     -- * MonadUtils
     MonadIO(..),
 
+    -- * OccName
+    clsName,
+    srcDataName,
+    tcName,
+    tcClsName,
+    tvName,
+
+    -- * Outputable
+    Outputable(..),
+    showPpr,
+    showSDoc,
+    showSDocUnqual,
+
+    -- * OrdList
+    toOL,
+
+    -- * Panic
+    GhcException(..),
+    handleGhcException,
+    throwGhcException,
+
     -- * PlaceHolder
     PlaceHolder(..),
+
+    -- * PprTyThing
+    pprTyThing,
 
     -- * RdrHsSyn
     cvTopDecls,
@@ -223,33 +273,57 @@ module SK.Core.GHC
     mkSrcSpan,
     unLoc,
 
+    -- * StringBuffer
+    stringToStringBuffer,
+
     -- * TyWiredIn
     consDataConName,
 
     -- * Util
     getModificationUTCTime,
-    readRational
+    readRational,
+
+    -- * Var
+    varName,
+    varType,
+
+    -- * GHCi.RemoteTypes
+    localRef,
+    withForeignRef
 
   ) where
 
+-- ghc
 import GHC
 import Bag
 import BasicTypes
+import DriverPhases
+import DriverPipeline
 import DynFlags
 import ErrUtils
 import Exception
 import FastString
 import Finder
+import GhcMonad
 import HeaderInfo
 import HscTypes
+import IfaceSyn
+import Linker
+import MkIface
 import Module
 import MonadUtils
-import OccName
+import OccName hiding (varName)
 import OrdList
 import Outputable
 import Panic
+import PprTyThing
 import RdrHsSyn
 import RdrName
 import SrcLoc
+import StringBuffer
 import TysWiredIn
 import Util
+import Var
+
+-- ghci
+import GHCi.RemoteTypes
