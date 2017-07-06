@@ -313,7 +313,6 @@ pats1 :: { HPat }
 expr :: { HExpr }
     : atom     { $1 }
     | 'list'   {% parse p_exprs $1 }
-    | 'hslist' {% b_hsListE `fmap` parse p_hlist (unwrapListL $1) }
 
 atom :: { HExpr }
     : 'symbol'  { b_varE $1 }
@@ -322,6 +321,7 @@ atom :: { HExpr }
     | 'integer' { b_integerE $1 }
     | 'frac'    { b_floatE $1 }
     | 'unit'    { b_unitE $1 }
+    | 'hslist'  {% b_hsListE `fmap` parse p_hlist (unwrapListL $1) }
 
 exprs :: { HExpr }
     : '\\' pats expr          { b_lamE $2 $3 }
@@ -417,8 +417,6 @@ rdo_stmts :: { [HStmt] }
 stmt :: { HStmt }
     : atom     { b_bodyS $1 }
     | 'list'   {% parse p_stmt1 $1 }
-    | 'hslist' {% (b_bodyS . b_hsListE) `fmap`
-                 parse p_hlist (unwrapListL $1) }
 
 stmt1 :: { HStmt }
     : '<-' pat expr { b_bindS $1 $2 $3 }
