@@ -1,0 +1,16 @@
+;;;; Module to support `apply' inside REPL.
+;;;;
+;;;; Will not work in compiled code since apply is handled specially in
+;;;; the REPL's evaluate function.
+
+(module SK.Repl.Apply)
+
+(data (ReplIO a)
+  (ReplIO {replIoName String
+           replIoArgs a}))
+
+(instance (Show (ReplIO a))
+  (= (show _) "<<ReplIO>>"))
+
+(:: apply (-> String a (ReplIO a)))
+(= (apply name args) (ReplIO name args))
