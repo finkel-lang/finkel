@@ -86,6 +86,7 @@ module SK.Core.GHC
     -- * DriverPipeline
     compileFile,
     link,
+    preprocess,
     oneShot,
 
     -- * DynFlags

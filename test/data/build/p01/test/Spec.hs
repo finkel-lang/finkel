@@ -1,9 +1,9 @@
 module Main where
 import System.Exit
-import S1A
+import P01A
 
 main :: IO ()
-main = do
-  if s1a == 42
+main =
+  if p01a == ["p01a", "p01b", "p01c", "p01d", "p01e", "p01f"]
     then exitSuccess
     else exitFailure

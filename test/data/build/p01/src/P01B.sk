@@ -1,4 +1,4 @@
 (module P01B)
 
-(:: p01b (-> Int Int))
-(= p01b (\ (n) (+ n 2)))
+(:: p01b String)
+(= p01b "p01b")

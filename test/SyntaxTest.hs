@@ -15,9 +15,9 @@ import SK.Core.Run
 getTestFiles :: IO [FilePath]
 getTestFiles =
   let dir = "test" </> "data" </> "syntax"
-      f = (\x acc -> if takeExtension x == ".sk"
-                       then (dir </> x) : acc
-                       else acc)
+      f x acc = if takeExtension x == ".sk"
+                  then (dir </> x) : acc
+                  else acc
       files = getDirectoryContents dir
   in  sort <$> foldr f [] <$> files
 
@@ -32,10 +32,10 @@ readCode src = do
 
 mkTest :: String -> Spec
 mkTest name =
-  before (readCode name) $ do
-    describe name $ do
+  before (readCode name) $
+    describe name $
       it "should compile and type check"
          (\result -> result `shouldBe` True)
 
 syntaxTests :: [FilePath] -> Spec
-syntaxTests files = mapM_ mkTest files
+syntaxTests = mapM_ mkTest

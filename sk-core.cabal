@@ -44,7 +44,6 @@ library
                      , directory
                      , filepath
                      , ghc == 8.0.*
-                     , ghc-boot
                      , ghc-paths
                      , ghci
                      , time

@@ -15,9 +15,6 @@ import Data.Maybe (catMaybes, fromMaybe)
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
 
--- ghc-boot
-import qualified GHC.LanguageExtensions as LangExt
-
 -- directory
 import System.Directory (doesFileExist)
 
@@ -72,6 +69,12 @@ make inputs no_link mb_output = do
                          show compileTimeImports)))
 
   -- If required modules are found in argument, compile them first.
+  --
+  -- The problem in dependency resolution is, we need module imports
+  -- list to make ModSummary, but modules imports could not be obtained
+  -- unless the source code is parsed and macro expanded. However,
+  -- macroexpansion may use macros from imported modules.
+  --
   let lkupReqs (source,mbphase) acc =
         case source of
           SkSource _ mn _ _
@@ -184,12 +187,12 @@ isSkFile :: FilePath -> Bool
 isSkFile path = takeExtension path == ".sk"
 
 isHsFile :: FilePath -> Bool
-isHsFile path = suffix `elem` [".hs", ".lhs"]
-   where suffix = takeExtension path
+isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
 
 compileHsFile :: FilePath -> Maybe Phase -> Skc (HsModule RdrName)
 compileHsFile source mbphase = do
-  (source', dflags) <- maybePreprocess source mbphase
+  hsc_env <- getSession
+  (dflags, source') <- liftIO (preprocess hsc_env (source, mbphase))
   contents <- liftIO (readFile source')
   let location = mkRealSrcLoc (fsLit source) 1 1
       sbuf = stringToStringBuffer contents
@@ -197,20 +200,6 @@ compileHsFile source mbphase = do
   case GHCLexer.unP GHCParser.parseModule parseState of
     GHCLexer.POk _ m     -> return (unLoc m)
     GHCLexer.PFailed _ _ -> failS ("Parser error with " ++ source)
-
-maybePreprocess :: FilePath -> Maybe Phase -> Skc (FilePath, DynFlags)
-maybePreprocess source mbphase = do
-  hsc_env <- getSession
-  let dflags0 = hsc_dflags hsc_env
-  src_opts <- liftIO (getOptionsFromFile dflags0 source)
-  (dflags1,_,_) <- liftIO (parseDynamicFilePragma dflags0 src_opts)
-  source' <-
-    if xopt LangExt.Cpp dflags1
-       then liftIO (compileFile hsc_env
-                                (HsPp HsSrcFile)
-                                (source, mbphase))
-       else return source
-  return (source', dflags1)
 
 compileOtherFile :: FilePath -> Skc ()
 compileOtherFile path = do

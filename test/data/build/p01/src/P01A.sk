@@ -2,6 +2,7 @@
 
 (import P01B)
 (import P01C)
+(import P01D)
 
-(:: p01a Int)
-(= p01a (* (p01b 5) (p01c 3)))
+(:: p01a [String])
+(= p01a (++ ["p01a" p01b p01c] p01d))
