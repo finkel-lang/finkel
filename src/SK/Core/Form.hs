@@ -29,7 +29,6 @@ module SK.Core.Form
 
 -- From base
 import Data.Data
-import Data.List (intersperse)
 
 -- Pretty module from ghc.
 import qualified Pretty as P
@@ -59,7 +58,7 @@ instance Show a => Show (Form a) where
       HsList xs -> mkList "[" xs "]"
     where
       mkList open xs close =
-        open ++ concat (intersperse " " (map show xs)) ++ close
+        open ++ unwords (map show xs) ++ close
 
 -- | Atom in tokens.
 data Atom
@@ -166,9 +165,9 @@ pprAtom atom =
     ASymbol x -> P.text "ASymbol" P.<+> P.text x
     AChar x -> P.text "AChar" P.<+> P.char x
     AString x -> P.text "AString" P.<+> P.doubleQuotes (P.text x)
-    AInteger x -> P.text "AInteger" P.<+> (P.text (show x))
-    AFractional x -> P.text "AFractional" P.<+> (P.text (fl_text x))
-    AComment x -> P.text "AComment" P.<+> (P.doubleQuotes (P.text x))
+    AInteger x -> P.text "AInteger" P.<+> P.text (show x)
+    AFractional x -> P.text "AFractional" P.<+> P.text (fl_text x)
+    AComment x -> P.text "AComment" P.<+> P.doubleQuotes (P.text x)
 
 pprTForm :: LCode -> P.Doc
 pprTForm (L _ form) =
@@ -231,7 +230,7 @@ class Codish a where
                       _         -> Nothing
 
 instance Codish Atom where
-  toCode a = Atom a
+  toCode = Atom
   fromCode a =
     case a of
       Atom x -> Just x

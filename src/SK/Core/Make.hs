@@ -9,7 +9,7 @@ import Control.Monad (foldM_, mapAndUnzipM, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Graph (flattenSCCs)
 import Data.List (find, nub)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromMaybe)
 
 -- ghc
 import qualified Parser as GHCParser
@@ -75,7 +75,7 @@ make inputs no_link mb_output = do
   let lkupReqs (source,mbphase) acc =
         case source of
           SkSource _ mn _ _
-            | elem mn compileTimeImports ->
+            | mn `elem` compileTimeImports ->
               (source, mbphase) : acc
           _ -> acc
       requiredHomePkgMods = foldr lkupReqs [] sources
@@ -184,7 +184,7 @@ isSkFile :: FilePath -> Bool
 isSkFile path = takeExtension path == ".sk"
 
 isHsFile :: FilePath -> Bool
-isHsFile path = elem suffix [".hs", ".lhs"]
+isHsFile path = suffix `elem` [".hs", ".lhs"]
    where suffix = takeExtension path
 
 compileHsFile :: FilePath -> Maybe Phase -> Skc (HsModule RdrName)
@@ -232,7 +232,7 @@ findFileInImportPaths dirs modName = do
   let suffix = takeExtension modName
       moduleFileName = moduleNameSlashes (mkModuleName modName)
       moduleFileName'
-        | elem suffix [".sk", ".hs", ".c"] = modName
+        | suffix `elem` [".sk", ".hs", ".c"] = modName
         | otherwise = moduleFileName <.> "sk"
       search ds =
         case ds of
@@ -283,7 +283,7 @@ makeOne i total ms hmdl = do
     (putStrLn
        (concat [ ";;; [", show i, "/", show total,  "] compiling "
                , p (ms_mod_name ms)
-               , " (", maybe "unknown input" id (ml_hs_file loc)
+               , " (", fromMaybe "unknown input" (ml_hs_file loc)
                , ", ", ml_obj_file loc, ")"
                ]))
   tc <- tcHsModule (Just (ms_hspp_file ms)) True hmdl

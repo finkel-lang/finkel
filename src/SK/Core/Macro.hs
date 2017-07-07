@@ -95,7 +95,7 @@ quasiquote orig@(L l form) =
     _       -> orig
   where
    go acc forms =
-     let (pre, post) = span (not . isUnquoteSplice) forms
+     let (pre, post) = break isUnquoteSplice forms
      in  case post of
            (L ls (TList (_:body)):post') ->
              go (acc ++ [tHsList l (map quasiquote pre)
@@ -172,10 +172,10 @@ pTyThing dflags ty_thing@(AnId var) = do
       name = str (varName var)
       typ = str (varType var)
   when (typ == "Macro")
-       (do (prn (";;; adding macro `" ++
+       (do prn (";;; adding macro `" ++
                  name ++
-                 "' to current compiler session."))
-           (addImportedMacro ty_thing))
+                 "' to current compiler session.")
+           addImportedMacro ty_thing)
 pTyThing dflags tt = pTyThing' dflags tt
 
 -- Currently unused for adding macro, just for printing out information.
@@ -364,7 +364,7 @@ macroexpands forms = do
 -- calling macroexpand on the result, cannot expand macro-generating
 -- macros.
 macroexpand :: LCode -> Skc LCode
-macroexpand form = do
+macroexpand form =
   -- liftIO (putStrLn ("expanding:\n" ++ show (pprForm (unLocForm form))))
   case form of
     -- Expand list of forms with preserving the constructor.

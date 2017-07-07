@@ -82,7 +82,7 @@ putBState = Builder . put
 -- | Parse with builder using given tokens, continue on successful
 -- parse.
 parse :: Builder a -> [LCode] -> Builder a
-parse bld toks = do
+parse bld toks =
   case runBuilder bld toks of
     Right (a, _) -> return a
     Left err -> failB err
@@ -157,7 +157,7 @@ builderError = do
     Nothing -> failB "no location"
     Just x  ->
       failB (showLoc x ++ "parse error on input `" ++
-             (show (pForm (unLocForm x))) ++ "'")
+             show (pForm (unLocForm x)) ++ "'")
 
 
 -- | Unwrap the element of 'TList' and 'THsList', otherwise returns '[]'.
@@ -174,7 +174,7 @@ mkRdrName :: String -> RdrName
 mkRdrName name@(x:_)
   -- ':' is special syntax. It is defined in module "GHC.Types" in
   -- package "ghc-prim", but not exported.
-  | name == [':'] = nameRdrName consDataConName
+  | name == ":" = nameRdrName consDataConName
 
   -- Data constructor starts from capital letter or ':'.
   | isUpper x || x == ':' = mkUnqual srcDataName (fsLit name)
@@ -296,11 +296,11 @@ b_simpletypeD ((L _ (TAtom (ASymbol name))):tvs) = (name, tvs')
 
 b_conD :: LCode -> HsConDeclDetails RdrName -> HConDecl
 b_conD (L l1 (TAtom (ASymbol s1))) details =
-    L l1 (ConDeclH98 { con_name = L l1 (mkUnqual srcDataName (fsLit s1))
+    L l1 ConDeclH98 { con_name = L l1 (mkUnqual srcDataName (fsLit s1))
                      , con_qvars = Nothing
                      , con_cxt = Nothing
                      , con_details = details
-                     , con_doc = Nothing })
+                     , con_doc = Nothing }
 
 b_conOnlyD :: LCode -> HConDecl
 b_conOnlyD name = b_conD name (PrefixCon [])
@@ -339,8 +339,8 @@ b_instD (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
                        , cid_tyfam_insts = []
                        , cid_datafam_insts = []
                        , cid_overlap_mode = Nothing }
-    qty = L l (HsQualTy { hst_ctxt = mkLocatedList ctxts
-                        , hst_body = ty })
+    qty = L l HsQualTy { hst_ctxt = mkLocatedList ctxts
+                        , hst_body = ty }
     binds = foldr declToBind [] decls
     -- XXX: Skipping non-functional bindings.
     declToBind d acc =
@@ -354,7 +354,7 @@ b_qtyclC ts =
     []  -> builderError
     [_] -> builderError
     _   -> do
-      let (ctxt,t) = splitAt ((length ts) - 1) ts
+      let (ctxt,t) = splitAt (length ts - 1) ts
       return (ctxt, head t)
 
 b_funD :: Located a -> ([HGRHS] -> HsBind RdrName) -> [HGRHS] -> HDecl
@@ -516,9 +516,9 @@ b_recConOrUpdE sym@(L l _) flds = L l expr
 
 mkcfld :: (String,HExpr) -> LHsRecField RdrName HExpr
 mkcfld (name, e@(L fl _)) =
-  L fl (HsRecField { hsRecFieldLbl = mkfname fl name
-                   , hsRecFieldArg = e
-                   , hsRecPun = False })
+  L fl HsRecField { hsRecFieldLbl = mkfname fl name
+                  , hsRecFieldArg = e
+                  , hsRecPun = False }
   where
     mkfname nl n = L nl (mkFieldOcc (L nl (mkRdrName n)))
 
@@ -543,11 +543,11 @@ b_stringE (L l (TAtom (AString x))) = L l (HsLit (HsString x (fsLit x)))
 
 b_integerE :: LCode -> HExpr
 b_integerE (L l (TAtom (AInteger x))) =
-    L l (HsOverLit $! (mkHsIntegral (show x) x placeHolderType))
+    L l (HsOverLit $! mkHsIntegral (show x) x placeHolderType)
 
 b_floatE :: LCode -> HExpr
 b_floatE (L l (TAtom (AFractional x))) =
-   L l (HsOverLit $! (mkHsFractional x placeHolderType))
+   L l (HsOverLit $! mkHsFractional x placeHolderType)
 
 b_varE :: LCode -> HExpr
 b_varE (L l (TAtom (ASymbol x))) = L l (HsVar (L l (mkRdrName x)))

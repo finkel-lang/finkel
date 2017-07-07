@@ -20,6 +20,7 @@ module SK.Core.Run
 -- base
 import Control.Exception
 import System.Exit
+import Data.Maybe (fromMaybe)
 
 -- containers
 import qualified Data.Map as Map
@@ -62,15 +63,13 @@ runSkcWithoutHandler m env =
 -- | Run action with source error handling.
 withSourceErrorHandling :: (ExceptionMonad m, GhcMonad m)
                         => m (Either String a) -> m (Either String a)
-withSourceErrorHandling m =
+withSourceErrorHandling =
   handleSourceError
     (\se -> do
       flags <- getSessionDynFlags
       return (Left (unlines (map (showSDoc flags)
                                  (pprErrMsgBagWithLoc
                                    (srcErrorMessages se))))))
-    m
-
 
 -- | Similar to 'defaultErrorHandler', but won't exit with 'ExitFailure'
 -- in exception handler.
@@ -88,13 +87,13 @@ skErrorHandler fm (FlushOut flush) work =
                _ ->
                  case fromException e of
                    Just UserInterrupt ->
-                     (throwIO UserInterrupt)
+                     throwIO UserInterrupt
                    Just StackOverflow ->
                      fatalErrorMsg'' fm "stack overflow"
                    _ ->
                      case fromException e of
                        Just (ec :: ExitCode) ->
-                         (throwIO ec)
+                         throwIO ec
                        _ -> fatalErrorMsg'' fm (show e)
              return (Left (show e))))
     (handleGhcException
@@ -119,7 +118,7 @@ sExpression input =
   case evalSP sexprs Nothing input of
     Right forms ->
       do putStrLn "=== pform ==="
-         mapM_ (print . pForm) (map unLocForm forms)
+         mapM_ (print . pForm . unLocForm) forms
          putStrLn "=== pprForm ==="
          print (pprForms (map unLocForm forms))
     Left err -> putStrLn err
@@ -157,7 +156,7 @@ mkModSummary mbfile mdl = do
   let modName = case hsmodName mdl of
                       Just name -> unLoc name
                       Nothing   -> mkModuleName "Main"
-      fn = maybe "anonymous" id mbfile
+      fn = fromMaybe "anonymous" mbfile
       mmod = mkModule mainUnitId modName
       prelude = noLoc (mkModuleName "Prelude")
       imports = map importedName (hsmodImports mdl)
@@ -206,7 +205,7 @@ tcHsModule :: GhcMonad m
            -> HsModule RdrName -- ^ Module to typecheck.
            -> m TypecheckedModule
 tcHsModule mbfile genFile mdl = do
-  let fn = maybe "anon" id mbfile
+  let fn = fromMaybe "anon" mbfile
       langExts = languageExtensions (Just Haskell2010)
   dflags0 <- getSessionDynFlags
   -- XXX: Does not take care of user specified DynFlags settings.
