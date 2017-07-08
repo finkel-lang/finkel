@@ -225,9 +225,9 @@ qtycl :: { ([HType], HType) }
     : 'list' {% parse p_lqtycl $1 }
 
 lqtycl :: { ([HType], HType) }
-    : '=>' 'unit' type { ([], $3) }
-    | '=>' types       {% b_qtyclC $2 }
-    | types0           { ([], $1) }
+    : '=>' 'unit' type  { ([], $3) }
+    | '=>' 'list' types {% parse p_types0 $2 >>= b_qtyclC . (:$3) }
+    | types0            { ([], $1) }
 
 idecls :: { [HDecl] }
     : decls { $1 }
