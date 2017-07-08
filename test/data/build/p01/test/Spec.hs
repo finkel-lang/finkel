@@ -4,6 +4,7 @@ import P01A
 
 main :: IO ()
 main =
-  if p01a == ["p01a", "p01b", "p01c", "p01d", "p01e", "p01f"]
+  if p01a == ["p01a", "p01b", "p01c", "p01d", "p01e", "p01f"
+             ,"p01h", "p01i"]
     then exitSuccess
     else exitFailure

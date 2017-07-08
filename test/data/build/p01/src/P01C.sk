@@ -1,4 +1,5 @@
+(require P01G)
+
 (module P01C)
 
-(:: p01c String)
-(= p01c "p01c")
+(m1 p01c "p01c")

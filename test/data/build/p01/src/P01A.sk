@@ -3,6 +3,7 @@
 (import P01B)
 (import P01C)
 (import P01D)
+(import P01H)
 
 (:: p01a [String])
-(= p01a (++ ["p01a" p01b p01c] p01d))
+(= p01a (concat [["p01a" p01b p01c] p01d p01h]))

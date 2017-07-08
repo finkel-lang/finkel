@@ -19,6 +19,7 @@ module SK.Core.Setup
   ) where
 
 -- base
+import Data.Function (on)
 import Data.List (unionBy)
 
 -- Cabal
@@ -96,8 +97,8 @@ skcBuildHooks pkg_descr lbi hooks flags =
 -- | Haddock hooks using @stack exec skc@ for preprocessing ".sk"
 -- files.
 stackSkHaddockHooks :: PackageDescription -> LocalBuildInfo
-                     -> UserHooks -> HaddockFlags -> IO ()
-stackSkHaddockHooks p l h f = haddock p l pps f
+                    -> UserHooks -> HaddockFlags -> IO ()
+stackSkHaddockHooks p l h = haddock p l pps
   where
     pps = ("sk", mkSk2hsPP stackSk2hsProgram) : allSuffixHandlers h
 
@@ -105,8 +106,7 @@ stackSkHaddockHooks p l h f = haddock p l pps f
 allSuffixHandlers :: UserHooks -> [PPSuffixHandler]
 allSuffixHandlers hooks =
   overridesPP (hookedPreProcessors hooks) knownSuffixHandlers
-    where
-      overridesPP = unionBy (\x y -> fst x == fst y)
+    where overridesPP = unionBy ((==) `on` fst)
 
 -- | Make simple preprocessor from configured program.
 mkSk2hsPP :: ConfiguredProgram -> BuildInfo -> LocalBuildInfo
@@ -116,7 +116,7 @@ mkSk2hsPP program _ _ = PreProcessor
   , runPreProcessor = mkSimplePreProcessor (mkSk2hs program)
   }
   where
-    mkSk2hs prog infile outfile verbosity = do
+    mkSk2hs prog infile outfile verbosity =
       runProgram verbosity prog ["-o", outfile, infile]
 
 -- Preprocessor arguments

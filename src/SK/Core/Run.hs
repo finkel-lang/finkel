@@ -14,6 +14,7 @@ module SK.Core.Run
   , parseSexprs
   , buildHsSyn
   , mkModSummary
+  , mkModSummary'
   , tcHsModule
   ) where
 
@@ -154,15 +155,19 @@ mkModSummary :: GhcMonad m => Maybe FilePath -> HsModule RdrName
              -> m ModSummary
 mkModSummary mbfile mdl = do
   let modName = case hsmodName mdl of
-                      Just name -> unLoc name
-                      Nothing   -> mkModuleName "Main"
-      fn = fromMaybe "anonymous" mbfile
+                  Just name -> unLoc name
+                  Nothing -> mkModuleName "Main"
+      imports = map (ideclName . unLoc) (hsmodImports mdl)
+  mkModSummary' mbfile modName imports
+
+-- | Makd 'ModSummary' from source file, module name, and imports.
+mkModSummary' :: GhcMonad m => Maybe FilePath -> ModuleName
+              -> [Located ModuleName] -> m ModSummary
+mkModSummary' mbfile modName imports = do
+  let fn = fromMaybe "anonymous" mbfile
       mmod = mkModule mainUnitId modName
       prelude = noLoc (mkModuleName "Prelude")
-      imports = map importedName (hsmodImports mdl)
-      importedName lm = ideclName (unLoc lm)
       imported = map (\x -> (Nothing, x)) imports
-
   dflags0 <- getSessionDynFlags
   mloc <- liftIO (mkHomeModLocation dflags0 modName fn)
   timestamp <-
@@ -174,7 +179,6 @@ mkModSummary mbfile mdl = do
         (dflags1,_,_) <- liftIO (parseDynamicFilePragma dflags0 opts)
         return dflags1
       else return dflags0
-
   -- XXX: Have not tested with complex module importing modules from
   -- non-standard packages.
   return ModSummary { ms_mod = mmod
@@ -188,6 +192,7 @@ mkModSummary mbfile mdl = do
                     , ms_hspp_file = fn
                     , ms_hspp_opts = dflags1
                     , ms_hspp_buf = Nothing }
+
 
 isHsSource :: FilePath -> Bool
 isHsSource path = "hs" == suffix

@@ -26,6 +26,9 @@ library
                        P01D
                        P01E
                        P01F
+                       P01G
+                       P01H
+                       P01I
   build-depends:       base >= 4.7 && < 5
                      , sk-core
   default-language:    Haskell2010
