@@ -1,5 +1,0 @@
-(require P01G)
-
-(module P01C)
-
-(m1 p01c "p01c")

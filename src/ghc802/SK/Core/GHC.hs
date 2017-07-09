@@ -219,6 +219,7 @@ module SK.Core.GHC
     mainUnitId,
     mkModule,
     moduleNameSlashes,
+    moduleNameString,
 
     -- * MonadUtils
     MonadIO(..),

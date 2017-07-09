@@ -4,7 +4,7 @@
 
 (import SK.Core)
 
-;; Simple `defmacro' definition by `define-macro'
+;; Simple `defmacro' defined with `define-macro'
 (define-macro defmacro (form)
   (case form
     ((List [name arg body])

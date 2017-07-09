@@ -14,8 +14,8 @@ extra-source-files:  README.md
                      test/data/syntax/*.sk
                      test/data/build/p01/*.cabal
                      test/data/build/p01/*.yaml
-                     test/data/build/p01/*.hs
-                     test/data/build/p01/src/*.sk
+                     test/data/build/p01/src/P01/*.hs
+                     test/data/build/p01/src/P01/*.sk
                      test/data/build/p01/test/*.hs
 cabal-version:       >=1.10
 

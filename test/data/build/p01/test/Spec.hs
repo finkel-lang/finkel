@@ -1,6 +1,6 @@
 module Main where
 import System.Exit
-import P01A
+import P01.A
 
 main :: IO ()
 main =

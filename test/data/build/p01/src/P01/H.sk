@@ -1,0 +1,6 @@
+(require P01.G2)
+
+(define-p01-module P01.H P01.I)
+
+(define-p01-function p01h [String]
+  ["p01h" p01i])

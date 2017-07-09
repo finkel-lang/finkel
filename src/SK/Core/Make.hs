@@ -5,7 +5,7 @@ module SK.Core.Make
   ) where
 
 -- base
-import Control.Monad (foldM_, mapAndUnzipM, unless)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Graph (flattenSCCs)
 import Data.List (find)
@@ -31,18 +31,11 @@ import SK.Core.Lexer
 import SK.Core.Run
 import SK.Core.SKC
 
--- From ghc, currently unused.
---
--- import HscTypes (FindResult(..))
--- import Finder (findHomeModule)
-
-import Module (moduleNameString)
-
 -- ---------------------------------------------------------------------
 --
 -- Exported main interface
 --
--- --------------------------------------------------------------------------
+-- ---------------------------------------------------------------------
 
 -- [Requiring home package module]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -66,8 +59,7 @@ make :: [(FilePath, Maybe Phase)] -- ^ List of input file and phase
      -> Maybe FilePath -- ^ Output file, if any.
      -> Skc ()
 make inputs no_link mb_output = do
-
-  -- Setting ghcMode as done in ghc's "Main.hs".
+  -- Updating ghcMode, as done in ghc's "Main.hs".
   dflags <- getSessionDynFlags
   _ <- setSessionDynFlags (dflags { ghcMode = CompManager
                                   , outputFile = mb_output })
@@ -75,40 +67,12 @@ make inputs no_link mb_output = do
   -- Decide the kind of sources of the inputs.
   sources <- mapM findTargetSource inputs
 
-  let partition (source,mbp) (r,p) =
-        case source of
-          SkSource _ _ _ reqs
-            | any (`elem` homePkgModules) reqs -> (r,(source,mbp):p)
-          _ -> ((source,mbp):r, p)
-      homePkgModules = map fst inputs
-      (ready, pendings) = foldr partition ([],[]) sources
-
-  debugIO (do putStrLn (";;; ready: " ++ show ready)
-              putStrLn (";;; pending: " ++ show pendings))
-
-  -- Making temporally ModSummary for target sources without `require'
-  -- of home package modules.
-  req_mss <- mkReadTimeModSummaries ready
-
-  let graph1 = topSortModuleGraph True req_mss Nothing
-      targets1 = sortTargets (flattenSCCs graph1) ready
-
-  debugIO (do putStrLn ";;; targets1: "
-              mapM_ print targets1)
-  -- mod_summaries <- go [] targets1 pendings
-  mod_summaries <- make' targets1 pendings
-
-  -- (mb_summaries, mb_modules) <- mapAndUnzipM compileInput sources
-
-  -- let mgraph = topSortModuleGraph True (catMaybes mb_summaries) Nothing
-  --     mgraph_flattened = flattenSCCs mgraph
-  --     total = length mgraph
-  --     modules = catMaybes mb_modules
-  --     work i msum = do
-  --       let name = moduleName (ms_mod msum)
-  --       case findHsModuleByModName name modules of
-  --         Just hsmdl -> makeOne i total msum hsmdl >> return (i + 1)
-  --         Nothing -> return i
+  -- XXX: Assuming modules names were passed as arguments, but inputs
+  -- could be file paths. Problem with SK source is that module name
+  -- could not be snured until parsing the file contents as HsModule,
+  -- but module parsing might use compiled code of other files.
+  let homePkgModules = map fst inputs
+  mod_summaries <- make' homePkgModules [] sources
 
   -- Update current module graph for linker. Linking work is delegated
   -- to deriver pipelin's `link' function.
@@ -153,61 +117,6 @@ targetSourcePath mt =
     HsSource path -> path
     OtherSource path -> path
 
--- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule', then compile
--- to interface file, and object code.
---
--- Do macro expansion and get the Haskell `import' declarations from
--- parsed source contents. If the macro expanded result does not
--- contain imports from pending modules, compile to '*.hi' and
--- '*.o'. If the HsModule contained imports of pending module, add the
--- module to the pending modules.
---
-make' :: [TargetUnit] -> [TargetUnit] -> Skc [ModSummary]
-make' readys pendings = go 1 [] readys pendings
-  where
-    -- Compile to ModSummary and HsModule. Input could be SK source
-    -- code or something else. If SK source code or Haskell source
-    -- code, get ModSummary to resolve the dependencies.
-    go i acc (target@(tsr,mbp):summarised) pending = do
-      case tsr of
-        SkSource path _mn form _reqs -> do
-          hmdl <- compileSkModuleForm form
-          summary <- mkModSummary (Just path) hmdl
-          let imports = map importName (hsmodImports hmdl)
-          if any (`elem` map (skmn . fst) pending) imports
-             then go i acc summarised (target:pending)
-             else do
-               makeOne i total summary hmdl
-               go (i + 1) (summary:acc) summarised pending
-        HsSource _ -> do
-          (Just summary, Just hmdl) <- compileInput (tsr,mbp)
-          makeOne i total summary hmdl
-          go (i + 1) (summary:acc) summarised pending
-        OtherSource _ -> do
-          go i acc summarised pending
-
-    -- Ready to compile pending modules. Get ModSummary and HsModule,
-    -- resolve dependency with `topSortModuleGraph', then compile to
-    -- object code.
-    go i acc [] pending = do
-      (mb_p_mss, mb_hmdls) <- mapAndUnzipM compileInput pending
-      let p_mss = catMaybes mb_p_mss
-          hmdls = catMaybes mb_hmdls
-          graph2 = topSortModuleGraph True p_mss Nothing
-          work j msum = do
-            let name = moduleName (ms_mod msum)
-            case findHsModuleByModName name hmdls of
-              Just hmdl -> makeOne j total msum hmdl >> return (j+1)
-              Nothing   -> return j
-      foldM_ work i (flattenSCCs graph2)
-      return (p_mss ++ acc)
-
-    importName ld = moduleNameString (unLoc (ideclName (unLoc ld)))
-    skmn t = case t of
-               SkSource _ mn _ _ -> mn
-               _ -> "module-name-unknown"
-    total = length readys + length pendings
-
 findTargetSource :: (String, a) -> Skc (TargetSource, a)
 findTargetSource (modName, a) = do
   dflags <- getSessionDynFlags
@@ -221,6 +130,74 @@ findTargetSource (modName, a) = do
         | isHsFile path = return (HsSource path, a)
         | otherwise = return (OtherSource path, a)
   detectSource inputPath
+
+-- | Make temporally ModSummary for target sources without `require' of
+-- home package modules.
+partitionRequired :: [String] -> [TargetUnit]
+                  -> ([TargetUnit], [TargetUnit])
+partitionRequired homePkgModules = foldr f ([],[])
+  where
+    f (source,mbp) (r,p) =
+      case source of
+        SkSource _ _ _ reqs
+          | any (`elem` homePkgModules) reqs -> (r,(source,mbp):p)
+        _ -> ((source,mbp):r, p)
+
+-- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule' with resolving
+-- dependencies, then compile to interface file and object code.
+make' :: [String] -> [TargetUnit] -> [TargetUnit] -> Skc [ModSummary]
+make' not_yet_compiled readys0 pendings0 =
+  -- XXX: Quite a lot of assumptions made with input argument format
+  -- passed from Cabal.
+  go [] total not_yet_compiled readys0 pendings0
+  where
+    -- No more modules to compile, return the accumulated ModSummary.
+    go acc 0  _ _  _ = return acc
+    go acc _ [] _  _ = return acc
+    go acc _ _ [] [] = return acc
+
+    -- Compile ready-to-compile-targets to ModSummary and
+    -- HsModule. Input could be SK source code or something else. If SK
+    -- source code or Haskell source code, get ModSummary to resolve the
+    -- dependencies.
+    go acc i nycs (target@(tsr,mbp):summarised) pendings = do
+      case tsr of
+        SkSource path mn form _reqs -> do
+          hmdl <- compileSkModuleForm form
+          summary <- mkModSummary (Just path) hmdl
+          let imports = map importName (hsmodImports hmdl)
+          if any (`elem` map (skmn . fst) pendings) imports
+             then go acc i nycs summarised (target:pendings)
+             else do
+               makeOne (total - i + 1) total summary hmdl
+               let nycs' = filter (/= mn) nycs
+               go (summary:acc) (i - 1) nycs' summarised pendings
+        HsSource _ -> do
+          (Just summary, Just hmdl) <- compileInput (tsr,mbp)
+          makeOne (total - i + 1) total summary hmdl
+          let mName = moduleNameString (moduleName (ms_mod summary))
+              nycs' = filter (/= mName) nycs
+          go (summary:acc)  (i - 1) nycs' summarised pendings
+        OtherSource _ -> do
+          go acc i nycs summarised pendings
+
+    -- Ready to compile pending modules to read-time-ModSummary.
+    -- Partition the modules, make read time ModSummaries, then sort via
+    -- topSortModuleGraph, and recurse.
+    go acc i nycs [] pendings = do
+      debugIO (putStrLn (";;; nycs: " ++ show nycs))
+      let (readies', pendings') = partitionRequired nycs pendings
+      r_mss <- mkReadTimeModSummaries readies'
+      let graph = topSortModuleGraph True r_mss Nothing
+          readies'' = sortTargets (flattenSCCs graph) readies'
+      go acc i nycs readies'' pendings'
+
+    -- Auxiliary
+    importName = moduleNameString . unLoc . ideclName . unLoc
+    skmn t = case t of
+               SkSource _ mn _ _ -> mn
+               _ -> "module-name-unknown"
+    total = length readys0 + length pendings0
 
 -- | Make list of 'ModSummary' for read time dependency analysis.
 mkReadTimeModSummaries :: [TargetUnit] -> Skc [ModSummary]
@@ -254,7 +231,15 @@ compileInput (tsrc, mbphase) = do
   mb_summary <-
     case mb_module of
       Nothing -> return Nothing
-      Just m -> Just <$> mkModSummary (Just (targetSourcePath tsrc)) m
+      Just m -> do
+        summary <- mkModSummary (Just (targetSourcePath tsrc)) m
+        case tsrc of
+          SkSource _ _ _ reqs -> do
+            let mkImport req = (Nothing, noLoc (mkModuleName req))
+                imps = ms_textual_imps summary ++ map mkImport reqs
+                summary' = summary {ms_textual_imps=imps}
+            return (Just summary')
+          _ -> return (Just summary)
   return (mb_summary, mb_module)
 
 compileToHsModule :: TargetUnit
@@ -330,25 +315,14 @@ findFileInImportPaths dirs modName = do
   debugIO (putStrLn ("File found: " ++ found))
   return found
 
--- Failed attempt to avoid recompilation. Haskell source code cache
--- management not working properly. See below for details of how GHC
--- avoid recompilation:
+-- XXX: See below for details of how GHC avoid recompilation:
 --
 --   https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/RecompilationAvoidance
 --
--- makeOne :: GhcMonad m => Int -> Int -> ModSummary
---         -> HsModule RdrName -> m ()
--- makeOne i total ms hmdl = do
---   hsc_env <- getSession
---   findResult <- liftIO (findHomeModule hsc_env (ms_mod_name ms))
---   case findResult of
---     Found _ _ -> return ()
---     -- The `makeOne' function defined below.
---     _ -> makeOne' i total ms hmdl
 
 -- | Compile single module.
-makeOne :: GhcMonad m => Int -> Int -> ModSummary
-        -> HsModule RdrName -> m ()
+makeOne :: GhcMonad m => Int -> Int -> ModSummary -> HsModule RdrName
+        -> m ()
 makeOne i total ms hmdl = do
   dflags <- getSessionDynFlags
   let p x = showSDoc dflags (ppr x)
@@ -368,15 +342,6 @@ makeOne i total ms hmdl = do
                                       (ms_mod_name ms)
                                       (ms_location ms))
   return ()
-
-findHsModuleByModName :: ModuleName -> [HsModule a]
-                      -> Maybe (HsModule a)
-findHsModuleByModName name = find f
-  where
-    -- Using module name "Main" for look up key when module name was not
-    -- specified in given HsModule.
-    f mdl = name == maybe mainModName unLoc (hsmodName mdl)
-    mainModName = mkModuleName "Main"
 
 -- | Link 'ModSummary's, when required.
 doLink :: [ModSummary] -> Skc ()

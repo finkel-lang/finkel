@@ -1,4 +1,4 @@
-(module P01B)
+(module P01.B)
 
 (:: p01b String)
 (= p01b "p01b")

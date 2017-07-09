@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
-module P01E where
+module P01.E where
 
-import P01F
+import P01.F
 
 p01e :: [String]
 #ifdef DEBUG
