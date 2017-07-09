@@ -57,7 +57,7 @@
 (= (let2 n)
   (let ((:: a Int)
         (= a 14)
-        (:: f (-> Int (-> Int Int)))
+        (:: f (-> Int Int Int))
         (= (f x y)
           (+ x y))
         (:: g (-> Int Int))
@@ -88,7 +88,7 @@
       (Just n)
       Nothing))
 
-(:: case3 (-> (Maybe Int) (-> Int String)))
+(:: case3 (-> (Maybe Int) Int String))
 (= (case3 x y)
   (case x
     ((Just n) (| ((odd n) (> n 100)

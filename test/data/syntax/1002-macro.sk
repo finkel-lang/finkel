@@ -4,16 +4,33 @@
 
 (import SK.Core)
 
-;;; Simple `defmacro'
-(defmacro m1 (x)
-  (return `(putStrLn (++ "Hello, " ,x))))
+;; Simple `defmacro' definition by `define-macro'
+(define-macro defmacro (form)
+  (case form
+    ((List [name arg body])
+     (case arg
+       ((List list-args)
+        (return `(define-macro ,name (form)
+                   (case form
+                     ((List ,list-args) (return ,body))
+                     (_ (failS (++ (show ',name) ": error")))))))
+       ((Atom (ASymbol _))
+        (return `(define-macro ,name (,arg)
+                   (return ,body))))))
+    (_ (failS "defmac: error"))))
+
+;;; Using `defmacro' defined above.
+(defmacro m1 (x y)
+  `(putStrLn (concat [,x ", " ,y])))
 
 ;; Simple `macrolet'.
-(macrolet ((m2 (a b c)
-             (return `(,a (+ ,b ,c)))))
+(macrolet ((m2a (a b c)
+             (return `(,a (+ ,b ,c))))
+           (m2b (x y)
+             (return `(+ ,x ,y))))
   (:: f1 (-> Int Int (IO ())))
   (= (f1 x y)
-    (m2 print x y)))
+    (m2a print x (m2b x y))))
 
 ;;; Macro taking fractional value as argument.
 (macrolet ((m1 (n)
@@ -45,7 +62,7 @@
 
 (:: main (IO ()))
 (= main
-  (do (m1 "macro")
-      (f1 11 31)
+  (do (m1 "Hello" "macro")
+      (f1 11 20)
       fracmac
       hslistmac))

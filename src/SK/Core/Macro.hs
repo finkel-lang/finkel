@@ -89,8 +89,12 @@ quasiquote orig@(L l form) =
                   , tList l [tSym l "concat", tHsList l (go [] forms')]]
        | otherwise ->
           tList l [tSym l "List", tHsList l (map quasiquote forms')]
-    THsList forms' ->
-      tList l [tSym l "HsList", tHsList l (map quasiquote forms')]
+    THsList forms'
+       | any isUnquoteSplice forms' ->
+          tList l [ tSym l "HsList"
+                  , tList l [tSym l "concat", tHsList l (go [] forms')]]
+       | otherwise ->
+          tList l [tSym l "HsList", tHsList l (map quasiquote forms')]
     TAtom atom -> quoteAtom l atom
     _       -> orig
   where
@@ -229,13 +233,23 @@ addImportedMacro ty_thing =
       return ()
     _ -> error "addImportedmacro"
 
-m_defmacro :: LMacro
-m_defmacro form =
+m_defineMacro :: LMacro
+m_defineMacro form =
   case form of
-    L l (TList (_:self:rest)) -> do
-      decls <- putMacro (L l (TList (self:rest)))
-      return (tList l (tSym l "begin":decls))
-    _ -> failS "defmacro: malformed macro"
+    L l (TList [_,self@(L _ (TAtom (ASymbol name))),arg,body]) -> do
+      body' <- macroexpand body
+      let expr = tList l [ tSym l "::"
+                         , tList l [tSym l "\\", arg, body']
+                         , tSym l "Macro"]
+      case evalBuilder parseExpr [expr] of
+        Right hexpr -> do
+          macro <- compileMT hexpr
+          let decls = [tList l [tSym l "::", self, tSym l "Macro"]
+                      ,tList l [tSym l "=", self, expr]]
+          addMacro name (wrapMacro macro)
+          return (tList l (tSym l "begin":decls))
+        Left err -> failS err
+    _ -> failS "define-macro: malformed body"
 
 m_quote :: LMacro
 m_quote form =
@@ -311,14 +325,20 @@ specialForms :: [(String, LMacro)]
 specialForms =
   [("quote", m_quote)
   ,("quasiquote", m_quasiquote)
+  ,("define-macro", m_defineMacro)
   ,("macrolet", m_macrolet)
-  ,("defmacro", m_defmacro)
   ,("require", m_require)
 
-  -- Binary operators defined in Prelude are hard coded, to support
-  -- forms with variable number of arguments. In general, better not to
-  -- expand with functions defined in Prelude when NoImplicitPrelude
-  -- language extension was specified.
+  -- XXX: Support for variable number of arguments for builtin binary
+  -- operators may not a good idea, might remove. It will hide the types
+  -- of operators, which could be confusing. Also, quoted '+' will
+  -- always transformed '__+', which makes impossible to use the raw '+'
+  -- symbol.
+  --
+  -- Binary operators defined in Prelude are hard coded,
+  -- to support forms with variable number of arguments. In general,
+  -- better not to expand with functions defined in Prelude when
+  -- NoImplicitPrelude language extension was specified.
   --
   -- Also, when defining instance, qualified names are not allowed, need
   -- to cope such situations.
