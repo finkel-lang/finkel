@@ -1,8 +1,11 @@
 ;;;; Fundamental macros.
 
+(require SK.Macro.Util)
+
 (module SK.Macro)
 
 (import SK.Core)
+(import SK.Macro.Util)
 
 ;;; The `defmacro*' macro, a macro for defining macro in `Skc' monad.
 (define-macro defmacro* (form)
@@ -10,10 +13,13 @@
     ((List [name arg body])
      (case arg
        ((List list-args)
-        (return `(define-macro ,name (form)
-                   (case form
-                     ((List ,list-args) ,body)
-                     (_ (failS (++ (show ',name) ": error")))))))
+        (return
+          `(define-macro ,name (form)
+             (case form
+               (,(pmatch-list-args arg) ,body)
+               (args (failS
+                      (concat [(show ',name) ": invalid arguments `"
+                               (show args) "'"])))))))
        ((Atom (ASymbol _))
         (return `(define-macro ,name (,arg)
                    ,body)))

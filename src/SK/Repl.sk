@@ -118,13 +118,14 @@
 
 ;;;; Auxiliary
 
-(defn: bodyp ((L _ stmt)) (-> HStmt Bool)
+(defn: bodyp ((L _ stmt))
+  (-> HStmt Bool)
   (case stmt
     ((BodyStmt _ _ _ _) True)
     (_ False)))
 
-(:: print-names-and-types (-> DynFlags [Name] [Var] (IO ())))
-(= (print-names-and-types dflags names vars)
+(defn: print-names-and-types (dflags names vars)
+  (-> DynFlags [Name] [Var] (IO ()))
   (mapM_ (\ ((, name var))
            (let ((= nstr (occNameString (nameOccName name)))
                  (= typ (showPpr dflags (varType var))))
@@ -138,8 +139,8 @@
 
 ;;; | Read a form. Keeps its previous input string, repeatedly consumes
 ;;; inputs until concatenated inputs is a valid S-expression.
-(:: readForm (-> String (Repl (Maybe LCode))))
-(= (readForm input0)
+(defn: readForm (input0)
+  (-> String (Repl (Maybe LCode)))
   (do (<- st getReplState)
       (let ((= input1 (++ (pendingInput st) (: \lf input0)))
             (= count (succ (inputCount st)))
@@ -157,20 +158,22 @@
 ;; See `runStmt' in "ghc/GHCi/UI.hs". It handles statement, import
 ;; declaration, and other declarations by testing whether parser
 ;; succeeded or not.
-(:: evalForms (-> [LTForm Atom] (Repl ())))
-(= (evalForms forms0)
+(defn: evalForms (forms0)
+  (-> [LTForm Atom] (Repl (Result ())))
   (let ((= work
           (do (<- forms1 (macroexpands forms0))
-              (<- ret (withHandler (evalStatement forms1)))
+              (<- ret (evalStatement forms1))
               (case ret
-                ((Right _) (return ()))
-                ((Left err) (liftIO (putStrLn err))))))
+                ((Right _)  (return (Right ())))
+                ((Left err) (return (Left err))))))
         (= (withHandler m)
-          (withSourceErrorHandling m)))
-    (liftRepl work)))
+          (skErrorHandler defaultFatalMessager
+                          defaultFlushOut
+                          (withSourceErrorHandling m))))
+    (liftRepl (withHandler work))))
 
-(:: evalStatement (-> [LTForm Atom] (Skc (Result ()))))
-(= (evalStatement forms)
+(defn: evalStatement (forms)
+  (-> [LTForm Atom] (Skc (Result ())))
   (case (evalBuilder parseStmt forms)
     ((Right stmt0)
      (do (<- hscenv getSession)
@@ -182,9 +185,8 @@
             (return (Left "evalStatement: no ret"))))))
     ((Left _) (evalImport forms))))
 
-(:: update-hsc-env (-> HscEnv Bool [Id] ForeignHValue FixityEnv
-                       (Skc (Result ()))))
-(= (update-hsc-env hsc-env is-body ids hvals-io fixity-env)
+(defn: update-hsc-env (hsc-env is-body ids hvals-io fixity-env)
+  (-> HscEnv Bool [Id] ForeignHValue FixityEnv (Skc (Result ())))
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its body.
   (do (<- status (liftIO (evalStmt hsc-env False (EvalThis hvals-io))))
@@ -226,8 +228,8 @@
         (_
          (return (Left "update-hsc-env failed."))))))
 
-(:: evalApply (-> HscEnv [ForeignHValue] (Skc ())))
-(= (evalApply hsc-env replio-frefs)
+(defn: evalApply (hsc-env replio-frefs)
+  (-> HscEnv [ForeignHValue] (Skc ()))
   (do (<- session (fromGhc (Ghc return)))
       (case replio-frefs
         ([replio-fref]
@@ -237,8 +239,8 @@
         (_
          (liftIO (putStrLn "evalApply: ambiguous ForeignHValue."))))))
 
-(:: runReplIO (-> Session (ReplIO a) (IO ())))
-(= (runReplIO (Session session) replio)
+(defn: runReplIO ((Session session) replio)
+  (-> Session (ReplIO a) (IO ()))
   (do (<- hsc-env (readIORef session))
       (let ((= lrdr-name (noLoc (mkRdrName (replIoName replio))))))
       (<- (: name _) (hscTcRnLookupRdrName hsc-env lrdr-name))
@@ -263,8 +265,8 @@
         (Nothing
          (putStrLn "runReplIO: no type info.")))))
 
-(:: evalImport (-> [LTForm Atom] (Skc (Result ()))))
-(= (evalImport forms)
+(defn: evalImport (forms)
+  (-> [LTForm Atom] (Skc (Result ())))
   (case (evalBuilder parseImports forms)
     ((Right imports)
      (do (<- context getContext)
@@ -292,8 +294,8 @@
 ;;;  * libraries/ghci/GHCi/Run.hs: various command responding to
 ;;;    messages, extensively using RemoteRef.
 ;;;
-(:: evalDecls (-> [LTForm Atom] (Skc (Result ()))))
-(= (evalDecls forms)
+(defn: evalDecls (forms)
+  (-> [LTForm Atom] (Skc (Result ())))
   (case (evalBuilder parseDecls forms)
     ((Right decls)
      ;; Currently decls are converted as `let' statement and passed to
@@ -315,9 +317,35 @@
 
 ;;;; Loop
 
+(defn: loop () (InputT Repl ())
+  (let ((= inner-loop
+          (do (<- st (lift getReplState))
+              (let ((= prompt (| ((null (pendingInput st)) "> ")
+                                 (otherwise "")))))
+              (<- mb-input (getInputLine prompt))
+              (case mb-input
+                (Nothing (return ()))
+                ((Just str)
+                 (| ((== str "(quit)") (return ()))
+                    ((null str) inner-loop)
+                    (otherwise
+                     (do (<- mb-form (lift (readForm str)))
+                         (case mb-form
+                           (Nothing (return ()))
+                           ((Just form)
+                            (do (<- result (lift (evalForms [form])))
+                                (case result
+                                  ((Right _) (return ()))
+                                  ((Left err) (outputStrLn err))))))
+                         inner-loop)))))))
+        (= outer-loop
+          (handleInterrupt
+           (>> (outputStrLn "Cancelled.") outer-loop)
+           inner-loop)))
+    (withInterrupt outer-loop)))
+
 ;;; See `HscTypes.runInteractiveHsc'.
-(:: initRepl (Repl ()))
-(= initRepl
+(defn: initRepl () (Repl ())
   (liftRepl
    (do (<- hsc_env getSession)
        (void (setSessionDynFlags (ic_dflags (hsc_IC hsc_env))))
@@ -326,37 +354,13 @@
                     (decl "SK.Core")
                     (decl "SK.Repl.Apply")]))))
 
-(:: loop (InputT Repl ()))
-(= loop
-  (do (<- st (lift getReplState))
-      (let ((= prompt (| ((null (pendingInput st)) "> ")
-                         (otherwise "")))))
-      (<- mb-input (getInputLine prompt))
-      (case mb-input
-        (Nothing (return ()))
-        ((Just str)
-         (| ((== str "(quit)") (return ()))
-            ((null str) loop)
-            (otherwise
-             (do (<- mb-form (lift (readForm str)))
-                 (case mb-form
-                   (Nothing (return ()))
-                   ((Just form) (lift (evalForms [form]))))
-                 loop)))))))
-
-(:: skRepl (InputT Repl ()))
-(= skRepl
-  (let ((= lp
-          (handleInterrupt (>> (outputStrLn "Cancelled.") lp)
-                           loop)))
-    (do (lift initRepl)
-        (withInterrupt lp))))
+(defn: skRepl () (InputT Repl ())
+  (>> (lift initRepl) loop))
 
 
 ;;;; Main
 
-(:: replMain (IO ()))
-(= replMain
+(defn: replMain () (IO ())
   (let ((= go
           (do (let ((= repl (runInputT defaultSettings skRepl))
                     (= skc (runRepl repl initialReplState))))
@@ -364,7 +368,8 @@
               (case ret
                 ((Right a) (return ()))
                 ((Left err)
-                 (>> (putStrLn (++ "replMain: error:" err)) go))))))
+                 (>> (putStrLn (++ "REPL: got error:" (: \lf err)))
+                 go))))))
     (do (putStrLn
          (concat ["SK repl version " (showVersion version) ", "
                   "hit `Ctrl-d' to exit."]))
