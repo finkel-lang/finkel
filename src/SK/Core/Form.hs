@@ -60,6 +60,13 @@ instance Show a => Show (Form a) where
       mkList open xs close =
         open ++ unwords (map show xs) ++ close
 
+instance Functor Form where
+  fmap f form =
+    case form of
+      Atom a -> Atom (f a)
+      List xs -> List (map (fmap f) xs)
+      HsList xs -> HsList (map (fmap f) xs)
+
 -- | Atom in tokens.
 data Atom
   = AUnit
