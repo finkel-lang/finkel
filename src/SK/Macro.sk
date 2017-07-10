@@ -1,0 +1,39 @@
+;;;; Fundamental macros.
+
+(module SK.Macro)
+
+(import SK.Core)
+
+;;; The `defmacro*' macro, a macro for defining macro in `Skc' monad.
+(define-macro defmacro* (form)
+  (case form
+    ((List [name arg body])
+     (case arg
+       ((List list-args)
+        (return `(define-macro ,name (form)
+                   (case form
+                     ((List ,list-args) ,body)
+                     (_ (failS (++ (show ',name) ": error")))))))
+       ((Atom (ASymbol _))
+        (return `(define-macro ,name (,arg)
+                   ,body)))
+       (_ (failS "defmac: unknown args"))))
+    (_ (failS "defmac: non-list form"))))
+
+;;; The `defmacro' macro, almost same as those found in Commmon Lisp,
+;;; clojure, lfe, hy ... etc.
+(defmacro* defmacro (name args body)
+  (return `(defmacro* ,name ,args
+             (return ,body))))
+
+;;; Macro for defining simple function.
+(defmacro defn (name args body)
+  `(= (,name ,@args)
+     ,body))
+
+;;; Macro for defining function, takes type signature argument.
+(defmacro defn: (name args tsig body)
+  `(begin
+     (:: ,name ,tsig)
+     (= (,name ,@args)
+       ,body)))

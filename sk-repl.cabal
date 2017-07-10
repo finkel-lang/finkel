@@ -22,8 +22,10 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     SK.Repl
+  exposed-modules:     SK.Macro
+                       SK.Repl
                        SK.Repl.Apply
+                       SK.Repl.Macro
                        SK.Repl.Orphan
                        Paths_sk_repl
   build-depends:       base >= 4.7 && < 5

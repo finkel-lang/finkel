@@ -1,5 +1,7 @@
 ;;;; | Module containing orphan instance declarations.
 
+(require SK.Repl.Macro)
+
 (module SK.Repl.Orphan)
 
 (import Control.Monad.Trans.Except)
@@ -21,31 +23,7 @@
                                      (run0 (unGhc m s)))))))
                 (fmap (flip unGhc s) (f run1)))))))))
 
-(macrolet ((derive-monad-exception (ctxs ty con unCon)
-             (return
-               `(instance (=> ,ctxs (MonadException ,ty))
-                  (= (controlIO f)
-                    (,con (controlIO
-                           (\ ((RunIO run0))
-                             (let ((= run1 (RunIO
-                                            (. (fmap ,con)
-                                               (. run0 ,unCon)))))
-                               (fmap ,unCon (f run1)))))))))))
-  (derive-monad-exception
-   (MonadException m) (ExceptT e m) ExceptT runExceptT)
-  (derive-monad-exception
-   () Skc Skc unSkc))
+(derive-monad-exception (MonadException m) (ExceptT e m)
+                        ExceptT runExceptT)
 
-;; (instance (=> (MonadException m) (MonadException (ExceptT e m)))
-;;   (= controlIO (mkControlIO ExceptT runExceptT)))
-
-;; (instance (MonadException Skc)
-;;   (= controlIO (mkControlIO Skc unSkc)))
-
-;; (= (mkControlIO con unCon f)
-;;   (con (controlIO
-;;          (\ ((RunIO run0))
-;;            (let ((= run1 (RunIO
-;;                           (. (fmap con)
-;;                              (. run0 unCon)))))
-;;              (fmap unCon (f run1)))))))
+(derive-monad-exception () Skc Skc unSkc)

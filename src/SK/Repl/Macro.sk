@@ -1,0 +1,17 @@
+;;;; Macros used in REPL.
+
+(require SK.Macro)
+
+(module SK.Repl.Macro)
+
+(import SK.Core)
+
+;;; Macro to derive instance of MonadException defined used by
+;;; haskeline.
+(defmacro derive-monad-exception (ctxs ty con unCon)
+  `(instance (=> ,ctxs (MonadException ,ty))
+     (= (controlIO f)
+       (,con (controlIO
+              (\ ((RunIO r0))
+                (let ((= r1 (RunIO (. (fmap ,con) (. r0 ,unCon)))))
+                  (fmap ,unCon (f r1)))))))))

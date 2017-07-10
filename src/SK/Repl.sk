@@ -11,7 +11,10 @@
 ;;;;
 ;;;; It might worth understanding the detail of the implementation to
 ;;;; support implementing some unusual functionalities such as `apply',
-;;;; `compile-file', qload', ...etc.
+;;;; `compile-file', `load', `apropos', ... etc.
+
+(require SK.Macro)
+(require SK.Repl.Macro)
 
 (module SK.Repl)
 
@@ -73,26 +76,13 @@
               inputCount Int})
   (deriving (Eq Show)))
 
-(:: initialReplState ReplState)
-(= initialReplState
+(defn: initialReplState () (ReplState)
   (ReplState {pendingInput ""
               inputCount 0}))
 
 ;; Newtype wrapper to hold repl state.
 (newtype (Repl a)
   (Repl {unRepl (StateT ReplState Skc a)}))
-
-(:: runRepl (-> (Repl a) ReplState (Skc a)))
-(= (runRepl repl st) (evalStateT (unRepl repl) st))
-
-(:: putReplState (-> ReplState (Repl ())))
-(= (putReplState st) (Repl (put st)))
-
-(:: getReplState (Repl ReplState))
-(= getReplState (Repl get))
-
-(:: liftRepl (-> (Skc a) (Repl a)))
-(= (liftRepl m) (Repl (lift m)))
 
 (instance (Functor Repl)
   (= (fmap f (Repl a)) (Repl (fmap f a))))
@@ -108,20 +98,27 @@
 (instance (MonadIO Repl)
   (= (liftIO io) (Repl (liftIO io))))
 
-(instance (MonadException Repl)
-  (= (controlIO f)
-    (Repl (controlIO
-           (\ ((RunIO run0))
-             (let ((= run1 (RunIO (. (fmap Repl) (. run0 unRepl)))))
-               (fmap unRepl (f run1))))))))
+(derive-monad-exception () Repl Repl unRepl)
 
+(defn: runRepl (repl st) (-> (Repl a) ReplState (Skc a))
+  (evalStateT (unRepl repl) st))
+
+(defn: putReplState (st) (-> ReplState (Repl ()))
+  (Repl (put st)))
+
+(defn: getReplState () (Repl ReplState)
+  (Repl get))
+
+(defn: liftRepl (m) (-> (Skc a) (Repl a))
+  (Repl (lift m)))
+
+;;; Synonym for result value used in Repl.
 (type (Result a) (Either String a))
 
 
 ;;;; Auxiliary
 
-(:: bodyp (-> HStmt Bool))
-(= (bodyp (L _ stmt))
+(defn: bodyp ((L _ stmt)) (-> HStmt Bool)
   (case stmt
     ((BodyStmt _ _ _ _) True)
     (_ False)))
@@ -179,9 +176,10 @@
      (do (<- hscenv getSession)
          (<- stmt1 (liftIO (hscParsedStmt hscenv stmt0)))
          (case stmt1
-           (Nothing (return (Left "evalStatement: no ret")))
            ((Just (, ids fhv fixity))
-            (update-hsc-env hscenv (bodyp stmt0) ids fhv fixity)))))
+            (update-hsc-env hscenv (bodyp stmt0) ids fhv fixity))
+           (Nothing
+            (return (Left "evalStatement: no ret"))))))
     ((Left _) (evalImport forms))))
 
 (:: update-hsc-env (-> HscEnv Bool [Id] ForeignHValue FixityEnv
@@ -225,7 +223,8 @@
            ((EOtherException str) (return (Left str)))
            ((EExitCode ecode) (liftIO (exitWith ecode)))
            (EUserInterrupt (return (Right ())))))
-        (_ (return (Left "update-hsc-env failed."))))))
+        (_
+         (return (Left "update-hsc-env failed."))))))
 
 (:: evalApply (-> HscEnv [ForeignHValue] (Skc ())))
 (= (evalApply hsc-env replio-frefs)
@@ -250,16 +249,19 @@
       (case f-ty
         ((Just ty)
          (do (let ((= tystr (showPpr (hsc_dflags hsc-env) ty))))
-             ;; XXX: Adhoc detection of ReplIO type.
+             ;; XXX: Adhoc detection of ReplIO type, supports (ReplIO
+             ;; Int) only. Want to generalize the detection of the
+             ;; result type with ReplIO constructor.
              (if (isSuffixOf "(ReplIO Int)" tystr)
-                 ;; Run the body of `f', then recursively run
+                 ;; Run the body of `f', then recursively call
                  ;; `runReplIO' with the returned value of `f'.
                  (do (let ((= f (unsafeCoerce f-hv))))
                      (<- replio' (f (replIoArgs replio)))
                      (runReplIO (Session session) replio'))
                  ;; Not a ReplIO, run once and done.
                  ((unsafeCoerce f-hv) (replIoArgs replio)))))
-        (Nothing (putStrLn "runReplIO: no type info.")))))
+        (Nothing
+         (putStrLn "runReplIO: no type info.")))))
 
 (:: evalImport (-> [LTForm Atom] (Skc (Result ()))))
 (= (evalImport forms)
@@ -268,8 +270,8 @@
      (do (<- context getContext)
          (liftIO (mapM_ (. putStrLn (. (++ ";;; ") (. show unLocForm)))
                         forms))
-         (let ((= (ii (L _ idecl)) (IIDecl idecl))))
-         (setContext (++ (map ii imports) context))
+         (let ((= (mkIIdecl (L _ idecl)) (IIDecl idecl))))
+         (setContext (++ (map mkIIdecl imports) context))
          (return (Right ()))))
     ((Left err) (evalDecls forms))))
 
@@ -302,10 +304,11 @@
          (<- hsc-env getSession)
          (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
          (case ret
-           (Nothing (return (Left (++ "evalDecls: "
-                                      (show (map unLocForm forms))))))
            ((Just (, ids hvals fixity))
-            (update-hsc-env hsc-env False ids hvals fixity)))))
+            (update-hsc-env hsc-env False ids hvals fixity))
+           (Nothing
+            (return (Left (++ "evalDecls: "
+                              (show (map unLocForm forms)))))))))
     ((Left err) (return (Left err)))))
 
 
@@ -323,15 +326,11 @@
                     (decl "SK.Core")
                     (decl "SK.Repl.Apply")]))))
 
-;; (= initRepl
-;;   (liftRepl setExpanderSettings))
-
 (:: loop (InputT Repl ()))
 (= loop
   (do (<- st (lift getReplState))
-      (let ((= prompt (if (null (pendingInput st))
-                          "sk> "
-                          ""))))
+      (let ((= prompt (| ((null (pendingInput st)) "> ")
+                         (otherwise "")))))
       (<- mb-input (getInputLine prompt))
       (case mb-input
         (Nothing (return ()))
@@ -368,5 +367,5 @@
                  (>> (putStrLn (++ "replMain: error:" err)) go))))))
     (do (putStrLn
          (concat ["SK repl version " (showVersion version) ", "
-                  "hit `Ctrl-d to exit."]))
+                  "hit `Ctrl-d' to exit."]))
         go)))
