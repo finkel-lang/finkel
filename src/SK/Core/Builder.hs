@@ -15,7 +15,6 @@ import Control.Monad.Trans.State
 import SK.Core.GHC
 import SK.Core.Form
 
-
 -- -------------------------------------------------------------------
 --
 -- Builder data type
@@ -362,12 +361,33 @@ b_funD (L l _) f e = L l (ValD (f e))
 
 b_declLhsB :: LCode -> [HPat] -> Builder ([HGRHS] -> HsBind RdrName)
 b_declLhsB (L l (TAtom (ASymbol name))) args =
-    return (\grhs ->
-              -- Fields in Match changed since ghc-8.0.2.
-              let match = L l (Match ctxt args Nothing body)
-                  body = GRHSs grhs (noLoc emptyLocalBinds)
-                  ctxt = NonFunBindMatch
-              in  mkFunBind (L l (mkRdrName name)) [match])
+  case name of
+    -- Pattern matching.
+    "," ->
+      return (\grhs ->
+                PatBind { pat_lhs = L l (TuplePat args Boxed [])
+                        , pat_rhs = GRHSs grhs (noLoc emptyLocalBinds)
+                        , pat_rhs_ty = placeHolderType
+                        , bind_fvs = placeHolderNames
+                        , pat_ticks = ([],[]) })
+    x:_ | isUpper x ->
+      return (\grhs ->
+                PatBind { pat_lhs = L l (ConPatIn (L l name')
+                                                  (PrefixCon args))
+                        , pat_rhs = GRHSs grhs (noLoc emptyLocalBinds)
+                        , pat_rhs_ty = placeHolderType
+                        , bind_fvs = placeHolderNames
+                        , pat_ticks = ([],[]) })
+          where
+            name' = mkRdrName name
+
+    -- Function binding.
+    _ ->
+      return (\grhs ->
+                let match = L l (Match ctxt args Nothing body)
+                    body = GRHSs grhs (noLoc emptyLocalBinds)
+                    ctxt = NonFunBindMatch
+                in  mkFunBind (L l (mkRdrName name)) [match])
 
 b_tsigD :: [LCode] -> HType -> HDecl
 b_tsigD names typ =

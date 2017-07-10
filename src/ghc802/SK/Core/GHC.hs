@@ -131,6 +131,7 @@ module SK.Core.GHC
     getOptionsFromFile,
 
     -- * HsBinds
+    HsBindLR(..),
     HsLocalBinds,
     HsLocalBindsLR(..),
     HsValBindsLR(..),

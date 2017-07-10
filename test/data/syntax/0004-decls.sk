@@ -88,6 +88,10 @@
 
 ;;; 4.3 Type Classes and Overloading
 
+;;; 4.3.1 Class Declarations
+
+;;; Not yet implemented.
+
 ;;; 4.3.2 Instance Declarations
 
 (data (MyFnct a)
@@ -168,6 +172,8 @@
 
 ;;; 4.4.3 Function and Pattern Bindinds
 
+;;; 4.4.3.1 Function bindings
+
 ;;; Function without guards.
 (:: fpb0 (-> Int String))
 (= (fpb0 n)
@@ -196,6 +202,18 @@
 (:: fpb3 [String])
 (= fpb3 ["string" "expression" "without" "guards"])
 
+;;; 4.4.3.2 Pattern Bindings
+
+(:: (xs ys) [Int])
+(= (, xs ys)
+  (break (> 5) (enumFromTo 1 10)))
+
+(:: addJust (-> Int Int (Maybe Int)))
+(= (addJust a b) (Just (+ a b)))
+
+(:: tpb1 Int)
+(= (Just tpb1) (addJust 16 27))
+
 (:: s4_4_3 (IO ()))
 (= s4_4_3
   (do (putStrLn (fpb0 42))
@@ -206,7 +224,10 @@
       (putStrLn (fpb2 (Just 100) Nothing))
       (putStrLn (fpb2 (Nothing) (Just 8)))
       (putStrLn (fpb2 Nothing Nothing))
-      (print fpb3)))
+      (print fpb3)
+      (putStrLn (++ "xs: " (show xs)))
+      (putStrLn (++ "ys: " (show ys)))
+      (putStrLn (++ "tpb1: " (show tpb1)))))
 
 (:: s4_4 (IO ()))
 (= s4_4
