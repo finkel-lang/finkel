@@ -246,6 +246,7 @@ rdecls :: { [HDecl] }
 
 decl_lhs :: { [HGRHS] -> HsBind RdrName }
     : 'list'   {% b_declLhsB (head $1) =<< parse p_pats0 (tail $1) }
+    | 'hslist' {% b_declLhsB $1 =<< parse p_pats0 (unwrapListL $1) }
     | 'symbol' {% b_declLhsB $1 [] }
 
 

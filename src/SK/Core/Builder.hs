@@ -370,16 +370,15 @@ b_declLhsB (L l (TAtom (ASymbol name))) args =
                         , pat_rhs_ty = placeHolderType
                         , bind_fvs = placeHolderNames
                         , pat_ticks = ([],[]) })
-    x:_ | isUpper x ->
-      return (\grhs ->
-                PatBind { pat_lhs = L l (ConPatIn (L l name')
-                                                  (PrefixCon args))
-                        , pat_rhs = GRHSs grhs (noLoc emptyLocalBinds)
-                        , pat_rhs_ty = placeHolderType
-                        , bind_fvs = placeHolderNames
-                        , pat_ticks = ([],[]) })
-          where
-            name' = mkRdrName name
+    x:_ | isUpper x || x == ':' ->
+      return
+        (\grhs ->
+           PatBind { pat_lhs = L l (ConPatIn (L l (mkRdrName name))
+                                             (PrefixCon args))
+                   , pat_rhs = GRHSs grhs (noLoc emptyLocalBinds)
+                   , pat_rhs_ty = placeHolderType
+                   , bind_fvs = placeHolderNames
+                   , pat_ticks = ([],[]) })
 
     -- Function binding.
     _ ->
@@ -388,6 +387,14 @@ b_declLhsB (L l (TAtom (ASymbol name))) args =
                     body = GRHSs grhs (noLoc emptyLocalBinds)
                     ctxt = NonFunBindMatch
                 in  mkFunBind (L l (mkRdrName name)) [match])
+
+b_declLhsB (L l (THsList _)) pats =
+  return (\grhs ->
+         PatBind { pat_lhs = L l (ListPat pats placeHolderType Nothing)
+                 , pat_rhs = GRHSs grhs (noLoc emptyLocalBinds)
+                 , pat_rhs_ty = placeHolderType
+                 , bind_fvs = placeHolderNames
+                 , pat_ticks = ([],[]) })
 
 b_tsigD :: [LCode] -> HType -> HDecl
 b_tsigD names typ =

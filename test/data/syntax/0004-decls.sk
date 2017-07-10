@@ -214,6 +214,14 @@
 (:: tpb1 Int)
 (= (Just tpb1) (addJust 16 27))
 
+(:: tpb2 Int)
+(= [_ _ tpb2 _]
+  (enumFrom 40))
+
+(:: tpb3 Int)
+(= (: tpb3 _)
+  (enumFrom 42))
+
 (:: s4_4_3 (IO ()))
 (= s4_4_3
   (do (putStrLn (fpb0 42))
@@ -227,7 +235,9 @@
       (print fpb3)
       (putStrLn (++ "xs: " (show xs)))
       (putStrLn (++ "ys: " (show ys)))
-      (putStrLn (++ "tpb1: " (show tpb1)))))
+      (putStrLn (++ "tpb1: " (show tpb1)))
+      (putStrLn (++ "tpb2: " (show tpb2)))
+      (putStrLn (++ "tpb3: " (show tpb3)))))
 
 (:: s4_4 (IO ()))
 (= s4_4
