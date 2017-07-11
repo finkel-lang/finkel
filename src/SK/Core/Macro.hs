@@ -50,6 +50,9 @@ tList l forms = L l (TList forms)
 tHsList :: SrcSpan -> [LCode] -> LCode
 tHsList l forms = L l (THsList forms)
 
+failS' :: Located a -> String -> Skc b
+failS' l msg = failS (showLoc l ++ msg)
+
 quoteAtom :: SrcSpan -> Atom -> LCode
 quoteAtom l form =
   case form of
@@ -128,8 +131,9 @@ putMacro form =
           macro <- compileMT hexpr
           addMacro name (wrapMacro macro)
           return [tsig, self']
-        Left err -> failS err
-    _ -> failS ("malformed macro: " ++ show (pForm (unLocForm form)))
+        Left err -> failS' form err
+    _ -> failS' form ("malformed macro: " ++
+                      show (pForm (unLocForm form)))
 
 -- | Convert 'Macro' to 'LMacro'. Location information are discarded
 -- with this function.
@@ -248,20 +252,20 @@ m_defineMacro form =
                       ,tList l [tSym l "=", self, expr]]
           addMacro name (wrapMacro macro)
           return (tList l (tSym l "begin":decls))
-        Left err -> failS err
-    _ -> failS "define-macro: malformed body"
+        Left err -> failS' form err
+    _ -> failS' form "define-macro: malformed body"
 
 m_quote :: LMacro
 m_quote form =
   case form of
     L _ (TList [_,body]) -> return (quote body)
-    _ -> failS ("malformed quote at " ++ showLoc form)
+    _ -> failS' form ("malformed quote at " ++ showLoc form)
 
 m_quasiquote :: LMacro
 m_quasiquote form =
     case form of
       L _ (TList [_,body]) -> return (quasiquote body)
-      _ -> failS ("malformed quasiquote at " ++ showLoc form)
+      _ -> failS' form ("malformed quasiquote at " ++ showLoc form)
 
 m_varArgBinOp :: String -> LMacro
 m_varArgBinOp sym = \form ->
@@ -272,8 +276,8 @@ m_varArgBinOp sym = \form ->
                                       (TList [mkOp op, arg1, arg2]))
     TList (_:rest) -> return (go rest)
     TList _        -> return form
-    _              -> failS ("macroexpand error at " ++
-                             showLoc form ++ ", `" ++ sym ++ "'")
+    _              -> failS' form ("macroexpand error at " ++
+                                   showLoc form ++ ", `" ++ sym ++ "'")
   where
     go [x,y] = combine x y
     go (x:xs) = combine x (go xs)
@@ -293,8 +297,8 @@ m_macrolet form =
       expanded <- macroexpands rest
       putSkEnv sk_env
       return (tList l1 (tSym l2 "begin":expanded))
-    _ -> failS ("macrolet: malformed macro: " ++
-               show (pForm (unLocForm form)))
+    _ -> failS' form ("macrolet: malformed macro: " ++
+                     show (pForm (unLocForm form)))
 
 m_require :: LMacro
 m_require form =
@@ -322,8 +326,9 @@ m_require form =
           do dflags <- getSessionDynFlags
              mapM_ (pTyThing dflags) (modInfoTyThings minfo)
              return emptyForm
-        Nothing -> failS ("require: cannot find modinfo for " ++ mname)
-    _ -> failS "require: malformed syntax."
+        Nothing -> failS' form ("require: cannot find modinfo for "
+                                 ++ mname)
+    _ -> failS' form "require: malformed syntax."
 
 specialForms :: [(String, LMacro)]
 specialForms =
