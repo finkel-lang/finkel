@@ -298,17 +298,21 @@ m_macrolet form =
 
 m_require :: LMacro
 m_require form =
+  -- The `require' is implemented as special form, to support dependency
+  -- resolution during compilation of multiple modules with `--make'
+  -- command.
+  --
+  --  Modify the HscEnv at this moment. Updating the compile
+  -- time module dependency mapping in SkEnv.
+  --
+  -- Need to manage the context par file, but not yet done. Reason to
+  -- clean up the context is, if not cleaned, all files passed via
+  -- "--make" command will use the required module, which could cause
+  -- unwanted name conflicts.
+  --
   case form of
     L _l1 (TList [_,L _l2 (TAtom (ASymbol mname))]) -> do
-      -- Modify the HscEnv at this moment. Updating the compile time
-      -- module dependency mapping in SkEnv.
-      --
-      -- Need to manage the context par file, but not yet done. Reason
-      -- to clean up the context is, if not cleaned, all files passed
-      -- via "--make" command will use the required module, which could
-      -- cause unwanted name conflicts.
-      --
-      liftIO (putStrLn (";;; requiring " ++ mname))
+      debugIO (putStrLn (";;; requiring " ++ mname))
       contexts <- getContext
       setContext (mkIIDecl mname : contexts)
       mdl <- lookupModule (mkModuleName mname) Nothing

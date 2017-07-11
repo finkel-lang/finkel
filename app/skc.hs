@@ -11,7 +11,7 @@ import qualified GHC.Paths as GhcPaths
 import Control.Monad (when)
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (find, isPrefixOf, isSuffixOf)
-import System.Environment (getArgs)
+import System.Environment (getArgs, lookupEnv)
 import System.Process (rawSystem)
 import System.Exit (exitWith)
 
@@ -21,14 +21,22 @@ main :: IO ()
 main = do
   argIns <- getArgs
   let argOuts = [ "--frontend", "SK.Core.Plugin"
-                -- , "-plugin-package", "sk-core"
-                ]
+                , "-plugin-package", "sk-core" ]
       (srcs, skopts, ghcopts) = groupOptions [] [] [] argIns
       ghcopts' = reverse ghcopts
       ghc = fromMaybe GhcPaths.ghc (findGhc skopts)
+  debug <- if isJust (find (== "--sk-debug") skopts)
+              then return True
+              else do mbDebug <- lookupEnv "SKC_DEBUG"
+                      case mbDebug of
+                        Nothing -> return False
+                        Just _  -> return True
   when (isJust (find (== "--sk-debug") skopts))
        (putStrLn ("ghc: " ++ show ghc))
-  let getO =
+  let skopts' | isJust (find (== "--sk-debug") skopts) = skopts
+              | debug = "-ffrontend-opt":"--sk-debug":skopts
+              | otherwise = skopts
+      getO =
         let go [] = []
             go (val:_:"--sk-o":_) = [val]
             go (_:rest) = go rest
@@ -52,7 +60,7 @@ main = do
        || null skopts && null srcs
        then runRawGhc
        else do
-         let args = concat [argOuts,skopts,ghcopts',"-x":"hs":srcs]
+         let args = concat [argOuts,skopts',ghcopts',"-x":"hs":srcs]
          rawSystem ghc args
   exitWith exitCode
 

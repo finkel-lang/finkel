@@ -93,7 +93,7 @@ showLoc x = case getLoc x of
         unpackFS (srcSpanFile r) ++ ":" ++
         show (srcSpanStartLine r) ++ ":" ++
         show (srcSpanStartCol r) ++ ": "
-      UnhelpfulSpan _ -> "unknown location"
+      UnhelpfulSpan _ -> "unknown location: "
 
 -- | Simple lexer to parse forms.
 formLexer :: (LCode -> Builder a) -> Builder a

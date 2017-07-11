@@ -7,6 +7,7 @@ module SK.Core.Setup
 
   -- * UserHooks
   , skcHooks
+  , skcDebugHooks
   , sk2hsHooks
   , stackSk2hsHooks
   , registerSkHooks
@@ -45,9 +46,14 @@ import Distribution.Simple.Setup
 skcHooks :: UserHooks
 skcHooks = simpleUserHooks
   { hookedPreProcessors = [registerSkPPHandler]
-  , buildHook = skcBuildHooks
+  , buildHook = skcBuildHooks False
   , haddockHook = stackSkHaddockHooks
   }
+
+-- | UserHooks almost same as'skcHooks', but with SK debug flag turned
+-- on.
+skcDebugHooks :: UserHooks
+skcDebugHooks = skcHooks { buildHook = skcBuildHooks True }
 
 -- | Hooks to register @"*.sk"@ files.
 registerSkHooks :: UserHooks
@@ -86,13 +92,17 @@ registerSkPPHandler = ("sk", doNothingPP)
 
 -- | Build hooks to replace the executable path of "ghc" with "skc"
 -- found on system.
-skcBuildHooks :: PackageDescription -> LocalBuildInfo
+skcBuildHooks :: Bool -> PackageDescription -> LocalBuildInfo
               -> UserHooks -> BuildFlags -> IO ()
-skcBuildHooks pkg_descr lbi hooks flags =
+skcBuildHooks debug pkg_descr lbi hooks flags =
   build pkg_descr lbi' flags (allSuffixHandlers hooks)
     where
       lbi' = lbi {withPrograms = updateProgram ghc (withPrograms lbi)}
-      ghc = simpleConfiguredProgram "ghc" (FoundOnSystem "skc")
+      ghc = (simpleConfiguredProgram "ghc" (FoundOnSystem "skc")) {
+        programOverrideArgs = ["--sk-debug" | debug]
+      }
+      -- flags' = flags {buildProgramArgs = args}
+      -- args = ("ghc",["--sk-debug"]) : buildProgramArgs flags
 
 -- | Haddock hooks using @stack exec skc@ for preprocessing ".sk"
 -- files.

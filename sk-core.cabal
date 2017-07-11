@@ -37,9 +37,9 @@ library
                        SK.Core.SKC
                        SK.Core.Setup
                        SK.Core.Syntax
-  build-depends:       base >= 4.7 && < 5
-                     , Cabal >= 1.10
+  build-depends:       Cabal >= 1.10
                      , array
+                     , base >= 4.7 && < 5
                      , containers
                      , directory
                      , filepath

@@ -44,6 +44,7 @@ import SK.Core.Lexer as L
 import SK.Core.Macro
 import SK.Core.Reader
 
+
 -- | Run 'Skc' with given environment and 'skcErrrorHandler'.
 runSkc :: Skc a -> SkEnv -> IO (Either String a)
 runSkc m env =
@@ -168,10 +169,16 @@ mkModSummary' mbfile modName imports = do
       mmod = mkModule mainUnitId modName
       prelude = noLoc (mkModuleName "Prelude")
       imported = map (\x -> (Nothing, x)) imports
+      tryGetTimeStamp x = liftIO (tryIO (getModificationUTCTime x))
   dflags0 <- getSessionDynFlags
   mloc <- liftIO (mkHomeModLocation dflags0 modName fn)
-  timestamp <-
+  hs_date <-
     liftIO (maybe getCurrentTime getModificationUTCTime mbfile)
+  e_obj_date <- tryGetTimeStamp (ml_obj_file mloc)
+  e_hi_date <- tryGetTimeStamp (ml_hi_file mloc)
+  let e2mb e = case e of Right a -> Just a; _ -> Nothing
+      obj_date = e2mb e_obj_date
+      iface_date = e2mb e_hi_date
   dflags1 <-
     if isHsSource fn
       then do
@@ -184,15 +191,14 @@ mkModSummary' mbfile modName imports = do
   return ModSummary { ms_mod = mmod
                     , ms_hsc_src = HsSrcFile
                     , ms_location = mloc
-                    , ms_hs_date = timestamp
-                    , ms_obj_date = Nothing
-                    , ms_iface_date = Nothing
+                    , ms_hs_date = hs_date
+                    , ms_obj_date = obj_date
+                    , ms_iface_date = iface_date
                     , ms_srcimps = []
                     , ms_textual_imps = (Nothing, prelude) : imported
                     , ms_hspp_file = fn
                     , ms_hspp_opts = dflags1
                     , ms_hspp_buf = Nothing }
-
 
 isHsSource :: FilePath -> Bool
 isHsSource path = "hs" == suffix

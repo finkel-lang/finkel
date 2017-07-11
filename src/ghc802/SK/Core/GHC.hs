@@ -30,7 +30,7 @@ module SK.Core.GHC
     Pat(..),
     RdrName,
     Sig(..),
-    TypecheckedModule,
+    TypecheckedModule(..),
 
     compileParsedExpr,
     defaultErrorHandler,
@@ -40,6 +40,7 @@ module SK.Core.GHC
     emptyLocalBinds,
     getLoc,
     getModuleInfo,
+    getModSummary,
     getSessionDynFlags,
     loadModule,
     lookupModule,
@@ -85,6 +86,7 @@ module SK.Core.GHC
 
     -- * DriverPipeline
     compileFile,
+    compileOne',
     link,
     preprocess,
     oneShot,
@@ -112,6 +114,7 @@ module SK.Core.GHC
 
     -- * Exception
     ghandle,
+    tryIO,
 
     -- * FastString
     fsLit,
@@ -119,6 +122,7 @@ module SK.Core.GHC
 
     -- * Finder
     addHomeModuleToFinder,
+    findObjectLinkable,
     mkHomeModLocation,
 
     -- * GhcMake
@@ -192,10 +196,15 @@ module SK.Core.GHC
     mkLHsSigType,
     mkHsIsString,
 
+    -- * HscMain
+    batchMsg,
+
     -- * HscTypes
     HscEnv(..),
+    SourceModified(..),
     TyThing(..),
     ms_mod_name,
+    pprHPT,
 
     -- * IfaceSyn
     IfaceDecl(..),
@@ -282,6 +291,11 @@ module SK.Core.GHC
     -- * TyWiredIn
     consDataConName,
 
+    -- * UniqFM
+
+    -- Ghc version newer than 8.0.2 uses "addToHpt" instead of "addToUFM".
+    addToUFM,
+
     -- * Util
     getModificationUTCTime,
     readRational,
@@ -309,6 +323,7 @@ import FastString
 import Finder
 import GhcMonad
 import HeaderInfo
+import HscMain
 import HscTypes
 import IfaceSyn
 import Linker
@@ -325,6 +340,7 @@ import RdrName
 import SrcLoc
 import StringBuffer
 import TysWiredIn
+import UniqFM
 import Util
 import Var
 
