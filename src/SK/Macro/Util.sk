@@ -1,5 +1,7 @@
 ;;;; Utility codes used by fundamental macros.
 
+;;; This module contains function used by fundamental macros.
+
 (module SK.Macro.Util)
 
 (import SK.Core)
@@ -31,3 +33,9 @@
          ([]          `(List ,xs))
          ((: post' _) (pre-match pre post')))))
     (_ form)))
+
+(:: cons' (-> LCode LCode LCode))
+(= (cons' x xs)
+  (case xs
+    ((L l (TList ys)) (L l (TList (: x ys))))
+    ((L l y) (L l (TList [x (L l y)])))))

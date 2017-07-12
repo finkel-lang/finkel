@@ -1,7 +1,8 @@
 ;;;; Module to support `apply' inside REPL.
-;;;;
-;;;; Will not work in compiled code since apply is handled specially in
-;;;; the REPL's evaluate function.
+
+;;; Will not work in compiled code since apply is handled specially in
+;;; the REPL's evaluate function. May better to make the mechanism more
+;;; general to support `compile-file', `apropos', ... etc.
 
 (module SK.Repl.Apply)
 
