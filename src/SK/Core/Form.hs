@@ -1,15 +1,22 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
 -- | Form and Atom data.
 module SK.Core.Form
-  ( Form(..)
+  ( -- * The S-expression form
+    Form(..)
   , Atom(..)
   , TForm(..)
   , LTForm
   , Code
   , LCode
+
   , aFractional
+  , unLoc
   , unLocForm
+  , getLoc
+  , showLoc
   , nlForm
+  , locateForm
   , symbolNameL
   , toListL
 
@@ -25,6 +32,9 @@ module SK.Core.Form
   , splice
   , car
   , cdr
+
+  -- * Reexported data from GHC
+  , GenLocated(..)
   ) where
 
 -- From base
@@ -98,7 +108,7 @@ instance Show Atom where
       AFractional f -> fl_text f
       AComment _ -> ""
 
--- | Token form. Contains location information.
+-- | Located form type, used as token.
 data TForm a
   = TAtom a            -- ^ S-expression atom.
   | TList [LTForm a]   -- ^ S-expression list.
@@ -140,6 +150,23 @@ nlForm form =
     Atom x -> noLoc (TAtom x)
     List xs -> noLoc (TList (map nlForm xs))
     HsList xs -> noLoc (THsList (map nlForm xs))
+
+-- | Attach given location to form, including all sub forms.
+locateForm :: SrcSpan -> Form a -> LTForm a
+locateForm l form =
+  case form of
+    Atom x -> L l (TAtom x)
+    List xs -> L l (TList (map (locateForm l) xs))
+    HsList xs -> L l (THsList (map (locateForm l) xs))
+
+-- | String representation of located data.
+showLoc :: Located a -> String
+showLoc x = case getLoc x of
+      RealSrcSpan r ->
+        unpackFS (srcSpanFile r) ++ ":" ++
+        show (srcSpanStartLine r) ++ ":" ++
+        show (srcSpanStartCol r) ++ ": "
+      UnhelpfulSpan _ -> "unknown location: "
 
 -- | Extract string from given atom when the atom was 'ASymbol',
 -- otherwise error.
@@ -297,6 +324,11 @@ instance Codish a => Codish (Form a) where
       Atom _  -> fromCode a
       List as -> List <$> mapM fromCode as
       HsList as -> HsList <$> mapM fromCode as
+
+-- `FlexibleInstance' language pragma required for below.
+instance Codish a => Codish (LTForm a) where
+  toCode = toCode . unLocForm
+  fromCode = fmap nlForm . fromCode
 
 splice :: Codish a => a -> [Code]
 splice form =

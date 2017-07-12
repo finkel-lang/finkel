@@ -15,7 +15,7 @@ import Unsafe.Coerce (unsafeCoerce)
 -- Internal
 import SK.Core.Form
 import SK.Core.GHC
-import SK.Core.Syntax (evalBuilder, parseExpr, showLoc)
+import SK.Core.Syntax (evalBuilder, parseExpr)
 import SK.Core.SKC
 
 -- Macro expansion
@@ -116,54 +116,22 @@ compileMT :: LHsExpr RdrName -> Skc Macro
 compileMT = fmap unsafeCoerce . compileParsedExpr
 {-# INLINE compileMT #-}
 
-putMacro :: LCode -> Skc [LCode]
+putMacro :: LCode -> Skc ()
 putMacro form =
   case form of
-    L l (TList [self@(L _ (TAtom (ASymbol name))),args,body]) -> do
+    L l (TList [(L _ (TAtom (ASymbol name))),arg,body]) -> do
       expanded <- macroexpand body
-      let tsig = tList l [tSym l "::", self, tSym l "Macro"]
-          self' = tList l [ tSym l "=", self
-                          , wrapArgs name args expanded]
-          expr = tList l [ tSym l "let", tList l [tsig, self']
-                         , self]
+      let expr = tList l [ tSym l "::"
+                         , tList l [tSym l "\\", arg, expanded]
+                         , tSym l "Macro"]
       case evalBuilder parseExpr [expr] of
         Right hexpr -> do
           macro <- compileMT hexpr
-          addMacro name (wrapMacro macro)
-          return [tsig, self']
+          addMacro name macro
+          return ()
         Left err -> failS' form err
     _ -> failS' form ("malformed macro: " ++
                       show (pForm (unLocForm form)))
-
--- | Convert 'Macro' to 'LMacro'. Location information are discarded
--- with this function.
-wrapMacro :: Macro -> LMacro
-wrapMacro macro = fmap nlForm . macro . cdr . unLocForm
-
--- | Wrap arguments for function body of macro.
-wrapArgs :: String -> LCode -> LCode -> LCode
-wrapArgs name args@(L l1 _) body0 =
-  let sym = tSym l1
-      list = tList l1
-      form = sym "form"
-      message =
-        list [ sym "failS"
-             , list [ sym "++"
-                    , tString l1
-                              (concat [ "macroexpand error with `"
-                                      , name, "' at "
-                                      , showLoc form, "\n"
-                                      , "arg mismatch: "])
-                    , list [sym "show", list [sym "pForm", form]]]]
-      body1 =  list [ sym "case", form
-                    , list [mkPat args, body0]
-                    , list [sym "_", message ]]
-      mkPat (L l x) =
-        case x of
-          TList xs -> list [sym "List", tHsList l (map mkPat xs)]
-          s@(TAtom (ASymbol _)) -> L l s
-          _ -> error "wrapArgs:mkPat"
-  in  list [sym  "\\", list [form], body1]
 
 mkIIDecl :: String -> InteractiveImport
 mkIIDecl = IIDecl . simpleImportDecl . mkModuleName
@@ -186,7 +154,8 @@ pTyThing dflags ty_thing@(AnId var) = do
            addImportedMacro ty_thing)
 pTyThing dflags tt = pTyThing' dflags tt
 
--- Currently unused for adding macro, just for printing out information.
+-- Currently not in use during macro addition, just for printing out
+-- information.
 --
 -- Using 'IfaceDecl' to detect the SK.Core.SKC.Macro type. This way is
 -- more safe than comparing the Type of Var, since IfaceDecl contains
@@ -213,9 +182,6 @@ pTyThing' dflags tt@(AnId _) = do
       prn (concat [ ";;; ty con app,"
                   , " tyConName=", conName
                   , " tyConArg=", str arg])
-      -- when (conName == "Macro")
-      --      (do (prn ("Found macro: " ++ str name))
-      --          (addImportedMacro tt))
     IfaceCastTy _ _ -> prn "cast ty"
     IfaceCoercionTy _ -> prn "coercion ty"
     IfaceTupleTy _ _ _ -> prn "tuple ty"
@@ -232,12 +198,24 @@ addImportedMacro ty_thing =
       let name = varName var
       fhv <- liftIO (getHValue hsc_env name)
       hv <- liftIO (withForeignRef fhv localRef)
-      let macro = wrapMacro (unsafeCoerce hv)
+      let macro = unsafeCoerce hv
       addMacro (showPpr (hsc_dflags hsc_env) name) macro
       return ()
     _ -> error "addImportedmacro"
 
-m_defineMacro :: LMacro
+m_quote :: Macro
+m_quote form =
+  case form of
+    L _ (TList [_,body]) -> return (quote body)
+    _ -> failS' form ("malformed quote at " ++ showLoc form)
+
+m_quasiquote :: Macro
+m_quasiquote form =
+    case form of
+      L _ (TList [_,body]) -> return (quasiquote body)
+      _ -> failS' form ("malformed quasiquote at " ++ showLoc form)
+
+m_defineMacro :: Macro
 m_defineMacro form =
   case form of
     L l (TList [_,self@(L _ (TAtom (ASymbol name))),arg,body]) -> do
@@ -250,46 +228,16 @@ m_defineMacro form =
           macro <- compileMT hexpr
           let decls = [tList l [tSym l "::", self, tSym l "Macro"]
                       ,tList l [tSym l "=", self, expr]]
-          addMacro name (wrapMacro macro)
+          addMacro name macro
           return (tList l (tSym l "begin":decls))
         Left err -> failS' form err
     _ -> failS' form "define-macro: malformed body"
 
-m_quote :: LMacro
-m_quote form =
-  case form of
-    L _ (TList [_,body]) -> return (quote body)
-    _ -> failS' form ("malformed quote at " ++ showLoc form)
-
-m_quasiquote :: LMacro
-m_quasiquote form =
-    case form of
-      L _ (TList [_,body]) -> return (quasiquote body)
-      _ -> failS' form ("malformed quasiquote at " ++ showLoc form)
-
-m_varArgBinOp :: String -> LMacro
-m_varArgBinOp sym = \form ->
-  case unLoc form of
-    TList [op] -> return (L (getLoc op) (TList [mkOp op]))
-    TList [op,arg] -> return (L (getLoc op) (TList [mkOp op, arg]))
-    TList [op,arg1,arg2] -> return (L (getLoc op)
-                                      (TList [mkOp op, arg1, arg2]))
-    TList (_:rest) -> return (go rest)
-    TList _        -> return form
-    _              -> failS' form ("macroexpand error at " ++
-                                   showLoc form ++ ", `" ++ sym ++ "'")
-  where
-    go [x,y] = combine x y
-    go (x:xs) = combine x (go xs)
-    go _ = error ("varArgBinOp: impossible happened with " ++ sym)
-    mkOp x = L (getLoc x) (TAtom (ASymbol sym))
-    combine x y = L (getLoc x) (TList [mkOp x, x, y])
-
--- XXX: Does not preserve macros defined with `defmacro' inside
--- `macrolet' body. Need to update the SkEnv to hold the contents of
+-- XXX: Does not preserve macros defined with `define-macro' inside
+-- `let-macro' body. Need to update the SkEnv to hold the contents of
 -- currently defined macros.
-m_macrolet :: LMacro
-m_macrolet form =
+m_letMacro :: Macro
+m_letMacro form =
   case form of
     L l1 (TList (_:L l2 (TList forms):rest)) -> do
       sk_env <- getSkEnv
@@ -297,22 +245,23 @@ m_macrolet form =
       expanded <- macroexpands rest
       putSkEnv sk_env
       return (tList l1 (tSym l2 "begin":expanded))
-    _ -> failS' form ("macrolet: malformed macro: " ++
+    _ -> failS' form ("let-macro: malformed args:\n" ++
                      show (pForm (unLocForm form)))
 
-m_require :: LMacro
+m_require :: Macro
 m_require form =
   -- The `require' is implemented as special form, to support dependency
   -- resolution during compilation of multiple modules with `--make'
   -- command.
   --
-  --  Modify the HscEnv at this moment. Updating the compile
-  -- time module dependency mapping in SkEnv.
+  -- The special form `require' modifies the HscEnv at the time of macro
+  -- expansion, to update the context in compile time session.
   --
-  -- Need to manage the context par file, but not yet done. Reason to
-  -- clean up the context is, if not cleaned, all files passed via
-  -- "--make" command will use the required module, which could cause
-  -- unwanted name conflicts.
+  -- Need to clean up the context after compiling each file, but not yet
+  -- done. Reason to clean up the context is, if not cleaned, all files
+  -- passed via "--make" command will use the same interactive context,
+  -- which could be confusing, and may cause unwanted name conflicts and
+  -- overridings.
   --
   case form of
     L _l1 (TList [_,L _l2 (TAtom (ASymbol mname))]) -> do
@@ -330,12 +279,30 @@ m_require form =
                                  ++ mname)
     _ -> failS' form "require: malformed syntax."
 
-specialForms :: [(String, LMacro)]
+m_varArgBinOp :: String -> Macro
+m_varArgBinOp sym = \form ->
+  case unLoc form of
+    TList [op] -> return (L (getLoc op) (TList [mkOp op]))
+    TList [op,arg] -> return (L (getLoc op) (TList [mkOp op, arg]))
+    TList [op,arg1,arg2] -> return (L (getLoc op)
+                                      (TList [mkOp op, arg1, arg2]))
+    TList (_:rest) -> return (go rest)
+    TList _        -> return form
+    _              -> failS' form ("macroexpand error at " ++
+                                   showLoc form ++ ", `" ++ sym ++ "'")
+  where
+    go [x,y] = combine x y
+    go (x:xs) = combine x (go xs)
+    go _ = error ("varArgBinOp: impossible happened with " ++ sym)
+    mkOp x = L (getLoc x) (TAtom (ASymbol sym))
+    combine x y = L (getLoc x) (TList [mkOp x, x, y])
+
+specialForms :: [(String, Macro)]
 specialForms =
   [("quote", m_quote)
   ,("quasiquote", m_quasiquote)
   ,("define-macro", m_defineMacro)
-  ,("macrolet", m_macrolet)
+  ,("let-macro", m_letMacro)
   ,("require", m_require)
 
   -- XXX: Support for variable number of arguments for builtin binary

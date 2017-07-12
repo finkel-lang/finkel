@@ -5,7 +5,6 @@ module SK.Core.SKC
   ( Skc(..)
   , SkEnv(..)
   , Macro
-  , LMacro
   , debugIO
   , toGhc
   , fromGhc
@@ -48,15 +47,16 @@ instance GhcMonad Skc where
    setSession s = Skc (lift (lift (setSession s)))
 
 -- | Macro transformer function.
-type Macro = Code -> Skc Code
-
--- | Macro transformer with location information preserved.
-type LMacro = LCode -> Skc LCode
+--
+-- A macro in SK is implemented as a function. The function takes a
+-- single located S-expression data argument, returns a located
+-- S-expression data wrapped in 'Skc'.
+type Macro = LCode -> Skc LCode
 
 -- | Type of state in 'SKC'.
 data SkEnv = SkEnv
    { -- | Association list of macros.
-     envMacros :: [(String, LMacro)]
+     envMacros :: [(String, Macro)]
      -- | Flag to hold debug setting.
    , envDebug :: Bool
    }
@@ -86,11 +86,10 @@ getSkEnv = Skc get
 putSkEnv :: SkEnv -> Skc ()
 putSkEnv = Skc . put
 
-getMacroEnv :: Skc [(String, LMacro)]
+getMacroEnv :: Skc [(String, Macro)]
 getMacroEnv = envMacros <$> getSkEnv
 
-addMacro :: String -> LMacro -> Skc ()
+addMacro :: String -> Macro -> Skc ()
 addMacro name mac = Skc go
   where
-    go = modify (\env ->
-                    env {envMacros = (name, mac) : envMacros env})
+    go = modify (\e -> e {envMacros = (name, mac) : envMacros e})

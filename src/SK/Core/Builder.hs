@@ -86,15 +86,6 @@ parse bld toks =
     Right (a, _) -> return a
     Left err -> failB err
 
--- | String representation of located data.
-showLoc :: Located a -> String
-showLoc x = case getLoc x of
-      RealSrcSpan r ->
-        unpackFS (srcSpanFile r) ++ ":" ++
-        show (srcSpanStartLine r) ++ ":" ++
-        show (srcSpanStartCol r) ++ ": "
-      UnhelpfulSpan _ -> "unknown location: "
-
 -- | Simple lexer to parse forms.
 formLexer :: (LCode -> Builder a) -> Builder a
 formLexer cont = do

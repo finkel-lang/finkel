@@ -16,7 +16,6 @@ module SK.Core.Syntax
   , parseStmt
   , parseDecls
   , parseExpr
-  , showLoc
   ) where
 
 import SK.Core.Builder
