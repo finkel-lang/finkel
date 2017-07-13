@@ -8,44 +8,66 @@
 (import Control.Monad.IO.Class)
 (import SK.Macro.Util)
 
+(:: car (-> Code Code))
+(= (car (L l code))
+  (case code
+    ((List (: x _xs)) x)
+    (_ (L l (List [])))))
+
+(:: cdr (-> Code Code))
+(= (cdr (L l code))
+  (case code
+    ((List (: x xs))
+     (case xs
+       ([] (L (getLoc x) (List xs)))
+       ((: y _) (L (getLoc y) (List xs)))))
+    (_ (L l (List [])))))
+
+(:: cons (=> (Codish a) (-> a Code Code)))
+(= (cons x (L l0 xs))
+  (let ((= x' (toCode x))
+        (= l1 (getLoc x')))
+    (case xs
+      ((List xs')
+       (L l1 (List (: x' xs'))))
+      (_ (L l1 (List [x']))))))
+
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
 (define-macro defmacro* (form)
   (case form
-    ((L l0 (TList [_ name arg body]))
+    ((L l0 (List [_ name arg body]))
      (case arg
-       ((L l1 (TList arg'))
+       ((L l1 (List arg'))
         (let ((= (sym s)
-                (L l1 (TAtom (ASymbol s))))
+                (L l1 (Atom (ASymbol s))))
               (= (list xs)
-                (L l1 (TList xs)))
+                (L l1 (List xs)))
               (= (hlist xs)
-                (L l1 (THsList xs)))
+                (L l1 (HsList xs)))
               (= err
-                (nlForm
-                 `(failS
-                   (concat
-                    [(showLoc *form*) (show ',name) [\lf]
-                     "invalid args: `"
-                     (show (unLocForm *form*)) "'"]))))
+                `(skSrcError *form*
+                             (concat
+                              [(show ',name) [\lf]
+                               "invalid args: `"
+                               (show *form*) "'"])))
               (= abind
                 (list
                  [(sym "L") (sym "l1")
-                  (list [(sym "TList") (hlist (: (sym "_") arg'))])]))
+                  (list [(sym "List") (hlist (: (sym "_") arg'))])]))
 
               ;; Below `body2' is same as following form, but with
               ;; location information preserved:
               ;;
               ;; `(define-macro ,name (*form*)
               ;;    (case *form*
-              ;;      ((L l1 (TList [_ ,@arg]))
-              ;;       ,body)
+              ;;      ((L l1 (List [_ ,@arg])) ,body)
               ;;      (_
-              ;;       (failS
+              ;;       (skSrcError
               ;;        (concat
               ;;         [(showLoc *form*) ":"
               ;;          (show ',name) ": invalid arguments `"
-              ;;          (show (unLocForm *form*)) "'"])))))
+              ;;          (show *form*) "'"])))))
               ;;
               (= body2
                 (list [(sym "define-macro") name
@@ -55,56 +77,48 @@
                               (list [(sym "_") err])])])))
           (return body2)))
 
-       ((L l1 (TAtom _))
+       ((L l1 (Atom _))
         (let ((= body'
                 `(define-macro ,name (,arg)
                    ,body)))
-          (return (locateForm l1 body'))))
+          (return body')))
 
        ;; Compile time pattern match failure for arguments.
-       (_ (failS "defmacro*: unknown args"))))
+       (_ (skSrcError form "defmacro*: unknown args"))))
 
     ;; Compile time pattern match failure for body.
-    (_ (failS "defmacro*: non-list form"))))
+    (_ (skSrcError form "defmacro*: non-list form"))))
 
-;;; The `defmacro' macro, almost same as those found in Commmon Lisp,
-;;; Clojure, LFE, Hy ... etc.
-;; (defmacro* defmacro (name args body)
-;;   (let ((= body'
-;;           `(defmacro* ,name ,args
-;;              (return (locateForm (getLoc *form*) ,body)))))
-;;     (return (locateForm (getLoc name) body'))))
-(defmacro* defmacro (name args body)
+;;; The `defmacro' macro, similar to the macro with same name found in
+;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy ... etc.
+(defmacro* defmacro (name args body0)
+  ;; Body of this macro is same as below, but with preserving location
+  ;; information:
+  ;;
+  ;;   `(defmacro* ,name ,args
+  ;;      (return (locateForm (getLoc *form*) ,body)))
+  ;;
   (let ((= l (getLoc name))
-        (= (list xs)
-          (L l (TList xs)))
-        (= (sym x)
-          (L l (TAtom (ASymbol x))))
-        (= body'
-          (list [(sym "defmacro*") name args
-                 (list [(sym "return")
-                        (list [(sym "locateForm")
-                               (list [(sym "getLoc") (sym "*form*")])
-                               body])])])))
-    (return body')))
+        (= (list xs) (L l (List xs)))
+        (= (sym x) (L l (Atom (ASymbol x))))
+        (= body1 (list [(sym "defmacro*") name args
+                        (list [(sym "return") body0])])))
+    (return body1)))
 
 ;;; Macro for defining simple function, or, an alias of `='. This macro
 ;;; preserves the location of function name, arguments, and body.
-;;;
-;;; XXX: Documentation in form body not supported.
 (define-macro defn ((L l form'))
-  (let ((= (header n a) (| ((== (unLoc a) (TAtom AUnit)) n)
+  (let ((= (header n a) (| ((== (unLoc a) (Atom AUnit)) n)
                            (otherwise (cons' n a))))
         (= (defn' n a b)
-          (cons' (L l (TAtom (ASymbol "=")))
-                 (cons' (header n a) (L l (TList [b]))))))
+          (cons' (L l (Atom (ASymbol "=")))
+                 (cons' (header n a) (L l (List [b])))))
+        (= err (concat ["defn: invalid form:" [\lf]
+                        (show (L l form'))])))
     (case form'
-      ((TList [_ name args body])
+      ((List [_ name args body])
        (return (defn' name args body)))
-      (_
-       (failS
-        (concat [(showLoc (L l '())) "defn: invalid form:" [\lf]
-                 (show (pForm (unLocForm (L l form'))))]))))))
+      (_ (skSrcError (L l ()) err)))))
 
 ;;; Macro for defining function and type signature in single form.
 ;; (defmacro defn: (name args tsig body)
@@ -116,12 +130,12 @@
 ;; Location information are lost when defining macros with `defmacro'.
 (define-macro defn: (form)
   (case form
-    ((L l (TList [_ name args tsig body]))
+    ((L l (List [_ name args tsig body]))
      (let ((= (sym s)
-             (L l (TAtom (ASymbol s))))
+             (L l (Atom (ASymbol s))))
            (= (list xs)
-             (L l (TList xs)))
-           (= (header n a) (| ((== (unLoc a) (TAtom AUnit)) n)
+             (L l (List xs)))
+           (= (header n a) (| ((== (unLoc a) (Atom AUnit)) n)
                               (otherwise (cons' n a))))
            (= (defn:' n a t b)
              (cons' (sym "begin")
@@ -130,6 +144,5 @@
                       (list [(sym "=") (header n a) (list [b])])]))))
        (return (defn:' name args tsig body))))
     ((L l _)
-     (failS
-      (concat [(showLoc form) "defn: invalid form:" [\lf]
-               (show (pForm (unLocForm form)))])))))
+     (skSrcError form
+                 (concat ["defn: invalid form:" [\lf] (show form)])))))

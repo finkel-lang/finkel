@@ -3,12 +3,11 @@
 ;;;;
 ;;;; This implementation uses two threads: one for reading input and
 ;;;; another for evaluating and modifying the SkEnv. Using `MVar'
-;;;; containing `LCode' to commnicate between the threads. This design
+;;;; containing `Code' to commnicate between the threads. This design
 ;;;; shall be easier to support reading forms from other sources than
 ;;;; line oriented user input, e.g. network sockets.
 
 (require SK.Macro)
-(require SK.Repl.Macro)
 
 (module SK.Repl)
 
@@ -104,8 +103,7 @@
 
 ;;;; Main
 
-(:: replMain (IO ()))
-(= replMain
+(defn: replMain () (IO ())
   (do (<- in-mv newEmptyMVar)
       (<- out-mv newEmptyMVar)
       (let ((= skc (runSkc (eval-loop in-mv out-mv) initialSkEnv))))
@@ -121,27 +119,12 @@
 
 ;;;; Read
 
-;;; Read single S-expression form.
-(defn: read-form (input0)
-    (-> String (Repl (Maybe LCode)))
-  (do (<- st get-repl-state)
-      (let ((= input1 (++ (pending-input st) (: \lf input0)))
-            (= count (succ (input-count st)))
-            (= (put-and-return pending ret)
-              (do (put-repl-state (st {input-count count
-                                       pending-input pending}))
-                  (return ret))))
-        (case (evalSP sexpr (Just "<<repl>>") input1)
-          ((Right forms) (put-and-return "" (Just forms)))
-          ((Left err) (put-and-return input1 Nothing))))))
-
-;;; Loop for reading input.
+;;; Loop for read ing input and printing the output.
 ;;;
-;;; Tracks tate of intermediate S-expression, and continue reading the
-;;; input until successful parse result.
-;;;
+;;; Tracks the state of intermediate S-expression from input, and
+;;; continue reading the input until successful parse result.
 (:: read-print-loop
-  (-> (MVar LCode) (MVar String) ThreadId (InputT Repl ())))
+  (-> (MVar Code) (MVar String) ThreadId (InputT Repl ())))
 (= (read-print-loop to-eval-mvar from-eval-mvar eval-tid)
   (let ((= quit
           (liftIO (killThread eval-tid)))
@@ -170,10 +153,24 @@
                            go)))
     (withInterrupt loop)))
 
+;;; Read single S-expression form.
+(:: read-form  (-> String (Repl (Maybe Code))))
+(= (read-form input0)
+  (do (<- st get-repl-state)
+      (let ((= input1 (++ (pending-input st) (: \lf input0)))
+            (= count (succ (input-count st)))
+            (= (put-and-return pending ret)
+              (do (put-repl-state (st {input-count count
+                                       pending-input pending}))
+                  (return ret))))
+        (case (evalSP sexpr (Just "<repl>") input1)
+          ((Right forms) (put-and-return "" (Just forms)))
+          ((Left err) (put-and-return input1 Nothing))))))
+
 
 ;;;; Eval
 
-(:: eval-loop (-> (MVar LCode) (MVar String) (Skc ())))
+(:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
 (= (eval-loop in-mvar out-mvar)
   (let ((= init
           (do (<- hsc-env getSession)
@@ -198,7 +195,7 @@
                   go)))
     (>> init go)))
 
-(:: eval-statement (-> [LCode] (Skc Result)))
+(:: eval-statement (-> [Code] (Skc Result)))
 (= (eval-statement forms)
   (case (evalBuilder parseStmt forms)
     ((Right stmt0)
@@ -211,18 +208,18 @@
             (return (Left "eval-statement: no result"))))))
     ((Left err) (eval-import forms))))
 
-(:: eval-import (-> [LTForm Atom] (Skc Result)))
+(:: eval-import (-> [Code] (Skc Result)))
 (= (eval-import forms)
   (case (evalBuilder parseImports forms)
     ((Right imports)
      (do (<- context getContext)
          (let ((= (mkIIdecl (L _ idecl)) (IIDecl idecl))
-               (= ret (map (. (++ ";;; ") (. show unLocForm)) forms))))
+               (= ret (map (. (++ ";;; ") show) forms))))
          (setContext (++ (map mkIIdecl imports) context))
          (return (Right (unlines ret)))))
     ((Left err) (eval-decls forms))))
 
-(:: eval-decls (-> [LTForm Atom] (Skc Result)))
+(:: eval-decls (-> [Code] (Skc Result)))
 (= (eval-decls forms)
   (case (evalBuilder parseDecls forms)
     ((Right decls)
@@ -237,8 +234,7 @@
            ((Just (, ids hvals fixity))
             (update-hsc-env hsc-env False ids hvals fixity))
            (Nothing
-            (return (Left (++ "evalDecls: "
-                              (show (map unLocForm forms)))))))))
+            (return (Left (++ "evalDecls: " (show forms))))))))
     ((Left err) (return (Left err)))))
 
 (:: update-hsc-env
