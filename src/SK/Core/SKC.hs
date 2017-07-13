@@ -9,6 +9,7 @@ module SK.Core.SKC
   , toGhc
   , fromGhc
   , failS
+  , skSrcError
   , getSkEnv
   , putSkEnv
   , addMacro
@@ -24,6 +25,13 @@ import Control.Monad.Trans.State.Strict
 import SK.Core.Form
 import SK.Core.GHC
 
+
+-- ---------------------------------------------------------------------
+--
+-- Skc monad
+--
+-- --------------------------------------------------------------------------
+
 -- | Newtype wrapper for compiling SK code to Haskell AST.
 newtype Skc a = Skc {
   unSkc :: StateT SkEnv (ExceptT String Ghc) a
@@ -35,7 +43,7 @@ instance ExceptionMonad Skc where
                    (ExceptT
                       (toGhc m st `gcatch` \e -> toGhc (h e) st))))
   gmask f =
-    let g r m = Skc (StateT (\st -> ExceptT (r (toGhc m st))))
+    let g r m = Skc (StateT (ExceptT . r . toGhc m))
     in  Skc (StateT (\st ->
                        ExceptT (gmask (\r -> toGhc (f (g r)) st))))
 
@@ -69,6 +77,13 @@ fromGhc m = Skc (lift (lift m))
 
 failS :: String -> Skc a
 failS msg = Skc (lift (throwE msg))
+
+-- | Throw a 'SourceError'.
+skSrcError :: Located a -> String -> Skc e
+skSrcError l msg = do
+  dflags <- getSessionDynFlags
+  let em = mkErrMsg dflags (getLoc l) neverQualify (text msg)
+  liftIO (throwIO (mkSrcErr (unitBag em)))
 
 -- | Perform given IO action iff debug flag is turned on.
 debugIO :: IO () -> Skc ()

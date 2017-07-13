@@ -64,13 +64,11 @@ module SK.Core.GHC
     runGhc,
     setContext,
     setSessionDynFlags,
-    srcSpanFile,
-    srcSpanStartCol,
-    srcSpanStartLine,
     typecheckModule,
 
     -- * Bag
     listToBag,
+    unitBag,
 
     -- * BasicTypes
     Boxity(..),
@@ -109,12 +107,14 @@ module SK.Core.GHC
     xopt_unset,
 
     -- * ErrUtils
-    pprErrMsgBagWithLoc,
     fatalErrorMsg'',
+    mkErrMsg,
+    pprErrMsgBagWithLoc,
 
     -- * Exception
     ghandle,
     tryIO,
+    throwIO,
 
     -- * FastString
     fsLit,
@@ -203,6 +203,7 @@ module SK.Core.GHC
     HscEnv(..),
     SourceModified(..),
     TyThing(..),
+    mkSrcErr,
     ms_mod_name,
     pprHPT,
 
@@ -243,9 +244,11 @@ module SK.Core.GHC
 
     -- * Outputable
     Outputable(..),
+    neverQualify,
     showPpr,
     showSDoc,
     showSDocUnqual,
+    text,
 
     -- * OrdList
     toOL,
@@ -276,13 +279,21 @@ module SK.Core.GHC
     Located,
     RealLocated,
     RealSrcSpan,
+    SrcLoc(..),
     SrcSpan(..),
 
     combineLocs,
+    mkGeneralSrcSpan,
     mkRealSrcLoc,
     mkRealSrcSpan,
     mkSrcLoc,
     mkSrcSpan,
+    srcSpanEndCol,
+    srcSpanEndLine,
+    srcSpanFile,
+    srcSpanFileName_maybe,
+    srcSpanStartCol,
+    srcSpanStartLine,
     unLoc,
 
     -- * StringBuffer

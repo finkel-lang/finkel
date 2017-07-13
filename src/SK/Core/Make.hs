@@ -33,6 +33,9 @@ import SK.Core.Lexer
 import SK.Core.Run
 import SK.Core.SKC
 
+import ErrUtils (withTiming)
+import Outputable (text)
+
 
 -- ---------------------------------------------------------------------
 --
@@ -165,7 +168,7 @@ make' not_yet_compiled readys0 pendings0 = do
     go acc i nycs (target@(tsr,mbp):summarised) pendings =
       case tsr of
         SkSource path mn form reqs -> do
-          hmdl <- compileSkModuleForm form
+          hmdl <- compileSkModuleForm' form
           summary <- mkModSummary (Just path) hmdl
           let imports = map import_name (hsmodImports hmdl)
 
@@ -380,11 +383,14 @@ compileToHsModule :: TargetUnit
                   -> Skc (Maybe (HsModule RdrName))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
-    SkSource _ _ form _ -> Just <$> compileSkModuleForm form
+    SkSource _ _ form _ -> Just <$> compileSkModuleForm' form
     HsSource path -> do
       (mdl, _) <- compileHsFile path mbphase
       return (Just mdl)
     OtherSource path -> compileOtherFile path >> return Nothing
+
+compileSkModuleForm' :: [LCode] -> Skc (HsModule RdrName)
+compileSkModuleForm' = timeIt "HsModule [sk]" . compileSkModuleForm
 
 isSkFile :: FilePath -> Bool
 isSkFile path = takeExtension path == ".sk"
@@ -481,6 +487,9 @@ sortTargets summaries targets = foldr f [] summaries
               case find (byPath path') targets of
                 Nothing -> error ("sortTargets: no target " ++ path')
                 Just target -> target:acc
+
+timeIt :: String -> Skc a -> Skc a
+timeIt label = withTiming getDynFlags (text label) (const ())
 
 -- [guessOutputFile]
 --

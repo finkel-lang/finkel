@@ -50,9 +50,6 @@ tList l forms = L l (TList forms)
 tHsList :: SrcSpan -> [LCode] -> LCode
 tHsList l forms = L l (THsList forms)
 
-failS' :: Located a -> String -> Skc b
-failS' l msg = failS (showLoc l ++ msg)
-
 quoteAtom :: SrcSpan -> Atom -> LCode
 quoteAtom l form =
   case form of
@@ -129,8 +126,8 @@ putMacro form =
           macro <- compileMT hexpr
           addMacro name macro
           return ()
-        Left err -> failS' form err
-    _ -> failS' form ("malformed macro: " ++
+        Left err -> skSrcError form err
+    _ -> skSrcError form ("malformed macro: " ++
                       show (pForm (unLocForm form)))
 
 mkIIDecl :: String -> InteractiveImport
@@ -207,13 +204,13 @@ m_quote :: Macro
 m_quote form =
   case form of
     L _ (TList [_,body]) -> return (quote body)
-    _ -> failS' form ("malformed quote at " ++ showLoc form)
+    _ -> skSrcError form ("malformed quote at " ++ showLoc form)
 
 m_quasiquote :: Macro
 m_quasiquote form =
     case form of
       L _ (TList [_,body]) -> return (quasiquote body)
-      _ -> failS' form ("malformed quasiquote at " ++ showLoc form)
+      _ -> skSrcError form ("malformed quasiquote at " ++ showLoc form)
 
 m_defineMacro :: Macro
 m_defineMacro form =
@@ -230,8 +227,8 @@ m_defineMacro form =
                       ,tList l [tSym l "=", self, expr]]
           addMacro name macro
           return (tList l (tSym l "begin":decls))
-        Left err -> failS' form err
-    _ -> failS' form "define-macro: malformed body"
+        Left err -> skSrcError form err
+    _ -> skSrcError form "define-macro: malformed body"
 
 -- XXX: Does not preserve macros defined with `define-macro' inside
 -- `let-macro' body. Need to update the SkEnv to hold the contents of
@@ -245,7 +242,7 @@ m_letMacro form =
       expanded <- macroexpands rest
       putSkEnv sk_env
       return (tList l1 (tSym l2 "begin":expanded))
-    _ -> failS' form ("let-macro: malformed args:\n" ++
+    _ -> skSrcError form ("let-macro: malformed args:\n" ++
                      show (pForm (unLocForm form)))
 
 m_require :: Macro
@@ -275,9 +272,9 @@ m_require form =
           do dflags <- getSessionDynFlags
              mapM_ (pTyThing dflags) (modInfoTyThings minfo)
              return emptyForm
-        Nothing -> failS' form ("require: cannot find modinfo for "
+        Nothing -> skSrcError form ("require: cannot find modinfo for "
                                  ++ mname)
-    _ -> failS' form "require: malformed syntax."
+    _ -> skSrcError form "require: malformed syntax."
 
 m_varArgBinOp :: String -> Macro
 m_varArgBinOp sym = \form ->
@@ -288,7 +285,7 @@ m_varArgBinOp sym = \form ->
                                       (TList [mkOp op, arg1, arg2]))
     TList (_:rest) -> return (go rest)
     TList _        -> return form
-    _              -> failS' form ("macroexpand error at " ++
+    _              -> skSrcError form ("macroexpand error at " ++
                                    showLoc form ++ ", `" ++ sym ++ "'")
   where
     go [x,y] = combine x y

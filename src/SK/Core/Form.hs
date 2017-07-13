@@ -35,6 +35,11 @@ module SK.Core.Form
 
   -- * Reexported data from GHC
   , GenLocated(..)
+  , SrcLoc(..)
+  , SrcSpan(..)
+  , mkSrcLoc
+  , mkSrcSpan
+  , fsLit
   ) where
 
 -- From base
@@ -329,6 +334,51 @@ instance Codish a => Codish (Form a) where
 instance Codish a => Codish (LTForm a) where
   toCode = toCode . unLocForm
   fromCode = fmap nlForm . fromCode
+
+-- instance Codish SrcSpan where
+--   toCode sp =
+--     case sp of
+--       UnhelpfulSpan txt ->
+--         List [Atom (ASymbol "UnhelpfulSpan")
+--              ,Atom (AString (unpackFS txt))]
+--       RealSrcSpan rs ->
+--         List [Atom (ASymbol "mkSrcSpan")
+--              ,List [Atom (ASymbol "mkSrcLoc")
+--                    ,List [Atom (ASymbol "fsLit")
+--                          ,Atom (AString fn)]
+--                    ,aint srcSpanStartLine
+--                    ,aint srcSpanStartCol]
+--              ,List [Atom (ASymbol "mkSrcLoc")
+--                    ,List [Atom (ASymbol "fsLit")
+--                          ,Atom (AString fn)]
+--                    ,aint srcSpanEndLine
+--                    ,aint srcSpanEndCol]]
+--           where
+--             fn = case srcSpanFileName_maybe sp of
+--                Just fs -> unpackFS fs
+--                Nothing -> "unknown file"
+--             aint f = Atom (AInteger (fromIntegral (f rs)))
+--   fromCode form =
+--     case form of
+--       List [Atom (ASymbol "UnhelpfulSpan"), Atom (AString txt)]
+--        -> Just (mkGeneralSrcSpan (fsLit txt))
+--       List [Atom (ASymbol "mkSrcSpan")
+--            ,List [Atom (ASymbol "mkSrcLoc")
+--                  ,List [Atom (ASymbol "fsLit")
+--                        ,Atom (AString fn)]
+--                  ,Atom (AInteger sl)
+--                  ,Atom (AInteger sc)]
+--            ,List [Atom (ASymbol "mkSrcLoc")
+--                  ,List [Atom (ASymbol "fsLit")
+--                        ,Atom (AString _)]
+--                  ,Atom (AInteger el)
+--                  ,Atom (AInteger ec)]]
+--        -> Just (mkSrcSpan loc1 loc2)
+--          where
+--            loc1 = mkSrcLoc fn' (fromIntegral sl) (fromIntegral sc)
+--            loc2 = mkSrcLoc fn' (fromIntegral el) (fromIntegral ec)
+--            fn' = fsLit fn
+--       _ -> Nothing
 
 splice :: Codish a => a -> [Code]
 splice form =
