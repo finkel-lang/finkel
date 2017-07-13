@@ -29,9 +29,7 @@ module SK.Core.Form
   , pAtom
 
   , Codish(..)
-  , splice
-  , car
-  , cdr
+  , unquoteSplice
 
   -- * Reexported data from GHC
   , GenLocated(..)
@@ -380,16 +378,9 @@ instance Codish a => Codish (LTForm a) where
 --            fn' = fsLit fn
 --       _ -> Nothing
 
-splice :: Codish a => a -> [Code]
-splice form =
+unquoteSplice :: Codish a => a -> [Code]
+unquoteSplice form =
   case toCode form of
     List xs -> xs
+    HsList xs -> xs
     _       -> []
-
-car :: Form a -> Form a
-car (List (x:_)) = x
-car _ = List []
-
-cdr :: Form a -> Form a
-cdr (List (_:xs)) = List xs
-cdr _ = List []

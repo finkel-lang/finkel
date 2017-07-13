@@ -103,7 +103,8 @@ quasiquote orig@(L l form) =
      in  case post of
            (L ls (TList (_:body)):post') ->
              go (acc ++ [tHsList l (map quasiquote pre)
-                        ,tList ls [tSym l "splice", tList l body]])
+                        ,tList ls [ tSym l "unquoteSplice"
+                                  , tList l body]])
                      post'
            _ | null pre  -> acc
              | otherwise -> acc ++ [tHsList l (map quasiquote pre)]

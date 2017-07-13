@@ -38,4 +38,5 @@
 
     (f1 'foo)
     (f2 'foo)
-    (f3 '(foo bar buzz))))
+    (f3 '(foo bar buzz))
+    (f3 [\x \y \z])))
