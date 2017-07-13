@@ -330,7 +330,7 @@ b_instD (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
                        , cid_datafam_insts = []
                        , cid_overlap_mode = Nothing }
     qty = L l HsQualTy { hst_ctxt = mkLocatedList ctxts
-                        , hst_body = ty }
+                       , hst_body = ty }
     binds = foldr declToBind [] decls
     -- XXX: Skipping non-functional bindings.
     declToBind d acc =
@@ -387,9 +387,12 @@ b_declLhsB (L l (THsList _)) pats =
                  , bind_fvs = placeHolderNames
                  , pat_ticks = ([],[]) })
 
-b_tsigD :: [LCode] -> HType -> HDecl
-b_tsigD names typ =
-  let typ' = mkLHsSigWcType typ
+b_tsigD :: [LCode] -> ([HType], HType) -> HDecl
+b_tsigD names (ctxts,typ) =
+  let typ' = mkLHsSigWcType qtyp
+      qtyp | null ctxts = typ
+           | otherwise = L l HsQualTy { hst_ctxt = mkLocatedList ctxts
+                                      , hst_body = typ }
       mkName (L l1 (TAtom (ASymbol name))) = L l1 (mkRdrName name)
       l = getLoc (mkLocatedList names)
   in  L l (SigD (TypeSig (map mkName names) typ'))

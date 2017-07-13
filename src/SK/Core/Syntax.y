@@ -233,8 +233,15 @@ idecls :: { [HDecl] }
 
 decl :: { HDecl }
     : '=' decl_lhs guards { b_funD $1 $2 $3 }
-    | '::' 'symbol' type  { b_tsigD [$2] $3 }
-    | '::' symbols type   { b_tsigD $2 $3 }
+    | '::' 'symbol' dtype { b_tsigD [$2] $3 }
+    | '::' symbols dtype  { b_tsigD $2 $3 }
+
+dtype :: { ([HType], HType) }
+    : 'symbol' { ([], b_symT $1) }
+    | 'unit'   { ([], b_unitT $1) }
+    | 'hslist'
+      {% parse p_type [toListL $1] >>= \t -> return ([], b_listT t) }
+    | qtycl { $1 }
 
 decls :: { [HDecl] }
    : rdecls { reverse $1 }

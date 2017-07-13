@@ -160,6 +160,16 @@
 (= (ts6 x ys)
   (length ys))
 
+;;; Type signature with context.
+(:: ts7 (=> (Show a) (-> a String)))
+(= (ts7 x)
+  (++ (show x) (++ ", " (show x))))
+
+;;; Another type signature with context.
+(:: ts8 (=> (Functor f) (Show a) (-> (f a) (f String))))
+(= (ts8 m)
+  (fmap ts7 m))
+
 (:: s4_4_1 (IO ()))
 (= s4_4_1
   (do (print ts1)
@@ -168,7 +178,9 @@
       (ts3b 2 False "buzzz")
       (print (ts4 (\ (n) (* (+ n 1) n))))
       (ts5 [1 2 3])
-      (print (ts6 True [1 2 3]))))
+      (print (ts6 True [1 2 3]))
+      (putStrLn (ts7 False))
+      (print (ts8 (Just True)))))
 
 ;;; 4.4.3 Function and Pattern Bindinds
 
