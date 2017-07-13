@@ -13,10 +13,14 @@ module SK.Core.Form
   , aFractional
   , unLoc
   , unLocForm
-  , getLoc
-  , showLoc
   , nlForm
+  , getLoc
+
+  , showLoc
   , mkSkSrcSpan
+  , skSrcSpan
+  , quoted
+
   , locateForm
   , symbolNameL
   , toListL
@@ -421,6 +425,9 @@ skSrcSpan = mkSkSrcSpan "<sk generated code>"
 
 genSrc :: a -> Located a
 genSrc = L skSrcSpan
+
+quoted :: TForm Atom -> LCode
+quoted = L (UnhelpfulSpan (fsLit "<quoted code>"))
 
 mkLocatedList ::  [Located a] -> Located [Located a]
 mkLocatedList [] = genSrc []

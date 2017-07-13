@@ -18,37 +18,12 @@ import SK.Core.GHC
 import SK.Core.Syntax (evalBuilder, parseExpr)
 import SK.Core.SKC
 
--- Macro expansion
--- ~~~~~~~~~~~~~~~
+
+-- ---------------------------------------------------------------------
 --
--- Consider how to support User defined macros. Need to load the form
--- transforming functions defined by the user. May restrict those
--- functions to imported module in current target file. Need to take
--- some kind of GHC environment value to expand macros.
+-- Quote
 --
--- Hy language separates the loading of modules. For runtime, it's done
--- with `import', for macro expansion time, done with `require'.
-
-tSym :: SrcSpan -> String -> LCode
-tSym l s = L l (TAtom (ASymbol s))
-
-tChar :: SrcSpan -> Char -> LCode
-tChar l c = L l (TAtom (AChar c))
-
-tString :: SrcSpan -> String -> LCode
-tString l s = L l (TAtom (AString s))
-
-tInteger :: SrcSpan -> Integer -> LCode
-tInteger l n = L l (TAtom (AInteger n))
-
-tFractional :: SrcSpan -> FractionalLit -> LCode
-tFractional l n = L l (TAtom (AFractional n))
-
-tList :: SrcSpan -> [LCode] -> LCode
-tList l forms = L l (TList forms)
-
-tHsList :: SrcSpan -> [LCode] -> LCode
-tHsList l forms = L l (THsList forms)
+-- ---------------------------------------------------------------------
 
 quoteAtom :: SrcSpan -> Atom -> LCode
 quoteAtom l form =
@@ -61,21 +36,22 @@ quoteAtom l form =
     AUnit -> atom [tSym l "AUnit"]
     _ -> L l (TAtom form)
   where
-    atom vals =
-      tList l [tSym l "L", toCode l
-              ,tList l [tSym l "TAtom", tList l vals]]
+    atom vals = mkQuoted l (tList l [tSym l "TAtom", tList l vals])
 
 quote :: LCode -> LCode
 quote orig@(L l form) =
   case form of
     TAtom atom -> quoteAtom l atom
     TList xs ->
-      tList l [tSym l "L", toCode l
-              ,tList l [tSym l "TList", tHsList l (map quote xs)]]
+      mkQuoted l (tList l [tSym l "TList", tHsList l (map quote xs)])
     THsList xs ->
-      tList l [tSym l "L", toCode l
-              ,tList l [tSym l "THsList", tHsList l (map quote xs)]]
+      mkQuoted l (tList l [tSym l "THsList", tHsList l (map quote xs)])
     _ -> orig
+
+-- Quasiquote is currently implemented in Haskell. Though it could be
+-- implemented with SK code later. If done in SK code, lexer and reader
+-- still need to handle the special case for backtick, comma, and
+-- comma-at, because currently there's no way to define read macro.
 
 isUnquoteSplice :: LCode -> Bool
 isUnquoteSplice form =
@@ -90,24 +66,20 @@ quasiquote orig@(L l form) =
       tList l [tSym l "toCode", x]
     TList forms'
        | any isUnquoteSplice forms' ->
-          tList l [tSym l "L", toCode l
-                  ,tList l [tSym l "TList"
-                           ,tList l [tSym l "concat"
-                                    ,tHsList l (go [] forms')]]]
+          mkQuoted l (tList l [tSym l "TList"
+                              ,tList l [tSym l "concat"
+                                       ,tHsList l (go [] forms')]])
        | otherwise ->
-          tList l [tSym l "L", toCode l
-                  ,tList l [tSym l "TList"
-                           ,tHsList l (map quasiquote forms')]]
+          mkQuoted l (tList l [tSym l "TList"
+                              ,tHsList l (map quasiquote forms')])
     THsList forms'
        | any isUnquoteSplice forms' ->
-          tList l [tSym l "L", toCode l
-                  ,tList l [ tSym l "THsList"
-                            , tList l [tSym l "concat"
-                                      , tHsList l (go [] forms')]]]
+         mkQuoted l (tList l [ tSym l "THsList"
+                              , tList l [tSym l "concat"
+                                        , tHsList l (go [] forms')]])
        | otherwise ->
-          tList l [tSym l "L", toCode l
-                  ,tList l [tSym l "THsList"
-                           ,tHsList l (map quasiquote forms')]]
+         mkQuoted l (tList l [tSym l "THsList"
+                             ,tHsList l (map quasiquote forms')])
     TAtom atom -> quoteAtom l atom
     TEnd       -> orig
   where
@@ -121,6 +93,24 @@ quasiquote orig@(L l form) =
                      post'
            _ | null pre  -> acc
              | otherwise -> acc ++ [tHsList l (map quasiquote pre)]
+
+
+-- ---------------------------------------------------------------------
+--
+-- Macro
+--
+-- ---------------------------------------------------------------------
+
+-- Macro expansion
+-- ~~~~~~~~~~~~~~~
+--
+-- Consider how to support User defined macros. Need to load the form
+-- transforming functions defined by the user. May restrict those
+-- functions to imported module in current target file. Need to take
+-- some kind of GHC environment value to expand macros.
+--
+-- Hy language separates the loading of modules. For runtime, it's done
+-- with `import', for macro expansion time, done with `require'.
 
 -- Using `unsafeCoerce'.
 compileMT :: LHsExpr RdrName -> Skc Macro
@@ -146,10 +136,6 @@ putMacro form =
 
 mkIIDecl :: String -> InteractiveImport
 mkIIDecl = IIDecl . simpleImportDecl . mkModuleName
-
-emptyForm :: LCode
-emptyForm = tList l0 [tSym l0 "begin"]
-  where l0 = getLoc (noLoc ())
 
 pTyThing :: DynFlags -> TyThing -> Skc ()
 pTyThing dflags ty_thing@(AnId var) = do
@@ -214,6 +200,13 @@ addImportedMacro ty_thing =
       return ()
     _ -> error "addImportedmacro"
 
+
+-- ---------------------------------------------------------------------
+--
+-- Special forms
+--
+-- ---------------------------------------------------------------------
+
 mkVarArgBinOp :: String -> Macro
 mkVarArgBinOp sym = \form ->
   case unLoc form of
@@ -235,13 +228,17 @@ mkVarArgBinOp sym = \form ->
 m_quote :: Macro
 m_quote form =
   case form of
-    L _ (TList [_,body]) -> return (quote body)
+    L l (TList [_,body]) ->
+      let (L _ body') = quote body
+      in  return (L l body')
     _ -> skSrcError form ("malformed quote at " ++ showLoc form)
 
 m_quasiquote :: Macro
 m_quasiquote form =
     case form of
-      L _ (TList [_,body]) -> return (quasiquote body)
+      L l (TList [_,body]) ->
+        let (L _ body') = quasiquote body
+        in  return (L l body')
       _ -> skSrcError form ("malformed quasiquote at " ++ showLoc form)
 
 m_defineMacro :: Macro
@@ -333,6 +330,13 @@ specialForms =
   ,("__+", mkVarArgBinOp "+")
   ,("__*", mkVarArgBinOp "*")]
 
+
+-- ---------------------------------------------------------------------
+--
+-- Macro expander
+--
+-- ---------------------------------------------------------------------
+
 -- | Add modules used during macro expansion to current context.
 setExpanderSettings :: GhcMonad m => m ()
 setExpanderSettings = do
@@ -397,3 +401,37 @@ macroexpand form =
         _ -> do
           forms' <- mapM macroexpand forms
           return (L l (constr forms'))
+
+
+-- ---------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- ---------------------------------------------------------------------
+
+tSym :: SrcSpan -> String -> LCode
+tSym l s = L l (TAtom (ASymbol s))
+
+tChar :: SrcSpan -> Char -> LCode
+tChar l c = L l (TAtom (AChar c))
+
+tString :: SrcSpan -> String -> LCode
+tString l s = L l (TAtom (AString s))
+
+tInteger :: SrcSpan -> Integer -> LCode
+tInteger l n = L l (TAtom (AInteger n))
+
+tFractional :: SrcSpan -> FractionalLit -> LCode
+tFractional l n = L l (TAtom (AFractional n))
+
+tList :: SrcSpan -> [LCode] -> LCode
+tList l forms = L l (TList forms)
+
+tHsList :: SrcSpan -> [LCode] -> LCode
+tHsList l forms = L l (THsList forms)
+
+mkQuoted :: SrcSpan -> LCode -> LCode
+mkQuoted l form = tList l [tSym l "quoted", form]
+
+emptyForm :: LCode
+emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
