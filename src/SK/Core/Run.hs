@@ -120,7 +120,7 @@ sExpression input =
   case evalSP sexprs Nothing input of
     Right forms ->
       do putStrLn "=== pform ==="
-         mapM_ (print . pForm) forms
+         mapM_ print forms
     Left err -> putStrLn err
 
 compileAndEmit :: FilePath -> IO (Either String String)

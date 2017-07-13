@@ -52,9 +52,9 @@ sexp :: { Code }
      | '(' sexps ')' { L (getLoc $1) (List $2) }
 
 -- Required modules are added to SPState here. This is to support
--- requuring modules in home package when compiling multiple modules
--- with "--make" command, to get the required modules before macro
--- expansion.
+-- requiring modules in home package when compiling multiple modules
+-- with "--make" command, to get the modules information before macro
+-- expansion phase.
 
 sexps :: { [Code] }
       : 'require' 'symbol' {% mkRequire $1 $2 }

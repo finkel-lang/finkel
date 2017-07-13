@@ -9,16 +9,15 @@ module SK.Core.Form
   , Code
 
   , aFractional
+  , symbolNameL
+  , toListL
+
   , unLoc
   , getLoc
-
   , showLoc
   , mkSkSrcSpan
   , skSrcSpan
   , quoted
-
-  , symbolNameL
-  , toListL
 
   , pprForm
   , pprForms
@@ -112,6 +111,21 @@ instance Functor Form where
       HsList xs -> HsList (map (fmap (fmap f)) xs)
       TEnd -> TEnd
 
+instance Foldable Form where
+  -- XXX: Quite inefficient.
+  foldr f z form =
+    case form of
+      TEnd -> z
+      Atom x -> f x z
+      List xs ->
+        case xs of
+          [] -> z
+          y:ys -> foldr f (foldr f z (unLoc y)) (List ys)
+      HsList xs ->
+        case xs of
+          [] -> z
+          y:ys -> foldr f (foldr f z (unLoc y)) (HsList ys)
+
 type LForm a = Located (Form a)
 
 type Code = LForm Atom
@@ -146,17 +160,6 @@ toListL orig@(L l form) =
     HsList xs -> L l (List xs)
     _ -> L l (List [orig])
 
--- pprForm :: Code -> P.Doc
--- pprForm form =
---   case form of
---     Atom x -> P.text "Atom" P.<+> P.parens (pprAtom x)
---     List xs -> P.text "List" P.<+> P.nest 2 (pprForms xs)
---     HsList xs -> P.text "HsList" P.<+> P.nest 2 (pprForms xs)
-
--- pprForms :: [Code] -> P.Doc
--- pprForms forms =
---   P.brackets (P.sep (P.punctuate P.comma (map pprForm forms)))
-
 pprAtom :: Atom -> P.Doc
 pprAtom atom =
   case atom of
@@ -181,23 +184,18 @@ pprForms forms =
   P.brackets (P.sep (P.punctuate P.comma (map pprForm forms)))
 
 pForm :: Code -> P.Doc
-pForm = error "pForm"
+pForm (L _ form) =
+  case form of
+    Atom a -> pAtom a
+    List forms -> pForms P.parens forms
+    HsList forms -> pForms P.brackets forms
+    TEnd -> P.text "TEnd"
 
 pForms :: (P.Doc -> P.Doc) -> [Code] -> P.Doc
-pForms = error "pForms"
-
--- pForm :: Code -> P.Doc
--- pForm form =
---   case form of
---     Atom a -> pAtom a
---     List forms -> pForms P.parens forms
---     HsList forms -> pForms P.brackets forms
-
--- pForms :: (P.Doc -> P.Doc) -> [Code] -> P.Doc
--- pForms f forms =
---   case forms of
---     [] -> P.empty
---     _  -> f (P.sep (map pForm forms))
+pForms f forms =
+  case forms of
+    [] -> P.empty
+    _  -> f (P.sep (map pForm forms))
 
 pAtom :: Atom -> P.Doc
 pAtom atom =
@@ -290,17 +288,26 @@ instance Codish a => Codish [a] where
   fromCode = listFromCode
 
 -- `FlexibleInstance' language pragma required for below.
-instance Codish a => Codish (LForm a) where
-  toCode (L l form) =
-    case form of
-      Atom a    -> let (L _ b) = toCode a in L l b
-      List xs   -> L l (List (map toCode xs))
-      HsList xs -> L l (HsList (map toCode xs))
-      TEnd       -> L l TEnd
-  fromCode form@(L _ x) =
-    case x of
-      Atom _  -> fromCode form
-      _        -> error "fromCode: LForm"
+-- instance Codish a => Codish (LForm a) where
+--   toCode (L l form) =
+--     case form of
+--       Atom a    -> let (L _ b) = toCode a in L l b
+--       List xs   -> L l (List (map toCode xs))
+--       HsList xs -> L l (HsList (map toCode xs))
+--       TEnd       -> L l TEnd
+--   fromCode form@(L _ x) =
+--     case x of
+--       Atom _  -> fromCode form
+--       _        -> error "fromCode: LForm"
+
+instance Codish (Form Atom) where
+  toCode = genSrc
+  fromCode = Just . unLoc
+
+-- Requires "FlexibleInstances".
+instance Codish Code where
+  toCode = id
+  fromCode = Just
 
 instance Codish SrcSpan where
   toCode sp =
