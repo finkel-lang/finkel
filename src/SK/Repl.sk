@@ -80,7 +80,12 @@
 (instance (MonadIO Repl)
   (= (liftIO io) (Repl (liftIO io))))
 
-(derive-monad-exception () Repl Repl unRepl)
+(instance (MonadException Repl)
+  (= (controlIO f)
+    (Repl (controlIO
+           (\ ((RunIO r0))
+             (let ((= r1 (RunIO (. (fmap Repl) (. r0 unRepl)))))
+               (fmap unRepl (f r1))))))))
 
 (:: run-repl (-> (Repl a) ReplState (IO a)))
 (= (run-repl repl st) (evalStateT (unRepl repl) st))

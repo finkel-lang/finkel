@@ -23,12 +23,11 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     SK.Macro
+  exposed-modules:     Paths_sk_repl
+                       SK.Macro
                        SK.Macro.Util
                        SK.Repl
                        SK.Repl.Apply
-                       SK.Repl.Macro
-                       Paths_sk_repl
   build-depends:       base >= 4.7 && < 5
                      , haskeline
                      , ghc
