@@ -16,6 +16,7 @@ module SK.Core.Form
   , getLoc
   , showLoc
   , nlForm
+  , mkSkSrcSpan
   , locateForm
   , symbolNameL
   , toListL
@@ -131,6 +132,9 @@ type Code = Form Atom
 
 type LCode = LTForm Atom
 
+instance Show LCode where
+  show = show . unLoc
+
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.
 aFractional :: (Real a, Show a) => a -> Atom
@@ -169,7 +173,7 @@ showLoc x = case getLoc x of
         unpackFS (srcSpanFile r) ++ ":" ++
         show (srcSpanStartLine r) ++ ":" ++
         show (srcSpanStartCol r) ++ ": "
-      UnhelpfulSpan _ -> "unknown location: "
+      UnhelpfulSpan fs -> unpackFS fs ++ ": "
 
 -- | Extract string from given atom when the atom was 'ASymbol',
 -- otherwise error.
@@ -253,64 +257,69 @@ pAtom atom =
 --- S-expression form with `unquote' and `unquote-splice'.
 
 class Codish a where
-  toCode :: a -> Code
+  toCode :: a -> LCode
 
-  fromCode :: Code -> Maybe a
+  fromCode :: LCode -> Maybe a
   fromCode _ = Nothing
 
-  listToCode :: [a] -> Code
-  listToCode = HsList . map toCode
+  listToCode :: [a] -> LCode
+  listToCode xs =
+     let xs' = map toCode xs
+         l = getLoc (mkLocatedList xs')
+     in  L l (THsList xs')
 
-  listFromCode :: Code -> Maybe [a]
-  listFromCode xs = case xs of
-                      HsList as -> mapM fromCode as
-                      _         -> Nothing
+  listFromCode :: LCode -> Maybe [a]
+  listFromCode xs = case unLoc xs of
+                      THsList as -> mapM fromCode as
+                      _          -> Nothing
 
 instance Codish Atom where
-  toCode = Atom
+  toCode = genSrc . TAtom
   fromCode a =
-    case a of
-      Atom x -> Just x
-      _      -> Nothing
+    case unLoc a of
+      TAtom x -> Just x
+      _       -> Nothing
 
 instance Codish () where
-  toCode _ = Atom AUnit
+  toCode _ = genSrc (TAtom AUnit)
   fromCode a =
-    case a of
-      Atom AUnit -> Just ()
-      _          -> Nothing
+    case unLoc a of
+      TAtom AUnit -> Just ()
+      _           -> Nothing
 
 instance Codish Char where
-  toCode = Atom . AChar
+  toCode = genSrc . TAtom . AChar
   fromCode a =
-    case a of
-      Atom (AChar x) -> Just x
-      _              -> Nothing
-  listToCode = Atom . AString
-  listFromCode a = case a of
-                     Atom (AString s) -> Just s
+    case unLoc a of
+      TAtom (AChar x) -> Just x
+      _               -> Nothing
+  listToCode = genSrc . TAtom . AString
+  listFromCode a = case unLoc a of
+                     TAtom (AString s) -> Just s
                      _ -> Nothing
 
 instance Codish Int where
-  toCode a = Atom (AInteger (fromIntegral a))
+  toCode = genSrc . TAtom . AInteger . fromIntegral
   fromCode a =
-    case a of
-      Atom (AInteger n) -> Just (fromIntegral n)
-      _                 -> Nothing
+    case unLoc a of
+      TAtom (AInteger n) -> Just (fromIntegral n)
+      _                  -> Nothing
 
 instance Codish Integer where
-  toCode a = Atom (AInteger a)
+  toCode = genSrc . TAtom . AInteger
   fromCode a =
-    case a of
-      Atom (AInteger n) -> Just n
+    case unLoc a of
+      TAtom (AInteger n) -> Just n
       _                 -> Nothing
 
 instance Codish Double where
-  toCode a = let r = toRational a in Atom (AFractional (FL (show a) r))
+  toCode a =
+    let r = toRational a
+    in  genSrc (TAtom (AFractional (FL (show a) r)))
   fromCode a =
-    case a of
-      Atom (AFractional x) -> Just (fromRational (fl_value x))
-      _                    -> Nothing
+    case unLoc a of
+      TAtom (AFractional x) -> Just (fromRational (fl_value x))
+      _                     -> Nothing
 
 instance Codish a => Codish [a] where
   toCode = listToCode
@@ -320,67 +329,99 @@ instance Codish a => Codish (Form a) where
   toCode form =
     case form of
       Atom a  -> toCode a
-      List as -> List (map toCode as)
-      HsList as -> HsList (map toCode as)
-  fromCode a =
+      List as ->
+        let as' = map toCode as
+            l = getLoc (mkLocatedList as')
+        in  L l (TList as')
+      HsList as ->
+        let as' = map toCode as
+            l = getLoc (mkLocatedList as')
+        in  L l (THsList (map toCode as))
+  fromCode form@(L _ a) =
     case a of
-      Atom _  -> fromCode a
-      List as -> List <$> mapM fromCode as
-      HsList as -> HsList <$> mapM fromCode as
+      TAtom _    -> fromCode form
+      TList as   -> List <$> mapM fromCode as
+      THsList as -> HsList <$> mapM fromCode as
+      TEnd       -> Just (List [])
 
 -- `FlexibleInstance' language pragma required for below.
 instance Codish a => Codish (LTForm a) where
-  toCode = toCode . unLocForm
-  fromCode = fmap nlForm . fromCode
+  toCode (L l form) =
+    case form of
+      TAtom a    -> let (L _ b) = toCode a in L l b
+      TList xs   -> L l (TList (map toCode xs))
+      THsList xs -> L l (THsList (map toCode xs))
+      TEnd       -> L l TEnd
+  fromCode form@(L _ x) =
+    case x of
+      TAtom _  -> fromCode form
+      _        -> error ("fromCode: LTForm")
 
--- instance Codish SrcSpan where
---   toCode sp =
---     case sp of
---       UnhelpfulSpan txt ->
---         List [Atom (ASymbol "UnhelpfulSpan")
---              ,Atom (AString (unpackFS txt))]
---       RealSrcSpan rs ->
---         List [Atom (ASymbol "mkSrcSpan")
---              ,List [Atom (ASymbol "mkSrcLoc")
---                    ,List [Atom (ASymbol "fsLit")
---                          ,Atom (AString fn)]
---                    ,aint srcSpanStartLine
---                    ,aint srcSpanStartCol]
---              ,List [Atom (ASymbol "mkSrcLoc")
---                    ,List [Atom (ASymbol "fsLit")
---                          ,Atom (AString fn)]
---                    ,aint srcSpanEndLine
---                    ,aint srcSpanEndCol]]
---           where
---             fn = case srcSpanFileName_maybe sp of
---                Just fs -> unpackFS fs
---                Nothing -> "unknown file"
---             aint f = Atom (AInteger (fromIntegral (f rs)))
---   fromCode form =
---     case form of
---       List [Atom (ASymbol "UnhelpfulSpan"), Atom (AString txt)]
---        -> Just (mkGeneralSrcSpan (fsLit txt))
---       List [Atom (ASymbol "mkSrcSpan")
---            ,List [Atom (ASymbol "mkSrcLoc")
---                  ,List [Atom (ASymbol "fsLit")
---                        ,Atom (AString fn)]
---                  ,Atom (AInteger sl)
---                  ,Atom (AInteger sc)]
---            ,List [Atom (ASymbol "mkSrcLoc")
---                  ,List [Atom (ASymbol "fsLit")
---                        ,Atom (AString _)]
---                  ,Atom (AInteger el)
---                  ,Atom (AInteger ec)]]
---        -> Just (mkSrcSpan loc1 loc2)
---          where
---            loc1 = mkSrcLoc fn' (fromIntegral sl) (fromIntegral sc)
---            loc2 = mkSrcLoc fn' (fromIntegral el) (fromIntegral ec)
---            fn' = fsLit fn
---       _ -> Nothing
+instance Codish SrcSpan where
+  toCode sp =
+    case sp of
+      UnhelpfulSpan txt ->
+        (list [(atom (ASymbol "mkSkSrcSpan"))
+              ,(atom (AString (unpackFS txt)))])
+      RealSrcSpan rs ->
+        list [atom (ASymbol "mkSrcSpan")
+             ,list [atom (ASymbol "mkSrcLoc")
+                   ,list [atom (ASymbol "fsLit")
+                         ,atom (AString fn)]
+                   ,aint srcSpanStartLine
+                   ,aint srcSpanStartCol]
+             ,list [atom (ASymbol "mkSrcLoc")
+                   ,list [atom (ASymbol "fsLit")
+                         ,atom (AString fn)]
+                   ,aint srcSpanEndLine
+                   ,aint srcSpanEndCol]]
+        where
+          fn = case srcSpanFileName_maybe sp of
+             Just fs -> unpackFS fs
+             Nothing -> "unknown file"
+          aint f = atom (AInteger (fromIntegral (f rs)))
+    where
+      list = genSrc . TList
+      atom = genSrc . TAtom
+  fromCode form =
+    case unLoc form of
+      TList [L _ (TAtom (ASymbol "mkSkSrcSpan"))
+            ,L _ (TAtom (AString txt))]
+       -> Just (mkSkSrcSpan txt)
+      TList [L _ (TAtom (ASymbol "mkSrcSpan"))
+            ,L _ (TList [L _ (TAtom (ASymbol "mkSrcLoc"))
+                        ,L _ (TList [L _ (TAtom (ASymbol "fsLit"))
+                                    ,L _ (TAtom (AString fn))])
+                        ,L _ (TAtom (AInteger sl))
+                        ,L _ (TAtom (AInteger sc))])
+            ,L _ (TList [L _ (TAtom (ASymbol "mkSrcLoc"))
+                        ,L _ (TList [L _ (TAtom (ASymbol "fsLit"))
+                                    ,L _ (TAtom (AString _))])
+                        ,L _ (TAtom (AInteger el))
+                        ,L _ (TAtom (AInteger ec))])]
+       -> Just (mkSrcSpan loc1 loc2)
+         where
+           loc1 = mkSrcLoc fn' (fromIntegral sl) (fromIntegral sc)
+           loc2 = mkSrcLoc fn' (fromIntegral el) (fromIntegral ec)
+           fn' = fsLit fn
+      _ -> Nothing
 
-unquoteSplice :: Codish a => a -> [Code]
+unquoteSplice :: Codish a => a -> [LCode]
 unquoteSplice form =
-  case toCode form of
-    List xs -> xs
-    HsList xs -> xs
-    _       -> []
+  case unLoc (toCode form) of
+    TList xs   -> xs
+    THsList xs -> xs
+    _          -> []
+
+mkSkSrcSpan :: String -> SrcSpan
+mkSkSrcSpan = UnhelpfulSpan . fsLit
+
+skSrcSpan :: SrcSpan
+skSrcSpan = mkSkSrcSpan "<sk generated code>"
+
+genSrc :: a -> Located a
+genSrc = L skSrcSpan
+
+mkLocatedList ::  [Located a] -> Located [Located a]
+mkLocatedList [] = genSrc []
+mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms

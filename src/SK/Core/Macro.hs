@@ -57,19 +57,24 @@ quoteAtom l form =
     AChar c -> atom [tSym l "AChar", tChar l c]
     AString s -> atom [tSym l "AString", tString l s]
     AInteger n -> atom [tSym l "AInteger", tInteger l n]
-    AFractional n ->
-      atom [tSym l "aFractional", tFractional l n]
+    AFractional n -> atom [tSym l "aFractional", tFractional l n]
     AUnit -> atom [tSym l "AUnit"]
     _ -> L l (TAtom form)
   where
-    atom vals = tList l [tSym l "Atom", tList l vals]
+    atom vals =
+      tList l [tSym l "L", toCode l
+              ,tList l [tSym l "TAtom", tList l vals]]
 
 quote :: LCode -> LCode
 quote orig@(L l form) =
   case form of
     TAtom atom -> quoteAtom l atom
-    TList xs -> tList l [tSym l "List", tHsList l (map quote xs)]
-    THsList xs -> tList l [tSym l "HsList", tHsList l (map quote xs)]
+    TList xs ->
+      tList l [tSym l "L", toCode l
+              ,tList l [tSym l "TList", tHsList l (map quote xs)]]
+    THsList xs ->
+      tList l [tSym l "L", toCode l
+              ,tList l [tSym l "THsList", tHsList l (map quote xs)]]
     _ -> orig
 
 isUnquoteSplice :: LCode -> Bool
@@ -81,22 +86,30 @@ isUnquoteSplice form =
 quasiquote :: LCode -> LCode
 quasiquote orig@(L l form) =
   case form of
-    TList [L _ (TAtom (ASymbol "unquote")), rest] ->
-      tList l [tSym l "toCode", rest]
+    TList [L _ (TAtom (ASymbol "unquote")), x] ->
+      tList l [tSym l "toCode", x]
     TList forms'
        | any isUnquoteSplice forms' ->
-          tList l [ tSym l "List"
-                  , tList l [tSym l "concat", tHsList l (go [] forms')]]
+          tList l [tSym l "L", toCode l
+                  ,tList l [tSym l "TList"
+                           ,tList l [tSym l "concat"
+                                    ,tHsList l (go [] forms')]]]
        | otherwise ->
-          tList l [tSym l "List", tHsList l (map quasiquote forms')]
+          tList l [tSym l "L", toCode l
+                  ,tList l [tSym l "TList"
+                           ,tHsList l (map quasiquote forms')]]
     THsList forms'
        | any isUnquoteSplice forms' ->
-          tList l [ tSym l "HsList"
-                  , tList l [tSym l "concat", tHsList l (go [] forms')]]
+          tList l [tSym l "L", toCode l
+                  ,tList l [ tSym l "THsList"
+                            , tList l [tSym l "concat"
+                                      , tHsList l (go [] forms')]]]
        | otherwise ->
-          tList l [tSym l "HsList", tHsList l (map quasiquote forms')]
+          tList l [tSym l "L", toCode l
+                  ,tList l [tSym l "THsList"
+                           ,tHsList l (map quasiquote forms')]]
     TAtom atom -> quoteAtom l atom
-    _       -> orig
+    TEnd       -> orig
   where
    go acc forms =
      let (pre, post) = break isUnquoteSplice forms
@@ -168,7 +181,7 @@ pTyThing' dflags tt@(AnId _) = do
       str = showPpr dflags
   prn (concat [";;; an id: name=", str name , " type=", str typ])
   case typ of
-    -- Constructor name 'IfaceTyVar' changed sinde ghc 8.0.2 release.
+    -- Constructor name 'IfaceTyVar' changed since ghc 8.0.2 release.
     IfaceTyVar _ -> prn "free ty var"
     IfaceLitTy _ -> prn "lit ty"
     IfaceAppTy _ _ -> prn "app ty"
@@ -201,6 +214,24 @@ addImportedMacro ty_thing =
       return ()
     _ -> error "addImportedmacro"
 
+mkVarArgBinOp :: String -> Macro
+mkVarArgBinOp sym = \form ->
+  case unLoc form of
+    TList [op] -> return (L (getLoc op) (TList [mkOp op]))
+    TList [op,arg] -> return (L (getLoc op) (TList [mkOp op, arg]))
+    TList [op,arg1,arg2] -> return (L (getLoc op)
+                                      (TList [mkOp op, arg1, arg2]))
+    TList (_:rest) -> return (go rest)
+    TList _        -> return form
+    _              -> skSrcError form ("macroexpand error at " ++
+                                   showLoc form ++ ", `" ++ sym ++ "'")
+  where
+    go [x,y] = combine x y
+    go (x:xs) = combine x (go xs)
+    go _ = error ("varArgBinOp: impossible happened with " ++ sym)
+    mkOp x = L (getLoc x) (TAtom (ASymbol sym))
+    combine x y = L (getLoc x) (TList [mkOp x, x, y])
+
 m_quote :: Macro
 m_quote form =
   case form of
@@ -231,9 +262,9 @@ m_defineMacro form =
         Left err -> skSrcError form err
     _ -> skSrcError form "define-macro: malformed body"
 
--- XXX: Does not preserve macros defined with `define-macro' inside
--- `let-macro' body. Need to update the SkEnv to hold the contents of
--- currently defined macros.
+-- XXX: When macros defined with `define-macro' have same name, old
+-- macros will be overridden by `let-macro'. Need to update the SkEnv to
+-- hold the list of macro name-function lookup table ...
 m_letMacro :: Macro
 m_letMacro form =
   case form of
@@ -277,24 +308,6 @@ m_require form =
                                  ++ mname)
     _ -> skSrcError form "require: malformed syntax."
 
-m_varArgBinOp :: String -> Macro
-m_varArgBinOp sym = \form ->
-  case unLoc form of
-    TList [op] -> return (L (getLoc op) (TList [mkOp op]))
-    TList [op,arg] -> return (L (getLoc op) (TList [mkOp op, arg]))
-    TList [op,arg1,arg2] -> return (L (getLoc op)
-                                      (TList [mkOp op, arg1, arg2]))
-    TList (_:rest) -> return (go rest)
-    TList _        -> return form
-    _              -> skSrcError form ("macroexpand error at " ++
-                                   showLoc form ++ ", `" ++ sym ++ "'")
-  where
-    go [x,y] = combine x y
-    go (x:xs) = combine x (go xs)
-    go _ = error ("varArgBinOp: impossible happened with " ++ sym)
-    mkOp x = L (getLoc x) (TAtom (ASymbol sym))
-    combine x y = L (getLoc x) (TList [mkOp x, x, y])
-
 specialForms :: [(String, Macro)]
 specialForms =
   [("quote", m_quote)
@@ -317,9 +330,8 @@ specialForms =
   -- Also, when defining instance, qualified names are not allowed, need
   -- to cope such situations.
   --
-  ,("__+", m_varArgBinOp "+")
-  ,("__*", m_varArgBinOp "*")
-  ]
+  ,("__+", mkVarArgBinOp "+")
+  ,("__*", mkVarArgBinOp "*")]
 
 -- | Add modules used during macro expansion to current context.
 setExpanderSettings :: GhcMonad m => m ()
