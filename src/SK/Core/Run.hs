@@ -120,9 +120,7 @@ sExpression input =
   case evalSP sexprs Nothing input of
     Right forms ->
       do putStrLn "=== pform ==="
-         mapM_ (print . pForm . unLocForm) forms
-         putStrLn "=== pprForm ==="
-         print (pprForms (map unLocForm forms))
+         mapM_ (print . pForm) forms
     Left err -> putStrLn err
 
 compileAndEmit :: FilePath -> IO (Either String String)
@@ -131,14 +129,14 @@ compileAndEmit file = runSkc go initialSkEnv
     go = do (mdl, st) <- compileSkModule file
             genHsSrc st mdl
 
-parseSexprs :: Maybe FilePath -> String -> Skc ([LCode], SPState)
+parseSexprs :: Maybe FilePath -> String -> Skc ([Code], SPState)
 parseSexprs mb_file contents =
   Skc (lift (runSP' sexprs mb_file contents))
 
-buildHsSyn :: Builder a -> [LCode] -> Skc a
+buildHsSyn :: Builder a -> [Code] -> Skc a
 buildHsSyn bldr forms = Skc (lift (evalBuilder' bldr forms))
 
-compileSkModuleForm :: [LCode] -> Skc (HsModule RdrName)
+compileSkModuleForm :: [Code] -> Skc (HsModule RdrName)
 compileSkModuleForm form = do
   expanded <- withExpanderSettings (macroexpands form)
   buildHsSyn parseModule expanded

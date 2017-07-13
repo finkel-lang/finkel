@@ -7,13 +7,13 @@
 ;; Simple version of `defmacro' defined with `define-macro'
 (define-macro defmacro (form)
   (case form
-    ((L _ (TList [_self name args body]))
+    ((L _ (List [_self name args body]))
      (case args
-       ((L _ (TList _))
+       ((L _ (List _))
         (return
           `(define-macro ,name (form)
              (case form
-               ((L l1 (TList [_ ,@args]))
+               ((L l1 (List [_ ,@args]))
                 (return ,body))
                (_ (failS (++ (show ',name) ": error")))))))
        (_
@@ -28,12 +28,12 @@
 ;; Simple `let-macro'.
 (let-macro ((m2a (form)
               (case form
-                ((L _ (TList [_ a b c]))
+                ((L _ (List [_ a b c]))
                  (return `(,a (+ ,b ,c))))
                 (_ (failS "m2a: error"))))
             (m2b (form)
               (case form
-                ((L _ (TList [_ x y]))
+                ((L _ (List [_ x y]))
                  (return `(+ ,x ,y)))
                 (_ (failS "m2b: error")))))
   (:: f1 (-> Int Int (IO ())))
@@ -43,7 +43,7 @@
 ;;; Macro taking fractional value as argument.
 (let-macro ((m1 (form)
              (case form
-               ((L l (TList [_ x]))
+               ((L l (List [_ x]))
                 (case (fromCode x)
                   ((Just d)
                    (if (<= 1.0 (:: d Double))
@@ -62,7 +62,7 @@
 ;;; Macro returning haskell list.
 (let-macro ((m2 (form)
               (case form
-                ((L l (TList [_ a b c]))
+                ((L l (List [_ a b c]))
                  (let ((:: mbints (Maybe (, Int Int Int)))
                        (= mbints
                          (do (<- x (fromCode a))

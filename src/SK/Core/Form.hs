@@ -3,17 +3,13 @@
 -- | Form and Atom data.
 module SK.Core.Form
   ( -- * The S-expression form
-    Form(..)
-  , Atom(..)
-  , TForm(..)
-  , LTForm
+    Atom(..)
+  , Form(..)
+  , LForm
   , Code
-  , LCode
 
   , aFractional
   , unLoc
-  , unLocForm
-  , nlForm
   , getLoc
 
   , showLoc
@@ -21,16 +17,12 @@ module SK.Core.Form
   , skSrcSpan
   , quoted
 
-  , locateForm
   , symbolNameL
   , toListL
 
   , pprForm
   , pprForms
-  , pprTForm
-  , pprTForms
   , pForm
-  , pForms
   , pAtom
 
   , Codish(..)
@@ -60,30 +52,6 @@ import SK.Core.GHC
 -- Form data type
 --
 -- -------------------------------------------------------------------
-
--- | Simple form type.
-data Form a
-  = Atom a
-  | List [Form a]
-  | HsList [Form a]
-  deriving (Eq, Data, Typeable)
-
-instance Show a => Show (Form a) where
-  show form =
-    case form of
-      Atom a -> show a
-      List xs -> mkList "(" xs ")"
-      HsList xs -> mkList "[" xs "]"
-    where
-      mkList open xs close =
-        open ++ unwords (map show xs) ++ close
-
-instance Functor Form where
-  fmap f form =
-    case form of
-      Atom a -> Atom (f a)
-      List xs -> List (map (fmap f) xs)
-      HsList xs -> HsList (map (fmap f) xs)
 
 -- | Atom in tokens.
 data Atom
@@ -116,59 +84,45 @@ instance Show Atom where
       AFractional f -> fl_text f
       AComment _ -> ""
 
--- | Located form type, used as token.
-data TForm a
-  = TAtom a            -- ^ S-expression atom.
-  | TList [LTForm a]   -- ^ S-expression list.
-  | THsList [LTForm a] -- ^ Haskell list.
-  | TEnd               -- ^ End of token.
+-- | Form type. Also used as token. Elements of recursive structures
+-- contain location information.
+data Form a
+  = Atom a           -- ^ S-expression atom.
+  | List [LForm a]   -- ^ S-expression list.
+  | HsList [LForm a] -- ^ Haskell list.
+  | TEnd             -- ^ End of token.
   deriving (Eq, Data, Typeable)
 
-instance Show a => Show (TForm a) where
-  show (TAtom a) = "TAtom " ++ show a
-  show (TList as) = "TList " ++ show (map unLoc as)
-  show (THsList as) = "THsList " ++ show (map unLoc as)
-  show TEnd = "TEnd"
+instance Show a => Show (Form a) where
+  show form =
+    case form of
+      Atom a -> show a
+      List xs -> mkList "(" xs ")"
+      HsList xs -> mkList "[" xs "]"
+      TEnd -> "TEnd"
+    where
+      mkList open xs close =
+        open ++ unwords (map (show . unLoc) xs) ++ close
 
-type LTForm a = Located (TForm a)
+instance Functor Form where
+  fmap f form =
+    case form of
+      Atom a -> Atom (f a)
+      List xs -> List (map (fmap (fmap f)) xs)
+      HsList xs -> HsList (map (fmap (fmap f)) xs)
+      TEnd -> TEnd
 
-type Code = Form Atom
+type LForm a = Located (Form a)
 
-type LCode = LTForm Atom
+type Code = LForm Atom
 
-instance Show LCode where
+instance Show Code where
   show = show . unLoc
 
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.
 aFractional :: (Real a, Show a) => a -> Atom
 aFractional x = AFractional $! FL (show x) (toRational x)
-
--- | Converts located token form to bare 'Form'. Location information,
--- token end constructor, and Haskell list constructor disappears.
-unLocForm :: LTForm a -> Form a
-unLocForm form =
-   case unLoc form of
-     TAtom a    -> Atom a
-     TList xs   -> List (map unLocForm xs)
-     THsList xs -> HsList (map unLocForm xs)
-     TEnd       -> List []
-
--- | Make a token form with no location information.
-nlForm :: Form a -> LTForm a
-nlForm form =
-  case form of
-    Atom x -> noLoc (TAtom x)
-    List xs -> noLoc (TList (map nlForm xs))
-    HsList xs -> noLoc (THsList (map nlForm xs))
-
--- | Attach given location to form, including all sub forms.
-locateForm :: SrcSpan -> Form a -> LTForm a
-locateForm l form =
-  case form of
-    Atom x -> L l (TAtom x)
-    List xs -> L l (TList (map (locateForm l) xs))
-    HsList xs -> L l (THsList (map (locateForm l) xs))
 
 -- | String representation of located data.
 showLoc :: Located a -> String
@@ -181,27 +135,27 @@ showLoc x = case getLoc x of
 
 -- | Extract string from given atom when the atom was 'ASymbol',
 -- otherwise error.
-symbolNameL :: LCode -> String
-symbolNameL (L _ (TAtom (ASymbol name))) = name
-symbolNameL x = error ("symbolNameL: got " ++ show (pprTForm x))
+symbolNameL :: Code -> String
+symbolNameL (L _ (Atom (ASymbol name))) = name
+symbolNameL x = error ("symbolNameL: got " ++ show (pprForm x))
 
-toListL :: LCode -> LCode
+toListL :: Code -> Code
 toListL orig@(L l form) =
   case form of
-    TList _ -> orig
-    THsList xs -> L l (TList xs)
-    _ -> L l (TList [orig])
+    List _ -> orig
+    HsList xs -> L l (List xs)
+    _ -> L l (List [orig])
 
-pprForm :: Code -> P.Doc
-pprForm form =
-  case form of
-    Atom x -> P.text "Atom" P.<+> P.parens (pprAtom x)
-    List xs -> P.text "List" P.<+> P.nest 2 (pprForms xs)
-    HsList xs -> P.text "HsList" P.<+> P.nest 2 (pprForms xs)
+-- pprForm :: Code -> P.Doc
+-- pprForm form =
+--   case form of
+--     Atom x -> P.text "Atom" P.<+> P.parens (pprAtom x)
+--     List xs -> P.text "List" P.<+> P.nest 2 (pprForms xs)
+--     HsList xs -> P.text "HsList" P.<+> P.nest 2 (pprForms xs)
 
-pprForms :: [Code] -> P.Doc
-pprForms forms =
-  P.brackets (P.sep (P.punctuate P.comma (map pprForm forms)))
+-- pprForms :: [Code] -> P.Doc
+-- pprForms forms =
+--   P.brackets (P.sep (P.punctuate P.comma (map pprForm forms)))
 
 pprAtom :: Atom -> P.Doc
 pprAtom atom =
@@ -214,30 +168,36 @@ pprAtom atom =
     AFractional x -> P.text "AFractional" P.<+> P.text (fl_text x)
     AComment x -> P.text "AComment" P.<+> P.doubleQuotes (P.text x)
 
-pprTForm :: LCode -> P.Doc
-pprTForm (L _ form) =
+pprForm :: Code -> P.Doc
+pprForm (L _ form) =
   case form of
-    TAtom x -> P.text "TAtom" P.<+> P.parens (pprAtom x)
-    TList xs -> P.text "TList" P.<+> P.nest 2 (pprTForms xs)
-    THsList xs -> P.text "THsList" P.<+> P.nest 2 (pprTForms xs)
+    Atom x -> P.text "Atom" P.<+> P.parens (pprAtom x)
+    List xs -> P.text "List" P.<+> P.nest 2 (pprForms xs)
+    HsList xs -> P.text "HsList" P.<+> P.nest 2 (pprForms xs)
     TEnd -> P.text "TEnd"
 
-pprTForms :: [LCode] -> P.Doc
-pprTForms forms =
-  P.brackets (P.sep (P.punctuate P.comma (map pprTForm forms)))
+pprForms :: [Code] -> P.Doc
+pprForms forms =
+  P.brackets (P.sep (P.punctuate P.comma (map pprForm forms)))
 
 pForm :: Code -> P.Doc
-pForm form =
-  case form of
-    Atom a -> pAtom a
-    List forms -> pForms P.parens forms
-    HsList forms -> pForms P.brackets forms
+pForm = error "pForm"
 
 pForms :: (P.Doc -> P.Doc) -> [Code] -> P.Doc
-pForms f forms =
-  case forms of
-    [] -> P.empty
-    _  -> f (P.sep (map pForm forms))
+pForms = error "pForms"
+
+-- pForm :: Code -> P.Doc
+-- pForm form =
+--   case form of
+--     Atom a -> pAtom a
+--     List forms -> pForms P.parens forms
+--     HsList forms -> pForms P.brackets forms
+
+-- pForms :: (P.Doc -> P.Doc) -> [Code] -> P.Doc
+-- pForms f forms =
+--   case forms of
+--     [] -> P.empty
+--     _  -> f (P.sep (map pForm forms))
 
 pAtom :: Atom -> P.Doc
 pAtom atom =
@@ -261,112 +221,93 @@ pAtom atom =
 --- S-expression form with `unquote' and `unquote-splice'.
 
 class Codish a where
-  toCode :: a -> LCode
+  toCode :: a -> Code
 
-  fromCode :: LCode -> Maybe a
+  fromCode :: Code -> Maybe a
   fromCode _ = Nothing
 
-  listToCode :: [a] -> LCode
+  listToCode :: [a] -> Code
   listToCode xs =
      let xs' = map toCode xs
          l = getLoc (mkLocatedList xs')
-     in  L l (THsList xs')
+     in  L l (HsList xs')
 
-  listFromCode :: LCode -> Maybe [a]
+  listFromCode :: Code -> Maybe [a]
   listFromCode xs = case unLoc xs of
-                      THsList as -> mapM fromCode as
+                      HsList as -> mapM fromCode as
                       _          -> Nothing
 
 instance Codish Atom where
-  toCode = genSrc . TAtom
+  toCode = genSrc . Atom
   fromCode a =
     case unLoc a of
-      TAtom x -> Just x
+      Atom x -> Just x
       _       -> Nothing
 
 instance Codish () where
-  toCode _ = genSrc (TAtom AUnit)
+  toCode _ = genSrc (Atom AUnit)
   fromCode a =
     case unLoc a of
-      TAtom AUnit -> Just ()
+      Atom AUnit -> Just ()
       _           -> Nothing
 
 instance Codish Char where
-  toCode = genSrc . TAtom . AChar
+  toCode = genSrc . Atom . AChar
   fromCode a =
     case unLoc a of
-      TAtom (AChar x) -> Just x
+      Atom (AChar x) -> Just x
       _               -> Nothing
-  listToCode = genSrc . TAtom . AString
+  listToCode = genSrc . Atom . AString
   listFromCode a = case unLoc a of
-                     TAtom (AString s) -> Just s
+                     Atom (AString s) -> Just s
                      _ -> Nothing
 
 instance Codish Int where
-  toCode = genSrc . TAtom . AInteger . fromIntegral
+  toCode = genSrc . Atom . AInteger . fromIntegral
   fromCode a =
     case unLoc a of
-      TAtom (AInteger n) -> Just (fromIntegral n)
+      Atom (AInteger n) -> Just (fromIntegral n)
       _                  -> Nothing
 
 instance Codish Integer where
-  toCode = genSrc . TAtom . AInteger
+  toCode = genSrc . Atom . AInteger
   fromCode a =
     case unLoc a of
-      TAtom (AInteger n) -> Just n
+      Atom (AInteger n) -> Just n
       _                 -> Nothing
 
 instance Codish Double where
   toCode a =
     let r = toRational a
-    in  genSrc (TAtom (AFractional (FL (show a) r)))
+    in  genSrc (Atom (AFractional (FL (show a) r)))
   fromCode a =
     case unLoc a of
-      TAtom (AFractional x) -> Just (fromRational (fl_value x))
+      Atom (AFractional x) -> Just (fromRational (fl_value x))
       _                     -> Nothing
 
 instance Codish a => Codish [a] where
   toCode = listToCode
   fromCode = listFromCode
 
-instance Codish a => Codish (Form a) where
-  toCode form =
-    case form of
-      Atom a  -> toCode a
-      List as ->
-        let as' = map toCode as
-            l = getLoc (mkLocatedList as')
-        in  L l (TList as')
-      HsList as ->
-        let as' = map toCode as
-            l = getLoc (mkLocatedList as')
-        in  L l (THsList (map toCode as))
-  fromCode form@(L _ a) =
-    case a of
-      TAtom _    -> fromCode form
-      TList as   -> List <$> mapM fromCode as
-      THsList as -> HsList <$> mapM fromCode as
-      TEnd       -> Just (List [])
-
 -- `FlexibleInstance' language pragma required for below.
-instance Codish a => Codish (LTForm a) where
+instance Codish a => Codish (LForm a) where
   toCode (L l form) =
     case form of
-      TAtom a    -> let (L _ b) = toCode a in L l b
-      TList xs   -> L l (TList (map toCode xs))
-      THsList xs -> L l (THsList (map toCode xs))
+      Atom a    -> let (L _ b) = toCode a in L l b
+      List xs   -> L l (List (map toCode xs))
+      HsList xs -> L l (HsList (map toCode xs))
       TEnd       -> L l TEnd
   fromCode form@(L _ x) =
     case x of
-      TAtom _  -> fromCode form
-      _        -> error ("fromCode: LTForm")
+      Atom _  -> fromCode form
+      _        -> error "fromCode: LForm"
 
 instance Codish SrcSpan where
   toCode sp =
     case sp of
       UnhelpfulSpan txt ->
-        (list [(atom (ASymbol "mkSkSrcSpan"))
-              ,(atom (AString (unpackFS txt)))])
+        list [(atom (ASymbol "mkSkSrcSpan"))
+             ,(atom (AString (unpackFS txt)))]
       RealSrcSpan rs ->
         list [atom (ASymbol "mkSrcSpan")
              ,list [atom (ASymbol "mkSrcLoc")
@@ -385,24 +326,24 @@ instance Codish SrcSpan where
              Nothing -> "unknown file"
           aint f = atom (AInteger (fromIntegral (f rs)))
     where
-      list = genSrc . TList
-      atom = genSrc . TAtom
+      list = genSrc . List
+      atom = genSrc . Atom
   fromCode form =
     case unLoc form of
-      TList [L _ (TAtom (ASymbol "mkSkSrcSpan"))
-            ,L _ (TAtom (AString txt))]
+      List [L _ (Atom (ASymbol "mkSkSrcSpan"))
+            ,L _ (Atom (AString txt))]
        -> Just (mkSkSrcSpan txt)
-      TList [L _ (TAtom (ASymbol "mkSrcSpan"))
-            ,L _ (TList [L _ (TAtom (ASymbol "mkSrcLoc"))
-                        ,L _ (TList [L _ (TAtom (ASymbol "fsLit"))
-                                    ,L _ (TAtom (AString fn))])
-                        ,L _ (TAtom (AInteger sl))
-                        ,L _ (TAtom (AInteger sc))])
-            ,L _ (TList [L _ (TAtom (ASymbol "mkSrcLoc"))
-                        ,L _ (TList [L _ (TAtom (ASymbol "fsLit"))
-                                    ,L _ (TAtom (AString _))])
-                        ,L _ (TAtom (AInteger el))
-                        ,L _ (TAtom (AInteger ec))])]
+      List [L _ (Atom (ASymbol "mkSrcSpan"))
+            ,L _ (List [L _ (Atom (ASymbol "mkSrcLoc"))
+                        ,L _ (List [L _ (Atom (ASymbol "fsLit"))
+                                    ,L _ (Atom (AString fn))])
+                        ,L _ (Atom (AInteger sl))
+                        ,L _ (Atom (AInteger sc))])
+            ,L _ (List [L _ (Atom (ASymbol "mkSrcLoc"))
+                        ,L _ (List [L _ (Atom (ASymbol "fsLit"))
+                                    ,L _ (Atom (AString _))])
+                        ,L _ (Atom (AInteger el))
+                        ,L _ (Atom (AInteger ec))])]
        -> Just (mkSrcSpan loc1 loc2)
          where
            loc1 = mkSrcLoc fn' (fromIntegral sl) (fromIntegral sc)
@@ -410,11 +351,11 @@ instance Codish SrcSpan where
            fn' = fsLit fn
       _ -> Nothing
 
-unquoteSplice :: Codish a => a -> [LCode]
+unquoteSplice :: Codish a => a -> [Code]
 unquoteSplice form =
   case unLoc (toCode form) of
-    TList xs   -> xs
-    THsList xs -> xs
+    List xs   -> xs
+    HsList xs -> xs
     _          -> []
 
 mkSkSrcSpan :: String -> SrcSpan
@@ -426,7 +367,7 @@ skSrcSpan = mkSkSrcSpan "<sk generated code>"
 genSrc :: a -> Located a
 genSrc = L skSrcSpan
 
-quoted :: TForm Atom -> LCode
+quoted :: Form Atom -> Code
 quoted = L (UnhelpfulSpan (fsLit "<quoted code>"))
 
 mkLocatedList ::  [Located a] -> Located [Located a]

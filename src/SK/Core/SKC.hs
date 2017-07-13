@@ -30,7 +30,22 @@ import SK.Core.GHC
 --
 -- Skc monad
 --
--- --------------------------------------------------------------------------
+-- ---------------------------------------------------------------------
+
+-- | Macro transformer function.
+--
+-- A macro in SK is implemented as a function. The function takes a
+-- single located code data argument, returns a located code data
+-- wrapped in 'Skc'.
+type Macro = Code -> Skc Code
+
+-- | Environment state in 'Skc'.
+data SkEnv = SkEnv
+   { -- | Association list of macros.
+     envMacros :: [(String, Macro)]
+     -- | Flag to hold debug setting.
+   , envDebug :: Bool
+   }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
 newtype Skc a = Skc {
@@ -53,21 +68,6 @@ instance HasDynFlags Skc where
 instance GhcMonad Skc where
    getSession = Skc (lift (lift getSession))
    setSession s = Skc (lift (lift (setSession s)))
-
--- | Macro transformer function.
---
--- A macro in SK is implemented as a function. The function takes a
--- single located S-expression data argument, returns a located
--- S-expression data wrapped in 'Skc'.
-type Macro = LCode -> Skc LCode
-
--- | Type of state in 'SKC'.
-data SkEnv = SkEnv
-   { -- | Association list of macros.
-     envMacros :: [(String, Macro)]
-     -- | Flag to hold debug setting.
-   , envDebug :: Bool
-   }
 
 toGhc :: Skc a -> SkEnv -> Ghc (Either String (a, SkEnv))
 toGhc m st = runExceptT (runStateT (unSkc m) st)

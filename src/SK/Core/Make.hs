@@ -104,7 +104,7 @@ make inputs no_link mb_output = do
 data TargetSource
   -- XXX: Original input string in SkSource is assumed as module name at
   -- the moment, but it could be a file path.
-  = SkSource FilePath String [LCode] [String]
+  = SkSource FilePath String [Code] [String]
   -- ^ SK source. Holds file path of the source code, original string
   -- input, parsed form data, and required module names.
   | HsSource FilePath
@@ -389,7 +389,7 @@ compileToHsModule (tsrc, mbphase) =
       return (Just mdl)
     OtherSource path -> compileOtherFile path >> return Nothing
 
-compileSkModuleForm' :: [LCode] -> Skc (HsModule RdrName)
+compileSkModuleForm' :: [Code] -> Skc (HsModule RdrName)
 compileSkModuleForm' = timeIt "HsModule [sk]" . compileSkModuleForm
 
 isSkFile :: FilePath -> Bool

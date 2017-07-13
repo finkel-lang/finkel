@@ -60,56 +60,56 @@ import SK.Core.GHC
 
 %name p_symbols1 symbols1
 
-%tokentype { LCode }
+%tokentype { Code }
 %monad { Builder }
 %lexer { formLexer } { L _ TEnd }
 
 %token
 
-'case'     { L _ (TAtom (ASymbol "case")) }
-'data'     { L _ (TAtom (ASymbol "data")) }
-'do'       { L _ (TAtom (ASymbol "do")) }
-'if'       { L _ (TAtom (ASymbol "if")) }
-'import'   { L _ (TAtom (ASymbol "import")) }
-'instance' { L _ (TAtom (ASymbol "instance")) }
-'let'      { L _ (TAtom (ASymbol "let")) }
-'module'   { L _ (TAtom (ASymbol "module")) }
-'newtype'  { L _ (TAtom (ASymbol "newtype")) }
-'type'     { L _ (TAtom (ASymbol "type")) }
+'case'     { L _ (Atom (ASymbol "case")) }
+'data'     { L _ (Atom (ASymbol "data")) }
+'do'       { L _ (Atom (ASymbol "do")) }
+'if'       { L _ (Atom (ASymbol "if")) }
+'import'   { L _ (Atom (ASymbol "import")) }
+'instance' { L _ (Atom (ASymbol "instance")) }
+'let'      { L _ (Atom (ASymbol "let")) }
+'module'   { L _ (Atom (ASymbol "module")) }
+'newtype'  { L _ (Atom (ASymbol "newtype")) }
+'type'     { L _ (Atom (ASymbol "type")) }
 
-','  { L _ (TAtom (ASymbol ",")) }
-'->' { L _ (TAtom (ASymbol "->")) }
-'::' { L _ (TAtom (ASymbol "::")) }
-'<-' { L _ (TAtom (ASymbol "<-")) }
-'='  { L _ (TAtom (ASymbol "=")) }
-'=>' { L _ (TAtom (ASymbol "=>")) }
-'\\' { L _ (TAtom (ASymbol "\\")) }
-'{'  { L _ (TAtom (ASymbol "{")) }
-'|'  { L _ (TAtom (ASymbol "|")) }
-'}'  { L _ (TAtom (ASymbol "}")) }
+','  { L _ (Atom (ASymbol ",")) }
+'->' { L _ (Atom (ASymbol "->")) }
+'::' { L _ (Atom (ASymbol "::")) }
+'<-' { L _ (Atom (ASymbol "<-")) }
+'='  { L _ (Atom (ASymbol "=")) }
+'=>' { L _ (Atom (ASymbol "=>")) }
+'\\' { L _ (Atom (ASymbol "\\")) }
+'{'  { L _ (Atom (ASymbol "{")) }
+'|'  { L _ (Atom (ASymbol "|")) }
+'}'  { L _ (Atom (ASymbol "}")) }
 
 -- For `as' pattern
--- '@'  { L _ (TAtom (ASymbol "@")) }
+-- '@'  { L _ (Atom (ASymbol "@")) }
 
 -- For `irrefutable' pattern
--- '~'  { L _ (TAtom (ASymbol "~")) }
+-- '~'  { L _ (Atom (ASymbol "~")) }
 
-'symbol'  { L _ (TAtom (ASymbol _)) }
-'char'    { L _ (TAtom (AChar _)) }
-'string'  { L _ (TAtom (AString _)) }
-'integer' { L _ (TAtom (AInteger _)) }
-'frac'    { L _ (TAtom (AFractional _)) }
-'comment' { L _ (TAtom (AComment _)) }
-'unit'    { L _ (TAtom AUnit) }
+'symbol'  { L _ (Atom (ASymbol _)) }
+'char'    { L _ (Atom (AChar _)) }
+'string'  { L _ (Atom (AString _)) }
+'integer' { L _ (Atom (AInteger _)) }
+'frac'    { L _ (Atom (AFractional _)) }
+'comment' { L _ (Atom (AComment _)) }
+'unit'    { L _ (Atom AUnit) }
 
 'f_import'
-    { L _ (TList $$@((L _ (TAtom (ASymbol "import"))):_)) }
+    { L _ (List $$@((L _ (Atom (ASymbol "import"))):_)) }
 
 'deriving'
-    { L _ (TList [L _ (TAtom (ASymbol "deriving")), L _ (TList $$)])}
+    { L _ (List [L _ (Atom (ASymbol "deriving")), L _ (List $$)])}
 
-'list'       { L _ (TList $$) }
-'hslist'     { L _ (THsList _) }
+'list'       { L _ (List $$) }
+'hslist'     { L _ (HsList _) }
 
 
 %%
@@ -437,13 +437,13 @@ stmt1 :: { HStmt }
 --
 -- ---------------------------------------------------------------------
 
-symbols :: { [LCode] }
+symbols :: { [Code] }
     : 'list' {% parse p_symbols1 $1 }
 
-symbols1 :: { [LCode] }
+symbols1 :: { [Code] }
     : rsymbols { reverse $1 }
 
-rsymbols :: { [LCode] }
+rsymbols :: { [Code] }
     : 'symbol'          { [$1] }
     | rsymbols 'symbol' { $2:$1 }
 

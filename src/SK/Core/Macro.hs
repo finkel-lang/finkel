@@ -25,7 +25,7 @@ import SK.Core.SKC
 --
 -- ---------------------------------------------------------------------
 
-quoteAtom :: SrcSpan -> Atom -> LCode
+quoteAtom :: SrcSpan -> Atom -> Code
 quoteAtom l form =
   case form of
     ASymbol s -> atom [tSym l "ASymbol", tString l s]
@@ -34,18 +34,18 @@ quoteAtom l form =
     AInteger n -> atom [tSym l "AInteger", tInteger l n]
     AFractional n -> atom [tSym l "aFractional", tFractional l n]
     AUnit -> atom [tSym l "AUnit"]
-    _ -> L l (TAtom form)
+    _ -> L l (Atom form)
   where
-    atom vals = mkQuoted l (tList l [tSym l "TAtom", tList l vals])
+    atom vals = mkQuoted l (tList l [tSym l "Atom", tList l vals])
 
-quote :: LCode -> LCode
+quote :: Code -> Code
 quote orig@(L l form) =
   case form of
-    TAtom atom -> quoteAtom l atom
-    TList xs ->
-      mkQuoted l (tList l [tSym l "TList", tHsList l (map quote xs)])
-    THsList xs ->
-      mkQuoted l (tList l [tSym l "THsList", tHsList l (map quote xs)])
+    Atom atom -> quoteAtom l atom
+    List xs ->
+      mkQuoted l (tList l [tSym l "List", tHsList l (map quote xs)])
+    HsList xs ->
+      mkQuoted l (tList l [tSym l "HsList", tHsList l (map quote xs)])
     _ -> orig
 
 -- Quasiquote is currently implemented in Haskell. Though it could be
@@ -53,40 +53,40 @@ quote orig@(L l form) =
 -- still need to handle the special case for backtick, comma, and
 -- comma-at, because currently there's no way to define read macro.
 
-isUnquoteSplice :: LCode -> Bool
+isUnquoteSplice :: Code -> Bool
 isUnquoteSplice form =
   case form of
-    L _ (TList (L _ (TAtom (ASymbol "unquote-splice")):_)) -> True
+    L _ (List (L _ (Atom (ASymbol "unquote-splice")):_)) -> True
     _ -> False
 
-quasiquote :: LCode -> LCode
+quasiquote :: Code -> Code
 quasiquote orig@(L l form) =
   case form of
-    TList [L _ (TAtom (ASymbol "unquote")), x] ->
+    List [L _ (Atom (ASymbol "unquote")), x] ->
       tList l [tSym l "toCode", x]
-    TList forms'
+    List forms'
        | any isUnquoteSplice forms' ->
-          mkQuoted l (tList l [tSym l "TList"
+          mkQuoted l (tList l [tSym l "List"
                               ,tList l [tSym l "concat"
                                        ,tHsList l (go [] forms')]])
        | otherwise ->
-          mkQuoted l (tList l [tSym l "TList"
+          mkQuoted l (tList l [tSym l "List"
                               ,tHsList l (map quasiquote forms')])
-    THsList forms'
+    HsList forms'
        | any isUnquoteSplice forms' ->
-         mkQuoted l (tList l [ tSym l "THsList"
+         mkQuoted l (tList l [ tSym l "HsList"
                               , tList l [tSym l "concat"
                                         , tHsList l (go [] forms')]])
        | otherwise ->
-         mkQuoted l (tList l [tSym l "THsList"
+         mkQuoted l (tList l [tSym l "HsList"
                              ,tHsList l (map quasiquote forms')])
-    TAtom atom -> quoteAtom l atom
+    Atom atom -> quoteAtom l atom
     TEnd       -> orig
   where
    go acc forms =
      let (pre, post) = break isUnquoteSplice forms
      in  case post of
-           (L ls (TList (_:body)):post') ->
+           (L ls (List (_:body)):post') ->
              go (acc ++ [tHsList l (map quasiquote pre)
                         ,tList ls [ tSym l "unquoteSplice"
                                   , tList l body]])
@@ -117,10 +117,10 @@ compileMT :: LHsExpr RdrName -> Skc Macro
 compileMT = fmap unsafeCoerce . compileParsedExpr
 {-# INLINE compileMT #-}
 
-putMacro :: LCode -> Skc ()
+putMacro :: Code -> Skc ()
 putMacro form =
   case form of
-    L l (TList [(L _ (TAtom (ASymbol name))),arg,body]) -> do
+    L l (List [(L _ (Atom (ASymbol name))),arg,body]) -> do
       expanded <- macroexpand body
       let expr = tList l [ tSym l "::"
                          , tList l [tSym l "\\", arg, expanded]
@@ -132,7 +132,7 @@ putMacro form =
           return ()
         Left err -> skSrcError form err
     _ -> skSrcError form ("malformed macro: " ++
-                      show (pForm (unLocForm form)))
+                      show (pForm form))
 
 mkIIDecl :: String -> InteractiveImport
 mkIIDecl = IIDecl . simpleImportDecl . mkModuleName
@@ -210,25 +210,25 @@ addImportedMacro ty_thing =
 mkVarArgBinOp :: String -> Macro
 mkVarArgBinOp sym = \form ->
   case unLoc form of
-    TList [op] -> return (L (getLoc op) (TList [mkOp op]))
-    TList [op,arg] -> return (L (getLoc op) (TList [mkOp op, arg]))
-    TList [op,arg1,arg2] -> return (L (getLoc op)
-                                      (TList [mkOp op, arg1, arg2]))
-    TList (_:rest) -> return (go rest)
-    TList _        -> return form
+    List [op] -> return (L (getLoc op) (List [mkOp op]))
+    List [op,arg] -> return (L (getLoc op) (List [mkOp op, arg]))
+    List [op,arg1,arg2] -> return (L (getLoc op)
+                                      (List [mkOp op, arg1, arg2]))
+    List (_:rest) -> return (go rest)
+    List _        -> return form
     _              -> skSrcError form ("macroexpand error at " ++
                                    showLoc form ++ ", `" ++ sym ++ "'")
   where
     go [x,y] = combine x y
     go (x:xs) = combine x (go xs)
     go _ = error ("varArgBinOp: impossible happened with " ++ sym)
-    mkOp x = L (getLoc x) (TAtom (ASymbol sym))
-    combine x y = L (getLoc x) (TList [mkOp x, x, y])
+    mkOp x = L (getLoc x) (Atom (ASymbol sym))
+    combine x y = L (getLoc x) (List [mkOp x, x, y])
 
 m_quote :: Macro
 m_quote form =
   case form of
-    L l (TList [_,body]) ->
+    L l (List [_,body]) ->
       let (L _ body') = quote body
       in  return (L l body')
     _ -> skSrcError form ("malformed quote at " ++ showLoc form)
@@ -236,7 +236,7 @@ m_quote form =
 m_quasiquote :: Macro
 m_quasiquote form =
     case form of
-      L l (TList [_,body]) ->
+      L l (List [_,body]) ->
         let (L _ body') = quasiquote body
         in  return (L l body')
       _ -> skSrcError form ("malformed quasiquote at " ++ showLoc form)
@@ -244,7 +244,7 @@ m_quasiquote form =
 m_defineMacro :: Macro
 m_defineMacro form =
   case form of
-    L l (TList [_,self@(L _ (TAtom (ASymbol name))),arg,body]) -> do
+    L l (List [_,self@(L _ (Atom (ASymbol name))),arg,body]) -> do
       body' <- macroexpand body
       let expr = tList l [ tSym l "::"
                          , tList l [tSym l "\\", arg, body']
@@ -265,14 +265,14 @@ m_defineMacro form =
 m_letMacro :: Macro
 m_letMacro form =
   case form of
-    L l1 (TList (_:L l2 (TList forms):rest)) -> do
+    L l1 (List (_:L l2 (List forms):rest)) -> do
       sk_env <- getSkEnv
       mapM_ putMacro forms
       expanded <- macroexpands rest
       putSkEnv sk_env
       return (tList l1 (tSym l2 "begin":expanded))
     _ -> skSrcError form ("let-macro: malformed args:\n" ++
-                     show (pForm (unLocForm form)))
+                     show (pForm form))
 
 m_require :: Macro
 m_require form =
@@ -290,7 +290,7 @@ m_require form =
   -- overridings.
   --
   case form of
-    L _l1 (TList [_,L _l2 (TAtom (ASymbol mname))]) -> do
+    L _l1 (List [_,L _l2 (Atom (ASymbol mname))]) -> do
       debugIO (putStrLn (";;; requiring " ++ mname))
       contexts <- getContext
       setContext (mkIIDecl mname : contexts)
@@ -357,7 +357,7 @@ withExpanderSettings act = do
   return ret
 
 -- | Expands form, with taking care of @begin@ special form.
-macroexpands :: [LCode] -> Skc [LCode]
+macroexpands :: [Code] -> Skc [Code]
 macroexpands forms = do
     -- XXX: Get rid of unnecessary reverses.
     forms' <- mapM macroexpand forms
@@ -365,7 +365,7 @@ macroexpands forms = do
   where
     f acc orig@(L _ form) =
       case form of
-        TList (L _ (TAtom (ASymbol "begin")) : rest) -> do
+        List (L _ (Atom (ASymbol "begin")) : rest) -> do
           rest' <- macroexpands rest
           return (reverse rest' ++ acc)
         _ -> return (orig : acc)
@@ -373,25 +373,25 @@ macroexpands forms = do
 -- This function recursively expand the result. Without recursively
 -- calling macroexpand on the result, cannot expand macro-generating
 -- macros.
-macroexpand :: LCode -> Skc LCode
+macroexpand :: Code -> Skc Code
 macroexpand form =
   -- liftIO (putStrLn ("expanding:\n" ++ show (pprForm (unLocForm form))))
   case form of
     -- Expand list of forms with preserving the constructor.
-    L l (TList forms) -> expandList l TList forms
-    L l (THsList forms) -> expandList l THsList forms
+    L l (List forms) -> expandList l List forms
+    L l (HsList forms) -> expandList l HsList forms
 
     -- The prefixes added to binary operators by tokenizer are removed
     -- at this point.
-    L l (TAtom (ASymbol "__+")) -> return (L l (TAtom (ASymbol "+")))
-    L l (TAtom (ASymbol "__*")) -> return (L l (TAtom (ASymbol "*")))
+    L l (Atom (ASymbol "__+")) -> return (L l (Atom (ASymbol "+")))
+    L l (Atom (ASymbol "__*")) -> return (L l (Atom (ASymbol "*")))
 
     -- Rest of the form are untouched.
     L _ _ -> return form
   where
     expandList l constr forms =
       case forms of
-        sym@(L _ (TAtom (ASymbol k))) : rest -> do
+        sym@(L _ (Atom (ASymbol k))) : rest -> do
           macros <- getMacroEnv
           case lookup k macros of
            Just f -> f form >>= macroexpand
@@ -409,29 +409,29 @@ macroexpand form =
 --
 -- ---------------------------------------------------------------------
 
-tSym :: SrcSpan -> String -> LCode
-tSym l s = L l (TAtom (ASymbol s))
+tSym :: SrcSpan -> String -> Code
+tSym l s = L l (Atom (ASymbol s))
 
-tChar :: SrcSpan -> Char -> LCode
-tChar l c = L l (TAtom (AChar c))
+tChar :: SrcSpan -> Char -> Code
+tChar l c = L l (Atom (AChar c))
 
-tString :: SrcSpan -> String -> LCode
-tString l s = L l (TAtom (AString s))
+tString :: SrcSpan -> String -> Code
+tString l s = L l (Atom (AString s))
 
-tInteger :: SrcSpan -> Integer -> LCode
-tInteger l n = L l (TAtom (AInteger n))
+tInteger :: SrcSpan -> Integer -> Code
+tInteger l n = L l (Atom (AInteger n))
 
-tFractional :: SrcSpan -> FractionalLit -> LCode
-tFractional l n = L l (TAtom (AFractional n))
+tFractional :: SrcSpan -> FractionalLit -> Code
+tFractional l n = L l (Atom (AFractional n))
 
-tList :: SrcSpan -> [LCode] -> LCode
-tList l forms = L l (TList forms)
+tList :: SrcSpan -> [Code] -> Code
+tList l forms = L l (List forms)
 
-tHsList :: SrcSpan -> [LCode] -> LCode
-tHsList l forms = L l (THsList forms)
+tHsList :: SrcSpan -> [Code] -> Code
+tHsList l forms = L l (HsList forms)
 
-mkQuoted :: SrcSpan -> LCode -> LCode
+mkQuoted :: SrcSpan -> Code -> Code
 mkQuoted l form = tList l [tSym l "quoted", form]
 
-emptyForm :: LCode
+emptyForm :: Code
 emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]

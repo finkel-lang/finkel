@@ -42,29 +42,29 @@ import SK.Core.Form
 
 %%
 
-sexp :: { LCode }
+sexp :: { Code }
      : atom          { $1 }
-     | 'quote' sexp  { L (getLoc $1) (TList [mkQuote $1, $2]) }
-     | '`' sexp      { L (getLoc $1) (TList [mkQuasiQuote $1, $2]) }
-     | ',' sexp      { L (getLoc $1) (TList [mkUnquote $1, $2]) }
-     | ',@' sexp     { L (getLoc $1) (TList [mkUnquoteSplice $1, $2]) }
-     | '[' sexps ']' { L (getLoc $1) (THsList $2) }
-     | '(' sexps ')' { L (getLoc $1) (TList $2) }
+     | 'quote' sexp  { L (getLoc $1) (List [mkQuote $1, $2]) }
+     | '`' sexp      { L (getLoc $1) (List [mkQuasiQuote $1, $2]) }
+     | ',' sexp      { L (getLoc $1) (List [mkUnquote $1, $2]) }
+     | ',@' sexp     { L (getLoc $1) (List [mkUnquoteSplice $1, $2]) }
+     | '[' sexps ']' { L (getLoc $1) (HsList $2) }
+     | '(' sexps ')' { L (getLoc $1) (List $2) }
 
 -- Required modules are added to SPState here. This is to support
 -- requuring modules in home package when compiling multiple modules
 -- with "--make" command, to get the required modules before macro
 -- expansion.
 
-sexps :: { [LCode] }
+sexps :: { [Code] }
       : 'require' 'symbol' {% mkRequire $1 $2 }
       | rsexps             { reverse $1 }
 
-rsexps :: { [LCode] }
+rsexps :: { [Code] }
        : {- empty -} { [] }
        | rsexps sexp { $2 : $1 }
 
-atom :: { LCode }
+atom :: { Code }
      : 'symbol'  { mkASymbol $1 }
      | 'char'    { mkAChar $1 }
      | 'string'  { mkAString $1 }
@@ -76,46 +76,46 @@ atom :: { LCode }
      | '}'       { mkCcSymbol $1 }
 
 {
-mkQuote :: Located Token -> LCode
-mkQuote (L l _) = L l (TAtom (ASymbol "quote"))
+mkQuote :: Located Token -> Code
+mkQuote (L l _) = L l (Atom (ASymbol "quote"))
 
-mkQuasiQuote :: Located Token -> LCode
-mkQuasiQuote (L l _) = L l (TAtom (ASymbol "quasiquote"))
+mkQuasiQuote :: Located Token -> Code
+mkQuasiQuote (L l _) = L l (Atom (ASymbol "quasiquote"))
 
-mkUnquote :: Located Token -> LCode
-mkUnquote (L l _) = L l (TAtom (ASymbol "unquote"))
+mkUnquote :: Located Token -> Code
+mkUnquote (L l _) = L l (Atom (ASymbol "unquote"))
 
-mkUnquoteSplice :: Located Token -> LCode
-mkUnquoteSplice (L l _) = L l (TAtom (ASymbol "unquote-splice"))
+mkUnquoteSplice :: Located Token -> Code
+mkUnquoteSplice (L l _) = L l (Atom (ASymbol "unquote-splice"))
 
-mkASymbol :: Located Token -> LCode
-mkASymbol (L l (TSymbol x)) = L l (TAtom (ASymbol x))
+mkASymbol :: Located Token -> Code
+mkASymbol (L l (TSymbol x)) = L l (Atom (ASymbol x))
 
-mkAChar :: Located Token -> LCode
-mkAChar (L l (TChar x)) = L l (TAtom (AChar x))
+mkAChar :: Located Token -> Code
+mkAChar (L l (TChar x)) = L l (Atom (AChar x))
 
-mkAString :: Located Token -> LCode
-mkAString (L l (TString x)) = L l (TAtom (AString x))
+mkAString :: Located Token -> Code
+mkAString (L l (TString x)) = L l (Atom (AString x))
 
-mkAInteger :: Located Token -> LCode
-mkAInteger (L l (TInteger x)) = L l (TAtom (AInteger x))
+mkAInteger :: Located Token -> Code
+mkAInteger (L l (TInteger x)) = L l (Atom (AInteger x))
 
-mkAFractional :: Located Token -> LCode
-mkAFractional (L l (TFractional x)) = L l (TAtom (AFractional x))
+mkAFractional :: Located Token -> Code
+mkAFractional (L l (TFractional x)) = L l (Atom (AFractional x))
 
-mkAComment :: Located Token -> LCode
-mkAComment (L l (TDocCommentNext x)) = L l (TAtom (AComment x))
+mkAComment :: Located Token -> Code
+mkAComment (L l (TDocCommentNext x)) = L l (Atom (AComment x))
 
-mkAUnit :: Located Token -> LCode
-mkAUnit (L l TUnit) = L l (TAtom AUnit)
+mkAUnit :: Located Token -> Code
+mkAUnit (L l TUnit) = L l (Atom AUnit)
 
-mkOcSymbol :: Located Token -> LCode
-mkOcSymbol (L l _) = L l (TAtom (ASymbol "{"))
+mkOcSymbol :: Located Token -> Code
+mkOcSymbol (L l _) = L l (Atom (ASymbol "{"))
 
-mkCcSymbol :: Located Token -> LCode
-mkCcSymbol (L l _) = L l (TAtom (ASymbol "}"))
+mkCcSymbol :: Located Token -> Code
+mkCcSymbol (L l _) = L l (Atom (ASymbol "}"))
 
-mkRequire :: Located Token -> Located Token -> SP [LCode]
+mkRequire :: Located Token -> Located Token -> SP [Code]
 mkRequire t1 t2@(L _ (TSymbol modName)) = do
   addRequiredModuleName modName
   return [mkASymbol t1, mkASymbol t2]
