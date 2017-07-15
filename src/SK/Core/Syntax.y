@@ -249,7 +249,8 @@ dtype :: { ([HType], HType) }
     : 'symbol' { ([], b_symT $1) }
     | 'unit'   { ([], b_unitT $1) }
     | 'hslist'
-      {% parse p_type [toListL $1] >>= \t -> return ([], b_listT t) }
+      {% do { t <- parse p_type [toListL $1]
+            ; return ([], b_listT t) }}
     | qtycl { $1 }
 
 decls :: { [HDecl] }
@@ -312,7 +313,7 @@ pat :: { HPat }
 
 pats1 :: { HPat }
     : ',' pats0      { b_tupP $1 $2 }
-    | 'symbol' pats0 { b_conP $1 $2 }
+    | 'symbol' pats0 {% b_conP $1 $2 }
 
 
 -- ---------------------------------------------------------------------
@@ -335,8 +336,7 @@ atom :: { HExpr }
     | 'hslist'  {% b_hsListE `fmap` parse p_hlist (unwrapListL $1) }
 
 exprs :: { HExpr }
-    -- : '\\' pats expr          { b_lamE $2 $3 }
-    : '\\' arhs               { b_lamE $2 }
+    : '\\' lambda             { b_lamE $2 }
     | ',' app                 { b_tupE $1 $2 }
     | 'let' lbinds expr       { b_letE $1 $2 $3 }
     | 'if' expr expr expr     { b_ifE $1 $2 $3 $4 }
@@ -347,9 +347,9 @@ exprs :: { HExpr }
     | 'list' '{' fbinds '}'   {% b_recUpdE (parse p_exprs $1) $3 }
     | app                     { b_appE $1 }
 
-arhs :: { (HExpr,[HPat]) }
-     : expr     { ($1,[]) }
-     | pat arhs { fmap ($1:) $2 }
+lambda :: { (HExpr,[HPat]) }
+     : expr       { ($1,[]) }
+     | pat lambda { fmap ($1:) $2 }
 
 lbinds :: { [HDecl] }
     : 'unit' { [] }

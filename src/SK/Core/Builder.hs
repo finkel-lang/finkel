@@ -442,13 +442,15 @@ b_hsListP :: [HPat] -> HPat
 b_hsListP pats = L l (ListPat pats placeHolderType Nothing)
   where l = getLoc (mkLocatedList pats)
 
-
 b_tupP :: Located a -> [HPat] -> HPat
 b_tupP (L l _) ps = L l (TuplePat ps Boxed [])
 
-b_conP :: Code -> [HPat] -> HPat
-b_conP (L l (Atom (ASymbol con))) rest =
-    L l (ConPatIn (L l (mkRdrName con)) (PrefixCon rest))
+b_conP :: Code -> [HPat] -> Builder HPat
+b_conP (L l (Atom (ASymbol conName))) rest =
+  case conName of
+    x:_ | isUpper x || x == ':' ->
+      return (L l (ConPatIn (L l (mkRdrName conName)) (PrefixCon rest)))
+    _ -> builderError
 
 
 -- ---------------------------------------------------------------------
@@ -459,9 +461,6 @@ b_conP (L l (Atom (ASymbol con))) rest =
 
 b_ifE :: Code -> HExpr -> HExpr -> HExpr -> HExpr
 b_ifE (L l (Atom _)) p t f = L l (mkHsIf p t f)
-
--- b_lamE ::  [HPat] -> HExpr -> HExpr
--- b_lamE pats body = mkHsLam pats body
 
 b_lamE :: (HExpr,[HPat]) -> HExpr
 b_lamE (body,pats) = mkHsLam pats body

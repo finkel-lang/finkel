@@ -92,6 +92,10 @@ data Form a
   | TEnd             -- ^ End of token.
   deriving (Eq, Data, Typeable)
 
+type LForm a = Located (Form a)
+
+type Code = LForm Atom
+
 instance Show a => Show (Form a) where
   show form =
     case form of
@@ -125,10 +129,6 @@ instance Foldable Form where
         case xs of
           [] -> z
           y:ys -> foldr f (foldr f z (unLoc y)) (HsList ys)
-
-type LForm a = Located (Form a)
-
-type Code = LForm Atom
 
 instance Show Code where
   show = show . unLoc
@@ -313,8 +313,8 @@ instance Codish SrcSpan where
   toCode sp =
     case sp of
       UnhelpfulSpan txt ->
-        list [(atom (ASymbol "mkSkSrcSpan"))
-             ,(atom (AString (unpackFS txt)))]
+        list [atom (ASymbol "mkSkSrcSpan")
+             ,atom (AString (unpackFS txt))]
       RealSrcSpan rs ->
         list [atom (ASymbol "mkSrcSpan")
              ,list [atom (ASymbol "mkSrcLoc")
