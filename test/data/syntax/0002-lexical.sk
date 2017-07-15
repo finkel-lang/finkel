@@ -47,6 +47,7 @@
                 (return 123))
             (Left "foo")])
 
+    ;; Value names not starting with but containing `quote'.
     (let ((:: (x x' x'') Int)
           (= x 100)
           (= x' 200)

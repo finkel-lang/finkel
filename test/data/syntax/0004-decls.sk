@@ -60,7 +60,7 @@
 (newtype (N1 a) (N1 a))
 
 (instance (=> (Show a) (Show (N1 a)))
-  (= (show (N1 a))
+  (= show (N1 a)
     (++ "N1 " (show a))))
 
 (newtype (N2 a) (N2 a) (deriving (Eq Show)))
@@ -68,7 +68,7 @@
 (newtype (N3 a) (N3 {unN3 a}))
 
 (instance (=> (Show a) (Show (N3 a)))
-  (= (show (N3 a))
+  (= show (N3 a)
     (++ "N3 " (show a))))
 
 (newtype (N4 a) (N4 {unN4 a}) (deriving (Eq Show)))
@@ -99,17 +99,20 @@
   (deriving (Eq Show)))
 
 (instance (Functor MyFnct)
-  (= (fmap f (MyFnct a)) (MyFnct (f a))))
+  (= fmap f (MyFnct a)
+    (MyFnct (f a))))
 
 (data (EmptyContext a) (EmptyContext Int))
 
 (instance (=> () (Show (EmptyContext a)))
-  (= (show (EmptyContext n)) (++ "EmptyContext " (show n))))
+  (= show (EmptyContext n)
+    (++ "EmptyContext " (show n))))
 
 (data (MCs a b) (MCs a b))
 
 (instance (=> (Show a) (Show b) (Show (MCs a b)))
-  (= (show (MCs a b)) (concat ["MCs " (show a) " " (show b)])))
+  (= show (MCs a b)
+    (concat ["MCs " (show a) " " (show b)])))
 
 (:: s4_3 (IO ()))
 (= s4_3
@@ -127,12 +130,12 @@
 
 ;;; Simple function type.
 (:: ts2 (-> String (IO ())))
-(= (ts2 str)
+(= ts2 str
   (putStrLn (++ "From ts2: " str)))
 
 ;;; Another function type, taking multiple arguments.
 (:: ts3 (-> Int (-> Bool (-> String (IO ())))))
-(= (ts3 i b s)
+(= ts3 i b s
   (do (putStrLn (++ "Int: " (show i)))
       (putStrLn (++ "Bool: " (show b)))
       (putStrLn (++ "String: " (show s)))))
@@ -140,34 +143,34 @@
 ;;; Function type operator '->' takes variable arguments, explicit
 ;;; parentheses are optional.
 (:: ts3b (-> Int Bool String (IO ())))
-(= (ts3b i b s)
+(= ts3b i b s
   (do (putStrLn (++ "Int: " (show i)))
       (putStrLn (++ "Bool: " (show b)))
       (putStrLn (++ "String: " (show s)))))
 
 ;;; Function taking higher order function.
 (:: ts4 (-> (-> Int Int) Int))
-(= (ts4 f)
+(= ts4 f
   (f 6))
 
 ;;; Function taking list.
 (:: ts5 (-> [Int] (IO ())))
-(= (ts5 xs)
+(= ts5 xs
   (mapM_ print xs))
 
 ;;; Function with type variables.
 (:: ts6 (-> a [b] Int))
-(= (ts6 x ys)
+(= ts6 x ys
   (length ys))
 
 ;;; Type signature with context.
 (:: ts7 (=> (Show a) (-> a String)))
-(= (ts7 x)
+(= ts7 x
   (++ (show x) (++ ", " (show x))))
 
 ;;; Another type signature with context.
 (:: ts8 (=> (Functor f) (Show a) (-> (f a) (f String))))
-(= (ts8 m)
+(= ts8 m
   (fmap ts7 m))
 
 (:: s4_4_1 (IO ()))
@@ -176,7 +179,8 @@
       (ts2 "BAR")
       (ts3 1 True "buzz")
       (ts3b 2 False "buzzz")
-      (print (ts4 (\ (n) (* (+ n 1) n))))
+      ;; (print (ts4 (\ (n) (* (+ n 1) n))))
+      (print (ts4 (\ n (* (+ n 1) n))))
       (ts5 [1 2 3])
       (print (ts6 True [1 2 3]))
       (putStrLn (ts7 False))
@@ -188,18 +192,18 @@
 
 ;;; Function without guards.
 (:: fpb0 (-> Int String))
-(= (fpb0 n)
+(= fpb0 n
   (++ "f0 got " (show n)))
 
 ;;; Function with guards.
 (:: fpb1 (-> Int String))
-(= (fpb1 n)
+(= fpb1 n
   (| ((even n) "even")
      (otherwise "odd")))
 
 ;;; Function with pattern guards.
 (:: fpb2 (-> (Maybe Int) (Maybe Int) String))
-(= (fpb2 a b)
+(= fpb2 a b
   (| ((<- (Just n) a) (<- (Just m) b) (even n) (even m)
       "f2: got two even numbers.")
      ((<- (Just n) a) (<- (Just m) b)
@@ -221,7 +225,7 @@
   (break (> 5) (enumFromTo 1 10)))
 
 (:: addJust (-> Int Int (Maybe Int)))
-(= (addJust a b) (Just (+ a b)))
+(= addJust a b (Just (+ a b)))
 
 (:: tpb1 Int)
 (= (Just tpb1) (addJust 16 27))

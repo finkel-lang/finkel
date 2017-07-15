@@ -9,5 +9,5 @@
 (= main
   (putStrLn (foo (Just "bar"))))
 
-(= (foo x)
+(= foo x
   (fromMaybe "foo" x))

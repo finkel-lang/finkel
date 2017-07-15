@@ -4,15 +4,15 @@
 
 ;;; Simple expressions
 
-(= (simple1 a b)
-   (+ (* a (simple2 (+ a b) (+ a b) a))
-      (* (simple2 (* b b) (* a a) (* a b)) b)))
+(= simple1 a b
+  (+ (* a (simple2 (+ a b) (+ a b) a))
+     (* (simple2 (* b b) (* a a) (* a b)) b)))
 
-(= (simple2 x y z)
-   (* (+ x (* y z))
-      (+ y (* x z))))
+(= simple2 x y z
+  (* (+ x (* y z))
+     (+ y (* x z))))
 
-(= (factorial n)
+(= factorial n
    (if (== n 1)
        1
        (* n (factorial (- n 1)))))
@@ -25,12 +25,12 @@
 
 ;;; This function takes single argument which is a function, and applies
 ;;; 3 and 11 to it.
-(= (lam1 f)
+(= lam1 f
   (f 3 11))
 
 ;;; Calls `lam1' defined above.
 (= lam2
-  (print (lam1 (\ (a b)
+  (print (lam1 (\ a b
                  (* a (+ a b))))))
 
 (= lamexprs
@@ -39,7 +39,7 @@
 ;;; 3.8 Tuples
 
 (:: tup1 (-> a (-> b (-> c (, a b c)))))
-(= (tup1 a b c)
+(= tup1 a b c
   (, a b c))
 
 (= tupexprs
@@ -48,20 +48,20 @@
 ;;; 3.12 Let Expressions
 
 ;;; Expression with empty 'let'.
-(= (let1 n)
+(= let1 n
   (let ()
     (+ n 35)))
 
 ;;; Expression with 'let'. In bindings of `let', 'a' is a integer value
 ;;; 14, and `f' is a function taking two arguments.
-(= (let2 n)
+(= let2 n
   (let ((:: a Int)
         (= a 14)
         (:: f (-> Int Int Int))
-        (= (f x y)
+        (= f x y
           (+ x y))
         (:: g (-> Int Int))
-        (= g (\ (x) (* x 2))))
+        (= g (\ x (* x 2))))
     (g (f n a))))
 
 (= letexprs
@@ -70,12 +70,12 @@
 
 ;;; 3.13 Case Expressions
 
-(= (case1 x)
+(= case1 x
   (case x
     ((Just n) (+ n 1))
     (_ 0)))
 
-(= (case2 x)
+(= case2 x
   (case x
     ((Right (Just _)) 1)
     ((Right Nothing) 2)
@@ -83,13 +83,13 @@
     ((Left Nothing) 4)))
 
 (:: mbeven (-> Int (Maybe Int)))
-(= (mbeven n)
+(= mbeven n
   (if (even n)
       (Just n)
       Nothing))
 
 (:: case3 (-> (Maybe Int) Int String))
-(= (case3 x y)
+(= case3 x y
   (case x
     ((Just n) (| ((odd n) (> n 100)
                   "small odd number")
@@ -113,7 +113,7 @@
 
 ;;; 3.14 Do Expressions
 
-(= (showBar x)
+(= showBar x
   (do (putStrLn "String `bar' from showBar.")
       (return x)))
 
@@ -140,7 +140,7 @@
   (deriving (Eq Show)))
 
 (:: mkR1 (-> Int (-> Bool R1)))
-(= (mkR1 a b)
+(= mkR1 a b
   (Con1 {field1 a field2 b}))
 
 (= fieldexprs
@@ -155,7 +155,7 @@
 
 ;;; 3.16 Expression Type-Signatures
 
-(= (f2 n)
+(= f2 n
   (if (< n (:: 2 Int))
       n
       (+ (f2 (- n 1))
@@ -168,34 +168,34 @@
 
 ;;; Top level functions with pattern matches.
 
-(= (fib 0) 0)
-(= (fib 1) 1)
-(= (fib n) (+ (fib (- n 1))
-              (fib (- n 2))))
+(= fib 0 0)
+(= fib 1 1)
+(= fib n (+ (fib (- n 1))
+            (fib (- n 2))))
 
-(= (bar Nothing) "bar got nothing")
-(= (bar _) "bar got something")
+(= bar Nothing "bar got nothing")
+(= bar _ "bar got something")
 
-(= (buzz (Just n))
+(= buzz (Just n)
   (putStrLn (++ "buzz: " (show n))))
-(= (buzz _)
+(= buzz _
   (putStrLn "buzz got nothing"))
 
-(= (addMaybes Nothing Nothing) 0)
-(= (addMaybes (Just a) Nothing) a)
-(= (addMaybes Nothing (Just b)) b)
-(= (addMaybes (Just a) (Just b)) (+ a b))
+(= addMaybes Nothing Nothing 0)
+(= addMaybes (Just a) Nothing a)
+(= addMaybes Nothing (Just b) b)
+(= addMaybes (Just a) (Just b) (+ a b))
 
-(= (nest1 Nothing) 0)
-(= (nest1 (Just (Right n))) n)
-(= (nest1 (Just (Left True))) 9999)
-(= (nest1 (Just (Left False))) 42)
+(= nest1 Nothing 0)
+(= nest1 (Just (Right n)) n)
+(= nest1 (Just (Left True)) 9999)
+(= nest1 (Just (Left False)) 42)
 
-(= (lp1 []) 0)
-(= (lp1 [a]) 1)
-(= (lp1 [(Just x) (Just y)]) (+ x y))
-(= (lp1 [a b]) 2)
-(= (lp1 _) 999)
+(= lp1 [] 0)
+(= lp1 [a] 1)
+(= lp1 [(Just x) (Just y)] (+ x y))
+(= lp1 [a b] 2)
+(= lp1 _ 999)
 
 (= patexprs1
   (do (print (fib 10))
@@ -216,29 +216,29 @@
       (print (lp1 [Nothing (Just 1) Nothing]))))
 
 (:: tupp1 (-> (, a b) a))
-(= (tupp1 (, a _)) a)
+(= tupp1 (, a _) a)
 
 (:: tupp2 (-> (, Char Char Char) Char))
-(= (tupp2 x)
+(= tupp2 x
   (case x
     ((, _ _ c) c)))
 
 (:: intpat (-> Int String))
-(= (intpat x)
+(= intpat x
   (case x
     (1 "one")
     (2 "two")
     (_ "unknown")))
 
 (:: strpat (-> String String))
-(= (strpat x)
+(= strpat x
   (case x
     ("foo" "GOT FOO")
     ("bar" "GOT BAR")
     (_ "UNKNOWN")))
 
 (:: charpat (-> Char String))
-(= (charpat x)
+(= charpat x
   (case x
     (\a "GOT A")
     (\b "GOT B")

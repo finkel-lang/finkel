@@ -4,13 +4,13 @@
 
 (import SK.Core.Form)
 
-(= (f1 arg)
+(= f1 arg
   (print ['a 'b arg 'd]))
 
-(= (f2 arg)
+(= f2 arg
   (print `(a b ,arg d)))
 
-(= (f3 arg)
+(= f3 arg
   (print `(a b ,@arg d)))
 
 (:: main (IO ()))

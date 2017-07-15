@@ -3,23 +3,23 @@
 (import SK.Core)
 
 ;;; Simple definition of `defmacro' used in `p01' package.
-(define-macro defmacro (form)
+(define-macro defmacro form
   (case form
-    ((L _ (TList [_ name args body]))
+    ((L _ (List [_ name args body]))
      (case args
-       ((L l1 (TList _))
+       ((L l1 (List _))
         (let ((= body'
-                `(define-macro ,name (form)
+                `(define-macro ,name form
                    (case form
-                     ((L l2 (TList [_ ,@args]))
-                      (return (locateForm l2 ,body)))
+                     ((L l2 (List [_ ,@args]))
+                      (return ,body))
                      (_
                       (failS (++ (show ',name) ": error")))))))
-          (return (locateForm l1 body'))))
-       ((L l1 (TAtom _))
+          (return body')))
+       ((L l1 (Atom _))
         (let ((= body'
-                `(define-macro ,name (,args)
-                   (return (locateForm (getLoc ,args) ,body)))))
-          (return (locateForm l1 body'))))))
+                `(define-macro ,name ,args
+                   (return ,body))))
+          (return body')))))
     (_
      (failS (++ (showLoc form) "defmacro: error")))))

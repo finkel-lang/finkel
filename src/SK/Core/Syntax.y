@@ -41,6 +41,7 @@ import SK.Core.GHC
 %name p_types0 types0
 %name p_lconstr lconstr
 
+%name p_pat pat
 %name p_pats pats
 %name p_pats0 pats0
 %name p_pats1 pats1
@@ -232,9 +233,17 @@ idecls :: { [HDecl] }
     : decls { $1 }
 
 decl :: { HDecl }
-    : '=' decl_lhs guards { b_funD $1 $2 $3 }
+    : '=' 'symbol' aguards { b_funBindD $2 $3 }
+    | '=' 'list' guards    {% b_patBindD $3 `fmap` parse p_pats1 $2 }
+    | '=' 'hslist' guards
+      {% do { lp <- parse p_pats0 (unwrapListL $2)
+            ; return (b_patBindD $3 (b_hsListP lp)) }}
     | '::' 'symbol' dtype { b_tsigD [$2] $3 }
     | '::' symbols dtype  { b_tsigD $2 $3 }
+
+aguards :: { ([HGRHS], [HPat]) }
+        : guards      { ($1, []) }
+        | pat aguards { ($1:) `fmap` $2 }
 
 dtype :: { ([HType], HType) }
     : 'symbol' { ([], b_symT $1) }
@@ -249,11 +258,6 @@ decls :: { [HDecl] }
 rdecls :: { [HDecl] }
    : {- empty -}   { [] }
    | rdecls 'list' {% (:$1) `fmap` parse p_decl $2 }
-
-decl_lhs :: { [HGRHS] -> HsBind RdrName }
-    : 'list'   {% b_declLhsB (head $1) =<< parse p_pats0 (tail $1) }
-    | 'hslist' {% b_declLhsB $1 =<< parse p_pats0 (unwrapListL $1) }
-    | 'symbol' {% b_declLhsB $1 [] }
 
 
 -- ---------------------------------------------------------------------
@@ -331,7 +335,8 @@ atom :: { HExpr }
     | 'hslist'  {% b_hsListE `fmap` parse p_hlist (unwrapListL $1) }
 
 exprs :: { HExpr }
-    : '\\' pats expr          { b_lamE $2 $3 }
+    -- : '\\' pats expr          { b_lamE $2 $3 }
+    : '\\' arhs               { b_lamE $2 }
     | ',' app                 { b_tupE $1 $2 }
     | 'let' lbinds expr       { b_letE $1 $2 $3 }
     | 'if' expr expr expr     { b_ifE $1 $2 $3 $4 }
@@ -341,6 +346,10 @@ exprs :: { HExpr }
     | 'symbol' '{' fbinds '}' { b_recConOrUpdE $1 $3 }
     | 'list' '{' fbinds '}'   {% b_recUpdE (parse p_exprs $1) $3 }
     | app                     { b_appE $1 }
+
+arhs :: { (HExpr,[HPat]) }
+     : expr     { ($1,[]) }
+     | pat arhs { fmap ($1:) $2 }
 
 lbinds :: { [HDecl] }
     : 'unit' { [] }

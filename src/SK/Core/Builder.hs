@@ -347,45 +347,22 @@ b_qtyclC ts =
       let (ctxt,t) = splitAt (length ts - 1) ts
       return (ctxt, head t)
 
-b_funD :: Located a -> ([HGRHS] -> HsBind RdrName) -> [HGRHS] -> HDecl
-b_funD (L l _) f e = L l (ValD (f e))
+b_funBindD :: Code -> ([HGRHS], [HPat]) -> HDecl
+b_funBindD (L l (Atom (ASymbol name))) (grhss, args) =
+  let match = L l (Match ctxt args Nothing body)
+      body = GRHSs grhss (noLoc emptyLocalBinds)
+      ctxt = NonFunBindMatch
+      bind = mkFunBind (L l (mkRdrName name)) [match]
+  in  L l (ValD bind)
 
-b_declLhsB :: Code -> [HPat] -> Builder ([HGRHS] -> HsBind RdrName)
-b_declLhsB (L l (Atom (ASymbol name))) args =
-  case name of
-    -- Pattern matching.
-    "," ->
-      return (\grhs ->
-                PatBind { pat_lhs = L l (TuplePat args Boxed [])
-                        , pat_rhs = GRHSs grhs (noLoc emptyLocalBinds)
-                        , pat_rhs_ty = placeHolderType
-                        , bind_fvs = placeHolderNames
-                        , pat_ticks = ([],[]) })
-    x:_ | isUpper x || x == ':' ->
-      return
-        (\grhs ->
-           PatBind { pat_lhs = L l (ConPatIn (L l (mkRdrName name))
-                                             (PrefixCon args))
-                   , pat_rhs = GRHSs grhs (noLoc emptyLocalBinds)
-                   , pat_rhs_ty = placeHolderType
-                   , bind_fvs = placeHolderNames
-                   , pat_ticks = ([],[]) })
-
-    -- Function binding.
-    _ ->
-      return (\grhs ->
-                let match = L l (Match ctxt args Nothing body)
-                    body = GRHSs grhs (noLoc emptyLocalBinds)
-                    ctxt = NonFunBindMatch
-                in  mkFunBind (L l (mkRdrName name)) [match])
-
-b_declLhsB (L l (HsList _)) pats =
-  return (\grhs ->
-         PatBind { pat_lhs = L l (ListPat pats placeHolderType Nothing)
-                 , pat_rhs = GRHSs grhs (noLoc emptyLocalBinds)
-                 , pat_rhs_ty = placeHolderType
-                 , bind_fvs = placeHolderNames
-                 , pat_ticks = ([],[]) })
+b_patBindD :: [HGRHS] -> HPat -> HDecl
+b_patBindD grhss pat@(L l _) =
+  let bind = PatBind { pat_lhs = pat
+                     , pat_rhs = GRHSs grhss (noLoc emptyLocalBinds)
+                     , pat_rhs_ty = placeHolderType
+                     , bind_fvs = placeHolderNames
+                     , pat_ticks = ([],[]) }
+  in  L l (ValD bind)
 
 b_tsigD :: [Code] -> ([HType], HType) -> HDecl
 b_tsigD names (ctxts,typ) =
@@ -483,8 +460,11 @@ b_conP (L l (Atom (ASymbol con))) rest =
 b_ifE :: Code -> HExpr -> HExpr -> HExpr -> HExpr
 b_ifE (L l (Atom _)) p t f = L l (mkHsIf p t f)
 
-b_lamE ::  [HPat] -> HExpr -> HExpr
-b_lamE pats body = mkHsLam pats body
+-- b_lamE ::  [HPat] -> HExpr -> HExpr
+-- b_lamE pats body = mkHsLam pats body
+
+b_lamE :: (HExpr,[HPat]) -> HExpr
+b_lamE (body,pats) = mkHsLam pats body
 
 b_tupE :: Located a -> [HExpr] -> HExpr
 b_tupE (L l _) args = L l (ExplicitTuple (map mkArg args) Boxed)

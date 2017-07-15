@@ -18,7 +18,7 @@
   (foo "Module with doc comments."))
 
 ;;; | Comment for function foo.
-(= (foo str)
+(= foo str
   (>> (putStrLn str)
       (bar 15 27)))
 
@@ -31,7 +31,7 @@
 ;;; bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar
 ;;; bar bar bar.
 ;;;
-(= (bar a b)
+(= bar a b
   (putStrLn (++ "From bar: " (show (+ a b)))))
 
 
@@ -40,5 +40,5 @@
 ;;; This comment is written on the line above type signature of buzz.
 ;;;
 (:: buzz (-> Int Int))
-(= (buzz n)
+(= buzz n
   (+ n n))
