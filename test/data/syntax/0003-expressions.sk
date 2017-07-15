@@ -72,15 +72,15 @@
 
 (= case1 x
   (case x
-    ((Just n) (+ n 1))
-    (_ 0)))
+    (Just n) (+ n 1)
+    _ 0))
 
 (= case2 x
   (case x
-    ((Right (Just _)) 1)
-    ((Right Nothing) 2)
-    ((Left (Just _)) 3)
-    ((Left Nothing) 4)))
+    (Right (Just _)) 1
+    (Right Nothing)  2
+    (Left (Just _))  3
+    (Left Nothing)   4))
 
 (:: mbeven (-> Int (Maybe Int)))
 (= mbeven n
@@ -91,19 +91,19 @@
 (:: case3 (-> (Maybe Int) Int String))
 (= case3 x y
   (case x
-    ((Just n) (| ((odd n) (> n 100)
-                  "small odd number")
-                 ((odd n)
-                  "big odd number")
-                 ((<- (Just m) (mbeven n))
-                  (let ((:: k Int)
-                        (= k (+ m 1))))
-                  (< k 101)
-                  "small even number")
-                 (otherwise
-                  "big even number")))
-    (Nothing (| ((even y) "y is even")
-                (otherwise "y is odd")))))
+    (Just n) (| ((odd n) (> n 100)
+                 "small odd number")
+                ((odd n)
+                 "big odd number")
+                ((<- (Just m) (mbeven n))
+                 (let ((:: k Int)
+                       (= k (+ m 1))))
+                 (< k 101)
+                 "small even number")
+                (otherwise
+                 "big even number"))
+    Nothing  (| ((even y) "y is even")
+                (otherwise "y is odd"))))
 
 (= caseexprs
   (do (print (case1 (Just 41)))
@@ -221,28 +221,28 @@
 (:: tupp2 (-> (, Char Char Char) Char))
 (= tupp2 x
   (case x
-    ((, _ _ c) c)))
+    (, _ _ c) c))
 
 (:: intpat (-> Int String))
 (= intpat x
   (case x
-    (1 "one")
-    (2 "two")
-    (_ "unknown")))
+    1 "one"
+    2 "two"
+    _ "unknown"))
 
 (:: strpat (-> String String))
 (= strpat x
   (case x
-    ("foo" "GOT FOO")
-    ("bar" "GOT BAR")
-    (_ "UNKNOWN")))
+    "foo" "GOT FOO"
+    "bar" "GOT BAR"
+    _ "UNKNOWN"))
 
 (:: charpat (-> Char String))
 (= charpat x
   (case x
-    (\a "GOT A")
-    (\b "GOT B")
-    (_ "UNKNOWN")))
+    \a "GOT A"
+    \b "GOT B"
+    _ "UNKNOWN"))
 
 (= patexprs2
   (do (print (tupp1 (, True False)))

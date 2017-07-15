@@ -380,8 +380,8 @@ alts :: { [HMatch] }
     : ralts { reverse $1 }
 
 ralts :: { [HMatch] }
-    : 'list'       {% fmap (:[]) (parse p_match $1) }
-    | ralts 'list' {% fmap (:$1) (parse p_match $2) }
+    : pat guards       { [b_match $1 $2] }
+    | ralts pat guards { b_match $2 $3 : $1 }
 
 match :: { HMatch }
     : pat guards { b_match $1 $2 }
