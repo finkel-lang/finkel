@@ -28,6 +28,8 @@ library
                        SK.Macro.Util
                        SK.Repl
                        SK.Repl.Apply
+                       --
+                       -- Scratch.F1
   build-depends:       base >= 4.7 && < 5
                      , haskeline
                      , ghc

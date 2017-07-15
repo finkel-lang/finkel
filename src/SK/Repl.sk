@@ -1,11 +1,11 @@
 ;;;; -*- mode: sk -*-
 ;;;; | Simple SK REPL.
-;;;;
-;;;; This implementation uses two threads: one for reading input and
-;;;; another for evaluating and modifying the SkEnv. Using `MVar'
-;;;; containing `Code' to commnicate between the threads. This design
-;;;; shall be easier to support reading forms from other sources than
-;;;; line oriented user input, e.g. network sockets.
+
+;;; This implementation uses two threads: one for reading input and
+;;; another for evaluating and modifying the SkEnv. Using `MVar'
+;;; containing `Code' to commnicate between the threads. This design
+;;; shall be easier to support reading forms from other sources than
+;;; line oriented user input, e.g. network sockets.
 
 (require SK.Macro)
 
@@ -66,37 +66,37 @@
   (Repl {unRepl (StateT ReplState IO a)}))
 
 (instance (Functor Repl)
-  (= (fmap f (Repl a)) (Repl (fmap f a))))
+  (= fmap f (Repl a) (Repl (fmap f a))))
 
 (instance (Applicative Repl)
-  (= (pure a) (Repl (pure a)))
-  (= (<*> (Repl f) (Repl a)) (Repl (<*> f a))))
+  (= pure a (Repl (pure a)))
+  (= <*> (Repl f) (Repl a) (Repl (<*> f a))))
 
 (instance (Monad Repl)
   (= return pure)
-  (= (>>= a k) (Repl (>>= (unRepl a) (. unRepl k)))))
+  (= >>= a k (Repl (>>= (unRepl a) (. unRepl k)))))
 
 (instance (MonadIO Repl)
-  (= (liftIO io) (Repl (liftIO io))))
+  (= liftIO io (Repl (liftIO io))))
 
 (instance (MonadException Repl)
-  (= (controlIO f)
+  (= controlIO f
     (Repl (controlIO
-           (\ ((RunIO r0))
+           (\ (RunIO r0)
              (let ((= r1 (RunIO (. (fmap Repl) (. r0 unRepl)))))
                (fmap unRepl (f r1))))))))
 
 (:: run-repl (-> (Repl a) ReplState (IO a)))
-(= (run-repl repl st) (evalStateT (unRepl repl) st))
+(= run-repl repl st (evalStateT (unRepl repl) st))
 
 (:: put-repl-state (-> ReplState (Repl ())))
-(= (put-repl-state st) (Repl (put st)))
+(= put-repl-state st (Repl (put st)))
 
 (:: get-repl-state (Repl ReplState))
 (= get-repl-state (Repl get))
 
 (:: lift-repl (-> (IO a) (Repl a)))
-(= (lift-repl m) (Repl (lift m)))
+(= lift-repl m (Repl (lift m)))
 
 (type Result (Either String String))
 
@@ -125,7 +125,7 @@
 ;;; continue reading the input until successful parse result.
 (:: read-print-loop
   (-> (MVar Code) (MVar String) ThreadId (InputT Repl ())))
-(= (read-print-loop to-eval-mvar from-eval-mvar eval-tid)
+(= read-print-loop to-eval-mvar from-eval-mvar eval-tid
   (let ((= quit
           (liftIO (killThread eval-tid)))
         (= go
@@ -155,11 +155,11 @@
 
 ;;; Read single S-expression form.
 (:: read-form  (-> String (Repl (Maybe Code))))
-(= (read-form input0)
+(= read-form input0
   (do (<- st get-repl-state)
       (let ((= input1 (++ (pending-input st) (: \lf input0)))
             (= count (succ (input-count st)))
-            (= (put-and-return pending ret)
+            (= put-and-return pending ret
               (do (put-repl-state (st {input-count count
                                        pending-input pending}))
                   (return ret))))
@@ -171,7 +171,7 @@
 ;;;; Eval
 
 (:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
-(= (eval-loop in-mvar out-mvar)
+(= eval-loop in-mvar out-mvar
   (let ((= init
           (do (<- hsc-env getSession)
               (<- _ (setSessionDynFlags (ic_dflags (hsc_IC hsc-env))))
@@ -180,7 +180,7 @@
               (setContext [(decl "Prelude")
                            (decl "SK.Core")
                            (decl "SK.Repl.Apply")])))
-        (= (withHandler m)
+        (= withHandler m
           (skErrorHandler defaultFatalMessager
                           defaultFlushOut
                           (withSourceErrorHandling m)))
@@ -196,7 +196,7 @@
     (>> init go)))
 
 (:: eval-statement (-> [Code] (Skc Result)))
-(= (eval-statement forms)
+(= eval-statement forms
   (case (evalBuilder parseStmt forms)
     ((Right stmt0)
      (do (<- hsc-env getSession)
@@ -209,18 +209,18 @@
     ((Left err) (eval-import forms))))
 
 (:: eval-import (-> [Code] (Skc Result)))
-(= (eval-import forms)
+(= eval-import forms
   (case (evalBuilder parseImports forms)
     ((Right imports)
      (do (<- context getContext)
-         (let ((= (mkIIdecl (L _ idecl)) (IIDecl idecl))
+         (let ((= mkIIdecl (L _ idecl) (IIDecl idecl))
                (= ret (map (. (++ ";;; ") show) forms))))
          (setContext (++ (map mkIIdecl imports) context))
          (return (Right (unlines ret)))))
     ((Left err) (eval-decls forms))))
 
 (:: eval-decls (-> [Code] (Skc Result)))
-(= (eval-decls forms)
+(= eval-decls forms
   (case (evalBuilder parseDecls forms)
     ((Right decls)
      ;; Currently decls are converted as `let' statement and passed to
@@ -239,7 +239,7 @@
 
 (:: update-hsc-env
   (-> HscEnv Bool [Id] ForeignHValue FixityEnv (Skc Result)))
-(= (update-hsc-env hsc-env is-body ids hvals-io fixity-env)
+(= update-hsc-env hsc-env is-body ids hvals-io fixity-env
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its body.
   (do (<- status (liftIO (evalStmt hsc-env False (EvalThis hvals-io))))
@@ -285,9 +285,9 @@
 ;;;; Auxiliary
 
 (:: print-names-and-types (-> DynFlags [Name] [Var] String))
-(= (print-names-and-types dflags names vars)
+(= print-names-and-types dflags names vars
   (let ((= tvs
-          (map (\ ((, name var))
+          (map (\ (, name var)
                  (let ((= nstr (occNameString (nameOccName name)))
                        (= typ (showPpr dflags (varType var))))
                    (if (== nstr "it")

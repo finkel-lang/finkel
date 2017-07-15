@@ -35,7 +35,7 @@
 ;;     (_ form)))
 
 (:: cons' (-> Code Code Code))
-(= (cons' x xs)
+(= cons' x xs
   (case xs
     ((L l (List ys)) (L l (List (: x ys))))
     ((L l y) (L l (List [x (L l y)])))))

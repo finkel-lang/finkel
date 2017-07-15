@@ -9,13 +9,13 @@
 (import SK.Macro.Util)
 
 (:: car (-> Code Code))
-(= (car (L l code))
+(= car (L l code)
   (case code
     ((List (: x _xs)) x)
     (_ (L l (List [])))))
 
 (:: cdr (-> Code Code))
-(= (cdr (L l code))
+(= cdr (L l code)
   (case code
     ((List (: x xs))
      (case xs
@@ -24,7 +24,7 @@
     (_ (L l (List [])))))
 
 (:: cons (=> (Codish a) (-> a Code Code)))
-(= (cons x (L l0 xs))
+(= cons x (L l0 xs)
   (let ((= x' (toCode x))
         (= l1 (getLoc x')))
     (case xs
@@ -34,16 +34,16 @@
 
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
-(define-macro defmacro* (form)
+(define-macro defmacro* form
   (case form
     ((L l0 (List [_ name arg body]))
      (case arg
        ((L l1 (List arg'))
-        (let ((= (sym s)
+        (let ((= sym s
                 (L l1 (Atom (ASymbol s))))
-              (= (list xs)
+              (= list xs
                 (L l1 (List xs)))
-              (= (hlist xs)
+              (= hlist xs
                 (L l1 (HsList xs)))
               (= err
                 `(skSrcError *form*
@@ -70,8 +70,7 @@
               ;;          (show *form*) "'"])))))
               ;;
               (= body2
-                (list [(sym "define-macro") name
-                       (list [(sym "*form*")])
+                (list [(sym "define-macro") name (sym "*form*")
                        (list [(sym "case") (sym "*form*")
                               (list [abind body])
                               (list [(sym "_") err])])])))
@@ -79,7 +78,7 @@
 
        ((L l1 (Atom _))
         (let ((= body'
-                `(define-macro ,name (,arg)
+                `(define-macro ,name ,arg
                    ,body)))
           (return body')))
 
@@ -99,50 +98,67 @@
   ;;      (return (locateForm (getLoc *form*) ,body)))
   ;;
   (let ((= l (getLoc name))
-        (= (list xs) (L l (List xs)))
-        (= (sym x) (L l (Atom (ASymbol x))))
+        (= list xs (L l (List xs)))
+        (= sym x (L l (Atom (ASymbol x))))
         (= body1 (list [(sym "defmacro*") name args
                         (list [(sym "return") body0])])))
     (return body1)))
 
 ;;; Macro for defining simple function, or, an alias of `='. This macro
 ;;; preserves the location of function name, arguments, and body.
-(define-macro defn ((L l form'))
-  (let ((= (header n a) (| ((== (unLoc a) (Atom AUnit)) n)
-                           (otherwise (cons' n a))))
-        (= (defn' n a b)
-          (cons' (L l (Atom (ASymbol "=")))
-                 (cons' (header n a) (L l (List [b])))))
-        (= err (concat ["defn: invalid form:" [\lf]
-                        (show (L l form'))])))
-    (case form'
-      ((List [_ name args body])
-       (return (defn' name args body)))
-      (_ (skSrcError (L l ()) err)))))
+(define-macro defn (L l form')
+  (case form'
+    ((List [_ name args body])
+     (return `(= ,name ,@args
+                ,body)))
+    (_
+     (skSrcError (L l form')
+                 (concat ["`defn': invalid form:" [\lf]
+                          (show (L l form'))])))))
+
+;; (define-macro defn (L l form')
+;;   (let ((= header n a (| ((== (unLoc a) (Atom AUnit)) n)
+;;                            (otherwise (cons' n a))))
+;;         (= defn' n a b
+;;           `(= ,n ,@a ,b)
+;;           ;; (cons' (L l (Atom (ASymbol "=")))
+;;           ;;        (cons' (header n a)
+;;           ;;               (L l (List [b]))))
+;;           )
+;;         (= err (concat ["defn: invalid form:" [\lf]
+;;                         (show (L l form'))])))
+;;     (case form'
+;;       ((List [_ name args body])
+;;        (return (defn' name args body)))
+;;       (_ (skSrcError (L l ()) err)))))
 
 ;;; Macro for defining function and type signature in single form.
-;; (defmacro defn: (name args tsig body)
-;;   `(begin
-;;      (:: ,name ,tsig)
-;;      (= (,name ,@args)
-;;        ,body)))
+(defmacro defn: (name args tsig body)
+  `(begin
+     (:: ,name ,tsig)
+     (= ,name ,@args
+       ,body)))
 
-;; Location information are lost when defining macros with `defmacro'.
-(define-macro defn: (form)
-  (case form
-    ((L l (List [_ name args tsig body]))
-     (let ((= (sym s)
-             (L l (Atom (ASymbol s))))
-           (= (list xs)
-             (L l (List xs)))
-           (= (header n a) (| ((== (unLoc a) (Atom AUnit)) n)
-                              (otherwise (cons' n a))))
-           (= (defn:' n a t b)
-             (cons' (sym "begin")
-                    (list
-                     [(list [(sym "::") n t])
-                      (list [(sym "=") (header n a) (list [b])])]))))
-       (return (defn:' name args tsig body))))
-    ((L l _)
-     (skSrcError form
-                 (concat ["defn: invalid form:" [\lf] (show form)])))))
+;; (define-macro defn: form
+;;   (case form
+;;     ((L l (List [_ name args tsig body]))
+;;      (let ((= sym s
+;;              (L l (Atom (ASymbol s))))
+;;            (= list xs
+;;              (L l (List xs)))
+;;            (= header n a (| ((== (unLoc a) (Atom AUnit)) n)
+;;                             (otherwise (cons' n a))))
+;;            (= defn:' n a t b
+;;              `(begin
+;;                 (:: ,n ,t)
+;;                 (= ,n ,@a
+;;                   ,b))
+;;              ;; (cons' (sym "begin")
+;;              ;;        (list
+;;              ;;         [(list [(sym "::") n t])
+;;              ;;          (list [(sym "=") (header n a) (list [b])])]))
+;;              ))
+;;        (return (defn:' name args tsig body))))
+;;     ((L l _)
+;;      (skSrcError form
+;;                  (concat ["defn: invalid form:" [\lf] (show form)])))))
