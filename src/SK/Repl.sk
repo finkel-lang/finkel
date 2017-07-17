@@ -134,20 +134,20 @@
                                  (otherwise "")))))
               (<- mb-input (getInputLine prompt))
               (case mb-input
-                (Nothing quit)
-                ((Just line)
-                 (| ((== line "(quit)") quit)
-                    ((null line) go)
-                    (otherwise
-                     (do (<- mb-form (lift (read-form line)))
-                         (case mb-form
-                           (Nothing go)
-                           ((Just form)
-                            (do (liftIO
-                                 (do (putMVar to-eval-mvar form)
-                                     (<- ret (takeMVar from-eval-mvar))
-                                     (putStr ret)))
-                                go))))))))))
+                Nothing quit
+                (Just line)
+                (| ((== line "(quit)") quit)
+                   ((null line) go)
+                   (otherwise
+                    (do (<- mb-form (lift (read-form line)))
+                        (case mb-form
+                          Nothing go
+                          (Just form)
+                          (do (liftIO
+                               (do (putMVar to-eval-mvar form)
+                                   (<- ret (takeMVar from-eval-mvar))
+                                   (putStr ret)))
+                              go))))))))
         (= loop
           (handleInterrupt (>> (outputStrLn "Interrupd") loop)
                            go)))
@@ -164,8 +164,8 @@
                                        pending-input pending}))
                   (return ret))))
         (case (evalSP sexpr (Just "<repl>") input1)
-          ((Right forms) (put-and-return "" (Just forms)))
-          ((Left err) (put-and-return input1 Nothing))))))
+          (Right forms) (put-and-return "" (Just forms))
+          (Left err) (put-and-return input1 Nothing)))))
 
 
 ;;;; Eval
@@ -189,8 +189,8 @@
                            (do (<- expanded (macroexpands [form]))
                                (eval-statement expanded))))
                   (let ((= str (case ret
-                                 ((Right r) r)
-                                 ((Left err) err)))))
+                                 (Right r) r
+                                 (Left err) err))))
                   (liftIO (putMVar out-mvar str))
                   go)))
     (>> init go)))
@@ -198,44 +198,44 @@
 (:: eval-statement (-> [Code] (Skc Result)))
 (= eval-statement forms
   (case (evalBuilder parseStmt forms)
-    ((Right stmt0)
-     (do (<- hsc-env getSession)
-         (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
-         (case stmt1
-           ((Just (, ids hvals-io fixity-env))
-            (update-hsc-env hsc-env True ids hvals-io fixity-env))
-           (Nothing
-            (return (Left "eval-statement: no result"))))))
-    ((Left err) (eval-import forms))))
+    (Right stmt0)
+    (do (<- hsc-env getSession)
+        (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
+        (case stmt1
+          (Just (, ids hvals-io fixity-env))
+          (update-hsc-env hsc-env True ids hvals-io fixity-env)
+          Nothing (return (Left "eval-statement: no result"))))
+    (Left err) (eval-import forms)))
 
 (:: eval-import (-> [Code] (Skc Result)))
 (= eval-import forms
   (case (evalBuilder parseImports forms)
-    ((Right imports)
-     (do (<- context getContext)
-         (let ((= mkIIdecl (L _ idecl) (IIDecl idecl))
-               (= ret (map (. (++ ";;; ") show) forms))))
-         (setContext (++ (map mkIIdecl imports) context))
-         (return (Right (unlines ret)))))
-    ((Left err) (eval-decls forms))))
+    (Right imports)
+    (do (<- context getContext)
+        (let ((= mkIIdecl (L _ idecl) (IIDecl idecl))
+              (= ret (map (. (++ ";;; ") show) forms))))
+        (setContext (++ (map mkIIdecl imports) context))
+        (return (Right (unlines ret))))
+    (Left err) (eval-decls forms)))
 
 (:: eval-decls (-> [Code] (Skc Result)))
 (= eval-decls forms
   (case (evalBuilder parseDecls forms)
-    ((Right decls)
-     ;; Currently decls are converted as `let' statement and passed to
-     ;; `hscParsedStmt'. Support for `data', `newtype', `class' .. etc
-     ;; are not yet implemented.
-     (do (let ((= l (mkLocatedList decls))
-               (= stmt (b_letS l decls))))
-         (<- hsc-env getSession)
-         (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
-         (case ret
-           ((Just (, ids hvals fixity))
-            (update-hsc-env hsc-env False ids hvals fixity))
-           (Nothing
-            (return (Left (++ "evalDecls: " (show forms))))))))
-    ((Left err) (return (Left err)))))
+    (Right decls)
+    ;; Currently decls are converted as `let' statement and passed to
+    ;; `hscParsedStmt'. Support for `data', `newtype', `class' .. etc
+    ;; are not yet implemented.
+
+    (do (let ((= l (mkLocatedList decls))
+              (= stmt (b_letS l decls))))
+        (<- hsc-env getSession)
+        (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
+        (case ret
+          (Just (, ids hvals fixity))
+          (update-hsc-env hsc-env False ids hvals fixity)
+          Nothing
+          (return (Left (++ "evalDecls: " (show forms))))))
+    (Left err) (return (Left err))))
 
 (:: update-hsc-env
   (-> HscEnv Bool [Id] ForeignHValue FixityEnv (Skc Result)))
@@ -245,41 +245,40 @@
   (do (<- status (liftIO (evalStmt hsc-env False (EvalThis hvals-io))))
       (<- dflags getSessionDynFlags)
       (case status
-        ((EvalComplete _ (EvalSuccess fhvals))
-         (do (let ((= ic (hsc_IC hsc-env))
-                   (= bindings (, (ic_tythings ic) (ic_rn_gbl_env ic)))
-                   (= size 10)
-                   (= ic2 (extendInteractiveContextWithIds ic ids))
-                   (= ic3 (ic2 {ic_fix_env fixity-env}))
-                   (= final-names (map getName ids))
-                   (= hsc-env-2 (hsc-env {hsc_IC ic3}))))
-             (liftIO (extendLinkEnv (zip final-names fhvals)))
-             (when is-body
-               (return ())
-               ;; (case ids
-               ;;   ([] (return ()))
-               ;;   ((: var _)
-               ;;    (do (let ((= tystr (showPpr dflags (varType var)))))
-               ;;        (when (isPrefixOf "ReplIO" tystr)
-               ;;          (evalApply hsc-env-2 fhvals)))))
-               )
+        (EvalComplete _ (EvalSuccess fhvals))
+        (do (let ((= ic (hsc_IC hsc-env))
+                  (= bindings (, (ic_tythings ic) (ic_rn_gbl_env ic)))
+                  (= size 10)
+                  (= ic2 (extendInteractiveContextWithIds ic ids))
+                  (= ic3 (ic2 {ic_fix_env fixity-env}))
+                  (= final-names (map getName ids))
+                  (= hsc-env-2 (hsc-env {hsc_IC ic3}))))
+            (liftIO (extendLinkEnv (zip final-names fhvals)))
+            (when is-body
+              (return ())
+              ;; (case ids
+              ;;   ([] (return ()))
+              ;;   ((: var _)
+              ;;    (do (let ((= tystr (showPpr dflags (varType var)))))
+              ;;        (when (isPrefixOf "ReplIO" tystr)
+              ;;          (evalApply hsc-env-2 fhvals)))))
+              )
 
-             ;; InteractiveEval does not export rttiEnvironment ...
-             ;;
-             ;; (<- hsc-env-3
-             ;;     (liftIO
-             ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
+            ;; InteractiveEval does not export rttiEnvironment ...
+            ;;
+            ;; (<- hsc-env-3
+            ;;     (liftIO
+            ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
 
-             (setSession hsc-env-2)
-             (return
-               (Right (print-names-and-types dflags final-names ids)))))
-        ((EvalComplete _ (EvalException serialized))
-         (case serialized
-           ((EOtherException str) (return (Left str)))
-           ((EExitCode ecode) (liftIO (exitWith ecode)))
-           (EUserInterrupt (return (Right "Interrupt")))))
-        (_
-         (return (Left "update-hsc-env failed."))))))
+            (setSession hsc-env-2)
+            (return
+              (Right (print-names-and-types dflags final-names ids))))
+        (EvalComplete _ (EvalException serialized))
+        (case serialized
+          (EOtherException str) (return (Left str))
+          (EExitCode ecode) (liftIO (exitWith ecode))
+          EUserInterrupt (return (Right "Interrupt")))
+        _ (return (Left "update-hsc-env failed.")))))
 
 
 ;;;; Auxiliary
