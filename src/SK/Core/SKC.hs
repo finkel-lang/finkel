@@ -16,6 +16,9 @@ module SK.Core.SKC
   , getMacroEnv
   ) where
 
+-- base
+import Control.Monad (when)
+
 -- transformers
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
@@ -91,9 +94,8 @@ debugIO act = Skc go
   where
     go = do
       sk_env <- get
-      if envDebug sk_env
-         then liftIO act
-         else return ()
+      when (envDebug sk_env)
+           (liftIO act)
 
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get

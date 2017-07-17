@@ -181,7 +181,7 @@ pTyThing' dflags tt@(AnId _) = do
                   , " tyConArg=", str arg])
     IfaceCastTy _ _ -> prn "cast ty"
     IfaceCoercionTy _ -> prn "coercion ty"
-    IfaceTupleTy _ _ _ -> prn "tuple ty"
+    IfaceTupleTy {} -> prn "tuple ty"
 
 pTyThing' dflags tt =
   -- Arguments of `pprTyThing' changed since ghc-8.0.2 release.
@@ -283,11 +283,11 @@ m_require form =
   -- The special form `require' modifies the HscEnv at the time of macro
   -- expansion, to update the context in compile time session.
   --
-  -- Need to clean up the context after compiling each file, but not yet
-  -- done. Reason to clean up the context is, if not cleaned, all files
-  -- passed via "--make" command will use the same interactive context,
-  -- which could be confusing, and may cause unwanted name conflicts and
-  -- overridings.
+  -- XXX: Need to clean up the context after compiling each file, but
+  -- not yet done. Reason to clean up the context is, if not cleaned,
+  -- all files passed via "--make" command will use the same interactive
+  -- context, which could be confusing, and may cause unwanted name
+  -- conflicts and overridings.
   --
   case form of
     L _l1 (List [_,L _l2 (Atom (ASymbol mname))]) -> do

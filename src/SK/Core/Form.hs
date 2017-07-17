@@ -5,7 +5,6 @@ module SK.Core.Form
   ( -- * The S-expression form
     Atom(..)
   , Form(..)
-  , LForm
   , Code
 
   , aFractional
@@ -86,15 +85,13 @@ instance Show Atom where
 -- | Form type. Also used as token. Elements of recursive structures
 -- contain location information.
 data Form a
-  = Atom a           -- ^ S-expression atom.
-  | List [LForm a]   -- ^ S-expression list.
-  | HsList [LForm a] -- ^ Haskell list.
-  | TEnd             -- ^ End of token.
+  = Atom a                    -- ^ S-expression atom.
+  | List [Located (Form a)]   -- ^ S-expression list.
+  | HsList [Located (Form a)] -- ^ Haskell list.
+  | TEnd                      -- ^ End of token.
   deriving (Eq, Data, Typeable)
 
-type LForm a = Located (Form a)
-
-type Code = LForm Atom
+type Code = Located (Form Atom)
 
 instance Show a => Show (Form a) where
   show form =
