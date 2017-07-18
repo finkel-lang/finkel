@@ -225,6 +225,9 @@ b_module (L l (Atom (ASymbol name))) mbdoc imports decls =
              , hsmodDeprecMessage = Nothing
              , hsmodHaddockModHeader = mbdoc }
 
+b_implicitMainModule :: [HImportDecl] -> [HDecl] -> HsModule RdrName
+b_implicitMainModule = b_module (noLoc (Atom (ASymbol "Main"))) Nothing
+
 
 -- ---------------------------------------------------------------------
 --

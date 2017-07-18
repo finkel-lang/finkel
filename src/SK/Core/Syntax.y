@@ -105,7 +105,8 @@ import SK.Core.GHC
 
 'f_import'
     { L _ (List $$@((L _ (Atom (ASymbol "import"))):_)) }
-
+'f_module'
+    { L _ (List $$@((L _ (Atom (ASymbol "module"))):_)) }
 'deriving'
     { L _ (List [L _ (Atom (ASymbol "deriving")), L _ (List $$)])}
 
@@ -133,15 +134,16 @@ mbdoc :: { Maybe LHsDocString }
 -- ---------------------------------------------------------------------
 
 module :: { HsModule RdrName }
-    : mbdoc 'list' imports top_decls
-      {% parse p_mod_header $2 <*> pure $1 <*> pure $3 <*> pure $4 }
-    | mbdoc 'list' top_decls
-      {% parse p_mod_header $2 <*> pure $1 <*> pure [] <*> pure $3 }
-    | mbdoc 'list' imports
-      {% parse p_mod_header $2 <*> pure $1 <*> pure $3 <*> pure [] }
+    : mhead imports top_decls {% $1 `fmap` pure $2 <*> pure $3 }
+    | mhead imports           {% $1 `fmap` pure $2 <*> pure [] }
+    | mhead top_decls         {% $1 `fmap` pure [] <*> pure $2 }
+
+mhead :: { [HImportDecl] -> [HDecl] -> HsModule RdrName }
+    : {- empty -}      { b_implicitMainModule }
+    | mbdoc 'f_module' {% parse p_mod_header $2 <*> pure $1 }
 
 mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl]
-               -> HsModule RdrName }
+                -> HsModule RdrName }
     : 'module' 'symbol' { b_module $2 }
 
 imports :: { [HImportDecl] }
