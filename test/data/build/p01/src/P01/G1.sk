@@ -4,13 +4,13 @@
 
 ;;; Simple definition of `defmacro' used in `p01' package.
 (define-macro defmacro form
-  (case form
+  (case (unLForm form)
     (L _ (List [_ name args body]))
-    (case args
+    (case (unLForm args)
       (L l1 (List _))
       (let ((= body'
               `(define-macro ,name form
-                 (case form
+                 (case (unLForm form)
                    (L l2 (List [_ ,@args])) (return ,body)
                    _ (failS (++ (show ',name) ": error"))))))
         (return body'))

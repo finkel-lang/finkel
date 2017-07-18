@@ -7,13 +7,14 @@
 ;; Simple version of `defmacro' defined with `define-macro'
 (define-macro defmacro form
   (case form
-    (L _ (List [_self name args body]))
+    (LForm (L _ (List [_self name args body])))
     (case args
-      (L _ (List _)) (return
-                       `(define-macro ,name form
-                          (case form
-                            (L l1 (List [_ ,@args])) (return ,body)
-                            _ (failS (++ (show ',name) ": error")))))
+      (LForm (L _ (List _)))
+      (return
+        `(define-macro ,name form
+           (case form
+             (LForm (L l1 (List [_ ,@args]))) (return ,body)
+             _ (failS (++ (show ',name) ": error")))))
       _ (return `(define-macro ,name ,args
                    (return ,body))))
     _ (failS "defmac: error")))
@@ -25,11 +26,11 @@
 ;; Simple `let-macro'.
 (let-macro ((m2a form
               (case form
-                (L _ (List [_ a b c])) (return `(,a (+ ,b ,c)))
+                (LForm (L _ (List [_ a b c]))) (return `(,a (+ ,b ,c)))
                 _ (failS "m2a: error")))
             (m2b form
               (case form
-                (L _ (List [_ x y])) (return `(+ ,x ,y))
+                (LForm (L _ (List [_ x y]))) (return `(+ ,x ,y))
                 _ (failS "m2b: error"))))
   (:: f1 (-> Int Int (IO ())))
   (= f1 x y
@@ -38,7 +39,7 @@
 ;;; Macro taking fractional value as argument.
 (let-macro ((m1 form
               (case form
-                (L l (List [_ x]))
+                (LForm (L l (List [_ x])))
                 (case (fromCode x)
                   (Just d) (if (<= 1.0 (:: d Double))
                                (return '"more or eq to one")
@@ -54,7 +55,7 @@
 ;;; Macro returning haskell list.
 (let-macro ((m2 form
               (case form
-                (L l (List [_ a b c]))
+                (LForm (L l (List [_ a b c])))
                 (let ((:: mbints (Maybe (, Int Int Int)))
                       (= mbints
                         (do (<- x (fromCode a))

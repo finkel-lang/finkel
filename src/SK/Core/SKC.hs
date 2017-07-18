@@ -82,10 +82,10 @@ failS :: String -> Skc a
 failS msg = Skc (lift (throwE msg))
 
 -- | Throw a 'SourceError'.
-skSrcError :: Located a -> String -> Skc e
-skSrcError l msg = do
+skSrcError :: Code -> String -> Skc e
+skSrcError (LForm (L l _)) msg = do
   dflags <- getSessionDynFlags
-  let em = mkErrMsg dflags (getLoc l) neverQualify (text msg)
+  let em = mkErrMsg dflags l neverQualify (text msg)
   liftIO (throwIO (mkSrcErr (unitBag em)))
 
 -- | Perform given IO action iff debug flag is turned on.

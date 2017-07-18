@@ -44,12 +44,12 @@ import SK.Core.Form
 
 sexp :: { Code }
      : atom          { $1 }
-     | 'quote' sexp  { L (getLoc $1) (List [mkQuote $1, $2]) }
-     | '`' sexp      { L (getLoc $1) (List [mkQuasiQuote $1, $2]) }
-     | ',' sexp      { L (getLoc $1) (List [mkUnquote $1, $2]) }
-     | ',@' sexp     { L (getLoc $1) (List [mkUnquoteSplice $1, $2]) }
-     | '[' sexps ']' { L (getLoc $1) (HsList $2) }
-     | '(' sexps ')' { L (getLoc $1) (List $2) }
+     | 'quote' sexp  { mkQuote $1 $2 }
+     | '`' sexp      { mkQuasiQuote $1 $2 }
+     | ',' sexp      { mkUnquote $1 $2 }
+     | ',@' sexp     { mkUnquoteSplice $1 $2 }
+     | '[' sexps ']' { LForm (L (getLoc $1) (HsList $2)) }
+     | '(' sexps ')' { LForm (L (getLoc $1) (List $2)) }
 
 -- Required modules are added to SPState here. This is to support
 -- requiring modules in home package when compiling multiple modules
@@ -76,49 +76,56 @@ atom :: { Code }
      | '}'       { mkCcSymbol $1 }
 
 {
-mkQuote :: Located Token -> Code
-mkQuote (L l _) = L l (Atom (ASymbol "quote"))
 
-mkQuasiQuote :: Located Token -> Code
-mkQuasiQuote (L l _) = L l (Atom (ASymbol "quasiquote"))
+sym :: SrcSpan -> String -> Code
+sym l str = LForm (L l (Atom (ASymbol str)))
 
-mkUnquote :: Located Token -> Code
-mkUnquote (L l _) = L l (Atom (ASymbol "unquote"))
+li :: SrcSpan -> [Code] -> Code
+li l xs = LForm (L l (List xs))
 
-mkUnquoteSplice :: Located Token -> Code
-mkUnquoteSplice (L l _) = L l (Atom (ASymbol "unquote-splice"))
+mkQuote :: Located Token -> Code -> Code
+mkQuote (L l _) body = li l [sym l "quote", body]
 
-mkASymbol :: Located Token -> Code
-mkASymbol (L l (TSymbol x)) = L l (Atom (ASymbol x))
+mkQuasiQuote :: Located Token -> Code -> Code
+mkQuasiQuote (L l _) body = li l [sym l "quasiquote", body]
 
-mkAChar :: Located Token -> Code
-mkAChar (L l (TChar x)) = L l (Atom (AChar x))
+mkUnquote :: Located Token -> Code -> Code
+mkUnquote (L l _) body = li l [sym l "unquote", body]
 
-mkAString :: Located Token -> Code
-mkAString (L l (TString x)) = L l (Atom (AString x))
-
-mkAInteger :: Located Token -> Code
-mkAInteger (L l (TInteger x)) = L l (Atom (AInteger x))
-
-mkAFractional :: Located Token -> Code
-mkAFractional (L l (TFractional x)) = L l (Atom (AFractional x))
-
-mkAComment :: Located Token -> Code
-mkAComment (L l (TDocCommentNext x)) = L l (Atom (AComment x))
-
-mkAUnit :: Located Token -> Code
-mkAUnit (L l TUnit) = L l (Atom AUnit)
-
-mkOcSymbol :: Located Token -> Code
-mkOcSymbol (L l _) = L l (Atom (ASymbol "{"))
-
-mkCcSymbol :: Located Token -> Code
-mkCcSymbol (L l _) = L l (Atom (ASymbol "}"))
+mkUnquoteSplice :: Located Token -> Code -> Code
+mkUnquoteSplice (L l _) body = li l [sym l "unquote-splice", body]
 
 mkRequire :: Located Token -> Located Token -> SP [Code]
 mkRequire t1 t2@(L _ (TSymbol modName)) = do
   addRequiredModuleName modName
   return [mkASymbol t1, mkASymbol t2]
+
+mkASymbol :: Located Token -> Code
+mkASymbol (L l (TSymbol x)) = LForm (L l (Atom (ASymbol x)))
+
+mkAChar :: Located Token -> Code
+mkAChar (L l (TChar x)) = LForm (L l (Atom (AChar x)))
+
+mkAString :: Located Token -> Code
+mkAString (L l (TString x)) = LForm (L l (Atom (AString x)))
+
+mkAInteger :: Located Token -> Code
+mkAInteger (L l (TInteger x)) = LForm (L l (Atom (AInteger x)))
+
+mkAFractional :: Located Token -> Code
+mkAFractional (L l (TFractional x)) = LForm (L l (Atom (AFractional x)))
+
+mkAComment :: Located Token -> Code
+mkAComment (L l (TDocCommentNext x)) = LForm (L l (Atom (AComment x)))
+
+mkAUnit :: Located Token -> Code
+mkAUnit (L l TUnit) = LForm (L l (Atom AUnit))
+
+mkOcSymbol :: Located Token -> Code
+mkOcSymbol (L l _) = LForm (L l (Atom (ASymbol "{")))
+
+mkCcSymbol :: Located Token -> Code
+mkCcSymbol (L l _) = LForm (L l (Atom (ASymbol "}")))
 
 happyError :: SP a
 happyError = showErrorSP

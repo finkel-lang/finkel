@@ -96,18 +96,6 @@ $whitechar+  ;
 @signed @decimal     { tok_integer }
 @signed @frac        { tok_fractional }
 
--- Binary operators
---
--- Some of the binary operators defined in Prelude are converted to
--- intermediate state to support variable number of arguments, for
--- convenience.
---
--- May worth adding Token constructor dedicated to binary operators, to
--- increase efficiency in macro expansion.
-
-\+               { tok_plus }
-\*               { tok_asterisk }
-
 --- Symbols
 
 @hsymbol         { tok_symbol }
@@ -309,12 +297,6 @@ tok_fractional (_,_,_,s) l = do
   let str = take l s
       rat = readRational (take l s)
   return (TFractional (FL str rat))
-
-tok_plus :: Action
-tok_plus _ _ = return (TSymbol "__+")
-
-tok_asterisk :: Action
-tok_asterisk _ _ = return (TSymbol "__*")
 
 alexEOF :: Alex Token
 alexEOF = return TEOF

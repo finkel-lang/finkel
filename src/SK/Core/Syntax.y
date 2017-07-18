@@ -63,31 +63,31 @@ import SK.Core.GHC
 
 %tokentype { Code }
 %monad { Builder }
-%lexer { formLexer } { L _ TEnd }
+%lexer { formLexer } { LForm (L _ TEnd) }
 
 %token
 
-'case'     { L _ (Atom (ASymbol "case")) }
-'data'     { L _ (Atom (ASymbol "data")) }
-'do'       { L _ (Atom (ASymbol "do")) }
-'if'       { L _ (Atom (ASymbol "if")) }
-'import'   { L _ (Atom (ASymbol "import")) }
-'instance' { L _ (Atom (ASymbol "instance")) }
-'let'      { L _ (Atom (ASymbol "let")) }
-'module'   { L _ (Atom (ASymbol "module")) }
-'newtype'  { L _ (Atom (ASymbol "newtype")) }
-'type'     { L _ (Atom (ASymbol "type")) }
+'case'     { LForm (L _ (Atom (ASymbol "case"))) }
+'data'     { LForm (L _ (Atom (ASymbol "data"))) }
+'do'       { LForm (L _ (Atom (ASymbol "do"))) }
+'if'       { LForm (L _ (Atom (ASymbol "if"))) }
+'import'   { LForm (L _ (Atom (ASymbol "import"))) }
+'instance' { LForm (L _ (Atom (ASymbol "instance"))) }
+'let'      { LForm (L _ (Atom (ASymbol "let"))) }
+'module'   { LForm (L _ (Atom (ASymbol "module"))) }
+'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
+'type'     { LForm (L _ (Atom (ASymbol "type"))) }
 
-','  { L _ (Atom (ASymbol ",")) }
-'->' { L _ (Atom (ASymbol "->")) }
-'::' { L _ (Atom (ASymbol "::")) }
-'<-' { L _ (Atom (ASymbol "<-")) }
-'='  { L _ (Atom (ASymbol "=")) }
-'=>' { L _ (Atom (ASymbol "=>")) }
-'\\' { L _ (Atom (ASymbol "\\")) }
-'{'  { L _ (Atom (ASymbol "{")) }
-'|'  { L _ (Atom (ASymbol "|")) }
-'}'  { L _ (Atom (ASymbol "}")) }
+','  { LForm (L _ (Atom (ASymbol ","))) }
+'->' { LForm (L _ (Atom (ASymbol "->"))) }
+'::' { LForm (L _ (Atom (ASymbol "::"))) }
+'<-' { LForm (L _ (Atom (ASymbol "<-"))) }
+'='  { LForm (L _ (Atom (ASymbol "="))) }
+'=>' { LForm (L _ (Atom (ASymbol "=>"))) }
+'\\' { LForm (L _ (Atom (ASymbol "\\"))) }
+'{'  { LForm (L _ (Atom (ASymbol "{"))) }
+'|'  { LForm (L _ (Atom (ASymbol "|"))) }
+'}'  { LForm (L _ (Atom (ASymbol "}"))) }
 
 -- For `as' pattern
 -- '@'  { L _ (Atom (ASymbol "@")) }
@@ -95,23 +95,24 @@ import SK.Core.GHC
 -- For `irrefutable' pattern
 -- '~'  { L _ (Atom (ASymbol "~")) }
 
-'symbol'  { L _ (Atom (ASymbol _)) }
-'char'    { L _ (Atom (AChar _)) }
-'string'  { L _ (Atom (AString _)) }
-'integer' { L _ (Atom (AInteger _)) }
-'frac'    { L _ (Atom (AFractional _)) }
-'comment' { L _ (Atom (AComment _)) }
-'unit'    { L _ (Atom AUnit) }
+'symbol'  { LForm (L _ (Atom (ASymbol _))) }
+'char'    { LForm (L _ (Atom (AChar _))) }
+'string'  { LForm (L _ (Atom (AString _))) }
+'integer' { LForm (L _ (Atom (AInteger _))) }
+'frac'    { LForm (L _ (Atom (AFractional _))) }
+'comment' { LForm (L _ (Atom (AComment _))) }
+'unit'    { LForm (L _ (Atom AUnit)) }
 
 'f_import'
-    { L _ (List $$@((L _ (Atom (ASymbol "import"))):_)) }
+    { LForm (L _ (List $$@((LForm (L _ (Atom (ASymbol "import")))):_))) }
 'f_module'
-    { L _ (List $$@((L _ (Atom (ASymbol "module"))):_)) }
+    { LForm (L _ (List $$@((LForm (L _ (Atom (ASymbol "module")))):_))) }
 'deriving'
-    { L _ (List [L _ (Atom (ASymbol "deriving")), L _ (List $$)])}
+    { LForm (L _ (List [ LForm (L _ (Atom (ASymbol "deriving")))
+                       , LForm (L _ (List $$))])) }
 
-'list'       { L _ (List $$) }
-'hslist'     { L _ (HsList _) }
+'list'       { LForm (L _ (List $$)) }
+'hslist'     { LForm (L _ (HsList _)) }
 
 
 %%
