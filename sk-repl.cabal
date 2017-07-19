@@ -25,7 +25,6 @@ library
   hs-source-dirs:      src
   exposed-modules:     Paths_sk_repl
                        SK.Macro
-                       SK.Macro.Util
                        SK.Repl
                        SK.Repl.Apply
                        --

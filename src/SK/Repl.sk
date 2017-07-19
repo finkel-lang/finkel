@@ -174,9 +174,14 @@
 (= eval-loop in-mvar out-mvar
   (let ((= init
           (do (<- hsc-env getSession)
-              (<- _ (setSessionDynFlags (ic_dflags (hsc_IC hsc-env))))
-              (let ((= decl
+              (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
+                    ;; Default target in interactive context is
+                    ;; ``HscAsm', updating to `HscInterpreted'.
+                    (= dflags1 (dflags0 {hscTarget HscInterpreted
+                                         ghcLink LinkInMemory}))
+                    (= decl
                       (. IIDecl (. simpleImportDecl mkModuleName)))))
+              (<- _ (setSessionDynFlags dflags1))
               (setContext [(decl "Prelude")
                            (decl "SK.Core")
                            (decl "SK.Repl.Apply")])))
@@ -201,7 +206,7 @@
       (eval-statement stmt))
      ((<- (Right idecl) (evalBuilder parseImports forms))
       (eval-imports idecl))
-     ((<- (Right decls) (evalBuilder parseDecls forms))
+     ((<- (Right decls) (evalBuilder parseTopDecls forms))
       (eval-decls decls))
      (otherwise
       (return (Left (++ "parse error: "
@@ -225,18 +230,49 @@
 
 (:: eval-decls (-> [HDecl] (Skc Result)))
 (= eval-decls decls
-  ;; Currently decls are converted as `let' statement and passed to
-  ;; `hscParsedStmt'. Support for `data', `newtype', `class' .. etc
-  ;; are not yet implemented.
-  (do (let ((= l (mkLocatedList decls))
-            (= stmt (b_letS l decls))))
+  (do (<- dflags getSessionDynFlags)
+      (<- (, tythings ic) (compileDecls decls))
       (<- hsc-env getSession)
-      (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
-      (case ret
-        (Just (, ids hvals fixity))
-        (update-hsc-env hsc-env False ids hvals fixity)
-        Nothing
-        (return (Left "evalDecls: error")))))
+      (let ((= dflags (hsc_dflags hsc-env))))
+
+      ;; (liftIO
+      ;;  (do (putStrLn ";;; tythings:")
+      ;;      (mapM_ (\ tt
+      ;;               (putStrLn (showSDoc dflags (ppr tt))))
+      ;;             tythings)))
+      ;; (let ((= ids (foldr (\ thing acc
+      ;;                       (case thing
+      ;;                         (AnId i) (: i acc)
+      ;;                         _ acc))
+      ;;                     []
+      ;;                     tythings))
+      ;;       (= fixity (ic_fix_env ic))))
+
+      ;; (<- hvals (liftIO (mapM (getHValue hsc-env) ids)))
+      ;; (update-hsc-env hsc-env False ids hvals fixity)
+      ;; (setSession (hsc-env {hsc_IC ic}))
+      ;; (mapM_ (\ var
+      ;;          (do (<- hv (liftIO (getHValue hsc-env (getName var))))
+      ;;              (update-hsc-env hsc-env False [var] hv fixity)))
+      ;;        ids)
+
+      ;; (return (Right (++ ";;; declared." [\lf])))
+
+      (return (Right ""))))
+
+;; (= eval-decls decls
+;;   ;; Currently decls are converted as `let' statement and passed to
+;;   ;; `hscParsedStmt'. Support for `data', `newtype', `class' .. etc
+;;   ;; are not yet implemented.
+;;   (do (let ((= ref (mkLocatedList decls))
+;;             (= stmt (b_letS '() decls))))
+;;       (<- hsc-env getSession)
+;;       (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
+;;       (case ret
+;;         (Just (, ids hvals fixity))
+;;         (update-hsc-env hsc-env False ids hvals fixity)
+;;         Nothing
+;;         (return (Left "evalDecls: error")))))
 
 (:: update-hsc-env
   (-> HscEnv Bool [Id] ForeignHValue FixityEnv (Skc Result)))
@@ -265,7 +301,7 @@
               ;;          (evalApply hsc-env-2 fhvals)))))
               )
 
-            ;; InteractiveEval does not export rttiEnvironment ...
+            ;; InteractiveEval does not export `rttiEnvironment' ...
             ;;
             ;; (<- hsc-env-3
             ;;     (liftIO

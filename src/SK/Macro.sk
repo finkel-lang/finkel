@@ -1,48 +1,69 @@
-;;;; Fundamental macros.
-
-(require SK.Macro.Util)
+;;;; Fundamental macros and functions.
 
 (module SK.Macro)
 
 (import SK.Core)
-(import Control.Monad.IO.Class)
-(import SK.Macro.Util)
 
-(:: car (-> Code Code))
-(= car (L l code)
-  (case code
-    (List (: x _xs)) x
-    _ (L l (List []))))
+;;; Macro to specify the phase of body contents evaluation.
+(define-macro eval-when form
+  (let ((= compile? (elem 'compile))
+        (= load? (elem 'load)))
+    (case (unLForm form)
+      (L _ (List (: _ (: (LForm (L _ (List phases))) body))))
+      (| ((&& (compile? phases) (load? phases))
+          (return
+            `(begin
+               (eval-when-compile
+                ,@body)
+               ,@body)))
+         ((compile? phases)
+          (return `(eval-when-compile ,@body)))
+         ((load? phases)
+          (return `(begin ,@body)))
+         (otherwise
+          (skSrcError form (++ "eval-when: invalid phase: "
+                               (show phases)))))
+      _ (skSrcError form (++ "eval-when: invalid form: "
+                             (show form))))))
 
-(:: cdr (-> Code Code))
-(= cdr (L l code)
-  (case code
-    (List (: x xs)) (case xs
-                      []      (L (getLoc x) (List xs))
-                      (: y _) (L (getLoc y) (List xs)))
-    _ (L l (List []))))
+;;; Fundamental functions for defining fundamental macros.
+(eval-when (compile load)
+  (:: car (-> Code Code))
+  (= car (LForm (L l code))
+    (case code
+      (List (: x _xs)) x
+      _                (LForm (L l (List [])))))
 
-(:: cons (=> (Codish a) (-> a Code Code)))
-(= cons x (L l0 xs)
-  (let ((= x' (toCode x))
-        (= l1 (getLoc x')))
-    (case xs
-      (List xs') (L l1 (List (: x' xs')))
-      _ (L l1 (List [x'])))))
+  (:: cdr (-> Code Code))
+  (= cdr (LForm (L l code))
+    (case code
+      (List (: x xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
+                        (case xs
+                          []      (LForm (L l' (List [])))
+                          (: y _) (LForm (L l' (List xs)))))
+      _               (LForm (L l (List [])))))
+
+  (:: cons (=> (Codish a) (-> a Code Code)))
+  (= cons x (LForm (L l0 xs))
+    (let ((= x' (toCode x))
+          (= l1 (getLoc (unLForm x'))))
+      (LForm (case xs
+               (List xs') (L l1 (List (: x' xs')))
+               _          (L l1 (List [x'])))))))
 
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
 (define-macro defmacro* form
-  (case form
+  (case (unLForm form)
     (L l0 (List [_ name arg body]))
-    (case arg
+    (case (unLForm arg)
       (L l1 (List arg'))
       (let ((= sym s
-              (L l1 (Atom (ASymbol s))))
+              (LForm (L l1 (Atom (ASymbol s)))))
             (= list xs
-              (L l1 (List xs)))
+              (LForm (L l1 (List xs))))
             (= hlist xs
-              (L l1 (HsList xs)))
+              (LForm (L l1 (HsList xs))))
             (= err
               `(skSrcError *form*
                            (concat
@@ -51,8 +72,10 @@
                              (show *form*) "'"])))
             (= abind
               (list
-               [(sym "L") (sym "l1")
-                (list [(sym "List") (hlist (: (sym "_") arg'))])]))
+               [(sym "LForm")
+                (list
+                 [(sym "L") (sym "l1")
+                  (list [(sym "List") (hlist (: (sym "_") arg'))])])]))
 
             ;; Below `body2' is same as following form, but with
             ;; location information preserved:
@@ -97,21 +120,21 @@
   ;;   `(defmacro* ,name ,args
   ;;      (return (locateForm (getLoc *form*) ,body)))
   ;;
-  (let ((= l (getLoc name))
-        (= list xs (L l (List xs)))
-        (= sym x (L l (Atom (ASymbol x))))
+  (let ((= l (getLoc (unLForm name)))
+        (= list xs (LForm (L l (List xs))))
+        (= sym x (LForm (L l (Atom (ASymbol x)))))
         (= body1 (list [(sym "defmacro*") name args
                         (list [(sym "return") body0])])))
     (return body1)))
 
 ;;; Macro for defining simple function, or, an alias of `='. This macro
 ;;; preserves the location of function name, arguments, and body.
-(define-macro defn (L l form')
+(define-macro defn (LForm (L l form'))
   (case form'
     (List [_ name args body]) (return `(= ,name ,@args ,body))
-    _ (skSrcError (L l form')
+    _ (skSrcError (LForm (L l form'))
        (concat ["`defn': invalid form:" [\lf]
-                (show (L l form'))]))))
+                (show (LForm (L l form')))]))))
 
 ;; (define-macro defn (L l form')
 ;;   (let ((= header n a (| ((== (unLoc a) (Atom AUnit)) n)
