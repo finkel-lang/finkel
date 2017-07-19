@@ -154,7 +154,7 @@
     (withInterrupt loop)))
 
 ;;; Read single S-expression form.
-(:: read-form  (-> String (Repl (Maybe Code))))
+(:: read-form (-> String (Repl (Maybe Code))))
 (= read-form input0
   (do (<- st get-repl-state)
       (let ((= input1 (++ (pending-input st) (: \lf input0)))
@@ -202,15 +202,17 @@
 
 (:: eval-form (-> [Code] (Skc Result)))
 (= eval-form forms
-  (| ((<- (Right stmt) (evalBuilder parseStmt forms))
+  (| ((null forms)
+      (return (Right "")))
+     ((<- (Right stmt) (evalBuilder parseStmt forms))
       (eval-statement stmt))
      ((<- (Right idecl) (evalBuilder parseImports forms))
       (eval-imports idecl))
-     ((<- (Right decls) (evalBuilder parseTopDecls forms))
-      (eval-decls decls))
      (otherwise
-      (return (Left (++ "parse error: "
-                        (unlines (map show forms))))))))
+      (case (evalBuilder parseTopDecls forms)
+        (Right decs) (eval-decls decs)
+        (Left err)   (return (Left
+                              (concat ["parse error:" err [\lf]])))))))
 
 (:: eval-statement (-> HStmt (Skc Result)))
 (= eval-statement stmt0
@@ -230,49 +232,24 @@
 
 (:: eval-decls (-> [HDecl] (Skc Result)))
 (= eval-decls decls
-  (do (<- dflags getSessionDynFlags)
-      (<- (, tythings ic) (compileDecls decls))
+  (do (<- (, tythings ic) (compileDecls decls))
       (<- hsc-env getSession)
-      (let ((= dflags (hsc_dflags hsc-env))))
-
-      ;; (liftIO
-      ;;  (do (putStrLn ";;; tythings:")
-      ;;      (mapM_ (\ tt
-      ;;               (putStrLn (showSDoc dflags (ppr tt))))
-      ;;             tythings)))
-      ;; (let ((= ids (foldr (\ thing acc
-      ;;                       (case thing
-      ;;                         (AnId i) (: i acc)
-      ;;                         _ acc))
-      ;;                     []
-      ;;                     tythings))
-      ;;       (= fixity (ic_fix_env ic))))
-
-      ;; (<- hvals (liftIO (mapM (getHValue hsc-env) ids)))
-      ;; (update-hsc-env hsc-env False ids hvals fixity)
-      ;; (setSession (hsc-env {hsc_IC ic}))
-      ;; (mapM_ (\ var
-      ;;          (do (<- hv (liftIO (getHValue hsc-env (getName var))))
-      ;;              (update-hsc-env hsc-env False [var] hv fixity)))
-      ;;        ids)
-
-      ;; (return (Right (++ ";;; declared." [\lf])))
-
-      (return (Right ""))))
-
-;; (= eval-decls decls
-;;   ;; Currently decls are converted as `let' statement and passed to
-;;   ;; `hscParsedStmt'. Support for `data', `newtype', `class' .. etc
-;;   ;; are not yet implemented.
-;;   (do (let ((= ref (mkLocatedList decls))
-;;             (= stmt (b_letS '() decls))))
-;;       (<- hsc-env getSession)
-;;       (<- ret (liftIO (hscParsedStmt hsc-env stmt)))
-;;       (case ret
-;;         (Just (, ids hvals fixity))
-;;         (update-hsc-env hsc-env False ids hvals fixity)
-;;         Nothing
-;;         (return (Left "evalDecls: error")))))
+      (let ((= dflags (hsc_dflags hsc-env))
+            (= pr tt
+              (case tt
+                (AnId var) (var-name-and-type dflags (getName var) var)
+                _          (++ "; " (showSDoc dflags (ppr tt)))))
+            (= tystrs (foldr
+                       (\ tt acc
+                         (let ((= nstr
+                                 (showSDoc dflags (ppr (getName tt)))))
+                           (if (== "$trModule" nstr)
+                               acc
+                               (: (pr tt) acc))))
+                       []
+                       tythings))
+            (= tystr (unlines tystrs))))
+      (return (Right tystr))))
 
 (:: update-hsc-env
   (-> HscEnv Bool [Id] ForeignHValue FixityEnv (Skc Result)))
@@ -309,7 +286,7 @@
 
             (setSession hsc-env-2)
             (return
-              (Right (print-names-and-types dflags final-names ids))))
+              (Right (show-names-and-types dflags final-names ids))))
         (EvalComplete _ (EvalException serialized))
         (case serialized
           (EOtherException str) (return (Left str))
@@ -320,16 +297,20 @@
 
 ;;;; Auxiliary
 
-(:: print-names-and-types (-> DynFlags [Name] [Var] String))
-(= print-names-and-types dflags names vars
-  (let ((= tvs
-          (map (\ (, name var)
-                 (let ((= nstr (occNameString (nameOccName name)))
-                       (= typ (showPpr dflags (varType var))))
-                   (if (== nstr "it")
-                       ""
-                       (concat [";; " nstr " :: " typ]))))
-               (zip names vars))))
+(:: var-name-and-type (-> DynFlags Name Var String))
+(= var-name-and-type dflags name var
+  (let ((= nstr (occNameString (nameOccName name)))
+        (= typ (showPpr dflags (varType var))))
+    (if (== nstr "it")
+        ""
+        (concat
+         (intersperse [\lf]
+                      (map (++ "; ")
+                           (lines (++ nstr (++ " :: " typ)))))))))
+
+(:: show-names-and-types (-> DynFlags [Name] [Var] String))
+(= show-names-and-types dflags names vars
+  (let ((= tvs (zipWith (var-name-and-type dflags) names vars)))
     (if (all null tvs)
         ""
         (++ (concat (intersperse [\lf] tvs)) [\lf]))))

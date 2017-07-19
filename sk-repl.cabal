@@ -13,7 +13,6 @@ build-type:          Custom
 extra-source-files:  README.md
                      src/SK/*.sk
                      src/SK/Repl/*.sk
-                     src/SK/Macro/*.sk
 cabal-version:       >=1.10
 
 custom-setup
