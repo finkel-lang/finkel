@@ -9,7 +9,7 @@ module SK.Core.Form
   , Code
 
   , aFractional
-  , symbolNameL
+  , symbolName
   , toListL
 
   , unLoc
@@ -131,22 +131,21 @@ instance Functor LForm where
   fmap f (LForm (L l a)) = LForm (L l (fmap f a))
 
 instance Foldable Form where
-  -- XXX: Quite inefficient.
   foldr f z form =
     case form of
-      TEnd -> z
-      Atom x -> f x z
+      TEnd    -> z
+      Atom x  -> f x z
       List xs ->
         case xs of
-          [] -> z
+          []   -> z
           y:ys -> foldr f (foldr f z (unLocLForm y)) (List ys)
       HsList xs ->
         case xs of
-          [] -> z
+          []   -> z
           y:ys -> foldr f (foldr f z (unLocLForm y)) (HsList ys)
 
 instance Foldable LForm where
-  foldr _f _z _form = undefined
+  foldr f z (LForm (L _ form)) = foldr f z form
 
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.
@@ -164,9 +163,9 @@ showLoc (LForm (L l _)) = case l of
 
 -- | Extract string from given atom when the atom was 'ASymbol',
 -- otherwise error.
-symbolNameL :: Code -> String
-symbolNameL (LForm (L _ (Atom (ASymbol name)))) = name
-symbolNameL x = error ("symbolNameL: got " ++ show (pprForm x))
+symbolName :: Code -> String
+symbolName (LForm (L _ (Atom (ASymbol name)))) = name
+symbolName x = error ("symbolName: got " ++ show (pprForm x))
 
 toListL :: Code -> Code
 toListL orig@(LForm (L l form)) =

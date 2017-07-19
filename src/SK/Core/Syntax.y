@@ -371,7 +371,7 @@ fbinds :: { [(String, HExpr)] }
 
 rfbinds :: { [(String, HExpr)] }
     : {- empty -}           { [] }
-    | rfbinds 'symbol' expr { (symbolNameL $2, $3):$1 }
+    | rfbinds 'symbol' expr { (symbolName $2, $3):$1 }
 
 app :: { [HExpr] }
     : rapp { reverse $1 }

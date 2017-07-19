@@ -516,7 +516,7 @@ b_recConOrUpdE sym@(LForm (L l _)) flds = L l expr
       case name of
         x:_ | isUpper x -> mkRdrRecordCon rName cflds
         _  -> mkRdrRecordUpd (b_varE sym) uflds
-    name = symbolNameL sym
+    name = symbolName sym
     rName = L l (mkRdrName name)
     cflds = HsRecFields { rec_flds = map mkcfld flds
                         , rec_dotdot = Nothing }
