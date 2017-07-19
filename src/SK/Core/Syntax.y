@@ -15,6 +15,7 @@ module SK.Core.Syntax
   , parseImports
   , parseStmt
   , parseDecls
+  , parseTopDecls
   , parseExpr
   ) where
 
@@ -475,6 +476,9 @@ parseStmt = p_stmt
 
 parseDecls :: Builder [HDecl]
 parseDecls = p_decls
+
+parseTopDecls :: Builder [HDecl]
+parseTopDecls = p_top_decls
 
 parseExpr :: Builder HExpr
 parseExpr = p_expr
