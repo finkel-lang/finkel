@@ -80,19 +80,18 @@ import SK.Core.GHC
 'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
 'type'     { LForm (L _ (Atom (ASymbol "type"))) }
 
+
 ','  { LForm (L _ (Atom (ASymbol ","))) }
 '->' { LForm (L _ (Atom (ASymbol "->"))) }
 '::' { LForm (L _ (Atom (ASymbol "::"))) }
 '<-' { LForm (L _ (Atom (ASymbol "<-"))) }
 '='  { LForm (L _ (Atom (ASymbol "="))) }
 '=>' { LForm (L _ (Atom (ASymbol "=>"))) }
+'@'  { LForm (L _ (Atom (ASymbol "@"))) }
 '\\' { LForm (L _ (Atom (ASymbol "\\"))) }
 '{'  { LForm (L _ (Atom (ASymbol "{"))) }
 '|'  { LForm (L _ (Atom (ASymbol "|"))) }
 '}'  { LForm (L _ (Atom (ASymbol "}"))) }
-
--- For `as' pattern
--- '@'  { L _ (Atom (ASymbol "@")) }
 
 -- For `irrefutable' pattern
 -- '~'  { L _ (Atom (ASymbol "~")) }
@@ -321,8 +320,9 @@ pat :: { HPat }
     | 'list'    {% parse p_pats1 $1 }
 
 pats1 :: { HPat }
-    : ',' pats0      { b_tupP $1 $2 }
-    | 'symbol' pats0 {% b_conP $1 $2 }
+    : ',' pats0        { b_tupP $1 $2 }
+    | '@' 'symbol' pat { b_asP $2 $3 }
+    | 'symbol' pats0   {% b_conP $1 $2 }
 
 
 -- ---------------------------------------------------------------------

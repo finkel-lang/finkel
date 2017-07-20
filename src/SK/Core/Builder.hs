@@ -483,6 +483,10 @@ b_hsListP pats = L l (ListPat pats placeHolderType Nothing)
 b_tupP :: Code -> [HPat] -> HPat
 b_tupP (LForm (L l _)) ps = L l (TuplePat ps Boxed [])
 
+b_asP :: Code -> HPat -> HPat
+b_asP (LForm (L l (Atom (ASymbol name)))) pat =
+  L l (AsPat (L l (mkRdrName name)) pat)
+
 b_conP :: Code -> [HPat] -> Builder HPat
 b_conP (LForm (L l (Atom (ASymbol conName)))) rest =
   case conName of

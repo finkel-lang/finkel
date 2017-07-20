@@ -256,9 +256,35 @@
       (print (charpat \a))
       (print (charpat \X))))
 
+(:: aspat1 (-> (Maybe Char) String))
+(= aspat1 mbc
+  (case mbc
+    (@ x (Just y)) (unwords [(show x) (show y)])
+    Nothing        "Nothing"))
+
+(:: (ap2a ap2b ap2c) Int)
+(:: aspat2 [Int])
+(= (@ aspat2 [ap2a ap2b ap2c])
+  [123 456 789])
+
+(:: ap3 [String])
+(= ap3
+  (let ((:: p (Either String Int))
+        (= (@ p (Right q)) (Right 42)))
+    [(show p) (show q)]))
+
+(= patexprs3
+  (do (print (aspat1 (Just \p)))
+      (print ap2a)
+      (print ap2b)
+      (print ap2c)
+      (print aspat2)
+      (print ap3)))
+
 (= patexprs
   (do patexprs1
-      patexprs2))
+      patexprs2
+      patexprs3))
 
 ;;; Main
 
