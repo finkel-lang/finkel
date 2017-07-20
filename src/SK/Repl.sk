@@ -19,6 +19,7 @@
 (import Data.List)
 (import Data.Version)
 (import System.Exit)
+(import System.IO)
 
 (import GhcMonad)               ; ghc
 (import HscMain)
@@ -110,10 +111,12 @@
       (<- eval-tid (forkIO (void skc)))
       (let ((= reader (read-print-loop in-mv out-mv eval-tid))
             (= reader' (runInputT defaultSettings reader))
-            (= msg (unlines
-                    [(++ "SK REPL, version " (showVersion version))
-                     "hit `Ctrl-d' to exit."]))))
-      (putStr msg)
+            (= init-form
+              `(begin
+                 (require SK.Macro)
+                 (putStrLn ";;; REPL ready, hit `Ctrl-d' to exit.")))))
+      (putStrLn (++ ";;; SK REPL " (showVersion version)))
+      (putMVar in-mv init-form)
       (run-repl reader' initial-repl-state)))
 
 
@@ -128,30 +131,35 @@
 (= read-print-loop to-eval-mvar from-eval-mvar eval-tid
   (let ((= quit
           (liftIO (killThread eval-tid)))
+        (= print-io
+          (do (<- str (takeMVar from-eval-mvar))
+              (putStr str)
+              (hFlush stdout)))
         (= go
           (do (<- st (lift get-repl-state))
               (let ((= prompt (| ((null (pending-input st)) "> ")
                                  (otherwise "")))))
               (<- mb-input (getInputLine prompt))
               (case mb-input
-                Nothing quit
-                (Just line)
-                (| ((== line "(quit)") quit)
-                   ((null line) go)
-                   (otherwise
-                    (do (<- mb-form (lift (read-form line)))
-                        (case mb-form
-                          Nothing go
-                          (Just form)
-                          (do (liftIO
-                               (do (putMVar to-eval-mvar form)
-                                   (<- ret (takeMVar from-eval-mvar))
-                                   (putStr ret)))
-                              go))))))))
+                Nothing     quit
+                (Just line) (| ((== line "(quit)") quit)
+                               ((null line) go)
+                               (otherwise (go' line))))))
+        (= go' line
+          (do (<- mb-form (lift (read-form line)))
+              (case mb-form
+                Nothing     go
+                (Just form) (do (liftIO
+                                 (do (putMVar to-eval-mvar form)
+                                     print-io))
+                                go))))
         (= loop
           (handleInterrupt (>> (outputStrLn "Interrupd") loop)
                            go)))
-    (withInterrupt loop)))
+
+    ;; Print the result from boot expression, then start the loop.
+    (do (liftIO print-io)
+        (withInterrupt loop))))
 
 ;;; Read single S-expression form.
 (:: read-form (-> String (Repl (Maybe Code))))
@@ -165,40 +173,41 @@
                   (return ret))))
         (case (evalSP sexpr (Just "<repl>") input1)
           (Right forms) (put-and-return "" (Just forms))
-          (Left err) (put-and-return input1 Nothing)))))
+          (Left err)    (put-and-return input1 Nothing)))))
 
 
 ;;;; Eval
 
 (:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
 (= eval-loop in-mvar out-mvar
-  (let ((= init
-          (do (<- hsc-env getSession)
-              (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
-                    ;; Default target in interactive context is
-                    ;; ``HscAsm', updating to `HscInterpreted'.
-                    (= dflags1 (dflags0 {hscTarget HscInterpreted
-                                         ghcLink LinkInMemory}))
-                    (= decl
-                      (. IIDecl (. simpleImportDecl mkModuleName)))))
-              (<- _ (setSessionDynFlags dflags1))
-              (setContext [(decl "Prelude")
-                           (decl "SK.Core")
-                           (decl "SK.Repl.Apply")])))
-        (= withHandler m
-          (skErrorHandler defaultFatalMessager
-                          defaultFlushOut
-                          (withSourceErrorHandling m)))
-        (= go (do (<- form (liftIO (takeMVar in-mvar)))
-                  (<- ret (withHandler
-                           (do (<- expanded (macroexpands [form]))
-                               (eval-form expanded))))
-                  (let ((= str (case ret
-                                 (Right r) r
-                                 (Left err) err))))
-                  (liftIO (putMVar out-mvar str))
-                  go)))
-    (>> init go)))
+  (>> init go)
+  (where
+    (= init
+      (do (<- hsc-env getSession)
+          (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
+                ;; Default target in interactive context is
+                ;; ``HscAsm', updating to `HscInterpreted'.
+                (= dflags1 (dflags0 {hscTarget HscInterpreted
+                                     ghcLink LinkInMemory}))
+                (= decl
+                  (. IIDecl (. simpleImportDecl mkModuleName)))))
+          (<- _ (setSessionDynFlags dflags1))
+          (setContext [(decl "Prelude")
+                       (decl "SK.Core")
+                       (decl "SK.Repl.Apply")])))
+    (= withHandler m
+      (skErrorHandler defaultFatalMessager
+                      defaultFlushOut
+                      (withSourceErrorHandling m)))
+    (= go (do (<- form (liftIO (takeMVar in-mvar)))
+              (<- ret (withHandler
+                       (do (<- expanded (macroexpands [form]))
+                           (eval-form expanded))))
+              (let ((= str (case ret
+                             (Right r) r
+                             (Left err) err))))
+              (liftIO (putMVar out-mvar str))
+              go))))
 
 (:: eval-form (-> [Code] (Skc Result)))
 (= eval-form forms
@@ -226,9 +235,11 @@
 (:: eval-imports (-> [HImportDecl] (Skc Result)))
 (= eval-imports imports
   (do (<- context getContext)
-      (let ((= mkIIdecl (L _ idecl) (IIDecl idecl))))
-      (setContext (++ (map mkIIdecl imports) context))
-      (return (Right ""))))
+      (setContext (++ (map mkIIDecl imports) context))
+      (return (Right "")))
+  (where
+    (= mkIIDecl (L _ idecl)
+      (IIDecl idecl))))
 
 (:: eval-decls (-> [HDecl] (Skc Result)))
 (= eval-decls decls
@@ -310,7 +321,7 @@
 
 (:: show-names-and-types (-> DynFlags [Name] [Var] String))
 (= show-names-and-types dflags names vars
-  (let ((= tvs (zipWith (var-name-and-type dflags) names vars)))
-    (if (all null tvs)
-        ""
-        (++ (concat (intersperse [\lf] tvs)) [\lf]))))
+  (| ((all null tvs) "")
+     (otherwise      (++ (concat (intersperse "\n" tvs)) "\n")))
+  (where
+    (= tvs (zipWith (var-name-and-type dflags) names vars))))
