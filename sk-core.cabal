@@ -69,6 +69,14 @@ executable skc
                      , sk-core
   default-language:    Haskell2010
 
+executable sk-profile
+  hs-source-dirs:      exec
+  main-is:             profile.hs
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , sk-core
+  default-language:    Haskell2010
+
 test-suite sk-core-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
