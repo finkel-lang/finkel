@@ -80,7 +80,6 @@ import SK.Core.GHC
 'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
 'type'     { LForm (L _ (Atom (ASymbol "type"))) }
 
-
 ','  { LForm (L _ (Atom (ASymbol ","))) }
 '->' { LForm (L _ (Atom (ASymbol "->"))) }
 '::' { LForm (L _ (Atom (ASymbol "::"))) }
@@ -92,9 +91,7 @@ import SK.Core.GHC
 '{'  { LForm (L _ (Atom (ASymbol "{"))) }
 '|'  { LForm (L _ (Atom (ASymbol "|"))) }
 '}'  { LForm (L _ (Atom (ASymbol "}"))) }
-
--- For `irrefutable' pattern
--- '~'  { L _ (Atom (ASymbol "~")) }
+'~'  { LForm (L _ (Atom (ASymbol "~"))) }
 
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }
@@ -126,7 +123,7 @@ import SK.Core.GHC
 
 mbdoc :: { Maybe LHsDocString }
     : {- empty -} { Nothing }
-    | 'comment' { Just (b_commentStringE $1) }
+    | 'comment'   { Just (b_commentStringE $1) }
 
 
 -- ---------------------------------------------------------------------
@@ -141,7 +138,7 @@ module :: { HsModule RdrName }
     | mhead top_decls         {% $1 `fmap` pure [] <*> pure $2 }
 
 mhead :: { [HImportDecl] -> [HDecl] -> HsModule RdrName }
-    : {- empty -}      { b_implicitMainModule }
+    : mbdoc            { b_implicitMainModule }
     | mbdoc 'f_module' {% parse p_mod_header $2 <*> pure $1 }
 
 mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl]
@@ -322,6 +319,7 @@ pat :: { HPat }
 pats1 :: { HPat }
     : ',' pats0        { b_tupP $1 $2 }
     | '@' 'symbol' pat { b_asP $2 $3 }
+    | '~' pat          { b_lazyP $2 }
     | 'symbol' pats0   {% b_conP $1 $2 }
 
 

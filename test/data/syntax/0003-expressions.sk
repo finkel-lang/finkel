@@ -281,10 +281,26 @@
       (print aspat2)
       (print ap3)))
 
+(:: lzp1 (-> (Maybe Int) String))
+(= lzp1 (@ _mbi (~ (Just _i))) "matched")
+
+(:: lzp2 (-> (, Int [Char] (, Char [Int])) Char))
+(= lzp2 a
+  (case a
+    (, x (~ (: y ys)) (~ (, z (: w ws))))
+    (| ((even x) y)
+       ((odd x) z))))
+
+(= patexprs4
+  (do (print (lzp1 (Just undefined)))
+      (print (lzp2 (, 3 undefined (, \x [1 2 3]))))
+      (print (lzp2 (, 4 [\a \b] (, undefined []))))))
+
 (= patexprs
   (do patexprs1
       patexprs2
-      patexprs3))
+      patexprs3
+      patexprs4))
 
 ;;; Main
 

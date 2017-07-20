@@ -44,7 +44,7 @@ $alpha = [a-zA-Z]
 $negative = \-
 $digit    = [0-9]
 
-$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\"\~$white]
+$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\"$white]
 $hsymtail = [$hsymhead\']
 
 @signed   = $negative ?
