@@ -44,7 +44,7 @@ $alpha = [a-zA-Z]
 $negative = \-
 $digit    = [0-9]
 
-$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\~$white]
+$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\"\~$white]
 $hsymtail = [$hsymhead\']
 
 @signed   = $negative ?
@@ -68,7 +68,6 @@ $whitechar+  ;
 "{-#".*          { skip }
 
 --- Parenthesis
-
 "()"             { tok_unit }
 
 \(               { tok_oparen }
@@ -81,7 +80,6 @@ $whitechar+  ;
 \}               { tok_ccurly }
 
 -- Quote and unquote
-
 \'               { tok_quote }
 \`               { tok_quasiquote }
 
@@ -90,14 +88,13 @@ $whitechar+  ;
 \,               { tok_unquote }
 
 --- Literal values
-
 \\[~$white][A-Za-z]* { tok_char }
-\"[^\"]*\"           { tok_string }
+-- \"[^\"]*\"           { tok_string }
+\"                   { tok_string }
 @signed @decimal     { tok_integer }
 @signed @frac        { tok_fractional }
 
 --- Symbols
-
 @hsymbol         { tok_symbol }
 
 {
@@ -287,7 +284,41 @@ tok_char (_,_,_,s) l =
       , ("DEL", '\DEL')]
 
 tok_string :: Action
-tok_string (_,_,_,s) l = return (TString (tail (take (l-1) s)))
+tok_string _ast0 _l = do
+  inp <- alexGetInput
+  case alexGetChar' inp of
+    Just ('"', inp') -> alexSetInput inp' >> go []
+    _                -> alexError "tok_string: panic"
+  where
+    go acc = do
+       inp0 <- alexGetInput
+       case alexGetChar' inp0 of
+         Nothing -> return (TString (reverse acc))
+         Just (c0, inp1)
+           | c0 == '"'  -> return (TString (reverse acc))
+           | c0 == '\\' ->
+             case alexGetChar' inp1 of
+               Nothing -> alexError "invalid escape in string literal"
+               Just (c1, inp2)
+                 | Just c2 <- escape c1 -> putAndGo inp2 (c2:acc)
+                 | c1 == '\n'           -> putAndGo inp2 acc
+                 | otherwise            -> putAndGo inp2 (c1:acc)
+           | otherwise  -> putAndGo inp1 (c0:acc)
+    putAndGo inp acc = alexSetInput inp >> go acc
+    escape x = lookup x tbl
+      where
+        tbl = [('a','\a'),('b','\b'),('f','\f'),('n','\n'),('r','\r')
+              ,('t','\t'),('v','\v')]
+
+alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
+alexGetChar' (AlexPn pos ln col,chr,bs,str) =
+  case str of
+    []      -> Nothing
+    (s:str') -> Just (chr, (p',s,bs,str'))
+  where
+    p' = AlexPn (pos+1) ln' col'
+    (ln', col') = if chr == '\n' then (ln+1, 0) else (ln, col+1)
+    str' = tail str
 
 tok_integer :: Action
 tok_integer (_,_,_,s) l = return (TInteger (read (take l s)))

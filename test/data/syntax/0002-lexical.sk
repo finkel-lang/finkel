@@ -29,8 +29,13 @@
     (putChar \nul)              ; \NUL
     (putChar \lf)               ; line feed
 
-    (print "string literal") ;; Simple string
-    ;; (print "string\" with \escapes.")
+    (putStrLn "string literal") ; Simple string
+
+    ;; String containing escaped `"'
+    (putStrLn "string with \"double quotes\".")
+
+    ;; String containing escaped newlines and tabs.
+    (putStrLn "string with newlines: \n\n\nand tabs: \t\t\t.")
 
     ;; Unit.
     (print ())

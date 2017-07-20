@@ -51,7 +51,7 @@ sexp :: { Code }
      | '[' sexps ']' { LForm (L (getLoc $1) (HsList $2)) }
      | '(' sexps ')' { LForm (L (getLoc $1) (List $2)) }
 
--- Required modules are added to SPState here. This is to support
+-- Required modules are added to SPState here. The reason is, to support
 -- requiring modules in home package when compiling multiple modules
 -- with "--make" command, to get the modules information before macro
 -- expansion phase.

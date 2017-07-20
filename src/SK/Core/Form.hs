@@ -13,6 +13,7 @@ module SK.Core.Form
   , toListL
 
   , unLoc
+  , unLocLForm
   , getLoc
   , showLoc
   , mkSkSrcSpan
@@ -230,7 +231,7 @@ pAtom atom =
 -- -------------------------------------------------------------------
 
 --- Instance data types of Formable class could be inserted to
---- S-expression form with `unquote' and `unquote-splice'.
+--- S-expression with `unquote' and `unquote-splice'.
 
 class Codish a where
   toCode :: a -> Code
