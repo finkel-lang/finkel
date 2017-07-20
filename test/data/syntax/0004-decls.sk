@@ -90,7 +90,28 @@
 
 ;;; 4.3.1 Class Declarations
 
-;;; Not yet implemented.
+;;; Simple type class.
+(class (MyShow a)
+  (:: myShow (-> a String)))
+
+;;; Instance declaration of `MyShow' for `Bool'.
+(instance (MyShow Bool)
+  (= myShow b
+    (case b
+      True "t"
+      False "f")))
+
+;;; Typeclass with context and default method.
+(class (=> (Show a) (MyShow2 a))
+  (:: myShow2 (-> a String))
+  (= myShow2 show))
+
+(instance (MyShow2 Bool))
+
+(:: s4_3_1 (IO ()))
+(= s4_3_1
+  (do (print (map myShow [True False]))
+      (print (map myShow2 [True False]))))
 
 ;;; 4.3.2 Instance Declarations
 
@@ -114,11 +135,16 @@
   (= show (MCs a b)
     (concat ["MCs " (show a) " " (show b)])))
 
-(:: s4_3 (IO ()))
-(= s4_3
+(:: s4_3_2 (IO ()))
+(= s4_3_2
   (do (print (fmap (* 2) (MyFnct 21)))
       (print (EmptyContext 42))
       (print (MCs True \a))))
+
+(:: s4_3 (IO ()))
+(= s4_3
+  (do s4_3_1
+      s4_3_2))
 
 ;;; 4.4 Nested Declarations
 

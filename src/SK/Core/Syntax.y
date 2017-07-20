@@ -69,6 +69,7 @@ import SK.Core.GHC
 %token
 
 'case'     { LForm (L _ (Atom (ASymbol "case"))) }
+'class'    { LForm (L _ (Atom (ASymbol "class"))) }
 'data'     { LForm (L _ (Atom (ASymbol "data"))) }
 'do'       { LForm (L _ (Atom (ASymbol "do"))) }
 'if'       { LForm (L _ (Atom (ASymbol "if"))) }
@@ -182,6 +183,7 @@ top_decl :: { HDecl }
     : 'data' simpletype constrs    { b_dataD $1 $2 $3 }
     | 'type' simpletype type       { b_typeD $1 $2 $3 }
     | 'newtype' simpletype constrs { b_newtypeD $1 $2 $3 }
+    | 'class' qtycl cdecls         {% b_classD $2 $3 }
     | 'instance' qtycl idecls      { b_instD $2 $3 }
     | decl                         { $1 }
 
@@ -232,6 +234,9 @@ lqtycl :: { ([HType], HType) }
     : '=>' 'unit' type  { ([], $3) }
     | '=>' 'list' types {% b_qtyclC . (:$3) =<< parse p_types0 $2 }
     | types0            { ([], $1) }
+
+cdecls :: { [HDecl] }
+    : decls { $1 }
 
 idecls :: { [HDecl] }
     : decls { $1 }

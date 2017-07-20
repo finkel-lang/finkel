@@ -3,7 +3,7 @@
 module SK.Core.Builder where
 
 -- base
-import Control.Monad (liftM, ap)
+import Control.Monad (ap, foldM, liftM)
 import Data.Char (isUpper)
 import Data.List (foldl1')
 
@@ -323,6 +323,35 @@ b_derivD :: (HsDeriving RdrName, [HConDecl])
          -> (HsDeriving RdrName, [HConDecl])
 b_derivD (_, cs) tys = (Just (L l (map mkLHsSigType tys)), cs)
   where l = getLoc (mkLocatedList tys)
+
+b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
+b_classD (tys,ty) decls = do
+    -- XXX: Does not support multiple type class.
+    let categorize (ms,ss) (L ld decl) =
+          case decl of
+            SigD d -> return (ms, L ld d : ss)
+            ValD d -> return (L ld d : ms, ss)
+            _      -> builderError
+
+    (l, name, L lv tvar) <-
+       case ty of
+          L l (HsAppTy (L _ (HsTyVar n)) (L _ (HsTyVar v))) ->
+            return (l, n, v)
+          _ -> builderError
+    (meths,sigs) <- foldM categorize ([],[]) decls
+
+    let bndrs = [L lv (UserTyVar (L lv tvar))]
+        cls = ClassDecl { tcdCtxt = mkLocatedList tys
+                        , tcdLName = name
+                        , tcdTyVars = mkHsQTvs bndrs
+                        , tcdFDs = []
+                        , tcdSigs = mkClassOpSigs sigs
+                        , tcdMeths = listToBag meths
+                        , tcdATs = []
+                        , tcdATDefs = []
+                        , tcdDocs = []
+                        , tcdFVs = placeHolderNames }
+    return (L l (TyClD cls))
 
 b_instD :: ([HType], HType) -> [HDecl] -> HDecl
 b_instD (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
