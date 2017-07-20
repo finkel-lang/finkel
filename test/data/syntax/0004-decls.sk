@@ -244,6 +244,13 @@
 (:: fpb3 [String])
 (= fpb3 ["string" "expression" "without" "guards"])
 
+;;; Function with `where'
+(:: fpb4 (-> Char Int String))
+(= fpb4 c n (f n)
+  (where
+    (= f x
+      (replicate x c))))
+
 ;;; 4.4.3.2 Pattern Bindings
 
 (:: (xs ys) [Int])
@@ -275,6 +282,7 @@
       (putStrLn (fpb2 (Nothing) (Just 8)))
       (putStrLn (fpb2 Nothing Nothing))
       (print fpb3)
+      (putStrLn (fpb4 \= 30))
       (putStrLn (++ "xs: " (show xs)))
       (putStrLn (++ "ys: " (show ys)))
       (putStrLn (++ "tpb1: " (show tpb1)))

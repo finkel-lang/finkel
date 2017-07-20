@@ -173,8 +173,8 @@ mkRdrName name@(x:_)
   | otherwise = mkVarUnqual (fsLit name)
 
 -- | Build 'HLocalBinds' from list of 'HDecl's.
-declsToBinds :: Code -> [HDecl] -> HLocalBinds
-declsToBinds (LForm (L l _)) decls = L l binds'
+declsToBinds :: SrcSpan -> [HDecl] -> HLocalBinds
+declsToBinds l decls = L l binds'
   where
     binds' = case decls of
       [] -> emptyLocalBinds
@@ -380,18 +380,18 @@ b_qtyclC ts =
       let (ctxt,t) = splitAt (length ts - 1) ts
       return (ctxt, head t)
 
-b_funBindD :: Code -> ([HGRHS], [HPat]) -> HDecl
-b_funBindD (LForm (L l (Atom (ASymbol name)))) (grhss, args) =
+b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
+b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
   let match = L l (Match ctxt args Nothing body)
-      body = GRHSs grhss (noLoc emptyLocalBinds)
+      body = GRHSs grhss (declsToBinds l decls)
       ctxt = NonFunBindMatch
       bind = mkFunBind (L l (mkRdrName name)) [match]
   in  L l (ValD bind)
 
-b_patBindD :: [HGRHS] -> HPat -> HDecl
-b_patBindD grhss pat@(L l _) =
+b_patBindD :: ([HGRHS],[HDecl]) -> HPat -> HDecl
+b_patBindD (grhss,decls) pat@(L l _) =
   let bind = PatBind { pat_lhs = pat
-                     , pat_rhs = GRHSs grhss (noLoc emptyLocalBinds)
+                     , pat_rhs = GRHSs grhss (declsToBinds l decls)
                      , pat_rhs_ty = placeHolderType
                      , bind_fvs = placeHolderNames
                      , pat_ticks = ([],[]) }
@@ -515,18 +515,18 @@ b_tupE (LForm (L l _)) args = L l (ExplicitTuple (map mkArg args) Boxed)
   where mkArg x@(L al _) = L al (Present x)
 
 b_letE :: Code -> [HDecl] -> HExpr -> HExpr
-b_letE ref@(LForm (L l _)) decls body =
-    L l (HsLet (declsToBinds ref decls) body)
+b_letE (LForm (L l _)) decls body =
+  L l (HsLet (declsToBinds l decls) body)
 
 b_caseE :: Code -> HExpr -> [HMatch] -> HExpr
 b_caseE (LForm (L l _)) expr matches = L l (HsCase expr mg)
   where mg = mkMatchGroup FromSource matches
 
-b_match :: HPat -> [HGRHS] -> HMatch
-b_match pat@(L l _) grhss =
+b_match :: HPat -> ([HGRHS],[HDecl]) -> HMatch
+b_match pat@(L l _) (grhss,decls) =
     L l (Match NonFunBindMatch [pat] Nothing grhss')
   where
-    grhss' = GRHSs grhss (noLoc emptyLocalBinds)
+    grhss' = GRHSs grhss (declsToBinds l decls)
 
 b_hgrhs :: [HGRHS] -> (HExpr, [GuardLStmt RdrName]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
@@ -621,8 +621,7 @@ b_bindS :: Code -> HPat -> HExpr -> HStmt
 b_bindS (LForm (L l _)) pat expr = L l (mkBindStmt pat expr)
 
 b_letS :: Code -> [HDecl] -> HStmt
-b_letS lref@(LForm (L l _)) decls =
-  L l (LetStmt (declsToBinds lref decls))
+b_letS (LForm (L l _)) decls = L l (LetStmt (declsToBinds l decls))
 
 b_bodyS :: HExpr -> HStmt
 b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)

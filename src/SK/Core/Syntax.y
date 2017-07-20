@@ -103,8 +103,13 @@ import SK.Core.GHC
 
 'f_import'
     { LForm (L _ (List $$@((LForm (L _ (Atom (ASymbol "import")))):_))) }
+
 'f_module'
     { LForm (L _ (List $$@((LForm (L _ (Atom (ASymbol "module")))):_))) }
+
+'f_where'
+    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "where")))):$$))) }
+
 'deriving'
     { LForm (L _ (List [ LForm (L _ (Atom (ASymbol "deriving")))
                        , LForm (L _ (List $$))])) }
@@ -246,7 +251,7 @@ decl :: { HDecl }
     | '::' 'symbol' dtype { b_tsigD [$2] $3 }
     | '::' symbols dtype  { b_tsigD $2 $3 }
 
-aguards :: { ([HGRHS], [HPat]) }
+aguards :: { (([HGRHS],[HDecl]), [HPat]) }
         : guards      { ($1, []) }
         | pat aguards { ($1:) `fmap` $2 }
 
@@ -407,9 +412,9 @@ rhlist :: { [HExpr] }
 -- can try matching the symbol '|' before 'expr' rule, to differentiate
 -- the entire form from function application of reserved symbol '|'.
 
-guards :: { [HGRHS] }
-    : 'list' {% parse p_guards0 $1 }
-    | atom   { [L (getLoc $1) (GRHS [] $1)] }
+guards :: { ([HGRHS],[HDecl]) }
+    : 'list' mbwhere {% parse p_guards0 $1 >>= \gs -> return (gs,$2) }
+    | atom   mbwhere { ([L (getLoc $1) (GRHS [] $1)],$2) }
 
 guards0 :: { [HGRHS] }
     : '|' guards1 { $2 }
@@ -422,6 +427,10 @@ guards1 :: { [HGRHS] }
 guard :: { (HExpr, [GuardLStmt RdrName]) }
     : expr       { ($1, []) }
     | stmt guard { fmap ($1:) $2 }
+
+mbwhere :: { [HDecl] }
+    : {- empty -} { [] }
+    | 'f_where'   {% parse p_lbinds0 $1 }
 
 
 -- ---------------------------------------------------------------------

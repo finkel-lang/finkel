@@ -105,11 +105,24 @@
     Nothing  (| ((even y) "y is even")
                 (otherwise "y is odd"))))
 
+(:: case4 (-> (Maybe Int) Int String))
+(= case4 x y
+  (case x
+    (Just n) (| ((even n) (show (f n y)))
+                ((odd n) (++ (h n) (show (f n 1)))))
+    (where
+      (= f a b (+ a b)))
+    Nothing "nothing")
+  (where
+    (= h i
+      (replicate (+ i y) \@))))
+
 (= caseexprs
   (do (print (case1 (Just 41)))
       (print (case1 Nothing))
       (print (case2 (Right (Just ()))))
-      (print (case3 (Just 42) 12))))
+      (print (case3 (Just 42) 12))
+      (print (case4 (Just 41) 1))))
 
 ;;; 3.14 Do Expressions
 
