@@ -168,14 +168,19 @@
 
 ;;; 3.16 Expression Type-Signatures
 
-(= f2 n
+(= t316a n
   (if (< n (:: 2 Int))
       n
-      (+ (f2 (- n 1))
-         (f2 (- n 2)))))
+      (+ (t316a (- n 1))
+         (t316a (- n 2)))))
+
+(= t316b xs
+  (print (map (:: (\ x (+ x 1)) (=> (Num a) (-> a a))) xs)))
 
 (= tsigexprs
-  (print (f2 10)))
+  (do (print (t316a 10))
+      (t316b [1 2 3])
+      (t316b [1.0 2.0 3.0])))
 
 ;;; 3.17 Pattern Matching
 

@@ -246,11 +246,11 @@ idecls :: { [HDecl] }
 decl :: { HDecl }
     : '=' 'symbol' aguards { b_funBindD $2 $3 }
     | '=' 'list' guards    {% b_patBindD $3 `fmap` parse p_pats1 $2 }
-    | '=' 'hslist' guards
-      {% do { lp <- parse p_pats0 (unwrapListL $2)
-            ; return (b_patBindD $3 (b_hsListP lp)) }}
-    | '::' 'symbol' dtype { b_tsigD [$2] $3 }
-    | '::' symbols dtype  { b_tsigD $2 $3 }
+    | '=' 'hslist' guards  {% do { lp <- parse p_pats0 (unwrapListL $2)
+                                 ; let lp' = b_hsListP lp
+                                 ; return (b_patBindD $3 lp') }}
+    | '::' 'symbol' dtype  { b_tsigD [$2] $3 }
+    | '::' symbols dtype   { b_tsigD $2 $3 }
 
 aguards :: { (([HGRHS],[HDecl]), [HPat]) }
         : guards      { ($1, []) }
@@ -259,10 +259,9 @@ aguards :: { (([HGRHS],[HDecl]), [HPat]) }
 dtype :: { ([HType], HType) }
     : 'symbol' { ([], b_symT $1) }
     | 'unit'   { ([], b_unitT $1) }
-    | 'hslist'
-      {% do { t <- parse p_type [toListL $1]
-            ; return ([], b_listT t) }}
-    | qtycl { $1 }
+    | 'hslist' {% do { t <- parse p_type [toListL $1]
+                     ; return ([], b_listT t) }}
+    | qtycl    { $1 }
 
 decls :: { [HDecl] }
    : rdecls { reverse $1 }
@@ -296,6 +295,12 @@ rtypes :: { [HType] }
     : type        { [$1] }
     | rtypes type { $2 : $1 }
 
+qtype :: { ([HType], HType) }
+    : 'symbol' { ([],b_symT $1) }
+    | 'unit'   { ([],b_unitT $1) }
+    | 'hslist' {% do { typ <- parse p_type [toListL $1]
+                     ; return ([], b_listT typ) } }
+    | qtycl    { $1 }
 
 -- ---------------------------------------------------------------------
 --
@@ -355,7 +360,7 @@ exprs :: { HExpr }
     | 'if' expr expr expr     { b_ifE $1 $2 $3 $4 }
     | 'case' expr alts        { b_caseE $1 $2 $3 }
     | 'do' do_stmts           { b_doE $1 $2 }
-    | '::' expr type          { b_tsigE $1 $2 $3 }
+    | '::' expr qtype         { b_tsigE $1 $2 $3 }
     | 'symbol' '{' fbinds '}' { b_recConOrUpdE $1 $3 }
     | 'list' '{' fbinds '}'   {% b_recUpdE (parse p_exprs $1) $3 }
     | app                     { b_appE $1 }

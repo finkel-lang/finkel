@@ -549,8 +549,13 @@ b_grhs guard@(L l _) body = L l (GRHS [L l (mkBodyStmt guard)] body)
 b_doE :: Code -> [HStmt] -> HExpr
 b_doE (LForm (L l _)) exprs = L l (mkHsDo DoExpr exprs)
 
-b_tsigE :: Code -> HExpr -> HType -> HExpr
-b_tsigE (LForm (L l _)) e t = L l (ExprWithTySig e (mkLHsSigWcType t))
+b_tsigE :: Code -> HExpr -> ([HType], HType) -> HExpr
+b_tsigE (LForm (L l _)) e (ctxt,t) =
+  let t' = case ctxt of
+             [] -> t
+             _  -> L l HsQualTy { hst_ctxt = mkLocatedList ctxt
+                                , hst_body = t }
+  in  L l (ExprWithTySig e (mkLHsSigWcType t'))
 
 b_recConOrUpdE :: Code -> [(FastString,HExpr)] -> HExpr
 b_recConOrUpdE sym@(LForm (L l _)) flds = L l expr

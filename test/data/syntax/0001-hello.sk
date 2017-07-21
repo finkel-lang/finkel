@@ -7,4 +7,4 @@
 (module Main)
 
 (= main
-   (putStrLn "Hello, world!"))
+  (putStrLn "Hello, world!"))

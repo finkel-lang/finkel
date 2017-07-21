@@ -71,8 +71,6 @@ $whitechar+  ;
 "{-#".*          { skip }
 
 --- Parenthesis
--- "()"             { tok_unit }
-
 \(               { tok_oparen }
 \)               { tok_cparen }
 
@@ -366,17 +364,17 @@ tokenLexer cont = SP go'
     go' st =
       let fn = fsLit (fromMaybe "anon" (targetFile st))
       in  go fn st
-    go fn st0 = do
+    go fn st = do
       L span tok <- scanToken fn
       case tok of
         TLineComment _ -> do
           let comment = L (RealSrcSpan span) (annotateComment tok)
-          go fn $! pushComment comment st0
+          go fn $! pushComment comment st
         TDocCommentNext _ -> do
           let comment = L (RealSrcSpan span) (annotateComment tok)
           unSP (cont $! L (RealSrcSpan span) tok)
-               (pushComment comment st0)
-        _ -> unSP (cont $! L (RealSrcSpan span) tok) st0
+               (pushComment comment st)
+        _ -> unSP (cont $! L (RealSrcSpan span) tok) st
 
 pushComment :: Located AnnotationComment -> SPState -> SPState
 pushComment comment st = st { comments = comment : comments st }
@@ -395,7 +393,6 @@ scanToken fn = do
       AlexSkip inp' _ -> do
         alexSetInput inp'
         scanToken fn
-        -- go st
       AlexToken inp'@(AlexPn _ ln1 cn1,_,_,_) len act -> do
          alexSetInput inp'
          tok <- act (ignorePendingBytes inp) (fromIntegral len)
