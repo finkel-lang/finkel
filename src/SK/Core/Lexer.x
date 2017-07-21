@@ -25,6 +25,9 @@ import Control.Monad (ap, liftM)
 import Data.Char (toUpper)
 import Data.Maybe (fromMaybe)
 
+-- bytestring
+import qualified Data.ByteString.Lazy.Char8 as BL
+
 -- transformers
 import Control.Monad.Trans.Except (ExceptT(..), throwE)
 
@@ -32,7 +35,7 @@ import Control.Monad.Trans.Except (ExceptT(..), throwE)
 import SK.Core.GHC
 }
 
-%wrapper "monad"
+%wrapper "monad-bytestring"
 
 $unispace    = \x05
 $nl          = [\n\r\f]
@@ -68,7 +71,7 @@ $whitechar+  ;
 "{-#".*          { skip }
 
 --- Parenthesis
-"()"             { tok_unit }
+-- "()"             { tok_unit }
 
 \(               { tok_oparen }
 \)               { tok_cparen }
@@ -89,7 +92,6 @@ $whitechar+  ;
 
 --- Literal values
 \\[~$white][A-Za-z]* { tok_char }
--- \"[^\"]*\"           { tok_string }
 \"                   { tok_string }
 @signed @decimal     { tok_integer }
 @signed @frac        { tok_fractional }
@@ -120,28 +122,35 @@ initialSPState = SPState [] [] Nothing []
 newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
 
 instance Functor SP where
-  fmap = liftM
+  fmap f (SP sp) = SP (\st -> fmap (\(a,st) -> (f a, st)) (sp st))
+  {-# INLINE fmap #-}
 
 instance Applicative SP where
-  pure = return
+  pure a = a `seq` SP (\st -> pure (a,st))
+  {-# INLINE pure #-}
   (<*>) = ap
+  {-# INLINE (<*>) #-}
 
 instance Monad SP where
-  return a = a `seq` SP (\st -> return (a, st))
-  m >>= k = SP (\st -> unSP m st >>= \(a, st') -> unSP (k a) st')
+  return a = a `seq` SP (\st -> return (a,st))
+  {-# INLINE return #-}
+  m >>= k = SP (\st -> unSP m st >>= \(a,st') -> unSP (k a) st')
+  {-# INLINE (>>=) #-}
 
-runSP :: SP a -> Maybe FilePath -> String -> Either String (a, SPState)
+runSP :: SP a -> Maybe FilePath -> BL.ByteString
+      -> Either String (a, SPState)
 runSP sp target input =
   let st = initialSPState { targetFile = target }
   in  runAlex input (unSP sp st)
 
-runSP' :: Monad m => SP a -> Maybe FilePath -> String
+runSP' :: Monad m => SP a -> Maybe FilePath -> BL.ByteString
       -> ExceptT String m (a, SPState)
-runSP' sp target input = case runSP sp target input of
-  Right (a, st) -> return (a, st)
-  Left err      -> throwE err
+runSP' sp target input =
+  case runSP sp target input of
+    Right (a, st) -> return (a, st)
+    Left err      -> throwE err
 
-evalSP :: SP a -> Maybe FilePath -> String -> Either String a
+evalSP :: SP a -> Maybe FilePath -> BL.ByteString -> Either String a
 evalSP sp target input = fmap fst (runSP sp target input)
 
 showErrorSP :: SP a
@@ -181,7 +190,7 @@ data Token
   -- ^ Close curly.
   | TQuote
   -- ^ Quote.
-  | TQuasiQuote
+  | TQuasiquote
   -- ^ Quasi-quote.
   | TUnquote
   -- ^ Unquote.
@@ -191,7 +200,7 @@ data Token
   -- ^ Comment string starting with @-- |@.
   | TLineComment String
   -- ^ Non-documentation line comment string.
-  | TSymbol String
+  | TSymbol FastString
   -- ^ Symbol data.
   | TChar Char
   -- ^ Character data.
@@ -201,66 +210,79 @@ data Token
   -- ^ Literal integer number.
   | TFractional FractionalLit
   -- ^ Literal fractional number.
-  | TUnit
-  -- ^ Unit type, i.e. Haskell's @()@.
   | TEOF
   -- ^ End of form.
   deriving (Eq, Show)
 
 type LToken = Located Token
 
-type Action = AlexInput -> Int -> Alex Token
-
-tok_unit :: Action
-tok_unit _ _ = return TUnit
+type Action = AlexInput -> Int64 -> Alex Token
 
 tok_oparen :: Action
 tok_oparen _ _ = return TOparen
+{-# INLINE tok_oparen #-}
 
 tok_cparen :: Action
 tok_cparen _ _ = return TCparen
+{-# INLINE tok_cparen #-}
 
 tok_obracket :: Action
 tok_obracket _ _ = return TObracket
+{-# INLINE tok_obracket #-}
 
 tok_cbracket :: Action
 tok_cbracket _ _ = return TCbracket
+{-# INLINE tok_cbracket #-}
 
 tok_ocurly :: Action
 tok_ocurly _ _ = return TOcurly
+{-# INLINE tok_ocurly #-}
 
 tok_ccurly :: Action
 tok_ccurly _ _ = return TCcurly
+{-# INLINE tok_ccurly #-}
 
 tok_quote :: Action
 tok_quote _ _ = return TQuote
+{-# INLINE tok_quote #-}
 
 tok_quasiquote :: Action
-tok_quasiquote _ _ = return TQuasiQuote
+tok_quasiquote _ _ = return TQuasiquote
+{-# INLINE tok_quasiquote #-}
 
 tok_comma :: Action
-tok_comma _ _ = return (TSymbol ",")
+tok_comma _ _ = return $! TSymbol $! fsLit ","
+{-# INLINE tok_comma #-}
 
 tok_unquote :: Action
 tok_unquote _ _ = return TUnquote
+{-# INLINE tok_unquote #-}
 
 tok_unquote_splice :: Action
 tok_unquote_splice _ _ = return TUnquoteSplice
+{-# INLINE tok_unquote_splice #-}
 
 tok_doc_comment_next :: Action
-tok_doc_comment_next (_,_,_,s) l =
-  return (TDocCommentNext (lc2hc (take l s)))
+tok_doc_comment_next (_,_,s,_) l = do
+  let str = toString (BL.take l s)
+  return (TDocCommentNext (lc2hc str))
+{-# INLINE tok_doc_comment_next #-}
 
 tok_line_comment :: Action
-tok_line_comment (_,_,_,s) l =
-  return (TLineComment (lc2hc (take l s)))
+tok_line_comment (_,_,s,_) l = do
+  let str = toString (BL.take l s)
+  return (TLineComment (lc2hc str))
+{-# INLINE tok_line_comment #-}
 
 tok_symbol :: Action
-tok_symbol (_,_,_,s) l = return (TSymbol (take l s))
+tok_symbol (_,_,s,_) l = do
+  let bs = l `seq` s `seq` BL.toStrict $! BL.take l s
+  bs `seq` return $! TSymbol $! mkFastStringByteString bs
+{-# INLINE tok_symbol #-}
 
 tok_char :: Action
-tok_char (_,_,_,s) l =
-  case take l s of
+tok_char (_,_,s,_) l =
+  case s' of
     ['\\',c] -> return (TChar c)
     '\\':cs | Just c' <- lookup (map toUpper cs) charTable
              -> return (TChar c')
@@ -269,7 +291,7 @@ tok_char (_,_,_,s) l =
      alexError ("unknown character token `" ++ s' ++ "' at line " ++
                 show lno ++ ", column " ++ show cno)
   where
-    s' = take l s
+    s' = toString (BL.take l s)
     charTable =
       [ ("NUL", '\NUL'), ("SOH", '\SOH'), ("STX", '\STX')
       , ("ETX", '\ETX'), ("EOT", '\EOT'), ("ENQ", '\ENQ')
@@ -282,65 +304,51 @@ tok_char (_,_,_,s) l =
       , ("SUB", '\SUB'), ("ESC", '\ESC'), ("FS", '\FS')
       , ("GS", '\GS'), ("RS", '\RS'), ("US", '\US'), ("SP", '\SP')
       , ("DEL", '\DEL')]
+{-# INLINE tok_char #-}
 
 tok_string :: Action
 tok_string _ast0 _l = do
   inp <- alexGetInput
   case alexGetChar' inp of
-    Just ('"', inp') -> alexSetInput inp' >> go []
+    Just ('"', inp') -> alexSetInput inp' >> go BL.empty
     _                -> alexError "tok_string: panic"
   where
     go acc = do
        inp0 <- alexGetInput
        case alexGetChar' inp0 of
-         Nothing -> return (TString (reverse acc))
+         Nothing -> return (accToTString acc)
          Just (c0, inp1)
-           | c0 == '"'  -> return (TString (reverse acc))
+           | c0 == '"'  -> return (accToTString acc)
            | c0 == '\\' ->
              case alexGetChar' inp1 of
                Nothing -> alexError "invalid escape in string literal"
                Just (c1, inp2)
-                 | Just c2 <- escape c1 -> putAndGo inp2 (c2:acc)
-                 | c1 == '\n'           -> putAndGo inp2 acc
-                 | otherwise            -> putAndGo inp2 (c1:acc)
-           | otherwise  -> putAndGo inp1 (c0:acc)
+                 | Just c2 <- escape c1 ->
+                   putAndGo inp2 (BL.cons c2 acc)
+                 | c1 == '\n'           ->
+                   putAndGo inp2 acc
+                 | otherwise            ->
+                   putAndGo inp2 (BL.cons c1 acc)
+           | otherwise  -> putAndGo inp1 (BL.cons c0 acc)
     putAndGo inp acc = alexSetInput inp >> go acc
+    accToTString = TString . BL.unpack . BL.reverse
     escape x = lookup x tbl
       where
         tbl = [('a','\a'),('b','\b'),('f','\f'),('n','\n'),('r','\r')
               ,('t','\t'),('v','\v')]
-
-alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
-alexGetChar' (AlexPn pos ln col,chr,bs,str) =
-  case str of
-    []      -> Nothing
-    (s:str') -> Just (chr, (p',s,bs,str'))
-  where
-    p' = AlexPn (pos+1) ln' col'
-    (ln', col') = if chr == '\n' then (ln+1, 0) else (ln, col+1)
-    str' = tail str
+{-# INLINE tok_string #-}
 
 tok_integer :: Action
-tok_integer (_,_,_,s) l = return (TInteger (read (take l s)))
+tok_integer (_,_,s,_) l =
+  return (TInteger (read (toString (BL.take l s))))
+{-# INLINE tok_integer #-}
 
 tok_fractional :: Action
-tok_fractional (_,_,_,s) l = do
-  let str = take l s
-      rat = readRational (take l s)
+tok_fractional (_,_,s,_) l = do
+  let str = toString (BL.take l s)
+      rat = readRational str
   return (TFractional (FL str rat))
-
-alexEOF :: Alex Token
-alexEOF = return TEOF
-
--- | Lisp comment to Haskell comment.
-lc2hc :: String -> String
-lc2hc str = '-':'-':dropWhile (== ';') str
-
-annotateComment :: Token -> AnnotationComment
-annotateComment tok = case tok of
-  TDocCommentNext s -> AnnDocCommentNext s
-  TLineComment s    -> AnnLineComment s
-  _                 -> error ("annotateComment: " ++ show tok)
+{-# INLINE tok_fractional #-}
 
 
 -- ---------------------------------------------------------------------
@@ -353,47 +361,52 @@ annotateComment tok = case tok of
 -- parser made from Happy. This functions will not pass comment tokens
 -- to continuation but add them to 'SPState'.
 tokenLexer :: (Located Token -> SP a) -> SP a
-tokenLexer cont = SP go where
-  go st0 = do
-    (L span tok, st1) <- unSP scanToken st0
-    case tok of
-      TLineComment _ -> do
-        let comment = L (RealSrcSpan span) (annotateComment tok)
-        go (pushComment comment st1)
-      TDocCommentNext _ -> do
-        let comment = L (RealSrcSpan span) (annotateComment tok)
-        unSP (cont (L (RealSrcSpan span) tok))
-             (pushComment comment st1)
-      _ -> unSP (cont (L (RealSrcSpan span) tok)) st1
+tokenLexer cont = SP go'
+  where
+    go' st =
+      let fn = fsLit (fromMaybe "anon" (targetFile st))
+      in  go fn st
+    go fn st0 = do
+      L span tok <- scanToken fn
+      case tok of
+        TLineComment _ -> do
+          let comment = L (RealSrcSpan span) (annotateComment tok)
+          go fn $! pushComment comment st0
+        TDocCommentNext _ -> do
+          let comment = L (RealSrcSpan span) (annotateComment tok)
+          unSP (cont $! L (RealSrcSpan span) tok)
+               (pushComment comment st0)
+        _ -> unSP (cont $! L (RealSrcSpan span) tok) st0
 
 pushComment :: Located AnnotationComment -> SPState -> SPState
 pushComment comment st = st { comments = comment : comments st }
+{-# INLINE pushComment #-}
 
-scanToken :: SP (RealLocated Token)
-scanToken = SP go where
-  go st = do
+scanToken :: FastString -> Alex (RealLocated Token)
+scanToken fn = do
     inp@(AlexPn _ ln0 cn0,_,_,_) <- alexGetInput
     sc <- alexGetStartCode
     case alexScan inp sc of
       AlexEOF -> do eof <- alexEOF
-                    return (L undefined eof, st)
+                    return (L undefined eof)
       AlexError (AlexPn _ ln cn,_,_,_) ->
         alexError ("lexial error at line " ++ show ln ++ ", column "
                    ++ show cn)
       AlexSkip inp' _ -> do
         alexSetInput inp'
-        go st
+        scanToken fn
+        -- go st
       AlexToken inp'@(AlexPn _ ln1 cn1,_,_,_) len act -> do
          alexSetInput inp'
-         tok <- act (ignorePendingBytes inp) len
-         let fn = fromMaybe "anon" (targetFile st)
-             bgn = mkRealSrcLoc (fsLit fn) ln0 cn0
-             end = mkRealSrcLoc (fsLit fn) ln1 cn1
+         tok <- act (ignorePendingBytes inp) (fromIntegral len)
+         let bgn = mkRealSrcLoc fn ln0 cn0
+             end = mkRealSrcLoc fn ln1 cn1
              span = mkRealSrcSpan bgn end
-         return (L span tok, st)
+         return $! (L span tok)
+{-# INLINE scanToken #-}
 
 -- | Lex the input to list of 'Token's.
-lexTokens :: String -> Either String [Located Token]
+lexTokens :: BL.ByteString -> Either String [Located Token]
 lexTokens input = evalSP go Nothing input
   where
      go = do
@@ -401,4 +414,40 @@ lexTokens input = evalSP go Nothing input
        case tok of
          L _ TEOF -> return []
          _        -> (tok :) <$> go
+
+alexEOF :: Alex Token
+alexEOF = return TEOF
+
+alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
+alexGetChar' (AlexPn pos ln col, chr, bs, consumed) =
+  if BL.null bs
+    then Nothing
+    else Just (chr, (p', BL.head bs, BL.tail bs, consumed + 1))
+  where
+    p' = AlexPn (pos+1) ln' col'
+    (ln', col') = if chr == '\n' then (ln+1, 0) else (ln, col+1)
+{-# INLINE alexGetChar' #-}
+
+
+-- ---------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- ---------------------------------------------------------------------
+
+toString :: BL.ByteString -> String
+toString = BL.unpack
+{-# INLINE toString #-}
+
+-- | Lisp comment to Haskell comment.
+lc2hc :: String -> String
+lc2hc str = '-':'-':dropWhile (== ';') str
+{-# INLINE lc2hc #-}
+
+annotateComment :: Token -> AnnotationComment
+annotateComment tok = case tok of
+  TDocCommentNext s -> AnnDocCommentNext s
+  TLineComment s    -> AnnLineComment s
+  _                 -> error ("annotateComment: " ++ show tok)
+{-# INLINE annotateComment #-}
 }

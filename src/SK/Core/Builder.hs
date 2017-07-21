@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- | Builder functions for Haskell syntax data type.
 module SK.Core.Builder where
 
@@ -160,17 +161,19 @@ unwrapListL (LForm (L _ form)) =
 
 -- XXX: Currently, cannot tell the difference between 'Qualified.fun'
 -- and 'DataConstr'.
-mkRdrName :: String -> RdrName
-mkRdrName name@(x:_)
+mkRdrName :: FastString -> RdrName
+mkRdrName name
   -- ':' is special syntax. It is defined in module "GHC.Types" in
   -- package "ghc-prim", but not exported.
   | name == ":" = nameRdrName consDataConName
 
   -- Data constructor starts from capital letter or ':'.
-  | isUpper x || x == ':' = mkUnqual srcDataName (fsLit name)
+  | isUpper x || x == ':' = mkUnqual srcDataName name
 
   -- Variable.
-  | otherwise = mkVarUnqual (fsLit name)
+  | otherwise = mkVarUnqual name
+  where
+    x = headFS name
 
 -- | Build 'HLocalBinds' from list of 'HDecl's.
 declsToBinds :: SrcSpan -> [HDecl] -> HLocalBinds
@@ -215,7 +218,7 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
 b_module :: Code -> Maybe LHsDocString -> [HImportDecl]
          -> [HDecl] -> HsModule RdrName
 b_module (LForm (L l (Atom (ASymbol name)))) mbdoc imports decls =
-    HsModule { hsmodName = Just (L l (mkModuleName name))
+    HsModule { hsmodName = Just (L l (mkModuleNameFS name))
              , hsmodExports = Nothing
              , hsmodImports = imports
              -- Function `cvTopDecls' is used for mergeing multiple
@@ -238,27 +241,27 @@ b_implicitMainModule =
 
 b_importD :: Code -> HImportDecl
 b_importD (LForm (L l (Atom (ASymbol m)))) =
-    L l (simpleImportDecl (mkModuleName m))
+    L l (simpleImportDecl (mkModuleNameFS m))
 
 b_dataD :: Code
-        -> (String, [HTyVarBndr])
+        -> (FastString, [HTyVarBndr])
         -> (HsDeriving RdrName, [HConDecl])
         -> HDecl
 b_dataD = mkNewtypeOrDataD DataType
 
-b_newtypeD :: Code -> (String, [HTyVarBndr])
+b_newtypeD :: Code -> (FastString, [HTyVarBndr])
            -> (HsDeriving RdrName, [HConDecl])
            -> HDecl
 b_newtypeD = mkNewtypeOrDataD NewType
 
 mkNewtypeOrDataD :: NewOrData -> Code
-                 -> (String, [HTyVarBndr])
+                 -> (FastString, [HTyVarBndr])
                  -> (HsDeriving RdrName, [HConDecl])
                  -> HDecl
 mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
   L l (TyClD decl)
   where
-    decl = DataDecl { tcdLName = L l (mkUnqual tcName (fsLit name))
+    decl = DataDecl { tcdLName = L l (mkUnqual tcName name)
                     , tcdTyVars = mkHsQTvs tvs
                     , tcdDataDefn = defn
                     , tcdDataCusk = PlaceHolder
@@ -271,26 +274,26 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
                       -- `dd_derivs' field changed since ghc-8.0.2.
                       , dd_derivs = derivs }
 
-b_typeD :: Code -> (String, [HTyVarBndr]) -> HType -> HDecl
+b_typeD :: Code -> (FastString, [HTyVarBndr]) -> HType -> HDecl
 b_typeD (LForm (L l _)) (name, tvs) ty = L l (TyClD synonym)
   where
     -- Fields in 'SynDecl' changed since ghc-8.0.2.
-    synonym = SynDecl { tcdLName = L l (mkUnqual tcName (fsLit name))
+    synonym = SynDecl { tcdLName = L l (mkUnqual tcName name)
                       , tcdTyVars = mkHsQTvs tvs
                       , tcdRhs = ty
                       , tcdFVs = placeHolderNames }
 
-b_simpletypeD :: [Code] -> (String, [HTyVarBndr])
+b_simpletypeD :: [Code] -> (FastString, [HTyVarBndr])
 b_simpletypeD ((LForm (L _ (Atom (ASymbol name)))):tvs) = (name, tvs')
   -- XXX: Kind signatures not supported.
   where
     tvs' = map (f . unLForm) tvs
     f (L l (Atom (ASymbol tname))) =
-        L l (UserTyVar (L l (mkUnqual tvName (fsLit tname))))
+        L l (UserTyVar (L l (mkUnqual tvName tname)))
 
 b_conD :: Code -> HsConDeclDetails RdrName -> HConDecl
 b_conD (LForm (L l1 (Atom (ASymbol s1)))) details =
-    L l1 ConDeclH98 { con_name = L l1 (mkUnqual srcDataName (fsLit s1))
+    L l1 ConDeclH98 { con_name = L l1 (mkUnqual srcDataName s1)
                      , con_qvars = Nothing
                      , con_cxt = Nothing
                      , con_details = details
@@ -418,11 +421,12 @@ b_tsigD names (ctxts,typ) =
 b_symT :: Code -> HType
 b_symT (LForm (L l (Atom (ASymbol name)))) = L l (HsTyVar (L l ty))
   where
-    ty = mkUnqual namespace (fsLit name)
+    ty = mkUnqual namespace name
     namespace =
-      case name of
-        (x:_) | isUpper x || ':' == x -> tcName
-        _ -> tvName
+      case () of
+        _ | isUpper x || ':' == x -> tcName
+        _                         -> tvName
+        where x = headFS name
 
 b_unitT :: Code -> HType
 b_unitT (LForm (L l _)) = L l (HsTupleTy HsBoxedTuple [])
@@ -470,11 +474,12 @@ b_charP (LForm (L l (Atom (AChar c)))) =
   in  L l (LitPat lit)
 
 b_symP :: Code -> HPat
-b_symP (LForm (L l (Atom (ASymbol name@(x:_)))))
+b_symP (LForm (L l (Atom (ASymbol name))))
    | name == "_" = L l (WildPat placeHolderType)
    | isUpper x || x == ':'
     = L l (ConPatIn (L l (mkRdrName name)) (PrefixCon []))
    | otherwise = L l (VarPat (L l (mkRdrName name)))
+   where x = headFS name
 
 b_hsListP :: [HPat] -> HPat
 b_hsListP pats = L l (ListPat pats placeHolderType Nothing)
@@ -492,10 +497,12 @@ b_lazyP pat@(L l _) = L l (LazyPat pat)
 
 b_conP :: Code -> [HPat] -> Builder HPat
 b_conP (LForm (L l (Atom (ASymbol conName)))) rest =
-  case conName of
-    x:_ | isUpper x || x == ':' ->
-      return (L l (ConPatIn (L l (mkRdrName conName)) (PrefixCon rest)))
-    _ -> builderError
+  case () of
+    _ | isUpper x || x == ':' ->
+      return (L l (ConPatIn (L l (mkRdrName conName))
+                            (PrefixCon rest)))
+    _                         -> builderError
+    where x = headFS conName
 
 
 -- ---------------------------------------------------------------------
@@ -545,21 +552,21 @@ b_doE (LForm (L l _)) exprs = L l (mkHsDo DoExpr exprs)
 b_tsigE :: Code -> HExpr -> HType -> HExpr
 b_tsigE (LForm (L l _)) e t = L l (ExprWithTySig e (mkLHsSigWcType t))
 
-b_recConOrUpdE :: Code -> [(String,HExpr)] -> HExpr
+b_recConOrUpdE :: Code -> [(FastString,HExpr)] -> HExpr
 b_recConOrUpdE sym@(LForm (L l _)) flds = L l expr
   where
     expr =
-      case name of
-        x:_ | isUpper x -> mkRdrRecordCon rName cflds
-        _  -> mkRdrRecordUpd (b_varE sym) uflds
-    name = symbolName sym
+      case () of
+        _ | isUpper (headFS name) -> mkRdrRecordCon rName cflds
+        _ -> mkRdrRecordUpd (b_varE sym) uflds
+    name = symbolNameFS sym
     rName = L l (mkRdrName name)
     cflds = HsRecFields { rec_flds = map mkcfld flds
                         , rec_dotdot = Nothing }
     uflds = map mkufld flds
     mkufld  = cfld2ufld . mkcfld
 
-mkcfld :: (String,HExpr) -> LHsRecField RdrName HExpr
+mkcfld :: (FastString,HExpr) -> LHsRecField RdrName HExpr
 mkcfld (name, e@(L fl _)) =
   L fl HsRecField { hsRecFieldLbl = mkfname fl name
                   , hsRecFieldArg = e
@@ -567,7 +574,7 @@ mkcfld (name, e@(L fl _)) =
   where
     mkfname nl n = L nl (mkFieldOcc (L nl (mkRdrName n)))
 
-b_recUpdE :: Builder HExpr -> [(String,HExpr)] -> Builder HExpr
+b_recUpdE :: Builder HExpr -> [(FastString,HExpr)] -> Builder HExpr
 b_recUpdE expr flds = do
    expr' <- expr
    let uflds = map (cfld2ufld . mkcfld) flds

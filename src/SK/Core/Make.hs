@@ -10,6 +10,9 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Data.List (find)
 import Data.Maybe (catMaybes, fromMaybe)
 
+-- bytestring
+import qualified Data.ByteString.Lazy as BL
+
 -- container
 import Data.Graph (flattenSCCs)
 
@@ -328,7 +331,7 @@ findTargetSource (modName, a) = do
   inputPath <- findFileInImportPaths (importPaths dflags) modName
   let detectSource path
         | isSkFile path =
-          do contents <- liftIO (readFile path)
+          do contents <- liftIO (BL.readFile path)
              (forms, sp) <- parseSexprs (Just path) contents
              let reqs = requiredModuleNames sp
              return (SkSource path modName forms reqs, a)

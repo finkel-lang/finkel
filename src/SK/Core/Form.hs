@@ -9,7 +9,9 @@ module SK.Core.Form
   , Code
 
   , aFractional
+  , aSymbol
   , symbolName
+  , symbolNameFS
   , toListL
 
   , unLoc
@@ -57,7 +59,7 @@ import SK.Core.GHC
 -- | Atom in tokens.
 data Atom
   = AUnit
-  | ASymbol String
+  | ASymbol FastString
   | AChar Char
   | AString String
   | AInteger Integer
@@ -69,7 +71,7 @@ instance Show Atom where
   show x =
     case x of
       AUnit -> "()"
-      ASymbol s -> s
+      ASymbol s -> unpackFS s
       AChar c -> case c of
         '\a' -> "\\bel"
         '\b' -> "\\bs"
@@ -148,6 +150,9 @@ instance Foldable Form where
 instance Foldable LForm where
   foldr f z (LForm (L _ form)) = foldr f z form
 
+aSymbol :: String -> Atom
+aSymbol = ASymbol . fsLit
+
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.
 aFractional :: (Real a, Show a) => a -> Atom
@@ -165,8 +170,11 @@ showLoc (LForm (L l _)) = case l of
 -- | Extract string from given atom when the atom was 'ASymbol',
 -- otherwise error.
 symbolName :: Code -> String
-symbolName (LForm (L _ (Atom (ASymbol name)))) = name
-symbolName x = error ("symbolName: got " ++ show (pprForm x))
+symbolName = unpackFS . symbolNameFS
+
+symbolNameFS :: Code -> FastString
+symbolNameFS (LForm (L _ (Atom (ASymbol name)))) = name
+symbolNameFS x = error ("symbolName: got " ++ show (pprForm x))
 
 toListL :: Code -> Code
 toListL orig@(LForm (L l form)) =
@@ -179,7 +187,7 @@ pprAtom :: Atom -> P.Doc
 pprAtom atom =
   case atom of
     AUnit     -> P.text "AUnit"
-    ASymbol x -> P.text "ASymbol" P.<+> P.text x
+    ASymbol x -> P.text "ASymbol" P.<+> P.text (unpackFS x)
     AChar x -> P.text "AChar" P.<+> P.char x
     AString x -> P.text "AString" P.<+> P.doubleQuotes (P.text x)
     AInteger x -> P.text "AInteger" P.<+> P.text (show x)
@@ -215,7 +223,7 @@ pForms f forms =
 pAtom :: Atom -> P.Doc
 pAtom atom =
   case atom of
-    ASymbol x -> P.text x
+    ASymbol x -> P.text (unpackFS x)
     AChar x -> P.char '\\' P.<+> P.char x
     AString x -> P.doubleQuotes (P.text x)
     AInteger x -> P.text (show x)

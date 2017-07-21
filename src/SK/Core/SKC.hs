@@ -45,7 +45,7 @@ type Macro = Code -> Skc Code
 -- | Environment state in 'Skc'.
 data SkEnv = SkEnv
    { -- | Association list of macros.
-     envMacros :: [(String, Macro)]
+     envMacros :: [(FastString, Macro)]
      -- | Flag to hold debug setting.
    , envDebug :: Bool
    }
@@ -103,10 +103,10 @@ getSkEnv = Skc get
 putSkEnv :: SkEnv -> Skc ()
 putSkEnv = Skc . put
 
-getMacroEnv :: Skc [(String, Macro)]
+getMacroEnv :: Skc [(FastString, Macro)]
 getMacroEnv = envMacros <$> getSkEnv
 
-addMacro :: String -> Macro -> Skc ()
+addMacro :: FastString -> Macro -> Skc ()
 addMacro name mac = Skc go
   where
     go = modify (\e -> e {envMacros = (name, mac) : envMacros e})

@@ -1,5 +1,6 @@
 -- Happy parser for S-expression forms.
 {
+{-# LANGUAGE OverloadedStrings #-}
 -- | Module for parsing form data.
 --
 -- Unlike the lexer for reading source code, parser defined in this
@@ -188,7 +189,7 @@ top_decl :: { HDecl }
     | 'instance' qtycl idecls      { b_instD $2 $3 }
     | decl                         { $1 }
 
-simpletype :: { (String, [HTyVarBndr])}
+simpletype :: { (FastString, [HTyVarBndr])}
     : 'symbol' { b_simpletypeD [$1] }
     | 'list'   { b_simpletypeD $1 }
 
@@ -374,12 +375,12 @@ rlbinds0 :: { [HDecl] }
     : 'list'          {% fmap (:[]) (parse p_decl $1) }
     | rlbinds0 'list' {% fmap (:$1) (parse p_decl $2) }
 
-fbinds :: { [(String, HExpr)] }
+fbinds :: { [(FastString, HExpr)] }
     : rfbinds { reverse $1 }
 
-rfbinds :: { [(String, HExpr)] }
+rfbinds :: { [(FastString, HExpr)] }
     : {- empty -}           { [] }
-    | rfbinds 'symbol' expr { (symbolName $2, $3):$1 }
+    | rfbinds 'symbol' expr { (symbolNameFS $2, $3):$1 }
 
 app :: { [HExpr] }
     : rapp { reverse $1 }

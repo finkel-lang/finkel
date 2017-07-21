@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- | Module for macros.
 module SK.Core.Macro
   ( macroexpand
@@ -51,7 +52,7 @@ import SK.Core.SKC
 quoteAtom :: SrcSpan -> Atom -> Code
 quoteAtom l form =
   case form of
-    ASymbol s -> atom [tSym l "ASymbol", tString l s]
+    ASymbol s -> atom [tSym l "aSymbol", tString l (unpackFS s)]
     AChar c -> atom [tSym l "AChar", tChar l c]
     AString s -> atom [tSym l "AString", tString l s]
     AInteger n -> atom [tSym l "AInteger", tInteger l n]
@@ -160,8 +161,8 @@ putMacro form =
         Left err -> skSrcError form err
     _ -> skSrcError form ("malformed macro: " ++ show (pForm form))
 
-mkIIDecl :: String -> InteractiveImport
-mkIIDecl = IIDecl . simpleImportDecl . mkModuleName
+mkIIDecl :: FastString -> InteractiveImport
+mkIIDecl = IIDecl . simpleImportDecl . mkModuleNameFS
 
 pTyThing :: DynFlags -> TyThing -> Skc ()
 pTyThing dflags ty_thing@(AnId var) = do
@@ -222,7 +223,7 @@ addImportedMacro ty_thing =
       fhv <- liftIO (getHValue hsc_env name)
       hv <- liftIO (withForeignRef fhv localRef)
       let macro = unsafeCoerce hv
-      addMacro (showPpr (hsc_dflags hsc_env) name) macro
+      addMacro (fsLit (showPpr (hsc_dflags hsc_env) name)) macro
       return ()
     _ -> error "addImportedmacro"
 
@@ -380,10 +381,10 @@ m_require form =
   --
   case unLForm form of
     L _l1 (List [_,LForm (L _l2 (Atom (ASymbol mname)))]) -> do
-      debugIO (putStrLn (";;; requiring " ++ mname))
+      debugIO (putStrLn (";;; requiring " ++ unpackFS mname))
       contexts <- getContext
       setContext (mkIIDecl mname : contexts)
-      mdl <- lookupModule (mkModuleName mname) Nothing
+      mdl <- lookupModule (mkModuleNameFS mname) Nothing
       mb_minfo <- getModuleInfo mdl
       case mb_minfo of
         Just minfo ->
@@ -391,7 +392,7 @@ m_require form =
              mapM_ (pTyThing dflags) (modInfoTyThings minfo)
              return emptyForm
         Nothing -> skSrcError form ("require: cannot find modinfo for "
-                                 ++ mname)
+                                 ++ unpackFS mname)
     _ -> skSrcError form "require: malformed syntax."
 
 m_evalWhenCompile :: Macro
@@ -407,7 +408,7 @@ m_evalWhenCompile form =
     _ -> skSrcError form ("eval-when-compile: malformed body: " ++
                           show form)
 
-specialForms :: [(String, Macro)]
+specialForms :: [(FastString, Macro)]
 specialForms =
   [("quote", m_quote)
   ,("quasiquote", m_quasiquote)
@@ -490,7 +491,7 @@ macroexpand form =
 --
 -- ---------------------------------------------------------------------
 
-tSym :: SrcSpan -> String -> Code
+tSym :: SrcSpan -> FastString -> Code
 tSym l s = LForm (L l (Atom (ASymbol s)))
 
 tChar :: SrcSpan -> Char -> Code

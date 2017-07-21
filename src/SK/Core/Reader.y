@@ -1,5 +1,6 @@
 -- Happy parser for S-expression tokens.
 {
+{-# LANGUAGE OverloadedStrings #-}
 module SK.Core.Reader
   ( sexpr
   , sexprs
@@ -7,8 +8,10 @@ module SK.Core.Reader
 
 import SrcLoc
 
-import SK.Core.Lexer
 import SK.Core.Form
+import SK.Core.GHC
+import SK.Core.Lexer
+
 }
 
 %name sexpr sexp
@@ -27,7 +30,7 @@ import SK.Core.Form
 '}'         { L _ TCcurly }
 
 'quote'     { L _ TQuote }
-'`'         { L _ TQuasiQuote }
+'`'         { L _ TQuasiquote }
 ','         { L _ TUnquote }
 ',@'        { L _ TUnquoteSplice }
 
@@ -38,17 +41,17 @@ import SK.Core.Form
 'integer' { L _ (TInteger _) }
 'frac'    { L _ (TFractional _) }
 'comment' { L _ (TDocCommentNext _) }
-'unit'    { L _ TUnit }
 
 %%
 
 sexp :: { Code }
      : atom          { $1 }
      | 'quote' sexp  { mkQuote $1 $2 }
-     | '`' sexp      { mkQuasiQuote $1 $2 }
+     | '`' sexp      { mkQuasiquote $1 $2 }
      | ',' sexp      { mkUnquote $1 $2 }
      | ',@' sexp     { mkUnquoteSplice $1 $2 }
      | '[' sexps ']' { LForm (L (getLoc $1) (HsList $2)) }
+     | '(' ')'       { LForm (L (getLoc $1) (Atom AUnit)) }
      | '(' sexps ')' { LForm (L (getLoc $1) (List $2)) }
 
 -- Required modules are added to SPState here. The reason is, to support
@@ -71,61 +74,75 @@ atom :: { Code }
      | 'integer' { mkAInteger $1 }
      | 'frac'    { mkAFractional $1 }
      | 'comment' { mkAComment $1 }
-     | 'unit'    { mkAUnit $1 }
      | '{'       { mkOcSymbol $1 }
      | '}'       { mkCcSymbol $1 }
 
 {
+atom :: SrcSpan -> Atom -> Code
+atom l atom = LForm (L l (Atom atom))
+{-# INLINE atom #-}
 
-sym :: SrcSpan -> String -> Code
-sym l str = LForm (L l (Atom (ASymbol str)))
+sym :: SrcSpan -> FastString -> Code
+sym l str = atom l (ASymbol str)
+{-# INLINE sym #-}
 
 li :: SrcSpan -> [Code] -> Code
 li l xs = LForm (L l (List xs))
+{-# INLINE li #-}
 
 mkQuote :: Located Token -> Code -> Code
 mkQuote (L l _) body = li l [sym l "quote", body]
+{-# INLINE mkQuote #-}
 
-mkQuasiQuote :: Located Token -> Code -> Code
-mkQuasiQuote (L l _) body = li l [sym l "quasiquote", body]
+mkQuasiquote :: Located Token -> Code -> Code
+mkQuasiquote (L l _) body = li l [sym l "quasiquote", body]
+{-# INLINE mkQuasiquote #-}
 
 mkUnquote :: Located Token -> Code -> Code
 mkUnquote (L l _) body = li l [sym l "unquote", body]
+{-# INLINE mkUnquote #-}
 
 mkUnquoteSplice :: Located Token -> Code -> Code
 mkUnquoteSplice (L l _) body = li l [sym l "unquote-splice", body]
+{-# INLINE mkUnquoteSplice #-}
 
 mkRequire :: Located Token -> Located Token -> SP [Code]
 mkRequire t1 t2@(L _ (TSymbol modName)) = do
-  addRequiredModuleName modName
+  addRequiredModuleName (unpackFS modName)
   return [mkASymbol t1, mkASymbol t2]
+{-# INLINE mkRequire #-}
 
 mkASymbol :: Located Token -> Code
-mkASymbol (L l (TSymbol x)) = LForm (L l (Atom (ASymbol x)))
+mkASymbol (L l (TSymbol x)) = atom l (ASymbol x)
+{-# INLINE mkASymbol #-}
 
 mkAChar :: Located Token -> Code
-mkAChar (L l (TChar x)) = LForm (L l (Atom (AChar x)))
+mkAChar (L l (TChar x)) = atom l (AChar x)
+{-# INLINE mkAChar #-}
 
 mkAString :: Located Token -> Code
-mkAString (L l (TString x)) = LForm (L l (Atom (AString x)))
+mkAString (L l (TString x)) = atom l (AString x)
+{-# INLINE mkAString #-}
 
 mkAInteger :: Located Token -> Code
-mkAInteger (L l (TInteger x)) = LForm (L l (Atom (AInteger x)))
+mkAInteger (L l (TInteger x)) = atom l (AInteger x)
+{-# INLINE mkAInteger #-}
 
 mkAFractional :: Located Token -> Code
-mkAFractional (L l (TFractional x)) = LForm (L l (Atom (AFractional x)))
+mkAFractional (L l (TFractional x)) = atom l (AFractional x)
+{-# INLINE mkAFractional #-}
 
 mkAComment :: Located Token -> Code
-mkAComment (L l (TDocCommentNext x)) = LForm (L l (Atom (AComment x)))
-
-mkAUnit :: Located Token -> Code
-mkAUnit (L l TUnit) = LForm (L l (Atom AUnit))
+mkAComment (L l (TDocCommentNext x)) = atom l (AComment x)
+{-# INLINE mkAComment #-}
 
 mkOcSymbol :: Located Token -> Code
-mkOcSymbol (L l _) = LForm (L l (Atom (ASymbol "{")))
+mkOcSymbol (L l _) = sym l "{"
+{-# INLINE mkOcSymbol #-}
 
 mkCcSymbol :: Located Token -> Code
-mkCcSymbol (L l _) = LForm (L l (Atom (ASymbol "}")))
+mkCcSymbol (L l _) = sym l "}"
+{-# INLINE mkCcSymbol #-}
 
 happyError :: SP a
 happyError = showErrorSP

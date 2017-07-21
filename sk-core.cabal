@@ -9,7 +9,7 @@ author:              8c6794b6
 maintainer:          example@example.com
 copyright:           2017 8c6794b6
 category:            Language
-build-type:          Simple
+build-type:          Custom
 extra-source-files:  README.md
                      test/data/syntax/*.sk
                      test/data/build/p01/*.cabal
@@ -18,6 +18,10 @@ extra-source-files:  README.md
                      test/data/build/p01/src/P01/*.sk
                      test/data/build/p01/test/*.hs
 cabal-version:       >=1.10
+
+custom-setup
+  setup-depends:       base >= 4.7 && < 5
+                     , Cabal >= 1.10
 
 library
   hs-source-dirs:      src
@@ -40,6 +44,7 @@ library
   build-depends:       Cabal >= 1.10
                      , array
                      , base >= 4.7 && < 5
+                     , bytestring
                      , containers
                      , directory
                      , filepath
@@ -74,6 +79,7 @@ executable sk-profile
   main-is:             profile.hs
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
+                     , bytestring
                      , sk-core
   default-language:    Haskell2010
 

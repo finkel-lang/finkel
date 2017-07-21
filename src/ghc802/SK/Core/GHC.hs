@@ -1,4 +1,5 @@
 -- | Module re-exporting functions and types from ghc-8.0.2 package.
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module SK.Core.GHC
   ( -- * GHC
     AnnotationComment(..),
@@ -56,6 +57,7 @@ module SK.Core.GHC
     mkMatch, -- signature changed in git HEAD
     mkMatchGroup,
     mkModuleName,
+    mkModuleNameFS,
     mkNPat,
     modInfoTyThings,
     noLoc,
@@ -117,7 +119,10 @@ module SK.Core.GHC
     throwIO,
 
     -- * FastString
+    FastString,
     fsLit,
+    headFS,
+    mkFastStringByteString,
     unpackFS,
 
     -- * Finder
@@ -357,3 +362,10 @@ import Var
 
 -- ghci
 import GHCi.RemoteTypes
+
+-- base
+import Data.String
+
+-- NOTE: Orphan instance.
+instance IsString FastString where
+  fromString = fsLit

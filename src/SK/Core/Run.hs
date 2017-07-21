@@ -23,6 +23,9 @@ import Control.Exception
 import System.Exit
 import Data.Maybe (fromMaybe)
 
+-- bytestring
+import qualified Data.ByteString.Lazy as BL
+
 -- containers
 import qualified Data.Map as Map
 
@@ -115,7 +118,7 @@ initialSkEnv = SkEnv
   { envMacros = specialForms
   , envDebug = False }
 
-sExpression :: String -> IO ()
+sExpression :: BL.ByteString -> IO ()
 sExpression input =
   case evalSP sexprs Nothing input of
     Right forms ->
@@ -129,7 +132,7 @@ compileAndEmit file = runSkc go initialSkEnv
     go = do (mdl, st) <- compileSkModule file
             genHsSrc st mdl
 
-parseSexprs :: Maybe FilePath -> String -> Skc ([Code], SPState)
+parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =
   Skc (lift (runSP' sexprs mb_file contents))
 
@@ -144,7 +147,7 @@ compileSkModuleForm form = do
 -- | Compile a file containing SK module.
 compileSkModule :: FilePath -> Skc (HsModule RdrName, SPState)
 compileSkModule file = do
-  contents <- liftIO (readFile file)
+  contents <- liftIO (BL.readFile file)
   (form', st) <- parseSexprs (Just file) contents
   mdl <- compileSkModuleForm form'
   return (mdl, st)
