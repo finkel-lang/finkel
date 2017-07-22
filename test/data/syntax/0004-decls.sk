@@ -236,6 +236,21 @@
       (putStrLn (ts7 False))
       (print (ts8 (Just True)))))
 
+;;; 4.4.2 Fixity Declarations
+
+(= $^+^$ a b (+ a b))
+(= $^-^$ a b (- a b))
+(= $^*^$ a b (* a b))
+(= $^/^$ a b (/ a b))
+
+(infixl 6 $^+^$)
+(infixl 6 $^-^$)
+(infixl 7 $^*^$ $^/^$)
+
+(:: s4_4_2 (IO ()))
+(= s4_4_2
+  (print ($^*^$ ($^+^$ 3 4) ($^/^$ 48 8))))
+
 ;;; 4.4.3 Function and Pattern Bindinds
 
 ;;; 4.4.3.1 Function bindings
@@ -316,6 +331,7 @@
 (:: s4_4 (IO ()))
 (= s4_4
   (do s4_4_1
+      s4_4_2
       s4_4_3))
 
 ;;; Main.

@@ -76,6 +76,9 @@ import SK.Core.GHC
 'do'       { LForm (L _ (Atom (ASymbol "do"))) }
 'if'       { LForm (L _ (Atom (ASymbol "if"))) }
 'import'   { LForm (L _ (Atom (ASymbol "import"))) }
+'infix'    { LForm (L _ (Atom (ASymbol "infix"))) }
+'infixl'   { LForm (L _ (Atom (ASymbol "infixl"))) }
+'infixr'   { LForm (L _ (Atom (ASymbol "infixr"))) }
 'instance' { LForm (L _ (Atom (ASymbol "instance"))) }
 'let'      { LForm (L _ (Atom (ASymbol "let"))) }
 'module'   { LForm (L _ (Atom (ASymbol "module"))) }
@@ -191,6 +194,7 @@ top_decl :: { HDecl }
     | 'class' qtycl cdecls         {% b_classD $2 $3 }
     | 'instance' qtycl idecls      { b_instD $2 $3 }
     | 'default' zero_or_more_types { b_defaultD $2 }
+    | fixity 'integer' symbols1    { b_fixityD $1 $2 $3 }
     | decl                         { $1 }
 
 simpletype :: { (FastString, [HTyVarBndr])}
@@ -246,6 +250,11 @@ cdecls :: { [HDecl] }
 
 idecls :: { [HDecl] }
     : decls { $1 }
+
+fixity :: { FixityDirection }
+    : 'infixl' { InfixL }
+    | 'infixr' { InfixR }
+    | 'infix'  { InfixN }
 
 decl :: { HDecl }
     : '=' 'symbol' aguards { b_funBindD $2 $3 }

@@ -388,6 +388,18 @@ b_defaultD types = L l (DefD (DefaultDecl types))
   where
     l = getLoc (mkLocatedList types)
 
+b_fixityD :: FixityDirection -> Code -> [Code] -> HDecl
+b_fixityD dir (LForm (L l (Atom (AInteger n)))) syms = L l (SigD fsig)
+  where
+    fsig = FixSig (FixitySig names fixity)
+    names = map lname syms
+    lname (LForm (L l0 (Atom (ASymbol name)))) = L l0 (mkRdrName name)
+    fixity = Fixity dir' (fromIntegral n) dir
+    dir' = case dir of
+             InfixL -> "infixl"
+             InfixR -> "infixr"
+             InfixN -> "infix"
+
 b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
 b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
   let match = L l (Match ctxt args Nothing body)
@@ -458,7 +470,7 @@ b_bangT :: Code -> HType -> HType
 b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)
   where
     -- HsSrcBang field changed in ghc >= 8.0.2.
-    srcBang = HsSrcBang (Just "bang") NoSrcUnpack SrcStrict
+    srcBang = HsSrcBang (Just "b_bangT") NoSrcUnpack SrcStrict
 
 
 -- ---------------------------------------------------------------------

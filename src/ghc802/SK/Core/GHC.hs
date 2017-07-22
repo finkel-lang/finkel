@@ -74,6 +74,8 @@ module SK.Core.GHC
 
     -- * BasicTypes
     Boxity(..),
+    Fixity(..),
+    FixityDirection(..),
     FractionalLit(..),
     Origin(..),
     -- SourceText changed to is own type in ghc >= 8.0.2 (was String).
@@ -146,6 +148,7 @@ module SK.Core.GHC
     getOptionsFromFile,
 
     -- * HsBinds
+    FixitySig(..),
     HsBindLR(..),
     HsLocalBinds,
     HsLocalBindsLR(..),
