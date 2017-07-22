@@ -383,6 +383,11 @@ b_qtyclC ts =
       let (ctxt,t) = splitAt (length ts - 1) ts
       return (ctxt, head t)
 
+b_defaultD :: [HType] -> HDecl
+b_defaultD types = L l (DefD (DefaultDecl types))
+  where
+    l = getLoc (mkLocatedList types)
+
 b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
 b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
   let match = L l (Match ctxt args Nothing body)

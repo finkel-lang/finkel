@@ -72,6 +72,7 @@ import SK.Core.GHC
 'case'     { LForm (L _ (Atom (ASymbol "case"))) }
 'class'    { LForm (L _ (Atom (ASymbol "class"))) }
 'data'     { LForm (L _ (Atom (ASymbol "data"))) }
+'default'  { LForm (L _ (Atom (ASymbol "default"))) }
 'do'       { LForm (L _ (Atom (ASymbol "do"))) }
 'if'       { LForm (L _ (Atom (ASymbol "if"))) }
 'import'   { LForm (L _ (Atom (ASymbol "import"))) }
@@ -189,6 +190,7 @@ top_decl :: { HDecl }
     | 'newtype' simpletype constrs { b_newtypeD $1 $2 $3 }
     | 'class' qtycl cdecls         {% b_classD $2 $3 }
     | 'instance' qtycl idecls      { b_instD $2 $3 }
+    | 'default' zero_or_more_types { b_defaultD $2 }
     | decl                         { $1 }
 
 simpletype :: { (FastString, [HTyVarBndr])}
@@ -297,6 +299,10 @@ types :: { [HType] }
 rtypes :: { [HType] }
     : type        { [$1] }
     | rtypes type { $2 : $1 }
+
+zero_or_more_types :: { [HType] }
+    : {- empty -} { [] }
+    | types       { $1 }
 
 qtype :: { ([HType], HType) }
     : 'symbol' { ([],b_symT $1) }

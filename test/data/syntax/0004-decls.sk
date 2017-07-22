@@ -161,10 +161,15 @@
       (print (EmptyContext 42))
       (print (MCs True \a))))
 
+;;; 4.3.4 Ambiguous Types, and Defaults for Overloaded Numeric Options
+
+(default Integer Double)
+
 (:: s4_3 (IO ()))
 (= s4_3
   (do s4_3_1
       s4_3_2))
+
 
 ;;; 4.4 Nested Declarations
 
@@ -225,7 +230,6 @@
       (ts2 "BAR")
       (ts3 1 True "buzz")
       (ts3b 2 False "buzzz")
-      ;; (print (ts4 (\ (n) (* (+ n 1) n))))
       (print (ts4 (\ n (* (+ n 1) n))))
       (ts5 [1 2 3])
       (print (ts6 True [1 2 3]))

@@ -155,6 +155,7 @@ module SK.Core.GHC
     ClsInstDecl(..),
     ConDecl(..),
     ConDeclField(..),
+    DefaultDecl(..),
     HsConDeclDetails,
     HsDataDefn(..),
     HsDeriving,
