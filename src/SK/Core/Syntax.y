@@ -83,6 +83,7 @@ import SK.Core.GHC
 
 ','  { LForm (L _ (Atom (ASymbol ","))) }
 '->' { LForm (L _ (Atom (ASymbol "->"))) }
+'..' { LForm (L _ (Atom (ASymbol ".."))) }
 '::' { LForm (L _ (Atom (ASymbol "::"))) }
 '<-' { LForm (L _ (Atom (ASymbol "<-"))) }
 '='  { LForm (L _ (Atom (ASymbol "="))) }
@@ -404,12 +405,17 @@ ralts :: { [HMatch] }
 match :: { HMatch }
     : pat guards { b_match $1 $2 }
 
-hlist :: { [HExpr] }
-    : rhlist { reverse $1 }
+hlist :: { Either HExpr [HExpr] }
+    : expr expr '..' expr { Left (b_arithSeqE $1 (Just $2) (Just $4)) }
+    | expr expr '..'      { Left (b_arithSeqE $1 (Just $2) Nothing) }
+    | expr '..' expr      { Left (b_arithSeqE $1 Nothing (Just $3)) }
+    | expr '..'           { Left (b_arithSeqE $1 Nothing Nothing) }
+    | hlist0              { Right $1 }
 
-rhlist :: { [HExpr] }
+hlist0 :: { [HExpr] }
     : {- empty -} { [] }
-    | rhlist expr { $2:$1 }
+    | expr hlist0 { $1:$2 }
+
 
 -- Parsing form for guards
 -- ~~~~~~~~~~~~~~~~~~~~~~~

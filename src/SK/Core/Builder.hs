@@ -618,9 +618,25 @@ b_commentStringE :: Code -> Located HsDocString
 b_commentStringE (LForm (L l (Atom (AComment x)))) =
   L l (HsDocString (fsLit x))
 
-b_hsListE :: [HExpr] -> HExpr
-b_hsListE exprs = L l (ExplicitList placeHolderType Nothing exprs)
-  where l = getLoc (mkLocatedList exprs)
+b_hsListE :: Either HExpr [HExpr] -> HExpr
+b_hsListE expr =
+  case expr of
+    Right exprs -> L l (ExplicitList placeHolderType Nothing exprs)
+      where l = getLoc (mkLocatedList exprs)
+    Left arithSeqExpr -> arithSeqExpr
+
+b_arithSeqE :: HExpr -> Maybe HExpr -> Maybe HExpr -> HExpr
+b_arithSeqE fromE thenE toE =
+  L l (ArithSeq noPostTcExpr Nothing info)
+  where
+    info | Just thenE' <- thenE, Just toE' <- toE =
+           FromThenTo fromE thenE' toE'
+         | Just thenE' <- thenE =
+           FromThen fromE thenE'
+         | Just toE' <- toE =
+           FromTo fromE toE'
+         | otherwise = From fromE
+    l = getLoc fromE
 
 
 -- ---------------------------------------------------------------------

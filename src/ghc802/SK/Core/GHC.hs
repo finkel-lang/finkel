@@ -161,6 +161,7 @@ module SK.Core.GHC
     TyClDecl(..),
 
     -- * HsExpr
+    ArithSeqInfo(..),
     GRHSs(..),
     GRHS(..),
     GuardLStmt,
@@ -172,6 +173,7 @@ module SK.Core.GHC
     LGRHS,
     LMatch,
     StmtLR(..),
+    noPostTcExpr,
 
     -- * HsImpExp
     simpleImportDecl,
