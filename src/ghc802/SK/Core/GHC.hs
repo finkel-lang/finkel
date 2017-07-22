@@ -76,8 +76,14 @@ module SK.Core.GHC
     Boxity(..),
     FractionalLit(..),
     Origin(..),
+    -- SourceText changed to is own type in ghc >= 8.0.2 (was String).
     SourceText,
     SuccessFlag(..),
+
+    -- * DataCon
+    HsSrcBang(..),
+    SrcStrictness(..),
+    SrcUnpackedness(..),
 
     -- * DriverPhases
     HscSource(..),

@@ -449,6 +449,12 @@ b_listT ty@(L l _) = L l (HsListTy ty)
 b_tupT :: Code -> [HType] -> HType
 b_tupT (LForm (L l _)) ts = L l (HsTupleTy HsBoxedTuple ts)
 
+b_bangT :: Code -> HType -> HType
+b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)
+  where
+    -- HsSrcBang field changed in ghc >= 8.0.2.
+    srcBang = HsSrcBang (Just "bang") NoSrcUnpack SrcStrict
+
 
 -- ---------------------------------------------------------------------
 --

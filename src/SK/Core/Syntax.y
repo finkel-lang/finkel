@@ -81,6 +81,7 @@ import SK.Core.GHC
 'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
 'type'     { LForm (L _ (Atom (ASymbol "type"))) }
 
+'!'  { LForm (L _ (Atom (ASymbol "!"))) }
 ','  { LForm (L _ (Atom (ASymbol ","))) }
 '->' { LForm (L _ (Atom (ASymbol "->"))) }
 '..' { LForm (L _ (Atom (ASymbol ".."))) }
@@ -287,6 +288,7 @@ type :: { HType }
 types0 :: { HType }
     : '->' types {% b_funT $2 }
     | ',' types  { b_tupT $1 $2 }
+    | '!' type   { b_bangT $1 $2 }
     | types      { b_appT $1 }
 
 types :: { [HType] }
@@ -302,6 +304,7 @@ qtype :: { ([HType], HType) }
     | 'hslist' {% do { typ <- parse p_type [toListL $1]
                      ; return ([], b_listT typ) } }
     | qtycl    { $1 }
+
 
 -- ---------------------------------------------------------------------
 --
