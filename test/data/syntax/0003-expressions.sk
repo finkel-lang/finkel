@@ -57,6 +57,14 @@
 (= tupexprs
   (print (tup1 \x 1.23 "4567")))
 
+;;; 3.9 Unit Expressions and Parenthesized Expressions
+
+(= upe1 (print ()))
+(= upe2 (print ((((((((((True))))))))))))
+
+(= uparenexprs
+  (do upe1 upe2))
+
 ;;; 3.10 Arithmetic Sequences
 
 (= ase1 (print (take 10 [1 ..])))
@@ -349,6 +357,7 @@
       lamexprs
       listexprs
       tupexprs
+      uparenexprs
       aseqexprs
       letexprs
       caseexprs
