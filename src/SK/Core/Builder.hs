@@ -203,6 +203,15 @@ cfld2ufld :: Located (HsRecField RdrName (LHsExpr RdrName))
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
   L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
 
+-- | Makes 'HsRecField' with given name and located data.
+mkcfld :: (FastString, Located a) -> LHsRecField RdrName (Located a)
+mkcfld (name, e@(L fl _)) =
+  L fl HsRecField { hsRecFieldLbl = mkfname fl name
+                  , hsRecFieldArg = e
+                  , hsRecPun = False }
+  where
+    mkfname nl n = L nl (mkFieldOcc (L nl (mkRdrName n)))
+
 
 -- ---------------------------------------------------------------------
 --
@@ -508,6 +517,16 @@ b_hsListP :: [HPat] -> HPat
 b_hsListP pats = L l (ListPat pats placeHolderType Nothing)
   where l = getLoc (mkLocatedList pats)
 
+b_labeledP :: Code -> [(Code, HPat)] -> Builder HPat
+b_labeledP (LForm (L l (Atom (ASymbol name)))) ps
+  | isUpper x || x == ':' =  do
+    let rc = HsRecFields { rec_flds = map mkcfld' ps
+                         , rec_dotdot = Nothing }
+        mkcfld' (LForm (L _ (Atom (ASymbol n))), p) = mkcfld (n, p)
+    return (L l (ConPatIn (L l (mkRdrName name)) (RecCon rc)))
+  | otherwise = builderError
+  where x = headFS name
+
 b_tupP :: Code -> [HPat] -> HPat
 b_tupP (LForm (L l _)) ps = L l (TuplePat ps Boxed [])
 
@@ -519,13 +538,11 @@ b_lazyP :: HPat -> HPat
 b_lazyP pat@(L l _) = L l (LazyPat pat)
 
 b_conP :: Code -> [HPat] -> Builder HPat
-b_conP (LForm (L l (Atom (ASymbol conName)))) rest =
-  case () of
-    _ | isUpper x || x == ':' ->
-      return (L l (ConPatIn (L l (mkRdrName conName))
-                            (PrefixCon rest)))
-    _                         -> builderError
-    where x = headFS conName
+b_conP (LForm (L l (Atom (ASymbol name)))) rest
+  | isUpper x || x == ':' = return (L l (ConPatIn (L l (mkRdrName name))
+                                                  (PrefixCon rest)))
+  | otherwise = builderError
+  where x = headFS name
 
 
 -- ---------------------------------------------------------------------
@@ -593,14 +610,6 @@ b_recConOrUpdE sym@(LForm (L l _)) flds = L l expr
                         , rec_dotdot = Nothing }
     uflds = map mkufld flds
     mkufld  = cfld2ufld . mkcfld
-
-mkcfld :: (FastString,HExpr) -> LHsRecField RdrName HExpr
-mkcfld (name, e@(L fl _)) =
-  L fl HsRecField { hsRecFieldLbl = mkfname fl name
-                  , hsRecFieldArg = e
-                  , hsRecPun = False }
-  where
-    mkfname nl n = L nl (mkFieldOcc (L nl (mkRdrName n)))
 
 b_recUpdE :: Builder HExpr -> [(FastString,HExpr)] -> Builder HExpr
 b_recUpdE expr flds = do

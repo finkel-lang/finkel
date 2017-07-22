@@ -347,10 +347,18 @@ pat :: { HPat }
     | 'list'    {% parse p_pats1 $1 }
 
 pats1 :: { HPat }
-    : ',' pats0        { b_tupP $1 $2 }
-    | '@' 'symbol' pat { b_asP $2 $3 }
-    | '~' pat          { b_lazyP $2 }
-    | 'symbol' pats0   {% b_conP $1 $2 }
+    : ',' pats0             { b_tupP $1 $2 }
+    | '@' 'symbol' pat      { b_asP $2 $3 }
+    | '~' pat               { b_lazyP $2 }
+    | 'symbol' '{' lblp '}' {% b_labeledP $1 $3 }
+    | 'symbol' pats0        {% b_conP $1 $2 }
+
+lblp :: { [(Code, HPat)] }
+    : rlblp { reverse $1 }
+
+rlblp :: { [(Code, HPat)] }
+    : {- empty -}       { [] }
+    | rlblp 'symbol' pat { ($2, $3):$1 }
 
 
 -- ---------------------------------------------------------------------

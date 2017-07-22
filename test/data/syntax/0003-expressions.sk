@@ -344,11 +344,27 @@
       (print (lzp2 (, 3 undefined (, \x [1 2 3]))))
       (print (lzp2 (, 4 [\a \b] (, undefined []))))))
 
+(= lfp1 mb
+  (case mb
+    (Just {}) "just"
+    _         "nothing"))
+
+(= lfp2 r1
+  (case r1
+    (Con1 {field1 i field2 b}) (if b (* i 7) i)))
+
+(= patexprs5
+  (do (print (lfp1 Nothing))
+      (print (lfp1 (Just undefined)))
+      (print (lfp2 (Con1 42 False)))
+      (print (lfp2 (Con1 6 True)))))
+
 (= patexprs
   (do patexprs1
       patexprs2
       patexprs3
-      patexprs4))
+      patexprs4
+      patexprs5))
 
 ;;; Main
 
