@@ -16,7 +16,8 @@ module SK.Core.Lexer
   , runSP
   , runSP'
   , evalSP
-  , showErrorSP
+  , errorSP
+  , lexErrorSP
   , addRequiredModuleName
   ) where
 
@@ -32,6 +33,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Control.Monad.Trans.Except (ExceptT(..), throwE)
 
 -- Internal
+import SK.Core.Form
 import SK.Core.GHC
 }
 
@@ -47,8 +49,8 @@ $alpha = [a-zA-Z]
 $negative = \-
 $digit    = [0-9]
 
-$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\"$white]
-$hsymtail = [$hsymhead\']
+$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\"\#$white]
+$hsymtail = [$hsymhead\'\#]
 
 @signed   = $negative ?
 @decimal  = $digit+
@@ -68,25 +70,28 @@ $whitechar+  ;
 
 --- Haskell style pragmas, currently ignored.
 
-"{-#".*          { skip }
+"{-#".*              { skip }
 
---- Parenthesis
-\(               { tok_oparen }
-\)               { tok_cparen }
+--- Parentheses
+\(                   { tok_oparen }
+\)                   { tok_cparen }
 
-\[               { tok_obracket }
-\]               { tok_cbracket }
+\[                   { tok_obracket }
+\]                   { tok_cbracket }
 
-\{               { tok_ocurly }
-\}               { tok_ccurly }
+\{                   { tok_ocurly }
+\}                   { tok_ccurly }
 
--- Quote and unquote
-\'               { tok_quote }
-\`               { tok_quasiquote }
+-- Quote, unquote, quasiquote, and unquote splice
+\'                   { tok_quote }
+\`                   { tok_quasiquote }
 
-", "             { tok_comma }
-",@"             { tok_unquote_splice }
-\,               { tok_unquote }
+\,\                  { tok_comma }
+\,\@                 { tok_unquote_splice }
+\,                   { tok_unquote }
+
+-- Hash
+\#                   { tok_hash }
 
 --- Literal values
 \\[~$white][A-Za-z]* { tok_char }
@@ -151,8 +156,11 @@ runSP' sp target input =
 evalSP :: SP a -> Maybe FilePath -> BL.ByteString -> Either String a
 evalSP sp target input = fmap fst (runSP sp target input)
 
-showErrorSP :: SP a
-showErrorSP =
+errorSP :: Code -> String -> SP a
+errorSP code msg = SP (\_ -> alexError (showLoc code ++ msg))
+
+lexErrorSP :: SP a
+lexErrorSP =
   let go = do (AlexPn _ lno cno, _, _, _) <- alexGetInput
               alexError ("lexer error at line " ++
                           show lno ++ ", column " ++ show cno)
@@ -208,6 +216,8 @@ data Token
   -- ^ Literal integer number.
   | TFractional FractionalLit
   -- ^ Literal fractional number.
+  | THash
+  -- ^ Literal @#@.
   | TEOF
   -- ^ End of form.
   deriving (Eq, Show)
@@ -259,6 +269,9 @@ tok_unquote _ _ = return TUnquote
 tok_unquote_splice :: Action
 tok_unquote_splice _ _ = return TUnquoteSplice
 {-# INLINE tok_unquote_splice #-}
+
+tok_hash :: Action
+tok_hash _ _ =  return THash
 
 tok_doc_comment_next :: Action
 tok_doc_comment_next (_,_,s,_) l = do

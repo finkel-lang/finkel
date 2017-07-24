@@ -1,0 +1,28 @@
+;;; -*- mode: sk -*-
+
+(module Main)
+
+;;; 12.1 Inlining
+
+;;; TODO
+
+;;; 12.2 Specialization
+
+;;; TODO
+
+;;; 12.3 Language extensions
+
+;;; TODO
+
+;;; GHC extension: UNPACK
+
+(data D1
+  (C1 ##UNPACK (! Int) ##UNPACK (! Char))
+  (deriving (Eq Show)))
+
+(:: unpackprgm (IO ()))
+(= unpackprgm
+  (print (C1 42 \x)))
+
+(= main
+  unpackprgm)

@@ -85,6 +85,8 @@ import SK.Core.GHC
 'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
 'type'     { LForm (L _ (Atom (ASymbol "type"))) }
 
+'unpack'   { LForm (L _ (Atom (ASymbol "UNPACK"))) }
+
 '!'  { LForm (L _ (Atom (ASymbol "!"))) }
 ','  { LForm (L _ (Atom (ASymbol ","))) }
 '->' { LForm (L _ (Atom (ASymbol "->"))) }
@@ -221,7 +223,15 @@ lconstr :: { HConDecl }
     | 'symbol' '{' fielddecls '}' { b_conD $1 $3 }
 
 condetails :: { HsConDeclDetails RdrName }
-    : types { b_conDeclDetails $1 }
+    : dctypes { b_conDeclDetails $1 }
+
+dctypes :: { [HType] }
+    : {- empty -}    { [] }
+    | dctype dctypes { $1 : $2 }
+
+dctype :: { HType }
+    : 'unpack' type { b_unpackT $1 $2 }
+    | type          { $1 }
 
 fielddecls :: { HsConDeclDetails RdrName }
     : fielddecls1 { b_recFieldsD $1 }

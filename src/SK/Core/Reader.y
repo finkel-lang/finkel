@@ -11,7 +11,6 @@ import SrcLoc
 import SK.Core.Form
 import SK.Core.GHC
 import SK.Core.Lexer
-
 }
 
 %name sexpr sexp
@@ -34,6 +33,8 @@ import SK.Core.Lexer
 ','         { L _ TUnquote }
 ',@'        { L _ TUnquoteSplice }
 
+'#'         { L _ THash }
+
 'require' { L _ (TSymbol "require") }
 'symbol'  { L _ (TSymbol _) }
 'char'    { L _ (TChar _) }
@@ -53,6 +54,11 @@ sexp :: { Code }
      | '[' sexps ']' { LForm (L (getLoc $1) (HsList $2)) }
      | '(' ')'       { LForm (L (getLoc $1) (Atom AUnit)) }
      | '(' sexps ')' { LForm (L (getLoc $1) (List $2)) }
+     | '#' rmac      { $2 }
+
+rmac :: { Code }
+    : '#' sexp      {% pragma $2 }
+    | 'symbol' sexp {% dispatch $1 $2 }
 
 -- Required modules are added to SPState here. The reason is, to support
 -- requiring modules in home package when compiling multiple modules
@@ -144,6 +150,29 @@ mkCcSymbol :: Located Token -> Code
 mkCcSymbol (L l _) = sym l "}"
 {-# INLINE mkCcSymbol #-}
 
+pragma ::  Code -> SP Code
+pragma orig@(LForm (L l form)) =
+  case form of
+    Atom (ASymbol sym)
+      | sym == "UNPACK" ->
+        -- Return the UNPACK form as is. This pragma is handled by
+        -- syntax parser of data constructor field.
+        return orig
+    List (LForm (L _ (Atom (ASymbol sym))):rest)
+      | sym == "LANGUAGE" -> do
+        -- XXX: Add language pragma to SPState, return empty code.
+        errorSP orig "LANGUAGE pragma not yet implemented"
+    _ -> error ("unknown pragma: " ++ show form)
+
+emptyBody :: SrcSpan -> Code
+emptyBody l = LForm (L l (List [LForm (L l (Atom (ASymbol "begin")))]))
+
+dispatch :: Located Token -> Code -> SP Code
+dispatch (L l (TSymbol sym)) _ =
+  case sym of
+    "." -> error "dispatch: dot"
+    _   -> lexErrorSP
+
 happyError :: SP a
-happyError = showErrorSP
+happyError = lexErrorSP
 }

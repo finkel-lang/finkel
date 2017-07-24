@@ -481,6 +481,15 @@ b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)
     -- HsSrcBang field changed in ghc >= 8.0.2.
     srcBang = HsSrcBang (Just "b_bangT") NoSrcUnpack SrcStrict
 
+b_unpackT :: Code -> HType -> HType
+b_unpackT (LForm (L l _)) t = L l (HsBangTy bang t')
+  where
+    bang = HsSrcBang (Just "b_unpackT") SrcUnpack strictness
+    (strictness, t') =
+      case t of
+        L _ (HsBangTy (HsSrcBang _ _ st) t0) -> (st, t0)
+        _                                    -> (NoSrcStrict, t)
+
 
 -- ---------------------------------------------------------------------
 --
