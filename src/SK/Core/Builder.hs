@@ -112,6 +112,8 @@ type HConDecl = LConDecl RdrName
 
 type HConDeclField = LConDeclField RdrName
 
+type HLIE = LIE RdrName
+
 type HTyVarBndr = LHsTyVarBndr RdrName
 
 type HBind = LHsBind RdrName
@@ -224,22 +226,33 @@ mkcfld (name, e@(L fl _)) =
 -- GHC's internal data type, which is a helpful resource for
 -- understanding the values and types for constructing Haskell AST data.
 
-b_module :: Code -> Maybe LHsDocString -> [HImportDecl]
+b_module :: Code -> [HLIE] ->  Maybe LHsDocString -> [HImportDecl]
          -> [HDecl] -> HsModule RdrName
-b_module (LForm (L l (Atom (ASymbol name)))) mbdoc imports decls =
-    HsModule { hsmodName = Just (L l (mkModuleNameFS name))
-             , hsmodExports = Nothing
-             , hsmodImports = imports
-             -- Function `cvTopDecls' is used for mergeing multiple
-             -- top-level FunBinds, which possibly taking different
-             -- patterns in its arguments.
-             , hsmodDecls = cvTopDecls (toOL decls)
-             , hsmodDeprecMessage = Nothing
-             , hsmodHaddockModHeader = mbdoc }
+b_module form exports mbdoc imports decls =
+  HsModule { hsmodName = Just (L l (mkModuleNameFS name))
+           , hsmodExports = exports'
+           , hsmodImports = imports
+           -- Function `cvTopDecls' is used for mergeing multiple
+           -- top-level FunBinds, which possibly taking different
+           -- patterns in its arguments.
+           , hsmodDecls = cvTopDecls (toOL decls)
+           , hsmodDeprecMessage = Nothing
+           , hsmodHaddockModHeader = mbdoc }
+  where
+    LForm (L l (Atom (ASymbol name))) = form
+    exports'
+      | null exports = Nothing
+      | otherwise    = Just (L l exports)
 
 b_implicitMainModule :: [HImportDecl] -> [HDecl] -> HsModule RdrName
 b_implicitMainModule =
-  b_module (LForm (noLoc (Atom (ASymbol "Main")))) Nothing
+  b_module (LForm (noLoc (Atom (ASymbol "Main")))) [] Nothing
+
+b_exportVarB :: Code -> HLIE
+b_exportVarB (LForm (L l form)) =
+  case form of
+    Atom (ASymbol name) -> L l (IEVar (L l (mkRdrName name)))
+    _ -> error ("b_exportVarB: got " ++ show form)
 
 
 -- ---------------------------------------------------------------------

@@ -186,6 +186,9 @@ module SK.Core.GHC
     noPostTcExpr,
 
     -- * HsImpExp
+    LIE,
+    -- Field of IE changed in ghc >= 8.0.2.
+    IE(..),
     simpleImportDecl,
 
     -- * HsPat

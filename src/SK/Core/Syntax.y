@@ -75,13 +75,11 @@ import SK.Core.GHC
 'default'  { LForm (L _ (Atom (ASymbol "default"))) }
 'do'       { LForm (L _ (Atom (ASymbol "do"))) }
 'if'       { LForm (L _ (Atom (ASymbol "if"))) }
-'import'   { LForm (L _ (Atom (ASymbol "import"))) }
 'infix'    { LForm (L _ (Atom (ASymbol "infix"))) }
 'infixl'   { LForm (L _ (Atom (ASymbol "infixl"))) }
 'infixr'   { LForm (L _ (Atom (ASymbol "infixr"))) }
 'instance' { LForm (L _ (Atom (ASymbol "instance"))) }
 'let'      { LForm (L _ (Atom (ASymbol "let"))) }
-'module'   { LForm (L _ (Atom (ASymbol "module"))) }
 'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
 'type'     { LForm (L _ (Atom (ASymbol "type"))) }
 
@@ -110,18 +108,18 @@ import SK.Core.GHC
 'comment' { LForm (L _ (Atom (AComment _))) }
 'unit'    { LForm (L _ (Atom AUnit)) }
 
-'f_import'
-    { LForm (L _ (List $$@((LForm (L _ (Atom (ASymbol "import")))):_))) }
-
-'f_module'
-    { LForm (L _ (List $$@((LForm (L _ (Atom (ASymbol "module")))):_))) }
-
-'f_where'
-    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "where")))):$$))) }
-
 'deriving'
     { LForm (L _ (List [ LForm (L _ (Atom (ASymbol "deriving")))
                        , LForm (L _ (List $$))])) }
+
+'import'
+    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "import")))):$$))) }
+
+'module'
+    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "module")))):$$))) }
+
+'where'
+    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "where")))):$$))) }
 
 'list'       { LForm (L _ (List $$)) }
 'hslist'     { LForm (L _ (HsList _)) }
@@ -152,12 +150,19 @@ module :: { HsModule RdrName }
     | mhead top_decls         {% $1 `fmap` pure [] <*> pure $2 }
 
 mhead :: { [HImportDecl] -> [HDecl] -> HsModule RdrName }
-    : mbdoc            { b_implicitMainModule }
-    | mbdoc 'f_module' {% parse p_mod_header $2 <*> pure $1 }
+    : mbdoc          { b_implicitMainModule }
+    | mbdoc 'module' {% parse p_mod_header $2 <*> pure $1 }
 
 mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl]
                 -> HsModule RdrName }
-    : 'module' 'symbol' { b_module $2 }
+    : 'symbol' exports { b_module $1 $2 }
+
+exports :: { [HLIE] }
+    : rexports { reverse $1 }
+
+rexports :: { [HLIE] }
+    : {- empty -}       { [] }
+    | rexports 'symbol' { b_exportVarB $2 : $1 }
 
 imports :: { [HImportDecl] }
     : rimports { reverse $1 }
@@ -167,10 +172,10 @@ rimports :: { [HImportDecl] }
     | rimports import_form { $2 : $1 }
 
 import_form :: { HImportDecl }
-    : 'f_import' {% parse p_import $1 }
+    : 'import' {% parse p_import $1 }
 
 import :: { HImportDecl }
-    : 'import' 'symbol' { b_importD $2 }
+    : 'symbol' { b_importD $1 }
 
 
 -- ---------------------------------------------------------------------
@@ -478,7 +483,7 @@ guard :: { (HExpr, [GuardLStmt RdrName]) }
 
 mbwhere :: { [HDecl] }
     : {- empty -} { [] }
-    | 'f_where'   {% parse p_lbinds0 $1 }
+    | 'where'   {% parse p_lbinds0 $1 }
 
 
 -- ---------------------------------------------------------------------
