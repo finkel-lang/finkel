@@ -28,6 +28,8 @@ import SK.Core.GHC
 %name parse_module module
 %name p_mod_header mod_header
 
+%name p_lexport lexport
+
 %name p_imports imports
 %name p_import_form import_form
 %name p_import import
@@ -161,8 +163,18 @@ exports :: { [HLIE] }
     : rexports { reverse $1 }
 
 rexports :: { [HLIE] }
-    : {- empty -}       { [] }
-    | rexports 'symbol' { b_exportVarB $2 : $1 }
+    : {- empty -}     { [] }
+    | rexports export { $2 : $1 }
+
+export :: { HLIE }
+    : 'symbol' { b_exportSym $1 }
+    | 'module' { b_exportMdl $1 }
+    | 'list'   {% parse p_lexport $1 }
+
+lexport :: { HLIE }
+    : 'symbol'          { b_exportAbs $1 }
+    | 'symbol' '..'     { b_exportAll $1 }
+    | 'symbol' symbols1 { b_exportWith $1 $2 }
 
 imports :: { [HImportDecl] }
     : rimports { reverse $1 }

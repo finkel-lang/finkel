@@ -248,11 +248,37 @@ b_implicitMainModule :: [HImportDecl] -> [HDecl] -> HsModule RdrName
 b_implicitMainModule =
   b_module (LForm (noLoc (Atom (ASymbol "Main")))) [] Nothing
 
-b_exportVarB :: Code -> HLIE
-b_exportVarB (LForm (L l form)) =
-  case form of
-    Atom (ASymbol name) -> L l (IEVar (L l (mkRdrName name)))
-    _ -> error ("b_exportVarB: got " ++ show form)
+b_exportSym :: Code -> HLIE
+b_exportSym (LForm (L l (Atom (ASymbol name)))) = thing
+  where thing = L l (IEVar (L l (mkRdrName name)))
+
+b_exportAbs :: Code -> HLIE
+b_exportAbs (LForm (L l (Atom (ASymbol name)))) = thing
+  where thing = L l (IEThingAbs (L l (mkUnqual tcName name)))
+
+b_exportAll :: Code -> HLIE
+b_exportAll (LForm (L l (Atom (ASymbol name)))) = thing
+  where thing = L l (IEThingAll (L l (mkUnqual tcName name)))
+
+b_exportWith :: Code -> [Code] -> HLIE
+b_exportWith (LForm (L l (Atom (ASymbol name)))) names = thing
+  where
+    thing = L l (IEThingWith (L l (mkUnqual tcName name)) wc ns fs)
+    wc = NoIEWildcard
+    (ns, fs) = foldr f ([],[]) names
+    f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0)
+      | isUpper c || c == ':' = (L l0 (mkUnqual tcName n0) : ns0, fs0)
+      | otherwise             = (ns0, L l0 (fl n0) : fs0)
+      where
+        c = headFS n0
+     -- Does not support duplicateRecordFields.
+    fl x = FieldLabel { flLabel = x
+                      , flIsOverloaded = False
+                      , flSelector = mkRdrName x }
+
+b_exportMdl :: [Code] -> HLIE
+b_exportMdl [LForm (L l (Atom (ASymbol name)))] = L l thing
+  where thing = IEModuleContents (L l (mkModuleNameFS name))
 
 
 -- ---------------------------------------------------------------------

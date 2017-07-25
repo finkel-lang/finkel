@@ -133,6 +133,9 @@ module SK.Core.GHC
     mkFastStringByteString,
     unpackFS,
 
+    -- * FieldLabel
+    FieldLbl(..),
+
     -- * Finder
     addHomeModuleToFinder,
     findObjectLinkable,
@@ -189,6 +192,7 @@ module SK.Core.GHC
     LIE,
     -- Field of IE changed in ghc >= 8.0.2.
     IE(..),
+    IEWildcard(..),
     simpleImportDecl,
 
     -- * HsPat
@@ -351,6 +355,7 @@ import DynFlags
 import ErrUtils
 import Exception
 import FastString
+import FieldLabel
 import Finder
 import GhcMonad
 import HeaderInfo
