@@ -1,4 +1,6 @@
-;;;; 5.2 Export Lists
+;;; -*- mode: sk -*-
+;;;
+;;; 5.2 Export Lists
 
 (module M03
   ;; Value entities

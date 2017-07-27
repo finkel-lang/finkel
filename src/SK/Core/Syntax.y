@@ -28,11 +28,13 @@ import SK.Core.GHC
 %name parse_module module
 %name p_mod_header mod_header
 
-%name p_lexport lexport
+%name p_entity entity
+%name p_entities entities
 
 %name p_imports imports
-%name p_import_form import_form
 %name p_import import
+%name p_limport limport
+%name p_impdecl0 impdecl0
 
 %name p_top_decls top_decls
 %name p_top_decl top_decl
@@ -71,21 +73,23 @@ import SK.Core.GHC
 
 %token
 
-'case'     { LForm (L _ (Atom (ASymbol "case"))) }
-'class'    { LForm (L _ (Atom (ASymbol "class"))) }
-'data'     { LForm (L _ (Atom (ASymbol "data"))) }
-'default'  { LForm (L _ (Atom (ASymbol "default"))) }
-'do'       { LForm (L _ (Atom (ASymbol "do"))) }
-'if'       { LForm (L _ (Atom (ASymbol "if"))) }
-'infix'    { LForm (L _ (Atom (ASymbol "infix"))) }
-'infixl'   { LForm (L _ (Atom (ASymbol "infixl"))) }
-'infixr'   { LForm (L _ (Atom (ASymbol "infixr"))) }
-'instance' { LForm (L _ (Atom (ASymbol "instance"))) }
-'let'      { LForm (L _ (Atom (ASymbol "let"))) }
-'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
-'type'     { LForm (L _ (Atom (ASymbol "type"))) }
-
-'unpack'   { LForm (L _ (Atom (ASymbol "UNPACK"))) }
+-- Haskell 2010
+'as'        { LForm (L _ (Atom (ASymbol "as"))) }
+'case'      { LForm (L _ (Atom (ASymbol "case"))) }
+'class'     { LForm (L _ (Atom (ASymbol "class"))) }
+'data'      { LForm (L _ (Atom (ASymbol "data"))) }
+'default'   { LForm (L _ (Atom (ASymbol "default"))) }
+'do'        { LForm (L _ (Atom (ASymbol "do"))) }
+'hiding'    { LForm (L _ (Atom (ASymbol "hiding"))) }
+'if'        { LForm (L _ (Atom (ASymbol "if"))) }
+'infix'     { LForm (L _ (Atom (ASymbol "infix"))) }
+'infixl'    { LForm (L _ (Atom (ASymbol "infixl"))) }
+'infixr'    { LForm (L _ (Atom (ASymbol "infixr"))) }
+'instance'  { LForm (L _ (Atom (ASymbol "instance"))) }
+'let'       { LForm (L _ (Atom (ASymbol "let"))) }
+'newtype'   { LForm (L _ (Atom (ASymbol "newtype"))) }
+'qualified' { LForm (L _ (Atom (ASymbol "qualified"))) }
+'type'      { LForm (L _ (Atom (ASymbol "type"))) }
 
 '!'  { LForm (L _ (Atom (ASymbol "!"))) }
 ','  { LForm (L _ (Atom (ASymbol ","))) }
@@ -101,6 +105,9 @@ import SK.Core.GHC
 '|'  { LForm (L _ (Atom (ASymbol "|"))) }
 '}'  { LForm (L _ (Atom (ASymbol "}"))) }
 '~'  { LForm (L _ (Atom (ASymbol "~"))) }
+
+-- GHC extension
+'unpack' { LForm (L _ (Atom (ASymbol "UNPACK"))) }
 
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }
@@ -159,35 +166,60 @@ mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl]
                 -> HsModule RdrName }
     : 'symbol' exports { b_module $1 $2 }
 
-exports :: { [HLIE] }
+exports :: { [HIE] }
     : rexports { reverse $1 }
 
-rexports :: { [HLIE] }
+rexports :: { [HIE] }
     : {- empty -}     { [] }
     | rexports export { $2 : $1 }
 
-export :: { HLIE }
-    : 'symbol' { b_exportSym $1 }
-    | 'module' { b_exportMdl $1 }
-    | 'list'   {% parse p_lexport $1 }
+export :: { HIE }
+    : 'symbol' { b_ieSym $1 }
+    | 'module' { b_ieMdl $1 }
+    | 'list'   {% parse p_entity $1 }
 
-lexport :: { HLIE }
-    : 'symbol'          { b_exportAbs $1 }
-    | 'symbol' '..'     { b_exportAll $1 }
-    | 'symbol' symbols1 { b_exportWith $1 $2 }
+entity :: { HIE }
+    : 'symbol'          { b_ieAbs $1 }
+    | 'symbol' '..'     { b_ieAll $1 }
+    | 'symbol' symbols1 { b_ieWith $1 $2 }
+
+entities :: { [HIE] }
+    : rentities { reverse $1 }
+
+rentities :: { [HIE] }
+    : {- empty -}        { [] }
+    | rentities 'symbol' { b_ieSym $2 : $1 }
+    | rentities 'list'   {% fmap (:$1) (parse p_entity $2) }
 
 imports :: { [HImportDecl] }
     : rimports { reverse $1 }
 
 rimports :: { [HImportDecl] }
-    : import_form          { [$1] }
-    | rimports import_form { $2 : $1 }
-
-import_form :: { HImportDecl }
-    : 'import' {% parse p_import $1 }
+    : import          { [$1] }
+    | rimports import { $2 : $1 }
 
 import :: { HImportDecl }
-    : 'symbol' { b_importD $1 }
+    : 'import' {% parse p_limport $1 }
+
+limport :: { HImportDecl }
+    : impdecl                 { b_importD $1 False Nothing }
+    | impdecl 'unit'          { b_importD $1 False (Just []) }
+    | impdecl 'list'          {% do { es <- parse p_entities $2
+                                    ; let es' = Just es
+                                    ; return (b_importD $1 False es') }}
+    | impdecl 'hiding' 'list' {% do { es <- parse p_entities $3
+                                    ; let es' = Just es
+                                    ; return (b_importD $1 True es') }}
+
+impdecl :: { (Code, Bool, Maybe Code ) }
+    : 'symbol' { ($1, False, Nothing) }
+    | 'list'   {% parse p_impdecl0 $1 }
+
+impdecl0 :: { (Code, Bool, Maybe Code) }
+    : 'qualified' 'symbol'               { ($2, True, Nothing) }
+    | 'qualified' 'symbol' 'as' 'symbol' { ($2, True, Just $4) }
+    | 'symbol'                           { ($1, False, Nothing) }
+    | 'symbol' 'as' 'symbol'             { ($1, False, Just $3) }
 
 
 -- ---------------------------------------------------------------------

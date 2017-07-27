@@ -8,6 +8,10 @@ import Control.Monad (ap, foldM, liftM)
 import Data.Char (isUpper)
 import Data.List (foldl1')
 
+-- qualified import of OccName.varName from ghc package. The entity
+-- `varName' conflicts with `Var.varName'.
+import qualified OccName (varName)
+
 -- transformers
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
@@ -112,7 +116,7 @@ type HConDecl = LConDecl RdrName
 
 type HConDeclField = LConDeclField RdrName
 
-type HLIE = LIE RdrName
+type HIE = LIE RdrName
 
 type HTyVarBndr = LHsTyVarBndr RdrName
 
@@ -152,7 +156,6 @@ builderError = do
       failB (showLoc x ++ "parse error on input `" ++
              show (pForm x) ++ "'")
 
-
 -- | Unwrap the element of 'List' and 'HsList', otherwise returns '[]'.
 unwrapListL :: Code -> [Code]
 unwrapListL (LForm (L _ form)) =
@@ -169,13 +172,42 @@ mkRdrName name
   -- package "ghc-prim", but not exported.
   | name == ":" = nameRdrName consDataConName
 
-  -- Data constructor starts from capital letter or ':'.
-  | isUpper x || x == ':' = mkUnqual srcDataName name
+  -- Name starting with ':' is data constructor.
+  | x == ':' = mkUnqual srcDataName name
+
+  -- Name starting with capital letters may qualified var name or data
+  -- constructor name.
+  | isUpper x =
+    case splitQualName name of
+      Nothing -> mkUnqual srcDataName name
+      Just q@(_, name')
+         | isUpper y || y == ':' -> mkQual tcName q
+         | otherwise             -> mkQual OccName.varName q
+         where
+           y = headFS name'
 
   -- Variable.
   | otherwise = mkVarUnqual name
   where
     x = headFS name
+
+splitQualName :: FastString -> Maybe (FastString, FastString)
+splitQualName fstr = go str "" []
+  where
+    str = unpackFS fstr
+    go str0 tmp acc =
+      case str0 of
+        [] | null acc  -> Nothing
+           | otherwise ->
+             let mdl = reverse (tail (concat acc))
+                 var = (reverse tmp)
+             in  Just (fsLit mdl , fsLit var)
+        c:str1
+           | c == '.' ->
+             case str1 of
+               [] -> go str1 (c:tmp) acc
+               _  -> go str1 [] ((c:tmp) : acc)
+           | otherwise -> go str1 (c:tmp) acc
 
 -- | Build 'HLocalBinds' from list of 'HDecl's.
 declsToBinds :: SrcSpan -> [HDecl] -> HLocalBinds
@@ -226,7 +258,7 @@ mkcfld (name, e@(L fl _)) =
 -- GHC's internal data type, which is a helpful resource for
 -- understanding the values and types for constructing Haskell AST data.
 
-b_module :: Code -> [HLIE] ->  Maybe LHsDocString -> [HImportDecl]
+b_module :: Code -> [HIE] ->  Maybe LHsDocString -> [HImportDecl]
          -> [HDecl] -> HsModule RdrName
 b_module form exports mbdoc imports decls =
   HsModule { hsmodName = Just (L l (mkModuleNameFS name))
@@ -248,20 +280,20 @@ b_implicitMainModule :: [HImportDecl] -> [HDecl] -> HsModule RdrName
 b_implicitMainModule =
   b_module (LForm (noLoc (Atom (ASymbol "Main")))) [] Nothing
 
-b_exportSym :: Code -> HLIE
-b_exportSym (LForm (L l (Atom (ASymbol name)))) = thing
+b_ieSym :: Code -> HIE
+b_ieSym (LForm (L l (Atom (ASymbol name)))) = thing
   where thing = L l (IEVar (L l (mkRdrName name)))
 
-b_exportAbs :: Code -> HLIE
-b_exportAbs (LForm (L l (Atom (ASymbol name)))) = thing
+b_ieAbs :: Code -> HIE
+b_ieAbs (LForm (L l (Atom (ASymbol name)))) = thing
   where thing = L l (IEThingAbs (L l (mkUnqual tcName name)))
 
-b_exportAll :: Code -> HLIE
-b_exportAll (LForm (L l (Atom (ASymbol name)))) = thing
+b_ieAll :: Code -> HIE
+b_ieAll (LForm (L l (Atom (ASymbol name)))) = thing
   where thing = L l (IEThingAll (L l (mkUnqual tcName name)))
 
-b_exportWith :: Code -> [Code] -> HLIE
-b_exportWith (LForm (L l (Atom (ASymbol name)))) names = thing
+b_ieWith :: Code -> [Code] -> HIE
+b_ieWith (LForm (L l (Atom (ASymbol name)))) names = thing
   where
     thing = L l (IEThingWith (L l (mkUnqual tcName name)) wc ns fs)
     wc = NoIEWildcard
@@ -271,13 +303,13 @@ b_exportWith (LForm (L l (Atom (ASymbol name)))) names = thing
       | otherwise             = (ns0, L l0 (fl n0) : fs0)
       where
         c = headFS n0
-     -- Does not support duplicateRecordFields.
+    -- Does not support DuplicateRecordFields.
     fl x = FieldLabel { flLabel = x
                       , flIsOverloaded = False
                       , flSelector = mkRdrName x }
 
-b_exportMdl :: [Code] -> HLIE
-b_exportMdl [LForm (L l (Atom (ASymbol name)))] = L l thing
+b_ieMdl :: [Code] -> HIE
+b_ieMdl [LForm (L l (Atom (ASymbol name)))] = L l thing
   where thing = IEModuleContents (L l (mkModuleNameFS name))
 
 
@@ -287,9 +319,21 @@ b_exportMdl [LForm (L l (Atom (ASymbol name)))] = L l thing
 --
 -- ---------------------------------------------------------------------
 
-b_importD :: Code -> HImportDecl
-b_importD (LForm (L l (Atom (ASymbol m)))) =
-    L l (simpleImportDecl (mkModuleNameFS m))
+b_importD :: (Code, Bool, Maybe Code) ->  Bool -> Maybe [HIE]
+          -> HImportDecl
+b_importD (name, qualified, mb_as) hiding mb_entities =
+  case name of
+    LForm (L l (Atom (ASymbol m))) ->
+      let decl = simpleImportDecl (mkModuleNameFS m)
+          decl' = decl { ideclQualified = qualified
+                       , ideclAs = fmap asModName mb_as
+                       , ideclHiding = hiding' }
+          asModName (LForm (L _ (Atom (ASymbol x)))) = mkModuleNameFS x
+          hiding' =
+            case mb_entities of
+              Nothing       -> Nothing
+              Just entities -> Just (hiding, L l entities)
+      in  L l decl'
 
 b_dataD :: Code
         -> (FastString, [HTyVarBndr])

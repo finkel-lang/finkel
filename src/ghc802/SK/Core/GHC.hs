@@ -294,6 +294,7 @@ module SK.Core.GHC
     mkRdrRecordUpd,
 
     -- * RdrName
+    mkQual,
     mkUnqual,
     mkVarUnqual,
     nameRdrName,
