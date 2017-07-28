@@ -103,7 +103,8 @@ instance Eq a => Eq (LForm a) where
   LForm (L _ a) == LForm (L _ b) = a == b
 
 unLocLForm :: LForm a -> Form a
-unLocLForm = unLoc . unLForm
+unLocLForm (LForm (L _ a)) = a
+{-# INLINE unLocLForm #-}
 
 -- type Code = Located (Form Atom)
 type Code = LForm Atom

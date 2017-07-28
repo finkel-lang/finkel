@@ -114,12 +114,17 @@ data SPState = SPState {
   comments :: [Located AnnotationComment],
   annotation_comments :: [(SrcSpan, [Located AnnotationComment])],
   targetFile :: Maybe FilePath,
+  _targetFile :: FastString,
   requiredModuleNames :: [String]
 }
 
 -- | Initial empty state for 'SP'.
 initialSPState :: SPState
-initialSPState = SPState [] [] Nothing []
+initialSPState = SPState { comments = []
+                         , annotation_comments = []
+                         , targetFile = Nothing
+                         , _targetFile = error "_targetFile: uninitialized"
+                         , requiredModuleNames = [] }
 
 -- | A data type for State monad which wraps 'Alex' with 'SPstate'.
 newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
@@ -129,13 +134,13 @@ instance Functor SP where
   {-# INLINE fmap #-}
 
 instance Applicative SP where
-  pure a = a `seq` SP (\st -> pure (a,st))
+  pure a = SP (\st -> pure (a,st))
   {-# INLINE pure #-}
   (<*>) = ap
   {-# INLINE (<*>) #-}
 
 instance Monad SP where
-  return a = a `seq` SP (\st -> return (a,st))
+  return a = SP (\st -> return (a,st))
   {-# INLINE return #-}
   m >>= k = SP (\st -> unSP m st >>= \(a,st') -> unSP (k a) st')
   {-# INLINE (>>=) #-}
@@ -143,11 +148,13 @@ instance Monad SP where
 runSP :: SP a -> Maybe FilePath -> BL.ByteString
       -> Either String (a, SPState)
 runSP sp target input =
-  let st = initialSPState { targetFile = target }
+  let st = initialSPState { targetFile = target
+                          , _targetFile = target' }
+      target' = maybe (fsLit "anon") fsLit target
   in  runAlex input (unSP sp st)
 
 runSP' :: Monad m => SP a -> Maybe FilePath -> BL.ByteString
-      -> ExceptT String m (a, SPState)
+       -> ExceptT String m (a, SPState)
 runSP' sp target input =
   case runSP sp target input of
     Right (a, st) -> return (a, st)
@@ -259,7 +266,7 @@ tok_quasiquote _ _ = return TQuasiquote
 {-# INLINE tok_quasiquote #-}
 
 tok_comma :: Action
-tok_comma _ _ = return $! TSymbol $! fsLit ","
+tok_comma _ _ = return $ TSymbol $ fsLit ","
 {-# INLINE tok_comma #-}
 
 tok_unquote :: Action
@@ -272,11 +279,12 @@ tok_unquote_splice _ _ = return TUnquoteSplice
 
 tok_hash :: Action
 tok_hash _ _ =  return THash
+{-# INLINE tok_hash #-}
 
 tok_doc_comment_next :: Action
 tok_doc_comment_next (_,_,s,_) l = do
-  let str = toString (BL.take l s)
-  return (TDocCommentNext (lc2hc str))
+  let str = toString $ BL.take l s
+  return $ TDocCommentNext $ lc2hc str
 {-# INLINE tok_doc_comment_next #-}
 
 tok_line_comment :: Action
@@ -287,16 +295,16 @@ tok_line_comment (_,_,s,_) l = do
 
 tok_symbol :: Action
 tok_symbol (_,_,s,_) l = do
-  let bs = l `seq` s `seq` BL.toStrict $! BL.take l s
-  bs `seq` return $! TSymbol $! mkFastStringByteString bs
+  let bs = BL.toStrict $ BL.take l s
+  return $ TSymbol $ mkFastStringByteString bs
 {-# INLINE tok_symbol #-}
 
 tok_char :: Action
 tok_char (_,_,s,_) l =
   case s' of
-    ['\\',c] -> return (TChar c)
+    ['\\',c] -> return $ TChar c
     '\\':cs | Just c' <- lookup (map toUpper cs) charTable
-             -> return (TChar c')
+             -> return $ TChar c'
     _        -> do
      (AlexPn _ lno cno, _, _, _) <- alexGetInput
      alexError ("unknown character token `" ++ s' ++ "' at line " ++
@@ -325,22 +333,22 @@ tok_string _ast0 _l = do
     _                -> alexError "tok_string: panic"
   where
     go acc = do
-       inp0 <- alexGetInput
-       case alexGetChar' inp0 of
-         Nothing -> return (accToTString acc)
-         Just (c0, inp1)
-           | c0 == '"'  -> return (accToTString acc)
-           | c0 == '\\' ->
-             case alexGetChar' inp1 of
-               Nothing -> alexError "invalid escape in string literal"
-               Just (c1, inp2)
-                 | Just c2 <- escape c1 ->
-                   putAndGo inp2 (BL.cons c2 acc)
-                 | c1 == '\n'           ->
-                   putAndGo inp2 acc
-                 | otherwise            ->
-                   putAndGo inp2 (BL.cons c1 acc)
-           | otherwise  -> putAndGo inp1 (BL.cons c0 acc)
+      inp0 <- alexGetInput
+      case alexGetChar' inp0 of
+        Nothing -> return $ accToTString acc
+        Just (c0, inp1)
+          | c0 == '"'  -> return $ accToTString acc
+          | c0 == '\\' ->
+            case alexGetChar' inp1 of
+              Nothing -> alexError "invalid escape in string literal"
+              Just (c1, inp2)
+                | Just c2 <- escape c1 ->
+                  putAndGo inp2 (BL.cons c2 acc)
+                | c1 == '\n'           ->
+                  putAndGo inp2 acc
+                | otherwise            ->
+                  putAndGo inp2 (BL.cons c1 acc)
+          | otherwise  -> putAndGo inp1 (BL.cons c0 acc)
     putAndGo inp acc = alexSetInput inp >> go acc
     accToTString = TString . BL.unpack . BL.reverse
     escape x = lookup x tbl
@@ -351,14 +359,14 @@ tok_string _ast0 _l = do
 
 tok_integer :: Action
 tok_integer (_,_,s,_) l =
-  return (TInteger (read (toString (BL.take l s))))
+  return $ TInteger $ read $ toString $ BL.take l s
 {-# INLINE tok_integer #-}
 
 tok_fractional :: Action
 tok_fractional (_,_,s,_) l = do
   let str = toString (BL.take l s)
       rat = readRational str
-  return (TFractional (FL str rat))
+  return $ TFractional $ FL str rat
 {-# INLINE tok_fractional #-}
 
 
@@ -372,47 +380,48 @@ tok_fractional (_,_,s,_) l = do
 -- parser made from Happy. This functions will not pass comment tokens
 -- to continuation but add them to 'SPState'.
 tokenLexer :: (Located Token -> SP a) -> SP a
-tokenLexer cont = SP go'
+tokenLexer cont = SP go
   where
-    go' st =
-      let fn = fsLit (fromMaybe "anon" (targetFile st))
-      in  go fn st
-    go fn st = do
-      L span tok <- scanToken fn
+    go st = do
+      let fn = _targetFile st
+      ltok@(L span tok) <- scanToken fn
       case tok of
         TLineComment _ -> do
-          let comment = L (RealSrcSpan span) (annotateComment tok)
-          go fn $! pushComment comment st
+          let comment = L span (annotateComment tok)
+          go $ pushComment comment st
         TDocCommentNext _ -> do
-          let comment = L (RealSrcSpan span) (annotateComment tok)
-          unSP (cont $! L (RealSrcSpan span) tok)
-               (pushComment comment st)
-        _ -> unSP (cont $! L (RealSrcSpan span) tok) st
+          let comment = L span (annotateComment tok)
+          unSP (cont ltok) $ pushComment comment st
+        _ -> unSP (cont ltok) st
+{-# INLINE tokenLexer #-}
 
 pushComment :: Located AnnotationComment -> SPState -> SPState
 pushComment comment st = st { comments = comment : comments st }
 {-# INLINE pushComment #-}
 
-scanToken :: FastString -> Alex (RealLocated Token)
+scanToken :: FastString -> Alex (Located Token)
 scanToken fn = do
     inp@(AlexPn _ ln0 cn0,_,_,_) <- alexGetInput
     sc <- alexGetStartCode
     case alexScan inp sc of
-      AlexEOF -> do eof <- alexEOF
-                    return (L undefined eof)
+      AlexToken inp'@(AlexPn _ ln1 cn1,_,_,_) len act -> do
+         alexSetInput inp'
+         tok <- act inp (fromIntegral len)
+         let bgn = mkRealSrcLoc fn ln0 cn0
+             end = mkRealSrcLoc fn ln1 cn1
+             span = RealSrcSpan $ mkRealSrcSpan bgn end
+         return $ L span tok
       AlexError (AlexPn _ ln cn,_,_,_) ->
         alexError ("lexial error at line " ++ show ln ++ ", column "
                    ++ show cn)
       AlexSkip inp' _ -> do
         alexSetInput inp'
         scanToken fn
-      AlexToken inp'@(AlexPn _ ln1 cn1,_,_,_) len act -> do
-         alexSetInput inp'
-         tok <- act (ignorePendingBytes inp) (fromIntegral len)
-         let bgn = mkRealSrcLoc fn ln0 cn0
-             end = mkRealSrcLoc fn ln1 cn1
-             span = mkRealSrcSpan bgn end
-         return $! (L span tok)
+      AlexEOF -> do
+        eof <- alexEOF
+        let l = mkRealSrcLoc fn 0 0
+            span = RealSrcSpan (mkRealSrcSpan l l)
+        return (L span eof)
 {-# INLINE scanToken #-}
 
 -- | Lex the input to list of 'Token's.
@@ -427,6 +436,7 @@ lexTokens input = evalSP go Nothing input
 
 alexEOF :: Alex Token
 alexEOF = return TEOF
+{-# INLINE alexEOF #-}
 
 alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
 alexGetChar' (AlexPn pos ln col, chr, bs, consumed) =

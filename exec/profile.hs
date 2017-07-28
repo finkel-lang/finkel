@@ -42,6 +42,6 @@ parseHsModule path =
             expanded <-
               Macro.withExpanderSettings (Macro.macroexpands forms)
             case Syntax.evalBuilder Syntax.parseModule expanded of
-              Right mdl -> mdl `seq` liftIO (putStrLn "done.")
+              Right _   -> liftIO (putStrLn "done.")
               Left  err -> liftIO (putStrLn ("error: " ++ err))
           Left err -> liftIO (putStrLn ("error: " ++ err))
