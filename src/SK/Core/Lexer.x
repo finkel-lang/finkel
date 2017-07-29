@@ -266,7 +266,7 @@ tok_quasiquote _ _ = return TQuasiquote
 {-# INLINE tok_quasiquote #-}
 
 tok_comma :: Action
-tok_comma _ _ = return $ TSymbol $ fsLit ","
+tok_comma _ _ = return $ TSymbol $! fsLit ","
 {-# INLINE tok_comma #-}
 
 tok_unquote :: Action
@@ -295,8 +295,8 @@ tok_line_comment (_,_,s,_) l = do
 
 tok_symbol :: Action
 tok_symbol (_,_,s,_) l = do
-  let bs = BL.toStrict $ BL.take l s
-  return $ TSymbol $ mkFastStringByteString bs
+  let bs = BL.toStrict $! BL.take l s
+  return $ TSymbol $! mkFastStringByteString bs
 {-# INLINE tok_symbol #-}
 
 tok_char :: Action
@@ -333,7 +333,7 @@ tok_string _ast0 _l = do
     _                -> alexError "tok_string: panic"
   where
     go acc = do
-      inp0 <- alexGetInput
+      inp0 <- acc `seq` alexGetInput
       case alexGetChar' inp0 of
         Nothing -> return $ accToTString acc
         Just (c0, inp1)
@@ -343,7 +343,7 @@ tok_string _ast0 _l = do
               Nothing -> alexError "invalid escape in string literal"
               Just (c1, inp2)
                 | Just c2 <- escape c1 ->
-                  putAndGo inp2 (BL.cons c2 acc)
+                  putAndGo inp2 $! BL.cons c2 acc
                 | c1 == '\n'           ->
                   putAndGo inp2 acc
                 | otherwise            ->
@@ -359,14 +359,14 @@ tok_string _ast0 _l = do
 
 tok_integer :: Action
 tok_integer (_,_,s,_) l =
-  return $ TInteger $ read $ toString $ BL.take l s
+  return $ TInteger $! read $! toString $! BL.take l s
 {-# INLINE tok_integer #-}
 
 tok_fractional :: Action
 tok_fractional (_,_,s,_) l = do
   let str = toString (BL.take l s)
       rat = readRational str
-  return $ TFractional $ FL str rat
+  return $ TFractional $! FL str rat
 {-# INLINE tok_fractional #-}
 
 

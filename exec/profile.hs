@@ -26,7 +26,7 @@ printNumSexprs path =
   do contents <- BL.readFile path
      case Lexer.evalSP Reader.sexprs (Just path) contents of
        Right forms -> print (sum (map length forms))
-       Left err    -> putStrLn err
+       Left err -> putStrLn err
 
 parseHsModule :: FilePath -> IO ()
 parseHsModule path =

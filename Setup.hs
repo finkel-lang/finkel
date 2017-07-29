@@ -35,7 +35,12 @@ main = defaultMainWithHooks myHooks where
                         (updateProgram alex (withPrograms lbi))}
         alex = alex' { programOverrideArgs = ["--ghc"] }
         alex' = simpleConfiguredProgram "alex" (FoundOnSystem "alex")
-        happy = happy' { programOverrideArgs = ["--ghc"] }
+        happy = happy' { programOverrideArgs = ["-a", "-c", "-g"]
+                         -- Happy can take `--strict' flag, which adds
+                         -- strictness to happy parser.
+                         --
+                         -- ["-a", "-c", "-g", "--strict"]
+                       }
         happy' = simpleConfiguredProgram "happy" (FoundOnSystem "happy")
   allSuffixHandlers hooks =
     overridesPP (hookedPreProcessors hooks) knownSuffixHandlers

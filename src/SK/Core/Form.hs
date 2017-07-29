@@ -106,7 +106,6 @@ unLocLForm :: LForm a -> Form a
 unLocLForm (LForm (L _ a)) = a
 {-# INLINE unLocLForm #-}
 
--- type Code = Located (Form Atom)
 type Code = LForm Atom
 
 instance Show a => Show (Form a) where
