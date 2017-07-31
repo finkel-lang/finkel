@@ -310,19 +310,6 @@ instance Codish a => Codish [a] where
   toCode = listToCode
   fromCode = listFromCode
 
--- `FlexibleInstance' language pragma required for below.
--- instance Codish a => Codish (LForm a) where
---   toCode (L l form) =
---     case form of
---       Atom a    -> let (L _ b) = toCode a in L l b
---       List xs   -> L l (List (map toCode xs))
---       HsList xs -> L l (HsList (map toCode xs))
---       TEnd       -> L l TEnd
---   fromCode form@(L _ x) =
---     case x of
---       Atom _  -> fromCode form
---       _        -> error "fromCode: LForm"
-
 instance Codish (Form Atom) where
   toCode = LForm . genSrc
   fromCode = Just . unLocLForm
@@ -330,55 +317,6 @@ instance Codish (Form Atom) where
 instance Codish (LForm Atom) where
   toCode = id
   fromCode = Just
-
--- instance Codish SrcSpan where
---   toCode sp =
---     case sp of
---       UnhelpfulSpan txt ->
---         list [atom (ASymbol "mkSkSrcSpan")
---              ,atom (AString (unpackFS txt))]
---       RealSrcSpan rs ->
---         list [atom (ASymbol "mkSrcSpan")
---              ,list [atom (ASymbol "mkSrcLoc")
---                    ,list [atom (ASymbol "fsLit")
---                          ,atom (AString fn)]
---                    ,aint srcSpanStartLine
---                    ,aint srcSpanStartCol]
---              ,list [atom (ASymbol "mkSrcLoc")
---                    ,list [atom (ASymbol "fsLit")
---                          ,atom (AString fn)]
---                    ,aint srcSpanEndLine
---                    ,aint srcSpanEndCol]]
---         where
---           fn = case srcSpanFileName_maybe sp of
---              Just fs -> unpackFS fs
---              Nothing -> "unknown file"
---           aint f = atom (AInteger (fromIntegral (f rs)))
---     where
---       list = genSrc . List
---       atom = genSrc . Atom
---   fromCode form =
---     case unLoc form of
---       List [L _ (Atom (ASymbol "mkSkSrcSpan"))
---             ,L _ (Atom (AString txt))]
---        -> Just (mkSkSrcSpan txt)
---       List [L _ (Atom (ASymbol "mkSrcSpan"))
---             ,L _ (List [L _ (Atom (ASymbol "mkSrcLoc"))
---                         ,L _ (List [L _ (Atom (ASymbol "fsLit"))
---                                     ,L _ (Atom (AString fn))])
---                         ,L _ (Atom (AInteger sl))
---                         ,L _ (Atom (AInteger sc))])
---             ,L _ (List [L _ (Atom (ASymbol "mkSrcLoc"))
---                         ,L _ (List [L _ (Atom (ASymbol "fsLit"))
---                                     ,L _ (Atom (AString _))])
---                         ,L _ (Atom (AInteger el))
---                         ,L _ (Atom (AInteger ec))])]
---        -> Just (mkSrcSpan loc1 loc2)
---          where
---            loc1 = mkSrcLoc fn' (fromIntegral sl) (fromIntegral sc)
---            loc2 = mkSrcLoc fn' (fromIntegral el) (fromIntegral ec)
---            fn' = fsLit fn
---       _ -> Nothing
 
 unquoteSplice :: Codish a => a -> [Code]
 unquoteSplice form =

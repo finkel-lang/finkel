@@ -101,8 +101,6 @@ skcBuildHooks debug pkg_descr lbi hooks flags =
       ghc = (simpleConfiguredProgram "ghc" (FoundOnSystem "skc")) {
         programOverrideArgs = ["--sk-debug" | debug]
       }
-      -- flags' = flags {buildProgramArgs = args}
-      -- args = ("ghc",["--sk-debug"]) : buildProgramArgs flags
 
 -- | Haddock hooks using @stack exec skc@ for preprocessing ".sk"
 -- files.
