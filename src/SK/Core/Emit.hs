@@ -29,7 +29,7 @@ import SrcLoc
 
 -- Internal
 import SK.Core.Lexer
--- import SK.Core.GHC
+import SK.Core.GHC (unpackFS)
 
 
 -- ---------------------------------------------------------------------
@@ -176,7 +176,7 @@ linePragma' st linum =
   doubleQuotes (text file) <+>
   text "#-}"
     where
-      file = maybe "s-expression" replaceExtension (targetFile st)
+      file = replaceExtension (unpackFS (targetFile st))
       replaceExtension name =
         reverse ("sh" ++ dropWhile (/= '.') (reverse name))
 

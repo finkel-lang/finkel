@@ -114,8 +114,7 @@ $whitechar+  ;
 data SPState = SPState {
   comments :: [Located AnnotationComment],
   annotation_comments :: [(SrcSpan, [Located AnnotationComment])],
-  targetFile :: Maybe FilePath,
-  _targetFile :: FastString,
+  targetFile :: FastString,
   requiredModuleNames :: [String]
 }
 
@@ -123,8 +122,7 @@ data SPState = SPState {
 initialSPState :: SPState
 initialSPState = SPState { comments = []
                          , annotation_comments = []
-                         , targetFile = Nothing
-                         , _targetFile = error "_targetFile: uninitialized"
+                         , targetFile = error "_targetFile: uninitialized"
                          , requiredModuleNames = [] }
 
 -- | A data type for State monad which wraps 'Alex' with 'SPstate'.
@@ -149,8 +147,7 @@ instance Monad SP where
 runSP :: SP a -> Maybe FilePath -> BL.ByteString
       -> Either String (a, SPState)
 runSP sp target input =
-  let st = initialSPState { targetFile = target
-                          , _targetFile = target' }
+  let st = initialSPState {targetFile = target'}
       target' = maybe (fsLit "anon") fsLit target
   in  runAlex input (unSP sp st)
 
@@ -184,8 +181,7 @@ incrSP sp f z target input = go ast0 sst0 z
                      , alex_inp = input
                      , alex_chr = '\n'
                      , alex_scd = 0 }
-    sst0 = initialSPState { targetFile = target
-                          , _targetFile = target' }
+    sst0 = initialSPState { targetFile = target' }
     target' = maybe (fsLit "anon") fsLit target
 
 evalSP :: SP a -> Maybe FilePath -> BL.ByteString -> Either String a
@@ -411,7 +407,7 @@ tokenLexer :: (Located Token -> SP a) -> SP a
 tokenLexer cont = SP go
   where
     go st = do
-      let fn = _targetFile st
+      let fn = targetFile st
       ltok@(L span tok) <- scanToken fn
       case tok of
         TLineComment _ -> do
