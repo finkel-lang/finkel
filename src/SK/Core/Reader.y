@@ -4,6 +4,7 @@
 module SK.Core.Reader
   ( sexpr
   , sexprs
+  , psexpr
   ) where
 
 import SrcLoc
@@ -15,6 +16,8 @@ import SK.Core.Lexer
 
 %name sexpr sexp
 %name sexprs sexps
+
+%partial psexpr sexp
 
 %tokentype { Located Token }
 %monad { SP } { >>= } { return }

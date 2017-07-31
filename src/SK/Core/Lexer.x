@@ -16,6 +16,7 @@ module SK.Core.Lexer
   , runSP
   , runSP'
   , evalSP
+  , incrSP
   , errorSP
   , lexErrorSP
   , addRequiredModuleName
@@ -159,6 +160,33 @@ runSP' sp target input =
   case runSP sp target input of
     Right (a, st) -> return (a, st)
     Left err      -> throwE err
+
+-- | Incrementally perform computation with parsed result and given
+-- function.
+incrSP :: SP a          -- ^ The parser.
+       -> (a -> b -> b) -- ^ Function to apply.
+       -> b             -- ^ Initial argument to the function.
+       -> Maybe FilePath -> BL.ByteString -> Either String (b, SPState)
+incrSP sp f z target input = go ast0 sst0 z
+  where
+    go ast sst acc =
+      case unAlex (unSP sp sst) ast of
+        Left msg                ->
+          if BL.all (\c -> c `elem` "\n\r\t ") (alex_inp ast)
+            then return (acc, sst)
+            else Left msg
+        Right (ast', (x, sst')) -> go ast'' sst' $! (f x acc)
+          where
+            ast'' = alex_inp' `seq` ast' {alex_inp = alex_inp'}
+            alex_inp' = BL.cons (alex_chr ast') (alex_inp ast')
+    ast0 = AlexState { alex_pos = alexStartPos
+                     , alex_bpos = 0
+                     , alex_inp = input
+                     , alex_chr = '\n'
+                     , alex_scd = 0 }
+    sst0 = initialSPState { targetFile = target
+                          , _targetFile = target' }
+    target' = maybe (fsLit "anon") fsLit target
 
 evalSP :: SP a -> Maybe FilePath -> BL.ByteString -> Either String a
 evalSP sp target input = fmap fst (runSP sp target input)

@@ -15,6 +15,7 @@ main =
   do args <- getArgs
      case args of
        ["sexpr", file] -> printNumSexprs file
+       ["incr", file] -> incrementalCount file
        ["hsrc", file] -> parseHsModule file
        _ -> usage
 
@@ -45,3 +46,11 @@ parseHsModule path =
               Right _   -> liftIO (putStrLn "done.")
               Left  err -> liftIO (putStrLn ("error: " ++ err))
           Left err -> liftIO (putStrLn ("error: " ++ err))
+
+incrementalCount :: FilePath -> IO ()
+incrementalCount file = do
+  contents <- BL.readFile file
+  let f form acc = acc + length form
+  case Lexer.incrSP Reader.psexpr f 0 (Just file) contents of
+    Right (n, _) -> print n
+    Left err     -> putStrLn err
