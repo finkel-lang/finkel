@@ -12,6 +12,7 @@ category:            Language
 build-type:          Custom
 extra-source-files:  README.md
                      test/data/syntax/*.sk
+                     test/data/build/*.sk
                      test/data/build/p01/*.cabal
                      test/data/build/p01/*.yaml
                      test/data/build/p01/src/P01/*.hs
