@@ -169,13 +169,11 @@ pTyThing :: DynFlags -> TyThing -> Skc ()
 pTyThing dflags ty_thing@(AnId var) = do
   let str :: Outputable p => p -> String
       str = showPpr dflags
-      prn = liftIO . putStrLn
-      name = str (varName var)
       typ = str (varType var)
   when (typ == "Macro")
-       (do prn (";;; adding macro `" ++
-                 name ++
-                 "' to current compiler session.")
+       (do debugIO (putStrLn (";;; adding macro `" ++
+                                  str (varName var) ++
+                                  "' to current compiler session."))
            addImportedMacro ty_thing)
 pTyThing dflags tt = pTyThing' dflags tt
 

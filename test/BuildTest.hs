@@ -2,6 +2,7 @@ module BuildTest where
 
 -- base
 import Control.Monad (when)
+import Data.List (intersperse)
 import System.Directory ( doesFileExist, getDirectoryContents
                         , removeFile)
 import System.Exit (ExitCode(..))
@@ -21,14 +22,15 @@ buildTests = do
   buildFile ["main1.sk"]
   buildFile ["main2.sk"]
   buildFile ["main3.sk"]
+  buildFile ["main4.sk", "M3.sk"]
   buildPackage "p01"
 
 buildFile :: [FilePath] -> Spec
 buildFile paths =
   before_ removeArtifacts $
-  describe ("compile files: " ++ show paths) $
+  describe ("files " ++ concat (intersperse ", " paths)) $
     it "should compile successfully" $ do
-      ret <- runSkc (make' targets True Nothing) initialSkEnv
+      ret <- runSkc (make' targets False Nothing) initialSkEnv
       ret `shouldBe` Right ()
   where
      removeArtifacts = do

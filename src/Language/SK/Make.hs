@@ -185,7 +185,7 @@ make' not_yet_compiled readys0 pendings0 = do
           --
           let notYetReady =
                 any (\m -> m `elem` map (skmn . fst) pendings ||
-                            m `elem` map (skmn . fst) summarised)
+                           m `elem` map (skmn . fst) summarised)
                      imports
           if notYetReady
              then go acc i k nycs summarised (target:pendings)
@@ -223,6 +223,8 @@ make' not_yet_compiled readys0 pendings0 = do
                  -- the returned ModSummary to accumulator, and
                  -- continue.
                  reqs <- getReqs
+                 -- XXX: Test whether required modules are all ready to
+                 -- compile.
                  let graph_upto_this =
                        topSortModuleGraph True (summary:acc) (Just mn)
                      mn = ms_mod_name summary
