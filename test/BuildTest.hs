@@ -2,38 +2,47 @@ module BuildTest where
 
 -- base
 import Control.Monad (when)
-import System.Directory (doesFileExist, removeFile)
+import System.Directory ( doesFileExist, getDirectoryContents
+                        , removeFile)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), replaceExtension)
+import System.FilePath ((</>), replaceExtension, takeExtension)
 import System.Process (rawSystem)
 
 -- hspec
 import Test.Hspec
 
 -- sk-core
+import SK.Core.GHC
 import SK.Core.Make
 import SK.Core.Run
 
-removeIfExist :: FilePath -> IO ()
-removeIfExist path = do
-  exist <- doesFileExist path
-  when exist (removeFile path)
+buildTests :: Spec
+buildTests = do
+  buildFile ["main1.sk"]
+  buildFile ["main2.sk"]
+  buildPackage "p01"
 
 buildFile :: [FilePath] -> Spec
 buildFile paths =
+  before_ removeArtifacts $
   describe ("compile files: " ++ show paths) $
     it "should compile successfully" $ do
-      let targets = map (\path -> (path, Nothing)) paths
-          rm path ext = removeIfExist (replaceExtension path ext)
-      mapM_ (\path -> rm path ".o" >> rm path ".hi") paths
-      ret <- runSkc (make targets True Nothing) initialSkEnv
+      ret <- runSkc (make' targets True Nothing) initialSkEnv
       ret `shouldBe` Right ()
-
-stack :: String -> [String] -> IO ExitCode
-stack projectName args = do
-  let yaml = "test" </> "data" </> "build" </> projectName </>
-             "stack.yaml"
-  rawSystem "stack" (("--stack-yaml=" ++ yaml):"--silent":args)
+  where
+     removeArtifacts = do
+       contents <- getDirectoryContents odir
+       mapM_ removeObjAndHi contents
+     removeObjAndHi file =
+       when (takeExtension file `elem` [".o", ".hi"])
+            (removeFile (odir </> file))
+     targets = map (\path -> (path, Nothing)) paths
+     odir = "test" </> "data" </> "build"
+     make' targets link out = do
+       dflags <- getSessionDynFlags
+       let dflags' = dflags {importPaths = [".", odir]}
+       setSessionDynFlags dflags'
+       make targets link out
 
 buildPackage :: String -> Spec
 buildPackage name =
@@ -47,7 +56,8 @@ buildPackage name =
       _ <- s ["clean", name]
       exitCode `shouldBe` ExitSuccess
 
-buildTests :: Spec
-buildTests =
-  do buildFile ["test/data/build/m1.sk"]
-     buildPackage "p01"
+stack :: String -> [String] -> IO ExitCode
+stack projectName args = do
+  let yaml = "test" </> "data" </> "build" </> projectName </>
+             "stack.yaml"
+  rawSystem "stack" (("--stack-yaml=" ++ yaml):"--silent":args)

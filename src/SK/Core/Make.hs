@@ -24,9 +24,8 @@ import qualified Lexer as GHCLexer
 import System.Directory (doesFileExist)
 
 -- filepath
-import System.FilePath ( dropExtension
-                       , replaceExtension
-                       , takeExtension
+import System.FilePath ( dropExtension, pathSeparator
+                       , replaceExtension , takeExtension
                        , (<.>), (</>))
 
 -- internal
@@ -157,23 +156,24 @@ make' :: [String] -> [TargetUnit] -> [TargetUnit] -> Skc [ModSummary]
 make' not_yet_compiled readys0 pendings0 = do
   debugIO (do putStr ";;; nycs: "
               print not_yet_compiled)
-  go [] total not_yet_compiled readys0 pendings0
+  go [] total total not_yet_compiled readys0 pendings0
   where
     -- No more modules to compile, return the accumulated ModSummary.
-    go acc 0  _ _  _ = return acc
-    go acc _ [] _  _ = return acc
-    go acc _ _ [] [] = return acc
+    go acc i _  _ _  _ | i <= 0 = return acc
+    go acc _ _ [] _  _ = return acc
+    go acc _ _ _ [] [] = return acc
 
-    -- Compile ready to compile targets to ModSummary and
+    -- Compile ready-to-compile targets to ModSummary and
     -- HsModule. Input could be SK source code, Haskell source code, or
     -- something else. If SK source code or Haskell source code, get
     -- ModSummary to resolve the dependencies.
-    go acc i nycs (target@(tsr,mbp):summarised) pendings =
+    go acc i k nycs (target@(tsr,mbp):summarised) pendings =
       case tsr of
-        SkSource path mn form reqs -> do
+        SkSource path _mn form reqs -> do
           hmdl <- compileSkModuleForm' form
           summary <- mkModSummary (Just path) hmdl
           let imports = map import_name (hsmodImports hmdl)
+          debugIO (putStrLn (";;; imports: " ++ show imports))
 
           -- Test whether imported modules are in pendings. If found,
           -- skip the compilation and add this module to the list of
@@ -182,41 +182,60 @@ make' not_yet_compiled readys0 pendings0 = do
           -- N.B. For SK source target, dependency modules passed to
           -- 'makeOne' contains imported modules and required modules.
           --
-          if any (`elem` map (skmn . fst) pendings) imports
-             then go acc i nycs summarised (target:pendings)
+          if any (\m -> m `elem` map (skmn . fst) pendings ||
+                        m `elem` map (skmn . fst) summarised)
+                 imports
+             then go acc i k nycs summarised (target:pendings)
              else do
-               r_mss <- mapM (getModSummary . mkModuleName) reqs
-               let nycs' = filter (/= mn) nycs
-                   mn' = ms_mod_name summary
-                   graph_upto_this =
-                     topSortModuleGraph True (summary:acc) (Just mn')
-                   deps = flattenSCCs graph_upto_this
-               summary' <- makeOne i total summary hmdl (deps ++ r_mss)
-               go (summary':acc) (i - 1) nycs' summarised pendings
+               let act = mapM (getModSummary' . mkModuleName) reqs
+               compileIfReady summary hmdl imports (catMaybes <$> act)
 
         HsSource _ -> do
           (Just summary, Just hmdl) <- compileInput (tsr,mbp)
-          let mn = ms_mod_name summary
-              graph_upto_this =
-                topSortModuleGraph True (summary:acc) (Just mn)
-              mNameString = moduleNameString mn
-              nycs' = filter (/= mNameString) nycs
-              deps = flattenSCCs graph_upto_this
-          summary' <- makeOne i total summary hmdl deps
-          go (summary':acc)  (i - 1) nycs' summarised pendings
+          let imports = map import_name (hsmodImports hmdl)
+          compileIfReady summary hmdl imports (return [])
 
         OtherSource _ ->
-          go acc i nycs summarised pendings
+          go acc i k nycs summarised pendings
+
+        where
+          -- Compile the current target unit if it's ready.
+          compileIfReady summary hmdl imports getReqs = do
+            hsc_env <- getSession
+            is <- mapM (findImported hsc_env summarised) imports
+            let is' = catMaybes is
+            if not (null is')
+               then do
+                 -- Imported modules are not fully compiled yet. Move
+                 -- this module to the end of summarised modules and
+                 -- recurse.
+                 let summarised' = is' ++ summarised ++ [target]
+                     i' = i + length is'
+                     k' = k + length is'
+                 go acc i' k' nycs summarised' pendings
+               else do
+                 -- Ready to compile this target unit. Compile it, add
+                 -- the returned ModSummary to accumulator, and
+                 -- continue.
+                 reqs <- getReqs
+                 let graph_upto_this =
+                       topSortModuleGraph True (summary:acc) (Just mn)
+                     mn = ms_mod_name summary
+                     mNameString = moduleNameString mn
+                     nycs' = filter (/= mNameString) nycs
+                     deps = flattenSCCs graph_upto_this ++ reqs
+                 summary' <- makeOne i k summary hmdl deps
+                 go (summary':acc) (i-1) k nycs' summarised pendings
 
     -- Ready to compile pending modules to read time ModSummary.
     -- Partition the modules, make read time ModSummaries, then sort via
     -- topSortModuleGraph, and recurse.
-    go acc i nycs [] pendings = do
+    go acc i k nycs [] pendings = do
       let (readies', pendings') = partitionRequired nycs pendings
       rt_mss <- mkReadTimeModSummaries readies'
       let graph = topSortModuleGraph True rt_mss Nothing
           readies'' = sortTargets (flattenSCCs graph) readies'
-      go acc i nycs readies'' pendings'
+      go acc i k nycs readies'' pendings'
 
     import_name = moduleNameString . unLoc . ideclName . unLoc
     skmn t = case t of
@@ -263,10 +282,10 @@ doMakeOne i total ms hmdl = do
   _m <- liftIO (addHomeModuleToFinder hsc_env (ms_mod_name ms) loc)
 
   -- Update the time stamp of generated obj and hi files.
-  e_obj_date <- tryGetTimeStamp (ml_obj_file loc)
-  e_iface_date <- tryGetTimeStamp (ml_hi_file loc)
-  return ms { ms_obj_date = e2mb e_obj_date
-            , ms_iface_date = e2mb e_iface_date }
+  mb_obj_date <- e2mb <$> tryGetTimeStamp (ml_obj_file loc)
+  mb_iface_date <- e2mb <$> tryGetTimeStamp (ml_hi_file loc)
+  return ms { ms_obj_date = mb_obj_date
+            , ms_iface_date = mb_iface_date }
 
 -- XXX: Avoid the call to "tcHsModule", currently not much difference in
 -- time spent for compilation.
@@ -334,10 +353,36 @@ findTargetSource (modName, a) = do
           do contents <- liftIO (BL.readFile path)
              (forms, sp) <- parseSexprs (Just path) contents
              let reqs = requiredModuleNames sp
-             return (SkSource path modName forms reqs, a)
+                 modName' = asModName modName
+             return (SkSource path modName' forms reqs, a)
         | isHsFile path = return (HsSource path, a)
         | otherwise = return (OtherSource path, a)
   detectSource inputPath
+
+-- | Find imported module.
+findImported :: HscEnv -- ^ Current hsc environment.
+             -> [TargetUnit] -- ^ Pendingmodules.
+             -> String -- ^ Module name to find.
+             -> Skc (Maybe TargetUnit)
+findImported hsc_env pendings name
+  | isPending = return Nothing
+  | otherwise = do
+    findResult <-
+      liftIO (findImportedModule hsc_env (mkModuleName name) Nothing)
+    case findResult of
+      Found {}         -> return Nothing
+      NoPackage {}     -> failS ("No Package: " ++ name)
+      FoundMultiple {} -> failS ("Found multiple modules for " ++ name)
+      NotFound {}      -> Just <$> findTargetSource (name, Nothing)
+   where
+     isPending = name `elem` [n | (SkSource _ n _ _, _) <- pendings]
+
+-- | Variant of 'getModSummary' wrapped with 'Maybe'.
+getModSummary' :: ModuleName -> Skc (Maybe ModSummary)
+getModSummary' name = ghandle handler (Just <$> getModSummary name)
+  where
+    handler :: GhcApiError -> Skc (Maybe ModSummary)
+    handler _ghcApiError = return Nothing
 
 -- | Make list of 'ModSummary' for read time dependency analysis.
 mkReadTimeModSummaries :: [TargetUnit] -> Skc [ModSummary]
@@ -394,12 +439,6 @@ compileToHsModule (tsrc, mbphase) =
 
 compileSkModuleForm' :: [Code] -> Skc (HsModule RdrName)
 compileSkModuleForm' = timeIt "HsModule [sk]" . compileSkModuleForm
-
-isSkFile :: FilePath -> Bool
-isSkFile path = takeExtension path == ".sk"
-
-isHsFile :: FilePath -> Bool
-isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
 
 compileHsFile :: FilePath -> Maybe Phase
                -> Skc (HsModule RdrName, DynFlags)
@@ -493,6 +532,19 @@ sortTargets summaries targets = foldr f [] summaries
 
 timeIt :: String -> Skc a -> Skc a
 timeIt label = withTiming getDynFlags (text label) (const ())
+
+isSkFile :: FilePath -> Bool
+isSkFile path = takeExtension path == ".sk"
+
+isHsFile :: FilePath -> Bool
+isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
+
+asModName :: String -> String
+asModName name
+   | looksLikeModuleName name = name
+   | otherwise = map slash_to_dot (dropExtension name)
+   where
+     slash_to_dot c = if c == pathSeparator then '.' else c
 
 -- [guessOutputFile]
 --

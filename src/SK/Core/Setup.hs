@@ -33,7 +33,7 @@ import Distribution.Simple.Program
 import Distribution.Simple.Program.Types
 import Distribution.Simple.PreProcess
 import Distribution.Simple.Setup
-
+import Distribution.Simple.Test (test)
 
 -- ---------------------------------------------------------------------
 --

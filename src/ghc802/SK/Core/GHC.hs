@@ -138,6 +138,7 @@ module SK.Core.GHC
 
     -- * Finder
     addHomeModuleToFinder,
+    findImportedModule,
     findObjectLinkable,
     mkHomeModLocation,
 
@@ -216,6 +217,7 @@ module SK.Core.GHC
     srcErrorMessages,
 
     -- * HsUtils
+    looksLikeModuleName,
     mkClassOpSigs,
     mkLHsSigType,
     mkHsIsString,
@@ -224,6 +226,8 @@ module SK.Core.GHC
     batchMsg,
 
     -- * HscTypes
+    FindResult(..),
+    GhcApiError,
     HscEnv(..),
     SourceModified(..),
     TyThing(..),

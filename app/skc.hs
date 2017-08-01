@@ -53,11 +53,9 @@ main = do
         null srcs && elem "-shared" ghcopts' && elem "-dynamic" ghcopts
   exitCode <-
     -- When any of conflicting option with frontend plugin was set, OR
-    -- building shared library, OR no sk-specific option was specified,
-    -- delegate to raw ghc without frontend plugin.
-    if any (`elem` conflictingOptions) ghcopts'
-       || buildingSharedLib
-       || null skopts && null srcs
+    -- building shared library, delegate to raw ghc without frontend
+    -- plugin.
+    if any (`elem` conflictingOptions) ghcopts' || buildingSharedLib
        then runRawGhc
        else do
          let args = concat [argOuts,skopts',ghcopts',"-x":"hs":srcs]

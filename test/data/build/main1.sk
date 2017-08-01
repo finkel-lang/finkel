@@ -4,4 +4,4 @@
 
 (:: main (IO ()))
 (= main
-  (putStrLn "From M1.main."))
+  (putStrLn "From main1.sk"))
