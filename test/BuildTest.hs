@@ -20,6 +20,7 @@ buildTests :: Spec
 buildTests = do
   buildFile ["main1.sk"]
   buildFile ["main2.sk"]
+  buildFile ["main3.sk"]
   buildPackage "p01"
 
 buildFile :: [FilePath] -> Spec

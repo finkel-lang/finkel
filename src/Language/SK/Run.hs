@@ -7,7 +7,6 @@ module Language.SK.Run
   , withSourceErrorHandling
   , initialSkEnv
   , skErrorHandler
-  , sExpression
   , compileSkModule
   , compileSkModuleForm
   , compileAndEmit
@@ -117,14 +116,6 @@ initialSkEnv :: SkEnv
 initialSkEnv = SkEnv
   { envMacros = specialForms
   , envDebug = False }
-
-sExpression :: BL.ByteString -> IO ()
-sExpression input =
-  case evalSP sexprs Nothing input of
-    Right forms ->
-      do putStrLn "=== pform ==="
-         mapM_ print forms
-    Left err -> putStrLn err
 
 compileAndEmit :: FilePath -> IO (Either String String)
 compileAndEmit file = runSkc go initialSkEnv

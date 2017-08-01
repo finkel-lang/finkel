@@ -185,35 +185,38 @@ pTyThing dflags tt = pTyThing' dflags tt
 -- Using 'IfaceDecl' to detect the Language.SK.SKC.Macro type. This way is
 -- more safe than comparing the Type of Var, since IfaceDecl contains
 -- more detailed information.
+--
 pTyThing' :: DynFlags -> TyThing -> Skc ()
-pTyThing' dflags tt@(AnId _) = do
-  let ifd = tyThingToIfaceDecl tt
-      name = ifName ifd
-      typ = ifType ifd
-      prn = liftIO . putStrLn
-      str :: Outputable p => p -> String
-      str = showPpr dflags
-  prn (concat [";;; an id: name=", str name , " type=", str typ])
-  case typ of
-    -- Constructor name 'IfaceTyVar' changed since ghc 8.0.2 release.
-    IfaceTyVar _ -> prn "free ty var"
-    IfaceLitTy _ -> prn "lit ty"
-    IfaceAppTy _ _ -> prn "app ty"
-    IfaceFunTy _ _ -> prn "fun ty"
-    IfaceDFunTy _ _ -> prn "dfun ty"
-    IfaceForAllTy _ _ -> prn "for all ty"
-    IfaceTyConApp con arg -> do
-      let conName = str (ifaceTyConName con)
-      prn (concat [ ";;; ty con app,"
-                  , " tyConName=", conName
-                  , " tyConArg=", str arg])
-    IfaceCastTy _ _ -> prn "cast ty"
-    IfaceCoercionTy _ -> prn "coercion ty"
-    IfaceTupleTy {} -> prn "tuple ty"
+pTyThing' _ _ = return ()
 
-pTyThing' dflags tt =
-  -- Arguments of `pprTyThing' changed since ghc-8.0.2 release.
-  liftIO (putStrLn (";;; " ++ (showSDocUnqual dflags (pprTyThing tt))))
+-- pTyThing' dflags tt@(AnId _) = do
+--   let ifd = tyThingToIfaceDecl tt
+--       name = ifName ifd
+--       typ = ifType ifd
+--       prn = liftIO . putStrLn
+--       str :: Outputable p => p -> String
+--       str = showPpr dflags
+--   prn (concat [";;; an id: name=", str name , " type=", str typ])
+--   case typ of
+--     -- Constructor name 'IfaceTyVar' changed since ghc 8.0.2 release.
+--     IfaceTyVar _ -> prn "free ty var"
+--     IfaceLitTy _ -> prn "lit ty"
+--     IfaceAppTy _ _ -> prn "app ty"
+--     IfaceFunTy _ _ -> prn "fun ty"
+--     IfaceDFunTy _ _ -> prn "dfun ty"
+--     IfaceForAllTy _ _ -> prn "for all ty"
+--     IfaceTyConApp con arg -> do
+--       let conName = str (ifaceTyConName con)
+--       prn (concat [ ";;; ty con app,"
+--                   , " tyConName=", conName
+--                   , " tyConArg=", str arg])
+--     IfaceCastTy _ _ -> prn "cast ty"
+--     IfaceCoercionTy _ -> prn "coercion ty"
+--     IfaceTupleTy {} -> prn "tuple ty"
+
+-- pTyThing' dflags tt =
+--   -- Arguments of `pprTyThing' changed since ghc-8.0.2 release.
+--   liftIO (putStrLn (";;; " ++ (showSDocUnqual dflags (pprTyThing tt))))
 
 addImportedMacro :: TyThing -> Skc ()
 addImportedMacro ty_thing =

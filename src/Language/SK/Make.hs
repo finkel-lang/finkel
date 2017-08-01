@@ -173,7 +173,8 @@ make' not_yet_compiled readys0 pendings0 = do
           hmdl <- compileSkModuleForm' form
           summary <- mkModSummary (Just path) hmdl
           let imports = map import_name (hsmodImports hmdl)
-          debugIO (putStrLn (";;; imports: " ++ show imports))
+          debugIO (putStrLn (concat [ ";;; target=", show target
+                                    , " imports=", show imports]))
 
           -- Test whether imported modules are in pendings. If found,
           -- skip the compilation and add this module to the list of
@@ -182,9 +183,11 @@ make' not_yet_compiled readys0 pendings0 = do
           -- N.B. For SK source target, dependency modules passed to
           -- 'makeOne' contains imported modules and required modules.
           --
-          if any (\m -> m `elem` map (skmn . fst) pendings ||
-                        m `elem` map (skmn . fst) summarised)
-                 imports
+          let notYetReady =
+                any (\m -> m `elem` map (skmn . fst) pendings ||
+                            m `elem` map (skmn . fst) summarised)
+                     imports
+          if notYetReady
              then go acc i k nycs summarised (target:pendings)
              else do
                let act = mapM (getModSummary' . mkModuleName) reqs
@@ -193,16 +196,18 @@ make' not_yet_compiled readys0 pendings0 = do
         HsSource _ -> do
           (Just summary, Just hmdl) <- compileInput (tsr,mbp)
           let imports = map import_name (hsmodImports hmdl)
+          debugIO (putStrLn (concat [ ";;; target=", show target
+                                    , " imports=", show imports]))
           compileIfReady summary hmdl imports (return [])
 
         OtherSource _ ->
           go acc i k nycs summarised pendings
 
         where
-          -- Compile the current target unit if it's ready.
           compileIfReady summary hmdl imports getReqs = do
             hsc_env <- getSession
-            is <- mapM (findImported hsc_env summarised) imports
+            is <- mapM (findImported hsc_env acc summarised) imports
+            debugIO (putStrLn (";;; is = " ++ show is))
             let is' = catMaybes is
             if not (null is')
                then do
@@ -361,16 +366,30 @@ findTargetSource (modName, a) = do
 
 -- | Find imported module.
 findImported :: HscEnv -- ^ Current hsc environment.
+             -> [ModSummary] -- ^ Accumulated 'ModSummary's so far.
              -> [TargetUnit] -- ^ Pendingmodules.
              -> String -- ^ Module name to find.
              -> Skc (Maybe TargetUnit)
-findImported hsc_env pendings name
+findImported hsc_env acc pendings name
   | isPending = return Nothing
   | otherwise = do
     findResult <-
       liftIO (findImportedModule hsc_env (mkModuleName name) Nothing)
     case findResult of
-      Found {}         -> return Nothing
+      -- Haskell module returned by `Finder.findImportedModule' may
+      -- compiled yet. If the source code has Haskell file extension,
+      -- checking whether the module is listed in accumulator containing
+      -- compiled modules.
+      Found loc mdl    -> do
+        debugIO (putStrLn $ ";;; Found " ++ show loc ++ ", "
+                  ++ moduleNameString (moduleName mdl))
+        case ml_hs_file loc of
+          Just path | takeExtension path `elem` [".hs"] ->
+                      if moduleName mdl `elem` map ms_mod_name acc
+                         then return Nothing
+                         else Just <$> findTargetSource (name, Nothing)
+          _ -> return Nothing
+        -- return Nothing
       NoPackage {}     -> failS ("No Package: " ++ name)
       FoundMultiple {} -> failS ("Found multiple modules for " ++ name)
       NotFound {}      -> Just <$> findTargetSource (name, Nothing)
@@ -492,9 +511,9 @@ findFileInImportPaths dirs modName = do
                     else search ds'
       dirs' | "." `elem` dirs = dirs
             | otherwise     = dirs ++ ["."]
-  debugIO (putStrLn ("moduleName: " ++ show modName))
+  debugIO (putStrLn (";;; moduleName: " ++ show modName))
   found <- search dirs'
-  debugIO (putStrLn ("File found: " ++ found))
+  debugIO (putStrLn (";;; File found: " ++ found))
   return found
 
 -- | Link 'ModSummary's, when required.
