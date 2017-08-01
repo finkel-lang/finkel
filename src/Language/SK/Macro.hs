@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Module for macros.
-module SK.Core.Macro
+module Language.SK.Macro
   ( macroexpand
   , macroexpands
   , setExpanderSettings
@@ -37,11 +37,11 @@ import TyCon (isDataTyCon, isImplicitTyCon)
 import Util (filterOut)
 
 -- Internal
-import SK.Core.Builder (HExpr, HDecl)
-import SK.Core.Form
-import SK.Core.GHC
-import SK.Core.Syntax (evalBuilder, parseExpr, parseModule)
-import SK.Core.SKC
+import Language.SK.Builder (HExpr, HDecl)
+import Language.SK.Form
+import Language.SK.GHC
+import Language.SK.Syntax (evalBuilder, parseExpr, parseModule)
+import Language.SK.SKC
 
 
 -- ---------------------------------------------------------------------
@@ -182,7 +182,7 @@ pTyThing dflags tt = pTyThing' dflags tt
 -- Currently not in use during macro addition, just for printing out
 -- information.
 --
--- Using 'IfaceDecl' to detect the SK.Core.SKC.Macro type. This way is
+-- Using 'IfaceDecl' to detect the Language.SK.SKC.Macro type. This way is
 -- more safe than comparing the Type of Var, since IfaceDecl contains
 -- more detailed information.
 pTyThing' :: DynFlags -> TyThing -> Skc ()
@@ -432,7 +432,7 @@ setExpanderSettings = do
   _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
                                  , ghcLink = LinkInMemory
                                  , optLevel = 0 })
-  setContext [mkIIDecl "Prelude", mkIIDecl "SK.Core"]
+  setContext [mkIIDecl "Prelude", mkIIDecl "Language.SK"]
 
 -- | Perform given action with DynFlags set for macroexpansion, used
 -- this to preserve original DynFlags.

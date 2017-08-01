@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 -- | Emit Haskell source code from Haskell syntax data type.
-module SK.Core.Emit
+module Language.SK.Emit
   ( HsSrc(..)
   , genHsSrc
   , buildDocMap
@@ -28,8 +28,8 @@ import Outputable
 import SrcLoc
 
 -- Internal
-import SK.Core.Lexer
-import SK.Core.GHC (unpackFS)
+import Language.SK.Lexer
+import Language.SK.GHC (unpackFS)
 
 
 -- ---------------------------------------------------------------------

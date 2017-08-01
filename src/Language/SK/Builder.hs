@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Builder functions for Haskell syntax data type.
-module SK.Core.Builder where
+module Language.SK.Builder where
 
 -- base
 import Control.Monad (ap, foldM, liftM)
@@ -17,8 +17,8 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 
 -- Internal
-import SK.Core.GHC
-import SK.Core.Form
+import Language.SK.GHC
+import Language.SK.Form
 
 -- -------------------------------------------------------------------
 --

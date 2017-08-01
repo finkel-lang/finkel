@@ -1,5 +1,5 @@
 -- | Module containing GHC frontend plugin for skc.
-module SK.Core.Plugin
+module Language.SK.Plugin
    ( frontendPlugin
    ) where
 
@@ -12,11 +12,11 @@ import System.Exit (exitFailure)
 import GhcPlugins (FrontendPlugin(..), defaultFrontendPlugin)
 
 -- Internal
-import SK.Core.Emit
-import SK.Core.GHC
-import SK.Core.Make
-import SK.Core.Run
-import SK.Core.SKC
+import Language.SK.Emit
+import Language.SK.GHC
+import Language.SK.Make
+import Language.SK.Run
+import Language.SK.SKC
 
 
 -- ---------------------------------------------------------------------

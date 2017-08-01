@@ -2,7 +2,7 @@
 
 (module Main)
 
-(import SK.Core.Form)
+(import Language.SK.Form)
 
 (= f1 arg
   (print ['a 'b arg 'd]))

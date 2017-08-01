@@ -1,6 +1,6 @@
 (module P01.G1)
 
-(import SK.Core)
+(import Language.SK)
 
 ;;; Simple definition of `defmacro' used in `p01' package.
 (define-macro defmacro form

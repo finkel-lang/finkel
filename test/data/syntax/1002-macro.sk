@@ -2,7 +2,7 @@
 
 (module Main)
 
-(import SK.Core)
+(import Language.SK)
 
 ;; Simple version of `defmacro' defined with `define-macro'
 (define-macro defmacro form

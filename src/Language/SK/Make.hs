@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns, CPP #-}
 -- | Make mode for skc.
-module SK.Core.Make
+module Language.SK.Make
   ( make
   ) where
 
@@ -29,11 +29,11 @@ import System.FilePath ( dropExtension, pathSeparator
                        , (<.>), (</>))
 
 -- internal
-import SK.Core.Form
-import SK.Core.GHC
-import SK.Core.Lexer
-import SK.Core.Run
-import SK.Core.SKC
+import Language.SK.Form
+import Language.SK.GHC
+import Language.SK.Lexer
+import Language.SK.Run
+import Language.SK.SKC
 
 import ErrUtils (withTiming)
 import Outputable (text)

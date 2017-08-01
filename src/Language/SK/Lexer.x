@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 -- | Module for lexing S-expressions.
-module SK.Core.Lexer
+module Language.SK.Lexer
   ( -- * Token data type
     Token(..)
   , LToken
@@ -34,8 +34,8 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Control.Monad.Trans.Except (ExceptT(..), throwE)
 
 -- Internal
-import SK.Core.Form
-import SK.Core.GHC
+import Language.SK.Form
+import Language.SK.GHC
 }
 
 %wrapper "monad-bytestring"

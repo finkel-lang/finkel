@@ -4,11 +4,11 @@ import Control.Monad.IO.Class (MonadIO(..))
 import System.Environment (getArgs)
 import qualified Data.ByteString.Lazy as BL
 
-import qualified SK.Core.Lexer as Lexer
-import qualified SK.Core.Macro as Macro
-import qualified SK.Core.Reader as Reader
-import qualified SK.Core.Run as Run
-import qualified SK.Core.Syntax as Syntax
+import qualified Language.SK.Lexer as Lexer
+import qualified Language.SK.Macro as Macro
+import qualified Language.SK.Reader as Reader
+import qualified Language.SK.Run as Run
+import qualified Language.SK.Syntax as Syntax
 
 main :: IO ()
 main =

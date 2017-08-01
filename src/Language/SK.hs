@@ -4,10 +4,10 @@
 -- car, cdr), this module is likely to be required.
 --
 
-module SK.Core
-  ( module SK.Core.Form
-  , module SK.Core.SKC
+module Language.SK
+  ( module Language.SK.Form
+  , module Language.SK.SKC
   ) where
 
-import SK.Core.Form
-import SK.Core.SKC
+import Language.SK.Form
+import Language.SK.SKC

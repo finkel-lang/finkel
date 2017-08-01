@@ -15,13 +15,13 @@ import System.Environment (getArgs, lookupEnv)
 import System.Process (rawSystem)
 import System.Exit (exitWith)
 
-import SK.Core.Plugin ()
+import Language.SK.Plugin ()
 
 main :: IO ()
 main = do
   argIns <- getArgs
-  let argOuts = [ "--frontend", "SK.Core.Plugin"
-                , "-plugin-package", "sk-core" ]
+  let argOuts = [ "--frontend", "Language.SK.Plugin"
+                , "-plugin-package", "sk-kernel" ]
       (srcs, skopts, ghcopts) = groupOptions [] [] [] argIns
       ghcopts' = reverse ghcopts
       ghc = fromMaybe GhcPaths.ghc (findGhc skopts)

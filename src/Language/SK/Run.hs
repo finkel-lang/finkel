@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | Module exporting the @runSkc@, Haskell compiler, and some utility
 -- functions.
-module SK.Core.Run
+module Language.SK.Run
   ( runSkc
   , runSkcWithoutHandler
   , withSourceErrorHandling
@@ -38,14 +38,14 @@ import Data.Time (getCurrentTime)
 -- transformer
 import Control.Monad.Trans.Class
 
-import SK.Core.Emit
-import SK.Core.Form
-import SK.Core.GHC
-import SK.Core.SKC
-import SK.Core.Syntax
-import SK.Core.Lexer as L
-import SK.Core.Macro
-import SK.Core.Reader
+import Language.SK.Emit
+import Language.SK.Form
+import Language.SK.GHC
+import Language.SK.SKC
+import Language.SK.Syntax
+import Language.SK.Lexer as L
+import Language.SK.Macro
+import Language.SK.Reader
 
 
 -- | Run 'Skc' with given environment and 'skcErrrorHandler'.

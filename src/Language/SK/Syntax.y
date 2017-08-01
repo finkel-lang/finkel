@@ -7,7 +7,7 @@
 -- module expects list of 'Form' data as input, converts to Haskell
 -- AST defined in GHC.
 --
-module SK.Core.Syntax
+module Language.SK.Syntax
   ( Builder(..)
   , runBuilder
   , evalBuilder
@@ -20,9 +20,9 @@ module SK.Core.Syntax
   , parseExpr
   ) where
 
-import SK.Core.Builder
-import SK.Core.Form
-import SK.Core.GHC
+import Language.SK.Builder
+import Language.SK.Form
+import Language.SK.GHC
 }
 
 %name parse_module module

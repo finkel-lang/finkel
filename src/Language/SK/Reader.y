@@ -1,7 +1,7 @@
 -- Happy parser for S-expression tokens.
 {
 {-# LANGUAGE OverloadedStrings #-}
-module SK.Core.Reader
+module Language.SK.Reader
   ( sexpr
   , sexprs
   , psexpr
@@ -9,9 +9,9 @@ module SK.Core.Reader
 
 import SrcLoc
 
-import SK.Core.Form
-import SK.Core.GHC
-import SK.Core.Lexer
+import Language.SK.Form
+import Language.SK.GHC
+import Language.SK.Lexer
 }
 
 %name sexpr sexp

@@ -10,7 +10,7 @@ import System.FilePath
 import System.Directory
 import Test.Hspec
 
-import SK.Core.Run
+import Language.SK.Run
 
 getTestFiles :: IO [FilePath]
 getTestFiles =

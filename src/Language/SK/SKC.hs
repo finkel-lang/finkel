@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Wrapper for SK code compilation monad.
 
-module SK.Core.SKC
+module Language.SK.SKC
   ( Skc(..)
   , SkEnv(..)
   , Macro
@@ -25,8 +25,8 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.State.Strict
 
 -- Internal
-import SK.Core.Form
-import SK.Core.GHC
+import Language.SK.Form
+import Language.SK.GHC
 
 
 -- ---------------------------------------------------------------------

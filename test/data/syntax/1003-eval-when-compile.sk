@@ -4,7 +4,7 @@
 
 (module Main)
 
-(import SK.Core)
+(import Language.SK)
 
 ;;; Function declaration and macro definition done during compilation
 ;;; phase. Codes inside `eval-when-compile' do won't appear in resulting

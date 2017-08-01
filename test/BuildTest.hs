@@ -12,9 +12,9 @@ import System.Process (rawSystem)
 import Test.Hspec
 
 -- sk-core
-import SK.Core.GHC
-import SK.Core.Make
-import SK.Core.Run
+import Language.SK.GHC
+import Language.SK.Make
+import Language.SK.Run
 
 buildTests :: Spec
 buildTests = do

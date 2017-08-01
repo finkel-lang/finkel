@@ -2,7 +2,7 @@
 
 (module P01.G2)
 
-(import SK.Core)
+(import Language.SK)
 
 (defmacro m1 (name str)
   `(begin

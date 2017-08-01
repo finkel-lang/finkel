@@ -1,6 +1,6 @@
 -- | Module re-exporting functions and types from ghc-8.0.2 package.
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module SK.Core.GHC
+module Language.SK.GHC
   ( -- * GHC
     AnnotationComment(..),
     ExprLStmt,

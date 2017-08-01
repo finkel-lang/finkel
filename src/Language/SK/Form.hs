@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 -- | Form and Atom data.
-module SK.Core.Form
+module Language.SK.Form
   ( -- * The S-expression form
     Atom(..)
   , Form(..)
@@ -47,7 +47,7 @@ import Data.Data
 import qualified Pretty as P
 
 -- Internal
-import SK.Core.GHC
+import Language.SK.GHC
 
 
 -- -------------------------------------------------------------------

@@ -1,6 +1,6 @@
 -- | Module exporting utilities to work with cabal's @Setup.hs@ script.
 
-module SK.Core.Setup
+module Distribution.Simple.SK
   (
   -- * Reexport from Cabal
     defaultMainWithHooks
@@ -33,7 +33,6 @@ import Distribution.Simple.Program
 import Distribution.Simple.Program.Types
 import Distribution.Simple.PreProcess
 import Distribution.Simple.Setup
-import Distribution.Simple.Test (test)
 
 -- ---------------------------------------------------------------------
 --
