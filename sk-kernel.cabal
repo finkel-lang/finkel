@@ -88,9 +88,11 @@ test-suite sk-kernel-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Main.hs
-  other-modules:       SyntaxTest
-                       BuildTest
+  other-modules:       FormTest
+                       MakeTest
+                       SyntaxTest
   build-depends:       base
+                     , bytestring
                      , sk-kernel
                      , filepath
                      , directory

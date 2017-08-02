@@ -41,7 +41,7 @@ parseHsModule path =
         case Lexer.evalSP Reader.sexprs (Just path) contents of
           Right forms -> do
             expanded <-
-              Macro.withExpanderSettings (Macro.macroexpands forms)
+              Macro.withExpanderSettings (Macro.expands forms)
             case Syntax.evalBuilder Syntax.parseModule expanded of
               Right _   -> liftIO (putStrLn "done.")
               Left  err -> liftIO (putStrLn ("error: " ++ err))

@@ -1,4 +1,4 @@
-module BuildTest where
+module MakeTest (makeTests) where
 
 -- base
 import Control.Monad (when)
@@ -17,8 +17,8 @@ import Language.SK.GHC
 import Language.SK.Make
 import Language.SK.Run
 
-buildTests :: Spec
-buildTests = do
+makeTests :: Spec
+makeTests = do
   buildFile ["main1.sk"]
   buildFile ["main2.sk"]
   buildFile ["main3.sk"]

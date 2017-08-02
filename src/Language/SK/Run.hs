@@ -132,7 +132,7 @@ buildHsSyn bldr forms = Skc (lift (evalBuilder' bldr forms))
 
 compileSkModuleForm :: [Code] -> Skc (HsModule RdrName)
 compileSkModuleForm form = do
-  expanded <- withExpanderSettings (macroexpands form)
+  expanded <- withExpanderSettings (expands form)
   buildHsSyn parseModule expanded
 
 -- | Compile a file containing SK module.

@@ -3,8 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | Module for macros.
 module Language.SK.Macro
-  ( macroexpand
-  , macroexpands
+  ( expand
+  , expands
   , setExpanderSettings
   , withExpanderSettings
   , compileDecls
@@ -150,7 +150,7 @@ putMacro :: Code -> Skc ()
 putMacro form =
   case unLForm form of
     L l (List [LForm (L _ (Atom (ASymbol name))),arg,body]) -> do
-      expanded <- macroexpand body
+      expanded <- expand body
       let expr = tList l [ tSym l "::"
                          , tList l [tSym l "\\", arg, expanded]
                          , tSym l "Macro"]
@@ -338,7 +338,7 @@ m_defineMacro :: Macro
 m_defineMacro form =
   case unLForm form of
     L l (List [_,self@(LForm (L _ (Atom (ASymbol name)))),arg,body]) -> do
-      body' <- macroexpand body
+      body' <- expand body
       let expr = tList l [tSym l "\\", arg, body']
           expr' = tList l [ tSym l "::" , expr, tSym l "Macro"]
       case evalBuilder parseExpr [expr'] of
@@ -360,7 +360,7 @@ m_letMacro form =
     L l1 (List (_:LForm (L l2 (List forms)):rest)) -> do
       sk_env <- getSkEnv
       mapM_ putMacro forms
-      expanded <- macroexpands rest
+      expanded <- expands rest
       putSkEnv sk_env
       return (tList l1 (tSym l2 "begin":expanded))
     _ -> skSrcError form ("let-macro: malformed args:\n" ++
@@ -401,7 +401,7 @@ m_evalWhenCompile :: Macro
 m_evalWhenCompile form =
   case unLForm form of
     L l (List (_ : body)) -> do
-      expanded <- macroexpands body
+      expanded <- expands body
       case evalBuilder parseModule expanded of
         Right (HsModule {hsmodDecls = decls}) -> do
           _ <- compileDecls decls
@@ -446,24 +446,24 @@ withExpanderSettings act = do
   return ret
 
 -- | Expands form, with taking care of @begin@ special form.
-macroexpands :: [Code] -> Skc [Code]
-macroexpands forms = do
+expands :: [Code] -> Skc [Code]
+expands forms = do
     -- XXX: Get rid of unnecessary reverses.
-    forms' <- mapM macroexpand forms
+    forms' <- mapM expand forms
     fmap reverse (foldM f [] forms')
   where
     f acc orig@(LForm (L _ form)) =
       case form of
         List (LForm (L _ (Atom (ASymbol "begin"))) : rest) -> do
-          rest' <- macroexpands rest
+          rest' <- expands rest
           return (reverse rest' ++ acc)
         _ -> return (orig : acc)
 
 -- This function recursively expand the result. Without recursively
--- calling macroexpand on the result, cannot expand macro-generating
+-- calling expand on the result, cannot expand macro-generating
 -- macros.
-macroexpand :: Code -> Skc Code
-macroexpand form =
+expand :: Code -> Skc Code
+expand form =
   -- liftIO (putStrLn ("expanding:\n" ++ show (pprForm (unLocForm form))))
   case unLForm form of
     -- Expand list of forms with preserving the constructor.
@@ -478,12 +478,12 @@ macroexpand form =
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
           macros <- getMacroEnv
           case lookup k macros of
-           Just f -> f form >>= macroexpand
+           Just f -> f form >>= expand
            Nothing -> do
-             rest' <- mapM macroexpand rest
+             rest' <- mapM expand rest
              return (LForm (L l (constr (sym:rest'))))
         _ -> do
-          forms' <- mapM macroexpand forms
+          forms' <- mapM expand forms
           return (LForm (L l (constr forms')))
 
 
