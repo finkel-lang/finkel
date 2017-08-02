@@ -14,7 +14,6 @@ module Language.SK.Lexer
   , SP(..)
   , SPState(..)
   , runSP
-  , runSP'
   , evalSP
   , incrSP
   , errorSP
@@ -150,13 +149,6 @@ runSP sp target input =
   let st = initialSPState {targetFile = target'}
       target' = maybe (fsLit "anon") fsLit target
   in  runAlex input (unSP sp st)
-
-runSP' :: Monad m => SP a -> Maybe FilePath -> BL.ByteString
-       -> ExceptT String m (a, SPState)
-runSP' sp target input =
-  case runSP sp target input of
-    Right (a, st) -> return (a, st)
-    Left err      -> throwE err
 
 -- | Incrementally perform computation with parsed result and given
 -- function.

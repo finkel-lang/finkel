@@ -34,9 +34,6 @@ import GHC.Paths (libdir)
 -- time
 import Data.Time (getCurrentTime)
 
--- transformer
-import Control.Monad.Trans.Class
-
 import Language.SK.Emit
 import Language.SK.Form
 import Language.SK.GHC
@@ -58,11 +55,9 @@ runSkc m env =
 -- | Run 'Skc' without exception handler.
 runSkcWithoutHandler :: Skc a -> SkEnv -> IO (Either String a)
 runSkcWithoutHandler m env =
-   runGhc
-     (Just libdir)
-     (withSourceErrorHandling
-        (do ret <- toGhc m env
-            return (fmap fst ret)))
+   runGhc (Just libdir)
+          (withSourceErrorHandling
+            (fmap (Right . fst) (toGhc m env)))
 
 -- | Run action with source error handling.
 withSourceErrorHandling :: (ExceptionMonad m, GhcMonad m)
@@ -108,8 +103,9 @@ skErrorHandler fm (FlushOut flush) work =
                     Signal _ -> fatalErrorMsg'' fm "GhcException signal"
                     _ -> fatalErrorMsg'' fm (show ge))
             return (Left (show ge)))
-      work)
-
+      (handleSkException
+        (\(SkException se) -> return (Left se))
+        work))
 
 -- | Initial 'SkEnv' for performing computation with 'Skc'.
 initialSkEnv :: SkEnv
@@ -125,10 +121,15 @@ compileAndEmit file = runSkc go initialSkEnv
 
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =
-  Skc (lift (runSP' sexprs mb_file contents))
+  case runSP sexprs mb_file contents of
+     Right a -> return a
+     Left err -> failS err
 
 buildHsSyn :: Builder a -> [Code] -> Skc a
-buildHsSyn bldr forms = Skc (lift (evalBuilder' bldr forms))
+buildHsSyn bldr forms =
+  case evalBuilder bldr forms of
+    Right a  -> return a
+    Left err -> failS err
 
 compileSkModuleForm :: [Code] -> Skc (HsModule RdrName)
 compileSkModuleForm form = do

@@ -4,7 +4,9 @@
 module Language.SK.SKC
   ( Skc(..)
   , SkEnv(..)
+  , SkException(..)
   , Macro
+  , handleSkException
   , debugIO
   , toGhc
   , fromGhc
@@ -17,16 +19,32 @@ module Language.SK.SKC
   ) where
 
 -- base
+import Control.Exception (Exception(..))
 import Control.Monad (when)
 
 -- transformers
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Except
 import Control.Monad.Trans.State.Strict
 
 -- Internal
 import Language.SK.Form
 import Language.SK.GHC
+
+
+-- ---------------------------------------------------------------------
+--
+-- Exception
+--
+-- ---------------------------------------------------------------------
+
+newtype SkException = SkException String
+  deriving (Eq, Show)
+
+instance Exception SkException
+
+handleSkException :: ExceptionMonad m
+                  => (SkException -> m a) -> m a -> m a
+handleSkException = ghandle
 
 
 -- ---------------------------------------------------------------------
@@ -52,37 +70,36 @@ data SkEnv = SkEnv
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
 newtype Skc a = Skc {
-  unSkc :: StateT SkEnv (ExceptT String Ghc) a
+  unSkc :: StateT SkEnv Ghc a
 } deriving (Functor, Applicative, Monad, MonadIO)
 
 instance ExceptionMonad Skc where
   gcatch m h =
     Skc (StateT (\st ->
-                   (ExceptT
-                      (toGhc m st `gcatch` \e -> toGhc (h e) st))))
+                   (toGhc m st `gcatch` \e -> toGhc (h e) st)))
   gmask f =
-    let g r m = Skc (StateT (ExceptT . r . toGhc m))
+    let g r m = Skc (StateT (r . toGhc m))
     in  Skc (StateT (\st ->
-                       ExceptT (gmask (\r -> toGhc (f (g r)) st))))
+                       (gmask (\r -> toGhc (f (g r)) st))))
 
 instance HasDynFlags Skc where
    getDynFlags = Skc (lift getDynFlags)
 
 instance GhcMonad Skc where
-   getSession = Skc (lift (lift getSession))
-   setSession s = Skc (lift (lift (setSession s)))
+   getSession = Skc (lift getSession)
+   setSession s = Skc (lift (setSession s))
 
-toGhc :: Skc a -> SkEnv -> Ghc (Either String (a, SkEnv))
-toGhc m st = runExceptT (runStateT (unSkc m) st)
+toGhc :: Skc a -> SkEnv -> Ghc (a, SkEnv)
+toGhc m st = runStateT (unSkc m) st
 
 fromGhc :: Ghc a -> Skc a
-fromGhc m = Skc (lift (lift m))
+fromGhc m = Skc (lift m)
 
 failS :: String -> Skc a
-failS msg = Skc (lift (throwE msg))
+failS msg = liftIO (throwIO (SkException msg))
 
 -- | Throw a 'SourceError'.
-skSrcError :: Code -> String -> Skc e
+skSrcError :: Code -> String -> Skc a
 skSrcError (LForm (L l _)) msg = do
   dflags <- getSessionDynFlags
   let em = mkErrMsg dflags l neverQualify (text msg)

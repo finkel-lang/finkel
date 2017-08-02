@@ -36,10 +36,10 @@ skFrontend flags args = do
                   chooseAction (action options) o
       debug = skDebug options
       sk_env = initialSkEnv {envDebug = debug}
-  ret <- toGhc (act options) sk_env
-  case ret of
-    Left err -> liftIO (putStrLn err >> exitFailure)
-    Right _  -> return ()
+  handleSkException
+    (\(SkException se) -> liftIO (do putStrLn se
+                                     exitFailure))
+    (fmap fst (toGhc (act options) sk_env))
 
 
 -- ---------------------------------------------------------------------

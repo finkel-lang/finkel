@@ -11,7 +11,6 @@ module Language.SK.Syntax
   ( Builder(..)
   , runBuilder
   , evalBuilder
-  , evalBuilder'
   , parseModule
   , parseImports
   , parseStmt

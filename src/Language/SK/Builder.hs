@@ -13,7 +13,6 @@ import Data.List (foldl1')
 import qualified OccName (varName)
 
 -- transformers
-import Control.Monad.Trans.Except
 import Control.Monad.Trans.State
 
 -- Internal
@@ -49,14 +48,6 @@ runBuilder bld toks =
 
 evalBuilder :: Builder a -> [Code] -> Either String a
 evalBuilder bld toks = fmap fst (runBuilder bld toks)
-
-evalBuilder' :: Monad m
-             => Builder a
-             -> [Code]
-             -> ExceptT String m a
-evalBuilder' bld toks = case evalBuilder bld toks of
-  Right a -> return a
-  Left err -> throwE err
 
 failB :: String -> Builder a
 failB err = Builder (StateT (\_ -> Left err))
