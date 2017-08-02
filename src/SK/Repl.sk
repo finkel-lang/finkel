@@ -7,8 +7,6 @@
 ;;; shall be easier to support reading forms from other sources than
 ;;; line oriented user input, e.g. network sockets.
 
-(require SK.Macro)
-
 (module SK.Repl)
 
 (import Control.Concurrent)     ; base
@@ -17,6 +15,7 @@
 (import Control.Monad.Trans.Class)
 (import Control.Monad.Trans.State.Strict)
 (import Data.List)
+(import Data.String (fromString))
 (import Data.Version)
 (import System.Exit)
 (import System.IO)
@@ -38,14 +37,14 @@
 
 (import System.Console.Haskeline) ; haskeline
 
-(import SK.Core)                ; sk-core
-(import SK.Core.Builder)
-(import SK.Core.GHC)
-(import SK.Core.Lexer)
-(import SK.Core.Macro)
-(import SK.Core.Reader)
-(import SK.Core.Run)
-(import SK.Core.Syntax)
+(import Language.SK)                ; sk-kernel
+(import Language.SK.Builder)
+(import Language.SK.GHC)
+(import Language.SK.Lexer)
+(import Language.SK.Macro)
+(import Language.SK.Reader)
+(import Language.SK.Run)
+(import Language.SK.Syntax)
 
 (import Paths_sk_repl)          ; internal
 (import SK.Repl.Apply)
@@ -104,7 +103,7 @@
 
 ;;;; Main
 
-(defn: replMain () (IO ())
+(defn: replMain (IO ()) ()
   (do (<- in-mv newEmptyMVar)
       (<- out-mv newEmptyMVar)
       (let ((= skc (runSkc (eval-loop in-mv out-mv) initialSkEnv))))
@@ -129,9 +128,8 @@
 (:: read-print-loop
   (-> (MVar Code) (MVar String) ThreadId (InputT Repl ())))
 (= read-print-loop to-eval-mvar from-eval-mvar eval-tid
-  (let ((= quit
-          (liftIO (killThread eval-tid)))
-        (= print-io
+  ;; Print the result from boot expression, then start the loop.
+  (let ((= print-io
           (do (<- str (takeMVar from-eval-mvar))
               (putStr str)
               (hFlush stdout)))
@@ -153,11 +151,11 @@
                                  (do (putMVar to-eval-mvar form)
                                      print-io))
                                 go))))
+        (= quit
+          (liftIO (killThread eval-tid)))
         (= loop
           (handleInterrupt (>> (outputStrLn "Interrupd") loop)
                            go)))
-
-    ;; Print the result from boot expression, then start the loop.
     (do (liftIO print-io)
         (withInterrupt loop))))
 
@@ -171,7 +169,7 @@
               (do (put-repl-state (st {input-count count
                                        pending-input pending}))
                   (return ret))))
-        (case (evalSP sexpr (Just "<repl>") input1)
+        (case (evalSP sexpr (Just "<repl>") (fromString input1))
           (Right forms) (put-and-return "" (Just forms))
           (Left err)    (put-and-return input1 Nothing)))))
 
@@ -180,34 +178,33 @@
 
 (:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
 (= eval-loop in-mvar out-mvar
-  (>> init go)
-  (where
-    (= init
-      (do (<- hsc-env getSession)
-          (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
-                ;; Default target in interactive context is
-                ;; ``HscAsm', updating to `HscInterpreted'.
-                (= dflags1 (dflags0 {hscTarget HscInterpreted
-                                     ghcLink LinkInMemory}))
-                (= decl
-                  (. IIDecl (. simpleImportDecl mkModuleName)))))
-          (<- _ (setSessionDynFlags dflags1))
-          (setContext [(decl "Prelude")
-                       (decl "SK.Core")
-                       (decl "SK.Repl.Apply")])))
-    (= withHandler m
-      (skErrorHandler defaultFatalMessager
-                      defaultFlushOut
-                      (withSourceErrorHandling m)))
-    (= go (do (<- form (liftIO (takeMVar in-mvar)))
-              (<- ret (withHandler
-                       (do (<- expanded (macroexpands [form]))
-                           (eval-form expanded))))
-              (let ((= str (case ret
-                             (Right r) r
-                             (Left err) err))))
-              (liftIO (putMVar out-mvar str))
-              go))))
+  (let ((= init
+          (do (<- hsc-env getSession)
+              (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
+                    ;; Default target in interactive context is
+                    ;; ``HscAsm', updating to `HscInterpreted'.
+                    (= dflags1 (dflags0 {hscTarget HscInterpreted
+                                         ghcLink LinkInMemory}))
+                    (= decl
+                      (. IIDecl (. simpleImportDecl mkModuleName)))))
+              (<- _ (setSessionDynFlags dflags1))
+              (setContext [(decl "Prelude")
+                           (decl "Language.SK")
+                           (decl "SK.Repl.Apply")])))
+        (= withHandler m
+          (skErrorHandler defaultFatalMessager
+                          defaultFlushOut
+                          (withSourceErrorHandling m)))
+        (= go (do (<- form (liftIO (takeMVar in-mvar)))
+                  (<- ret (withHandler
+                           (do (<- expanded (expands [form]))
+                               (eval-form expanded))))
+                  (let ((= str (case ret
+                                 (Right r) r
+                                 (Left err) err))))
+                  (liftIO (putMVar out-mvar str))
+                  go)))
+    (>> init go)))
 
 (:: eval-form (-> [Code] (Skc Result)))
 (= eval-form forms
@@ -220,8 +217,7 @@
      (otherwise
       (case (evalBuilder parseTopDecls forms)
         (Right decs) (eval-decls decs)
-        (Left err)   (return (Left
-                              (concat ["parse error:" err [\lf]])))))))
+        (Left err)   (return (Left (concat [err [\lf]])))))))
 
 (:: eval-statement (-> HStmt (Skc Result)))
 (= eval-statement stmt0
@@ -235,11 +231,10 @@
 (:: eval-imports (-> [HImportDecl] (Skc Result)))
 (= eval-imports imports
   (do (<- context getContext)
+      (let ((= mkIIDecl (L _ idecl)
+              (IIDecl idecl))))
       (setContext (++ (map mkIIDecl imports) context))
-      (return (Right "")))
-  (where
-    (= mkIIDecl (L _ idecl)
-      (IIDecl idecl))))
+      (return (Right ""))))
 
 (:: eval-decls (-> [HDecl] (Skc Result)))
 (= eval-decls decls
@@ -301,8 +296,8 @@
         (EvalComplete _ (EvalException serialized))
         (case serialized
           (EOtherException str) (return (Left str))
-          (EExitCode ecode) (liftIO (exitWith ecode))
-          EUserInterrupt (return (Right "Interrupt")))
+          (EExitCode ecode)     (liftIO (exitWith ecode))
+          EUserInterrupt        (return (Right "Interrupt")))
         _ (return (Left "update-hsc-env failed.")))))
 
 
@@ -315,7 +310,7 @@
     (if (== nstr "it")
         ""
         (concat
-         (intersperse [\lf]
+         (intersperse "\n"
                       (map (++ "; ")
                            (lines (++ nstr (++ " :: " typ)))))))))
 

@@ -37,7 +37,7 @@ resolver: lts-8.20
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - .
-- ../sk-core
+- ../sk-kernel
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)

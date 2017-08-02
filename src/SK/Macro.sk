@@ -2,7 +2,7 @@
 
 (module SK.Macro)
 
-(import SK.Core)
+(import Language.SK)
 
 ;;; Macro to specify the phase of body contents evaluation.
 (define-macro eval-when form
@@ -67,9 +67,7 @@
           (case (unLForm arg)
             (L l1 (List arg')) (list-arg l1 name arg' body)
             (L l1 (Atom arg')) (atom-arg name arg body)
-            _                  (skSrcError
-                                form
-                                "defmacro*: invalid args")))
+            _                  (merr "defmacro*: invalid args")))
         (= atom-arg name arg body
           (let ((= arg'
                   (| ((== arg '()) '_unused)
@@ -95,12 +93,12 @@
                         (list 'case '*form*
                               abind body
                               '_ err))))
-            (return body2))))
+            (return body2)))
+        (= merr label
+          (skSrcError form label)))
     (case (unLocLForm form)
       (List [_ name arg body]) (make-body name arg body)
-      _                        (skSrcError
-                                form
-                                "defmacro*: invalid form"))))
+      _                        (merr "defmacro*: invalid form"))))
 
 ;;; The `defmacro' macro, similar to the macro with same name found in
 ;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy
@@ -116,11 +114,10 @@
   (case form'
     (List [_ name args body]) (return `(= ,name ,@args ,body))
     _ (skSrcError (LForm (L l form'))
-       (concat ["`defn': invalid form:" [\lf]
-                (show (LForm (L l form')))]))))
+       (++ "`defn': invalid form:\n" (show (LForm (L l form')))))))
 
 ;;; Macro for defining function and type signature in single form.
-(defmacro defn: (name args tsig body)
+(defmacro defn: (name tsig args body)
   `(begin
      (:: ,name ,tsig)
      (= ,name ,@args
