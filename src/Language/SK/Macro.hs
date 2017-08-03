@@ -115,21 +115,21 @@ quasiquote orig@(LForm (L l form)) =
 -- Hy language separates the loading of modules. For runtime, it's done
 -- with `import', for macro expansion time, done with `require'.
 
-putMacro :: Code -> Skc ()
-putMacro form =
-  case unLForm form of
-    L l (List [LForm (L _ (Atom (ASymbol name))),arg,body]) -> do
-      expanded <- expand body
-      let expr = tList l [ tSym l "::"
-                         , tList l [tSym l "\\", arg, expanded]
-                         , tSym l "Macro"]
-      case evalBuilder parseExpr [expr] of
-        Right hexpr -> do
-          macro <- evalExpr hexpr
-          addMacro name (unsafeCoerce macro)
-          return ()
-        Left err -> skSrcError form err
-    _ -> skSrcError form ("malformed macro: " ++ show (pForm form))
+putMacro :: Code -> Code -> Code -> Code -> Skc [Code]
+putMacro form self arg body = do
+  let LForm (L l _) = form
+      LForm (L _ (Atom (ASymbol name))) = self
+  expanded <- expand body
+  let expr = tList l [tSym l "\\", arg, expanded]
+      expr' = tList l [ tSym l "::" , expr, tSym l "Macro"]
+  case evalBuilder parseExpr [expr'] of
+    Right hexpr -> do
+      macro <- evalExpr hexpr
+      let decls = [tList l [tSym l "::", self, tSym l "Macro"]
+                  ,tList l [tSym l "=", self, expr]]
+      addMacro name (unsafeCoerce macro)
+      return decls
+    Left err -> skSrcError form err
 
 mkIIDecl :: FastString -> InteractiveImport
 mkIIDecl = IIDecl . simpleImportDecl . mkModuleNameFS
@@ -222,21 +222,15 @@ m_quasiquote form =
       _ -> skSrcError form ("malformed quasiquote at " ++ showLoc form)
 
 m_defineMacro :: Macro
-m_defineMacro form =
-  case unLForm form of
-    L l (List [_,self@(LForm (L _ (Atom (ASymbol name)))),arg,body]) -> do
-      body' <- expand body
-      let expr = tList l [tSym l "\\", arg, body']
-          expr' = tList l [ tSym l "::" , expr, tSym l "Macro"]
-      case evalBuilder parseExpr [expr'] of
-        Right hexpr -> do
-          macro <- evalExpr (hexpr)
-          let decls = [tList l [tSym l "::", self, tSym l "Macro"]
-                      ,tList l [tSym l "=", self, expr]]
-          addMacro name (unsafeCoerce macro)
-          return (tList l (tSym l "begin":decls))
-        Left err -> skSrcError form err
-    _ -> skSrcError form "define-macro: malformed body"
+m_defineMacro form@(LForm (L l _)) = do
+  decls <- add form
+  return (tList l (tSym l "begin":decls))
+  where
+    add x =
+      case unLocLForm x of
+        List [_,self,arg,body] -> putMacro x self arg body
+        _ -> skSrcError form ("define-macro: malformed args:\n" ++
+                              show (pForm x))
 
 -- XXX: When macros defined with `define-macro' have same name, old
 -- macros will be overridden by `let-macro'. Need to update the SkEnv to
@@ -246,12 +240,17 @@ m_letMacro form =
   case unLForm form of
     L l1 (List (_:LForm (L l2 (List forms)):rest)) -> do
       sk_env <- getSkEnv
-      mapM_ putMacro forms
+      mapM_ addLetMacro forms
       expanded <- expands rest
       putSkEnv sk_env
       return (tList l1 (tSym l2 "begin":expanded))
     _ -> skSrcError form ("let-macro: malformed args:\n" ++
                      show (pForm form))
+  where
+    addLetMacro x =
+      case unLocLForm x of
+        List [self,arg,body] -> putMacro x self arg body
+        _ -> skSrcError x ("malformed macro: " ++ show (pForm x))
 
 m_require :: Macro
 m_require form =
