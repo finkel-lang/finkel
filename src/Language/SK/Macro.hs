@@ -121,12 +121,12 @@ putMacro form self arg body = do
       LForm (L _ (Atom (ASymbol name))) = self
   expanded <- expand body
   let expr = tList l [tSym l "\\", arg, expanded]
-      expr' = tList l [ tSym l "::" , expr, tSym l "Macro"]
+      expr' = tList l [tSym l "Macro", expr]
   case evalBuilder parseExpr [expr'] of
     Right hexpr -> do
       macro <- evalExpr hexpr
       let decls = [tList l [tSym l "::", self, tSym l "Macro"]
-                  ,tList l [tSym l "=", self, expr]]
+                  ,tList l [tSym l "=", self, expr']]
       addMacro name (unsafeCoerce macro)
       return decls
     Left err -> skSrcError form err
@@ -205,7 +205,9 @@ addImportedMacro ty_thing =
 --
 -- ---------------------------------------------------------------------
 
-m_quote :: Macro
+type Mfunc = Code -> Skc Code
+
+m_quote :: Mfunc
 m_quote form =
   case unLForm form of
     L l (List [_,body]) ->
@@ -213,7 +215,7 @@ m_quote form =
       in  return (LForm (L l body'))
     _ -> skSrcError form ("malformed quote at " ++ showLoc form)
 
-m_quasiquote :: Macro
+m_quasiquote :: Mfunc
 m_quasiquote form =
     case unLForm form of
       L l (List [_,body]) ->
@@ -221,7 +223,7 @@ m_quasiquote form =
         in  return (LForm (L l body'))
       _ -> skSrcError form ("malformed quasiquote at " ++ showLoc form)
 
-m_defineMacro :: Macro
+m_defineMacro :: Mfunc
 m_defineMacro form@(LForm (L l _)) = do
   decls <- add form
   return (tList l (tSym l "begin":decls))
@@ -235,7 +237,7 @@ m_defineMacro form@(LForm (L l _)) = do
 -- XXX: When macros defined with `define-macro' have same name, old
 -- macros will be overridden by `let-macro'. Need to update the SkEnv to
 -- hold the list of macro name-function lookup table ...
-m_letMacro :: Macro
+m_letMacro :: Mfunc
 m_letMacro form =
   case unLForm form of
     L l1 (List (_:LForm (L l2 (List forms)):rest)) -> do
@@ -252,7 +254,7 @@ m_letMacro form =
         List [self,arg,body] -> putMacro x self arg body
         _ -> skSrcError x ("malformed macro: " ++ show (pForm x))
 
-m_require :: Macro
+m_require :: Mfunc
 m_require form =
   -- The `require' is implemented as special form, to support dependency
   -- resolution during compilation of multiple modules with `--make'
@@ -283,7 +285,7 @@ m_require form =
                                  ++ unpackFS mname)
     _ -> skSrcError form "require: malformed syntax."
 
-m_evalWhenCompile :: Macro
+m_evalWhenCompile :: Mfunc
 m_evalWhenCompile form =
   case unLForm form of
     L l (List (_ : body)) -> do
@@ -298,12 +300,12 @@ m_evalWhenCompile form =
 
 specialForms :: [(FastString, Macro)]
 specialForms =
-  [("quote", m_quote)
-  ,("quasiquote", m_quasiquote)
-  ,("define-macro", m_defineMacro)
-  ,("let-macro", m_letMacro)
-  ,("require", m_require)
-  ,("eval-when-compile", m_evalWhenCompile)]
+  [("define-macro", SpecialForm m_defineMacro)
+  ,("eval-when-compile", SpecialForm m_evalWhenCompile)
+  ,("let-macro", SpecialForm m_letMacro)
+  ,("quote", SpecialForm m_quote)
+  ,("quasiquote", SpecialForm m_quasiquote)
+  ,("require", SpecialForm m_require)]
 
 
 -- ---------------------------------------------------------------------
@@ -331,6 +333,36 @@ withExpanderSettings act = do
   _ <- setSessionDynFlags origFlags
   return ret
 
+-- | Returns a list of bounded names in let expression.
+boundedNames :: Code -> [FastString]
+boundedNames form =
+  case unLocLForm form of
+    List xs -> concatMap f xs
+    _       -> []
+  where
+    f x =
+      case unLocLForm x of
+        List ((LForm (L _ (Atom (ASymbol "=")))):n:_) ->
+          case unLocLForm n of
+            Atom (ASymbol n')        -> [n']
+            List ns | all isSymbol ns -> map symbolNameFS ns
+            _                        -> []
+        _                                             -> []
+
+-- | Perform 'SKc' action with temporary shadowed macro environment.
+withShadowing :: [FastString] -- ^ Names of macro to shadow.
+              -> Skc a -- ^ Action to perform.
+              -> Skc a
+withShadowing toShadow skc = do
+  macros <- getMacroEnv
+  let macros' = filter f macros
+      f (name,_) | name `elem` toShadow = False
+                 | otherwise            = True
+  putMacroEnv macros'
+  result <- skc
+  putMacroEnv macros
+  return result
+
 -- | Expands form, with taking care of @begin@ special form.
 expands :: [Code] -> Skc [Code]
 expands forms = do
@@ -350,21 +382,30 @@ expands forms = do
 -- macros.
 expand :: Code -> Skc Code
 expand form =
-  -- liftIO (putStrLn ("expanding:\n" ++ show (pprForm (unLocForm form))))
   case unLForm form of
+    -- Expand `with shadowing the lexically bounded names.
+    L l (List (kw@(LForm (L _ (Atom (ASymbol "let")))):binds:body)) ->
+      expandLet l kw binds body
+
     -- Expand list of forms with preserving the constructor.
     L l (List forms) -> expandList l List forms
     L l (HsList forms) -> expandList l HsList forms
 
     -- Rest of the form are untouched.
-    L _ _ -> return form
+    _ -> return form
   where
+    expandLet l kw binds body = do
+      binds' <- expand binds
+      body' <- withShadowing (boundedNames binds') (mapM expand body)
+      return (LForm (L l (List (kw:binds':body'))))
     expandList l constr forms =
       case forms of
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
           macros <- getMacroEnv
           case lookup k macros of
-           Just f -> f form >>= expand
+           Just m -> case m of
+              Macro f       -> f form >>= expand
+              SpecialForm f -> f form >>= expand
            Nothing -> do
              rest' <- mapM expand rest
              return (LForm (L l (constr (sym:rest'))))
@@ -405,3 +446,9 @@ mkQuoted l form = tList l [tSym l "quoted", form]
 
 emptyForm :: Code
 emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
+
+isSymbol :: Code -> Bool
+isSymbol x =
+  case unLocLForm x of
+    Atom (ASymbol _) -> True
+    _                -> False

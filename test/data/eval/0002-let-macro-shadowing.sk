@@ -1,0 +1,15 @@
+;;;; -*- mode: sk -*-
+
+;;; Expression to test name shadowing with conflictinging names bounded
+;;; to macro with `let-macro' and locally declared function with `let'.
+
+(let-macro ((foo (LForm (L l (List [_ body])))
+              (return `(++ "let-macro: " ,body))))
+  (all id [(== (foo "bar")
+               "let-macro: bar")
+           (== (let ((= foo body
+                       (++ "let: " body)))
+                 (foo "bar"))
+               "let: bar")
+           (== (foo "bar")
+               "let-macro: bar")]))

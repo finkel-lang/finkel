@@ -5,7 +5,7 @@ module Language.SK.SKC
   ( Skc(..)
   , SkEnv(..)
   , SkException(..)
-  , Macro
+  , Macro(..)
   , handleSkException
   , debugIO
   , toGhc
@@ -16,6 +16,7 @@ module Language.SK.SKC
   , putSkEnv
   , addMacro
   , getMacroEnv
+  , putMacroEnv
   ) where
 
 -- base
@@ -58,7 +59,9 @@ handleSkException = ghandle
 -- A macro in SK is implemented as a function. The function takes a
 -- single located code data argument, returns a located code data
 -- wrapped in 'Skc'.
-type Macro = Code -> Skc Code
+data Macro
+  = Macro (Code -> Skc Code)
+  | SpecialForm (Code -> Skc Code)
 
 -- | Environment state in 'Skc'.
 data SkEnv = SkEnv
@@ -122,6 +125,11 @@ putSkEnv = Skc . put
 
 getMacroEnv :: Skc [(FastString, Macro)]
 getMacroEnv = envMacros <$> getSkEnv
+
+putMacroEnv :: [(FastString, Macro)] -> Skc ()
+putMacroEnv macros = do
+  e <- getSkEnv
+  putSkEnv (e {envMacros=macros})
 
 addMacro :: FastString -> Macro -> Skc ()
 addMacro name mac = Skc go
