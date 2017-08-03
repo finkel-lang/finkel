@@ -34,6 +34,8 @@ import GHC.Paths (libdir)
 -- time
 import Data.Time (getCurrentTime)
 
+-- Internal
+import Language.SK.Builder (HModule)
 import Language.SK.Emit
 import Language.SK.Form
 import Language.SK.GHC
@@ -131,13 +133,13 @@ buildHsSyn bldr forms =
     Right a  -> return a
     Left err -> failS err
 
-compileSkModuleForm :: [Code] -> Skc (HsModule RdrName)
+compileSkModuleForm :: [Code] -> Skc HModule
 compileSkModuleForm form = do
   expanded <- withExpanderSettings (expands form)
   buildHsSyn parseModule expanded
 
 -- | Compile a file containing SK module.
-compileSkModule :: FilePath -> Skc (HsModule RdrName, SPState)
+compileSkModule :: FilePath -> Skc (HModule, SPState)
 compileSkModule file = do
   contents <- liftIO (BL.readFile file)
   (form', st) <- parseSexprs (Just file) contents
@@ -145,7 +147,7 @@ compileSkModule file = do
   return (mdl, st)
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.
-mkModSummary :: GhcMonad m => Maybe FilePath -> HsModule RdrName
+mkModSummary :: GhcMonad m => Maybe FilePath -> HModule
              -> m ModSummary
 mkModSummary mbfile mdl = do
   let modName = case hsmodName mdl of
@@ -206,7 +208,7 @@ isHsSource path = "hs" == suffix
 tcHsModule :: GhcMonad m
            => Maybe FilePath -- ^ Source of the module.
            -> Bool -- ^ True to generate files, otherwise False.
-           -> HsModule RdrName -- ^ Module to typecheck.
+           -> HModule -- ^ Module to typecheck.
            -> m TypecheckedModule
 tcHsModule mbfile genFile mdl = do
   let fn = fromMaybe "anon" mbfile

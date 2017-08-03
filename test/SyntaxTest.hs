@@ -3,23 +3,10 @@
 -- All files under "test/data" directory with '.sk' extension (i.e.:
 -- "test/data/*.sk") are read and compiled, then type checked.
 --
-module SyntaxTest (syntaxTests, getTestFiles) where
+module SyntaxTest (syntaxTests) where
 
-import Data.List
-import System.FilePath
-import System.Directory
 import Test.Hspec
-
 import Language.SK.Run
-
-getTestFiles :: IO [FilePath]
-getTestFiles =
-  let dir = "test" </> "data" </> "syntax"
-      f x acc = if takeExtension x == ".sk"
-                  then (dir </> x) : acc
-                  else acc
-      files = getDirectoryContents dir
-  in  sort <$> foldr f [] <$> files
 
 readCode :: FilePath -> IO Bool
 readCode src = do

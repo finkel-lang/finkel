@@ -152,17 +152,17 @@ mbdoc :: { Maybe LHsDocString }
 --
 -- ---------------------------------------------------------------------
 
-module :: { HsModule RdrName }
+module :: { HModule }
     : mhead imports top_decls {% $1 `fmap` pure $2 <*> pure $3 }
     | mhead imports           {% $1 `fmap` pure $2 <*> pure [] }
     | mhead top_decls         {% $1 `fmap` pure [] <*> pure $2 }
 
-mhead :: { [HImportDecl] -> [HDecl] -> HsModule RdrName }
+mhead :: { [HImportDecl] -> [HDecl] -> HModule }
     : mbdoc          { b_implicitMainModule }
     | mbdoc 'module' {% parse p_mod_header $2 <*> pure $1 }
 
 mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl]
-                -> HsModule RdrName }
+                -> HModule }
     : 'symbol' exports { b_module $1 $2 }
 
 exports :: { [HIE] }
@@ -251,10 +251,10 @@ simpletype :: { (FastString, [HTyVarBndr])}
     : 'symbol' { b_simpletypeD [$1] }
     | 'list'   { b_simpletypeD $1 }
 
-constrs :: { (HsDeriving RdrName, [HConDecl]) }
+constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs { let (m,d) = $1 in (m, reverse d) }
 
-rconstrs :: { (HsDeriving RdrName, [HConDecl]) }
+rconstrs :: { (HDeriving, [HConDecl]) }
     : {- empty -}            { (Nothing, []) }
     | rconstrs deriving      { b_derivD $1 $2 }
     | rconstrs constr        { fmap ($2:) $1 }
@@ -270,7 +270,7 @@ lconstr :: { HConDecl }
     : 'symbol' condetails         { b_conD $1 $2 }
     | 'symbol' '{' fielddecls '}' { b_conD $1 $3 }
 
-condetails :: { HsConDeclDetails RdrName }
+condetails :: { HConDeclDetails }
     : dctypes { b_conDeclDetails $1 }
 
 dctypes :: { [HType] }
@@ -281,7 +281,7 @@ dctype :: { HType }
     : 'unpack' type { b_unpackT $1 $2 }
     | type          { $1 }
 
-fielddecls :: { HsConDeclDetails RdrName }
+fielddecls :: { HConDeclDetails }
     : fielddecls1 { b_recFieldsD $1 }
 
 fielddecls1 :: { [HConDeclField] }
@@ -520,7 +520,7 @@ guards1 :: { [HGRHS] }
     : 'list'         {% b_hgrhs [] `fmap` parse p_guard $1 }
     | 'list' guards1 {% b_hgrhs $2 `fmap` parse p_guard $1 }
 
-guard :: { (HExpr, [GuardLStmt RdrName]) }
+guard :: { (HExpr, [HGuardLStmt]) }
     : expr       { ($1, []) }
     | stmt guard { fmap ($1:) $2 }
 
@@ -573,7 +573,7 @@ rsymbols :: { [Code] }
 happyError :: Builder a
 happyError = builderError
 
-parseModule :: Builder (HsModule RdrName)
+parseModule :: Builder HModule
 parseModule = parse_module
 
 parseImports :: Builder [HImportDecl]

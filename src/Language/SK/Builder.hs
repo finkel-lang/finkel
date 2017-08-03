@@ -19,6 +19,7 @@ import Control.Monad.Trans.State
 import Language.SK.GHC
 import Language.SK.Form
 
+
 -- -------------------------------------------------------------------
 --
 -- Builder data type
@@ -103,9 +104,13 @@ type HExpr = LHsExpr RdrName
 
 type HDecl = LHsDecl RdrName
 
+type HDeriving = HsDeriving RdrName
+
 type HConDecl = LConDecl RdrName
 
 type HConDeclField = LConDeclField RdrName
+
+type HConDeclDetails = HsConDeclDetails RdrName
 
 type HIE = LIE RdrName
 
@@ -131,6 +136,7 @@ type HGuardLStmt = GuardLStmt RdrName
 
 type HImportDecl = LImportDecl RdrName
 
+type HModule = HsModule RdrName
 
 -- ---------------------------------------------------------------------
 --
@@ -222,7 +228,7 @@ mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
 
 -- | Convert record field constructor expression to record field update
 -- expression.
-cfld2ufld :: Located (HsRecField RdrName (LHsExpr RdrName))
+cfld2ufld :: Located (HsRecField RdrName HExpr)
           -> Located (HsRecUpdField RdrName)
 -- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
@@ -250,7 +256,7 @@ mkcfld (name, e@(L fl _)) =
 -- understanding the values and types for constructing Haskell AST data.
 
 b_module :: Code -> [HIE] ->  Maybe LHsDocString -> [HImportDecl]
-         -> [HDecl] -> HsModule RdrName
+         -> [HDecl] -> HModule
 b_module form exports mbdoc imports decls =
   HsModule { hsmodName = Just (L l (mkModuleNameFS name))
            , hsmodExports = exports'
@@ -267,7 +273,7 @@ b_module form exports mbdoc imports decls =
       | null exports = Nothing
       | otherwise    = Just (L l exports)
 
-b_implicitMainModule :: [HImportDecl] -> [HDecl] -> HsModule RdrName
+b_implicitMainModule :: [HImportDecl] -> [HDecl] -> HModule
 b_implicitMainModule =
   b_module (LForm (noLoc (Atom (ASymbol "Main")))) [] Nothing
 
@@ -328,18 +334,18 @@ b_importD (name, qualified, mb_as) hiding mb_entities =
 
 b_dataD :: Code
         -> (FastString, [HTyVarBndr])
-        -> (HsDeriving RdrName, [HConDecl])
+        -> (HDeriving, [HConDecl])
         -> HDecl
 b_dataD = mkNewtypeOrDataD DataType
 
 b_newtypeD :: Code -> (FastString, [HTyVarBndr])
-           -> (HsDeriving RdrName, [HConDecl])
+           -> (HDeriving, [HConDecl])
            -> HDecl
 b_newtypeD = mkNewtypeOrDataD NewType
 
 mkNewtypeOrDataD :: NewOrData -> Code
                  -> (FastString, [HTyVarBndr])
-                 -> (HsDeriving RdrName, [HConDecl])
+                 -> (HDeriving, [HConDecl])
                  -> HDecl
 mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
   L l (TyClD decl)
@@ -374,7 +380,7 @@ b_simpletypeD ((LForm (L _ (Atom (ASymbol name)))):tvs) = (name, tvs')
     f (L l (Atom (ASymbol tname))) =
         L l (UserTyVar (L l (mkUnqual tvName tname)))
 
-b_conD :: Code -> HsConDeclDetails RdrName -> HConDecl
+b_conD :: Code -> HConDeclDetails -> HConDecl
 b_conD (LForm (L l1 (Atom (ASymbol s1)))) details =
     L l1 ConDeclH98 { con_name = L l1 (mkUnqual srcDataName s1)
                      , con_qvars = Nothing
@@ -386,10 +392,10 @@ b_conOnlyD :: Code -> HConDecl
 b_conOnlyD name = b_conD name (PrefixCon [])
 
 -- XXX: Infix data constructor not supported.
-b_conDeclDetails :: [HType] -> HsConDeclDetails RdrName
+b_conDeclDetails :: [HType] -> HConDeclDetails
 b_conDeclDetails = PrefixCon
 
-b_recFieldsD :: [HConDeclField] -> HsConDeclDetails RdrName
+b_recFieldsD :: [HConDeclField] -> HConDeclDetails
 b_recFieldsD flds = RecCon (mkLocatedList flds)
 
 b_recFieldD :: [Code] -> HType -> HConDeclField
@@ -404,9 +410,9 @@ b_recFieldD names ty = L loc field
         L l (mkFieldOcc (L l (mkRdrName name)))
 
 -- 'HsDeriving' changed in git head since ghc-8.0.2 release.
-b_derivD :: (HsDeriving RdrName, [HConDecl])
+b_derivD :: (HDeriving, [HConDecl])
          -> [HType]
-         -> (HsDeriving RdrName, [HConDecl])
+         -> (HDeriving, [HConDecl])
 b_derivD (_, cs) tys = (Just (L l (map mkLHsSigType tys)), cs)
   where l = getLoc (mkLocatedList tys)
 
@@ -658,7 +664,7 @@ b_match pat@(L l _) (grhss,decls) =
   where
     grhss' = GRHSs grhss (declsToBinds l decls)
 
-b_hgrhs :: [HGRHS] -> (HExpr, [GuardLStmt RdrName]) -> [HGRHS]
+b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
   let rhs = GRHS gs body
       lrhs = case gs of
@@ -703,9 +709,6 @@ b_recUpdE expr flds = do
 
 b_appE :: [HExpr] -> HExpr
 b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))
-
-b_lbindB :: (HExpr -> HsBind RdrName) -> HExpr -> HBind
-b_lbindB f e = L (getLoc e) (f e)
 
 b_charE :: Code -> HExpr
 b_charE (LForm (L l (Atom (AChar x)))) = L l (HsLit (HsChar (show x) x))
