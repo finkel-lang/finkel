@@ -3,13 +3,35 @@
 ;;; Expression to test name shadowing with conflictinging names bounded
 ;;; to macro with `let-macro' and locally declared function with `let'.
 
-(let-macro ((foo (LForm (L l (List [_ body])))
-              (return `(++ "let-macro: " ,body))))
+(let-macro ((foo (LForm (L _ (List [_ body])))
+              (return `(++ "let-macro: " ,body)))
+            (foo-macro (LForm (L _ (List [_ body])))
+              (return `(++ "foo-macro: " ,body))))
   (all id [(== (foo "bar")
                "let-macro: bar")
            (== (let ((= foo body
                        (++ "let: " body)))
                  (foo "bar"))
                "let: bar")
+           (== (foo-macro "bar")
+               "foo-macro: bar")
            (== (foo "bar")
-               "let-macro: bar")]))
+               "let-macro: bar")
+           (== (let ((= (: foo _)
+                       ["local let"
+                        "local bar"
+                        "local buzz"]))
+                 foo)
+               "local let")
+           (== (let ((= (@ bar (Just foo))
+                       (return "let: bar")))
+                 foo)
+               "let: bar")
+           (== (let ((= (@ foo (Just bar))
+                       (return "let: bar")))
+                 foo)
+               (Just "let: bar"))
+           (== (let ((= [foo _ _]
+                       ["let: bar" "" ""]))
+                 foo)
+               "let: bar")]))

@@ -11,6 +11,7 @@ module Language.SK.Macro
 
 -- base
 import Control.Monad (foldM, when)
+import Data.Char (isLower)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- Internal
@@ -337,17 +338,25 @@ withExpanderSettings act = do
 boundedNames :: Code -> [FastString]
 boundedNames form =
   case unLocLForm form of
-    List xs -> concatMap f xs
-    _       -> []
+    List xs          -> concatMap boundedName xs
+    Atom (ASymbol n) -> [n]
+    _                -> []
+
+boundedName :: Code -> [FastString]
+boundedName form =
+  case unLocLForm form of
+    List ((LForm (L _ (Atom (ASymbol "=")))):n:_) ->
+      case unLocLForm n of
+        Atom (ASymbol n') -> [n']
+        List ns           -> concatMap f ns
+        HsList ns         -> concatMap f ns
+        _                 -> []
+    _                                             -> []
   where
     f x =
       case unLocLForm x of
-        List ((LForm (L _ (Atom (ASymbol "=")))):n:_) ->
-          case unLocLForm n of
-            Atom (ASymbol n')        -> [n']
-            List ns | all isSymbol ns -> map symbolNameFS ns
-            _                        -> []
-        _                                             -> []
+        Atom (ASymbol n) | isLower (headFS n) -> [n]
+        _                                     -> []
 
 -- | Perform 'SKc' action with temporary shadowed macro environment.
 withShadowing :: [FastString] -- ^ Names of macro to shadow.
@@ -389,14 +398,15 @@ expand form =
 
     -- Expand list of forms with preserving the constructor.
     L l (List forms) -> expandList l List forms
-    L l (HsList forms) -> expandList l HsList forms
+    L l (HsList forms) -> LForm . L l . HsList <$> mapM expand forms
 
     -- Rest of the form are untouched.
     _ -> return form
   where
     expandLet l kw binds body = do
       binds' <- expand binds
-      body' <- withShadowing (boundedNames binds') (mapM expand body)
+      let bounded = boundedNames binds'
+      body' <- withShadowing bounded (mapM expand body)
       return (LForm (L l (List (kw:binds':body'))))
     expandList l constr forms =
       case forms of
@@ -446,9 +456,3 @@ mkQuoted l form = tList l [tSym l "quoted", form]
 
 emptyForm :: Code
 emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
-
-isSymbol :: Code -> Bool
-isSymbol x =
-  case unLocLForm x of
-    Atom (ASymbol _) -> True
-    _                -> False
