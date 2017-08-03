@@ -345,13 +345,16 @@ boundedNames form =
 boundedName :: Code -> [FastString]
 boundedName form =
   case unLocLForm form of
-    List ((LForm (L _ (Atom (ASymbol "=")))):n:_) ->
-      case unLocLForm n of
-        Atom (ASymbol n') -> [n']
-        List ns           -> concatMap f ns
-        HsList ns         -> concatMap f ns
-        _                 -> []
+    List ((LForm (L _ (Atom (ASymbol "=")))):n:_) -> boundedNameOne n
     _                                             -> []
+
+boundedNameOne :: Code -> [FastString]
+boundedNameOne form =
+  case unLocLForm form of
+    Atom (ASymbol n) -> [n]
+    List ns          -> concatMap f ns
+    HsList ns        -> concatMap f ns
+    _                -> []
   where
     f x =
       case unLocLForm x of
@@ -392,15 +395,23 @@ expands forms = do
 expand :: Code -> Skc Code
 expand form =
   case unLForm form of
-    -- Expand `with shadowing the lexically bounded names.
-    L l (List (kw@(LForm (L _ (Atom (ASymbol "let")))):binds:body)) ->
-      expandLet l kw binds body
+    L l (List forms) ->
+      case forms of
+        -- Expand `let' expression, `case' expression, function binding,
+        -- and lambda, with shadowing the lexically bounded
+        -- names. Expansion of other forms are done without name
+        -- shadowing.
+        kw@(LForm (L _ (Atom (ASymbol x)))):y:rest
+          | x == "let"  -> expandLet l kw y rest
+          -- | x == "case" -> expandCase l kw y rest
+          | x == "=" ||
+            x == "\\"   -> expandFunBind l kw (y:rest)
+        _               -> expandList l List forms
 
-    -- Expand list of forms with preserving the constructor.
-    L l (List forms) -> expandList l List forms
-    L l (HsList forms) -> LForm . L l . HsList <$> mapM expand forms
+    L l (HsList forms) ->
+      LForm . L l . HsList <$> mapM expand forms
 
-    -- Rest of the form are untouched.
+    -- Non-list forms are untouched.
     _ -> return form
   where
     expandLet l kw binds body = do
@@ -408,6 +419,28 @@ expand form =
       let bounded = boundedNames binds'
       body' <- withShadowing bounded (mapM expand body)
       return (LForm (L l (List (kw:binds':body'))))
+
+    expandFunBind l kw rest = do
+      let args = init rest
+          body = last rest
+          bounded = concatMap boundedNameOne args
+      args' <- mapM expand args
+      body' <- withShadowing bounded (expand body)
+      return (LForm (L l (List (kw:args'++[body']))))
+
+    -- expandCase l kw expr rest = do
+    --   let go acc xs =
+    --         case xs of
+    --           pat:expr0:rest0 -> do
+    --             pat' <- expand pat
+    --             expr1 <- withShadowing (boundedNameOne pat')
+    --                                    (expand expr0)
+    --             go (expr1:pat':acc) rest0
+    --           _               -> return acc
+    --   expr' <- expand expr
+    --   rest' <- go [] rest
+    --   return (LForm (L l (List (kw:expr':reverse rest'))))
+
     expandList l constr forms =
       case forms of
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do

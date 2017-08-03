@@ -4,19 +4,21 @@
 ;;; to macro with `let-macro' and locally declared function with `let'.
 
 (let-macro ((foo (LForm (L _ (List [_ body])))
-              (return `(++ "let-macro: " ,body)))
-            (foo-macro (LForm (L _ (List [_ body])))
-              (return `(++ "foo-macro: " ,body))))
+              (return `(++ "let-macro: " ,body))))
   (all id [(== (foo "bar")
                "let-macro: bar")
+
+           ;; Bind `foo' to locally declared function.
            (== (let ((= foo body
                        (++ "let: " body)))
                  (foo "bar"))
                "let: bar")
-           (== (foo-macro "bar")
-               "foo-macro: bar")
+
+           ;; The macro `foo' is still in current scope.
            (== (foo "bar")
                "let-macro: bar")
+
+           ;; Bind `foo' with pattern matching.
            (== (let ((= (: foo _)
                        ["local let"
                         "local bar"
@@ -34,4 +36,23 @@
            (== (let ((= [foo _ _]
                        ["let: bar" "" ""]))
                  foo)
-               "let: bar")]))
+               "let: bar")
+
+           ;; Bind `foo' to function binding argument.
+           (== (let ((= f1 foo
+                       (foo "bar")))
+                 (f1 (++ "let: ")))
+               "let: bar")
+
+           ;; Bind `foo' to lambda argument.
+           (== (let ((= f2
+                       (\ foo (foo "bar"))))
+                 (f2 (++ "let: ")))
+               "let: bar")
+
+           ;; Pattern match in `case' expression
+           ;; (== (case (Just (++ "let: "))
+           ;;       (Just foo) (foo "bar")
+           ;;       _          "blahblah")
+           ;;     "let: bar")
+           ]))
