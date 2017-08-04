@@ -47,16 +47,20 @@ $white_no_nl = $whitechar # \n
 $alpha = [a-zA-Z]
 
 $negative = \-
+$octit    = [0-7]
 $digit    = [0-9]
+$hexit    = [$digit A-F a-f]
 
-$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\"\#$white]
-$hsymtail = [$hsymhead\'\#]
-
-@signed   = $negative ?
-@decimal  = $digit+
-@exponent = [eE] [\-\+]? @decimal
-@frac     = @decimal \. @decimal @exponent ? | @decimal @exponent
+$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
+$hsymtail = [$hsymhead\'\#$digit]
 @hsymbol  = $hsymhead $hsymtail*
+
+@signed      = $negative ?
+@octal       = $octit+
+@decimal     = $digit+
+@hexadecimal = $hexit+
+@exponent    = [eE] [\-\+]? @decimal
+@frac        = @decimal \. @decimal @exponent ? | @decimal @exponent
 
 
 tokens :-
@@ -94,10 +98,12 @@ $whitechar+  ;
 \#                   { tok_hash }
 
 --- Literal values
-\\[~$white][A-Za-z]* { tok_char }
-\"                   { tok_string }
-@signed @decimal     { tok_integer }
-@signed @frac        { tok_fractional }
+\\[~$white][A-Za-z]*       { tok_char }
+\"                         { tok_string }
+@signed @decimal           { tok_integer }
+@signed 0[oO] @octal       { tok_integer }
+@signed 0[xX] @hexadecimal { tok_integer }
+@signed @frac              { tok_fractional }
 
 --- Symbols
 @hsymbol         { tok_symbol }

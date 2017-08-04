@@ -9,9 +9,13 @@
   (do
     ;; 2.5 Numeric Literals
 
-    ;; Decimal integer.
+    ;; Literal integers.
     (print 42)
     (print -24)
+    (print 0x123abcdef)
+    (print -0xdeadbeaf)
+    (print 0o7654321)
+    (print -0o7777)
 
     ;; Fractional number.
     (print 1.234567)
