@@ -25,8 +25,6 @@ module Language.SK.Form
 
   , pprForm
   , pprForms
-  , pForm
-  , pAtom
 
   , Codish(..)
   , unquoteSplice
@@ -206,31 +204,6 @@ pprForms :: [Code] -> P.Doc
 pprForms forms =
   P.brackets (P.sep (P.punctuate P.comma (map pprForm forms)))
 
-pForm :: Code -> P.Doc
-pForm (LForm (L _ form)) =
-  case form of
-    Atom a -> pAtom a
-    List forms -> pForms P.parens forms
-    HsList forms -> pForms P.brackets forms
-    TEnd -> P.text "TEnd"
-
-pForms :: (P.Doc -> P.Doc) -> [Code] -> P.Doc
-pForms f forms =
-  case forms of
-    [] -> P.empty
-    _  -> f (P.sep (map pForm forms))
-
-pAtom :: Atom -> P.Doc
-pAtom atom =
-  case atom of
-    ASymbol x -> P.text (unpackFS x)
-    AChar x -> P.char '\\' P.<+> P.char x
-    AString x -> P.doubleQuotes (P.text x)
-    AInteger x -> P.text (show x)
-    AFractional x -> P.text (fl_text x)
-    AUnit -> P.text "()"
-    AComment _ -> P.empty
-
 
 -- -------------------------------------------------------------------
 --
@@ -256,39 +229,39 @@ class Codish a where
   listFromCode :: Code -> Maybe [a]
   listFromCode xs = case unLocLForm xs of
                       HsList as -> mapM fromCode as
-                      _          -> Nothing
+                      _         -> Nothing
 
 instance Codish Atom where
   toCode = LForm . genSrc . Atom
   fromCode a =
     case unLocLForm a of
       Atom x -> Just x
-      _       -> Nothing
+      _      -> Nothing
 
 instance Codish () where
   toCode _ = LForm (genSrc (Atom AUnit))
   fromCode a =
     case unLocLForm a of
       Atom AUnit -> Just ()
-      _           -> Nothing
+      _          -> Nothing
 
 instance Codish Char where
   toCode = LForm . genSrc . Atom . AChar
   fromCode a =
     case unLocLForm a of
-      Atom (AChar x) -> Just x
+      Atom (AChar x)  -> Just x
       _               -> Nothing
   listToCode = LForm . genSrc . Atom . AString
   listFromCode a = case unLocLForm a of
                      Atom (AString s) -> Just s
-                     _ -> Nothing
+                     _                -> Nothing
 
 instance Codish Int where
   toCode = LForm . genSrc . Atom . AInteger . fromIntegral
   fromCode a =
     case unLocLForm a of
       Atom (AInteger n) -> Just (fromIntegral n)
-      _                  -> Nothing
+      _                 -> Nothing
 
 instance Codish Integer where
   toCode = LForm . genSrc . Atom . AInteger
@@ -304,7 +277,7 @@ instance Codish Double where
   fromCode a =
     case unLocLForm a of
       Atom (AFractional x) -> Just (fromRational (fl_value x))
-      _                     -> Nothing
+      _                    -> Nothing
 
 instance Codish a => Codish [a] where
   toCode = listToCode

@@ -150,8 +150,7 @@ builderError = do
   case lastToken st of
     Nothing -> failB "no location"
     Just x  ->
-      failB (showLoc x ++ "parse error on input `" ++
-             show (pForm x) ++ "'")
+      failB (showLoc x ++ "parse error on input `" ++ show x ++ "'")
 
 -- | Unwrap the element of 'List' and 'HsList', otherwise returns '[]'.
 unwrapListL :: Code -> [Code]

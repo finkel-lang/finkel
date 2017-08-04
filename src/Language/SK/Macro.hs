@@ -233,7 +233,7 @@ m_defineMacro form@(LForm (L l _)) = do
       case unLocLForm x of
         List [_,self,arg,body] -> putMacro x self arg body
         _ -> skSrcError form ("define-macro: malformed args:\n" ++
-                              show (pForm x))
+                              show x)
 
 -- XXX: When macros defined with `define-macro' have same name, old
 -- macros will be overridden by `let-macro'. Need to update the SkEnv to
@@ -247,13 +247,12 @@ m_letMacro form =
       expanded <- expands rest
       putSkEnv sk_env
       return (tList l1 (tSym l2 "begin":expanded))
-    _ -> skSrcError form ("let-macro: malformed args:\n" ++
-                     show (pForm form))
+    _ -> skSrcError form ("let-macro: malformed args:\n" ++ show form)
   where
     addLetMacro x =
       case unLocLForm x of
         List [self,arg,body] -> putMacro x self arg body
-        _ -> skSrcError x ("malformed macro: " ++ show (pForm x))
+        _ -> skSrcError x ("malformed macro: " ++ show x)
 
 m_require :: Mfunc
 m_require form =
