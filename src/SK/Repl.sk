@@ -39,6 +39,7 @@
 
 (import Language.SK)                ; sk-kernel
 (import Language.SK.Builder)
+(import Language.SK.Eval)
 (import Language.SK.GHC)
 (import Language.SK.Lexer)
 (import Language.SK.Macro)
@@ -226,7 +227,8 @@
       (case stmt1
         (Just (, ids hvals-io fixity-env))
         (update-hsc-env hsc-env True ids hvals-io fixity-env)
-        Nothing (return (Left "eval-statement: no result")))))
+        Nothing
+        (return (Left "eval-statement: no result")))))
 
 (:: eval-imports (-> [HImportDecl] (Skc Result)))
 (= eval-imports imports
@@ -238,7 +240,7 @@
 
 (:: eval-decls (-> [HDecl] (Skc Result)))
 (= eval-decls decls
-  (do (<- (, tythings ic) (compileDecls decls))
+  (do (<- (, tythings ic) (evalDecls decls))
       (<- hsc-env getSession)
       (let ((= dflags (hsc_dflags hsc-env))
             (= pr tt
@@ -316,7 +318,6 @@
 
 (:: show-names-and-types (-> DynFlags [Name] [Var] String))
 (= show-names-and-types dflags names vars
-  (| ((all null tvs) "")
-     (otherwise      (++ (concat (intersperse "\n" tvs)) "\n")))
-  (where
+  (where (| ((all null tvs) "")
+            (otherwise      (++ (concat (intersperse "\n" tvs)) "\n")))
     (= tvs (zipWith (var-name-and-type dflags) names vars))))
