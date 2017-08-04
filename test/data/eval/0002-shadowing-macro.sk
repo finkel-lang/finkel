@@ -60,4 +60,15 @@
                  (Just foo) (where bar
                               (= bar (foo "bar")))
                  _          "")
+               "let: bar")
+
+           ;; Shadowing with `where'
+           (== (case ()
+                 _ (where (foo "bar")
+                     (= foo (++ "let: "))))
+               "let: bar")
+           (== (case ()
+                 _ (where (bar "bar")
+                     (= bar foo
+                       (++ "let: " foo))))
                "let: bar")]))

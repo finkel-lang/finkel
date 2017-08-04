@@ -402,11 +402,12 @@ expand form =
         -- names. Expansion of other forms are done without name
         -- shadowing.
         kw@(LForm (L _ (Atom (ASymbol x)))):y:rest
-          | x == "let"  -> expandLet l kw y rest
-          | x == "case" -> expandCase l kw y rest
+          | x == "let"   -> expandLet l kw y rest
+          | x == "case"  -> expandCase l kw y rest
+          | x == "where" -> expandWhere l kw y rest
           | x == "=" ||
-            x == "\\"   -> expandFunBind l kw (y:rest)
-        _               -> expandList l List forms
+            x == "\\"    -> expandFunBind l kw (y:rest)
+        _                -> expandList l List forms
 
     L l (HsList forms) ->
       LForm . L l . HsList <$> mapM expand forms
@@ -440,6 +441,12 @@ expand form =
       expr' <- expand expr
       rest' <- go [] rest
       return (LForm (L l (List (kw:expr':reverse rest'))))
+
+    expandWhere l kw expr rest = do
+      rest' <- mapM expand rest
+      let bounded = concatMap boundedName rest'
+      expr' <- withShadowing bounded (expand expr)
+      return (LForm (L l (List (kw:expr':rest'))))
 
     expandList l constr forms =
       case forms of
