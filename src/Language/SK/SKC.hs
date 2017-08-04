@@ -6,6 +6,7 @@ module Language.SK.SKC
   , SkEnv(..)
   , SkException(..)
   , Macro(..)
+  , EnvMacros
   , handleSkException
   , debugIO
   , toGhc
@@ -14,14 +15,19 @@ module Language.SK.SKC
   , skSrcError
   , getSkEnv
   , putSkEnv
-  , addMacro
-  , getMacroEnv
-  , putMacroEnv
+  , insertMacro
+  , getEnvMacros
+  , putEnvMacros
+  , lookupMacro
+  , macroNames
   ) where
 
 -- base
 import Control.Exception (Exception(..))
 import Control.Monad (when)
+
+-- containers
+import qualified Data.Map as Map
 
 -- transformers
 import Control.Monad.Trans.Class
@@ -63,10 +69,12 @@ data Macro
   = Macro (Code -> Skc Code)
   | SpecialForm (Code -> Skc Code)
 
+type EnvMacros = Map.Map FastString Macro
+
 -- | Environment state in 'Skc'.
 data SkEnv = SkEnv
    { -- | Association list of macros.
-     envMacros :: [(FastString, Macro)]
+     envMacros :: EnvMacros
      -- | Flag to hold debug setting.
    , envDebug :: Bool
    }
@@ -123,15 +131,31 @@ getSkEnv = Skc get
 putSkEnv :: SkEnv -> Skc ()
 putSkEnv = Skc . put
 
-getMacroEnv :: Skc [(FastString, Macro)]
-getMacroEnv = envMacros <$> getSkEnv
+getEnvMacros :: Skc EnvMacros
+getEnvMacros = envMacros <$> getSkEnv
 
-putMacroEnv :: [(FastString, Macro)] -> Skc ()
-putMacroEnv macros = do
+putEnvMacros :: EnvMacros -> Skc ()
+putEnvMacros macros = do
   e <- getSkEnv
   putSkEnv (e {envMacros=macros})
 
-addMacro :: FastString -> Macro -> Skc ()
-addMacro name mac = Skc go
+-- | Insert new macro. This function will override existing macro.
+insertMacro :: FastString -> Macro -> Skc ()
+insertMacro name mac = Skc go
   where
-    go = modify (\e -> e {envMacros = (name, mac) : envMacros e})
+    go = modify (\e -> e {envMacros =
+                            Map.insert name mac (envMacros e)})
+    -- go = modify (\e -> e {envMacros = (name, mac) : envMacros e})
+
+-- | Lookup macro by name.
+lookupMacro :: FastString -> EnvMacros -> Maybe Macro
+lookupMacro = Map.lookup
+
+-- | All macros in given macro environment, filtering out the special
+-- forms.
+macroNames :: EnvMacros -> [String]
+macroNames = Map.foldrWithKey f []
+  where
+    f k m acc = case m of
+                  Macro _ -> unpackFS k : acc
+                  _       -> acc

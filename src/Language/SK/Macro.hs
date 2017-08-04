@@ -14,6 +14,9 @@ import Control.Monad (foldM, when)
 import Data.Char (isLower)
 import Unsafe.Coerce (unsafeCoerce)
 
+-- containers
+import qualified Data.Map as Map
+
 -- Internal
 import Language.SK.Eval
 import Language.SK.Form
@@ -128,7 +131,7 @@ putMacro form self arg body = do
       macro <- evalExpr hexpr
       let decls = [tList l [tSym l "::", self, tSym l "Macro"]
                   ,tList l [tSym l "=", self, expr']]
-      addMacro name (unsafeCoerce macro)
+      insertMacro name (unsafeCoerce macro)
       return decls
     Left err -> skSrcError form err
 
@@ -195,7 +198,7 @@ addImportedMacro ty_thing =
       fhv <- liftIO (getHValue hsc_env name)
       hv <- liftIO (withForeignRef fhv localRef)
       let macro = unsafeCoerce hv
-      addMacro (fsLit (showPpr (hsc_dflags hsc_env) name)) macro
+      insertMacro (fsLit (showPpr (hsc_dflags hsc_env) name)) macro
       return ()
     _ -> error "addImportedmacro"
 
@@ -298,14 +301,15 @@ m_evalWhenCompile form =
     _ -> skSrcError form ("eval-when-compile: malformed body: " ++
                           show form)
 
-specialForms :: [(FastString, Macro)]
+specialForms :: EnvMacros
 specialForms =
-  [("define-macro", SpecialForm m_defineMacro)
-  ,("eval-when-compile", SpecialForm m_evalWhenCompile)
-  ,("let-macro", SpecialForm m_letMacro)
-  ,("quote", SpecialForm m_quote)
-  ,("quasiquote", SpecialForm m_quasiquote)
-  ,("require", SpecialForm m_require)]
+  Map.fromList
+    [("define-macro", SpecialForm m_defineMacro)
+    ,("eval-when-compile", SpecialForm m_evalWhenCompile)
+    ,("let-macro", SpecialForm m_letMacro)
+    ,("quote", SpecialForm m_quote)
+    ,("quasiquote", SpecialForm m_quasiquote)
+    ,("require", SpecialForm m_require)]
 
 
 -- ---------------------------------------------------------------------
@@ -365,13 +369,13 @@ withShadowing :: [FastString] -- ^ Names of macro to shadow.
               -> Skc a -- ^ Action to perform.
               -> Skc a
 withShadowing toShadow skc = do
-  macros <- getMacroEnv
-  let macros' = filter f macros
-      f (name,_) | name `elem` toShadow = False
-                 | otherwise            = True
-  putMacroEnv macros'
+  macros <- getEnvMacros
+  let macros' = Map.filterWithKey f macros
+      f name _ | name `elem` toShadow = False
+               | otherwise            = True
+  putEnvMacros macros'
   result <- skc
-  putMacroEnv macros
+  putEnvMacros macros
   return result
 
 -- | Expands form, with taking care of @begin@ special form.
@@ -450,8 +454,8 @@ expand form =
     expandList l constr forms =
       case forms of
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
-          macros <- getMacroEnv
-          case lookup k macros of
+          macros <- getEnvMacros
+          case lookupMacro k macros of
            Just m -> case m of
               Macro f       -> f form >>= expand
               SpecialForm f -> f form >>= expand
