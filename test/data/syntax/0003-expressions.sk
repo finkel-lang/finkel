@@ -137,13 +137,11 @@
 
 (:: case4 (-> (Maybe Int) Int String))
 (= case4 x y
-  (case x
-    (Just n) (| ((even n) (show (f n y)))
-                ((odd n) (++ (h n) (show (f n 1)))))
-    (where
-      (= f a b (+ a b)))
-    Nothing "nothing")
-  (where
+  (where (case x
+           (Just n) (where (| ((even n) (show (f n y)))
+                              ((odd n) (++ (h n) (show (f n 1)))))
+                      (= f a b (+ a b)))
+           Nothing "nothing")
     (= h i
       (replicate (+ i y) \@))))
 

@@ -403,7 +403,7 @@ expand form =
         -- shadowing.
         kw@(LForm (L _ (Atom (ASymbol x)))):y:rest
           | x == "let"  -> expandLet l kw y rest
-          -- | x == "case" -> expandCase l kw y rest
+          | x == "case" -> expandCase l kw y rest
           | x == "=" ||
             x == "\\"   -> expandFunBind l kw (y:rest)
         _               -> expandList l List forms
@@ -428,18 +428,18 @@ expand form =
       body' <- withShadowing bounded (expand body)
       return (LForm (L l (List (kw:args'++[body']))))
 
-    -- expandCase l kw expr rest = do
-    --   let go acc xs =
-    --         case xs of
-    --           pat:expr0:rest0 -> do
-    --             pat' <- expand pat
-    --             expr1 <- withShadowing (boundedNameOne pat')
-    --                                    (expand expr0)
-    --             go (expr1:pat':acc) rest0
-    --           _               -> return acc
-    --   expr' <- expand expr
-    --   rest' <- go [] rest
-    --   return (LForm (L l (List (kw:expr':reverse rest'))))
+    expandCase l kw expr rest = do
+      let go acc xs =
+            case xs of
+              pat:expr0:rest0 -> do
+                pat' <- expand pat
+                expr1 <- withShadowing (boundedNameOne pat')
+                                       (expand expr0)
+                go (expr1:pat':acc) rest0
+              _               -> return acc
+      expr' <- expand expr
+      rest' <- go [] rest
+      return (LForm (L l (List (kw:expr':reverse rest'))))
 
     expandList l constr forms =
       case forms of

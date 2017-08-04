@@ -285,8 +285,8 @@
 
 ;;; Function with `where'
 (:: fpb4 (-> Char Int String))
-(= fpb4 c n (f n)
-  (where
+(= fpb4 c n
+  (where (f n)
     (= f x
       (replicate x c))))
 

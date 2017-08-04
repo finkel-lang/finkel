@@ -51,8 +51,13 @@
                "let: bar")
 
            ;; Pattern match in `case' expression
-           ;; (== (case (Just (++ "let: "))
-           ;;       (Just foo) (foo "bar")
-           ;;       _          "blahblah")
-           ;;     "let: bar")
-           ]))
+           (== (case (Just (++ "let: "))
+                 (Just foo) (foo "bar")
+                 _          "blahblah")
+               "let: bar")
+
+           (== (case (Just (++ "let: "))
+                 (Just foo) (where bar
+                              (= bar (foo "bar")))
+                 _          "")
+               "let: bar")]))

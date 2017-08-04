@@ -58,6 +58,7 @@ import Language.SK.GHC
 %name p_guards0 guards0
 %name p_guards1 guards1
 %name p_guard guard
+%name p_where where
 %name p_lbinds0 lbinds0
 %name p_app app
 
@@ -504,13 +505,15 @@ hlist0 :: { [HExpr] }
 -- Parsing form for guards
 -- ~~~~~~~~~~~~~~~~~~~~~~~
 --
--- Separating the rule for 'list' and atom, so that the 'guards0' rule
--- can try matching the symbol '|' before 'expr' rule, to differentiate
--- the entire form from function application of reserved symbol '|'.
+-- Separating the rule for 'where', 'list' and atom, so that the
+-- 'guards0' rule can try matching the symbol '|' before 'expr' rule, to
+-- differentiate the entire form from function application of reserved
+-- symbol '|'.
 
 guards :: { ([HGRHS],[HDecl]) }
-    : 'list' mbwhere {% parse p_guards0 $1 >>= \gs -> return (gs,$2) }
-    | atom   mbwhere { ([L (getLoc $1) (GRHS [] $1)],$2) }
+    : 'where' {% parse p_where $1 }
+    | 'list'  {% parse p_guards0 $1 >>= \gs -> return (gs,[]) }
+    | atom    { ([L (getLoc $1) (GRHS [] $1)], []) }
 
 guards0 :: { [HGRHS] }
     : '|' guards1 { $2 }
@@ -524,9 +527,9 @@ guard :: { (HExpr, [HGuardLStmt]) }
     : expr       { ($1, []) }
     | stmt guard { fmap ($1:) $2 }
 
-mbwhere :: { [HDecl] }
-    : {- empty -} { [] }
-    | 'where'   {% parse p_lbinds0 $1 }
+where :: { [HGRHS],[HDecl] }
+    : 'list' lbinds0 {% parse p_guards0 $1 >>= \gs -> return (gs,$2) }
+    | atom lbinds0   { ([L (getLoc $1) (GRHS [] $1)], $2) }
 
 
 -- ---------------------------------------------------------------------
