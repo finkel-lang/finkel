@@ -2,7 +2,25 @@
 
 (module SK.Macro)
 
+(require Language.SK.Macro)
+(require Language.SK.Run)
+
+(require Control.Monad.IO.Class)
+(require GhcMake)
+(require StaticFlags)
+(require Language.SK.GHC)
+(require Language.SK.Make)
+
 (import Language.SK)
+(import Language.SK.Macro)
+(import Language.SK.Run)
+
+(import Control.Monad.IO.Class)
+(import GhcMake)
+(import StaticFlags)
+(import Language.SK.GHC)
+(import Language.SK.Make)
+
 
 ;;; Macro to specify the phase of body contents evaluation.
 (define-macro eval-when form
@@ -122,3 +140,36 @@
      (:: ,name ,tsig)
      (= ,name ,@args
        ,body)))
+
+;;; Macro for expanding macro. This version of `macroexpand' recursively
+;;; expands all sub forms.
+(defmacro* macroexpand (form)
+  (case (unLocLForm form)
+    (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
+                     (do (<- expanded (expand x))
+                         (return `',expanded))))
+    _            (skSrcError form (++ "macroexpand: invalid form\n"
+                                      (show form)))))
+
+;;; Show names of macro as list of strings.
+(defmacro* macro-names ()
+  (do (<- mes getEnvMacros)
+      (return `(list ,@(macroNames mes)))))
+
+;;; Compile file, and then import the compiled result.
+(defmacro* compile-file (form)
+  ;; XXX: Re-compiling same file in single REPL session not working yet.
+  (let ((= compile-and-load file
+          (do (liftIO (do initStaticOpts
+                          (putStrLn (++ "; compile-file: " file))))
+              (<- dflags getSessionDynFlags)
+              (setSessionDynFlags (dflags {hscTarget HscAsm
+                                           ghcLink LinkBinary}))
+              (make [(, file Nothing)] True Nothing)
+              (setSessionDynFlags dflags)
+              (return `(import ,(aSymbol (asModuleName file))))))
+        (= err
+          (skSrcError form (++ "compile-file: got " (show form)))))
+    (case (fromCode form)
+      (Just file) (compile-and-load file)
+      Nothing     err)))
