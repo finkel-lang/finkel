@@ -41,6 +41,9 @@
     ;; String containing escaped newlines and tabs.
     (putStrLn "string with newlines: \n\n\nand tabs: \t\t\t.")
 
+    ;; Empty string
+    (putStrLn "")
+
     ;; Unit.
     (print ())
 

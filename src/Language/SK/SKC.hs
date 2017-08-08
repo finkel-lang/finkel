@@ -101,7 +101,7 @@ instance GhcMonad Skc where
    setSession s = Skc (lift (setSession s))
 
 toGhc :: Skc a -> SkEnv -> Ghc (a, SkEnv)
-toGhc m st = runStateT (unSkc m) st
+toGhc m = runStateT (unSkc m)
 
 fromGhc :: Ghc a -> Skc a
 fromGhc m = Skc (lift m)
@@ -141,11 +141,9 @@ putEnvMacros macros = do
 
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Skc ()
-insertMacro name mac = Skc go
+insertMacro k v = Skc go
   where
-    go = modify (\e -> e {envMacros =
-                            Map.insert name mac (envMacros e)})
-    -- go = modify (\e -> e {envMacros = (name, mac) : envMacros e})
+    go = modify (\e -> e {envMacros = Map.insert k v (envMacros e)})
 
 -- | Lookup macro by name.
 lookupMacro :: FastString -> EnvMacros -> Maybe Macro

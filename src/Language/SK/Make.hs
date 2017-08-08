@@ -2,6 +2,7 @@
 -- | Make mode for skc.
 module Language.SK.Make
   ( make
+  , asModuleName
   ) where
 
 -- base
@@ -19,6 +20,8 @@ import Data.Graph (flattenSCCs)
 -- ghc
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
+import ErrUtils (withTiming)
+import Outputable (text)
 
 -- directory
 import System.Directory (doesFileExist)
@@ -35,15 +38,11 @@ import Language.SK.Lexer
 import Language.SK.Run
 import Language.SK.SKC
 
-import ErrUtils (withTiming)
-import Outputable (text)
-
-
 -- ---------------------------------------------------------------------
 --
 -- Exported main interface
 --
--- --------------------------------------------------------------------------
+-- ---------------------------------------------------------------------
 
 -- [Requiring home package module]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -104,8 +103,6 @@ make inputs no_link mb_output = do
 
 -- | Data type to differentiate target sources.
 data TargetSource
-  -- XXX: Original input string in SkSource is assumed as module name at
-  -- the moment, but it could be a file path.
   = SkSource FilePath String [Code] [String]
   -- ^ SK source. Holds file path of the source code, original string
   -- input, parsed form data, and required module names.
@@ -360,7 +357,7 @@ findTargetSource (modName, a) = do
           do contents <- liftIO (BL.readFile path)
              (forms, sp) <- parseSexprs (Just path) contents
              let reqs = requiredModuleNames sp
-                 modName' = asModName modName
+                 modName' = asModuleName modName
              return (SkSource path modName' forms reqs, a)
         | isHsFile path = return (HsSource path, a)
         | otherwise = return (OtherSource path, a)
@@ -560,8 +557,8 @@ isSkFile path = takeExtension path == ".sk"
 isHsFile :: FilePath -> Bool
 isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
 
-asModName :: String -> String
-asModName name
+asModuleName :: String -> String
+asModuleName name
    | looksLikeModuleName name = name
    | otherwise = map slash_to_dot (dropExtension name)
    where

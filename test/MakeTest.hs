@@ -2,7 +2,7 @@ module MakeTest (makeTests) where
 
 -- base
 import Control.Monad (when)
-import Data.List (intersperse)
+import Data.List (intercalate)
 import System.Directory ( doesFileExist, getDirectoryContents
                         , removeFile)
 import System.Exit (ExitCode(..))
@@ -28,7 +28,7 @@ makeTests = do
 buildFile :: [FilePath] -> Spec
 buildFile paths =
   before_ removeArtifacts $
-  describe ("files " ++ concat (intersperse ", " paths)) $
+  describe ("files " ++ intercalate ", " paths) $
     it "should compile successfully" $ do
       ret <- runSkc (make' targets False Nothing) initialSkEnv
       ret `shouldBe` Right ()
