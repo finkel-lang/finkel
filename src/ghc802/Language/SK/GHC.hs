@@ -247,6 +247,8 @@ module Language.SK.GHC
 
     -- * Linker
     getHValue,
+    linkModule,
+    unload,
 
     -- * MkIface
     tyThingToIfaceDecl,
@@ -325,6 +327,11 @@ module Language.SK.GHC
     srcSpanStartLine,
     unLoc,
 
+    -- * StaticFlags
+
+    -- Module `StaticFlags' has been removed in ghc >= 8.2.0.
+    initStaticOpts,
+
     -- * StringBuffer
     stringToStringBuffer,
 
@@ -379,6 +386,7 @@ import PprTyThing
 import RdrHsSyn
 import RdrName
 import SrcLoc
+import StaticFlags
 import StringBuffer
 import TysWiredIn
 import UniqFM

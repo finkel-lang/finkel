@@ -156,7 +156,7 @@ mkModSummary mbfile mdl = do
       imports = map (ideclName . unLoc) (hsmodImports mdl)
   mkModSummary' mbfile modName imports
 
--- | Makd 'ModSummary' from source file, module name, and imports.
+-- | Make 'ModSummary' from source file, module name, and imports.
 mkModSummary' :: GhcMonad m => Maybe FilePath -> ModuleName
               -> [Located ModuleName] -> m ModSummary
 mkModSummary' mbfile modName imports = do

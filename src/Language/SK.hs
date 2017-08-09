@@ -1,7 +1,7 @@
 -- | Module re-exporting runtime dependency for SK program.
 --
--- When using non-standard Haskell values and functions (e.g.: symbols,
--- car, cdr), this module is likely to be required.
+-- When using non-standard Haskell values and functions, this module is
+-- likely to be required.
 --
 
 module Language.SK
