@@ -2,24 +2,17 @@
 
 (module SK.Macro)
 
-(require Language.SK.Macro)
-(require Language.SK.Run)
-
-(require Control.Monad.IO.Class)
-(require GhcMake)
-(require StaticFlags)
 (require Language.SK.GHC)
+(require Language.SK.Macro)
 (require Language.SK.Make)
 
 (import Language.SK)
-(import Language.SK.Macro)
-(import Language.SK.Run)
-
-(import Control.Monad.IO.Class)
-(import GhcMake)
-(import StaticFlags)
 (import Language.SK.GHC)
+(import Language.SK.Macro)
 (import Language.SK.Make)
+
+(require System.Directory)
+(import System.Directory)
 
 
 ;;; Macro to specify the phase of body contents evaluation.
@@ -128,11 +121,12 @@
 
 ;;; Macro for defining simple function, or, an alias of `='. This macro
 ;;; preserves the location of function name, arguments, and body.
-(define-macro defn (LForm (L l form'))
-  (case form'
+(define-macro defn form
+  (case (unLocLForm form)
     (List [_ name args body]) (return `(= ,name ,@args ,body))
-    _ (skSrcError (LForm (L l form'))
-       (++ "`defn': invalid form:\n" (show (LForm (L l form')))))))
+    _                         (skSrcError form
+                                          (++ "`defn': invalid form:\n"
+                                              (show form)))))
 
 ;;; Macro for defining function and type signature in single form.
 (defmacro defn: (name tsig args body)
@@ -156,20 +150,113 @@
   (do (<- mes getEnvMacros)
       (return `(list ,@(macroNames mes)))))
 
-;;; Compile file, and then import the compiled result.
-(defmacro* compile-file (form)
-  ;; XXX: Re-compiling same file in single REPL session not working yet.
-  (let ((= compile-and-load file
-          (do (liftIO (do initStaticOpts
-                          (putStrLn (++ "; compile-file: " file))))
-              (<- dflags getSessionDynFlags)
-              (setSessionDynFlags (dflags {hscTarget HscAsm
-                                           ghcLink LinkBinary}))
-              (make [(, file Nothing)] True Nothing)
-              (setSessionDynFlags dflags)
-              (return `(import ,(aSymbol (asModuleName file))))))
+;;; Compile source code file to object code.
+(defmacro* compile-obj (form)
+  (let ((= go file
+          (gbracket (do (liftIO
+                         (do initStaticOpts
+                             (putStrLn (++ "; compile-obj: "
+                                           file))))
+                        getSessionDynFlags)
+                    setSessionDynFlags
+                    (\ dflags
+                      (do (setSessionDynFlags
+                           (dflags {hscTarget HscAsm}))
+                          (make [(, file Nothing)] False Nothing)
+                          (return `(begin))))))
         (= err
-          (skSrcError form (++ "compile-file: got " (show form)))))
-    (case (fromCode form)
-      (Just file) (compile-and-load file)
-      Nothing     err)))
+          (skSrcError form (++ "compile-obj: not a FilePath: "
+                               (show form)))))
+    (maybe err go (fromCode form))))
+
+;;; Link the object code of given module.
+(defmacro* link-module (form)
+  (let ((= go name
+          (do (<- hsc-env getSession)
+              (let ((= name' (unpackFS name))
+                    (= mname' (mkModuleNameFS name))))
+              (liftIO
+               (do (putStrLn (concat ["; link-module `" name' "'"]))
+                   (unload hsc-env [])
+                   (linkModule hsc-env (Module mainUnitId mname'))))
+              (return '(begin))))
+        (= err
+          (skSrcError form (++ "link-module: not a symbol: "
+                               (show form)))))
+    (case (unLocLForm form)
+      (Atom (ASymbol sym)) (go sym)
+      _                    err)))
+
+;;; Compile module source code file to object code, then link it, and
+;;; then import the compiled module.
+(defmacro* compile-file (form)
+  (maybe (skSrcError form (++ "compile-file: not a FilePath: "
+                              (show form)))
+         (\ file
+           (let ((= mdl (aSymbol (asModuleName file))))
+             (return `(begin
+                        (compile-obj ,form)
+                        (link-module ,mdl)
+                        (import ,mdl)))))
+         (fromCode form)))
+
+(defmacro* load-file (form)
+  (return `(print '(load-file ,form))))
+
+
+;;;; Repl macros
+
+(defmacro* set-verbosity (form)
+  (let ((= go n
+          (do (<- dflags getSessionDynFlags)
+              (setSessionDynFlags (dflags {verbosity n}))
+              (return `(begin))))
+        (= err
+          (skSrcError form "set-verbosity: expecting int.")))
+    (case (unLocLForm form)
+      (Atom (AInteger n)) (go (fromInteger n))
+      _                   err)))
+
+(eval-when (compile load)
+  (:: show-context (Skc ()))
+  (= show-context
+    (where (do (<- context getContext)
+               (<- dflags getSessionDynFlags)
+               (liftIO (putStrLn "\n; context:"))
+               (liftIO (mapM_ (printContext dflags)
+                              context)))
+      (= printContext dflags ctx
+        (case ctx
+          (IIDecl decl)    (putStrLn (++ ";  IIDecl: "
+                                         (showSDoc dflags (ppr decl))))
+          (IIModule mname) (putStrLn (++ ";  IIModule: "
+                                         (moduleNameString mname)))))))
+  (:: show-paths (Skc ()))
+  (= show-paths
+    (do (<- dflags getDynFlags)
+        (liftIO
+         (do (<- cwd getCurrentDirectory)
+             (putStrLn "\n; current working directory: ")
+             (putStrLn (++ ";   " cwd))
+             (let ((= ipaths (importPaths dflags))))
+             (putStrLn "; module import search paths: ")
+             (if (null ipaths)
+                 (putStrLn ";   none")
+                 (mapM_ (\ ipath
+                          (putStrLn (++ ";   " ipath)))
+                        ipaths)))))))
+
+(defmacro* info (form)
+  (let ((= go sym
+          (case (unpackFS sym)
+            "context" show-context
+            "paths"   show-paths
+            _         err))
+
+        (= err
+          (skSrcError form (++ "info: invalid form: " (show form)))))
+    (case (unLocLForm form)
+      (Atom (ASymbol sym)) (do (liftIO initStaticOpts)
+                               (go sym)
+                               (return '(begin)))
+      _                    err)))

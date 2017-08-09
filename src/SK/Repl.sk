@@ -9,12 +9,14 @@
 
 (module SK.Repl)
 
+(require SK.Macro)
+
 (import Control.Concurrent      ; base
         ((MVar) (ThreadId) forkIO killThread newEmptyMVar
                 putMVar takeMVar))
 (import Control.Monad (void when))
 (import Control.Monad.IO.Class ((MonadIO ..)))
-(import Data.List (intersperse))
+(import Data.List (intercalate intersperse nubBy))
 (import Data.String (fromString))
 (import Data.Version (showVersion))
 (import System.Exit (exitWith))
@@ -52,8 +54,6 @@
 
 (import Paths_sk_repl)          ; internal
 (import SK.Repl.Apply)
-
-(import StaticFlags (initStaticOpts))
 
 
 
@@ -119,8 +119,8 @@
             (= init-form
               `(begin
                  (require SK.Macro)
-                 (putStrLn ";;; REPL ready, hit `Ctrl-d' to exit.")))))
-      (putStrLn (++ ";;; SK REPL " (showVersion version)))
+                 (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
+      (putStrLn (++ "SK REPL " (showVersion version)))
       (putMVar in-mv init-form)
       (run-repl reader' initial-repl-state)))
 
@@ -238,10 +238,22 @@
 (:: eval-imports (-> [HImportDecl] (Skc Result)))
 (= eval-imports imports
   (do (<- context getContext)
+      (<- dflags getSessionDynFlags)
       (let ((= mkIIDecl (L _ idecl)
-              (IIDecl idecl))))
-      (setContext (++ (map mkIIDecl imports) context))
-      (return (Right ""))))
+              (IIDecl idecl))
+            (= eqII a b
+              (case (, a b)
+                (, (IIModule x) (IIModule y)) (== x y)
+                (, (IIDecl x) (IIDecl y))     (== (unLoc (ideclName x))
+                                                  (unLoc (ideclName y)))
+                _                               False))
+            (= mdls
+              (concat ["; "
+                       (intercalate ", " (map (. (showSDoc dflags) ppr)
+                                              imports))
+                       "\n"]))))
+      (setContext (nubBy eqII (++ (map mkIIDecl imports) context)))
+      (return (Right mdls))))
 
 (:: eval-decls (-> [HDecl] (Skc Result)))
 (= eval-decls decls
