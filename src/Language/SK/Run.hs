@@ -41,7 +41,7 @@ import Language.SK.Form
 import Language.SK.GHC
 import Language.SK.SKC
 import Language.SK.Syntax
-import Language.SK.Lexer as L
+import Language.SK.Lexer
 import Language.SK.Macro
 import Language.SK.Reader
 
