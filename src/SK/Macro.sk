@@ -14,6 +14,12 @@
 (require System.Directory)
 (import System.Directory)
 
+(require Data.List)
+(import Data.List)
+
+(require System.FilePath)
+(import System.FilePath)
+
 
 ;;; Macro to specify the phase of body contents evaluation.
 (define-macro eval-when form
@@ -150,36 +156,52 @@
   (do (<- mes getEnvMacros)
       (return `(list ,@(macroNames mes)))))
 
+
+;;; Repl macros
+
+(eval-when (compile load)
+  (:: %compile-obj (-> String (Skc Code)))
+  (= %compile-obj str
+    (gbracket (do (liftIO initStaticOpts)
+                  getSessionDynFlags)
+              setSessionDynFlags
+              (\ dflags
+                (do (setSessionDynFlags
+                     (dflags {hscTarget HscAsm}))
+                    (make [(, str Nothing)] False Nothing)
+                    (return `(begin))))))
+
+  (:: %link-module (-> FastString (Skc Code)))
+  (= %link-module name
+    (do (<- hsc-env getSession)
+        (let ((= name' (unpackFS name))
+              (= mname' (mkModuleNameFS name))))
+        (liftIO
+         (do (unload hsc-env [])
+             (linkModule hsc-env (Module mainUnitId mname'))))
+        (return '(begin))))
+
+  (:: %compile-and-import (-> FilePath (Skc Code)))
+  (= %compile-and-import path
+    (do (let ((= mname (asModuleName path))))
+        (%compile-obj path)
+        (%link-module (fsLit mname))
+        (return `(import ,(aSymbol mname))))))
+
 ;;; Compile source code file to object code.
 (defmacro* compile-obj (form)
-  (let ((= go file
-          (gbracket (do (liftIO
-                         (do initStaticOpts
-                             (putStrLn (++ "; compile-obj: "
-                                           file))))
-                        getSessionDynFlags)
-                    setSessionDynFlags
-                    (\ dflags
-                      (do (setSessionDynFlags
-                           (dflags {hscTarget HscAsm}))
-                          (make [(, file Nothing)] False Nothing)
-                          (return `(begin))))))
-        (= err
-          (skSrcError form (++ "compile-obj: not a FilePath: "
-                               (show form)))))
-    (maybe err go (fromCode form))))
+  (maybe (skSrcError form (++ "compile-obj: not a FilePath: "
+                              (show form)))
+         (\ file
+           (do (liftIO (putStrLn (++ "; compile-obj: " file)))
+               (%compile-obj file)))
+         (fromCode form)))
 
 ;;; Link the object code of given module.
 (defmacro* link-module (form)
   (let ((= go name
-          (do (<- hsc-env getSession)
-              (let ((= name' (unpackFS name))
-                    (= mname' (mkModuleNameFS name))))
-              (liftIO
-               (do (putStrLn (concat ["; link-module `" name' "'"]))
-                   (unload hsc-env [])
-                   (linkModule hsc-env (Module mainUnitId mname'))))
-              (return '(begin))))
+          (do (liftIO (putStrLn (++ "; link-module: " (unpackFS name))))
+              (%link-module name)))
         (= err
           (skSrcError form (++ "link-module: not a symbol: "
                                (show form)))))
@@ -193,18 +215,35 @@
   (maybe (skSrcError form (++ "compile-file: not a FilePath: "
                               (show form)))
          (\ file
-           (let ((= mdl (aSymbol (asModuleName file))))
-             (return `(begin
-                        (compile-obj ,form)
-                        (link-module ,mdl)
-                        (import ,mdl)))))
+           (do (liftIO (putStrLn (++ "; compile-file: " file)))
+               (%compile-and-import file)))
          (fromCode form)))
 
+;;; Load a module source code file. Handles both absolute paths and
+;;; relative paths from import directories.
 (defmacro* load-file (form)
-  (return `(print '(load-file ,form))))
-
-
-;;;; Repl macros
+  (let ((= find-file idirs path0
+          (if (isAbsolute path0)
+              (find-absolute idirs path0)
+              (%compile-and-import path0)))
+        (= find-absolute dirs path
+          (case dirs
+            (: dir dirs') (find-absolute' dir dirs' path)
+            []            (cant-find-err path)))
+        (= find-absolute' dir dirs path
+          (do (<- dir' (if (== dir ".")
+                           (liftIO getCurrentDirectory)
+                           (return dir)))
+              (find-file dirs (makeRelative dir' path))))
+        (= cant-find-err file
+          (skSrcError form (++ "load-file: cannot find: " file))))
+    (maybe (skSrcError form (++ "load-file: not a FilePath: "
+                                (show form)))
+           (\ path
+             (do (liftIO (putStrLn (++ "; load-file: " path)))
+                 (<- dflags getSessionDynFlags)
+                 (find-file (importPaths dflags) path)))
+           (fromCode form))))
 
 (defmacro* set-verbosity (form)
   (let ((= go n
