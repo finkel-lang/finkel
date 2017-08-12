@@ -25,8 +25,8 @@
 (define-macro eval-when form
   (let ((= compile? (elem 'compile))
         (= load? (elem 'load)))
-    (case (unLForm form)
-      (L _ (List (: _ (: (LForm (L _ (List phases))) body))))
+    (case (unLocLForm form)
+      (List (: _ (: (LForm (L _ (List phases))) body)))
       (| ((&& (compile? phases) (load? phases))
           (return
             `(begin
@@ -90,8 +90,11 @@
                   (| ((== arg '()) '_unused)
                      (otherwise    arg))))
             (return
-              `(define-macro ,name ,arg'
-                 ,body))))
+              `(define-macro ,name *form*
+                 ,(if (== arg '())
+                      body
+                      `(case *form*
+                         (LForm (L _ (List (: _ ,arg)))) ,body))))))
         (= list-arg l1 name arg body
           (let ((= hlist xs
                   (LForm (L l1 (HsList xs))))
@@ -156,6 +159,13 @@
   (do (<- mes getEnvMacros)
       (return `(list ,@(macroNames mes)))))
 
+;;; The `cond' macro, found in many Lisp languages.  The behaviour is
+;;; same as wrapping the body with `case' expression with dummy unit, or
+;;; `if' with `MultiWayIf' GHC language extension.
+(defmacro cond body
+  `(case ()
+     _ (| ,@body)))
+
 
 ;;; Repl macros
 
@@ -166,8 +176,7 @@
                   getSessionDynFlags)
               setSessionDynFlags
               (\ dflags
-                (do (setSessionDynFlags
-                     (dflags {hscTarget HscAsm}))
+                (do (setSessionDynFlags (dflags {hscTarget HscAsm}))
                     (make [(, str Nothing)] False Nothing)
                     (return `(begin))))))
 
@@ -175,10 +184,9 @@
   (= %link-module name
     (do (<- hsc-env getSession)
         (let ((= name' (unpackFS name))
-              (= mname' (mkModuleNameFS name))))
-        (liftIO
-         (do (unload hsc-env [])
-             (linkModule hsc-env (Module mainUnitId mname'))))
+              (= mname (mkModuleNameFS name))))
+        (liftIO (do (unload hsc-env [])
+                    (linkModule hsc-env (Module mainUnitId mname))))
         (return '(begin))))
 
   (:: %compile-and-import (-> FilePath (Skc Code)))
