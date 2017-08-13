@@ -23,9 +23,6 @@ module Language.SK.Form
   , skSrcSpan
   , quoted
 
-  , pprForm
-  , pprForms
-
   , Codish(..)
   , unquoteSplice
 
@@ -40,9 +37,6 @@ module Language.SK.Form
 
 -- From base
 import Data.Data
-
--- Pretty module from ghc.
-import qualified Pretty as P
 
 -- Internal
 import Language.SK.GHC
@@ -172,7 +166,7 @@ symbolName = unpackFS . symbolNameFS
 
 symbolNameFS :: Code -> FastString
 symbolNameFS (LForm (L _ (Atom (ASymbol name)))) = name
-symbolNameFS x = error ("symbolName: got " ++ show (pprForm x))
+symbolNameFS x = error ("symbolName: got " ++ show x)
 
 toListL :: Code -> Code
 toListL orig@(LForm (L l form)) =
@@ -180,29 +174,6 @@ toListL orig@(LForm (L l form)) =
     List _ -> orig
     HsList xs -> LForm (L l (List xs))
     _ -> LForm (L l (List [orig]))
-
-pprAtom :: Atom -> P.Doc
-pprAtom atom =
-  case atom of
-    AUnit     -> P.text "AUnit"
-    ASymbol x -> P.text "ASymbol" P.<+> P.text (unpackFS x)
-    AChar x -> P.text "AChar" P.<+> P.char x
-    AString x -> P.text "AString" P.<+> P.doubleQuotes (P.text x)
-    AInteger x -> P.text "AInteger" P.<+> P.text (show x)
-    AFractional x -> P.text "AFractional" P.<+> P.text (fl_text x)
-    AComment x -> P.text "AComment" P.<+> P.doubleQuotes (P.text x)
-
-pprForm :: Code -> P.Doc
-pprForm (LForm (L _ form)) =
-  case form of
-    Atom x -> P.text "Atom" P.<+> P.parens (pprAtom x)
-    List xs -> P.text "List" P.<+> P.nest 2 (pprForms xs)
-    HsList xs -> P.text "HsList" P.<+> P.nest 2 (pprForms xs)
-    TEnd -> P.text "TEnd"
-
-pprForms :: [Code] -> P.Doc
-pprForms forms =
-  P.brackets (P.sep (P.punctuate P.comma (map pprForm forms)))
 
 
 -- -------------------------------------------------------------------
