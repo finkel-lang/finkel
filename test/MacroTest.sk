@@ -1,6 +1,6 @@
 ;;;; Module to test macros.
 
-(require SK.Macro)
+(require SK.Core)
 
 (module MacroTest f1 f2)
 

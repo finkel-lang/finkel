@@ -7,18 +7,18 @@
 
 (module SK.Repl.Macro)
 
-(require Language.SK.GHC)
-(require Language.SK.Make)
 (require System.Directory)
 (require System.FilePath)
-(require SK.Macro)
+(require Language.SK.GHC)
+(require Language.SK.Make)
+(require SK.Core)
 
+(import System.Directory)
+(import System.FilePath)
 (import Language.SK)
 (import Language.SK.GHC)
 (import Language.SK.Make)
-(import System.Directory)
-(import System.FilePath)
-(import SK.Macro)
+(import SK.Core)
 
 ;;; Functions for compiling and loading SK module.
 (eval-when (compile load)
@@ -105,7 +105,7 @@
                  (find-file (importPaths dflags) path)))
            (fromCode form))))
 
-;;; Modify various settings in REPL.
+;;; Modify settings in REPL.
 (defmacro* set-repl (key val)
   (let ((= set-dflags f
           (do (<- dflags getSessionDynFlags)

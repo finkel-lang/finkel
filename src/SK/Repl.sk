@@ -9,7 +9,7 @@
 
 (module SK.Repl)
 
-(require SK.Macro)
+(require SK.Core)
 
 (import Control.Concurrent      ; base
         ((MVar) (ThreadId) forkIO killThread newEmptyMVar
@@ -118,7 +118,7 @@
             (= reader' (runInputT defaultSettings reader))
             (= init-form
               `(begin
-                 (require SK.Macro)
+                 (require SK.Core)
                  (require SK.Repl.Macro)
                  (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
       (putStrLn (++ "SK REPL " (showVersion version)))

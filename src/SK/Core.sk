@@ -1,6 +1,6 @@
 ;;;; Fundamental macros and functions.
 
-(module SK.Macro)
+(module SK.Core)
 
 (require Language.SK.Macro)
 

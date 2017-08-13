@@ -24,7 +24,7 @@ custom-setup
 library
   hs-source-dirs:      src
   exposed-modules:     Paths_sk_repl
-                       SK.Macro
+                       SK.Core
                        SK.Repl
                        SK.Repl.Apply
                        SK.Repl.Macro
