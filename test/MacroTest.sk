@@ -1,0 +1,12 @@
+;;;; Module to test macros.
+
+(require SK.Macro)
+
+(module MacroTest f1 f2)
+
+(:: f1 Bool)
+(defn f1 ()
+  True)
+
+(defn: f2 (-> Int Int) (n)
+  (* n 2))
