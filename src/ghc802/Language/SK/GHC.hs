@@ -109,6 +109,7 @@ module Language.SK.GHC
     HasDynFlags(..),
     HscTarget(..),
     Language(..),
+    PackageFlag(..),
     gopt,
     languageExtensions,
     parseDynamicFilePragma,
@@ -247,7 +248,9 @@ module Language.SK.GHC
 
     -- * Linker
     getHValue,
+    initDynLinker,
     linkModule,
+    showLinkerState,
     unload,
 
     -- * MkIface
@@ -399,6 +402,6 @@ import GHCi.RemoteTypes
 -- base
 import Data.String
 
--- NOTE: Orphan instance.
+-- NB: Orphan instance.
 instance IsString FastString where
   fromString = fsLit

@@ -260,7 +260,7 @@ m_letMacro form =
 m_require :: Mfunc
 m_require form =
   -- The `require' is implemented as special form, to support dependency
-  -- resolution during compilation of multiple modules with `--make'
+  -- analysis during compilation of multiple modules with `--make'
   -- command.
   --
   -- The special form `require' modifies the HscEnv at the time of macro
@@ -319,17 +319,18 @@ specialForms =
 -- ---------------------------------------------------------------------
 
 -- | Add modules used during macro expansion to current context.
-setExpanderSettings :: GhcMonad m => m ()
+setExpanderSettings :: Skc ()
 setExpanderSettings = do
   flags <- getSessionDynFlags
   _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
                                  , ghcLink = LinkInMemory
                                  , optLevel = 0 })
-  setContext [mkIIDecl "Prelude", mkIIDecl "Language.SK"]
+  contextModules <- envContextModules <$> getSkEnv
+  setContext (map (mkIIDecl . fsLit) contextModules)
 
 -- | Perform given action with DynFlags set for macroexpansion, used
 -- this to preserve original DynFlags.
-withExpanderSettings :: GhcMonad m => m a -> m a
+withExpanderSettings :: Skc a -> Skc a
 withExpanderSettings act = do
   origFlags <- getSessionDynFlags
   setExpanderSettings

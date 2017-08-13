@@ -113,7 +113,8 @@ skErrorHandler fm (FlushOut flush) work =
 initialSkEnv :: SkEnv
 initialSkEnv = SkEnv
   { envMacros = specialForms
-  , envDebug = False }
+  , envDebug = False
+  , envContextModules = ["Prelude", "Language.SK"] }
 
 compileAndEmit :: FilePath -> IO (Either String String)
 compileAndEmit file = runSkc go initialSkEnv

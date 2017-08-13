@@ -261,7 +261,7 @@ makeOne i total ms hmdl graph_upto_this = do
 
 -- | Compile single module.
 doMakeOne :: GhcMonad m => Int -> Int -> ModSummary
-         -> HsModule RdrName -> m ModSummary
+          -> HsModule RdrName -> m ModSummary
 doMakeOne i total ms hmdl = do
   dflags <- getSessionDynFlags
   let p x = showSDoc dflags (ppr x)

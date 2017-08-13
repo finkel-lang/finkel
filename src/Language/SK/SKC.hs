@@ -77,6 +77,8 @@ data SkEnv = SkEnv
      envMacros :: EnvMacros
      -- | Flag to hold debug setting.
    , envDebug :: Bool
+     -- | Modules to import to context.
+   , envContextModules :: [String]
    }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
