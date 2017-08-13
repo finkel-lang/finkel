@@ -112,17 +112,27 @@
 (defn: replMain (IO ()) ()
   (do (<- in-mv newEmptyMVar)
       (<- out-mv newEmptyMVar)
-      (let ((= skc (runSkc (eval-loop in-mv out-mv) initialSkEnv))))
+      (let ((= skc (runSkc (eval-loop in-mv out-mv) repl-env))))
       (<- eval-tid (forkIO (void skc)))
       (let ((= reader (read-print-loop in-mv out-mv eval-tid))
             (= reader' (runInputT defaultSettings reader))
             (= init-form
               `(begin
                  (require SK.Macro)
+                 (require SK.Repl.Macro)
                  (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
       (putStrLn (++ "SK REPL " (showVersion version)))
       (putMVar in-mv init-form)
       (run-repl reader' initial-repl-state)))
+
+(:: repl-env SkEnv)
+(= repl-env
+  (let ((= mdls ["Prelude"
+                 "Language.SK"
+                 "SK.Macro"
+                 "SK.Repl.Apply"
+                 "SK.Repl.Macro"]))
+    (initialSkEnv {envContextModules mdls})))
 
 
 ;;;; Read and print

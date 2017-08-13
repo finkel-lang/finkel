@@ -27,6 +27,7 @@ library
                        SK.Macro
                        SK.Repl
                        SK.Repl.Apply
+                       SK.Repl.Macro
                        --
                        -- Scratch.F1
   build-depends:       base >= 4.7 && < 5

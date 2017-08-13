@@ -2,26 +2,13 @@
 
 (module SK.Macro)
 
-(require Language.SK.GHC)
 (require Language.SK.Macro)
-(require Language.SK.Make)
 
 (import Language.SK)
-(import Language.SK.GHC)
 (import Language.SK.Macro)
-(import Language.SK.Make)
-
-(require System.Directory)
-(import System.Directory)
-
-(require Data.List)
-(import Data.List)
-
-(require System.FilePath)
-(import System.FilePath)
 
 
-;;; Macro to specify the phase of body contents evaluation.
+;;; Macro to specify the phases of evaluation.
 (define-macro eval-when form
   (let ((= compile? (elem 'compile))
         (= load? (elem 'load)))
@@ -72,9 +59,10 @@
 ;;; vararg function (actually, vararg is doable in GHC, but requires
 ;;; some language extensions).
 (define-macro list form
-  (let ((= codes (map (\ arg (cons 'toCode (cons arg '()))))))
+  (let ((= codes (map (\ arg (cons 'toCode (cons arg '())))))
+        (= body args `(foldr cons '() [,@(codes args)])))
     (case (unLocLForm form)
-      (List (: _ args)) (return `(foldr cons '() [,@(codes args)]))
+      (List (: _ args)) (return (body args))
       _                 (skSrcError form "list: invalid args"))))
 
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
@@ -165,145 +153,3 @@
 (defmacro cond body
   `(case ()
      _ (| ,@body)))
-
-
-;;; Repl macros
-
-(eval-when (compile load)
-  (:: %compile-obj (-> String (Skc Code)))
-  (= %compile-obj str
-    (gbracket (do (liftIO initStaticOpts)
-                  getSessionDynFlags)
-              setSessionDynFlags
-              (\ dflags
-                (do (setSessionDynFlags (dflags {hscTarget HscAsm}))
-                    (make [(, str Nothing)] False Nothing)
-                    (return `(begin))))))
-
-  (:: %link-module (-> FastString (Skc Code)))
-  (= %link-module name
-    (do (<- hsc-env getSession)
-        (let ((= name' (unpackFS name))
-              (= mname (mkModuleNameFS name))))
-        (liftIO (do (unload hsc-env [])
-                    (linkModule hsc-env (Module mainUnitId mname))))
-        (return '(begin))))
-
-  (:: %compile-and-import (-> FilePath (Skc Code)))
-  (= %compile-and-import path
-    (do (let ((= mname (asModuleName path))))
-        (%compile-obj path)
-        (%link-module (fsLit mname))
-        (return `(import ,(aSymbol mname))))))
-
-;;; Compile source code file to object code.
-(defmacro* compile-obj (form)
-  (maybe (skSrcError form (++ "compile-obj: not a FilePath: "
-                              (show form)))
-         (\ file
-           (do (liftIO (putStrLn (++ "; compile-obj: " file)))
-               (%compile-obj file)))
-         (fromCode form)))
-
-;;; Link the object code of given module.
-(defmacro* link-module (form)
-  (let ((= go name
-          (do (liftIO (putStrLn (++ "; link-module: " (unpackFS name))))
-              (%link-module name)))
-        (= err
-          (skSrcError form (++ "link-module: not a symbol: "
-                               (show form)))))
-    (case (unLocLForm form)
-      (Atom (ASymbol sym)) (go sym)
-      _                    err)))
-
-;;; Compile module source code file to object code, then link it, and
-;;; then import the compiled module.
-(defmacro* compile-file (form)
-  (maybe (skSrcError form (++ "compile-file: not a FilePath: "
-                              (show form)))
-         (\ file
-           (do (liftIO (putStrLn (++ "; compile-file: " file)))
-               (%compile-and-import file)))
-         (fromCode form)))
-
-;;; Load a module source code file. Handles both absolute paths and
-;;; relative paths from import directories.
-(defmacro* load-file (form)
-  (let ((= find-file idirs path0
-          (if (isAbsolute path0)
-              (find-absolute idirs path0)
-              (%compile-and-import path0)))
-        (= find-absolute dirs path
-          (case dirs
-            (: dir dirs') (find-absolute' dir dirs' path)
-            []            (cant-find-err path)))
-        (= find-absolute' dir dirs path
-          (do (<- dir' (if (== dir ".")
-                           (liftIO getCurrentDirectory)
-                           (return dir)))
-              (find-file dirs (makeRelative dir' path))))
-        (= cant-find-err file
-          (skSrcError form (++ "load-file: cannot find: " file))))
-    (maybe (skSrcError form (++ "load-file: not a FilePath: "
-                                (show form)))
-           (\ path
-             (do (liftIO (putStrLn (++ "; load-file: " path)))
-                 (<- dflags getSessionDynFlags)
-                 (find-file (importPaths dflags) path)))
-           (fromCode form))))
-
-(defmacro* set-verbosity (form)
-  (let ((= go n
-          (do (<- dflags getSessionDynFlags)
-              (setSessionDynFlags (dflags {verbosity n}))
-              (return `(begin))))
-        (= err
-          (skSrcError form "set-verbosity: expecting int.")))
-    (case (unLocLForm form)
-      (Atom (AInteger n)) (go (fromInteger n))
-      _                   err)))
-
-(eval-when (compile load)
-  (:: show-context (Skc ()))
-  (= show-context
-    (where (do (<- context getContext)
-               (<- dflags getSessionDynFlags)
-               (liftIO (putStrLn "\n; context:"))
-               (liftIO (mapM_ (printContext dflags)
-                              context)))
-      (= printContext dflags ctx
-        (case ctx
-          (IIDecl decl)    (putStrLn (++ ";  IIDecl: "
-                                         (showSDoc dflags (ppr decl))))
-          (IIModule mname) (putStrLn (++ ";  IIModule: "
-                                         (moduleNameString mname)))))))
-  (:: show-paths (Skc ()))
-  (= show-paths
-    (do (<- dflags getDynFlags)
-        (liftIO
-         (do (<- cwd getCurrentDirectory)
-             (putStrLn "\n; current working directory: ")
-             (putStrLn (++ ";   " cwd))
-             (let ((= ipaths (importPaths dflags))))
-             (putStrLn "; module import search paths: ")
-             (if (null ipaths)
-                 (putStrLn ";   none")
-                 (mapM_ (\ ipath
-                          (putStrLn (++ ";   " ipath)))
-                        ipaths)))))))
-
-(defmacro* info (form)
-  (let ((= go sym
-          (case (unpackFS sym)
-            "context" show-context
-            "paths"   show-paths
-            _         err))
-
-        (= err
-          (skSrcError form (++ "info: invalid form: " (show form)))))
-    (case (unLocLForm form)
-      (Atom (ASymbol sym)) (do (liftIO initStaticOpts)
-                               (go sym)
-                               (return '(begin)))
-      _                    err)))
