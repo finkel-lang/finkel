@@ -23,6 +23,7 @@ formTests = do
   lengthTest 3 "(a b c)"
   lengthTest 5 "(a (b (c)) d e)"
   lengthTest 1 "()"
+  lengthTest 8 "[a (b (c d e) [f g]) h]"
 
   codishTest (AInteger 42)
   codishTest ()
@@ -31,9 +32,22 @@ formTests = do
   codishTest (42 :: Int)
   codishTest (42 :: Integer)
   codishTest (0.123456789 :: Double)
+  codishTest (1.234 :: Float)
   codishTest ([1,2,3] :: [Int])
   codishTest (Atom (AInteger 42))
   codishTest (parseE "(foo bar buzz)")
+
+  codishTest [True, False]
+  codishTest [EQ, LT, GT]
+  codishTest (Just (42 :: Int))
+  codishTest [Just 'a', Nothing, Just 'b']
+  codishTest [Right True, Left "foo"]
+  codishTest (Just 'x', [Right False, Left "foo"])
+  codishTest (Just 'x', [Right False, Left "foo"], EQ)
+  codishTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int))
+  codishTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int), False)
+  codishTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
+             ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
 
 readShow :: String -> Spec
 readShow str =
