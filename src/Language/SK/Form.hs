@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleInstances #-}
 -- | Form and Atom data.
 module Language.SK.Form
   ( -- * The S-expression form
@@ -16,15 +15,13 @@ module Language.SK.Form
 
   , unLoc
   , unLocLForm
+  , genSrc
   , getLoc
   , showLoc
   , mkSkSrcSpan
   , mkLocatedForm
   , skSrcSpan
   , quoted
-
-  , Codish(..)
-  , unquoteSplice
 
   -- * Reexported data from GHC
   , GenLocated(..)
@@ -93,10 +90,6 @@ newtype LForm a = LForm {unLForm :: Located (Form a)}
 
 instance Eq a => Eq (LForm a) where
   LForm (L _ a) == LForm (L _ b) = a == b
-
-unLocLForm :: LForm a -> Form a
-unLocLForm (LForm (L _ a)) = a
-{-# INLINE unLocLForm #-}
 
 type Code = LForm Atom
 
@@ -175,99 +168,9 @@ toListL orig@(LForm (L l form)) =
     HsList xs -> LForm (L l (List xs))
     _ -> LForm (L l (List [orig]))
 
-
--- -------------------------------------------------------------------
---
--- Codish type class
---
--- -------------------------------------------------------------------
-
---- Instance data types of Formable class could be inserted to
---- S-expression with `unquote' and `unquote-splice'.
-
-class Codish a where
-  toCode :: a -> Code
-
-  fromCode :: Code -> Maybe a
-  fromCode _ = Nothing
-
-  listToCode :: [a] -> Code
-  listToCode xs =
-     let xs' = map toCode xs
-         l = getLoc (mkLocatedForm xs')
-     in  LForm (L l (HsList xs'))
-
-  listFromCode :: Code -> Maybe [a]
-  listFromCode xs = case unLocLForm xs of
-                      HsList as -> mapM fromCode as
-                      _         -> Nothing
-
-instance Codish Atom where
-  toCode = LForm . genSrc . Atom
-  fromCode a =
-    case unLocLForm a of
-      Atom x -> Just x
-      _      -> Nothing
-
-instance Codish () where
-  toCode _ = LForm (genSrc (Atom AUnit))
-  fromCode a =
-    case unLocLForm a of
-      Atom AUnit -> Just ()
-      _          -> Nothing
-
-instance Codish Char where
-  toCode = LForm . genSrc . Atom . AChar
-  fromCode a =
-    case unLocLForm a of
-      Atom (AChar x)  -> Just x
-      _               -> Nothing
-  listToCode = LForm . genSrc . Atom . AString
-  listFromCode a = case unLocLForm a of
-                     Atom (AString s) -> Just s
-                     _                -> Nothing
-
-instance Codish Int where
-  toCode = LForm . genSrc . Atom . AInteger . fromIntegral
-  fromCode a =
-    case unLocLForm a of
-      Atom (AInteger n) -> Just (fromIntegral n)
-      _                 -> Nothing
-
-instance Codish Integer where
-  toCode = LForm . genSrc . Atom . AInteger
-  fromCode a =
-    case unLocLForm a of
-      Atom (AInteger n) -> Just n
-      _                 -> Nothing
-
-instance Codish Double where
-  toCode a =
-    let r = toRational a
-    in  LForm (genSrc (Atom (AFractional (FL (show a) r))))
-  fromCode a =
-    case unLocLForm a of
-      Atom (AFractional x) -> Just (fromRational (fl_value x))
-      _                    -> Nothing
-
-instance Codish a => Codish [a] where
-  toCode = listToCode
-  fromCode = listFromCode
-
-instance Codish (Form Atom) where
-  toCode = LForm . genSrc
-  fromCode = Just . unLocLForm
-
-instance Codish (LForm Atom) where
-  toCode = id
-  fromCode = Just
-
-unquoteSplice :: Codish a => a -> [Code]
-unquoteSplice form =
-  case unLocLForm (toCode form) of
-    List xs   -> xs
-    HsList xs -> xs
-    _         -> []
+unLocLForm :: LForm a -> Form a
+unLocLForm (LForm (L _ a)) = a
+{-# INLINE unLocLForm #-}
 
 mkSkSrcSpan :: String -> SrcSpan
 mkSkSrcSpan = UnhelpfulSpan . fsLit

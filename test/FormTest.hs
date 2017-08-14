@@ -4,6 +4,7 @@ module FormTest where
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Test.Hspec
 
+import Language.SK.Codish
 import Language.SK.Form
 import Language.SK.Lexer
 import Language.SK.Reader

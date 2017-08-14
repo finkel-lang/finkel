@@ -5,9 +5,13 @@
 --
 
 module Language.SK
-  ( module Language.SK.Form
+  ( module Language.SK.Codish
+  , module Language.SK.Form
+  , module Language.SK.Macro
   , module Language.SK.SKC
   ) where
 
+import Language.SK.Codish
 import Language.SK.Form
+import Language.SK.Macro
 import Language.SK.SKC

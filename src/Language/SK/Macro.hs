@@ -7,6 +7,7 @@ module Language.SK.Macro
   , setExpanderSettings
   , withExpanderSettings
   , specialForms
+  , unquoteSplice
   ) where
 
 -- base
@@ -18,6 +19,7 @@ import Unsafe.Coerce (unsafeCoerce)
 import qualified Data.Map as Map
 
 -- Internal
+import Language.SK.Codish
 import Language.SK.Eval
 import Language.SK.Form
 import Language.SK.GHC
@@ -59,13 +61,6 @@ quote orig@(LForm (L l form))  =
 -- still need to handle the special case for backtick, comma, and
 -- comma-at, because currently there's no way to define read macro.
 
-isUnquoteSplice :: Code -> Bool
-isUnquoteSplice (LForm form) =
-  case form of
-    L _ (List ((LForm (L _ (Atom (ASymbol "unquote-splice"))):_)))
-      -> True
-    _ -> False
-
 quasiquote :: Code -> Code
 quasiquote orig@(LForm (L l form)) =
   case form of
@@ -101,6 +96,19 @@ quasiquote orig@(LForm (L l form)) =
            _ | null pre  -> acc
              | otherwise -> acc ++ [tHsList l (map quasiquote pre)]
 
+isUnquoteSplice :: Code -> Bool
+isUnquoteSplice (LForm form) =
+  case form of
+    L _ (List ((LForm (L _ (Atom (ASymbol "unquote-splice"))):_)))
+      -> True
+    _ -> False
+
+unquoteSplice :: Codish a => a -> [Code]
+unquoteSplice form =
+  case unLocLForm (toCode form) of
+    List xs   -> xs
+    HsList xs -> xs
+    _         -> []
 
 -- ---------------------------------------------------------------------
 --
