@@ -146,6 +146,25 @@
           (IIModule mname) (putStrLn (++ ";  IIModule: "
                                          (moduleNameString mname)))))))
 
+  (:: show-info (Skc ()))
+  (= show-info
+    (liftIO
+     (do (putStrLn
+          "Usage: (info COMMANDS)
+
+DESCRIPTION:
+
+  Show info of current REPL session.
+
+COMMANDS:
+
+  context   - Show current context.
+  linker    - Show linker.
+  packages  - Show accessible packages.
+  paths     - Show paths.
+  info      - Show this help.
+"))))
+
   (:: show-linker (Skc ()))
   (= show-linker
     (do (<- hsc-env getSession)
@@ -185,6 +204,7 @@
             "linker"   show-linker
             "packages" show-packages
             "paths"    show-paths
+            "info"     show-info
             _          err))
         (= err
           (skSrcError form (++ "info: invalid form: " (show form)))))
