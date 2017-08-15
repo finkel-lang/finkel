@@ -13,6 +13,7 @@ module Language.SK.Macro
 -- base
 import Control.Monad (foldM, when)
 import Data.Char (isLower)
+import Data.Maybe (catMaybes)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- containers
@@ -69,15 +70,15 @@ quasiquote orig@(LForm (L l form)) =
     List forms'
        | any isUnquoteSplice forms' ->
           mkQuoted l (tList l [tSym l "List"
-                              ,tList l [tSym l "concat"
-                                       ,tHsList l (go [] forms')]])
+                              ,tList l [ tSym l "concat"
+                                       , tHsList l (go [] forms')]])
        | otherwise ->
           mkQuoted l (tList l [tSym l "List"
                               ,tHsList l (map quasiquote forms')])
     HsList forms'
        | any isUnquoteSplice forms' ->
          mkQuoted l (tList l [ tSym l "HsList"
-                              , tList l [tSym l "concat"
+                              , tList l [ tSym l "concat"
                                         , tHsList l (go [] forms')]])
        | otherwise ->
          mkQuoted l (tList l [tSym l "HsList"
@@ -290,7 +291,9 @@ m_require form =
       case mb_minfo of
         Just minfo ->
           do dflags <- getSessionDynFlags
-             mapM_ (pTyThing dflags) (modInfoTyThings minfo)
+             let names = modInfoExports minfo
+             mb_tythings <- mapM lookupName names
+             mapM_ (pTyThing dflags) (catMaybes mb_tythings)
              return emptyForm
         Nothing -> skSrcError form ("require: cannot find modinfo for "
                                  ++ unpackFS mname)
