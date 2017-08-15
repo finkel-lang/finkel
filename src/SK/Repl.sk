@@ -117,22 +117,15 @@
       (let ((= reader (read-print-loop in-mv out-mv eval-tid))
             (= reader' (runInputT defaultSettings reader))
             (= init-form
-              `(begin
-                 (require SK.Core)
-                 (require SK.Repl.Macro)
-                 (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
+              '(begin
+                (require SK.User)
+                (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
       (putStrLn (++ "SK REPL " (showVersion version)))
       (putMVar in-mv init-form)
       (run-repl reader' initial-repl-state)))
 
 (:: repl-env SkEnv)
-(= repl-env
-  (let ((= mdls ["Prelude"
-                 "Language.SK"
-                 "SK.Macro"
-                 "SK.Repl.Apply"
-                 "SK.Repl.Macro"]))
-    (initialSkEnv {envContextModules mdls})))
+(= repl-env (initialSkEnv {envContextModules ["SK.User"]}))
 
 
 ;;;; Read and print
@@ -162,9 +155,8 @@
           (do (<- mb-form (lift (read-form line)))
               (case mb-form
                 Nothing     go
-                (Just form) (do (liftIO
-                                 (do (putMVar to-mvar form)
-                                     print-io))
+                (Just form) (do (liftIO (do (putMVar to-mvar form)
+                                            print-io))
                                 go))))
         (= quit
           (liftIO (killThread eval-tid)))
@@ -204,9 +196,7 @@
                     (= decl
                       (. IIDecl (. simpleImportDecl mkModuleName)))))
               (<- _ (setSessionDynFlags dflags1))
-              (setContext [(decl "Prelude")
-                           (decl "Language.SK")
-                           (decl "SK.Repl.Apply")])))
+              (return ())))
         (= withHandler m
           (skErrorHandler defaultFatalMessager
                           defaultFlushOut
