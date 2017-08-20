@@ -7,12 +7,14 @@
 
 (module SK.Repl.Macro)
 
+(require Data.List)
 (require System.Directory)
 (require System.FilePath)
 (require Language.SK.GHC)
 (require Language.SK.Make)
 (require SK.Core)
 
+(import Data.List)
 (import System.Directory)
 (import System.FilePath)
 (import Language.SK)
@@ -43,10 +45,14 @@
 
   (:: %compile-and-import (-> FilePath (Skc Code)))
   (= %compile-and-import path
-    (do (let ((= mname (asModuleName path))))
+    (do (let ((= mname (asModuleName path))
+              (= mkII name
+                (IIDecl (simpleImportDecl (mkModuleName name))))))
         (%compile-obj path)
         (%link-module (fsLit mname))
-        (return `(import ,(aSymbol mname))))))
+        (<- mods (fmap envContextModules getSkEnv))
+        (setContext (map mkII (: mname mods)))
+        (return '(begin)))))
 
 ;;; Compile source code file to object code.
 (defmacro* compile-obj (form)
@@ -79,7 +85,7 @@
                (%compile-and-import file)))
          (fromCode form)))
 
-;;; Load a module source code file. Handles both absolute paths and
+;;; Load a module source code file. Handles absolute paths, and
 ;;; relative paths from import directories.
 (defmacro* load-file (form)
   (let ((= find-file idirs path0
@@ -150,7 +156,7 @@
   (= show-info
     (liftIO
      (do (putStrLn
-          "Usage: (info COMMANDS)
+          "USAGE: (info COMMANDS)
 
 DESCRIPTION:
 
@@ -159,6 +165,7 @@ DESCRIPTION:
 COMMANDS:
 
   context   - Show current context.
+  dflags    - Show current DynFlags information.
   linker    - Show linker.
   packages  - Show accessible packages.
   paths     - Show paths.
@@ -195,7 +202,22 @@ COMMANDS:
                         (putStrLn ";   none")
                         (mapM_ (\ ipath
                                  (putStrLn (++ ";   " ipath)))
-                               ipaths)))))))
+                               ipaths))))))
+
+  (:: show-dflags (Skc ()))
+  (= show-dflags
+    (do (<- dflags getDynFlags)
+        (let ((= s
+                ["; dflags:"
+                 (++ ";  ghcLink:   " (show (ghcLink dflags)))
+                 (++ ";  hscTarget: " (show (hscTarget dflags)))
+                 (++ ";  ghcMode:   " (showGhcMode (ghcMode dflags)))])
+              (= showGhcMode m
+                (case m
+                  CompManager "CompManager"
+                  OneShot     "OneShot"
+                  MkDepend    "MkDepend"))))
+        (liftIO (putStrLn (intercalate "\n" s))))))
 
 (defmacro* info (form)
   (let ((= go sym
@@ -205,6 +227,7 @@ COMMANDS:
             "packages" show-packages
             "paths"    show-paths
             "info"     show-info
+            "dflags"   show-dflags
             _          err))
         (= err
           (skSrcError form (++ "info: invalid form: " (show form)))))
