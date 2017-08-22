@@ -7,6 +7,7 @@
 
 (module SK.Repl.Macro)
 
+(require Control.Monad)
 (require Data.List)
 (require System.Directory)
 (require System.FilePath)
@@ -14,6 +15,7 @@
 (require Language.SK.Make)
 (require SK.Core)
 
+(import Control.Monad)
 (import Data.List)
 (import System.Directory)
 (import System.FilePath)
@@ -24,15 +26,27 @@
 
 ;;; Functions for compiling and loading SK module.
 (eval-when (compile load)
+  (:: mkII (-> String InteractiveImport))
+  (= mkII name
+    (IIDecl (simpleImportDecl (mkModuleName name))))
+
+  (:: mkIIFS (-> FastString InteractiveImport))
+  (= mkIIFS name
+    (IIDecl (simpleImportDecl (mkModuleNameFS name))))
+
   (:: %compile-obj (-> String (Skc Code)))
   (= %compile-obj str
     (gbracket (do (liftIO initStaticOpts)
-                  getSessionDynFlags)
-              setSessionDynFlags
-              (\ dflags
+                  (<- dflags getSessionDynFlags)
+                  (<- context getContext)
+                  (return (, dflags context)))
+              (\ (, dflags context)
+                (do (setSessionDynFlags dflags)
+                    (setContext context)))
+              (\ (, dflags _context)
                 (do (setSessionDynFlags (dflags {hscTarget HscAsm}))
                     (make [(, str Nothing)] False Nothing)
-                    (return `(begin))))))
+                    (return '(begin))))))
 
   (:: %link-module (-> FastString (Skc Code)))
   (= %link-module name
@@ -43,11 +57,9 @@
                     (linkModule hsc-env (Module mainUnitId mname))))
         (return '(begin))))
 
-  (:: %compile-and-import (-> FilePath (Skc Code)))
-  (= %compile-and-import path
-    (do (let ((= mname (asModuleName path))
-              (= mkII name
-                (IIDecl (simpleImportDecl (mkModuleName name))))))
+  (:: %compile-link-and-import (-> FilePath (Skc Code)))
+  (= %compile-link-and-import path
+    (do (let ((= mname (asModuleName path))))
         (%compile-obj path)
         (%link-module (fsLit mname))
         (<- mods (fmap envContextModules getSkEnv))
@@ -61,7 +73,10 @@
          (\ file
            (do (liftIO (putStrLn (++ "; compile-obj: " file)))
                (%compile-obj file)))
-         (fromCode form)))
+         (case (unLocLForm form)
+           (Atom (ASymbol sym)) (Just (show form))
+           (Atom (AString str)) (Just str)
+           _                    Nothing)))
 
 ;;; Link the object code of given module.
 (defmacro* link-module (form)
@@ -82,7 +97,7 @@
                               (show form)))
          (\ file
            (do (liftIO (putStrLn (++ "; compile-file: " file)))
-               (%compile-and-import file)))
+               (%compile-link-and-import file)))
          (fromCode form)))
 
 ;;; Load a module source code file. Handles absolute paths, and
@@ -91,7 +106,7 @@
   (let ((= find-file idirs path0
           (if (isAbsolute path0)
               (find-absolute idirs path0)
-              (%compile-and-import path0)))
+              (%compile-link-and-import path0)))
         (= find-absolute dirs path
           (case dirs
             (: dir dirs') (find-absolute' dir dirs' path)
@@ -111,12 +126,24 @@
                  (find-file (importPaths dflags) path)))
            (fromCode form))))
 
+(defmacro* in-module (form)
+  (case (unLocLForm form)
+    (Atom (ASymbol name)) (do (liftIO (putStrLn
+                                       (++ "; in-module: "
+                                           (unpackFS name))))
+                              (setContext [(mkIIFS name)
+                                           (mkII "Prelude")
+                                           (mkII "SK.User")])
+                              (return '(begin)))
+    _ (skSrcError form (++ "in-module: not a module name: "
+                           (show form)))))
+
 ;;; Modify settings in REPL.
 (defmacro* set-repl (key val)
   (let ((= set-dflags f
           (do (<- dflags getSessionDynFlags)
               (setSessionDynFlags (f dflags))
-              (return `(begin))))
+              (return '(begin))))
         (= val-err expect
           (skSrcError val (concat ["set-repl (" (show key)
                                    "): expecting " expect
@@ -126,9 +153,15 @@
             (Atom (AInteger n)) (set-dflags
                                  (\ d (d {verbosity (fromInteger n)})))
             _                   (val-err "Integer")))
+        (= set-debug v
+          (case (fromCode v)
+            (Just bool) (do (modifySkEnv (\ env (env {envDebug bool})))
+                            (return '(begin)))
+            Nothing     (val-err "Bool")))
         (= set-symbol k
           (case (unpackFS k)
             "verbosity" (set-verbosity val)
+            "debug"     (set-debug val)
             _           set-repl-err))
         (= set-repl-err
           (skSrcError key (++ "set-repl: unknown key: " (show key)))))
@@ -166,10 +199,11 @@ COMMANDS:
 
   context   - Show current context.
   dflags    - Show current DynFlags information.
+  info      - Show this help.
   linker    - Show linker.
+  modules   - Show loaded modules.
   packages  - Show accessible packages.
   paths     - Show paths.
-  info      - Show this help.
 "))))
 
   (:: show-linker (Skc ()))
@@ -217,18 +251,26 @@ COMMANDS:
                   CompManager "CompManager"
                   OneShot     "OneShot"
                   MkDepend    "MkDepend"))))
-        (liftIO (putStrLn (intercalate "\n" s))))))
+        (liftIO (putStrLn (intercalate "\n" s)))))
+
+  (:: show-modules (Skc ()))
+  (= show-modules
+    (do (<- graph0 getModuleGraph)
+        (<- graph1 (filterM (. isLoaded ms_mod_name) graph0))
+        (let ((= show-one m
+                (>>= (showModule m) (. liftIO putStrLn)))))
+        (mapM_ show-one graph1))))
 
 (defmacro* info (form)
   (let ((= go sym
           (case (unpackFS sym)
             "context"  show-context
+            "dflags"   show-dflags
             "linker"   show-linker
+            "modules"  show-modules
             "packages" show-packages
             "paths"    show-paths
-            "info"     show-info
-            "dflags"   show-dflags
-            _          err))
+            _          show-info))
         (= err
           (skSrcError form (++ "info: invalid form: " (show form)))))
     (case (unLocLForm form)

@@ -142,9 +142,8 @@
               (putStr str)
               (hFlush stdout)))
         (= go
-          (do (<- st (lift get-repl-state))
-              (let ((= prompt (| ((null (pending-input st)) "> ")
-                                 (otherwise "")))))
+          (do (let ((= prompt "")))
+              (<- st (lift get-repl-state))
               (<- mb-input (getInputLine prompt))
               (case mb-input
                 Nothing     quit
@@ -192,9 +191,7 @@
                     ;; Default target in interactive context is
                     ;; ``HscAsm', updating to `HscInterpreted'.
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
-                                         ghcLink LinkInMemory}))
-                    (= decl
-                      (. IIDecl (. simpleImportDecl mkModuleName)))))
+                                         ghcLink LinkInMemory}))))
               (<- _ (setSessionDynFlags dflags1))
               (return ())))
         (= withHandler m
@@ -208,7 +205,11 @@
                   (let ((= str (case ret
                                  (Right r) r
                                  (Left err) err))))
-                  (liftIO (putMVar out-mvar str))
+                  (<- ctx getContext)
+                  (let ((= ret
+                          (concat [str (showContext (head ctx))
+                                   "> "]))))
+                  (liftIO (putMVar out-mvar ret))
                   go)))
     (>> init go)))
 
@@ -338,3 +339,9 @@
   (where (| ((all null tvs) "")
             (otherwise      (++ (concat (intersperse "\n" tvs)) "\n")))
     (= tvs (zipWith (var-name-and-type dflags) names vars))))
+
+(:: showContext (-> InteractiveImport String))
+(= showContext ii
+  (case ii
+    (IIDecl idecl) (moduleNameString (unLoc (ideclName idecl)))
+    (IIModule mdl) (moduleNameString mdl)))
