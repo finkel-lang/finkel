@@ -22,27 +22,12 @@
 (import System.Exit (exitWith))
 (import System.IO (hFlush stdout))
 
-(import GhcMonad)               ; ghc
-(import HscMain)
-(import HscTypes)
-(import Id)
-(import InteractiveEval)
-(import Linker)
-(import Name)
-(import Outputable)
-(import TcRnDriver)
-(import Var)
-
-(import GHCi)                   ; ghci
-(import GHCi.Message)
-(import GHCi.RemoteTypes)
-
 (import System.Console.Haskeline) ; haskeline
 
 (import Control.Monad.Trans.Class) ; transformers
 (import Control.Monad.Trans.State.Strict)
 
-(import Language.SK)                ; sk-kernel
+(import Language.SK)            ; sk-kernel
 (import Language.SK.Builder)
 (import Language.SK.Eval)
 (import Language.SK.GHC)
@@ -54,6 +39,7 @@
 
 (import Paths_sk_repl)          ; internal
 (import SK.Repl.Apply)
+(import SK.Repl.GHC)
 
 
 

@@ -27,10 +27,9 @@ library
                        SK.Core
                        SK.Repl
                        SK.Repl.Apply
+                       SK.Repl.GHC
                        SK.Repl.Macro
                        SK.User
-                       --
-                       -- Scratch.F1
   build-depends:       base >= 4.7 && < 5
                      , directory
                      , filepath

@@ -14,6 +14,7 @@
 (require Language.SK.GHC)
 (require Language.SK.Make)
 (require SK.Core)
+(require SK.Repl.GHC)
 
 (import Control.Monad)
 (import Data.List)
@@ -23,6 +24,8 @@
 (import Language.SK.GHC)
 (import Language.SK.Make)
 (import SK.Core)
+(import SK.Repl.GHC)
+
 
 ;;; Functions for compiling and loading SK module.
 (eval-when (compile load)
@@ -155,7 +158,7 @@
             _                   (val-err "Integer")))
         (= set-debug v
           (case (fromCode v)
-            (Just bool) (do (modifySkEnv (\ env (env {envDebug bool})))
+            (Just bool) (do (modifySkEnv (\ e (e {envDebug bool})))
                             (return '(begin)))
             Nothing     (val-err "Bool")))
         (= set-symbol k
