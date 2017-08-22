@@ -42,7 +42,9 @@ module Language.SK.GHC
     getLoc,
     getModuleInfo,
     getModSummary,
+    getModuleGraph,
     getSessionDynFlags,
+    isLoaded,
     loadModule,
     lookupModule,
     lookupName,
@@ -111,7 +113,6 @@ module Language.SK.GHC
     HasDynFlags(..),
     HscTarget(..),
     Language(..),
-    PackageFlag(..),
     gopt,
     languageExtensions,
     parseDynamicFilePragma,
@@ -250,10 +251,6 @@ module Language.SK.GHC
 
     -- * Linker
     getHValue,
-    initDynLinker,
-    linkModule,
-    showLinkerState,
-    unload,
 
     -- * MkIface
     tyThingToIfaceDecl,
@@ -332,11 +329,6 @@ module Language.SK.GHC
     srcSpanStartLine,
     unLoc,
 
-    -- * StaticFlags
-
-    -- Module `StaticFlags' has been removed in ghc >= 8.2.0.
-    initStaticOpts,
-
     -- * StringBuffer
     stringToStringBuffer,
 
@@ -391,7 +383,6 @@ import PprTyThing
 import RdrHsSyn
 import RdrName
 import SrcLoc
-import StaticFlags
 import StringBuffer
 import TysWiredIn
 import UniqFM
