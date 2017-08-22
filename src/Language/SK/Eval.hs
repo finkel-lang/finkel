@@ -66,6 +66,9 @@ evalDecls decls = do
       !ModDetails { md_insts = cls_insts
                   , md_fam_insts = fam_insts } = mod_details
       data_tycons = filter isDataTyCon tycons
+  debugIO (putStrLn
+             ("[Language.SK.Eval.envDecls] this_mod=" ++
+              moduleNameString (moduleName this_mod)))
   prepd_binds <-
     liftIO (corePrepPgm hsc_env this_mod interactive_loc core_binds
                         data_tycons)
@@ -97,7 +100,6 @@ ioMsgMaybe :: IO (Messages, Maybe a) -> Skc a
 ioMsgMaybe ioA = do
   -- XXX: Show warning messages with DynFlags settings.
   ((_warns, errs), mb_r) <- liftIO ioA
-  debugIO (putStrLn "ioMsgMaybe")
   case mb_r of
     Nothing -> liftIO (throwIO (mkSrcErr errs))
     Just r  -> return r
