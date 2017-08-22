@@ -15,6 +15,7 @@ module Language.SK.SKC
   , skSrcError
   , getSkEnv
   , putSkEnv
+  , modifySkEnv
   , insertMacro
   , getEnvMacros
   , putEnvMacros
@@ -132,6 +133,9 @@ getSkEnv = Skc get
 
 putSkEnv :: SkEnv -> Skc ()
 putSkEnv = Skc . put
+
+modifySkEnv :: (SkEnv -> SkEnv) -> Skc ()
+modifySkEnv f = Skc (get >>= put . f)
 
 getEnvMacros :: Skc EnvMacros
 getEnvMacros = envMacros <$> getSkEnv
