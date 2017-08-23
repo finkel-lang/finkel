@@ -128,6 +128,12 @@ targetSourcePath mt =
     HsSource path -> path
     OtherSource path -> path
 
+isOtherSource :: TargetSource -> Bool
+isOtherSource ts =
+  case ts of
+    OtherSource{} -> True
+    _             -> False
+
 -- | Make temporally ModSummary for target sources without `require' of
 -- home package modules.
 partitionRequired :: [String] -> [TargetUnit]
@@ -151,8 +157,11 @@ partitionRequired homePkgModules = foldr f ([],[])
 --
 make' :: [String] -> [TargetUnit] -> [TargetUnit] -> Skc [ModSummary]
 make' not_yet_compiled readys0 pendings0 = do
-  debugIO (do putStr ";;; nycs: "
-              print not_yet_compiled)
+  debugIO (do putStrLn ";;; make'"
+              putStrLn (";;;   nycs: " ++ show not_yet_compiled)
+              putStrLn (";;;   total: " ++ show total)
+              putStrLn (";;;   readys0: " ++ show readys0)
+              putStrLn (";;;   pendings0: " ++ show pendings0))
   go [] total total not_yet_compiled readys0 pendings0
   where
     -- No more modules to compile, return the accumulated ModSummary.
@@ -197,7 +206,8 @@ make' not_yet_compiled readys0 pendings0 = do
                                     , " imports=", show imports]))
           compileIfReady summary hmdl imports (return [])
 
-        OtherSource _ ->
+        OtherSource _ -> do
+          _ <- compileInput target
           go acc i k nycs summarised pendings
 
         where
@@ -234,12 +244,17 @@ make' not_yet_compiled readys0 pendings0 = do
     -- Ready to compile pending modules to read time ModSummary.
     -- Partition the modules, make read time ModSummaries, then sort via
     -- topSortModuleGraph, and recurse.
-    go acc i k nycs [] pendings = do
-      let (readies', pendings') = partitionRequired nycs pendings
-      rt_mss <- mkReadTimeModSummaries readies'
-      let graph = topSortModuleGraph True rt_mss Nothing
-          readies'' = sortTargets (flattenSCCs graph) readies'
-      go acc i k nycs readies'' pendings'
+    go acc i k nycs [] pendings
+      | all (isOtherSource . fst) pendings =
+         -- All targets are other source, no need to worry about module
+         -- dependency analysis.
+         go acc i k nycs pendings []
+      | otherwise = do
+         let (readies', pendings') = partitionRequired nycs pendings
+         rt_mss <- mkReadTimeModSummaries readies'
+         let graph = topSortModuleGraph True rt_mss Nothing
+             readies'' = sortTargets (flattenSCCs graph) readies'
+         go acc i k nycs readies'' pendings'
 
     import_name = moduleNameString . unLoc . ideclName . unLoc
     skmn t = case t of
@@ -273,7 +288,7 @@ doMakeOne i total ms hmdl = do
 
   liftIO
     (putStrLn
-       (concat [ ";;; [", show i, "/", show total,  "] compiling "
+       (concat [ "; [", show i, "/", show total,  "] compiling "
                , p (ms_mod_name ms)
                , " (", fromMaybe "unknown input" (ml_hs_file loc)
                , ", ", ml_obj_file loc, ")"
@@ -475,7 +490,7 @@ compileOtherFile :: FilePath -> Skc ()
 compileOtherFile path = do
   debugIO (putStrLn ("Compiling other code: " ++ path))
   hsc_env <- getSession
-  liftIO (oneShot hsc_env (startPhase path) [(path, Just StopLn)])
+  liftIO (oneShot hsc_env StopLn [(path, Nothing)])
 
 findFileInImportPaths :: [FilePath]
                       -> String

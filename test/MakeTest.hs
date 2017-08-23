@@ -1,7 +1,7 @@
 module MakeTest (makeTests) where
 
 -- base
-import Control.Monad (when)
+import Control.Monad (void, when)
 import Data.List (intercalate)
 import System.Directory ( doesFileExist, getDirectoryContents
                         , removeFile)
@@ -16,36 +16,46 @@ import Test.Hspec
 import Language.SK.GHC
 import Language.SK.Make
 import Language.SK.Run
+import Language.SK.SKC
 
 makeTests :: Spec
 makeTests = do
-  buildFile ["main1.sk"]
-  buildFile ["main2.sk"]
-  buildFile ["main3.sk"]
-  buildFile ["main4.sk", "M3.sk"]
+  buildSk ["main1.sk"]
+  buildSk ["main2.sk"]
+  buildSk ["main3.sk"]
+  buildSk ["main4.sk", "M3.sk"]
+  buildC ["cbits1.c"]
   buildPackage "p01"
 
-buildFile :: [FilePath] -> Spec
-buildFile paths =
+buildSk :: [FilePath] -> Spec
+buildSk = buildFile (return ())
+
+buildC :: [FilePath] -> Spec
+buildC =
+  buildFile (do dflags <- getSessionDynFlags
+                void (setSessionDynFlags (dflags {ghcLink=NoLink})))
+
+buildFile :: Skc () -> [FilePath] -> Spec
+buildFile pre paths =
   before_ removeArtifacts $
   describe ("files " ++ intercalate ", " paths) $
     it "should compile successfully" $ do
-      ret <- runSkc (make' targets False Nothing) initialSkEnv
+      ret <- runSkc (pre >> make' targets False Nothing) initialSkEnv
       ret `shouldBe` Right ()
   where
-     removeArtifacts = do
-       contents <- getDirectoryContents odir
-       mapM_ removeObjAndHi contents
-     removeObjAndHi file =
-       when (takeExtension file `elem` [".o", ".hi"])
-            (removeFile (odir </> file))
-     targets = map (\path -> (path, Nothing)) paths
-     odir = "test" </> "data" </> "build"
-     make' targets link out = do
-       dflags <- getSessionDynFlags
-       let dflags' = dflags {importPaths = [".", odir]}
-       setSessionDynFlags dflags'
-       make targets link out
+    targets = map (\path -> (path, Nothing)) paths
+    odir = "test" </> "data" </> "build"
+    make' targets link out = do
+      dflags <- getSessionDynFlags
+      let dflags' = dflags {importPaths = [".", odir]}
+      setSessionDynFlags dflags'
+      make targets link out
+    removeArtifacts = do
+      contents <- getDirectoryContents odir
+      mapM_ removeObjAndHi contents
+    removeObjAndHi file =
+      when (takeExtension file `elem` [".o", ".hi"])
+           (removeFile (odir </> file))
 
 buildPackage :: String -> Spec
 buildPackage name =
