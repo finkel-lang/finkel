@@ -118,4 +118,4 @@ skcDesugar' mod_location tc_result = do
   return r
 
 evalDeclsSrcLoc :: SrcLoc
-evalDeclsSrcLoc = UnhelpfulLoc (fsLit "<SK.Eval.evalDecls>")
+evalDeclsSrcLoc = UnhelpfulLoc (fsLit "<Language.SK.Eval.evalDecls>")
