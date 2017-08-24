@@ -38,7 +38,7 @@
 (import Language.SK.Syntax)
 
 (import Paths_sk_repl)          ; internal
-(import SK.Repl.Apply)
+(import SK.Repl.Env)
 (import SK.Repl.GHC)
 
 
@@ -172,14 +172,17 @@
 (:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
 (= eval-loop in-mvar out-mvar
   (let ((= init
+          ;; Default target in interactive context is ``HscAsm',
+          ;; updating to `HscInterpreted'.  Also, `dynamic' option is
+          ;; enabled in REPL.
           (do (<- hsc-env getSession)
               (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
-                    ;; Default target in interactive context is
-                    ;; ``HscAsm', updating to `HscInterpreted'.
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
-                                         ghcLink LinkInMemory}))))
-              (<- _ (setSessionDynFlags dflags1))
-              (return ())))
+                                         ghcLink LinkInMemory}))
+                    (= dflags2 (addWay' WayDyn dflags1))))
+              (<- _ (setSessionDynFlags dflags2))
+              (<- (Session session) (fromGhc (Ghc return)))
+              (liftIO (putTheHscEnv session))))
         (= withHandler m
           (skErrorHandler defaultFatalMessager
                           defaultFlushOut
@@ -195,6 +198,8 @@
                   (let ((= ret
                           (concat [str (showContext (head ctx))
                                    "> "]))))
+                  (<- (Session session) (fromGhc (Ghc return)))
+                  (liftIO (putTheHscEnv session))
                   (liftIO (putMVar out-mvar ret))
                   go)))
     (>> init go)))

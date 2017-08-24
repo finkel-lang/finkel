@@ -26,7 +26,7 @@ library
   exposed-modules:     Paths_sk_repl
                        SK.Core
                        SK.Repl
-                       SK.Repl.Apply
+                       SK.Repl.Env
                        SK.Repl.GHC
                        SK.Repl.Macro
                        SK.User
@@ -41,9 +41,12 @@ library
   default-language:    Haskell2010
 
 executable sk
+  -- Ghc option `-dynamic' is mandatory for runtime HValue lookup.
+  -- This is because to share the object code with the compiled REPL
+  -- code and the expressions typed in to the REPL.
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , sk-repl
                      , sk-kernel

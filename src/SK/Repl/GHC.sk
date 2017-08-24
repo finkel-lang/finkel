@@ -3,9 +3,16 @@
 (module SK.Repl.GHC
   ;; DynFlags
   (PackageFlag ..)
+  (Way ..)
+  addWay'
+
+  ;; GhcMonad
+  (Ghc ..)
+  (Session ..)
 
   ;; HscMain
   hscParsedStmt
+  hscTcRnLookupRdrName
 
   ;; HscTypes
   (FixityEnv)
@@ -51,6 +58,7 @@
   (ForeignHValue))
 
 (import DynFlags)
+(import GhcMonad)
 (import HscMain)                ; ghc
 (import HscTypes)
 (import InteractiveEval)
