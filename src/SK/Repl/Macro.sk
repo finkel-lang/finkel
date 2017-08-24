@@ -69,7 +69,7 @@
         (setContext (map mkII (: mname mods)))
         (return '(begin)))))
 
-;;; Compile source code file to object code.
+;;; Compile source code to object code.
 (defmacro* compile-obj (form)
   (maybe (skSrcError form (++ "compile-obj: not a FilePath: "
                               (show form)))
@@ -135,7 +135,6 @@
                                        (++ "; in-module: "
                                            (unpackFS name))))
                               (setContext [(mkIIFS name)
-                                           (mkII "Prelude")
                                            (mkII "SK.User")])
                               (return '(begin)))
     _ (skSrcError form (++ "in-module: not a module name: "
@@ -151,26 +150,41 @@
           (skSrcError val (concat ["set-repl (" (show key)
                                    "): expecting " expect
                                    ", got " (show val)])))
-        (= set-verbosity v
+        (= set-cwd v
           (case (unLocLForm v)
-            (Atom (AInteger n)) (set-dflags
-                                 (\ d (d {verbosity (fromInteger n)})))
-            _                   (val-err "Integer")))
+            (Atom (AString path)) (do (liftIO
+                                       (setCurrentDirectory path))
+                                      (return '(begin)))
+            (Atom (ASymbol path)) (do (liftIO
+                                       (setCurrentDirectory
+                                        (unpackFS path)))
+                                      (return '(begin)))
+            _                     (val-err "Symbol or String")))
         (= set-debug v
           (case (fromCode v)
             (Just bool) (do (modifySkEnv (\ e (e {envDebug bool})))
                             (return '(begin)))
             Nothing     (val-err "Bool")))
+        (= set-verbosity v
+          (case (unLocLForm v)
+            (Atom (AInteger n)) (set-dflags
+                                 (\ d (d {verbosity (fromInteger n)})))
+            _                   (val-err "Integer")))
         (= set-symbol k
           (case (unpackFS k)
-            "verbosity" (set-verbosity val)
+            "cwd"       (set-cwd val)
             "debug"     (set-debug val)
+            "verbosity" (set-verbosity val)
             _           set-repl-err))
         (= set-repl-err
           (skSrcError key (++ "set-repl: unknown key: " (show key)))))
     (case (unLocLForm key)
       (Atom (ASymbol k)) (set-symbol k)
       _                  set-repl-err)))
+
+;;; Alias macro for a `set-repl' sub-command `cwd'.
+(defmacro cd (path)
+  `(set-repl cwd ,path))
 
 ;;; Functions for `info' macro.
 (eval-when (compile load)
