@@ -1,7 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- | Emit Haskell source code from Haskell syntax data type.
 module Language.SK.Emit
   ( HsSrc(..)
+  , Hsrc(..)
   , genHsSrc
   , buildDocMap
   , lookupDoc
@@ -132,6 +134,8 @@ lookupNextDoc = undefined
 class HsSrc a where
   toHsSrc :: SPState -> a -> SDoc
 
+newtype Hsrc a = Hsrc {unHsrc :: a}
+
 genHsSrc :: (GhcMonad m, HsSrc a) => SPState -> a -> m String
 genHsSrc st x =
   do flags <- getSessionDynFlags
@@ -205,13 +209,13 @@ instance HsSrc SrcLoc where
 instance (HsSrc b) => HsSrc (GenLocated a b) where
   toHsSrc st (L _ e) = toHsSrc st e
 
-instance (HsSrc a, OutputableBndr a, HasOccName a)
-          => HsSrc (HsModule a) where
-  toHsSrc st a = case a of
+instance (HsSrc a, OutputableBndrId a, HasOccName a)
+          => HsSrc (Hsrc (HsModule a)) where
+  toHsSrc st (Hsrc a) = case a of
     HsModule Nothing _ imports decls _ mbDoc ->
       pp_mb mbDoc
         $$ pp_nonnull imports
-        $$ hsSrc_nonnull st decls
+        $$ hsSrc_nonnull st (map (Hsrc . unLoc) decls)
     HsModule (Just name) exports imports decls deprec mbDoc ->
       vcat [ linePragma' st 1
            , mbHeaderComment st mbDoc
@@ -225,7 +229,7 @@ instance (HsSrc a, OutputableBndr a, HasOccName a)
                                               (map ppr (unLoc es))))
                       , nest 4 (text ") where")]
            , pp_nonnull imports
-           , hsSrc_nonnull st decls]
+           , hsSrc_nonnull st (map (Hsrc . unLoc) decls)]
       where
         pp_header rest =
           case deprec of
@@ -233,18 +237,18 @@ instance (HsSrc a, OutputableBndr a, HasOccName a)
             Just d  -> vcat [ pp_modname, ppr d, rest ]
         pp_modname = text "module" <+> ppr name
 
-instance (OutputableBndr a, HsSrc a) => HsSrc (HsExpr a) where
-  toHsSrc _ = ppr
+instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsExpr a)) where
+  toHsSrc _ = ppr . unHsrc
 
-instance (OutputableBndr a, HsSrc a) => HsSrc (HsDecl a) where
-  toHsSrc st decl =
+instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsDecl a)) where
+  toHsSrc st (Hsrc decl) =
     case decl of
-      ValD binds -> toHsSrc st binds
-      SigD sigd  -> toHsSrc st sigd
+      ValD binds -> toHsSrc st (Hsrc binds)
+      SigD sigd  -> toHsSrc st (Hsrc sigd)
       _          -> ppr decl
 
-instance (OutputableBndr a, HsSrc a) => HsSrc (HsBindLR a a) where
-  toHsSrc st binds =
+instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsBindLR a a)) where
+  toHsSrc st (Hsrc binds) =
     case binds of
       FunBind { fun_id = fun
               , fun_co_fn = wrap
@@ -261,12 +265,13 @@ instance (OutputableBndr a, HsSrc a) => HsSrc (HsBindLR a a) where
            --- $$ linePragma st fun
            $$ emitPrevDoc st fun
 
-           $$ pprFunBind (unLoc fun) matches
+           $$ pprFunBind matches
            $$ ifPprDebug (ppr wrap)
       _ -> ppr binds
 
-instance (OutputableBndr a, HsSrc a) => HsSrc (Sig a) where
-  toHsSrc st sig =
+-- instance (OutputableBndrId a, HsSrc a) => HsSrc (Sig a) where
+instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (Sig a)) where
+  toHsSrc st (Hsrc sig) =
     case sig of
       TypeSig vars ty ->
         (case vars of

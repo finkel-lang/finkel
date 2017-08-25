@@ -120,7 +120,7 @@ compileAndEmit :: FilePath -> IO (Either String String)
 compileAndEmit file = runSkc go initialSkEnv
   where
     go = do (mdl, st) <- compileSkModule file
-            genHsSrc st mdl
+            genHsSrc st (Hsrc mdl)
 
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =
@@ -155,12 +155,17 @@ mkModSummary mbfile mdl = do
                   Just name -> unLoc name
                   Nothing -> mkModuleName "Main"
       imports = map (ideclName . unLoc) (hsmodImports mdl)
-  mkModSummary' mbfile modName imports
+      pm = HsParsedModule
+        { hpm_module = noLoc mdl
+        , hpm_src_files = maybe [] (: []) mbfile
+        , hpm_annotations = emptyAnns }
+  mkModSummary' mbfile modName imports (Just pm)
 
 -- | Make 'ModSummary' from source file, module name, and imports.
 mkModSummary' :: GhcMonad m => Maybe FilePath -> ModuleName
-              -> [Located ModuleName] -> m ModSummary
-mkModSummary' mbfile modName imports = do
+              -> [Located ModuleName] -> Maybe HsParsedModule
+              -> m ModSummary
+mkModSummary' mbfile modName imports mb_pm = do
   let fn = fromMaybe "anonymous" mbfile
       mmod = mkModule mainUnitId modName
       prelude = noLoc (mkModuleName "Prelude")
@@ -190,6 +195,7 @@ mkModSummary' mbfile modName imports = do
                     , ms_hs_date = hs_date
                     , ms_obj_date = obj_date
                     , ms_iface_date = iface_date
+                    , ms_parsed_mod = mb_pm
                     , ms_srcimps = []
                     , ms_textual_imps = (Nothing, prelude) : imported
                     , ms_hspp_file = fn
@@ -232,3 +238,6 @@ tcHsModule mbfile genFile mdl = do
   tc <- typecheckModule pm
   _ <- setSessionDynFlags dflags0
   return tc
+
+emptyAnns :: ApiAnns
+emptyAnns = (Map.empty, Map.empty)

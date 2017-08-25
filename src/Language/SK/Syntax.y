@@ -256,7 +256,7 @@ constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs { let (m,d) = $1 in (m, reverse d) }
 
 rconstrs :: { (HDeriving, [HConDecl]) }
-    : {- empty -}            { (Nothing, []) }
+    : {- empty -}            { (noLoc [], []) }
     | rconstrs deriving      { b_derivD $1 $2 }
     | rconstrs constr        { fmap ($2:) $1 }
 

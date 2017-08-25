@@ -18,16 +18,19 @@ extra-source-files:  README.md
                      test/data/build/p01/src/P01/*.hs
                      test/data/build/p01/src/P01/*.sk
                      test/data/build/p01/test/*.hs
-cabal-version:       >=1.10
+cabal-version:       >= 2.0
 
 custom-setup
   setup-depends:       base >= 4.7 && < 5
-                     , Cabal >= 1.10
+                     , Cabal >= 2.0
 
 library
   hs-source-dirs:      src
-  if impl (ghc == 8.0.*)
-     hs-source-dirs:   src/ghc802
+  if impl (ghc == 8.2.*)
+     hs-source-dirs:   src/ghc82x
+     buildable: True
+  else
+     buildable: False
   exposed-modules:     Distribution.Simple.SK
                        Language.SK
                        Language.SK.Builder
@@ -44,14 +47,14 @@ library
                        Language.SK.Run
                        Language.SK.SKC
                        Language.SK.Syntax
-  build-depends:       Cabal >= 1.10
+  build-depends:       Cabal >= 2.0
                      , array
                      , base >= 4.7 && < 5
                      , bytestring
                      , containers
                      , directory
                      , filepath
-                     , ghc == 8.0.*
+                     , ghc
                      , ghc-paths
                      , ghci
                      , time

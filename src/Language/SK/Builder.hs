@@ -114,6 +114,8 @@ type HConDeclDetails = HsConDeclDetails RdrName
 
 type HIE = LIE RdrName
 
+type HIEWrappedName = LIEWrappedName RdrName
+
 type HTyVarBndr = LHsTyVarBndr RdrName
 
 type HBind = LHsBind RdrName
@@ -278,24 +280,29 @@ b_implicitMainModule =
 
 b_ieSym :: Code -> HIE
 b_ieSym (LForm (L l (Atom (ASymbol name)))) = thing
-  where thing = L l (IEVar (L l (mkRdrName name)))
+  where thing = L l (IEVar (L l (IEName (L l (mkRdrName name)))))
 
 b_ieAbs :: Code -> HIE
 b_ieAbs (LForm (L l (Atom (ASymbol name)))) = thing
-  where thing = L l (IEThingAbs (L l (mkUnqual tcName name)))
+  where
+    thing = L l (IEThingAbs (L l (IEName (L l (mkUnqual tcName name)))))
 
 b_ieAll :: Code -> HIE
 b_ieAll (LForm (L l (Atom (ASymbol name)))) = thing
-  where thing = L l (IEThingAll (L l (mkUnqual tcName name)))
+  where
+    thing = L l (IEThingAll (L l (IEName (L l (mkUnqual tcName name)))))
 
 b_ieWith :: Code -> [Code] -> HIE
 b_ieWith (LForm (L l (Atom (ASymbol name)))) names = thing
   where
-    thing = L l (IEThingWith (L l (mkUnqual tcName name)) wc ns fs)
+    thing =
+      L l (IEThingWith (L l (IEName (L l (mkUnqual tcName name))))
+                       wc ns fs)
     wc = NoIEWildcard
     (ns, fs) = foldr f ([],[]) names
     f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0)
-      | isUpper c || c == ':' = (L l0 (mkUnqual tcName n0) : ns0, fs0)
+      | isUpper c || c == ':' =
+        (L l0 (IEName (L l (mkUnqual tcName n0))) : ns0, fs0)
       | otherwise             = (ns0, L l0 (fl n0) : fs0)
       where
         c = headFS n0
@@ -324,7 +331,8 @@ b_importD (name, qualified, mb_as) hiding mb_entities =
           decl' = decl { ideclQualified = qualified
                        , ideclAs = fmap asModName mb_as
                        , ideclHiding = hiding' }
-          asModName (LForm (L _ (Atom (ASymbol x)))) = mkModuleNameFS x
+          asModName (LForm (L l' (Atom (ASymbol x)))) =
+            L l' (mkModuleNameFS x)
           hiding' =
             case mb_entities of
               Nothing       -> Nothing
@@ -350,6 +358,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
   L l (TyClD decl)
   where
     decl = DataDecl { tcdLName = L l (mkUnqual tcName name)
+                    , tcdFixity = Prefix
                     , tcdTyVars = mkHsQTvs tvs
                     , tcdDataDefn = defn
                     , tcdDataCusk = PlaceHolder
@@ -367,6 +376,7 @@ b_typeD (LForm (L l _)) (name, tvs) ty = L l (TyClD synonym)
   where
     -- Fields in 'SynDecl' changed since ghc-8.0.2.
     synonym = SynDecl { tcdLName = L l (mkUnqual tcName name)
+                      , tcdFixity = Prefix
                       , tcdTyVars = mkHsQTvs tvs
                       , tcdRhs = ty
                       , tcdFVs = placeHolderNames }
@@ -412,8 +422,12 @@ b_recFieldD names ty = L loc field
 b_derivD :: (HDeriving, [HConDecl])
          -> [HType]
          -> (HDeriving, [HConDecl])
-b_derivD (_, cs) tys = (Just (L l (map mkLHsSigType tys)), cs)
-  where l = getLoc (mkLocatedList tys)
+b_derivD (_, cs) tys = (L l dcs, cs)
+  where
+    l = getLoc (mkLocatedList tys)
+    dcs = [L l (HsDerivingClause
+                 { deriv_clause_strategy = Nothing
+                 , deriv_clause_tys = L l (map mkLHsSigType tys)})]
 
 b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do
@@ -426,7 +440,8 @@ b_classD (tys,ty) decls = do
 
     (l, name, L lv tvar) <-
        case ty of
-          L l (HsAppTy (L _ (HsTyVar n)) (L _ (HsTyVar v))) ->
+          L l (HsAppTy (L _ (HsTyVar _promo1 n))
+                       (L _ (HsTyVar _promo2 v))) ->
             return (l, n, v)
           _ -> builderError
     (meths,sigs) <- foldM categorize ([],[]) decls
@@ -434,6 +449,7 @@ b_classD (tys,ty) decls = do
     let bndrs = [L lv (UserTyVar (L lv tvar))]
         cls = ClassDecl { tcdCtxt = mkLocatedList tys
                         , tcdLName = name
+                        , tcdFixity = Prefix
                         , tcdTyVars = mkHsQTvs bndrs
                         , tcdFDs = []
                         , tcdSigs = mkClassOpSigs sigs
@@ -484,16 +500,21 @@ b_fixityD dir (LForm (L l (Atom (AInteger n)))) syms = L l (SigD fsig)
     lname (LForm (L l0 (Atom (ASymbol name)))) = L l0 (mkRdrName name)
     fixity = Fixity dir' (fromIntegral n) dir
     dir' = case dir of
-             InfixL -> "infixl"
-             InfixR -> "infixr"
-             InfixN -> "infix"
+             InfixL -> SourceText "infixl"
+             InfixR -> SourceText "infixr"
+             InfixN -> SourceText "infix"
 
 b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
 b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
   let match = L l (Match ctxt args Nothing body)
       body = GRHSs grhss (declsToBinds l decls)
-      ctxt = NonFunBindMatch
-      bind = mkFunBind (L l (mkRdrName name)) [match]
+      -- ctxt = NonFunBindMatch
+      ctxt = FunRhs { mc_fun = lrname
+                    , mc_fixity = Prefix
+                      -- XXX: Get strictness info from somewhere?
+                    , mc_strictness = NoSrcStrict }
+      lrname = L l (mkRdrName name)
+      bind = mkFunBind lrname [match]
   in  L l (ValD bind)
 
 b_patBindD :: ([HGRHS],[HDecl]) -> HPat -> HDecl
@@ -524,7 +545,8 @@ b_tsigD names (ctxts,typ) =
 -- ---------------------------------------------------------------------
 
 b_symT :: Code -> HType
-b_symT (LForm (L l (Atom (ASymbol name)))) = L l (HsTyVar (L l ty))
+b_symT (LForm (L l (Atom (ASymbol name)))) =
+  L l (HsTyVar NotPromoted (L l ty))
   where
     ty = mkUnqual namespace name
     namespace =
@@ -557,13 +579,12 @@ b_tupT (LForm (L l _)) ts = L l (HsTupleTy HsBoxedTuple ts)
 b_bangT :: Code -> HType -> HType
 b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)
   where
-    -- HsSrcBang field changed in ghc >= 8.0.2.
-    srcBang = HsSrcBang (Just "b_bangT") NoSrcUnpack SrcStrict
+    srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
 
 b_unpackT :: Code -> HType -> HType
 b_unpackT (LForm (L l _)) t = L l (HsBangTy bang t')
   where
-    bang = HsSrcBang (Just "b_unpackT") SrcUnpack strictness
+    bang = HsSrcBang (SourceText "b_unpackT") SrcUnpack strictness
     (strictness, t') =
       case t of
         L _ (HsBangTy (HsSrcBang _ _ st) t0) -> (st, t0)
@@ -580,17 +601,17 @@ b_intP :: Code -> HPat
 b_intP (LForm (L l (Atom (AInteger n)))) =
   L l (mkNPat (L l lit) Nothing)
   where
-     lit = mkHsIntegral (show n) n placeHolderType
+     lit = mkHsIntegral (SourceText (show n)) n placeHolderType
 
 b_stringP :: Code -> HPat
 b_stringP (LForm (L l (Atom (AString s)))) =
   L l (mkNPat (L l lit) Nothing)
   where
-    lit = mkHsIsString s (fsLit s) placeHolderType
+    lit = mkHsIsString (SourceText (show s)) (fsLit s) placeHolderType
 
 b_charP :: Code -> HPat
 b_charP (LForm (L l (Atom (AChar c)))) =
-  let lit = HsChar (show c) c
+  let lit = HsChar (SourceText (show c)) c
   in  L l (LitPat lit)
 
 b_symP :: Code -> HPat
@@ -659,9 +680,11 @@ b_caseE (LForm (L l _)) expr matches = L l (HsCase expr mg)
 
 b_match :: HPat -> ([HGRHS],[HDecl]) -> HMatch
 b_match pat@(L l _) (grhss,decls) =
-    L l (Match NonFunBindMatch [pat] Nothing grhss')
+    L l (Match ctxt [pat] Nothing grhss')
   where
     grhss' = GRHSs grhss (declsToBinds l decls)
+    ctxt = PatBindRhs
+    -- ctxt = mkPrefixFunRhs pat
 
 b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
@@ -710,15 +733,17 @@ b_appE :: [HExpr] -> HExpr
 b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))
 
 b_charE :: Code -> HExpr
-b_charE (LForm (L l (Atom (AChar x)))) = L l (HsLit (HsChar (show x) x))
+b_charE (LForm (L l (Atom (AChar x)))) =
+  L l (HsLit (HsChar (SourceText (show x)) x))
 
 b_stringE :: Code -> HExpr
 b_stringE (LForm (L l (Atom (AString x)))) =
-  L l (HsLit (HsString x (fsLit x)))
+  L l (HsLit (HsString (SourceText (show x)) (fsLit x)))
 
 b_integerE :: Code -> HExpr
 b_integerE (LForm (L l (Atom (AInteger x)))) =
-    L l (HsOverLit $! mkHsIntegral (show x) x placeHolderType)
+    L l (HsOverLit $! mkHsIntegral st x placeHolderType)
+  where st = SourceText (show x)
 
 b_floatE :: Code -> HExpr
 b_floatE (LForm (L l (Atom (AFractional x)))) =

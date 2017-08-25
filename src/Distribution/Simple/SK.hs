@@ -84,7 +84,7 @@ stackSk2hsHooks = simpleUserHooks {
 registerSkPPHandler :: PPSuffixHandler
 registerSkPPHandler = ("sk", doNothingPP)
   where
-    doNothingPP _ _ = PreProcessor
+    doNothingPP _ _ _ = PreProcessor
       { platformIndependent = True
       , runPreProcessor = mkSimplePreProcessor (\_ _ _ -> return ())
       }
@@ -117,8 +117,8 @@ allSuffixHandlers hooks =
 
 -- | Make simple preprocessor from configured program.
 mkSk2hsPP :: ConfiguredProgram -> BuildInfo -> LocalBuildInfo
-          -> PreProcessor
-mkSk2hsPP program _ _ = PreProcessor
+          -> ComponentLocalBuildInfo -> PreProcessor
+mkSk2hsPP program _ _ _ = PreProcessor
   { platformIndependent = True
   , runPreProcessor = mkSimplePreProcessor (mkSk2hs program)
   }

@@ -31,32 +31,39 @@ main = do
                       case mbDebug of
                         Nothing -> return False
                         Just _  -> return True
-  when (isJust (find (== "--sk-debug") skopts))
-       (putStrLn ("ghc: " ++ show ghc))
+  when debug
+       (do putStrLn ("ghc: " ++ show ghc)
+           putStrLn ("argIns: " ++ show argIns)
+           putStrLn ("srcs:" ++ show srcs)
+           putStrLn ("skopts: " ++ show skopts)
+           putStrLn ("ghcopts: " ++ show ghcopts))
   let skopts' | isJust (find (== "--sk-debug") skopts) = skopts
               | debug = "-ffrontend-opt":"--sk-debug":skopts
               | otherwise = skopts
       getO =
         let go [] = []
-            go (val:_:"--sk-o":_) = [val]
+            go (_:"--sk-o":_:val:_) = [val]
             go (_:rest) = go rest
         in  go skopts
       rawGhcOpts =
-        if not (null getO)
-          then ghcopts' ++ ("-o":getO)
-          else ghcopts'
-      runRawGhc = rawSystem ghc rawGhcOpts
+        if null getO
+          then ghcopts'
+          else ghcopts' ++ ("-o":getO)
       -- Testing whether ghc was invoked for building shared
       -- library. This may happen when building cabal package, to
       -- suppress unwanted warning messages.
       buildingSharedLib =
-        null srcs && elem "-shared" ghcopts' && elem "-dynamic" ghcopts
+        null srcs && elem "-shared" ghcopts' && elem "-dynamic" ghcopts'
   exitCode <-
     -- When any of conflicting option with frontend plugin was set, OR
     -- building shared library, delegate to raw ghc without frontend
     -- plugin.
     if any (`elem` conflictingOptions) ghcopts' || buildingSharedLib
-       then runRawGhc
+       then do
+         when debug
+              (do putStrLn "Running raw ghc"
+                  putStrLn ("rawGhcOpts: " ++ show rawGhcOpts))
+         rawSystem ghc rawGhcOpts
        else do
          let args = concat [argOuts,skopts',ghcopts',"-x":"hs":srcs]
          rawSystem ghc args
@@ -82,7 +89,7 @@ groupOptions = go where
          | isMake x ->
              go sksrc (fopt:"--sk-make":skopt) ghcopt xs
          | isO x ->
-             go sksrc (fopt:head xs:fopt:"--sk-o":skopt) ghcopt (tail xs)
+             go sksrc (fopt: "--sk-o":fopt:head xs:skopt) ghcopt (tail xs)
          | isC x ->
              go sksrc (fopt:"--sk-c":skopt) ghcopt ("-no-link":xs)
          | isSkOption x ->
@@ -133,7 +140,7 @@ isSkSrc = isSuffixOf ".sk"
 
 -- | Argument passed to SK plugin with value.
 isSkOption :: String -> Bool
-isSkOption str = elem str ["--sk-out", "--sk-ghc"]
+isSkOption str = str `elem` ["--sk-out", "--sk-ghc"]
 
 -- | Argument passed to SK plugin without value.
 isSkFlag :: String -> Bool

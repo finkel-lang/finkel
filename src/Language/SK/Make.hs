@@ -327,7 +327,7 @@ dontMakeOne ms hmdl = do
                                 Nothing mb_linkable
                                 SourceUnmodifiedAndStable)
 
-  let hpt' = addToUFM (hsc_HPT hsc_env) mn hminfo
+  let hpt' = addToHpt (hsc_HPT hsc_env) mn hminfo
   _ <- setSession hsc_env {hsc_HPT = hpt'}
   _ <- liftIO (addHomeModuleToFinder hsc_env mn loc)
   return ms
@@ -439,7 +439,7 @@ mkReadTimeModSummary (target, mbphase) =
     SkSource file mn _form reqs -> do
       let modName = mkModuleName mn
           imports = map (noLoc . mkModuleName) reqs
-      fmap Just (mkModSummary' (Just file) modName imports)
+      fmap Just (mkModSummary' (Just file) modName imports Nothing)
     OtherSource _ -> return Nothing
 
 compileInput :: TargetUnit
