@@ -1,6 +1,7 @@
 -- | Tests for forms.
 module FormTest where
 
+import Data.List (isPrefixOf, isSubsequenceOf)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Test.Hspec
 
@@ -19,6 +20,21 @@ formTests = do
     ,"[()]"
     ,"(1 -2 345 6.789 0.001)"
     ]
+
+  fracTest 1.23
+  fracTest (-1.23)
+  fracTest 0
+  fracTest 1e-9
+
+  functorTest "(a \"foo\" \\x [True False])"
+
+  nameTest "foo"
+  nameTest "bar-buzz-quux"
+
+  eqTest "(a \"bcd\" \\e [f g] (h i))"
+
+  locationTest Nothing "foo"
+  locationTest (Just "locationTest") "foo"
 
   lengthTest 3 "(a b c)"
   lengthTest 5 "(a (b (c)) d e)"
@@ -55,6 +71,45 @@ readShow str =
     it "should match the input" $
       show (parseE str) `shouldBe` str
 
+fracTest :: Double -> Spec
+fracTest x =
+  describe ("read and show a fractional number `" ++ show x ++ "'") $
+    it "should match the input" $
+       show (aFractional x) `shouldBe` show x
+
+functorTest :: String -> Spec
+functorTest str =
+  describe ("Functor instance of Code `" ++ str ++ "'") $
+    it "should obey the Functor law" $
+       let c = parseE str
+       in  fmap id c `shouldBe` c
+
+nameTest :: String -> Spec
+nameTest str =
+  describe ("name of symbol `" ++ str ++ "'") $
+    it ("should be `" ++ str ++ "'") $
+       symbolName (parseE str) `shouldBe` str
+
+eqTest :: String -> Spec
+eqTest str =
+  describe ("parsing same string twice") $
+   it "should result in equal codes" $
+     let c1 = parseE str
+         c2 = parseE str
+     in  c1 == c2 `shouldBe` True
+
+locationTest :: Maybe FilePath -> String -> Spec
+locationTest mb_path str =
+  describe ("location of `" ++ str ++ "'") $
+    it (case mb_path of
+          Just path -> "should contain `" ++ path ++ "'"
+          Nothing   -> "should be unhelpful") $ do
+       let c = parseE' mb_path str
+           l = showLoc c
+       case mb_path of
+         Just path -> (path `isPrefixOf` l) `shouldBe` True
+         Nothing   -> ("anon" `isSubsequenceOf` l) `shouldBe` True
+
 lengthTest :: Int -> String -> Spec
 lengthTest n str =
   describe ("length of " ++ str) $
@@ -69,7 +124,10 @@ codishTest x =
        Just y -> y `shouldBe` x
 
 parseE :: String -> Code
-parseE str =
-  case runSP sexpr Nothing (BL.pack str) of
+parseE = parseE' Nothing
+
+parseE' :: Maybe FilePath -> String -> Code
+parseE' mb_path str =
+  case runSP sexpr mb_path (BL.pack str) of
     Right (expr, _) -> expr
     Left err        -> error err
