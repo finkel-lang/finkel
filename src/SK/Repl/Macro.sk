@@ -218,6 +218,7 @@ COMMANDS:
   dflags    - Show current DynFlags information.
   info      - Show this help.
   linker    - Show linker.
+  macros    - Show macros defined in REPL environment.
   modules   - Show loaded modules.
   packages  - Show accessible packages.
   paths     - Show paths.
@@ -270,6 +271,13 @@ COMMANDS:
                   MkDepend    "MkDepend"))))
         (liftIO (putStrLn (intercalate "\n" s)))))
 
+  (:: show-macros (Skc ()))
+  (= show-macros
+    (do (<- macros getEnvMacros)
+        (liftIO (putStrLn "; macros:"))
+        (mapM_ (\ m (liftIO (putStrLn (++ ";  " m))))
+               (macroNames macros))))
+
   (:: show-modules (Skc ()))
   (= show-modules
     (do (<- graph0 getModuleGraph)
@@ -284,6 +292,7 @@ COMMANDS:
             "context"  show-context
             "dflags"   show-dflags
             "linker"   show-linker
+            "macros"   show-macros
             "modules"  show-modules
             "packages" show-packages
             "paths"    show-paths

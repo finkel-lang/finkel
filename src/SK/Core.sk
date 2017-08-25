@@ -142,11 +142,6 @@
     _            (skSrcError form (++ "macroexpand: invalid form\n"
                                       (show form)))))
 
-;;; Show names of macro as list of strings.
-(defmacro* macro-names ()
-  (do (<- mes getEnvMacros)
-      (return `(list ,@(macroNames mes)))))
-
 ;;; The `cond' macro, found in many Lisp languages.  The behaviour is
 ;;; same as wrapping the body with `case' expression with dummy unit, or
 ;;; `if' with `MultiWayIf' GHC language extension.
