@@ -1,4 +1,3 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
 module SK.Repl.Env where
 
 import Control.Monad.IO.Class
