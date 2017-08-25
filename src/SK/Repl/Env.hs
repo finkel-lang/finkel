@@ -19,21 +19,29 @@ type HscEnvRef = IORef (IORef HscEnv)
 
 funcall1 :: Code -> a -> IO r
 funcall1 name arg1 = do
-  mb_hval <- lookupHValue name
+  f <- symbolValue name
+  f arg1
+
+symbolValue :: Code -> IO a
+symbolValue form = do
+  mb_hval <- lookupHValue form
   case mb_hval of
-    Just f -> (unsafeCoerce f) arg1
-    Nothing -> error ("funcall1: not in scope " ++ show name)
+    Nothing -> error ("symbolValue: symbol not found " ++ show form)
+    Just hv -> return (unsafeCoerce hv)
 
 lookupHValue :: Code -> IO (Maybe HValue)
 lookupHValue form =
   case unLocLForm form of
-    Atom (ASymbol name) -> do
+    Atom (ASymbol name) -> go name
+    Atom (AString name) -> go (fsLit name)
+    _                   -> return Nothing
+  where
+    go name = do
       let rname = noLoc (mkRdrName name)
       env <- getTheHscEnv
       name': _ <- hscTcRnLookupRdrName env rname
       fref <- getHValue env name'
       Just <$> withForeignRef fref localRef
-    _ -> return Nothing
 
 getSomeThing :: String -> IO ()
 getSomeThing name = do
