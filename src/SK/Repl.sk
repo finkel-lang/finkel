@@ -222,10 +222,8 @@
   (do (<- hsc-env getSession)
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
       (case stmt1
-        (Just (, ids hvals-io fixity-env))
-        (update-hsc-env hsc-env True ids hvals-io fixity-env)
-        Nothing
-        (return (Left "eval-statement: no result")))))
+        (Just (, is h f)) (update-hsc-env hsc-env is h f)
+        Nothing           (return (Left "eval-statement: no result")))))
 
 (:: eval-imports (-> [HImportDecl] (Skc Result)))
 (= eval-imports imports
@@ -233,18 +231,12 @@
       (<- dflags getSessionDynFlags)
       (let ((= mkIIDecl (L _ idecl)
               (IIDecl idecl))
-            (= eqII a b
-              (case (, a b)
-                (, (IIModule x) (IIModule y)) (== x y)
-                (, (IIDecl x) (IIDecl y))     (== (unLoc (ideclName x))
-                                                  (unLoc (ideclName y)))
-                _                               False))
             (= mdls
               (concat ["; "
                        (intercalate ", " (map (. (showSDoc dflags) ppr)
                                               imports))
                        "\n"]))))
-      (setContext (nubBy eqII (++ (map mkIIDecl imports) context)))
+      (setContext (nubBy eq-ii (++ (map mkIIDecl imports) context)))
       (return (Right mdls))))
 
 (:: eval-decls (-> [HDecl] (Skc Result)))
@@ -269,47 +261,46 @@
       (return (Right tystr))))
 
 (:: update-hsc-env
-  (-> HscEnv Bool [Id] ForeignHValue FixityEnv (Skc Result)))
-(= update-hsc-env hsc-env is-body ids hvals-io fixity-env
+  (-> HscEnv [Id] ForeignHValue FixityEnv (Skc Result)))
+(= update-hsc-env hsc-env ids hvals-io fixity-env
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its body.
-  (do (<- status (liftIO (evalStmt hsc-env False (EvalThis hvals-io))))
-      (<- dflags getSessionDynFlags)
-      (case status
-        (EvalComplete _ (EvalSuccess fhvals))
-        (do (let ((= ic (hsc_IC hsc-env))
-                  (= bindings (, (ic_tythings ic) (ic_rn_gbl_env ic)))
-                  (= size 10)
-                  (= ic2 (extendInteractiveContextWithIds ic ids))
-                  (= ic3 (ic2 {ic_fix_env fixity-env}))
-                  (= final-names (map getName ids))
-                  (= hsc-env-2 (hsc-env {hsc_IC ic3}))))
-            (liftIO (extendLinkEnv (zip final-names fhvals)))
-            (when is-body
-              (return ())
-              ;; (case ids
-              ;;   ([] (return ()))
-              ;;   ((: var _)
-              ;;    (do (let ((= tystr (showPpr dflags (varType var)))))
-              ;;        (when (isPrefixOf "ReplIO" tystr)
-              ;;          (evalApply hsc-env-2 fhvals)))))
-              )
+  (let ((= success fhvals
+          (do (let ((= ic (hsc_IC hsc-env))
+                    (= bindings
+                      (, (ic_tythings ic) (ic_rn_gbl_env ic)))
+                    (= size 10)
+                    (= ic2
+                      (extendInteractiveContextWithIds ic ids))
+                    (= ic3 (ic2 {ic_fix_env fixity-env}))
+                    (= final-names (map getName ids))
+                    (= hsc-env-2 (hsc-env {hsc_IC ic3}))))
+              (<- dflags getSessionDynFlags)
+              (liftIO (extendLinkEnv (zip final-names fhvals)))
 
-            ;; InteractiveEval does not export `rttiEnvironment' ...
-            ;;
-            ;; (<- hsc-env-3
-            ;;     (liftIO
-            ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
+              ;; InteractiveEval does not export `rttiEnvironment'.
+              ;;
+              ;; (<- hsc-env-3
+              ;;     (liftIO
+              ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
 
-            (setSession hsc-env-2)
-            (return
-              (Right (show-names-and-types dflags final-names ids))))
-        (EvalComplete _ (EvalException serialized))
-        (case serialized
-          (EOtherException str) (return (Left str))
-          (EExitCode ecode)     (liftIO (exitWith ecode))
-          EUserInterrupt        (return (Right "Interrupt")))
-        _ (return (Left "update-hsc-env failed.")))))
+              (setSession hsc-env-2)
+              (return
+                (Right
+                 (show-names-and-types dflags final-names ids)))))
+        (= exception serialized
+          (case serialized
+            (EOtherException str) (return (Left str))
+            (EExitCode ecode)     (liftIO (exitWith ecode))
+            EUserInterrupt        (return (Right "Interrupt"))))
+        (= incomplete
+          (return (Left "update-hsc-env failed."))))
+    (do (<- status (liftIO
+                    (evalStmt hsc-env False (EvalThis hvals-io))))
+        (case status
+          (EvalComplete _ (EvalSuccess hvs)) (success hvs)
+          (EvalComplete _ (EvalException e)) (exception e)
+          _                                  incomplete))))
 
 
 ;;;; Auxiliary
@@ -336,3 +327,11 @@
   (case ii
     (IIDecl idecl) (moduleNameString (unLoc (ideclName idecl)))
     (IIModule mdl) (moduleNameString mdl)))
+
+(:: eq-ii (-> InteractiveImport InteractiveImport Bool))
+(= eq-ii a b
+  (case (, a b)
+    (, (IIModule x) (IIModule y)) (== x y)
+    (, (IIDecl x) (IIDecl y))     (== (unLoc (ideclName x))
+                                      (unLoc (ideclName y)))
+    _                             False))

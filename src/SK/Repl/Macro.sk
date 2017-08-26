@@ -29,13 +29,20 @@
 
 ;;; Functions for compiling and loading SK module.
 (eval-when (compile load)
-  (:: mkII (-> String InteractiveImport))
-  (= mkII name
+  (:: mk-ii (-> String InteractiveImport))
+  (= mk-ii name
     (IIDecl (simpleImportDecl (mkModuleName name))))
 
-  (:: mkIIFS (-> FastString InteractiveImport))
-  (= mkIIFS name
+  (:: mk-ii-fs (-> FastString InteractiveImport))
+  (= mk-ii-fs name
     (IIDecl (simpleImportDecl (mkModuleNameFS name))))
+
+  (:: code->mb-string (-> Code (Maybe String)))
+  (= code->mb-string code
+    (case (unLocLForm code)
+      (Atom (ASymbol sym)) (Just (unpackFS sym))
+      (Atom (AString str)) (Just str)
+      _                    Nothing))
 
   (:: %compile-obj (-> String (Skc Code)))
   (= %compile-obj str
@@ -65,7 +72,7 @@
         (%compile-obj path)
         (%link-module (fsLit mname))
         (<- mods (fmap envContextModules getSkEnv))
-        (setContext (map mkII (: mname mods)))
+        (setContext (map mk-ii (: mname mods)))
         (return '(begin)))))
 
 ;;; Compile source code to object code.
@@ -75,10 +82,7 @@
          (\ file
            (do (liftIO (putStrLn (++ "; compile-obj: " file)))
                (%compile-obj file)))
-         (case (unLocLForm form)
-           (Atom (ASymbol sym)) (Just (show form))
-           (Atom (AString str)) (Just str)
-           _                    Nothing)))
+         (code->mb-string form)))
 
 ;;; Link the object code of given module.
 (defmacro* link-module (form)
@@ -133,8 +137,8 @@
     (Atom (ASymbol name)) (do (liftIO (putStrLn
                                        (++ "; in-module: "
                                            (unpackFS name))))
-                              (setContext [(mkIIFS name)
-                                           (mkII "SK.User")])
+                              (setContext [(mk-ii-fs name)
+                                           (mk-ii "SK.User")])
                               (return '(begin)))
     _ (skSrcError form (++ "in-module: not a module name: "
                            (show form)))))
@@ -150,15 +154,10 @@
                                    "): expecting " expect
                                    ", got " (show val)])))
         (= set-cwd v
-          (case (unLocLForm v)
-            (Atom (AString path)) (do (liftIO
-                                       (setCurrentDirectory path))
-                                      (return '(begin)))
-            (Atom (ASymbol path)) (do (liftIO
-                                       (setCurrentDirectory
-                                        (unpackFS path)))
-                                      (return '(begin)))
-            _                     (val-err "Symbol or String")))
+          (case (code->mb-string v)
+            (Just path) (do (liftIO (setCurrentDirectory path))
+                            (return '(begin)))
+            Nothing     (val-err "Symbol or String")))
         (= set-debug v
           (case (fromCode v)
             (Just bool) (do (modifySkEnv (\ e (e {envDebug bool})))
