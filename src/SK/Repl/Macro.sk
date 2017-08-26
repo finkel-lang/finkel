@@ -39,8 +39,7 @@
 
   (:: %compile-obj (-> String (Skc Code)))
   (= %compile-obj str
-    (gbracket (do (liftIO initStaticOpts)
-                  (<- dflags getSessionDynFlags)
+    (gbracket (do (<- dflags getSessionDynFlags)
                   (<- context getContext)
                   (return (, dflags context)))
               (\ (, dflags context)
@@ -300,7 +299,5 @@ COMMANDS:
         (= err
           (skSrcError form (++ "info: invalid form: " (show form)))))
     (case (unLocLForm form)
-      (Atom (ASymbol sym)) (do (liftIO initStaticOpts)
-                               (go sym)
-                               (return '(begin)))
+      (Atom (ASymbol sym)) (>> (go sym) (return '(begin)))
       _                    err)))

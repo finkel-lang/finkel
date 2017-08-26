@@ -38,9 +38,6 @@
   nameOccName
   occNameString
 
-  ;; StaticFlags. This module has been removed in ghc >= 8.2.
-  initStaticOpts
-
   ;; Var
   (Var)
   varType
@@ -64,7 +61,6 @@
 (import InteractiveEval)
 (import Linker)
 (import Name)
-(import StaticFlags)
 (import Var)
 
 (import GHCi)                   ; ghci
