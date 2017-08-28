@@ -1,0 +1,21 @@
+;;;; This module test refershing context modules and macros modified by
+;;;; `require' keyword.
+
+(module P01.J)
+
+;;; Exported entities in P01.C is not used, the `import' declaration is
+;;; fore controlling the dependency analysis of `make' function.
+(import P01.C)
+
+(:: p01j String)
+(= p01j (m1 blah "j"))
+
+;;; In module P01.C, there is a top-level `require' of P01.G2. In
+;;; P01.G2, there is a macro named `m1'. Desired behaviour is that the
+;;; indirectly required macros should not affect the code in this
+;;; module.
+(:: m1 (-> String String String))
+(= m1 ++)
+
+(:: blah String)
+(= blah "p01")

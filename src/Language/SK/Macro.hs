@@ -404,9 +404,7 @@ expands forms = do
           return (reverse rest' ++ acc)
         _ -> return (orig : acc)
 
--- This function recursively expand the result. Without recursively
--- calling expand on the result, cannot expand macro-generating
--- macros.
+-- | Function to recursively expand the given 'Code'.
 expand :: Code -> Skc Code
 expand form =
   case unLForm form of
@@ -425,6 +423,8 @@ expand form =
         _                -> expandList l List forms
 
     L l (HsList forms) ->
+      -- Without recursively calling 'expand' on the result, cannot
+      -- expand macro-generating macros.
       LForm . L l . HsList <$> mapM expand forms
 
     -- Non-list forms are untouched.

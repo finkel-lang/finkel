@@ -113,6 +113,7 @@ skErrorHandler fm (FlushOut flush) work =
 initialSkEnv :: SkEnv
 initialSkEnv = SkEnv
   { envMacros = specialForms
+  , envDefaultMacros = specialForms
   , envDebug = False
   , envContextModules = ["Prelude", "Language.SK"] }
 

@@ -30,6 +30,7 @@ library
                        P01.G2
                        P01.H
                        P01.I
+                       P01.J
   build-depends:       base >= 4.7 && < 5
                      , sk-kernel
   default-language:    Haskell2010

@@ -470,8 +470,17 @@ compileToHsModule (tsrc, mbphase) =
       return (Just mdl)
     OtherSource path -> compileOtherFile path >> return Nothing
 
+-- | Wrapper for 'compileSkModuleForm', to use fresh set of modules and
+-- macros in 'SkEnv'.
 compileSkModuleForm' :: [Code] -> Skc (HsModule RdrName)
-compileSkModuleForm' = timeIt "HsModule [sk]" . compileSkModuleForm
+compileSkModuleForm' forms = do
+  skenv <- getSkEnv
+  let ii = IIDecl . simpleImportDecl . mkModuleNameFS
+      contextModules = envContextModules skenv
+      macros = envDefaultMacros skenv
+  setContext (map (ii . fsLit) contextModules)
+  putEnvMacros macros
+  timeIt "HsModule [sk]" (compileSkModuleForm forms)
 
 compileHsFile :: FilePath -> Maybe Phase
                -> Skc (HsModule RdrName, DynFlags)

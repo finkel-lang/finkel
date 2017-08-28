@@ -74,8 +74,10 @@ type EnvMacros = Map.Map FastString Macro
 
 -- | Environment state in 'Skc'.
 data SkEnv = SkEnv
-   { -- | Association list of macros.
+   { -- | Macros accessible in current compilation context.
      envMacros :: EnvMacros
+     -- | Set of macros to reset to, for compilation of each module.
+   , envDefaultMacros :: EnvMacros
      -- | Flag to hold debug setting.
    , envDebug :: Bool
      -- | Modules to import to context.
