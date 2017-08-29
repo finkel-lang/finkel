@@ -1,4 +1,4 @@
-module MakeTest (makeTests) where
+module MakeTest (makeTests, removeArtifacts) where
 
 -- base
 import Control.Monad (void, when)
@@ -36,7 +36,7 @@ buildC =
 
 buildFile :: Skc () -> [FilePath] -> Spec
 buildFile pre paths =
-  before_ removeArtifacts $
+  before_ (removeArtifacts odir) $
   describe ("files " ++ intercalate ", " paths) $
     it "should compile successfully" $ do
       ret <- runSkc (pre >> make' targets False Nothing) initialSkEnv
@@ -49,12 +49,15 @@ buildFile pre paths =
       let dflags' = dflags {importPaths = [".", odir]}
       _ <- setSessionDynFlags dflags'
       make sources doLink out
-    removeArtifacts = do
-      contents <- getDirectoryContents odir
-      mapM_ removeObjAndHi contents
+
+removeArtifacts :: FilePath -> IO ()
+removeArtifacts dir = do
+  contents <- getDirectoryContents dir
+  mapM_ removeObjAndHi contents
+  where
     removeObjAndHi file =
       when (takeExtension file `elem` [".o", ".hi"])
-           (removeFile (odir </> file))
+           (removeFile (dir </> file))
 
 buildPackage :: String -> Spec
 buildPackage name =

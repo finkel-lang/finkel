@@ -2,12 +2,22 @@
 ;;;
 ;;; 5.2 Export Lists
 
-(module M03
+(module Main
   ;; Value entities
   f1 f3
 
-  ;; Data constructor only.
-  D1A c1a
+  ;; Data constructor only ... is impossible. From section 5.2 of
+  ;; Haskell 2010 report:
+  ;;
+  ;;  ... Data cnstructros cannot be named in export lists except as
+  ;;  subordinate names, because they cannot otherwise be distinguished
+  ;;  from type constructors.
+  ;;
+
+  ;; D1A
+
+  ;; Typeclass method only.
+  c1a
 
   ;; Type constructor only.
   (D2) (C2)
@@ -19,7 +29,9 @@
   (D4 D4a D4c) (D5 d5f1 d5f3) (C4 c4a c4c)
 
   ;; Module re-export
-  (module Data.Char))
+  (module Data.Char)
+
+  main)
 
 (import Data.Char)
 
@@ -76,3 +88,7 @@
   (:: c4a (-> a String))
   (:: c4b (-> a Int))
   (:: c4c (-> a Bool)))
+
+(:: main (IO ()))
+(= main
+  (putStrLn "Module containing various exports list"))

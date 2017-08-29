@@ -10,7 +10,7 @@
 ;;;; foo. Foo foo foo foo. Foo foo foo foo. Foo foo foo foo. Foo foo foo
 ;;;; foo.
 
-(module Test10)
+(module Main)
 
 ;;; | Main entry function.
 (= main

@@ -372,7 +372,6 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
 b_typeD :: Code -> (FastString, [HTyVarBndr]) -> HType -> HDecl
 b_typeD (LForm (L l _)) (name, tvs) ty = L l (TyClD synonym)
   where
-    -- Fields in 'SynDecl' changed since ghc-8.0.2.
     synonym = SynDecl { tcdLName = L l (mkUnqual tcName name)
                       , tcdFixity = Prefix
                       , tcdTyVars = mkHsQTvs tvs
@@ -429,19 +428,20 @@ b_derivD (_, cs) tys = (L l dcs, cs)
 
 b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do
-    -- XXX: Does not support multiple type class.
+    -- XXX: Does not support multi-arg type class.
     let categorize (ms,ss) (L ld decl) =
           case decl of
             SigD d -> return (ms, L ld d : ss)
             ValD d -> return (L ld d : ms, ss)
             _      -> builderError
-
-    (l, name, L lv tvar) <-
-       case ty of
-          L l (HsAppTy (L _ (HsTyVar _promo1 n))
-                       (L _ (HsTyVar _promo2 v))) ->
-            return (l, n, v)
-          _ -> builderError
+        unAppTy t =
+          case t of
+            L l (HsAppTy (L _ (HsTyVar _promo1 n))
+                         (L _ (HsTyVar _promo2 v))) ->
+              return (l, n, v)
+            L _ (HsParTy t') -> unAppTy t'
+            _                -> builderError
+    (l, name, L lv tvar) <- unAppTy ty
     (meths,sigs) <- foldM categorize ([],[]) decls
 
     let bndrs = [L lv (UserTyVar (L lv tvar))]
@@ -565,8 +565,10 @@ b_funT ts =
     f a@(L l1 _) b = L l1 (HsFunTy a b)
 
 b_appT :: [HType] -> HType
-b_appT (x:xs) = foldl f x xs
-  where f b a = L (getLoc b) (HsAppTy b a)
+b_appT whole@(x:xs) = L l0 (HsParTy (foldl f x xs))
+  where
+    l0 = getLoc (mkLocatedList whole)
+    f b a = L (getLoc b) (HsAppTy b a)
 
 b_listT :: HType -> HType
 b_listT ty@(L l _) = L l (HsListTy ty)
@@ -575,7 +577,7 @@ b_tupT :: Code -> [HType] -> HType
 b_tupT (LForm (L l _)) ts = L l (HsTupleTy HsBoxedTuple ts)
 
 b_bangT :: Code -> HType -> HType
-b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)
+b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang (L l (HsParTy t)))
   where
     srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
 
@@ -642,10 +644,10 @@ b_tupP (LForm (L l _)) ps = L l (TuplePat ps Boxed [])
 
 b_asP :: Code -> HPat -> HPat
 b_asP (LForm (L l (Atom (ASymbol name)))) pat =
-  L l (AsPat (L l (mkRdrName name)) (L l (ParPat pat)))
+  L l (AsPat (L l (mkRdrName name)) (mkParPat pat))
 
 b_lazyP :: HPat -> HPat
-b_lazyP pat@(L l _) = L l (LazyPat (L l (ParPat pat)))
+b_lazyP pat@ (L l _) = L l (ParPat (L l (LazyPat pat)))
 
 b_conP :: Code -> [HPat] -> Builder HPat
 b_conP (LForm (L l (Atom (ASymbol name)))) rest
@@ -730,12 +732,12 @@ b_recUpdE expr flds = do
    expr' <- expr
    let uflds = map (cfld2ufld . mkcfld) flds
        l = getLoc expr'
-   return (L l (mkRdrRecordUpd expr' uflds))
+   return (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
 
 b_appE :: [HExpr] -> HExpr
 b_appE = foldl1' f
   where
-    f a b = let e = mkHsApp a b in L (getLoc e) (HsPar e)
+    f a b = let e = mkHsApp a (mkLHsPar b) in e
 
 b_charE :: Code -> HExpr
 b_charE (LForm (L l (Atom (AChar x)))) =
