@@ -304,7 +304,7 @@
 
 (:: tpb2 Int)
 (= [_ _ tpb2 _]
-  (enumFrom 40))
+  (enumFromTo 40 43))
 
 (:: tpb3 Int)
 (= (: tpb3 _)

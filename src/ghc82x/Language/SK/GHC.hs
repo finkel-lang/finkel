@@ -230,7 +230,10 @@ module Language.SK.GHC
     -- * HsUtils
     looksLikeModuleName,
     mkClassOpSigs,
+    mkHsApp,
     mkHsIsString,
+    mkParPat,
+    mkLHsPar,
     mkLHsSigType,
     mkPrefixFunRhs,
 

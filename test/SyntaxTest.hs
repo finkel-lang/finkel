@@ -5,7 +5,13 @@
 --
 module SyntaxTest (syntaxTests) where
 
+import System.Directory (getTemporaryDirectory)
+import System.Exit (ExitCode(..))
+import System.FilePath ((</>))
+import System.Process (readProcessWithExitCode)
 import Test.Hspec
+
+import Language.SK.Make
 import Language.SK.Run
 
 readCode :: FilePath -> IO Bool
@@ -17,12 +23,21 @@ readCode src = do
     Right _tc -> return True
     Left e -> putStrLn e >> return False
 
-mkTest :: String -> Spec
-mkTest name =
-  before (readCode name) $
-    describe name $
-      it "should compile and type check"
-         (\result -> result `shouldBe` True)
+mkTest :: FilePath -> Spec
+mkTest path = do
+  tmpdir <- runIO getTemporaryDirectory
+  let dotO = tmpdir </> "a.out"
+  describe path $ do
+    it "should type check" $ do
+      result <- readCode path
+      result `shouldBe` True
+    it "should compile with skc" $ do
+      let task = make [(path, Nothing)] False (Just dotO)
+      ret <- runSkc task initialSkEnv
+      ret `shouldBe` Right ()
+    it "should run the executable from skc successfully" $ do
+      (ecode, _stdout, _stderr) <- readProcessWithExitCode dotO [] ""
+      ecode `shouldBe` ExitSuccess
 
 syntaxTests :: [FilePath] -> Spec
 syntaxTests = mapM_ mkTest

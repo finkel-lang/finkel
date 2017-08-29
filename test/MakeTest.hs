@@ -3,10 +3,9 @@ module MakeTest (makeTests) where
 -- base
 import Control.Monad (void, when)
 import Data.List (intercalate)
-import System.Directory ( doesFileExist, getDirectoryContents
-                        , removeFile)
+import System.Directory (getDirectoryContents, removeFile)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), replaceExtension, takeExtension)
+import System.FilePath ((</>), takeExtension)
 import System.Process (rawSystem)
 
 -- hspec
@@ -45,11 +44,11 @@ buildFile pre paths =
   where
     targets = map (\path -> (path, Nothing)) paths
     odir = "test" </> "data" </> "build"
-    make' targets link out = do
+    make' sources doLink out = do
       dflags <- getSessionDynFlags
       let dflags' = dflags {importPaths = [".", odir]}
-      setSessionDynFlags dflags'
-      make targets link out
+      _ <- setSessionDynFlags dflags'
+      make sources doLink out
     removeArtifacts = do
       contents <- getDirectoryContents odir
       mapM_ removeObjAndHi contents

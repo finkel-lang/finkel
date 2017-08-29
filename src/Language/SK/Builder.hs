@@ -162,8 +162,6 @@ unwrapListL (LForm (L _ form)) =
       HsList xs -> xs
       _ -> []
 
--- XXX: Currently, cannot tell the difference between 'Qualified.fun'
--- and 'DataConstr'.
 mkRdrName :: FastString -> RdrName
 mkRdrName name
   -- ':' is special syntax. It is defined in module "GHC.Types" in
@@ -616,11 +614,14 @@ b_charP (LForm (L l (Atom (AChar c)))) =
 
 b_symP :: Code -> HPat
 b_symP (LForm (L l (Atom (ASymbol name))))
-   | name == "_" = L l (WildPat placeHolderType)
+   | name == "_"
+    = L l (WildPat placeHolderType)
    | isUpper x || x == ':'
     = L l (ConPatIn (L l (mkRdrName name)) (PrefixCon []))
-   | otherwise = L l (VarPat (L l (mkRdrName name)))
-   where x = headFS name
+   | otherwise
+    = L l (VarPat (L l (mkRdrName name)))
+   where
+     x = headFS name
 
 b_hsListP :: [HPat] -> HPat
 b_hsListP pats = L l (ListPat pats placeHolderType Nothing)
@@ -641,17 +642,20 @@ b_tupP (LForm (L l _)) ps = L l (TuplePat ps Boxed [])
 
 b_asP :: Code -> HPat -> HPat
 b_asP (LForm (L l (Atom (ASymbol name)))) pat =
-  L l (AsPat (L l (mkRdrName name)) pat)
+  L l (AsPat (L l (mkRdrName name)) (L l (ParPat pat)))
 
 b_lazyP :: HPat -> HPat
-b_lazyP pat@(L l _) = L l (LazyPat pat)
+b_lazyP pat@(L l _) = L l (LazyPat (L l (ParPat pat)))
 
 b_conP :: Code -> [HPat] -> Builder HPat
 b_conP (LForm (L l (Atom (ASymbol name)))) rest
-  | isUpper x || x == ':' = return (L l (ConPatIn (L l (mkRdrName name))
-                                                  (PrefixCon rest)))
-  | otherwise = builderError
-  where x = headFS name
+  | isUpper x || x == ':'
+    = return (L l (ParPat (L l (ConPatIn (L l (mkRdrName name))
+                                         (PrefixCon rest)))))
+  | otherwise
+    = builderError
+  where
+    x = headFS name
 
 
 -- ---------------------------------------------------------------------
@@ -683,8 +687,7 @@ b_match pat@(L l _) (grhss,decls) =
     L l (Match ctxt [pat] Nothing grhss')
   where
     grhss' = GRHSs grhss (declsToBinds l decls)
-    ctxt = PatBindRhs
-    -- ctxt = mkPrefixFunRhs pat
+    ctxt = CaseAlt
 
 b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
@@ -706,7 +709,7 @@ b_tsigE (LForm (L l _)) e (ctxt,t) =
              [] -> t
              _  -> L l HsQualTy { hst_ctxt = mkLocatedList ctxt
                                 , hst_body = t }
-  in  L l (ExprWithTySig e (mkLHsSigWcType t'))
+  in  mkLHsPar (L l (ExprWithTySig e (mkLHsSigWcType t')))
 
 b_recConOrUpdE :: Code -> [(FastString,HExpr)] -> HExpr
 b_recConOrUpdE sym@(LForm (L l _)) flds = L l expr
@@ -730,7 +733,9 @@ b_recUpdE expr flds = do
    return (L l (mkRdrRecordUpd expr' uflds))
 
 b_appE :: [HExpr] -> HExpr
-b_appE = foldl1' (\a b -> L (getLoc a) (HsApp a b))
+b_appE = foldl1' f
+  where
+    f a b = let e = mkHsApp a b in L (getLoc e) (HsPar e)
 
 b_charE :: Code -> HExpr
 b_charE (LForm (L l (Atom (AChar x)))) =
@@ -741,13 +746,19 @@ b_stringE (LForm (L l (Atom (AString x)))) =
   L l (HsLit (HsString (SourceText (show x)) (fsLit x)))
 
 b_integerE :: Code -> HExpr
-b_integerE (LForm (L l (Atom (AInteger x)))) =
-    L l (HsOverLit $! mkHsIntegral st x placeHolderType)
-  where st = SourceText (show x)
+b_integerE (LForm (L l (Atom (AInteger x))))
+   | x < 0     = L l (HsPar expr)
+   | otherwise = expr
+  where
+    expr =     L l (HsOverLit $! mkHsIntegral st x placeHolderType)
+    st = SourceText (show x)
 
 b_floatE :: Code -> HExpr
-b_floatE (LForm (L l (Atom (AFractional x)))) =
-   L l (HsOverLit $! mkHsFractional x placeHolderType)
+b_floatE (LForm (L l (Atom (AFractional x))))
+  | fl_value x < 0 = L l (HsPar expr)
+  | otherwise      = expr
+  where
+    expr = L l (HsOverLit $! mkHsFractional x placeHolderType)
 
 b_varE :: Code -> HExpr
 b_varE (LForm (L l (Atom (ASymbol x)))) =
