@@ -366,7 +366,6 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
                       , dd_cType = Nothing
                       , dd_kindSig = Nothing
                       , dd_cons = cs
-                      -- `dd_derivs' field changed since ghc-8.0.2.
                       , dd_derivs = derivs }
 
 b_typeD :: Code -> (FastString, [HTyVarBndr]) -> HType -> HDecl
@@ -506,7 +505,6 @@ b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
 b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
   let match = L l (Match ctxt args Nothing body)
       body = GRHSs grhss (declsToBinds l decls)
-      -- ctxt = NonFunBindMatch
       ctxt = FunRhs { mc_fun = lrname
                     , mc_fixity = Prefix
                       -- XXX: Get strictness info from somewhere?
@@ -534,6 +532,21 @@ b_tsigD names (ctxts,typ) =
         L l1 (mkRdrName name)
       l = getLoc (mkLocatedForm names)
   in  L l (SigD (TypeSig (map mkName names) typ'))
+
+b_inlineD :: InlineSpec -> Code -> HDecl
+b_inlineD ispec (LForm (L l (Atom (ASymbol name)))) =
+  L l (SigD (InlineSig (L l (mkRdrName name)) ipragma))
+  where
+    ipragma =
+      case ispec of
+        Inline    -> alwaysInlinePragma
+        NoInline  ->
+          defaultInlinePragma { inl_inline = NoInline
+                              , inl_src = SourceText "{-# NOINLINE" }
+        Inlinable ->
+          defaultInlinePragma { inl_inline = Inlinable
+                              , inl_src = SourceText "{-# INLINABLE" }
+        _         -> defaultInlinePragma
 
 
 -- ---------------------------------------------------------------------

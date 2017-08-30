@@ -83,10 +83,15 @@ module Language.SK.GHC
     Fixity(..),
     FixityDirection(..),
     FractionalLit(..),
+    InlinePragma(..),
+    InlineSpec(..),
     LexicalFixity(..),
     Origin(..),
     SourceText(..),
     SuccessFlag(..),
+    defaultInlinePragma,
+    alwaysInlinePragma,
+    neverInlinePragma,
 
     -- * DataCon
     HsSrcBang(..),

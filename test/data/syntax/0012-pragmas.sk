@@ -4,7 +4,23 @@
 
 ;;; 12.1 Inlining
 
-;;; TODO
+(:: inlineMe Int)
+(= inlineMe 42)
+##(INLINE inlineMe)
+
+(:: dontInlineMe Int)
+(= dontInlineMe 43)
+##(NOINLINE dontInlineMe)
+
+(:: iAmInlinable Int)
+(= iAmInlinable 44)
+##(INLINABLE iAmInlinable)
+
+(:: inlineprgm (IO ()))
+(= inlineprgm
+  (do (print inlineMe)
+      (print dontInlineMe)
+      (print iAmInlinable)))
 
 ;;; 12.2 Specialization
 
@@ -24,5 +40,7 @@
 (= unpackprgm
   (print (C1 42 \x)))
 
+(:: main (IO ()))
 (= main
-  unpackprgm)
+  (do inlineprgm
+      unpackprgm))

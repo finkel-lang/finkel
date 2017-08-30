@@ -106,8 +106,11 @@ import Language.SK.GHC
 '}'  { LForm (L _ (Atom (ASymbol "}"))) }
 '~'  { LForm (L _ (Atom (ASymbol "~"))) }
 
--- GHC extension
-'unpack' { LForm (L _ (Atom (ASymbol "UNPACK"))) }
+-- Pragmas
+'unpack'    { LForm (L _ (Atom (ASymbol "UNPACK"))) }
+'inline'    { LForm (L _ (Atom (ASymbol "INLINE"))) }
+'noinline'  { LForm (L _ (Atom (ASymbol "NOINLINE"))) }
+'inlinable' { LForm (L _ (Atom (ASymbol "INLINABLE"))) }
 
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }
@@ -323,6 +326,9 @@ decl :: { HDecl }
                                  ; return (b_patBindD $3 lp') }}
     | '::' 'symbol' dtype  { b_tsigD [$2] $3 }
     | '::' symbols dtype   { b_tsigD $2 $3 }
+    | 'inline' 'symbol'    { b_inlineD Inline $2 }
+    | 'noinline' 'symbol'  { b_inlineD NoInline $2 }
+    | 'inlinable' 'symbol' { b_inlineD Inlinable $2 }
 
 aguards :: { (([HGRHS],[HDecl]), [HPat]) }
         : guards      { ($1, []) }

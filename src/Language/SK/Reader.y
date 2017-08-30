@@ -7,6 +7,7 @@ module Language.SK.Reader
   , psexpr
   ) where
 
+import Data.Char (toLower)
 import SrcLoc
 
 import Language.SK.Form
@@ -167,16 +168,27 @@ mkCcSymbol (L l _) = sym l "}"
 pragma ::  Code -> SP Code
 pragma orig@(LForm (L l form)) =
   case form of
+    -- Pragma with no arguments.
     Atom (ASymbol sym)
-      | sym == "UNPACK" ->
-        -- Return the UNPACK form as is. This pragma is handled by
-        -- syntax parser of data constructor field.
-        return orig
+      -- Return the UNPACK form as is. This pragma is handled by
+      -- syntax parser of data constructor field.
+      | normalize sym == "unpack" -> return orig
+
+    -- Pragma with single argument.
+    List [LForm (L _ (Atom (ASymbol sym))), a1]
+      -- Inline pragmas are handled by syntax parser.
+      | normalize sym `elem` inlinePragmas -> return orig
+
+    -- Pragma with multiple arguments.
     List (LForm (L _ (Atom (ASymbol sym))):rest)
-      | sym == "LANGUAGE" -> do
-        -- XXX: Add language pragma to SPState, return empty code.
+      -- XXX: Add a filed to keep track of language pragma in SPState,
+      -- return empty code.
+      | normalize sym == "language" ->
         errorSP orig "LANGUAGE pragma not yet implemented"
     _ -> error ("unknown pragma: " ++ show form)
+  where
+    normalize = map toLower . unpackFS
+    inlinePragmas = ["inline", "noinline", "inlinable"]
 
 emptyBody :: SrcSpan -> Code
 emptyBody l = li l [sym l "begin"]

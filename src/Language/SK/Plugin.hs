@@ -143,7 +143,7 @@ hsrc o = do
   when (performTypecheck o)
        (void (tcHsModule (Just file) False mdl))
   hssrc <- genHsSrc sp (Hsrc mdl)
-  liftIO (case (skO o) of
+  liftIO (case skO o of
              Nothing -> putStrLn hssrc
              Just out -> writeFile out hssrc)
 
