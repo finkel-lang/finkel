@@ -17,6 +17,7 @@ import Language.SK.Emit
 import Language.SK.Lexer
 import Language.SK.Make
 import Language.SK.Run
+import Language.SK.SKC
 
 import MakeTest (removeArtifacts)
 
@@ -33,6 +34,7 @@ readCode src = do
 mkTest :: FilePath -> Spec
 mkTest path = do
   let mkRef = runIO . newIORef . error
+      skEnv = initialSkEnv {envSilent = True}
   tmpdir <- runIO getTemporaryDirectory
   skORef <- mkRef "skORef"
   hsORef <- mkRef "hsORef"
@@ -47,7 +49,7 @@ mkTest path = do
 
     it "should compile with skc" $ do
       let task = make [(path, Nothing)] False (Just dotO)
-      ret <- runSkc task initialSkEnv
+      ret <- runSkc task skEnv
       ret `shouldBe` Right ()
 
     it "should compile executable via skc successfully" $ do
@@ -59,7 +61,7 @@ mkTest path = do
       let gen = do
             (mdl, sp) <- compileWithSymbolConversion path
             genHsSrc sp (Hsrc mdl)
-      src <- runSkc gen initialSkEnv
+      src <- runSkc gen skEnv
       case src of
         Right src' -> do
           writeFile dotHs src'

@@ -264,8 +264,8 @@ make' not_yet_compiled readys0 pendings0 = do
 
 -- | Check whether recompilation is required, and compile the 'HsModule'
 -- when the codes or dependency modules were updated.
-makeOne :: GhcMonad m => Int -> Int -> ModSummary
-        -> HsModule RdrName -> [ModSummary] -> m ModSummary
+makeOne :: Int -> Int -> ModSummary
+        -> HsModule RdrName -> [ModSummary] -> Skc ModSummary
 makeOne i total ms hmdl graph_upto_this = do
   up_to_date <- checkUpToDate ms graph_upto_this
   ms' <- if up_to_date
@@ -275,8 +275,8 @@ makeOne i total ms hmdl graph_upto_this = do
   return ms'
 
 -- | Compile single module.
-doMakeOne :: GhcMonad m => Int -> Int -> ModSummary
-          -> HsModule RdrName -> m ModSummary
+doMakeOne :: Int -> Int -> ModSummary
+          -> HsModule RdrName -> Skc ModSummary
 doMakeOne i total ms hmdl = do
   dflags <- getSessionDynFlags
   let p x = showSDoc dflags (ppr x)
@@ -286,13 +286,15 @@ doMakeOne i total ms hmdl = do
                  Right a -> Just a
                  Left _  -> Nothing
 
-  liftIO
-    (putStrLn
-       (concat [ "; [", show i, "/", show total,  "] compiling "
-               , p (ms_mod_name ms)
-               , " (", fromMaybe "unknown input" (ml_hs_file loc)
-               , ", ", ml_obj_file loc, ")"
-               ]))
+  silent <- fmap envSilent getSkEnv
+  unless silent
+    (liftIO
+       (putStrLn
+          (concat [ "; [", show i, "/", show total,  "] compiling "
+                  , p (ms_mod_name ms)
+                  , " (", fromMaybe "unknown input" (ml_hs_file loc)
+                  , ", ", ml_obj_file loc, ")"
+                  ])))
 
   tc <- tcHsModule (Just (ms_hspp_file ms)) True hmdl
   ds <- desugarModule tc

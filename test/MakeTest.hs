@@ -39,7 +39,8 @@ buildFile pre paths =
   before_ (removeArtifacts odir) $
   describe ("files " ++ intercalate ", " paths) $
     it "should compile successfully" $ do
-      ret <- runSkc (pre >> make' targets False Nothing) initialSkEnv
+      ret <- runSkc (pre >> make' targets False Nothing)
+                    (initialSkEnv {envSilent = True})
       ret `shouldBe` Right ()
   where
     targets = map (\path -> (path, Nothing)) paths

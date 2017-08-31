@@ -82,6 +82,8 @@ data SkEnv = SkEnv
    , envDebug :: Bool
      -- | Modules to import to context.
    , envContextModules :: [String]
+     -- | Flag for controling informative output.
+   , envSilent :: Bool
    }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.

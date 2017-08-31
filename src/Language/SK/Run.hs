@@ -114,7 +114,8 @@ initialSkEnv = SkEnv
   { envMacros = specialForms
   , envDefaultMacros = specialForms
   , envDebug = False
-  , envContextModules = ["Prelude", "Language.SK"] }
+  , envContextModules = ["Prelude", "Language.SK"]
+  , envSilent = False }
 
 compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
 compileWithSymbolConversion file = go
