@@ -34,8 +34,6 @@ mkTest :: FilePath -> Spec
 mkTest path = do
   let mkRef = runIO . newIORef . error
   tmpdir <- runIO getTemporaryDirectory
-  mdlRef <- mkRef "mdlRef"
-  spRef <- mkRef "spRef"
   skORef <- mkRef "skORef"
   hsORef <- mkRef "hsORef"
   let dotO = tmpdir </> "a.out"
@@ -44,9 +42,7 @@ mkTest path = do
       runDotO = readProcessWithExitCode dotO [] ""
   beforeAll_ (removeArtifacts syndir) $ describe path $ do
     it "should type check" $ do
-      (result, mdl, sp) <- readCode path
-      writeIORef mdlRef mdl
-      writeIORef spRef sp
+      (result, _mdl, _sp) <- readCode path
       result `shouldBe` True
 
     it "should compile with skc" $ do
@@ -60,19 +56,15 @@ mkTest path = do
       ecode `shouldBe` ExitSuccess
 
     it "should emit Haskell source" $ do
-      mbMdl <- readIORef mdlRef
-      mbSp <- readIORef spRef
-      case (mbMdl, mbSp) of
-        (Just mdl, Just sp) -> do
-          et_src <- runSkc (genHsSrc sp (Hsrc mdl)) initialSkEnv
-          case et_src of
-            Left err -> do
-              let msg = "code generation failed:\n"
-              expectationFailure (msg ++ err)
-            Right src -> do
-              writeFile dotHs src
-              src `shouldNotBe` ""
-        _ -> "" `shouldNotBe` ""
+      let gen = do
+            (mdl, sp) <- compileWithSymbolConversion path
+            genHsSrc sp (Hsrc mdl)
+      src <- runSkc gen initialSkEnv
+      case src of
+        Right src' -> do
+          writeFile dotHs src'
+          src' `shouldNotBe` ""
+        Left err -> expectationFailure err
 
     it "should compile resulting Haskell code" $ do
       let args = ["exec", "ghc", "--", "-o", dotO, dotHs]

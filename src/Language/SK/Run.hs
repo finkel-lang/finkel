@@ -9,7 +9,7 @@ module Language.SK.Run
   , skErrorHandler
   , compileSkModule
   , compileSkModuleForm
-  , compileAndEmit
+  , compileWithSymbolConversion
   , parseSexprs
   , buildHsSyn
   , mkModSummary
@@ -36,7 +36,6 @@ import Data.Time (getCurrentTime)
 
 -- Internal
 import Language.SK.Builder (HModule)
-import Language.SK.Emit
 import Language.SK.Form
 import Language.SK.GHC
 import Language.SK.SKC
@@ -117,11 +116,33 @@ initialSkEnv = SkEnv
   , envDebug = False
   , envContextModules = ["Prelude", "Language.SK"] }
 
-compileAndEmit :: FilePath -> IO (Either String String)
-compileAndEmit file = runSkc go initialSkEnv
+compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
+compileWithSymbolConversion file = go
   where
-    go = do (mdl, st) <- compileSkModule file
-            genHsSrc st (Hsrc mdl)
+    go = do
+      contents <- liftIO (BL.readFile file)
+      (form, st) <- parseSexprs (Just file) contents
+      form' <- withExpanderSettings (expands form)
+      mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
+      return (mdl, st)
+
+asHaskellSymbols :: Code -> Code
+asHaskellSymbols = f1
+  where
+    f1 orig@(LForm (L l form)) =
+      case form of
+        List forms         -> li (List (map f1 forms))
+        HsList forms       -> li (HsList (map f1 forms))
+        Atom (ASymbol sym) -> li (Atom (ASymbol (f2 sym)))
+        _                  -> orig
+      where
+        li = LForm . (L l)
+    f2 sym
+      | headFS sym `elem` "!@#$%^&*-=+<>?/" = sym
+      | otherwise = fsLit (replace (unpackFS sym))
+    replace = map (\x -> case x of
+                           '-' -> '_'
+                           _   -> x)
 
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =

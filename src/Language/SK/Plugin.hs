@@ -139,7 +139,7 @@ hsrc o = do
     [(x, _)] -> return x
     []  -> failS "hsrc: No input file"
     _   -> failS "hsrc: Multiple input files not supported."
-  (mdl, sp) <- compileSkModule file
+  (mdl, sp) <- compileWithSymbolConversion file
   when (performTypecheck o)
        (void (tcHsModule (Just file) False mdl))
   hssrc <- genHsSrc sp (Hsrc mdl)
