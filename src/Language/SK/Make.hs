@@ -6,7 +6,7 @@ module Language.SK.Make
   ) where
 
 -- base
-import Control.Monad (unless)
+import Control.Monad (unless, void)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.List (find)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -28,8 +28,8 @@ import System.Directory (doesFileExist)
 
 -- filepath
 import System.FilePath ( dropExtension, pathSeparator
-                       , replaceExtension , takeExtension
-                       , (<.>), (</>))
+                       , replaceExtension , splitExtension
+                       , takeExtension, (<.>), (</>))
 
 -- internal
 import Language.SK.Form
@@ -173,7 +173,12 @@ make' not_yet_compiled readys0 pendings0 = do
     -- HsModule. Input could be SK source code, Haskell source code, or
     -- something else. If SK source code or Haskell source code, get
     -- ModSummary to resolve the dependencies.
-    go acc i k nycs (target@(tsr,mbp):summarised) pendings =
+    go acc i k nycs (target@(tsr,mbp):summarised) pendings = do
+
+      -- Since skc make is not using 'DriverPipeline.runPipeline',
+      -- setting 'DynFlags.dumpPrefix' manually.
+      setDumpPrefix (targetSourcePath tsr)
+
       case tsr of
         SkSource path _mn form reqs -> do
           hmdl <- compileSkModuleForm' form
@@ -197,13 +202,14 @@ make' not_yet_compiled readys0 pendings0 = do
              then go acc i k nycs summarised (target:pendings)
              else do
                let act = mapM (getModSummary' . mkModuleName) reqs
-               compileIfReady summary hmdl imports (catMaybes <$> act)
+                   act' = catMaybes <$> act
+               compileIfReady summary hmdl imports act'
 
-        HsSource _ -> do
+        HsSource _path -> do
           (Just summary, Just hmdl) <- compileInput (tsr,mbp)
           let imports = map import_name (hsmodImports hmdl)
-          debugIO (putStrLn (concat [ ";;; target=", show target
-                                    , " imports=", show imports]))
+          debugIO (putStrLn (concat [";;; target=", show target
+                                    ," imports=", show imports]))
           compileIfReady summary hmdl imports (return [])
 
         OtherSource _ -> do
@@ -285,7 +291,6 @@ doMakeOne i total ms hmdl = do
       e2mb x = case x of
                  Right a -> Just a
                  Left _  -> Nothing
-
   silent <- fmap envSilent getSkEnv
   unless silent
     (liftIO
@@ -295,7 +300,6 @@ doMakeOne i total ms hmdl = do
                   , " (", fromMaybe "unknown input" (ml_hs_file loc)
                   , ", ", ml_obj_file loc, ")"
                   ])))
-
   tc <- tcHsModule (Just (ms_hspp_file ms)) True hmdl
   ds <- desugarModule tc
   _ds' <- loadModule ds
@@ -559,6 +563,14 @@ doLink mgraph = do
   case linkResult of
     Failed    -> failS "Error during linking"
     Succeeded -> return ()
+
+-- | Set 'dumpPrefix' from file path.
+setDumpPrefix :: GhcMonad m => FilePath -> m ()
+setDumpPrefix path = do
+  dflags0 <- getSessionDynFlags
+  let (basename, _suffix) = splitExtension path
+      dflags1 = dflags0 { dumpPrefix = Just (basename ++ ".")}
+  void (setSessionDynFlags dflags1)
 
 sortTargets :: [ModSummary] -> [TargetUnit] -> [TargetUnit]
 sortTargets summaries targets = foldr f [] summaries

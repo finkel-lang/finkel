@@ -97,9 +97,19 @@ skcBuildHooks debug pkg_descr lbi hooks flags =
   build pkg_descr lbi' flags (allSuffixHandlers hooks)
     where
       lbi' = lbi {withPrograms = updateProgram ghc (withPrograms lbi)}
-      ghc = (simpleConfiguredProgram "ghc" (FoundOnSystem "skc")) {
-        programOverrideArgs = ["--sk-debug" | debug]
-      }
+      ghc =
+        case lookupProgram (simpleProgram "ghc") (withPrograms lbi) of
+          Just ghc_orig ->
+            ghc_orig {
+                programLocation = FoundOnSystem "skc",
+                programOverrideArgs =
+                  debugs ++ programOverrideArgs ghc_orig
+            }
+          Nothing ->
+            (simpleConfiguredProgram "ghc" (FoundOnSystem "skc")) {
+              programOverrideArgs = debugs
+            }
+      debugs = ["--sk-debug"|debug]
 
 -- | Haddock hooks using @stack exec skc@ for preprocessing ".sk"
 -- files.
