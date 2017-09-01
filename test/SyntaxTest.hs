@@ -5,8 +5,11 @@
 --
 module SyntaxTest (syntaxTests) where
 
+import Control.Monad (when)
 import Data.IORef (newIORef, readIORef, writeIORef)
-import System.Directory (getTemporaryDirectory)
+import System.Directory ( doesFileExist
+                        , getTemporaryDirectory
+                        , removeFile )
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode)
@@ -35,24 +38,29 @@ mkTest :: FilePath -> Spec
 mkTest path = do
   let mkRef = runIO . newIORef . error
       skEnv = initialSkEnv {envSilent = True}
+      removeWhenExist file = do
+        exist <- doesFileExist file
+        when exist (removeFile file)
   tmpdir <- runIO getTemporaryDirectory
   skORef <- mkRef "skORef"
   hsORef <- mkRef "hsORef"
-  let dotO = tmpdir </> "a.out"
+  let aDotOut = tmpdir </> "a.out"
       dotHs = tmpdir </> "tmp.hs"
+      dotTix = "a.out.tix"
       syndir = "test" </> "data" </> "syntax"
-      runDotO = readProcessWithExitCode dotO [] ""
+      runDotO = readProcessWithExitCode aDotOut [] ""
   beforeAll_ (removeArtifacts syndir) $ describe path $ do
     it "should type check" $ do
       (result, _mdl, _sp) <- readCode path
       result `shouldBe` True
 
     it "should compile with skc" $ do
-      let task = make [(path, Nothing)] False (Just dotO)
+      let task = make [(path, Nothing)] False (Just aDotOut)
       ret <- runSkc task skEnv
       ret `shouldBe` Right ()
 
-    it "should compile executable via skc successfully" $ do
+    it "should run executable compiled with skc" $ do
+      removeWhenExist dotTix
       (ecode, stdout, _stderr) <- runDotO
       writeIORef skORef stdout
       ecode `shouldBe` ExitSuccess
@@ -69,13 +77,13 @@ mkTest path = do
         Left err -> expectationFailure err
 
     it "should compile resulting Haskell code" $ do
-      let args = ["exec", "ghc", "--", "-o", dotO, dotHs]
+      let args = ["exec", "ghc", "--", "-o", aDotOut, dotHs]
       (ecode, _, stderr) <- readProcessWithExitCode "stack" args ""
       case stderr of
         [] -> ecode `shouldBe` ExitSuccess
         _  -> expectationFailure stderr
 
-    it "should run executable compiled with ghc successfully" $ do
+    it "should run executable compiled with ghc" $ do
       (ecode, stdout, _stderr) <- runDotO
       writeIORef hsORef stdout
       ecode `shouldBe` ExitSuccess
