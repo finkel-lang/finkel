@@ -21,27 +21,29 @@ import Distribution.Simple.Program.Db (updateProgram)
 import Distribution.Simple.Program.Types
   ( ConfiguredProgram(..)
   , ProgramLocation(..)
-  , simpleConfiguredProgram)
+  , simpleConfiguredProgram )
 
 
 main :: IO ()
-main = defaultMainWithHooks myHooks where
-  myHooks = simpleUserHooks {buildHook = myBuildHooks}
-  myBuildHooks pkg_descr lbi hooks flags =
-    build pkg_descr lbi' flags (allSuffixHandlers hooks)
-      where
-        lbi' = lbi {withPrograms =
-                      updateProgram happy
-                        (updateProgram alex (withPrograms lbi))}
-        alex = alex' { programOverrideArgs = ["--ghc"] }
-        alex' = simpleConfiguredProgram "alex" (FoundOnSystem "alex")
-        happy = happy' { programOverrideArgs = ["-a", "-c", "-g"]
-                         -- Happy can take `--strict' flag, which adds
-                         -- strictness to happy parser.
-                         --
-                         -- ["-a", "-c", "-g", "--strict"]
-                       }
-        happy' = simpleConfiguredProgram "happy" (FoundOnSystem "happy")
-  allSuffixHandlers hooks =
-    overridesPP (hookedPreProcessors hooks) knownSuffixHandlers
-      where overridesPP = unionBy ((==) `on` fst)
+main = defaultMainWithHooks myHooks
+  where
+    myHooks = simpleUserHooks {buildHook = myBuildHooks}
+    myBuildHooks pkg_descr lbi hooks flags =
+      build pkg_descr lbi' flags (allSuffixHandlers hooks)
+        where
+          lbi' = lbi {withPrograms =
+                        updateProgram happy
+                          (updateProgram alex (withPrograms lbi))}
+          alex = alex' { programOverrideArgs = ["--ghc"] }
+          alex' = simpleConfiguredProgram "alex" (FoundOnSystem "alex")
+          happy = happy' { programOverrideArgs = ["-a", "-c", "-g"]
+                           -- Happy can take `--strict' flag, which adds
+                           -- strictness to happy parser.
+                           --
+                           -- ["-a", "-c", "-g", "--strict"]
+                         }
+          happy' =
+            simpleConfiguredProgram "happy" (FoundOnSystem "happy")
+    allSuffixHandlers hooks =
+      overridesPP (hookedPreProcessors hooks) knownSuffixHandlers
+        where overridesPP = unionBy ((==) `on` fst)
