@@ -329,13 +329,18 @@ specialForms =
 --
 -- ---------------------------------------------------------------------
 
--- | Add modules used during macro expansion to current context.
+-- | Set state for macro expansion.
+--
+-- Add modules used during macro expansion to current context, and set
+-- some DynFlags fields.
 setExpanderSettings :: Skc ()
 setExpanderSettings = do
-  flags <- getSessionDynFlags
-  _ <- setSessionDynFlags (flags { hscTarget = HscInterpreted
-                                 , ghcLink = LinkInMemory
-                                 , optLevel = 0 })
+  flags0 <- getSessionDynFlags
+  let flags1 = flags0 { hscTarget = HscInterpreted
+                      , ghcLink = LinkInMemory
+                      , optLevel = 0 }
+      flags2 = gopt_unset flags1 Opt_Hpc
+  _ <- setSessionDynFlags flags2
   contextModules <- envContextModules <$> getSkEnv
   setContext (map (mkIIDecl . fsLit) contextModules)
 

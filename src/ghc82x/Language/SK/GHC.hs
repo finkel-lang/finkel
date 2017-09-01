@@ -121,6 +121,7 @@ module Language.SK.GHC
     HscTarget(..),
     Language(..),
     gopt,
+    gopt_unset,
     languageExtensions,
     parseDynamicFilePragma,
     xopt,
