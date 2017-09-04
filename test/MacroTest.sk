@@ -10,10 +10,10 @@
 (defmacro m1 (x)
   `(++ "m1 " ,x))
 
-(defn: macroTests Spec ()
+(defn (macroTests Spec) ()
   (describe "List" listTests))
 
-(defn: listTests Spec ()
+(defn (listTests Spec) ()
   (do (let ((= d describe)
             (= l1 '(a b c))))
       (d "cons"

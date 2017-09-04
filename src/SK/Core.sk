@@ -116,21 +116,24 @@
   (return (list 'defmacro* name args
                 (list 'return body0))))
 
-;;; Macro for defining simple function, or, an alias of `='. This macro
-;;; preserves the location of function name, arguments, and body.
+;;; Macro for defining simple function. This macro preserves the
+;;; location of function name, arguments, and body.
 (define-macro defn form
   (case (unLocLForm form)
-    (List [_ name args body]) (return `(= ,name ,@args ,body))
-    _                         (skSrcError form
-                                          (++ "`defn': invalid form:\n"
-                                              (show form)))))
-
-;;; Macro for defining function and type signature in single form.
-(defmacro defn: (name tsig args body)
-  `(begin
-     (:: ,name ,tsig)
-     (= ,name ,@args
-       ,body)))
+    (List [_ sig args body])
+    (return (case (unLocLForm sig)
+              ;; Declaration with type signature.
+              (List [name tsig]) `(begin
+                                    (:: ,name ,tsig)
+                                    (= ,name ,@args
+                                      ,body))
+              ;; Declaration without type signature.
+              (Atom _)           `(= ,sig ,@args
+                                    ,body)))
+    _
+    (skSrcError form
+                (++ "`defn': invalid form:\n"
+                    (show form)))))
 
 ;;; Macro for expanding macro. This version of `macroexpand' recursively
 ;;; expands all sub forms.

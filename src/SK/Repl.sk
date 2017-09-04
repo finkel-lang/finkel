@@ -95,7 +95,7 @@
 
 ;;;; Main
 
-(defn: replMain (IO ()) ()
+(defn (replMain (IO ())) ()
   (do (<- in-mv newEmptyMVar)
       (<- out-mv newEmptyMVar)
       (let ((= skc (runSkc (eval-loop in-mv out-mv) repl-env))))
