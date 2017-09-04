@@ -2,10 +2,10 @@
 
 (module SK.Core)
 
-(require Language.SK.Macro)
+(require Language.SK.Expand)
 
 (import Language.SK)
-(import Language.SK.Macro)
+(import Language.SK.Expand)
 
 
 ;;; Macro to specify the phases of evaluation.
@@ -47,7 +47,7 @@
                           (: y _) (LForm (L l' (List xs)))))
       _               (LForm (L l (List [])))))
 
-  (:: cons (=> (Codish a) (-> a Code Code)))
+  (:: cons (=> (Homoiconic a) (-> a Code Code)))
   (= cons x (LForm (L l0 xs))
     (let ((= x' (toCode x))
           (= l1 (getLoc (unLForm x'))))

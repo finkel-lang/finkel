@@ -30,9 +30,9 @@
 (import Language.SK)            ; sk-kernel
 (import Language.SK.Builder)
 (import Language.SK.Eval)
+(import Language.SK.Expand)
 (import Language.SK.GHC)
 (import Language.SK.Lexer)
-(import Language.SK.Macro)
 (import Language.SK.Reader)
 (import Language.SK.Run)
 (import Language.SK.Syntax)
