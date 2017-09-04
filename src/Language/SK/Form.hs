@@ -32,8 +32,11 @@ module Language.SK.Form
   , fsLit
   ) where
 
--- From base
-import Data.Data
+-- base
+import Data.Data (Data, Typeable)
+
+-- deepseq
+import Control.DeepSeq (NFData(..))
 
 -- Internal
 import Language.SK.GHC
@@ -76,6 +79,17 @@ instance Show Atom where
       AFractional f -> fl_text f
       AComment _ -> ""
 
+instance NFData Atom where
+  rnf x =
+    case x of
+      AUnit -> ()
+      ASymbol fs -> seq fs ()
+      AChar c -> seq c ()
+      AString str -> rnf str
+      AInteger i -> rnf i
+      AFractional y -> seq y ()
+      AComment str -> rnf str
+
 -- | Form type. Also used as token. Elements of recursive structures
 -- contain location information.
 data Form a
@@ -84,14 +98,6 @@ data Form a
   | HsList [LForm a] -- ^ Haskell list.
   | TEnd             -- ^ End of token.
   deriving (Eq, Data, Typeable)
-
-newtype LForm a = LForm {unLForm :: Located (Form a)}
-  deriving (Data, Typeable)
-
-instance Eq a => Eq (LForm a) where
-  LForm (L _ a) == LForm (L _ b) = a == b
-
-type Code = LForm Atom
 
 instance Show a => Show (Form a) where
   show form =
@@ -104,9 +110,6 @@ instance Show a => Show (Form a) where
       mkList open xs close =
         open ++ unwords (map (show . unLocLForm) xs) ++ close
 
-instance Show a => Show (LForm a) where
-  show (LForm (L _ a)) = show a
-
 instance Functor Form where
   fmap f form =
     case form of
@@ -115,8 +118,13 @@ instance Functor Form where
       HsList xs -> HsList (map (fmap f) xs)
       TEnd -> TEnd
 
-instance Functor LForm where
-  fmap f (LForm (L l a)) = LForm (L l (fmap f a))
+instance NFData a => NFData (Form a) where
+  rnf x =
+    case x of
+      Atom a -> rnf a
+      List as -> rnf as
+      HsList as -> rnf as
+      TEnd -> ()
 
 instance Foldable Form where
   foldr f z form =
@@ -132,8 +140,27 @@ instance Foldable Form where
           []   -> z
           y:ys -> foldr f (foldr f z (unLocLForm y)) (HsList ys)
 
+-- | Newtype wrapper for located 'Form'.
+newtype LForm a = LForm {unLForm :: Located (Form a)}
+  deriving (Data, Typeable)
+
+instance Eq a => Eq (LForm a) where
+  LForm (L _ a) == LForm (L _ b) = a == b
+
+instance Show a => Show (LForm a) where
+  show (LForm (L _ a)) = show a
+
+instance NFData a => NFData (LForm a) where
+  rnf (LForm (L l a)) = rnf l `seq` rnf a
+
+instance Functor LForm where
+  fmap f (LForm (L l a)) = LForm (L l (fmap f a))
+
 instance Foldable LForm where
   foldr f z (LForm (L _ form)) = foldr f z form
+
+-- | Type synonym for code data.
+type Code = LForm Atom
 
 aSymbol :: String -> Atom
 aSymbol = ASymbol . fsLit
