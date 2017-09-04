@@ -5,13 +5,10 @@
 --
 
 module Language.SK
-  ( module Language.SK.Codish
-  , module Language.SK.Form
-  , module Language.SK.Macro
-  , module Language.SK.SKC
+  ( module All
   ) where
 
-import Language.SK.Codish
-import Language.SK.Form
-import Language.SK.Macro
-import Language.SK.SKC
+import Language.SK.Expand as All
+import Language.SK.Form as All
+import Language.SK.Homoiconic as All
+import Language.SK.SKC as All

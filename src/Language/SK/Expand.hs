@@ -1,7 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Module for macros.
-module Language.SK.Macro
+-- | Module for macro expansion.
+module Language.SK.Expand
   ( expand
   , expands
   , setExpanderSettings
@@ -20,7 +20,7 @@ import Unsafe.Coerce (unsafeCoerce)
 import qualified Data.Map as Map
 
 -- Internal
-import Language.SK.Codish
+import Language.SK.Homoiconic
 import Language.SK.Eval
 import Language.SK.Form
 import Language.SK.GHC
@@ -104,7 +104,7 @@ isUnquoteSplice (LForm form) =
       -> True
     _ -> False
 
-unquoteSplice :: Codish a => a -> [Code]
+unquoteSplice :: Homoiconic a => a -> [Code]
 unquoteSplice form =
   case unLocLForm (toCode form) of
     List xs   -> xs

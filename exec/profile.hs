@@ -4,8 +4,8 @@ import Control.Monad.IO.Class (MonadIO(..))
 import System.Environment (getArgs)
 import qualified Data.ByteString.Lazy as BL
 
+import qualified Language.SK.Expand as Expand
 import qualified Language.SK.Lexer as Lexer
-import qualified Language.SK.Macro as Macro
 import qualified Language.SK.Reader as Reader
 import qualified Language.SK.Run as Run
 import qualified Language.SK.Syntax as Syntax
@@ -41,7 +41,7 @@ parseHsModule path =
         case Lexer.evalSP Reader.sexprs (Just path) contents of
           Right forms -> do
             expanded <-
-              Macro.withExpanderSettings (Macro.expands forms)
+              Expand.withExpanderSettings (Expand.expands forms)
             case Syntax.evalBuilder Syntax.parseModule expanded of
               Right _   -> liftIO (putStrLn "done.")
               Left  err -> liftIO (putStrLn ("error: " ++ err))

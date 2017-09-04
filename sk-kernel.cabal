@@ -34,13 +34,13 @@ library
   exposed-modules:     Distribution.Simple.SK
                        Language.SK
                        Language.SK.Builder
-                       Language.SK.Codish
                        Language.SK.Emit
                        Language.SK.Eval
+                       Language.SK.Expand
                        Language.SK.Form
                        Language.SK.GHC
+                       Language.SK.Homoiconic
                        Language.SK.Lexer
-                       Language.SK.Macro
                        Language.SK.Make
                        Language.SK.Plugin
                        Language.SK.Reader

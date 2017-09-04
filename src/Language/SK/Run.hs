@@ -36,12 +36,12 @@ import Data.Time (getCurrentTime)
 
 -- Internal
 import Language.SK.Builder (HModule)
+import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.GHC
 import Language.SK.SKC
 import Language.SK.Syntax
 import Language.SK.Lexer
-import Language.SK.Macro
 import Language.SK.Reader
 
 

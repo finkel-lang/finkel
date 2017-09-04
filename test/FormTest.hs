@@ -5,7 +5,7 @@ import Data.List (isPrefixOf, isSubsequenceOf)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Test.Hspec
 
-import Language.SK.Codish
+import Language.SK.Homoiconic
 import Language.SK.Form
 import Language.SK.Lexer
 import Language.SK.Reader
@@ -41,29 +41,30 @@ formTests = do
   lengthTest 1 "()"
   lengthTest 8 "[a (b (c d e) [f g]) h]"
 
-  codishTest (AInteger 42)
-  codishTest ()
-  codishTest 'x'
-  codishTest "string"
-  codishTest (42 :: Int)
-  codishTest (42 :: Integer)
-  codishTest (0.123456789 :: Double)
-  codishTest (1.234 :: Float)
-  codishTest ([1,2,3] :: [Int])
-  codishTest (Atom (AInteger 42))
-  codishTest (parseE "(foo bar buzz)")
+  homoiconicTest (AInteger 42)
+  homoiconicTest ()
+  homoiconicTest 'x'
+  homoiconicTest "string"
+  homoiconicTest (42 :: Int)
+  homoiconicTest (42 :: Integer)
+  homoiconicTest (0.123456789 :: Double)
+  homoiconicTest (1.234 :: Float)
+  homoiconicTest ([1,2,3] :: [Int])
+  homoiconicTest (Atom (AInteger 42))
+  homoiconicTest (parseE "(foo bar buzz)")
 
-  codishTest [True, False]
-  codishTest [EQ, LT, GT]
-  codishTest (Just (42 :: Int))
-  codishTest [Just 'a', Nothing, Just 'b']
-  codishTest [Right True, Left "foo"]
-  codishTest (Just 'x', [Right False, Left "foo"])
-  codishTest (Just 'x', [Right False, Left "foo"], EQ)
-  codishTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int))
-  codishTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int), False)
-  codishTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
-             ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
+  homoiconicTest [True, False]
+  homoiconicTest [EQ, LT, GT]
+  homoiconicTest (Just (42 :: Int))
+  homoiconicTest [Just 'a', Nothing, Just 'b']
+  homoiconicTest [Right True, Left "foo"]
+  homoiconicTest (Just 'x', [Right False, Left "foo"])
+  homoiconicTest (Just 'x', [Right False, Left "foo"], EQ)
+  homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int))
+  homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
+                 ,False)
+  homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
+                 ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
 
 readShow :: String -> Spec
 readShow str =
@@ -116,8 +117,8 @@ lengthTest n str =
    it ("should be " ++ show n) $
      length (parseE str) `shouldBe` n
 
-codishTest :: (Eq a, Show a, Codish a) => a -> Spec
-codishTest x =
+homoiconicTest :: (Eq a, Show a, Homoiconic a) => a -> Spec
+homoiconicTest x =
   describe ("to/from code " ++ show x) $ do
    it "should match the input" $
      case fromCode (toCode x) of

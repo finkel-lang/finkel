@@ -1,9 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Module containing 'Codish' typeclass and its instances
+-- | Module containing 'Homoiconic' typeclass and its instances
 -- declarations.
-module Language.SK.Codish
-  ( Codish(..)
+module Language.SK.Homoiconic
+  ( Homoiconic(..)
   ) where
 
 import Language.SK.GHC
@@ -12,14 +12,14 @@ import Language.SK.Form
 
 -- -------------------------------------------------------------------
 --
--- Codish type class
+-- Homoiconic type class
 --
 -- -------------------------------------------------------------------
 
 --- Instance data types of Formable class could be inserted to
 --- S-expression with `unquote' and `unquote-splice'.
 
-class Codish a where
+class Homoiconic a where
   toCode :: a -> Code
 
   fromCode :: Code -> Maybe a
@@ -36,14 +36,14 @@ class Codish a where
                       HsList as -> mapM fromCode as
                       _         -> Nothing
 
-instance Codish () where
+instance Homoiconic () where
   toCode _ = LForm (genSrc (Atom AUnit))
   fromCode a =
     case unLocLForm a of
       Atom AUnit -> Just ()
       _          -> Nothing
 
-instance Codish Char where
+instance Homoiconic Char where
   toCode = LForm . genSrc . Atom . AChar
   fromCode a =
     case unLocLForm a of
@@ -54,48 +54,48 @@ instance Codish Char where
                      Atom (AString s) -> Just s
                      _                -> Nothing
 
-instance Codish Int where
+instance Homoiconic Int where
   toCode = LForm . genSrc . Atom . AInteger . fromIntegral
   fromCode a =
     case unLocLForm a of
       Atom (AInteger n) -> Just (fromIntegral n)
       _                 -> Nothing
 
-instance Codish Integer where
+instance Homoiconic Integer where
   toCode = LForm . genSrc . Atom . AInteger
   fromCode a =
     case unLocLForm a of
       Atom (AInteger n) -> Just n
       _                 -> Nothing
 
-instance Codish Float where
+instance Homoiconic Float where
   toCode = realFracToCode
   fromCode = codeToFractional
 
-instance Codish Double where
+instance Homoiconic Double where
   toCode = realFracToCode
   fromCode = codeToFractional
 
-instance Codish a => Codish [a] where
+instance Homoiconic a => Homoiconic [a] where
   toCode = listToCode
   fromCode = listFromCode
 
-instance Codish Atom where
+instance Homoiconic Atom where
   toCode = LForm . genSrc . Atom
   fromCode a =
     case unLocLForm a of
       Atom x -> Just x
       _      -> Nothing
 
-instance Codish (Form Atom) where
+instance Homoiconic (Form Atom) where
   toCode = LForm . genSrc
   fromCode = Just . unLocLForm
 
-instance Codish (LForm Atom) where
+instance Homoiconic (LForm Atom) where
   toCode = id
   fromCode = Just
 
-instance Codish Bool where
+instance Homoiconic Bool where
   toCode = showAsSymbolCode
   fromCode a =
     case unLocLForm a of
@@ -103,7 +103,7 @@ instance Codish Bool where
                          | sym == "False" -> Just False
       _                                   -> Nothing
 
-instance Codish Ordering where
+instance Homoiconic Ordering where
   toCode = showAsSymbolCode
   fromCode a =
     case unLocLForm a of
@@ -112,7 +112,7 @@ instance Codish Ordering where
                          | sym == "GT" -> Just GT
       _                                -> Nothing
 
-instance Codish a => Codish (Maybe a) where
+instance Homoiconic a => Homoiconic (Maybe a) where
   toCode a =
     case a of
       Nothing -> toCode (aSymbol "Nothing")
@@ -123,7 +123,7 @@ instance Codish a => Codish (Maybe a) where
       List [LForm (L _ (Atom (ASymbol "Just"))), x] -> Just (fromCode x)
       _                                             -> Nothing
 
-instance (Codish a, Codish b) => Codish (Either a b) where
+instance (Homoiconic a, Homoiconic b) => Homoiconic (Either a b) where
   toCode a =
     case a of
       Right x -> toCode (List [symbolCode "Right", toCode x])
@@ -135,7 +135,7 @@ instance (Codish a, Codish b) => Codish (Either a b) where
         | x == "Left"  -> fmap Left (fromCode y)
       _                -> Nothing
 
-instance (Codish a, Codish b) => Codish (a, b) where
+instance (Homoiconic a, Homoiconic b) => Homoiconic (a, b) where
   toCode (a1, a2) =
     toCode (List [symbolCode ",", toCode a1, toCode a2])
   fromCode a =
@@ -145,7 +145,8 @@ instance (Codish a, Codish b) => Codish (a, b) where
            fromCode a1 <*> fromCode a2
       _ -> Nothing
 
-instance (Codish a, Codish b, Codish c) => Codish (a, b, c) where
+instance (Homoiconic a, Homoiconic b, Homoiconic c)
+         => Homoiconic (a, b, c) where
   toCode (a1, a2, a3) =
     toCode (List [symbolCode ",", toCode a1, toCode a2, toCode a3])
   fromCode a =
@@ -155,8 +156,8 @@ instance (Codish a, Codish b, Codish c) => Codish (a, b, c) where
            fromCode a1 <*> fromCode a2 <*> fromCode a3
       _ -> Nothing
 
-instance (Codish a, Codish b, Codish c, Codish d)
-         => Codish (a, b, c, d) where
+instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d)
+         => Homoiconic (a, b, c, d) where
   toCode (a1, a2, a3, a4) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4])
@@ -167,8 +168,9 @@ instance (Codish a, Codish b, Codish c, Codish d)
            fromCode a1 <*> fromCode a2 <*> fromCode a3 <*> fromCode a4
       _ -> Nothing
 
-instance (Codish a, Codish b, Codish c, Codish d, Codish e)
-         => Codish (a, b, c, d, e) where
+instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d,
+          Homoiconic e)
+         => Homoiconic (a, b, c, d, e) where
   toCode (a1, a2, a3, a4, a5) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4, toCode a5])
@@ -180,8 +182,9 @@ instance (Codish a, Codish b, Codish c, Codish d, Codish e)
            fromCode a4 <*> fromCode a5
       _ -> Nothing
 
-instance (Codish a, Codish b, Codish c, Codish d, Codish e, Codish f)
-         => Codish (a, b, c, d, e, f) where
+instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d,
+          Homoiconic e, Homoiconic f)
+         => Homoiconic (a, b, c, d, e, f) where
   toCode (a1, a2, a3, a4, a5, a6) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4, toCode a5, toCode a6])

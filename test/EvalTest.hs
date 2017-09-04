@@ -7,7 +7,7 @@ import Test.Hspec
 
 import Language.SK.Eval (evalExpr)
 import Language.SK.Lexer (evalSP)
-import Language.SK.Macro (expands, withExpanderSettings)
+import Language.SK.Expand (expands, withExpanderSettings)
 import Language.SK.Reader (sexprs)
 import Language.SK.Run (buildHsSyn, initialSkEnv, runSkc)
 import Language.SK.SKC (failS)
