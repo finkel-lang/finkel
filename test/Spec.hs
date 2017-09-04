@@ -2,9 +2,7 @@
 module Main where
 
 import MacroTest
+import Test.Hspec
 
 main :: IO ()
-main =
-  if all id [f1, f2 21 == 42]
-    then putStrLn "Success"
-    else error "Test failure"
+main = hspec macroTests

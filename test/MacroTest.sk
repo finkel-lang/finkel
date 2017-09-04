@@ -2,11 +2,29 @@
 
 (require SK.Core)
 
-(module MacroTest f1 f2)
+(module MacroTest macroTests)
 
-(:: f1 Bool)
-(defn f1 ()
-  True)
+(import Test.Hspec)
+(import SK.User)
 
-(defn: f2 (-> Int Int) (n)
-  (* n 2))
+(defmacro m1 (x)
+  `(++ "m1 " ,x))
+
+(defn: macroTests Spec ()
+  (describe "List" listTests))
+
+(defn: listTests Spec ()
+  (do (let ((= d describe)
+            (= l1 '(a b c))))
+      (d "cons"
+         (it (++ "should be '" (show l1))
+             (shouldBe (cons 'a '(b c)) l1)))
+      (d "car"
+         (it "should be 'a"
+             (shouldBe (car l1) 'a)))
+      (d "cdr"
+         (it "should be '(b c)"
+             (shouldBe (cdr l1) '(b c))))
+      (d "defmacro"
+         (it "should be \"m1 foo\""
+             (shouldBe (m1 "foo") "m1 foo")))))
