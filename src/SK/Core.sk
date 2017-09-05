@@ -151,3 +151,17 @@
 (defmacro cond body
   `(case ()
      _ (| ,@body)))
+
+;;; 'True' when given 'Code' is a 'List', otherwise 'False'.
+(defn (list? (-> Code Bool))
+  ((LForm (L _ form)))
+  (case form
+    (List _) True
+    _        False))
+
+;;; 'True' when given 'Code' is an 'Atom', otherwise 'False'.
+(defn (atom? (-> Code Bool))
+  ((LForm (L _ form)))
+  (case form
+    (Atom _) True
+    _        False))

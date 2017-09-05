@@ -1,8 +1,8 @@
 -- | Main entry point of SK tests.
 module Main where
 
-import MacroTest
+import CoreTest
 import Test.Hspec
 
 main :: IO ()
-main = hspec macroTests
+main = hspec coreTests

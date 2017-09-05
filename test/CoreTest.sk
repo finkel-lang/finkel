@@ -1,0 +1,54 @@
+;;;; Module to test macros.
+
+(require SK.Core)
+
+(module CoreTest coreTests)
+
+(import Test.Hspec)
+(import Test.QuickCheck)
+(import SK.User)
+
+(eval-when (compile load)
+ (defmacro m1 (x)
+   `(++ "m1 " ,x)))
+
+(defn (coreTests Spec) ()
+  (do (describe "List" listTests)
+      (describe "Macro" macTests)))
+
+(defn (listTests Spec) ()
+  (do (let ((= d describe)))
+      (d "car of (cons x xs)"
+         (it "should be x"
+             (let ((:: f (-> Code Code Property))
+                   (= f x xs
+                     (==> (list? xs) (== x (car (cons x xs))))))
+               (property f))))
+      (d "cdr of (cons x xs)"
+         (it "should be xs"
+             (let ((:: f (-> Code Code Property))
+                   (= f x xs
+                     (==> (list? xs) (== xs (cdr (cons x xs))))))
+               (property f))))
+      (d "list of x, y, and z"
+         (it "should be a list"
+             (let ((:: f (-> Int Char String Bool))
+                   (= f x y z
+                     (list? (list x y z))))
+               (property f))))
+      (d "length of atom"
+         (it "should be 1"
+             (let ((:: f (-> Code Property))
+                   (= f x
+                     (==> (atom? x) (== 1 (length x)))))
+               (property f))))))
+
+(defn (macTests Spec) ()
+  (do (let ((= d describe)))
+      (d "(m1 \"foo\")"
+         (it "should be \"m1 foo\""
+             (shouldBe (m1 "foo") "m1 foo")))
+      (d "(macroexpand ...)"
+         (it "shoulde expand to function declaration"
+             (shouldBe (macroexpand '(defn foo (a b) (+ a b)))
+                       '(= foo a b (+ a b)))))))
