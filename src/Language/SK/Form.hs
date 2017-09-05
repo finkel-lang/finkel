@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 -- | Form and Atom data.
 module Language.SK.Form
   ( -- * The S-expression form
@@ -9,6 +10,7 @@ module Language.SK.Form
 
   , aFractional
   , aSymbol
+  , nil
   , symbolName
   , symbolNameFS
   , toListL
@@ -33,10 +35,17 @@ module Language.SK.Form
   ) where
 
 -- base
+import Data.Char (isAlphaNum, isLetter)
 import Data.Data (Data, Typeable)
+import GHC.Generics (Generic)
 
 -- deepseq
 import Control.DeepSeq (NFData(..))
+
+-- QuickCheck
+import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
+                       , arbitraryASCIIChar, elements, listOf
+                       , oneof, scale, suchThat, variant )
 
 -- Internal
 import Language.SK.GHC
@@ -57,7 +66,7 @@ data Atom
   | AInteger Integer
   | AFractional FractionalLit
   | AComment String
-  deriving (Eq, Data, Typeable)
+  deriving (Eq, Data, Typeable, Generic)
 
 instance Show Atom where
   show x =
@@ -82,13 +91,48 @@ instance Show Atom where
 instance NFData Atom where
   rnf x =
     case x of
-      AUnit -> ()
-      ASymbol fs -> seq fs ()
-      AChar c -> seq c ()
-      AString str -> rnf str
-      AInteger i -> rnf i
+      AUnit         -> ()
+      ASymbol fs    -> seq fs ()
+      AChar c       -> seq c ()
+      AString str   -> rnf str
+      AInteger i    -> rnf i
       AFractional y -> seq y ()
-      AComment str -> rnf str
+      AComment str  -> rnf str
+
+instance Arbitrary Atom where
+   -- XXX: Unicode symbols, characters, and strings are not supported
+   -- yet.
+  arbitrary =
+    oneof [ return AUnit
+          , aSymbol <$> symbolG
+          , AChar <$> (suchThat arbitraryASCIIChar isAlphaNum)
+          , AString <$> stringG
+          , AInteger <$> arbitrary
+          , aFractional <$> (arbitrary :: Gen Double)
+          ]
+    where
+      headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "!$%&*+./:<=>?@^_|~"
+      tailChars = headChars ++ "0123456789'-"
+      symbolG = do
+        x <- elements headChars
+        xs <- listOf (elements tailChars)
+        return (x:xs)
+      stringG = listOf (suchThat arbitraryASCIIChar
+                                 (\c -> isAlphaNum c || isLetter c))
+
+instance CoArbitrary Atom where
+  coarbitrary x =
+    case x of
+      AUnit         -> var 0
+      ASymbol sym   -> var 1 . coarbitrary (unpackFS sym)
+      AChar c       -> var 2 . coarbitrary c
+      AString str   -> var 3 . coarbitrary str
+      AInteger i    -> var 4 . coarbitrary i
+      AFractional d -> var 5 . coarbitrary (fl_value d)
+      AComment str  -> var 6 . coarbitrary str
+    where
+      var :: Int -> Gen a -> Gen a
+      var = variant
 
 -- | Form type. Also used as token. Elements of recursive structures
 -- contain location information.
@@ -97,18 +141,26 @@ data Form a
   | List [LForm a]   -- ^ S-expression list.
   | HsList [LForm a] -- ^ Haskell list.
   | TEnd             -- ^ End of token.
-  deriving (Eq, Data, Typeable)
+  deriving (Eq, Data, Typeable, Generic)
 
 instance Show a => Show (Form a) where
-  show form =
+  showsPrec _ form s =
     case form of
-      Atom a -> show a
-      List xs -> mkList "(" xs ")"
-      HsList xs -> mkList "[" xs "]"
-      TEnd -> "TEnd"
+      Atom a    -> show a ++ s
+      List xs | null xs   -> "nil" ++ s
+              | otherwise -> showL '(' ')' xs s
+      HsList xs | null xs   -> "[]" ++ s
+                | otherwise -> showL '[' ']' xs s
+      TEnd      -> "TEnd" ++ s
     where
-      mkList open xs close =
-        open ++ unwords (map (show . unLocLForm) xs) ++ close
+      showL open close xs next =
+        case xs of
+          []    -> open : close : next
+          x:xs' -> open : shows x (showL' close xs' next)
+      showL' close xs next =
+        case xs of
+          []   -> close : next
+          y:ys -> ' ' : shows y (showL' close ys next)
 
 instance Functor Form where
   fmap f form =
@@ -117,14 +169,6 @@ instance Functor Form where
       List xs -> List (map (fmap f) xs)
       HsList xs -> HsList (map (fmap f) xs)
       TEnd -> TEnd
-
-instance NFData a => NFData (Form a) where
-  rnf x =
-    case x of
-      Atom a -> rnf a
-      List as -> rnf as
-      HsList as -> rnf as
-      TEnd -> ()
 
 instance Foldable Form where
   foldr f z form =
@@ -140,9 +184,40 @@ instance Foldable Form where
           []   -> z
           y:ys -> foldr f (foldr f z (unLocLForm y)) (HsList ys)
 
+instance NFData a => NFData (Form a) where
+  rnf x =
+    case x of
+      Atom a    -> rnf a
+      List as   -> rnf as
+      HsList as -> rnf as
+      TEnd      -> ()
+
+instance Arbitrary a => Arbitrary (Form a) where
+  arbitrary =
+    oneof [Atom <$> arbitrary
+          ,List <$> listOf (scale (`div` 2) arbitrary)
+          ,HsList <$> listOf (scale (`div` 2) arbitrary)]
+  shrink x =
+    case x of
+      Atom _    -> []
+      List xs   -> map unLocLForm xs ++ [List xs'|xs' <- shrink xs]
+      HsList xs -> map unLocLForm xs ++ [HsList xs'|xs' <- shrink xs]
+      TEnd      -> []
+
+instance CoArbitrary a => CoArbitrary (Form a) where
+  coarbitrary x =
+    case x of
+      Atom y    -> var 0 . coarbitrary y
+      List ys   -> var 1 . coarbitrary ys
+      HsList ys -> var 2 . coarbitrary ys
+      TEnd      -> var 3
+    where
+      var :: Int -> Gen a -> Gen a
+      var = variant
+
 -- | Newtype wrapper for located 'Form'.
 newtype LForm a = LForm {unLForm :: Located (Form a)}
-  deriving (Data, Typeable)
+  deriving (Data, Typeable, Generic)
 
 instance Eq a => Eq (LForm a) where
   LForm (L _ a) == LForm (L _ b) = a == b
@@ -150,18 +225,25 @@ instance Eq a => Eq (LForm a) where
 instance Show a => Show (LForm a) where
   show (LForm (L _ a)) = show a
 
-instance NFData a => NFData (LForm a) where
-  rnf (LForm (L l a)) = rnf l `seq` rnf a
-
 instance Functor LForm where
   fmap f (LForm (L l a)) = LForm (L l (fmap f a))
 
 instance Foldable LForm where
   foldr f z (LForm (L _ form)) = foldr f z form
 
+instance NFData a => NFData (LForm a) where
+  rnf (LForm (L l a)) = rnf l `seq` rnf a
+
+instance Arbitrary a => Arbitrary (LForm a) where
+  arbitrary = (LForm . L skSrcSpan) <$> arbitrary
+
+instance CoArbitrary a => CoArbitrary (LForm a) where
+  coarbitrary (LForm (L _ form)) = coarbitrary form
+
 -- | Type synonym for code data.
 type Code = LForm Atom
 
+-- | Auxiliary function to construct 'ASymbol' atom.
 aSymbol :: String -> Atom
 aSymbol = ASymbol . fsLit
 
@@ -170,20 +252,26 @@ aSymbol = ASymbol . fsLit
 aFractional :: (Real a, Show a) => a -> Atom
 aFractional x = AFractional $! FL (show x) (toRational x)
 
+-- | A form with empty 'List'.
+nil :: Code
+nil = LForm (genSrc (List []))
+
 -- | String representation of located data.
 showLoc :: LForm a -> String
-showLoc (LForm (L l _)) = case l of
-      RealSrcSpan r ->
-        unpackFS (srcSpanFile r) ++ ":" ++
-        show (srcSpanStartLine r) ++ ":" ++
-        show (srcSpanStartCol r) ++ ": "
-      UnhelpfulSpan fs -> unpackFS fs ++ ": "
+showLoc (LForm (L l _)) =
+  case l of
+    RealSrcSpan r    ->
+      unpackFS (srcSpanFile r) ++ ":" ++
+      show (srcSpanStartLine r) ++ ":" ++
+      show (srcSpanStartCol r) ++ ": "
+    UnhelpfulSpan fs -> unpackFS fs ++ ": "
 
 -- | Extract string from given atom when the atom was 'ASymbol',
 -- otherwise error.
 symbolName :: Code -> String
 symbolName = unpackFS . symbolNameFS
 
+-- | Like 'symbolName', but returns 'FastString'.
 symbolNameFS :: Code -> FastString
 symbolNameFS (LForm (L _ (Atom (ASymbol name)))) = name
 symbolNameFS x = error ("symbolName: got " ++ show x)

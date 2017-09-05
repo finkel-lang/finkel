@@ -48,6 +48,7 @@ library
                        Language.SK.SKC
                        Language.SK.Syntax
   build-depends:       Cabal >= 2.0
+                     , QuickCheck
                      , array
                      , base >= 4.7 && < 5
                      , bytestring
@@ -98,7 +99,8 @@ test-suite sk-kernel-test
                        FormTest
                        MakeTest
                        SyntaxTest
-  build-depends:       base
+  build-depends:       QuickCheck
+                     , base
                      , bytestring
                      , sk-kernel
                      , filepath
