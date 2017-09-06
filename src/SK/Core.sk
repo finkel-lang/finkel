@@ -32,28 +32,13 @@
 
 ;;; Functions used for defining macros in this file.
 (eval-when (compile load)
-  (:: car (-> Code Code))
-  (= car (LForm (L l code))
-    (case code
-      (List (: x _xs)) x
-      _                (LForm (L l (List [])))))
-
-  (:: cdr (-> Code Code))
-  (= cdr (LForm (L l code))
-    (case code
-      (List (: x xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
-                        (case xs
-                          []      (LForm (L l' (List [])))
-                          (: y _) (LForm (L l' (List xs)))))
-      _               (LForm (L l (List [])))))
-
   (:: cons (=> (Homoiconic a) (-> a Code Code)))
   (= cons x (LForm (L l0 xs))
     (let ((= x' (toCode x))
           (= l1 (getLoc (unLForm x'))))
-      (LForm (case xs
-               (List xs') (L l1 (List (: x' xs')))
-               _          (L l1 (List [x'])))))))
+      (LForm (L l1 (case xs
+                     (List xs') (List (: x' xs'))
+                     _          (List [x'])))))))
 
 ;;; Below `list' is defined as macro, since Haskell does not support
 ;;; vararg function (actually, vararg is doable in GHC, but requires
@@ -113,8 +98,8 @@
 ;;; ... etc. Currently does not suuport lambda-list like pattern match
 ;;; in macro argument.
 (defmacro* defmacro (name args body0)
-  (return (list 'defmacro* name args
-                (list 'return body0))))
+  (return `(defmacro* ,name ,args
+             (return ,body0))))
 
 ;;; Macro for defining simple function. This macro preserves the
 ;;; location of function name, arguments, and body.
@@ -152,16 +137,45 @@
   `(case ()
      _ (| ,@body)))
 
-;;; 'True' when given 'Code' is a 'List', otherwise 'False'.
+(defn (car (-> Code Code))
+    ((LForm (L l code)))
+  (case code
+    (List (: x _xs)) x
+    _                (LForm (L l (List [])))))
+
+(defn (cdr (-> Code Code))
+    ((LForm (L l code)))
+  (case code
+    (List (: x xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
+                      (case xs
+                        []      (LForm (L l' (List [])))
+                        (: y _) (LForm (L l' (List xs)))))
+    _               (LForm (L l (List [])))))
+
+;;; 'True' when given 'Code' is a 'List'.
 (defn (list? (-> Code Bool))
-  ((LForm (L _ form)))
+    ((LForm (L _ form)))
   (case form
     (List _) True
     _        False))
 
-;;; 'True' when given 'Code' is an 'Atom', otherwise 'False'.
+;;; 'True' when given 'Code' is an 'Atom'.
 (defn (atom? (-> Code Bool))
-  ((LForm (L _ form)))
+    ((LForm (L _ form)))
   (case form
     (Atom _) True
     _        False))
+
+;;; 'True' when given 'Code' is an atom of 'Symbol'.
+(defn (symbol? (-> Code Bool))
+    ((LForm (L _ form)))
+  (case form
+    (Atom (ASymbol _)) True
+    _                  False))
+
+(defn (mapcar (-> (-> Code Code) Code Code))
+    (f (@ form (LForm (L l lst))))
+  (case lst
+    (List xs)   (LForm (L l (List (map f xs))))
+    (HsList xs) (LForm (L l (HsList (map f xs))))
+    _           (error (++ "mapcar: not a list " (show form)))))

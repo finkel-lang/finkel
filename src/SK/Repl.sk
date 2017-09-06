@@ -172,7 +172,7 @@
 (:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
 (= eval-loop in-mvar out-mvar
   (let ((= init
-          ;; Default target in interactive context is ``HscAsm',
+          ;; Default target in interactive context is `HscAsm',
           ;; updating to `HscInterpreted'.  Also, `dynamic' option is
           ;; enabled in REPL.
           (do (<- hsc-env getSession)
@@ -248,15 +248,13 @@
               (case tt
                 (AnId var) (var-name-and-type dflags (getName var) var)
                 _          (++ "; " (showSDoc dflags (ppr tt)))))
-            (= tystrs (foldr
-                       (\ tt acc
-                         (let ((= nstr
-                                 (showSDoc dflags (ppr (getName tt)))))
-                           (if (== "$trModule" nstr)
-                               acc
-                               (: (pr tt) acc))))
-                       []
-                       tythings))
+            (= show-tything tt acc
+              (let ((= nstr
+                      (showSDoc dflags (ppr (getName tt)))))
+                (if (== "$trModule" nstr)
+                    acc
+                    (: (pr tt) acc))))
+            (= tystrs (foldr show-tything [] tythings))
             (= tystr (unlines tystrs))))
       (return (Right tystr))))
 
