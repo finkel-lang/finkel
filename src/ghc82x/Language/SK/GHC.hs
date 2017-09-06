@@ -140,6 +140,7 @@ module Language.SK.GHC
 
     -- * FastString
     FastString,
+    appendFS,
     fsLit,
     headFS,
     mkFastStringByteString,
@@ -397,7 +398,6 @@ import RdrName
 import SrcLoc
 import StringBuffer
 import TysWiredIn
--- import UniqFM
 import Util
 import Var
 

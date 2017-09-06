@@ -23,6 +23,13 @@
 (defmacro m1 (x y)
   `(putStrLn (concat [,x ", " ,y])))
 
+(define-macro m2 form
+  (where (case form
+           (LForm (L _ (List [_self arg1 arg2])))
+           (return (mkbody arg1 arg2)))
+    (= mkbody x y
+      `(print (+ (:: ,x Int) (:: ,y Int))))))
+
 ;; Simple `let-macro'.
 (let-macro ((m2a form
               (case form
@@ -74,6 +81,7 @@
 (:: main (IO ()))
 (= main
   (do (m1 "Hello" "macro")
+      (m2 11 31)
       (f1 11 20)
       fracmac
       hslistmac))

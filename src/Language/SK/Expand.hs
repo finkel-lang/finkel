@@ -120,26 +120,28 @@ unquoteSplice form =
 -- Macro expansion
 -- ~~~~~~~~~~~~~~~
 --
--- Consider how to support User defined macros. Need to load the form
--- transforming functions defined by the user. May restrict those
--- functions to imported module in current target file. Need to take
--- some kind of GHC environment value to expand macros.
---
--- Hy language separates the loading of modules. For runtime, it's done
--- with `import', for macro expansion time, done with `require'.
+-- Still considering how to support and what shall be supported with
+-- User defined macros. Need to load the form transforming functions
+-- defined by the user. May restrict those functions to imported module
+-- in current target file. Need to take some kind of GHC environment
+-- value to expand macros.
 
 putMacro :: Code -> Code -> Code -> Code -> Skc [Code]
-putMacro form self arg body = do
-  let LForm (L l _) = form
-      LForm (L _ (Atom (ASymbol name))) = self
+putMacro form@(LForm (L l _)) self arg body = do
+  let LForm (L _ (Atom (ASymbol name))) = self
+      name' = appendFS (fsLit "__") name
   expanded <- expand body
-  let expr = tList l [tSym l "\\", arg, expanded]
-      expr' = tList l [tSym l "Macro", expr]
-  case evalBuilder parseExpr [expr'] of
+  let decls = [tList l [ tSym l "::", self, tSym l "Macro"]
+              ,tList l [ tSym l "=", self, expr]]
+      expr = tList l [ tSym l "let", tList l [tsig, fn]
+                     , tList l [tSym l "Macro", tSym l name']]
+      tsig = tList l [ tSym l "::", tSym l name'
+                     , tList l [tSym l "->", tSym l "Code"
+                               ,tList l [tSym l "Skc", tSym l "Code"]]]
+      fn = tList l [tSym l "=", tSym l name', arg, expanded]
+  case evalBuilder parseExpr [expr] of
     Right hexpr -> do
       macro <- evalExpr hexpr
-      let decls = [tList l [tSym l "::", self, tSym l "Macro"]
-                  ,tList l [tSym l "=", self, expr']]
       insertMacro name (unsafeCoerce macro)
       return decls
     Left err -> skSrcError form err
@@ -415,8 +417,8 @@ expand form =
   case unLForm form of
     L l (List forms) ->
       case forms of
-        -- Expand `let' expression, `case' expression, function binding,
-        -- and lambda, with shadowing the lexically bounded
+        -- Expand `let' expression, `case' expression, lambda expression
+        -- and function binding with shadowing the lexically bounded
         -- names. Expansion of other forms are done without name
         -- shadowing.
         kw@(LForm (L _ (Atom (ASymbol x)))):y:rest

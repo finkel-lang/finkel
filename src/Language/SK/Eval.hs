@@ -46,9 +46,9 @@ evalExpr expr = do
 evalDecls :: [HDecl] -> Skc ([TyThing], InteractiveContext)
 evalDecls decls = do
   -- Mostly doing similar works done in `HscMain.hscDeclsWithLocation',
-  -- but this function is wrapped with 'Skc' instead of 'Hsc'. Also,
-  -- 'hscDeclsWithlocation' is not exported, and takes 'String' of
-  -- declarations codes as argument.
+  -- but this function is wrapped with 'Skc' instead of 'Hsc'. And takes
+  -- list of 'HDecl' instead of 'String' of declarations codes as
+  -- argument.
   hsc_env <- getSession
   tc_gblenv <- ioMsgMaybe (tcRnDeclsi hsc_env decls)
   let defaults = tcg_default tc_gblenv
