@@ -1,13 +1,10 @@
 ;;;; Default module imported to REPL context.
 
 (module SK.User
-  (module Prelude)
-  (module Language.SK)
-  (module SK.Core)
-  (module SK.Repl.Env)
-  (module SK.Repl.Macro))
+  (module All))
 
-(import Language.SK)
-(import SK.Core)
-(import SK.Repl.Env)
-(import SK.Repl.Macro)
+(import (Prelude as All))
+(import (Language.SK as All))
+(import (SK.Core as All))
+(import (SK.Repl.Env as All))
+(import (SK.Repl.Macro as All))
