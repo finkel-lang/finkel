@@ -17,6 +17,8 @@
   ;; HscTypes
   (FixityEnv)
   (InteractiveContext ..)
+  emptyHomePackageTable
+  emptyMG
   extendInteractiveContextWithIds
 
   ;; Id
