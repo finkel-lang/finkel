@@ -31,13 +31,12 @@
 
 ;;; Functions for compiling and loading SK module.
 (eval-when (compile load)
-  (:: mk-ii (-> String InteractiveImport))
-  (= mk-ii name
-    (IIDecl (simpleImportDecl (mkModuleName name))))
-
   (:: mk-ii-fs (-> FastString InteractiveImport))
   (= mk-ii-fs name
     (IIDecl (simpleImportDecl (mkModuleNameFS name))))
+
+  (:: mk-ii (-> String InteractiveImport))
+  (= mk-ii (. mk-ii-fs fsLit))
 
   (:: code->mb-string (-> Code (Maybe String)))
   (= code->mb-string code

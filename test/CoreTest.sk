@@ -9,8 +9,8 @@
 (import SK.User)
 
 (eval-when (compile load)
- (defmacro m1 (x)
-   `(++ "m1 " ,x)))
+  (defmacro m1 (x)
+    `(++ "m1 " ,x)))
 
 (defn (coreTests Spec) ()
   (do (describe "List" listTests)
@@ -51,4 +51,13 @@
       (d "(macroexpand ...)"
          (it "shoulde expand to function declaration"
              (shouldBe (macroexpand '(defn foo (a b) (+ a b)))
-                       '(= foo a b (+ a b)))))))
+                       '(= foo a b (+ a b)))))
+
+      ;; XXX: `macrolet' not working with code coverage.
+      ;;
+      ;; (macrolet ((m1 (a b) `(+ ,a ,b))
+      ;;            (m2 (a b) `(* ,a ,b)))
+      ;;   (d "macrolet"
+      ;;      (it "should be 42"
+      ;;          (shouldBe (m1 (m2 3 4) (m2 5 6)) 42))))
+      ))

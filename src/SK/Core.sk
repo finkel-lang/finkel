@@ -50,48 +50,50 @@
       (List (: _ args)) (return (body args))
       _                 (skSrcError form "list: invalid args"))))
 
+(eval-when (compile load)
+  ;;; Function to make body expression of macro-defining-macros.
+  (:: make-macro-body (-> String Code Code Code Code (Skc Code)))
+  (= make-macro-body label whole name arg body
+    (let ((= atom-body arg body form-name
+            (if (== arg '())
+                body
+                `(case ,form-name
+                   (LForm (L _ (List (: _ ,arg)))) ,body)))
+          (= list-body l1 name arg body form-name
+            (let ((= hlist xs
+                    (LForm (L l1 (HsList xs))))
+                  (= err
+                    `(skSrcError ,form-name
+                                 (concat
+                                  [(show ',name) [\lf]
+                                   "invalid args: `"
+                                   (show *form*) "'"])))
+                  (= abind
+                    (list 'LForm
+                          (list 'L '_loc
+                                (list 'List (hlist (: '_ arg)))))))
+              `(case ,form-name
+                 ,abind  ,body
+                 _       ,err))))
+      (case (unLForm arg)
+        (L l1 (List args)) (return
+                             (list-body l1 name args body '*form*))
+        (L l1 (Atom _))    (return (atom-body arg body '*form*))
+        _                  (skSrcError whole
+                                       (++ label ": invalid args"))))))
+
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
 (define-macro defmacro* form
-  (let ((= make-body name arg body
-          (case (unLForm arg)
-            (L l1 (List arg')) (list-arg l1 name arg' body)
-            (L l1 (Atom arg')) (atom-arg name arg body)
-            _                  (merr "defmacro*: invalid args")))
-        (= atom-arg name arg body
-          (let ((= arg'
-                  (| ((== arg '()) '_unused)
-                     (otherwise    arg))))
-            (return
-              `(define-macro ,name *form*
-                 ,(if (== arg '())
-                      body
-                      `(case *form*
-                         (LForm (L _ (List (: _ ,arg)))) ,body))))))
-        (= list-arg l1 name arg body
-          (let ((= hlist xs
-                  (LForm (L l1 (HsList xs))))
-                (= err
-                  `(skSrcError *form*
-                               (concat
-                                [(show ',name) [\lf]
-                                 "invalid args: `"
-                                 (show *form*) "'"])))
-                (= abind
-                  (list 'LForm
-                        (list 'L '_loc
-                              (list 'List (hlist (: '_ arg))))))
-                (= body2
-                  (list 'define-macro name '*form*
-                        (list 'case '*form*
-                              abind body
-                              '_ err))))
-            (return body2)))
-        (= merr label
-          (skSrcError form label)))
-    (case (unLocLForm form)
-      (List [_ name arg body]) (make-body name arg body)
-      _                        (merr "defmacro*: invalid form"))))
+  (case (unLocLForm form)
+    (List [_ name arg body])
+    (do (<- body2 (make-macro-body "defmacro*" form name arg body))
+        (return
+          `(define-macro ,name *form*
+             ,body2)))
+
+    _
+    (skSrcError form "defmacro*: invalid form")))
 
 ;;; The `defmacro' macro, similar to the macro with same name found in
 ;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy
@@ -100,6 +102,35 @@
 (defmacro* defmacro (name args body0)
   (return `(defmacro* ,name ,args
              (return ,body0))))
+
+(eval-when (compile load)
+  (:: make-macrolets (-> String Code (-> Code Code) (Skc Code)))
+  (= make-macrolets label whole f
+    (let ((= g code
+            (case (unLocLForm code)
+              (List [name arg body])
+              (do (<- body2 (make-macro-body label code name
+                                             arg (f body)))
+                  (return `(,name *form* ,body2)))
+              _ (skSrcError whole label))))
+      (case (unLocLForm whole)
+        (List (: _ (: (LForm (L _ (List forms))) rest)))
+        (do (<- macros (fmap List (mapM g forms)))
+            (return `(let-macro ,macros
+                       ,@rest)))
+        _
+        (skSrcError whole
+                    (concat
+                     [label ": invalid form: " (show whole)]))))))
+
+;;; Variant of `let-macro', with `make-macro-body'.
+(define-macro macrolet* form
+  (make-macrolets "macrolet*" form id))
+
+;;; Variant of `let-macro', with `make-macro-body', and body expression
+;;; wrapped with `return'.
+(define-macro macrolet form
+  (make-macrolets "macrolet" form (\ body `(return ,body))))
 
 ;;; Macro for defining simple function. This macro preserves the
 ;;; location of function name, arguments, and body.
