@@ -6,6 +6,9 @@
   (Way ..)
   addWay'
 
+  ;; GHC
+  getPrintUnqual
+
   ;; GhcMonad
   (Ghc ..)
   (Session ..)
@@ -20,11 +23,17 @@
   emptyHomePackageTable
   emptyMG
   extendInteractiveContextWithIds
+  tyThingParent_maybe
 
   ;; Id
   (Id)
 
+  ;; InstEnv
+  pprInstance
+
   ;; InteractiveEval
+  getInfo
+  parseName
   showModule
 
   ;; Linker
@@ -39,6 +48,21 @@
   getName
   nameOccName
   occNameString
+
+  ;; NameSet
+  elemNameSet
+  mkNameSet
+
+  ;; Outputable
+  (SDoc)
+  $$
+  showSDocForUser
+  text
+  vcat
+
+  ;; PprTyThing
+  pprFamInst
+  pprTyThingInContextLoc
 
   ;; Var
   (Var)
@@ -56,6 +80,7 @@
   ;; GHCi.RemoteTypes
   (ForeignHValue))
 
+(import GHC)
 (import DynFlags)
 (import GhcMonad)
 (import HscMain)                ; ghc
@@ -63,6 +88,9 @@
 (import InteractiveEval)
 (import Linker)
 (import Name)
+(import NameSet)
+(import Outputable)
+(import PprTyThing)
 (import Var)
 
 (import GHCi)                   ; ghci

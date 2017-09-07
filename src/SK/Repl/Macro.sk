@@ -9,6 +9,7 @@
 
 (require Control.Monad)
 (require Data.List)
+(require Data.Maybe)
 (require System.Directory)
 (require System.FilePath)
 (require Language.SK.GHC)
@@ -18,6 +19,7 @@
 
 (import Control.Monad)
 (import Data.List)
+(import Data.Maybe)
 (import System.Directory)
 (import System.FilePath)
 (import Language.SK)
@@ -186,8 +188,8 @@
 
 ;;; Functions for `info' macro.
 (eval-when (compile load)
-  (:: show-context (Skc ()))
-  (= show-context
+  (:: info-context (Skc ()))
+  (= info-context
     (where (do (<- context getContext)
                (<- dflags getSessionDynFlags)
                (liftIO (putStrLn "\n; context:"))
@@ -200,8 +202,8 @@
           (IIModule mname) (putStrLn (++ ";  IIModule: "
                                          (moduleNameString mname)))))))
 
-  (:: show-info (Skc ()))
-  (= show-info
+  (:: info-info (Skc ()))
+  (= info-info
     (liftIO
      (do (putStrLn
           "USAGE: (info COMMANDS)
@@ -222,14 +224,14 @@ COMMANDS:
   paths     - Show paths.
 "))))
 
-  (:: show-linker (Skc ()))
-  (= show-linker
+  (:: info-linker (Skc ()))
+  (= info-linker
     (do (<- hsc-env getSession)
         (liftIO (do (initDynLinker hsc-env)
                     (showLinkerState (hsc_dflags hsc-env))))))
 
-  (:: show-packages (Skc ()))
-  (= show-packages
+  (:: info-packages (Skc ()))
+  (= info-packages
     (do (<- dflags getDynFlags)
         (let ((= pr str
                 (putStrLn (++ ";   " str)))
@@ -240,8 +242,8 @@ COMMANDS:
         (liftIO (do (putStrLn "; packages")
                     (mapM_ pr-flag (packageFlags dflags))))))
 
-  (:: show-paths (Skc ()))
-  (= show-paths
+  (:: info-paths (Skc ()))
+  (= info-paths
     (do (<- dflags getDynFlags)
         (liftIO (do (<- cwd getCurrentDirectory)
                     (putStrLn "\n; current working directory: ")
@@ -254,8 +256,8 @@ COMMANDS:
                                  (putStrLn (++ ";   " ipath)))
                                ipaths))))))
 
-  (:: show-dflags (Skc ()))
-  (= show-dflags
+  (:: info-dflags (Skc ()))
+  (= info-dflags
     (do (<- dflags getDynFlags)
         (let ((= s
                 ["; dflags:"
@@ -269,34 +271,69 @@ COMMANDS:
                   MkDepend    "MkDepend"))))
         (liftIO (putStrLn (intercalate "\n" s)))))
 
-  (:: show-macros (Skc ()))
-  (= show-macros
+  (:: info-macros (Skc ()))
+  (= info-macros
     (do (<- macros getEnvMacros)
         (liftIO (putStrLn "; macros:"))
         (mapM_ (\ m (liftIO (putStrLn (++ ";  " m))))
                (macroNames macros))))
 
-  (:: show-modules (Skc ()))
-  (= show-modules
+  (:: info-modules (Skc ()))
+  (= info-modules
     (do (<- graph0 getModuleGraph)
         (<- graph1 (filterM (. isLoaded ms_mod_name) graph0))
         (let ((= show-one m
                 (>>= (showModule m) (. liftIO putStrLn)))))
-        (mapM_ show-one graph1))))
+        (mapM_ show-one graph1)))
+
+  ;; Mostly translated from `GHCi.UI.infoThing'.
+  (:: info-name (-> Code (Skc Code)))
+  (= info-name thing
+    (do (<- unqual getPrintUnqual)
+        (<- dflags getDynFlags)
+        (<- sdoc (info-thing True (show thing)))
+        (liftIO (putStrLn (showSDocForUser dflags unqual sdoc)))
+        (return '(begin))))
+
+  (:: info-thing (-> Bool String (Skc SDoc)))
+  (= info-thing all-info str
+    (do (<- names (parseName str))
+        (<- mb_stuffs (mapM (getInfo all-info) names))
+        (let ((= filtered (filter-out-children
+                           (\ (, t _f _ci _fi) t)
+                           (catMaybes mb_stuffs)))
+              (= ppr-info (, thing fixity cls-insts fam-insts)
+                ($$ (pprTyThingInContextLoc thing)
+                    ($$ (vcat (map pprInstance cls-insts))
+                        (vcat (map pprFamInst fam-insts)))))))
+        (return (vcat (intersperse (text "")
+                                   (map ppr-info filtered))))))
+
+  (:: filter-out-children (-> (-> a TyThing) [a] [a]))
+  (= filter-out-children get-thing xs
+    (let ((= all-names (mkNameSet (map (. getName get-thing) xs)))
+          (= has-parent x
+            (case (tyThingParent_maybe (get-thing x))
+              (Just p) (elemNameSet (getName p) all-names)
+              Nothing  False)))
+      (filter (. not has-parent) xs))))
 
 (defmacro* info (form)
   (let ((= go sym
-          (case (unpackFS sym)
-            "context"  show-context
-            "dflags"   show-dflags
-            "linker"   show-linker
-            "macros"   show-macros
-            "modules"  show-modules
-            "packages" show-packages
-            "paths"    show-paths
-            _          show-info))
+          (do (case (unpackFS sym)
+                "context"  info-context
+                "dflags"   info-dflags
+                "linker"   info-linker
+                "macros"   info-macros
+                "modules"  info-modules
+                "packages" info-packages
+                "paths"    info-paths
+                _          info-info)
+              (return '(begin))))
         (= err
           (skSrcError form (++ "info: invalid form: " (show form)))))
     (case (unLocLForm form)
-      (Atom (ASymbol sym)) (>> (go sym) (return '(begin)))
+      (Atom (ASymbol sym)) (go sym)
+      (List [q name])      (| ((|| (== q 'quote) (== q 'quasiquote))
+                               (info-name name)))
       _                    err)))
