@@ -260,7 +260,9 @@ m_letMacro form =
       mapM_ addLetMacro forms
       expanded <- expands rest
       putSkEnv sk_env
-      return (tList l1 (tSym l2 "begin":expanded))
+      case expanded of
+        [x] -> return x
+        _   -> return (tList l1 (tSym l2 "begin" : expanded))
     _ -> skSrcError form ("let-macro: malformed args:\n" ++ show form)
   where
     addLetMacro x =
