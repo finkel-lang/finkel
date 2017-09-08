@@ -55,9 +55,9 @@
 
       ;; XXX: `macrolet' not working with code coverage.
       ;;
-      ;; (macrolet ((m1 (a b) `(+ ,a ,b))
-      ;;            (m2 (a b) `(* ,a ,b)))
-      ;;   (d "macrolet"
-      ;;      (it "should be 42"
-      ;;          (shouldBe (m1 (m2 3 4) (m2 5 6)) 42))))
+      (macrolet ((m1 (a b) `(+ ,a ,b))
+                 (m2 (a b) `(* ,a ,b)))
+        (d "macrolet"
+           (it "should be 42"
+               (shouldBe (m1 (m2 3 4) (m2 5 6)) 42))))
       ))

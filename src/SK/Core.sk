@@ -2,12 +2,10 @@
 
 (module SK.Core)
 
-(require Language.SK.Expand)
-
 (import Language.SK)
 (import Language.SK.Expand)
 
-
+
 ;;; Macro to specify the phases of evaluation.
 (define-macro eval-when form
   (let ((= compile? (elem 'compile))
@@ -30,36 +28,17 @@
       _ (skSrcError form (++ "eval-when: invalid form: "
                              (show form))))))
 
-;;; Functions used for defining macros in this file.
 (eval-when (compile load)
-  (:: cons (=> (Homoiconic a) (-> a Code Code)))
-  (= cons x (LForm (L l0 xs))
-    (let ((= x' (toCode x))
-          (= l1 (getLoc (unLForm x'))))
-      (LForm (L l1 (case xs
-                     (List xs') (List (: x' xs'))
-                     _          (List [x'])))))))
-
-;;; Below `list' is defined as macro, since Haskell does not support
-;;; vararg function (actually, vararg is doable in GHC, but requires
-;;; some language extensions).
-(define-macro list form
-  (let ((= codes (map (\ arg (cons 'toCode (cons arg '())))))
-        (= body args `(foldr cons '() [,@(codes args)])))
-    (case (unLocLForm form)
-      (List (: _ args)) (return (body args))
-      _                 (skSrcError form "list: invalid args"))))
-
-(eval-when (compile load)
-  ;;; Function to make body expression of macro-defining-macros.
-  (:: make-macro-body (-> String Code Code Code Code (Skc Code)))
-  (= make-macro-body label whole name arg body
+  ;; Function to make body expression of `defmacro*' and `defmacro'.
+  (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
+  (= make-defmacro-body label whole name arg body
     (let ((= atom-body arg body form-name
             (if (== arg '())
                 body
                 `(case ,form-name
                    (LForm (L _ (List (: _ ,arg)))) ,body)))
-          (= list-body l1 name arg body form-name
+          (:: list-body (-> SrcSpan Code [Code] Code Code Code))
+          (= list-body l1 name args body form-name
             (let ((= hlist xs
                     (LForm (L l1 (HsList xs))))
                   (= err
@@ -69,9 +48,7 @@
                                    "invalid args: `"
                                    (show *form*) "'"])))
                   (= abind
-                    (list 'LForm
-                          (list 'L '_loc
-                                (list 'List (hlist (: '_ arg)))))))
+                    `(LForm (L _loc (List [_ ,@(List args)])))))
               `(case ,form-name
                  ,abind  ,body
                  _       ,err))))
@@ -80,14 +57,35 @@
                              (list-body l1 name args body '*form*))
         (L l1 (Atom _))    (return (atom-body arg body '*form*))
         _                  (skSrcError whole
-                                       (++ label ": invalid args"))))))
+                                       (++ label ": invalid args")))))
+
+  ;; Function to make body expression of `macrolet*' and `macrolet'.
+  (:: make-macrolet-body (-> String Code (-> Code Code) (Skc Code)))
+  (= make-macrolet-body label whole f
+    (let ((:: g (-> Code (Skc Code)))
+          (= g code
+            (case (unLocLForm code)
+              (List [name arg body])
+              (do (<- body2 (make-defmacro-body label code name
+                                                arg (f body)))
+                  (return `(,name *form* ,body2)))
+              _ (skSrcError whole label))))
+      (case (unLocLForm whole)
+        (List (: _ (: (LForm (L _ (List forms))) rest)))
+        (do (<- macros (mapM g forms))
+            (return `(let-macro ,(List macros)
+                       ,@(List rest))))
+        _
+        (skSrcError whole
+                    (concat
+                     [label ": invalid form: " (show whole)]))))))
 
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
 (define-macro defmacro* form
   (case (unLocLForm form)
     (List [_ name arg body])
-    (do (<- body2 (make-macro-body "defmacro*" form name arg body))
+    (do (<- body2 (make-defmacro-body "defmacro*" form name arg body))
         (return
           `(define-macro ,name *form*
              ,body2)))
@@ -103,53 +101,35 @@
   (return `(defmacro* ,name ,args
              (return ,body0))))
 
-(eval-when (compile load)
-  (:: make-macrolets (-> String Code (-> Code Code) (Skc Code)))
-  (= make-macrolets label whole f
-    (let ((= g code
-            (case (unLocLForm code)
-              (List [name arg body])
-              (do (<- body2 (make-macro-body label code name
-                                             arg (f body)))
-                  (return `(,name *form* ,body2)))
-              _ (skSrcError whole label))))
-      (case (unLocLForm whole)
-        (List (: _ (: (LForm (L _ (List forms))) rest)))
-        (do (<- macros (fmap List (mapM g forms)))
-            (return `(let-macro ,macros
-                       ,@rest)))
-        _
-        (skSrcError whole
-                    (concat
-                     [label ": invalid form: " (show whole)]))))))
-
 ;;; Variant of `let-macro', with `make-macro-body'.
 (define-macro macrolet* form
-  (make-macrolets "macrolet*" form id))
+  (make-macrolet-body "macrolet*" form id))
 
 ;;; Variant of `let-macro', with `make-macro-body', and body expression
 ;;; wrapped with `return'.
 (define-macro macrolet form
-  (make-macrolets "macrolet" form (\ body `(return ,body))))
+  (make-macrolet-body "macrolet" form (\ body `(return ,body))))
 
-;;; Macro for defining simple function. This macro preserves the
-;;; location of function name, arguments, and body.
+;;; Macro for defining function. This macro preserves the location of
+;;; function name, arguments, and body. Supports function declaration
+;;; with and without type signature,
 (define-macro defn form
   (case (unLocLForm form)
     (List [_ sig args body])
-    (return (case (unLocLForm sig)
-              ;; Declaration with type signature.
-              (List [name tsig]) `(begin
+    (case (unLocLForm sig)
+      (List [name tsig]) (return `(begin
                                     (:: ,name ,tsig)
                                     (= ,name ,@args
-                                      ,body))
-              ;; Declaration without type signature.
-              (Atom _)           `(= ,sig ,@args
-                                    ,body)))
+                                      ,body)))
+      (Atom _)           (return `(= ,sig ,@args
+                                    ,body))
+      _                  (skSrcError
+                          sig
+                          (concat
+                           ["defn: invalid signature: `"
+                            (show sig) "'"])))
     _
-    (skSrcError form
-                (++ "`defn': invalid form:\n"
-                    (show form)))))
+    (skSrcError form (++ "defn: invalid form:\n" (show form)))))
 
 ;;; Macro for expanding macro. This version of `macroexpand' recursively
 ;;; expands all sub forms.
@@ -167,6 +147,25 @@
 (defmacro cond body
   `(case ()
      _ (| ,@body)))
+
+(eval-when (compile load)
+  (defn (cons (=> (Homoiconic a) (-> a Code Code)))
+      (x (LForm (L l0 xs)))
+    (let ((= x' (toCode x))
+          (= l1 (getLoc (unLForm x'))))
+      (LForm (L l1 (case xs
+                     (List xs') (List (: x' xs'))
+                     _          (List [x'])))))))
+
+;;; Below `list' is defined as macro, since Haskell does not support
+;;; vararg function (actually, vararg is doable in GHC, but requires
+;;; some language extensions).
+(define-macro list form
+  (let ((= codes (map (\ arg (cons 'toCode (cons arg '())))))
+        (= body args `(foldr cons '() [,@(codes args)])))
+    (case (unLocLForm form)
+      (List (: _ args)) (return (body args))
+      _                 (skSrcError form "list: invalid args"))))
 
 (defn (car (-> Code Code))
     ((LForm (L l code)))
@@ -204,6 +203,7 @@
     (Atom (ASymbol _)) True
     _                  False))
 
+;;; Apply given function to immediate elements of `List' and `HsList'.
 (defn (mapcar (-> (-> Code Code) Code Code))
     (f (@ form (LForm (L l lst))))
   (case lst
