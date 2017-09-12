@@ -7,30 +7,25 @@
 
 (module SK.Repl.Macro)
 
-(require Control.Monad)
-(require Data.List)
-(require Data.Maybe)
-(require System.Directory)
-(require System.FilePath)
-(require Language.SK.Builder)
-(require Language.SK.GHC)
-(require Language.SK.Make)
 (require SK.Core)
-(require SK.Repl.GHC)
-
-(import Control.Monad)
-(import Data.List)
-(import Data.Maybe)
-(import System.Directory)
-(import System.FilePath)
-(import Language.SK)
-(import Language.SK.Builder)
-(import Language.SK.GHC)
-(import Language.SK.Make)
 (import SK.Core)
-(import SK.Repl.GHC)
 
+(macrolet ((reqimp (idecl)
+             `(begin
+                (require ,idecl)
+                (import ,idecl))))
+  (reqimp Control.Monad)
+  (reqimp Data.List)
+  (reqimp Data.Maybe)
+  (reqimp System.Directory)
+  (reqimp System.FilePath)
+  (reqimp Language.SK)
+  (reqimp Language.SK.Builder)
+  (reqimp Language.SK.GHC)
+  (reqimp Language.SK.Make)
+  (reqimp SK.Repl.GHC))
 
+
 ;;; Functions for compiling and loading SK module.
 (eval-when (compile load)
   (:: mk-ii-fs (-> FastString InteractiveImport))
@@ -274,7 +269,7 @@ COMMANDS:
 
   (:: info-macros (Skc ()))
   (= info-macros
-    (do (<- macros getEnvMacros)
+    (do (<- macros (fmap envMacros getSkEnv))
         (liftIO (putStrLn "; macros:"))
         (mapM_ (\ m (liftIO (putStrLn (++ ";  " m))))
                (macroNames macros))))
