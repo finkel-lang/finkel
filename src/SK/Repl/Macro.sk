@@ -12,6 +12,7 @@
 (require Data.Maybe)
 (require System.Directory)
 (require System.FilePath)
+(require Language.SK.Builder)
 (require Language.SK.GHC)
 (require Language.SK.Make)
 (require SK.Core)
@@ -23,6 +24,7 @@
 (import System.Directory)
 (import System.FilePath)
 (import Language.SK)
+(import Language.SK.Builder)
 (import Language.SK.GHC)
 (import Language.SK.Make)
 (import SK.Core)
@@ -296,7 +298,7 @@ COMMANDS:
 
   (:: info-thing (-> Bool String (Skc SDoc)))
   (= info-thing all-info str
-    (do (<- names (parseName str))
+    (do (<- names (parse-name str))
         (<- mb_stuffs (mapM (getInfo all-info) names))
         (let ((= filtered (filter-out-children
                            (\ (, t _f _ci _fi) t)
@@ -307,6 +309,16 @@ COMMANDS:
                         (vcat (map pprFamInst fam-insts)))))))
         (return (vcat (intersperse (text "")
                                    (map ppr-info filtered))))))
+
+  (:: parse-name (-> String (Skc [Name])))
+  (= parse-name str
+    (if (elem str ["()" "[]"])
+        (parseName str)
+        (withSession
+         (\ hsc-env
+           (liftIO
+            (let ((= lrdr-name (genSrc (mkRdrName (fsLit str)))))
+              (hscTcRnLookupRdrName hsc-env lrdr-name)))))))
 
   (:: filter-out-children (-> (-> a TyThing) [a] [a]))
   (= filter-out-children get-thing xs

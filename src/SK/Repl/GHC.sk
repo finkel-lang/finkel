@@ -12,6 +12,7 @@
   ;; GhcMonad
   (Ghc ..)
   (Session ..)
+  withSession
 
   ;; HscMain
   hscParsedStmt
