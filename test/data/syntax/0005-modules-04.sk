@@ -6,14 +6,19 @@
 
 (import Data.Char)
 (import System.IO ())
-(import Data.Complex ((Complex ..) realPart imagPart mkPolar))
 (import (Control.Monad as M))
+(import Data.Complex ((Complex ..) realPart imagPart mkPolar))
 (import Data.Ratio hiding (Ratio Rational numerator %))
 
 (import (qualified Data.List))
+(import (qualified Data.Map as Map))
 (import (qualified Data.Maybe as Mb))
 (import (qualified Data.Bits as Bt) (shiftL shiftR))
 (import (qualified System.Environment as Env) hiding (getArgs getEnv))
+
+(:: f1 (Map.Map String Int))
+(= f1
+  (Map.fromList [(, "k1" 1) (, "k2" 2)]))
 
 (:: main (IO ()))
 (= main
@@ -26,4 +31,5 @@
       (print (realPart c))
       (print (imagPart c))
       (print (Bt.shiftL (:: 8 Int) 8))
-      (>>= Env.getProgName putStrLn)))
+      (>>= Env.getProgName putStrLn)
+      (print f1)))

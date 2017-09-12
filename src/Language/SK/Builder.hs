@@ -559,7 +559,9 @@ b_symT :: Code -> HType
 b_symT (LForm (L l (Atom (ASymbol name)))) =
   L l (HsTyVar NotPromoted (L l ty))
   where
-    ty = mkUnqual namespace name
+    ty = case splitQualName name of
+           Nothing   -> mkUnqual namespace name
+           Just qual -> mkQual namespace qual
     namespace =
       case () of
         _ | isUpper x || ':' == x -> tcName
