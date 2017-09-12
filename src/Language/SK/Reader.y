@@ -48,29 +48,29 @@ import Language.SK.Lexer
 
 %%
 
+-- Required modules are added to SPState here. The reason is to support
+-- requiring modules in home package when compiling multiple modules
+-- with "--make" command, to get the modules information before macro
+-- expansion phase.
+
 sexp :: { Code }
-     : atom          { $1 }
-     | 'quote' sexp  { mkQuote $1 $2 }
-     | '`' sexp      { mkQuasiquote $1 $2 }
-     | ',' sexp      { mkUnquote $1 $2 }
-     | ',@' sexp     { mkUnquoteSplice $1 $2 }
-     | '[' sexps ']' { mkHsList $1 $2 }
-     | '(' ')'       { mkUnit $1 }
-     | '(' sexps ')' { mkList $1 $2 }
-     | '#' rmac      { $2 }
+     : atom                   { $1 }
+     | 'quote' sexp           { mkQuote $1 $2 }
+     | '`' sexp               { mkQuasiquote $1 $2 }
+     | ',' sexp               { mkUnquote $1 $2 }
+     | ',@' sexp              { mkUnquoteSplice $1 $2 }
+     | '[' sexps ']'          { mkHsList $1 $2 }
+     | '(' ')'                { mkUnit $1 }
+     | '(' 'require' sexp ')' {% mkRequire $1 $2 $3 }
+     | '(' sexps ')'          { mkList $1 $2 }
+     | '#' rmac               { $2 }
 
 rmac :: { Code }
     : '#' sexp      {% pragma $2 }
     | 'symbol' sexp {% dispatch $1 $2 }
 
--- Required modules are added to SPState here. The reason is, to support
--- requiring modules in home package when compiling multiple modules
--- with "--make" command, to get the modules information before macro
--- expansion phase.
-
 sexps :: { [Code] }
-    : 'require' 'symbol' {% mkRequire $1 $2 }
-    | rsexps             { reverse $1 }
+    : rsexps { reverse $1 }
 
 rsexps :: { [Code] }
        : {- empty -} { [] }
@@ -127,10 +127,13 @@ mkList :: Located Token -> [Code] -> Code
 mkList (L l _) body = li l body
 {-# INLINE mkList #-}
 
-mkRequire :: Located Token -> Located Token -> SP [Code]
-mkRequire t1 t2@(L _ (TSymbol modName)) = do
-  addRequiredModuleName (unpackFS modName)
-  return [mkASymbol t1, mkASymbol t2]
+mkRequire :: Located Token -> Located Token -> Code -> SP Code
+mkRequire lref t1 t2 = do
+  case t2 of
+    LForm (L _ (Atom (ASymbol modName))) ->
+        addRequiredModuleName (unpackFS modName)
+    _ -> return ()
+  return (mkList lref [mkASymbol t1, t2])
 {-# INLINE mkRequire #-}
 
 mkASymbol :: Located Token -> Code
