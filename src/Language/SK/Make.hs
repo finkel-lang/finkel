@@ -480,12 +480,11 @@ compileToHsModule (tsrc, mbphase) =
 -- macros in 'SkEnv'.
 compileSkModuleForm' :: [Code] -> Skc (HsModule RdrName)
 compileSkModuleForm' forms = do
-  skenv <- getSkEnv
+  modifySkEnv (\ske -> ske {envMacros = envDefaultMacros ske})
+  ske <- getSkEnv
   let ii = IIDecl . simpleImportDecl . mkModuleNameFS
-      contextModules = envContextModules skenv
-      macros = envDefaultMacros skenv
+      contextModules = envContextModules ske
   setContext (map (ii . fsLit) contextModules)
-  putEnvMacros macros
   timeIt "HsModule [sk]" (compileSkModuleForm forms)
 
 compileHsFile :: FilePath -> Maybe Phase

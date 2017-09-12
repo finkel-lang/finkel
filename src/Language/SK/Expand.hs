@@ -126,8 +126,9 @@ unquoteSplice form =
 -- in current target file. Need to take some kind of GHC environment
 -- value to expand macros.
 
-putMacro :: Code -> Code -> Code -> Code -> Skc [Code]
-putMacro form@(LForm (L l _)) self arg body = do
+compileMacro :: Code -> Code -> Code -> Code
+         -> Skc (FastString, [Code], Macro)
+compileMacro form@(LForm (L l _)) self arg body = do
   let LForm (L _ (Atom (ASymbol name))) = self
       name' = appendFS (fsLit "__") name
   expanded <- expand body
@@ -142,8 +143,7 @@ putMacro form@(LForm (L l _)) self arg body = do
   case evalBuilder parseExpr [expr] of
     Right hexpr -> do
       macro <- evalExpr hexpr
-      insertMacro name (unsafeCoerce macro)
-      return decls
+      return (name, decls, unsafeCoerce macro)
     Left err -> skSrcError form err
 
 mkIIDecl :: FastString -> InteractiveImport
@@ -240,26 +240,33 @@ m_quasiquote form =
 
 m_defineMacro :: Mfunc
 m_defineMacro form@(LForm (L l _)) = do
-  decls <- add form
+  (name, decls, macro) <- add form
+  insertMacro name macro
   return (tList l (tSym l "begin":decls))
   where
     add x =
       case unLocLForm x of
-        List [_,self,arg,body] -> putMacro x self arg body
+        List [_,self,arg,body] -> compileMacro x self arg body
         _ -> skSrcError form ("define-macro: malformed args:\n" ++
                               show x)
 
--- XXX: When macros defined with `define-macro' have same name, old
--- macros will be overridden by `let-macro'. Need to update the SkEnv to
--- hold the list of macro name-function lookup table ...
 m_letMacro :: Mfunc
 m_letMacro form =
   case unLForm form of
     L l1 (List (_:LForm (L l2 (List forms)):rest)) -> do
-      sk_env <- getSkEnv
-      mapM_ addLetMacro forms
+      sk_env0 <- getSkEnv
+
+      -- Expand body of `let-macro' with temporary macros.
+      macros <- Map.fromList <$> mapM addLetMacro forms
+      let tmpMacros0 = envTmpMacros sk_env0
+      putSkEnv (sk_env0 {envTmpMacros = macros : tmpMacros0})
       expanded <- expands rest
-      putSkEnv sk_env
+
+      -- Getting 'SkEnv' again, so that persistent macros defined inside
+      -- the `let-macro' body could be used hereafter.
+      sk_env1 <- getSkEnv
+      putSkEnv (sk_env1 {envTmpMacros = tmpMacros0})
+
       case expanded of
         [x] -> return x
         _   -> return (tList l1 (tSym l2 "begin" : expanded))
@@ -267,8 +274,10 @@ m_letMacro form =
   where
     addLetMacro x =
       case unLocLForm x of
-        List [self,arg,body] -> putMacro x self arg body
-        _ -> skSrcError x ("malformed macro: " ++ show x)
+        List [self,arg,body] -> do
+          (name, _decl, macro) <- compileMacro x self arg body
+          return (name, macro)
+        _ -> skSrcError x ("let-macro: malformed macro: " ++ show x)
 
 m_require :: Mfunc
 m_require form =
@@ -390,13 +399,15 @@ withShadowing :: [FastString] -- ^ Names of macro to shadow.
               -> Skc a -- ^ Action to perform.
               -> Skc a
 withShadowing toShadow skc = do
-  macros <- getEnvMacros
-  let macros' = Map.filterWithKey f macros
+  ske <- getSkEnv
+  let emacros = envMacros ske
+      tmacros = envTmpMacros ske
       f name _ | name `elem` toShadow = False
                | otherwise            = True
-  putEnvMacros macros'
+  putSkEnv (ske { envMacros = Map.filterWithKey f emacros
+                , envTmpMacros = map (Map.filterWithKey f) tmacros })
   result <- skc
-  putEnvMacros macros
+  putSkEnv ske
   return result
 
 -- | Expands form, with taking care of @begin@ special form.
@@ -475,8 +486,8 @@ expand form =
     expandList l constr forms =
       case forms of
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
-          macros <- getEnvMacros
-          case lookupMacro k macros of
+          ske <- getSkEnv
+          case lookupMacro k ske of
            Just m -> case m of
               Macro f       -> f form >>= expand
               SpecialForm f -> f form >>= expand

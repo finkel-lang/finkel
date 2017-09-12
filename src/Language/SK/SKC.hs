@@ -17,8 +17,6 @@ module Language.SK.SKC
   , putSkEnv
   , modifySkEnv
   , insertMacro
-  , getEnvMacros
-  , putEnvMacros
   , lookupMacro
   , macroNames
   ) where
@@ -76,6 +74,8 @@ type EnvMacros = Map.Map FastString Macro
 data SkEnv = SkEnv
    { -- | Macros accessible in current compilation context.
      envMacros :: EnvMacros
+     -- | Temporary macros in current compilation context.
+   , envTmpMacros :: [EnvMacros]
      -- | Set of macros to reset to, for compilation of each module.
    , envDefaultMacros :: EnvMacros
      -- | Flag to hold debug setting.
@@ -141,14 +141,6 @@ putSkEnv = Skc . put
 modifySkEnv :: (SkEnv -> SkEnv) -> Skc ()
 modifySkEnv f = Skc (get >>= put . f)
 
-getEnvMacros :: Skc EnvMacros
-getEnvMacros = envMacros <$> getSkEnv
-
-putEnvMacros :: EnvMacros -> Skc ()
-putEnvMacros macros = do
-  e <- getSkEnv
-  putSkEnv (e {envMacros=macros})
-
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Skc ()
 insertMacro k v = Skc go
@@ -156,8 +148,13 @@ insertMacro k v = Skc go
     go = modify (\e -> e {envMacros = Map.insert k v (envMacros e)})
 
 -- | Lookup macro by name.
-lookupMacro :: FastString -> EnvMacros -> Maybe Macro
-lookupMacro = Map.lookup
+lookupMacro :: FastString -> SkEnv -> Maybe Macro
+lookupMacro name ske = go (envTmpMacros ske)
+  where
+    go [] = Map.lookup name (envMacros ske)
+    go (t:ts)
+      | Just macro <- Map.lookup name t = Just macro
+      | otherwise = go ts
 
 -- | All macros in given macro environment, filtering out the special
 -- forms.

@@ -78,10 +78,21 @@
   (= hslistmac
     (print (m2 1 2 3))))
 
+(let-macro ((identity-form form
+              (case (unLocLForm form)
+                (List [_ body]) (return body))))
+  (identity-form
+   (define-macro m4 _
+     (return `(putStrLn "m4")))))
+
+(:: m4run (IO ()))
+(= m4run (m4))
+
 (:: main (IO ()))
 (= main
   (do (m1 "Hello" "macro")
       (m2 11 31)
       (f1 11 20)
       fracmac
-      hslistmac))
+      hslistmac
+      m4run))
