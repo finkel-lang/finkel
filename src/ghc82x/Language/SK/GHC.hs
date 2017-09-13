@@ -64,8 +64,6 @@ module Language.SK.GHC
     modInfoExports,
     modInfoTyThings,
     noLoc,
-    placeHolderType,
-    placeHolderNames,
     runGhc,
     setContext,
     setSessionDynFlags,
@@ -310,6 +308,8 @@ module Language.SK.GHC
 
     -- * PlaceHolder
     PlaceHolder(..),
+    placeHolderNames,
+    placeHolderType,
 
     -- * PprTyThing
     pprTyThing,
@@ -320,6 +320,7 @@ module Language.SK.GHC
     mkRdrRecordUpd,
 
     -- * RdrName
+    getRdrName,
     mkQual,
     mkUnqual,
     mkVarUnqual,
@@ -350,8 +351,9 @@ module Language.SK.GHC
     -- * StringBuffer
     stringToStringBuffer,
 
-    -- * TyWiredIn
+    -- * TysWiredIn
     consDataConName,
+    listTyCon,
 
     -- * Util
     getModificationUTCTime,

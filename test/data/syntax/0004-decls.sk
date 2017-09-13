@@ -155,11 +155,22 @@
   (= show (MCs a b)
     (concat ["MCs " (show a) " " (show b)])))
 
+(class (C1 c)
+  (:: c1m1 (-> (c a) String)))
+
+(instance (C1 [])
+  (= c1m1 li
+    (case li
+      [] "null"
+      _  "list")))
+
 (:: s4_3_2 (IO ()))
 (= s4_3_2
   (do (print (fmap (* 2) (MyFnct 21)))
       (print (EmptyContext 42))
-      (print (MCs True \a))))
+      (print (MCs True \a))
+      (putStrLn (c1m1 []))
+      (putStrLn (c1m1 [() () ()]))))
 
 ;;; 4.3.4 Ambiguous Types, and Defaults for Overloaded Numeric Options
 

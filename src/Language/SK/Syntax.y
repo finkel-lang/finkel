@@ -358,7 +358,9 @@ rdecls :: { [HDecl] }
 type :: { HType }
     : 'symbol' { b_symT $1 }
     | 'unit'   { b_unitT $1 }
-    | 'hslist' {% b_listT `fmap` parse p_type [toListL $1] }
+    | 'hslist' {% case toListL $1 of
+                    LForm (L _ (List [])) -> return (b_nilT $1)
+                    xs -> b_listT `fmap` parse p_type [xs] }
     | 'list'   {% parse p_types0 $1 }
 
 types0 :: { HType }

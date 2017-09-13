@@ -588,6 +588,10 @@ b_appT whole@(x:xs) = L l0 (HsParTy (foldl f x xs))
 b_listT :: HType -> HType
 b_listT ty@(L l _) = L l (HsListTy ty)
 
+b_nilT :: Code -> HType
+b_nilT (LForm (L l _)) =
+  L l (HsTyVar NotPromoted (L l (getRdrName listTyCon)))
+
 b_tupT :: Code -> [HType] -> HType
 b_tupT (LForm (L l _)) ts = L l (HsTupleTy HsBoxedTuple ts)
 
