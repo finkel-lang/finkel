@@ -147,15 +147,15 @@ instance Show a => Show (Form a) where
   showsPrec _ form s =
     case form of
       Atom a    -> show a ++ s
-      List xs | null xs   -> "nil" ++ s
-              | otherwise -> showL '(' ')' xs s
-      HsList xs | null xs   -> "[]" ++ s
-                | otherwise -> showL '[' ']' xs s
+      List xs   -> showL (Just "nil") '(' ')' xs s
+      HsList xs -> showL Nothing '[' ']' xs s
       TEnd      -> "TEnd" ++ s
     where
-      showL open close xs next =
+      showL mb_nil open close xs next =
         case xs of
-          []    -> open : close : next
+          []    -> maybe (open : close : next)
+                         (\str -> str ++ next)
+                         mb_nil
           x:xs' -> open : shows x (showL' close xs' next)
       showL' close xs next =
         case xs of
