@@ -7,6 +7,8 @@
   addWay'
 
   ;; GHC
+  (ModuleInfo ..)
+  getGRE
   getPrintUnqual
 
   ;; GhcMonad
@@ -29,6 +31,9 @@
   ;; Id
   (Id)
 
+  ;; IfaceSyn
+  showToHeader
+
   ;; InstEnv
   pprInstance
 
@@ -48,6 +53,8 @@
   (Name)
   getName
   nameOccName
+  nameModule
+  nameSrcSpan
   occNameString
 
   ;; NameSet
@@ -64,6 +71,9 @@
   ;; PprTyThing
   pprFamInst
   pprTyThingInContextLoc
+
+  ;; SrcLoc
+  isGoodSrcSpan
 
   ;; Var
   (Var)
@@ -86,12 +96,14 @@
 (import GhcMonad)
 (import HscMain)                ; ghc
 (import HscTypes)
+(import IfaceSyn)
 (import InteractiveEval)
 (import Linker)
 (import Name)
 (import NameSet)
 (import Outputable)
 (import PprTyThing)
+(import SrcLoc)
 (import Var)
 
 (import GHCi)                   ; ghci

@@ -343,3 +343,48 @@ COMMANDS:
       (List [q name])      (| ((|| (== q 'quote) (== q 'quasiquote))
                                (info-name name)))
       _                    err)))
+
+;;; Simplified version of `GHCi.UI.browseModule'.
+(eval-when (compile load)
+  (:: browse-module (-> Module ModuleInfo (Skc ())))
+  (= browse-module mdl mod-info
+    (do (let ((= names (modInfoExports mod-info))
+              (= sorted-names
+                (++ (loc-sort local) (occ-sort external)))
+              (= (, local external)
+                (partition (. (== mdl) nameModule) names))
+              (= occ-sort (sortBy (on compare nameOccName)))
+              (= loc-sort ns
+                (| ((<- (: n _) ns) (isGoodSrcSpan (nameSrcSpan n))
+                    (sortBy (on compare nameSrcSpan) ns))
+                   (otherwise
+                    (occ-sort ns))))
+              (= pretty
+                (pprTyThing showToHeader))))
+        (<- mb-things (mapM lookupName sorted-names))
+        (<- rdr-env getGRE)
+        (<- dflags getDynFlags)
+        (<- unqual getPrintUnqual)
+        (let ((= things (catMaybes mb-things))
+              (= prettyThings (map pretty things))))
+        (liftIO
+         (putStrLn
+          (showSDocForUser dflags unqual (vcat prettyThings)))))))
+
+;;; Mostly taken from `GHCi.UI.browseCmd'.
+(defmacro* browse (form)
+  (let ((= go name
+          (| ((looksLikeModuleName name)
+              (do (<- mdl (lookupModule (mkModuleName name) Nothing))
+                  (<- mb-mod-info (getModuleInfo mdl))
+                  (case mb-mod-info
+                    Nothing         (liftIO
+                                     (putStrLn
+                                      (++ "unknown module: " name)))
+                    (Just mod-info) (browse-module mdl mod-info))
+                  (return '(begin))))))
+        (= err
+          (skSrcError form (++ "browse: invalid form: " (show form)))))
+    (case (unLocLForm form)
+      (Atom (ASymbol sym)) (go (unpackFS sym))
+      _                    err)))
