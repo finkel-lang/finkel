@@ -10,20 +10,21 @@
 (require SK.Core)
 (import SK.Core)
 
-(macrolet ((reqimp (idecl)
+(macrolet ((use (idecl)
              `(begin
                 (require ,idecl)
                 (import ,idecl))))
-  (reqimp Control.Monad)
-  (reqimp Data.List)
-  (reqimp Data.Maybe)
-  (reqimp System.Directory)
-  (reqimp System.FilePath)
-  (reqimp Language.SK)
-  (reqimp Language.SK.Builder)
-  (reqimp Language.SK.GHC)
-  (reqimp Language.SK.Make)
-  (reqimp SK.Repl.GHC))
+  (use Control.Monad)
+  (use Data.Function)
+  (use Data.List)
+  (use Data.Maybe)
+  (use System.Directory)
+  (use System.FilePath)
+  (use Language.SK)
+  (use Language.SK.Builder)
+  (use Language.SK.GHC)
+  (use Language.SK.Make)
+  (use SK.Repl.GHC))
 
 
 ;;; Functions for compiling and loading SK module.
