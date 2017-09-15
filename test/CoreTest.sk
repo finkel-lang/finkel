@@ -4,6 +4,7 @@
 
 (module CoreTest coreTests)
 
+(import Language.SK.Run)
 (import Test.Hspec)
 (import Test.QuickCheck)
 (import SK.User)
@@ -48,16 +49,23 @@
       (d "(m1 \"foo\")"
          (it "should be \"m1 foo\""
              (shouldBe (m1 "foo") "m1 foo")))
-      (d "(macroexpand ...)"
-         (it "shoulde expand to function declaration"
-             (shouldBe (macroexpand '(defn foo (a b) (+ a b)))
-                       '(= foo a b (+ a b)))))
 
-      ;; XXX: `macrolet' not working with code coverage.
-      ;;
+      (d "expanding defn"
+         (do (let ((= f (macroFunction defn))))
+             (it "should expand to function decl"
+                 (do (<- e (f '(defn foo (a b) (+ a b))))
+                     (shouldBe e (Right '(= foo a b (+ a b))))))
+             (it "should expand to function decl with type sig"
+                 (do (<- e (f '(defn (foo (-> Int Int Int)) (a b)
+                                (+ a b))))
+                     (shouldBe e (Right
+                                  '(begin
+                                    (:: foo (-> Int Int Int))
+                                    (= foo a b
+                                      (+ a b)))))))))
+
       (macrolet ((m1 (a b) `(+ ,a ,b))
                  (m2 (a b) `(* ,a ,b)))
         (d "macrolet"
            (it "should be 42"
-               (shouldBe (m1 (m2 3 4) (m2 5 6)) 42))))
-      ))
+               (shouldBe (m1 (m2 3 4) (m2 5 6)) 42))))))
