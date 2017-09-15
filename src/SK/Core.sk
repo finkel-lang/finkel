@@ -131,15 +131,28 @@
     _
     (skSrcError form (++ "defn: invalid form:\n" (show form)))))
 
+;;; Expand given form if the given form is a macro form, otherwise
+;;; return the given form as is. Note that `macroexpand-1' and
+;;; `macroexpand' are macro, not function.
+(defmacro* macroexpand-1 (form)
+  (case (unLocLForm form)
+    (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
+                     (do (<- expanded (expand1 x))
+                         (return `',expanded))))
+    _            (return form)))
+
 ;;; Macro for expanding macro. This version of `macroexpand' recursively
 ;;; expands all sub forms.
 (defmacro* macroexpand (form)
   (case (unLocLForm form)
     (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
-                     (do (<- expanded (expand x))
-                         (return `',expanded))))
-    _            (skSrcError form (++ "macroexpand: invalid form\n"
-                                      (show form)))))
+                     (let ((= go expr
+                             (do (<- expr' (expand1 expr))
+                                 (if (== expr expr')
+                                     (return `',expr)
+                                     (go expr')))))
+                       (go x))))
+    _            (return form)))
 
 ;;; The `cond' macro, found in many Lisp languages.  The behaviour is
 ;;; same as wrapping the body with `case' expression with dummy unit, or
