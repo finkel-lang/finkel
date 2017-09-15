@@ -39,6 +39,7 @@ library
                      , transformers
                      , sk-kernel >= 0.1.3
   default-language:    Haskell2010
+  ghc-options:       -Wall
 
 executable sk
   -- Ghc option `-dynamic' is mandatory for runtime HValue lookup.

@@ -7,7 +7,7 @@
   addWay'
 
   ;; GHC
-  (ModuleInfo ..)
+  (ModuleInfo)
   getGRE
   getPrintUnqual
 
@@ -97,15 +97,12 @@
 (import HscMain)                ; ghc
 (import HscTypes)
 (import IfaceSyn)
-(import InteractiveEval)
 (import Linker)
 (import Name)
 (import NameSet)
 (import Outputable)
 (import PprTyThing)
-(import SrcLoc)
 (import Var)
 
 (import GHCi)                   ; ghci
 (import GHCi.Message)
-(import GHCi.RemoteTypes)

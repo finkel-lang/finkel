@@ -3,7 +3,6 @@
 (module SK.Core)
 
 (import Language.SK)
-(import Language.SK.Expand)
 
 
 ;;; Macro to specify the phases of evaluation.
@@ -31,31 +30,32 @@
 (eval-when (compile load)
   ;; Function to make body expression of `defmacro*' and `defmacro'.
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
-  (= make-defmacro-body label whole name arg body
-    (let ((= atom-body arg body form-name
+  (= make-defmacro-body label whole name0 arg0 body0
+    (let ((= err form-name name
+            `(skSrcError ,form-name
+                         (concat
+                          [(show ',name)
+                           "\ninvalid args: `" (show *form*) "'"])))
+          (= atom-body name arg body form-name
             (if (== arg '())
                 body
-                `(case ,form-name
-                   (LForm (L _ (List (: _ ,arg)))) ,body)))
+                `(case (unLocLForm ,form-name)
+                   (List (: _ ,arg)) ,body
+                   _                 ,(err form-name name))))
           (:: list-body (-> SrcSpan Code [Code] Code Code Code))
           (= list-body l1 name args body form-name
-            (let ((= hlist xs
-                    (LForm (L l1 (HsList xs))))
-                  (= err
-                    `(skSrcError ,form-name
-                                 (concat
-                                  [(show ',name) [\lf]
-                                   "invalid args: `"
-                                   (show *form*) "'"])))
-                  (= abind
-                    `(LForm (L _loc (List [_ ,@(List args)])))))
+            (let ((= abind
+                    `(LForm
+                      (L _loc
+                         (List [_ ,@(LForm (L l1 (List args)))])))))
               `(case ,form-name
                  ,abind  ,body
-                 _       ,err))))
-      (case (unLForm arg)
+                 _       ,(err form-name name)))))
+      (case (unLForm arg0)
         (L l1 (List args)) (return
-                             (list-body l1 name args body '*form*))
-        (L l1 (Atom _))    (return (atom-body arg body '*form*))
+                             (list-body l1 name0 args body0 '*form*))
+        (L _l1 (Atom _))   (return
+                             (atom-body name0 arg0 body0 '*form*))
         _                  (skSrcError whole
                                        (++ label ": invalid args")))))
 
@@ -163,7 +163,7 @@
 
 (eval-when (compile load)
   (defn (cons (=> (Homoiconic a) (-> a Code Code)))
-      (x (LForm (L l0 xs)))
+      (x (LForm (L _l0 xs)))
     (let ((= x' (toCode x))
           (= l1 (getLoc (unLForm x'))))
       (LForm (L l1 (case xs
@@ -189,10 +189,10 @@
 (defn (cdr (-> Code Code))
     ((LForm (L l code)))
   (case code
-    (List (: x xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
+    (List (: _ xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
                       (case xs
-                        []      (LForm (L l' (List [])))
-                        (: y _) (LForm (L l' (List xs)))))
+                        [] (LForm (L l' (List [])))
+                        _  (LForm (L l' (List xs)))))
     _               (LForm (L l (List [])))))
 
 ;;; 'True' when given 'Code' is a 'List'.

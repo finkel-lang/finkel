@@ -14,7 +14,7 @@
 (import Control.Concurrent      ; base
         ((MVar) (ThreadId) forkIO killThread newEmptyMVar
                 putMVar takeMVar))
-(import Control.Monad (void when))
+(import Control.Monad (void))
 (import Control.Monad.IO.Class ((MonadIO ..)))
 (import Data.List (intercalate intersperse nubBy))
 (import Data.String (fromString))
@@ -30,7 +30,6 @@
 (import Language.SK)            ; sk-kernel
 (import Language.SK.Builder)
 (import Language.SK.Eval)
-(import Language.SK.Expand)
 (import Language.SK.GHC)
 (import Language.SK.Lexer)
 (import Language.SK.Reader)
@@ -129,7 +128,7 @@
               (hFlush stdout)))
         (= go
           (do (let ((= prompt "")))
-              (<- st (lift get-repl-state))
+              ;; (<- st (lift get-repl-state))
               (<- mb-input (getInputLine prompt))
               (case mb-input
                 Nothing     quit
@@ -164,14 +163,14 @@
                   (return ret))))
         (case (evalSP sexpr (Just "<repl>") (fromString input1))
           (Right forms) (put-and-return "" (Just forms))
-          (Left err)    (put-and-return input1 Nothing)))))
+          (Left _err)   (put-and-return input1 Nothing)))))
 
 
 ;;;; Eval
 
 (:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
 (= eval-loop in-mvar out-mvar
-  (let ((= init
+  (let ((= initialize
           ;; Default target in interactive context is `HscAsm',
           ;; updating to `HscInterpreted'.  Also, `dynamic' option is
           ;; enabled in REPL.
@@ -195,14 +194,14 @@
                                  (Right r) r
                                  (Left err) err))))
                   (<- ctx getContext)
-                  (let ((= ret
+                  (let ((= ostr
                           (concat [str (showContext (head ctx))
                                    "> "]))))
                   (<- (Session session) (fromGhc (Ghc return)))
                   (liftIO (putTheHscEnv session))
-                  (liftIO (putMVar out-mvar ret))
+                  (liftIO (putMVar out-mvar ostr))
                   go)))
-    (>> init go)))
+    (>> initialize go)))
 
 (:: eval-form (-> [Code] (Skc Result)))
 (= eval-form forms
@@ -241,7 +240,7 @@
 
 (:: eval-decls (-> [HDecl] (Skc Result)))
 (= eval-decls decls
-  (do (<- (, tythings ic) (evalDecls decls))
+  (do (<- (, tythings _ic) (evalDecls decls))
       (<- hsc-env getSession)
       (let ((= dflags (hsc_dflags hsc-env))
             (= pr tt
@@ -265,9 +264,6 @@
   ;; `iservCmd' in its body.
   (let ((= success fhvals
           (do (let ((= ic (hsc_IC hsc-env))
-                    (= bindings
-                      (, (ic_tythings ic) (ic_rn_gbl_env ic)))
-                    (= size 10)
                     (= ic2
                       (extendInteractiveContextWithIds ic ids))
                     (= ic3 (ic2 {ic_fix_env fixity-env}))

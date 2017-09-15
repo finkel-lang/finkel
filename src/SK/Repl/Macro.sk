@@ -8,7 +8,6 @@
 (module SK.Repl.Macro)
 
 (require SK.Core)
-(import SK.Core)
 
 (macrolet ((use (idecl)
              `(begin
@@ -49,18 +48,18 @@
                   (<- context getContext)
                   (return (, dflags context)))
               (\ (, dflags context)
-                (do (setSessionDynFlags dflags)
+                (do (<- _ (setSessionDynFlags dflags))
                     (setContext context)))
               (\ (, dflags _context)
-                (do (setSessionDynFlags (dflags {hscTarget HscAsm}))
+                (do (<- _ (setSessionDynFlags
+                           (dflags {hscTarget HscAsm})))
                     (make [(, str Nothing)] False Nothing)
                     (return '(begin))))))
 
   (:: %link-module (-> FastString (Skc Code)))
   (= %link-module name
     (do (<- hsc-env getSession)
-        (let ((= name' (unpackFS name))
-              (= mname (mkModuleNameFS name))))
+        (let ((= mname (mkModuleNameFS name))))
         (liftIO (do (unload hsc-env [])
                     (linkModule hsc-env (Module mainUnitId mname))))
         (return '(begin))))
@@ -68,8 +67,8 @@
   (:: %compile-link-and-import (-> FilePath (Skc Code)))
   (= %compile-link-and-import path
     (do (let ((= mname (asModuleName path))))
-        (%compile-obj path)
-        (%link-module (fsLit mname))
+        (<- _ (%compile-obj path))
+        (<- _ (%link-module (fsLit mname)))
         (<- mods (fmap envContextModules getSkEnv))
         (setContext (map mk-ii (: mname mods)))
         (return '(begin)))))
@@ -146,7 +145,7 @@
 (defmacro* set-repl (key val)
   (let ((= set-dflags f
           (do (<- dflags getSessionDynFlags)
-              (setSessionDynFlags (f dflags))
+              (<- _ (setSessionDynFlags (f dflags)))
               (return '(begin))))
         (= val-err expect
           (skSrcError val (concat ["set-repl (" (show key)
@@ -299,7 +298,7 @@ COMMANDS:
         (let ((= filtered (filter-out-children
                            (\ (, t _f _ci _fi) t)
                            (catMaybes mb_stuffs)))
-              (= ppr-info (, thing fixity cls-insts fam-insts)
+              (= ppr-info (, thing _fixity cls-insts fam-insts)
                 ($$ (pprTyThingInContextLoc thing)
                     ($$ (vcat (map pprInstance cls-insts))
                         (vcat (map pprFamInst fam-insts)))))))
@@ -363,7 +362,6 @@ COMMANDS:
               (= pretty
                 (pprTyThing showToHeader))))
         (<- mb-things (mapM lookupName sorted-names))
-        (<- rdr-env getGRE)
         (<- dflags getDynFlags)
         (<- unqual getPrintUnqual)
         (let ((= things (catMaybes mb-things))
