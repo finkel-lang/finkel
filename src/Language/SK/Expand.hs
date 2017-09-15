@@ -3,6 +3,7 @@
 -- | Module for macro expansion.
 module Language.SK.Expand
   ( expand
+  , expand1
   , expands
   , setExpanderSettings
   , withExpanderSettings
@@ -424,7 +425,7 @@ expands forms = do
           return (reverse rest' ++ acc)
         _ -> return (orig : acc)
 
--- | Function to recursively expand the given 'Code'.
+-- | Recursively expands the given 'Code'.
 expand :: Code -> Skc Code
 expand form =
   case unLForm form of
@@ -488,15 +489,27 @@ expand form =
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
           ske <- getSkEnv
           case lookupMacro k ske of
-           Just m -> case m of
-              Macro f       -> f form >>= expand
-              SpecialForm f -> f form >>= expand
-           Nothing -> do
+           Just (Macro f)       -> f form >>= expand
+           Just (SpecialForm f) -> f form >>= expand
+           Nothing              -> do
              rest' <- mapM expand rest
              return (LForm (L l (constr (sym:rest'))))
         _ -> do
           forms' <- mapM expand forms
           return (LForm (L l (constr forms')))
+
+-- | Expand given form once if the form is a macro form, otherwise
+-- return the given form.
+expand1 :: Code -> Skc Code
+expand1 form =
+  case unLForm form of
+    L _l (List ((LForm (L _ (Atom (ASymbol k)))) : _)) -> do
+      ske <- getSkEnv
+      case lookupMacro k ske of
+        Just (Macro f)       -> f form
+        Just (SpecialForm f) -> f form
+        Nothing              -> return form
+    _ -> return form
 
 
 -- ---------------------------------------------------------------------
