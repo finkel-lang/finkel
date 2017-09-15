@@ -19,6 +19,8 @@ module Language.SK.SKC
   , insertMacro
   , lookupMacro
   , macroNames
+  , gensym
+  , gensym'
   ) where
 
 -- base
@@ -164,3 +166,18 @@ macroNames = Map.foldrWithKey f []
     f k m acc = case m of
                   Macro _ -> unpackFS k : acc
                   _       -> acc
+
+-- | Generate unique symbol with @gensym'@.
+gensym :: Skc Code
+gensym = gensym' "g"
+
+-- | Generate unique symbol with given prefix.
+--
+-- Note that although this function does not generate same symbol twice,
+-- generated symbols have a chance to have same name from symbols
+-- entered from codes written by arbitrary users.
+gensym' :: String -> Skc Code
+gensym' prefix = do
+  s <- liftIO (mkSplitUniqSupply '-')
+  let u = uniqFromSupply s
+  return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))

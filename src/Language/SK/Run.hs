@@ -12,6 +12,7 @@ module Language.SK.Run
   , compileWithSymbolConversion
   , parseSexprs
   , buildHsSyn
+  , macroFunction
   , mkModSummary
   , mkModSummary'
   , tcHsModule
@@ -170,6 +171,15 @@ compileSkModule file = do
   (form', st) <- parseSexprs (Just file) contents
   mdl <- compileSkModuleForm form'
   return (mdl, st)
+
+-- | Extract function from macro. Uses 'initialSkEnv' to unwrap the
+-- macro from 'Skc'.
+macroFunction :: Macro -> Code -> IO (Either String Code)
+macroFunction mac form = do
+  let fn = case mac of
+             Macro f -> f
+             SpecialForm f -> f
+  runSkc (fn form) initialSkEnv
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.
 mkModSummary :: GhcMonad m => Maybe FilePath -> HModule

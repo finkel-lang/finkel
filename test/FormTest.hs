@@ -11,6 +11,8 @@ import Language.SK.Form
 import Language.SK.GHC
 import Language.SK.Lexer
 import Language.SK.Reader
+import Language.SK.Run
+import Language.SK.SKC
 
 formTests :: Spec
 formTests = do
@@ -69,6 +71,8 @@ formTests = do
                  ,False)
   homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
                  ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
+
+  gensymTest
 
 readShow :: String -> Spec
 readShow str =
@@ -131,7 +135,7 @@ nameTest str =
 
 eqTest :: String -> Spec
 eqTest str =
-  describe ("parsing same string twice") $
+  describe "parsing same string twice" $
    it "should result in equal codes" $
      let c1 = parseE str
          c2 = parseE str
@@ -157,7 +161,7 @@ lengthTest n str =
 
 homoiconicTest :: (Eq a, Show a, Homoiconic a) => a -> Spec
 homoiconicTest x =
-  describe ("to/from code " ++ show x) $ do
+  describe ("to/from code " ++ show x) $
    it "should match the input" $
      case fromCode (toCode x) of
        Just y -> y `shouldBe` x
@@ -170,3 +174,17 @@ parseE' mb_path str =
   case runSP sexpr mb_path (BL.pack str) of
     Right (expr, _) -> expr
     Left err        -> error err
+
+gensymTest :: Spec
+gensymTest =
+  describe "generating two gensyms" $
+    it "should not be equal" $ do
+      let gen _ = do
+            g1 <- gensym
+            g2 <- gensym
+            return $ toCode [g1, g2]
+          f = macroFunction (Macro gen)
+      ret <- f nil
+      case ret of
+        Right (LForm (L _ (HsList [g1, g2]))) -> g1 `shouldNotBe` g2
+        _ -> expectationFailure "macro expansion failed"

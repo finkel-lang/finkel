@@ -355,6 +355,10 @@ module Language.SK.GHC
     consDataConName,
     listTyCon,
 
+    -- * UniqSupply
+    mkSplitUniqSupply,
+    uniqFromSupply,
+
     -- * Util
     getModificationUTCTime,
     readRational,
@@ -400,6 +404,7 @@ import RdrName
 import SrcLoc
 import StringBuffer
 import TysWiredIn
+import UniqSupply
 import Util
 import Var
 
