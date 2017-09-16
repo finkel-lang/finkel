@@ -1,18 +1,20 @@
 -- | Tests for forms.
 module FormTest where
 
+import Control.DeepSeq
+import Control.Exception
 import Data.List (isPrefixOf, isSubsequenceOf)
-import qualified Data.ByteString.Lazy.Char8 as BL
 import Test.Hspec
 import Test.QuickCheck
+import Text.Show.Functions ()
 
 import Language.SK.Homoiconic
 import Language.SK.Form
 import Language.SK.GHC
 import Language.SK.Lexer
 import Language.SK.Reader
-import Language.SK.Run
-import Language.SK.SKC
+
+import qualified Data.ByteString.Lazy.Char8 as BL
 
 formTests :: Spec
 formTests = do
@@ -38,6 +40,7 @@ formTests = do
   nameTest "bar-buzz-quux"
 
   eqTest "(a \"bcd\" \\e [f g] (h i))"
+  eqPropTest
 
   locationTest Nothing "foo"
   locationTest (Just "locationTest") "foo"
@@ -46,6 +49,10 @@ formTests = do
   lengthTest 5 "(a (b (c)) d e)"
   lengthTest 1 "()"
   lengthTest 8 "[a (b (c d e) [f g]) h]"
+
+  rnfTest
+  listTest
+  symbolNameTest
 
   homoiconicTest (AInteger 42)
   homoiconicTest ()
@@ -58,7 +65,6 @@ formTests = do
   homoiconicTest ([1,2,3] :: [Int])
   homoiconicTest (Atom (AInteger 42))
   homoiconicTest (parseE "(foo bar buzz)")
-
   homoiconicTest [True, False]
   homoiconicTest [EQ, LT, GT]
   homoiconicTest (Just (42 :: Int))
@@ -72,8 +78,6 @@ formTests = do
   homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
                  ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
 
-  gensymTest
-
 readShow :: String -> Spec
 readShow str =
   describe ("read and show `" ++ str ++ "'") $
@@ -84,8 +88,36 @@ readShowFormProp :: Spec
 readShowFormProp =
   describe "read and show form property" $
     it "should match the input" $
-      let f form = parseE (show form) `eqForm` form
-      in  property f
+      property (\form -> parseE (show form) `eqForm` form)
+
+rnfTest :: Spec
+rnfTest =
+  describe "rnf of arbitrary form" $
+    it "should return ()" $
+       property (rnf :: Code -> ())
+
+listTest :: Spec
+listTest =
+  describe "list from arbitrary form applied to arbitrary function" $
+    it "should be a list" $ do
+      let isListL (LForm (L _ (List _))) = True
+          isListL _                      = False
+          f :: (Code -> Code) -> Code -> Bool
+          f g form = isListL (toListL (g form))
+      property f
+
+symbolNameTest :: Spec
+symbolNameTest =
+  describe "symbolName" $ do
+    let isSym (LForm (L _ (Atom (ASymbol _)))) = True
+        isSym _                                = False
+    it "should return name of symbol" $
+      property (\form ->
+                  not (isSym form) || length (symbolName form) >= 1)
+    it "should throw error when applied to non-symbol" $ do
+      let p :: ErrorCall -> Bool
+          p _ = True
+      print (symbolName nil) `shouldThrow` p
 
 eqForm :: Code -> Code -> Bool
 eqForm a b =
@@ -141,6 +173,15 @@ eqTest str =
          c2 = parseE str
      in  c1 `shouldBe` c2
 
+eqPropTest :: Spec
+eqPropTest =
+  describe "Eq instance for LForm" $
+    it "should ignore location information" $ do
+      let g :: Code -> Bool
+          g x@(LForm (L _ body)) = x == LForm (L sp body)
+          sp = UnhelpfulSpan (fsLit "<eqPropTest>")
+      property g
+
 locationTest :: Maybe FilePath -> String -> Spec
 locationTest mb_path str =
   describe ("location of `" ++ str ++ "'") $
@@ -174,17 +215,3 @@ parseE' mb_path str =
   case runSP sexpr mb_path (BL.pack str) of
     Right (expr, _) -> expr
     Left err        -> error err
-
-gensymTest :: Spec
-gensymTest =
-  describe "generating two gensyms" $
-    it "should not be equal" $ do
-      let gen _ = do
-            g1 <- gensym
-            g2 <- gensym
-            return $ toCode [g1, g2]
-          f = macroFunction (Macro gen)
-      ret <- f nil
-      case ret of
-        Right (LForm (L _ (HsList [g1, g2]))) -> g1 `shouldNotBe` g2
-        _ -> expectationFailure "macro expansion failed"

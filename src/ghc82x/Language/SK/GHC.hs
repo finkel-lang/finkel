@@ -249,6 +249,7 @@ module Language.SK.GHC
     FindResult(..),
     GhcApiError,
     HscEnv(..),
+    SourceError,
     SourceModified(..),
     TyThing(..),
     mkSrcErr,

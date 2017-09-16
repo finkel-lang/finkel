@@ -10,6 +10,7 @@ import Test.Hspec
 import EvalTest
 import FormTest
 import MakeTest
+import SkcTest
 import SyntaxTest
 
 getTestFiles :: String -> IO [FilePath]
@@ -27,6 +28,7 @@ main = do
   evalFiles <- getTestFiles "eval"
   hspec
     (do describe "Form" formTests
+        describe "Skc" skcTests
         describe "Syntax" (syntaxTests syntaxFiles)
         describe "Eval" (evalTests evalFiles)
         describe "Make" makeTests)
