@@ -42,7 +42,7 @@
 
 
 
-;;;; Repl, state, and result types
+;;; Repl, state, and result types
 
 (data ReplState
   (ReplState {pending-input String
@@ -92,9 +92,10 @@
 (type Result (Either String String))
 
 
-;;;; Main
+;;; Main
 
-(defn (replMain (IO ())) ()
+(defn (replMain (IO ()))
+    ()
   (do (<- in-mv newEmptyMVar)
       (<- out-mv newEmptyMVar)
       (let ((= skc (runSkc (eval-loop in-mv out-mv) repl-env))))
@@ -113,7 +114,7 @@
 (= repl-env (initialSkEnv {envContextModules ["SK.User"]}))
 
 
-;;;; Read and print
+;;; Read and print
 
 ;;; Loop for reading input and printing the output.
 ;;;
@@ -128,7 +129,6 @@
               (hFlush stdout)))
         (= go
           (do (let ((= prompt "")))
-              ;; (<- st (lift get-repl-state))
               (<- mb-input (getInputLine prompt))
               (case mb-input
                 Nothing     quit
@@ -166,7 +166,7 @@
           (Left _err)   (put-and-return input1 Nothing)))))
 
 
-;;;; Eval
+;;; Eval
 
 (:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
 (= eval-loop in-mvar out-mvar
@@ -297,7 +297,7 @@
           _                                  incomplete))))
 
 
-;;;; Auxiliary
+;;; Auxiliary
 
 (:: var-name-and-type (-> DynFlags Name Var String))
 (= var-name-and-type dflags name var
