@@ -3,6 +3,7 @@ module FormTest where
 
 import Control.DeepSeq
 import Control.Exception
+import Data.Data
 import Data.List (isPrefixOf, isSubsequenceOf)
 import Test.Hspec
 import Test.QuickCheck
@@ -34,7 +35,9 @@ formTests = do
   fracTest 0
   fracTest 1e-9
 
+  showTest
   functorTest "(a \"foo\" \\x [True False])"
+  foldableTest
 
   nameTest "foo"
   nameTest "bar-buzz-quux"
@@ -49,6 +52,7 @@ formTests = do
   lengthTest 5 "(a (b (c)) d e)"
   lengthTest 1 "()"
   lengthTest 8 "[a (b (c d e) [f g]) h]"
+  lengthTest 1 "foo"
 
   rnfTest
   listTest
@@ -78,6 +82,8 @@ formTests = do
   homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
                  ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
 
+  fromCodeTest Foo
+
 readShow :: String -> Spec
 readShow str =
   describe ("read and show `" ++ str ++ "'") $
@@ -88,36 +94,8 @@ readShowFormProp :: Spec
 readShowFormProp =
   describe "read and show form property" $
     it "should match the input" $
-      property (\form -> parseE (show form) `eqForm` form)
-
-rnfTest :: Spec
-rnfTest =
-  describe "rnf of arbitrary form" $
-    it "should return ()" $
-       property (rnf :: Code -> ())
-
-listTest :: Spec
-listTest =
-  describe "list from arbitrary form applied to arbitrary function" $
-    it "should be a list" $ do
-      let isListL (LForm (L _ (List _))) = True
-          isListL _                      = False
-          f :: (Code -> Code) -> Code -> Bool
-          f g form = isListL (toListL (g form))
-      property f
-
-symbolNameTest :: Spec
-symbolNameTest =
-  describe "symbolName" $ do
-    let isSym (LForm (L _ (Atom (ASymbol _)))) = True
-        isSym _                                = False
-    it "should return name of symbol" $
       property (\form ->
-                  not (isSym form) || length (symbolName form) >= 1)
-    it "should throw error when applied to non-symbol" $ do
-      let p :: ErrorCall -> Bool
-          p _ = True
-      print (symbolName nil) `shouldThrow` p
+                  form == form && parseE (show form) `eqForm` form)
 
 eqForm :: Code -> Code -> Bool
 eqForm a b =
@@ -146,18 +124,86 @@ eqForm a b =
   where
     epsilon = 1e-7
 
+rnfTest :: Spec
+rnfTest = do
+  describe "rnf of arbitrary form" $
+    it "should return ()" $
+       property (rnf :: Code -> ())
+  describe "rnf of comment" $
+    it "should return ()" $
+      rnf (AComment "foo") `shouldBe` ()
+  describe "rnf of TEnd" $
+    it "should return ()" $
+      rnf (TEnd :: Form Atom) `shouldBe` ()
+
+listTest :: Spec
+listTest =
+  describe "list from arbitrary form applied to arbitrary function" $
+    it "should be a list" $ do
+      let isListL (LForm (L _ (List _))) = True
+          isListL _                      = False
+          f :: (Code -> Code) -> Code -> Bool
+          f g form = isListL (toListL (g form))
+      property f
+
+symbolNameTest :: Spec
+symbolNameTest =
+  describe "symbolName" $ do
+    let isSym (LForm (L _ (Atom (ASymbol _)))) = True
+        isSym _                                = False
+    it "should return name of symbol" $
+      property (\form ->
+                  not (isSym form) || length (symbolName form) >= 1)
+    it "should throw error when applied to non-symbol" $ do
+      let p :: ErrorCall -> Bool
+          p _ = True
+      print (symbolName nil) `shouldThrow` p
+
 fracTest :: Double -> Spec
 fracTest x =
   describe ("read and show a fractional number `" ++ show x ++ "'") $
     it "should match the input" $
        show (aFractional x) `shouldBe` show x
 
+showTest :: Spec
+showTest = do
+  describe "showing comment" $
+    it "should be empty string" $
+      show (AComment "foo bar buzz") `shouldBe` ""
+  describe "showing TEnd" $
+    it "should be \"TEnd\"" $
+      show (TEnd :: Form Atom) `shouldBe` "TEnd"
+
 functorTest :: String -> Spec
-functorTest str =
+functorTest str = do
   describe ("Functor instance of Code `" ++ str ++ "'") $
     it "should obey the Functor law" $
        let c = parseE str
        in  fmap id c `shouldBe` c
+  describe "fmap to TEnd" $
+    it "should be TEnd" $ do
+      let te :: Form Atom
+          te = TEnd
+          f :: Atom -> Atom
+          f _ = AUnit
+      fmap f te `shouldBe` te
+
+foldableTest :: Spec
+foldableTest = do
+  let fsum = foldr (\x acc -> case x of
+                                AInteger n -> acc + n
+                                _ -> acc)
+                   0
+  describe "taking sum of 1 to 10 with foldr" $ do
+    let str1 = "(1 2 3 4 5 6 7 8 9 10)"
+    it ("should be 55 for " ++ str1) $ do
+      fsum (parseE str1) `shouldBe` 55
+    it "should be 0 for TEnd" $ do
+      let sp = UnhelpfulSpan (fsLit "<foldableTest>")
+      fsum (LForm (L sp TEnd)) `shouldBe` 0
+  describe "length of nil" $ do
+    it "should be 0" $
+      length nil `shouldBe` 0
 
 nameTest :: String -> Spec
 nameTest str =
@@ -174,13 +220,23 @@ eqTest str =
      in  c1 `shouldBe` c2
 
 eqPropTest :: Spec
-eqPropTest =
+eqPropTest = do
   describe "Eq instance for LForm" $
     it "should ignore location information" $ do
       let g :: Code -> Bool
           g x@(LForm (L _ body)) = x == LForm (L sp body)
           sp = UnhelpfulSpan (fsLit "<eqPropTest>")
       property g
+  describe "comparing comment with comment" $ do
+    let c1 = AComment "foo"
+        c2 = AComment "bar"
+    it "should be True" $
+      c1 `shouldBe` c1
+    it "should be False" $
+      c1 `shouldNotBe` c2
+  describe "comparing TEnd with TEnd" $
+    it "should be True" $
+      (TEnd :: Form Atom) `shouldBe` (TEnd :: Form Atom)
 
 locationTest :: Maybe FilePath -> String -> Spec
 locationTest mb_path str =
@@ -206,6 +262,17 @@ homoiconicTest x =
    it "should match the input" $
      case fromCode (toCode x) of
        Just y -> y `shouldBe` x
+
+data Foo = Foo deriving (Eq, Show)
+
+instance Homoiconic Foo where
+  toCode foo = toCode (aSymbol (show foo))
+
+fromCodeTest :: Foo -> Spec
+fromCodeTest foo =
+  describe "default toCode implementation" $
+    it "should return Nothing" $
+      (fromCode nil :: Maybe Foo) `shouldBe` Nothing
 
 parseE :: String -> Code
 parseE = parseE' Nothing

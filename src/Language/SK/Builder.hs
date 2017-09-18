@@ -562,11 +562,11 @@ b_symT (LForm (L l (Atom (ASymbol name)))) =
     ty = case splitQualName name of
            Nothing   -> mkUnqual namespace name
            Just qual -> mkQual namespace qual
-    namespace =
-      case () of
-        _ | isUpper x || ':' == x -> tcName
-        _                         -> tvName
-        where x = headFS name
+    namespace
+      | isUpper x || ':' == x = tcName
+      | otherwise             = tvName
+      where
+        x = headFS name
 
 b_unitT :: Code -> HType
 b_unitT (LForm (L l _)) = L l (HsTupleTy HsBoxedTuple [])
@@ -717,9 +717,6 @@ b_hgrhs rhss (body, gs) =
         [] -> noLoc rhs
         _  -> let l = getLoc (mkLocatedList gs) in L l rhs
   in  (lrhs:rhss)
-
-b_grhs :: HExpr -> HExpr -> HGRHS
-b_grhs guard@(L l _) body = L l (GRHS [L l (mkBodyStmt guard)] body)
 
 b_doE :: Code -> [HStmt] -> HExpr
 b_doE (LForm (L l _)) exprs = L l (mkHsDo DoExpr exprs)

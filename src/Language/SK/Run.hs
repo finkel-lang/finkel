@@ -184,16 +184,17 @@ macroFunction mac form = do
 -- | Make 'ModSummary'. 'UnitId' is main unit.
 mkModSummary :: GhcMonad m => Maybe FilePath -> HModule
              -> m ModSummary
-mkModSummary mbfile mdl = do
+mkModSummary mbfile mdl =
   let modName = case hsmodName mdl of
                   Just name -> unLoc name
                   Nothing -> mkModuleName "Main"
       imports = map (ideclName . unLoc) (hsmodImports mdl)
+      emptyAnns = (Map.empty, Map.empty)
       pm = HsParsedModule
         { hpm_module = noLoc mdl
         , hpm_src_files = maybe [] (: []) mbfile
         , hpm_annotations = emptyAnns }
-  mkModSummary' mbfile modName imports (Just pm)
+  in  mkModSummary' mbfile modName imports (Just pm)
 
 -- | Make 'ModSummary' from source file, module name, and imports.
 mkModSummary' :: GhcMonad m => Maybe FilePath -> ModuleName
@@ -272,6 +273,3 @@ tcHsModule mbfile genFile mdl = do
   tc <- typecheckModule pm
   _ <- setSessionDynFlags dflags0
   return tc
-
-emptyAnns :: ApiAnns
-emptyAnns = (Map.empty, Map.empty)

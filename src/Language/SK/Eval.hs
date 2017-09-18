@@ -74,11 +74,11 @@ evalDecls decls = do
                         data_tycons)
   cbc <- liftIO (byteCodeGen hsc_env this_mod prepd_binds
                              data_tycons mod_breaks)
-  let src_span = srcLocSpan evalDeclsSrcLoc
+  let evalDeclsSrcLoc =
+        UnhelpfulLoc (fsLit "<Language.SK.Eval.evalDecls>")
+      src_span = srcLocSpan evalDeclsSrcLoc
   liftIO (linkDecls hsc_env src_span cbc)
-
-  -- Not done in ghc-8.0.2.
-  -- liftIO (hscAddSptEntries hsc_env (cg_spt_entries tidy_cg))
+  liftIO (hscAddSptEntries hsc_env (cg_spt_entries tidy_cg))
 
   let tcs = filterOut isImplicitTyCon (mg_tcs simpl_mg)
       patsyns = mg_patsyns simpl_mg
@@ -116,6 +116,3 @@ skcDesugar' mod_location tc_result = do
   -- handleWarnings
 
   return r
-
-evalDeclsSrcLoc :: SrcLoc
-evalDeclsSrcLoc = UnhelpfulLoc (fsLit "<Language.SK.Eval.evalDecls>")

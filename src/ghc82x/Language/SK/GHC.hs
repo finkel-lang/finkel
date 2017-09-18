@@ -244,6 +244,7 @@ module Language.SK.GHC
 
     -- * HscMain
     batchMsg,
+    hscAddSptEntries,
 
     -- * HscTypes
     FindResult(..),

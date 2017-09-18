@@ -289,15 +289,19 @@ unLocLForm (LForm (L _ a)) = a
 
 mkSkSrcSpan :: String -> SrcSpan
 mkSkSrcSpan = UnhelpfulSpan . fsLit
+{-# INLINE mkSkSrcSpan #-}
 
 skSrcSpan :: SrcSpan
 skSrcSpan = mkSkSrcSpan "<sk generated code>"
+{-# INLINE skSrcSpan #-}
 
 genSrc :: a -> Located a
 genSrc = L skSrcSpan
+{-# INLINE genSrc #-}
 
 quoted :: Form Atom -> Code
 quoted = LForm . L (UnhelpfulSpan (fsLit "<quoted code>"))
+{-# INLINE quoted #-}
 
 mkLocatedForm :: [LForm a] -> Located [LForm a]
 mkLocatedForm [] = genSrc []
