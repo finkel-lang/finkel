@@ -75,7 +75,6 @@ import Language.SK.Syntax.Internal
 %token
 
 -- Haskell 2010
-'as'        { LForm (L _ (Atom (ASymbol "as"))) }
 'case'      { LForm (L _ (Atom (ASymbol "case"))) }
 'class'     { LForm (L _ (Atom (ASymbol "class"))) }
 'data'      { LForm (L _ (Atom (ASymbol "data"))) }
@@ -220,10 +219,13 @@ impdecl :: { (Code, Bool, Maybe Code ) }
     | 'list'   {% parse p_impdecl0 $1 }
 
 impdecl0 :: { (Code, Bool, Maybe Code) }
-    : 'qualified' 'symbol'               { ($2, True, Nothing) }
-    | 'qualified' 'symbol' 'as' 'symbol' { ($2, True, Just $4) }
-    | 'symbol'                           { ($1, False, Nothing) }
-    | 'symbol' 'as' 'symbol'             { ($1, False, Just $3) }
+    : 'qualified' 'symbol'             { ($2, True, Nothing) }
+    | 'qualified' 'symbol' as 'symbol' { ($2, True, Just $4) }
+    | 'symbol'                         { ($1, False, Nothing) }
+    | 'symbol' as 'symbol'             { ($1, False, Just $3) }
+
+as :: { Code }
+    : 'symbol' {% b_isAs $1 }
 
 
 -- ---------------------------------------------------------------------

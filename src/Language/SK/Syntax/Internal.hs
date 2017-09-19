@@ -108,6 +108,12 @@ b_importD (name, qualified, mb_as) hiding mb_entities =
               Just entities -> Just (hiding, L l entities)
       in  L l decl'
 
+b_isAs :: Code -> Builder Code
+b_isAs form =
+  case form of
+    LForm (L _ (Atom (ASymbol as))) | as == "as" -> return form
+    _                                            -> builderError
+
 b_dataD :: Code
         -> (FastString, [HTyVarBndr])
         -> (HDeriving, [HConDecl])

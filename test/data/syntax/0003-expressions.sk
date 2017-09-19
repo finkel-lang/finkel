@@ -94,9 +94,16 @@
         (= g (\ x (* x 2))))
     (g (f n a))))
 
+;;; Using `as' as value name.
+(= let3 n
+  (let ((:: as [Int])
+        (= as [n n n]))
+    (concat [as as])))
+
 (= letexprs
   (do (print (let1 7))
-      (print (let2 7))))
+      (print (let2 7))
+      (print (let3 7))))
 
 ;;; 3.13 Case Expressions
 
