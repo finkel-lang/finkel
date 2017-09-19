@@ -153,6 +153,10 @@ module Language.SK.GHC
     findObjectLinkable,
     mkHomeModLocation,
 
+    -- * ForeignCall
+    CCallConv(..),
+    Safety(..),
+
     -- * GhcMake
     topSortModuleGraph,
 
@@ -174,6 +178,7 @@ module Language.SK.GHC
     ConDecl(..),
     ConDeclField(..),
     DefaultDecl(..),
+    ForeignDecl(..),
     HsConDeclDetails,
     HsDataDefn(..),
     HsDeriving,
@@ -185,6 +190,7 @@ module Language.SK.GHC
     LHsTyVarBndr,
     NewOrData(..),
     TyClDecl(..),
+    noForeignImportCoercionYet,
 
     -- * HsExpr
     ArithSeqInfo(..),
@@ -320,6 +326,7 @@ module Language.SK.GHC
     cvTopDecls,
     mkRdrRecordCon,
     mkRdrRecordUpd,
+    parseCImport,
 
     -- * RdrName
     getRdrName,
@@ -387,6 +394,7 @@ import Exception
 import FastString
 import FieldLabel
 import Finder
+import ForeignCall
 import GhcMonad
 import HeaderInfo
 import HscMain

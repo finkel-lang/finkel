@@ -17,6 +17,7 @@ module Language.SK.Builder
 
   -- * Type synonyms
   , HBind
+  , HCCallConv
   , HConDecl
   , HConDeclDetails
   , HConDeclField
@@ -142,6 +143,8 @@ builderError = do
 -- ---------------------------------------------------------------------
 
 type HBind = LHsBind RdrName
+
+type HCCallConv = Located CCallConv
 
 type HConDecl = LConDecl RdrName
 

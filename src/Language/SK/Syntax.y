@@ -41,6 +41,8 @@ import Language.SK.Syntax.Internal
 %name p_decl decl
 %name p_decls decls
 %name p_lqtycl lqtycl
+%name p_ffifn ffifn
+%name p_lsname lsname
 
 %name p_type type
 %name p_types types
@@ -80,6 +82,7 @@ import Language.SK.Syntax.Internal
 'data'      { LForm (L _ (Atom (ASymbol "data"))) }
 'default'   { LForm (L _ (Atom (ASymbol "default"))) }
 'do'        { LForm (L _ (Atom (ASymbol "do"))) }
+'foreign'   { LForm (L _ (Atom (ASymbol "foreign"))) }
 'hiding'    { LForm (L _ (Atom (ASymbol "hiding"))) }
 'if'        { LForm (L _ (Atom (ASymbol "if"))) }
 'infix'     { LForm (L _ (Atom (ASymbol "infix"))) }
@@ -252,7 +255,12 @@ top_decl :: { HDecl }
     | 'instance' qtycl idecls      { b_instD $2 $3 }
     | 'default' zero_or_more_types { b_defaultD $2 }
     | fixity 'integer' symbols1    { b_fixityD $1 $2 $3 }
+    | 'foreign' 'symbol' ccnv sname 'list'
+      {% parse p_ffifn $5 >>= b_ffiD $1 $2 $3 $4 }
     | decl                         { $1 }
+
+ffifn :: { (Code, HType) }
+    : '::' 'symbol' type { ($2, $3) }
 
 simpletype :: { (FastString, [HTyVarBndr])}
     : 'symbol' { b_simpletypeD [$1] }
@@ -320,6 +328,16 @@ fixity :: { FixityDirection }
     : 'infixl' { InfixL }
     | 'infixr' { InfixR }
     | 'infix'  { InfixN }
+
+ccnv :: { HCCallConv }
+    : 'symbol' {% b_callConv $1 }
+
+sname :: { (Maybe (Located Safety), Code) }
+    : 'string' { (Nothing, $1) }
+    | 'list'   {% parse p_lsname $1 }
+
+lsname :: { (Maybe (Located Safety), Code) }
+    : 'symbol' 'string' {% b_safety $1 >>= \s -> return (Just s, $2) }
 
 decl :: { HDecl }
     : '=' 'symbol' aguards { b_funBindD $2 $3 }

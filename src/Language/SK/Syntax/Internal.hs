@@ -7,6 +7,7 @@ module Language.SK.Syntax.Internal where
 import Control.Monad (foldM)
 import Data.Char (isUpper)
 import Data.List (foldl1')
+import Data.Maybe (fromMaybe)
 
 -- Internal
 import Language.SK.Builder
@@ -277,6 +278,48 @@ b_fixityD dir (LForm (L l (Atom (AInteger n)))) syms = L l (SigD fsig)
              InfixL -> SourceText "infixl"
              InfixR -> SourceText "infixr"
              InfixN -> SourceText "infix"
+
+b_ffiD :: Code -> Code -> HCCallConv -> (Maybe (Located Safety), Code)
+       -> (Code, HType) -> Builder HDecl
+b_ffiD (LForm (L l _)) imp_or_exp ccnv (mb_safety, ename) (nm, ty) =
+  case unLocLForm imp_or_exp of
+    Atom (ASymbol ie)
+      | ie == "import" -> do
+        let safety = fromMaybe (noLoc PlayRisky) mb_safety
+            LForm (L _ls (Atom (AString ename'))) = ename
+            source = L l (quotedSourceText ename')
+        case parseCImport ccnv safety name ename' source of
+          Just impspec -> do
+            let fi = ForeignImport { fd_name = lname
+                                   , fd_sig_ty = tsig
+                                   , fd_co = noForeignImportCoercionYet
+                                   , fd_fi = impspec }
+            return (L l (ForD fi))
+          Nothing      -> builderError
+      | ie == "export" -> return (L l (error "NYI: FFI export"))
+    _ -> builderError
+    where
+      lname = L ln (mkRdrName name)
+      LForm (L ln (Atom (ASymbol name))) = nm
+      tsig = mkLHsSigType ty
+
+b_callConv :: Code -> Builder (Located CCallConv)
+b_callConv (LForm (L l (Atom (ASymbol sym)))) =
+  case sym of
+    "capi"       -> return (L l CApiConv)
+    "ccall"      -> return (L l CCallConv)
+    "prim"       -> return (L l PrimCallConv)
+    "javascript" -> return (L l JavaScriptCallConv)
+    "stdcall"    -> return (L l StdCallConv)
+    _            -> builderError
+
+b_safety :: Code -> Builder (Located Safety)
+b_safety (LForm (L l (Atom (ASymbol sym)))) =
+  case sym of
+    "interruptible" -> return (L l PlayInterruptible)
+    "safe"          -> return (L l PlaySafe)
+    "unsafe"        -> return (L l PlayRisky)
+    _               -> builderError
 
 b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
 b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
@@ -645,3 +688,6 @@ mkcfld (name, e@(L fl _)) =
                   , hsRecPun = False }
   where
     mkfname nl n = L nl (mkFieldOcc (L nl (mkRdrName n)))
+
+quotedSourceText :: String -> SourceText
+quotedSourceText s = SourceText $ "\"" ++ s ++ "\""
