@@ -15,7 +15,7 @@ import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode)
 import Test.Hspec
 
-import Language.SK.Builder
+import Language.SK.Builder (HModule)
 import Language.SK.Emit
 import Language.SK.Lexer
 import Language.SK.Make

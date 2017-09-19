@@ -22,6 +22,7 @@ module Language.SK.Syntax
 import Language.SK.Builder
 import Language.SK.Form
 import Language.SK.GHC
+import Language.SK.Syntax.Internal
 }
 
 %name parse_module module
@@ -601,4 +602,12 @@ parseTopDecls = p_top_decls
 
 parseExpr :: Builder HExpr
 parseExpr = p_expr
+
+-- | Unwrap the element of 'List' and 'HsList', otherwise returns '[]'.
+unwrapListL :: Code -> [Code]
+unwrapListL (LForm (L _ form)) =
+    case form of
+      List xs -> xs
+      HsList xs -> xs
+      _ -> []
 }
