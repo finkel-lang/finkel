@@ -2,6 +2,7 @@ module SkcTest where
 
 import GHC.Paths (libdir)
 import Test.Hspec
+import Test.QuickCheck
 
 import Language.SK.Expand
 import Language.SK.Form
@@ -20,6 +21,12 @@ skcTests = do
 
 exceptionTest :: Spec
 exceptionTest = do
+  describe "Eq and Show instance of SkException" $
+    it "should return True when comparing with self" $
+      property (\str -> let e1 = SkException str
+                            e2 = SkException str
+                        in  e1 == e2 && show e1 == show e2)
+
   describe "running Skc action containing `failS'" $
     it "should throw SkException" $ do
       let p :: SkException -> Bool

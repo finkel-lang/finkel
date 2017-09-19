@@ -155,6 +155,7 @@ module Language.SK.GHC
 
     -- * ForeignCall
     CCallConv(..),
+    CExportSpec(..),
     Safety(..),
 
     -- * GhcMake
@@ -179,6 +180,7 @@ module Language.SK.GHC
     ConDeclField(..),
     DefaultDecl(..),
     ForeignDecl(..),
+    ForeignExport(..),
     HsConDeclDetails,
     HsDataDefn(..),
     HsDeriving,
@@ -190,6 +192,7 @@ module Language.SK.GHC
     LHsTyVarBndr,
     NewOrData(..),
     TyClDecl(..),
+    noForeignExportCoercionYet,
     noForeignImportCoercionYet,
 
     -- * HsExpr

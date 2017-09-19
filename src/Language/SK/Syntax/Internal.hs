@@ -284,24 +284,31 @@ b_ffiD :: Code -> Code -> HCCallConv -> (Maybe (Located Safety), Code)
 b_ffiD (LForm (L l _)) imp_or_exp ccnv (mb_safety, ename) (nm, ty) =
   case unLocLForm imp_or_exp of
     Atom (ASymbol ie)
-      | ie == "import" -> do
-        let safety = fromMaybe (noLoc PlayRisky) mb_safety
-            LForm (L _ls (Atom (AString ename'))) = ename
-            source = L l (quotedSourceText ename')
-        case parseCImport ccnv safety name ename' source of
-          Just impspec -> do
-            let fi = ForeignImport { fd_name = lname
-                                   , fd_sig_ty = tsig
-                                   , fd_co = noForeignImportCoercionYet
-                                   , fd_fi = impspec }
-            return (L l (ForD fi))
-          Nothing      -> builderError
-      | ie == "export" -> return (L l (error "NYI: FFI export"))
+      | ie == "import"
+      , Just ispec <- parseCImport ccnv safety name ename' source -> do
+        let fi = ForeignImport { fd_name = lname
+                               , fd_sig_ty = tsig
+                               , fd_co = noForeignImportCoercionYet
+                               , fd_fi = ispec }
+        return (L l (ForD fi))
+      | ie == "export" -> do
+        let fe = ForeignExport { fd_name = lname
+                               , fd_sig_ty = tsig
+                               , fd_co = noForeignExportCoercionYet
+                               , fd_fe = e }
+            e = CExport (L l (CExportStatic (SourceText ename')
+                                            (fsLit ename')
+                                            (unLoc ccnv)))
+                        (L l (SourceText ename'))
+        return (L l (ForD fe))
     _ -> builderError
     where
       lname = L ln (mkRdrName name)
       LForm (L ln (Atom (ASymbol name))) = nm
       tsig = mkLHsSigType ty
+      LForm (L _ls (Atom (AString ename'))) = ename
+      source = L l (quotedSourceText ename')
+      safety = fromMaybe (noLoc PlayRisky) mb_safety
 
 b_callConv :: Code -> Builder (Located CCallConv)
 b_callConv (LForm (L l (Atom (ASymbol sym)))) =
