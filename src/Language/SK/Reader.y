@@ -16,7 +16,7 @@ import Language.SK.GHC
 import Language.SK.Lexer
 
 -- ghc-boot
-import qualified GHC.LanguageExtensions as LangExt
+import GHC.LanguageExtensions (Extension(..))
 }
 
 %name sexpr sexp
@@ -202,7 +202,7 @@ pragma orig@(LForm (L l form)) =
     normalize = map toLower . unpackFS
     inlinePragmas = ["inline", "noinline", "inlinable"]
 
-groupExts :: [Code] -> ([LangExt.Extension],[Code])
+groupExts :: [Code] -> ([Extension],[Code])
 groupExts = foldr f ([],[])
   where
     f form (exts, invalids) =
@@ -212,10 +212,14 @@ groupExts = foldr f ([],[])
             (ext:exts, invalids)
         _ -> (exts, form:invalids)
 
-supportedLangExts :: [(FastString, LangExt.Extension)]
+supportedLangExts :: [(FastString, Extension)]
 supportedLangExts =
-    f [ LangExt.DeriveDataTypeable
-      , LangExt.DeriveGeneric ]
+    f [ DeriveDataTypeable
+      , DeriveFoldable
+      , DeriveFunctor
+      , DeriveGeneric
+      , DeriveTraversable
+      , GeneralizedNewtypeDeriving ]
   where
     f = map (\ext -> (fsLit (show ext), ext))
 
