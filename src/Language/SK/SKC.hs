@@ -28,6 +28,7 @@ import Control.Exception (Exception(..))
 import Control.Monad (when)
 
 -- containers
+import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 
 -- transformers
@@ -78,12 +79,14 @@ data SkEnv = SkEnv
      envMacros :: EnvMacros
      -- | Temporary macros in current compilation context.
    , envTmpMacros :: [EnvMacros]
-     -- | Set of macros to reset to, for compilation of each module.
+     -- | Default set of macros to reset the macros.
    , envDefaultMacros :: EnvMacros
      -- | Flag to hold debug setting.
    , envDebug :: Bool
      -- | Modules to import to context.
    , envContextModules :: [String]
+     -- | Default values to reset the language extensions.
+   , envDefaultLangExts :: (Maybe Language, IntSet.IntSet)
      -- | Flag for controling informative output.
    , envSilent :: Bool
    }

@@ -16,6 +16,7 @@ import qualified Data.ByteString.Lazy as BL
 
 -- container
 import Data.Graph (flattenSCCs)
+import qualified Data.IntSet as IntSet
 
 -- ghc
 import qualified Parser as GHCParser
@@ -75,6 +76,12 @@ make inputs no_link mb_output = do
   _ <- setSessionDynFlags (dflags { ghcMode = CompManager
                                   , outputFile = mb_output })
 
+  -- Preserve the language extension values in initial dynflags to
+  -- SkEnv, to reset the language extension later, to keep fresh set of
+  -- language extensios per module.
+  let lexts = (language dflags, extensionFlags dflags)
+  modifySkEnv (\e -> e {envDefaultLangExts = lexts})
+
   -- Decide the kind of sources of the inputs.
   sources <- mapM findTargetSource inputs
 
@@ -103,7 +110,7 @@ make inputs no_link mb_output = do
 
 -- | Data type to differentiate target sources.
 data TargetSource
-  = SkSource FilePath String [Code] [String]
+  = SkSource FilePath String [Code] SPState
   -- ^ SK source. Holds file path of the source code, original string
   -- input, parsed form data, and required module names.
   | HsSource FilePath
@@ -114,8 +121,9 @@ data TargetSource
 
 instance Show TargetSource where
   show s = case s of
-    SkSource path mdl _ reqs ->
-      concat ["SkSource ", show path, " ", mdl, " ", show reqs]
+    SkSource path mdl _ sp ->
+      concat ["SkSource ", show path, " ", mdl, " "
+             , show (requiredModuleNames sp) ]
     HsSource path -> "HsSource " ++ show path
     OtherSource path -> "OtherSource " ++ show path
 
@@ -142,8 +150,9 @@ partitionRequired homePkgModules = foldr f ([],[])
   where
     f (source,mbp) (r,p) =
       case source of
-        SkSource _ _ _ reqs
-          | any (`elem` homePkgModules) reqs -> (r,(source,mbp):p)
+        SkSource _ _ _ sp
+          | any (`elem` homePkgModules) (requiredModuleNames sp)
+          -> (r,(source,mbp):p)
         _ -> ((source,mbp):r, p)
 
 -- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule', then compile
@@ -173,15 +182,15 @@ make' not_yet_compiled readys0 pendings0 = do
     -- HsModule. Input could be SK source code, Haskell source code, or
     -- something else. If SK source code or Haskell source code, get
     -- ModSummary to resolve the dependencies.
-    go acc i k nycs (target@(tsr,mbp):summarised) pendings = do
+    go acc i k nycs (target@(tsr,_mbp):summarised) pendings = do
 
       -- Since skc make is not using 'DriverPipeline.runPipeline',
       -- setting 'DynFlags.dumpPrefix' manually.
       setDumpPrefix (targetSourcePath tsr)
 
       case tsr of
-        SkSource path _mn form reqs -> do
-          hmdl <- compileSkModuleForm' form
+        SkSource path _mn _form sp -> do
+          Just hmdl <- compileToHsModule target
           summary <- mkModSummary (Just path) hmdl
           let imports = map import_name (hsmodImports hmdl)
           debugIO (putStrLn (concat [ ";;; target=", show target
@@ -201,19 +210,21 @@ make' not_yet_compiled readys0 pendings0 = do
           if notYetReady
              then go acc i k nycs summarised (target:pendings)
              else do
-               let act = mapM (getModSummary' . mkModuleName) reqs
+               let act = mapM (getModSummary' . mkModuleName)
+                              (requiredModuleNames sp)
                    act' = catMaybes <$> act
                compileIfReady summary hmdl imports act'
 
-        HsSource _path -> do
-          (Just summary, Just hmdl) <- compileInput (tsr,mbp)
+        HsSource path -> do
+          Just hmdl <- compileToHsModule target
+          summary <- mkModSummary (Just path) hmdl
           let imports = map import_name (hsmodImports hmdl)
           debugIO (putStrLn (concat [";;; target=", show target
                                     ," imports=", show imports]))
           compileIfReady summary hmdl imports (return [])
 
         OtherSource _ -> do
-          _ <- compileInput target
+          _ <- compileToHsModule target
           go acc i k nycs summarised pendings
 
         where
@@ -312,8 +323,8 @@ doMakeOne i total ms hmdl = do
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
 
--- XXX: Avoid the call to "tcHsModule", currently not much difference in
--- time spent for compilation.
+-- XXX: Avoid the call to "tcHsModule", not sure how much time
+-- difference in compilation elapsed times with this approach.
 dontMakeOne :: GhcMonad m => ModSummary -> HsModule RdrName
             -> m ModSummary
 dontMakeOne ms hmdl = do
@@ -377,9 +388,8 @@ findTargetSource (modName, a) = do
         | isSkFile path =
           do contents <- liftIO (BL.readFile path)
              (forms, sp) <- parseSexprs (Just path) contents
-             let reqs = requiredModuleNames sp
-                 modName' = asModuleName modName
-             return (SkSource path modName' forms reqs, a)
+             let modName' = asModuleName modName
+             return (SkSource path modName' forms sp, a)
         | isHsFile path = return (HsSource path, a)
         | otherwise = return (OtherSource path, a)
   detectSource inputPath
@@ -442,50 +452,53 @@ mkReadTimeModSummary (target, mbphase) =
     HsSource file -> do
       Just hsmdl <- compileToHsModule (target, mbphase)
       fmap Just (mkModSummary (Just file) hsmdl)
-    SkSource file mn _form reqs -> do
+    SkSource file mn _form sp -> do
       let modName = mkModuleName mn
-          imports = map (noLoc . mkModuleName) reqs
+          imports = map (noLoc . mkModuleName) (requiredModuleNames sp)
       fmap Just (mkModSummary' (Just file) modName imports Nothing)
     OtherSource _ -> return Nothing
-
-compileInput :: TargetUnit
-             -> Skc (Maybe ModSummary, Maybe (HsModule RdrName))
-compileInput (tsrc, mbphase) = do
-  mb_module <- compileToHsModule (tsrc, mbphase)
-  mb_summary <-
-    case mb_module of
-      Nothing -> return Nothing
-      Just m -> do
-        summary <- mkModSummary (Just (targetSourcePath tsrc)) m
-        case tsrc of
-          SkSource _ _ _ reqs -> do
-            let mkImport req = (Nothing, noLoc (mkModuleName req))
-                imps = ms_textual_imps summary ++ map mkImport reqs
-                summary' = summary {ms_textual_imps=imps}
-            return (Just summary')
-          _ -> return (Just summary)
-  return (mb_summary, mb_module)
 
 compileToHsModule :: TargetUnit
                   -> Skc (Maybe (HsModule RdrName))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
-    SkSource _ _ form _ -> Just <$> compileSkModuleForm' form
-    HsSource path -> do
-      (mdl, _) <- compileHsFile path mbphase
-      return (Just mdl)
-    OtherSource path -> compileOtherFile path >> return Nothing
+    SkSource _ _ form sp -> Just <$> compileSkModuleForm' sp form
+    HsSource path        -> (Just . fst) <$> compileHsFile path mbphase
+    OtherSource path     -> compileOtherFile path >> return Nothing
 
--- | Wrapper for 'compileSkModuleForm', to use fresh set of modules and
--- macros in 'SkEnv'.
-compileSkModuleForm' :: [Code] -> Skc (HsModule RdrName)
-compileSkModuleForm' forms = do
-  modifySkEnv (\ske -> ske {envMacros = envDefaultMacros ske})
-  ske <- getSkEnv
+-- | Wrapper for 'compileSkModuleForm', to use fresh set of modules,
+-- language extensions, and macros in 'SkEnv'.
+compileSkModuleForm' :: SPState -> [Code] -> Skc (HsModule RdrName)
+compileSkModuleForm' sp forms = do
+  -- Reset the extension flags first, then update the flags again
+  -- with extension flags obtained from current SKSource file.
+  resetLanguageExtensions
+  setLangExtsFromSPState sp
+
+  -- Reset macros in current context.
+  resetEnvMacros
+
+  contextModules <- envContextModules <$> getSkEnv
   let ii = IIDecl . simpleImportDecl . mkModuleNameFS
-      contextModules = envContextModules ske
   setContext (map (ii . fsLit) contextModules)
   timeIt "HsModule [sk]" (compileSkModuleForm forms)
+
+resetLanguageExtensions :: Skc ()
+resetLanguageExtensions = do
+  dflags_orig <- getSessionDynFlags
+  (lang, extFlags) <- envDefaultLangExts <$> getSkEnv
+  let exts = map toEnum (IntSet.toList extFlags)
+      dflags0 = defaultDynFlags (settings dflags_orig)
+      dflags1 = lang_set dflags0 lang
+      dflags2 = foldl xopt_set dflags1 exts
+  void (setSessionDynFlags
+          (dflags_orig { language = lang
+                       , extensions = extensions dflags2
+                       , extensionFlags = extensionFlags dflags2}))
+
+resetEnvMacros :: Skc ()
+resetEnvMacros =
+  modifySkEnv (\ske -> ske {envMacros = envDefaultMacros ske})
 
 compileHsFile :: FilePath -> Maybe Phase
                -> Skc (HsModule RdrName, DynFlags)

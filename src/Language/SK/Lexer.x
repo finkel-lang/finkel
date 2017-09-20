@@ -18,6 +18,8 @@ module Language.SK.Lexer
   , incrSP
   , errorSP
   , lexErrorSP
+  , putSPState
+  , getSPState
   , addRequiredModuleName
   ) where
 
@@ -35,6 +37,9 @@ import Control.Monad.Trans.Except (ExceptT(..), throwE)
 -- Internal
 import Language.SK.Form
 import Language.SK.GHC
+
+-- ghc-boot
+import qualified GHC.LanguageExtensions as LangExt
 }
 
 %wrapper "monad-bytestring"
@@ -116,19 +121,21 @@ $whitechar+  ;
 -- ---------------------------------------------------------------------
 
 -- | Data type to hold states while reading source code.
-data SPState = SPState {
-  comments :: [Located AnnotationComment],
-  annotation_comments :: [(SrcSpan, [Located AnnotationComment])],
-  targetFile :: FastString,
-  requiredModuleNames :: [String]
-}
+data SPState = SPState
+  { comments :: [Located AnnotationComment]
+  , annotation_comments :: [(SrcSpan, [Located AnnotationComment])]
+  , targetFile :: FastString
+  , requiredModuleNames :: [String]
+  , langExts :: [LangExt.Extension]
+  } deriving (Eq)
 
 -- | Initial empty state for 'SP'.
 initialSPState :: SPState
 initialSPState = SPState { comments = []
                          , annotation_comments = []
                          , targetFile = error "_targetFile: uninitialized"
-                         , requiredModuleNames = [] }
+                         , requiredModuleNames = []
+                         , langExts = [] }
 
 -- | A data type for State monad which wraps 'Alex' with 'SPstate'.
 newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
@@ -194,6 +201,12 @@ lexErrorSP =
               alexError ("lexer error at line " ++
                           show lno ++ ", column " ++ show cno)
   in  SP (\_ -> go)
+
+putSPState :: SPState -> SP ()
+putSPState st = SP (\_ -> return ((), st))
+
+getSPState :: SP SPState
+getSPState = SP (\st -> return (st, st))
 
 addRequiredModuleName :: String -> SP ()
 addRequiredModuleName name =

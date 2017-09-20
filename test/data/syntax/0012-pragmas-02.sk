@@ -1,0 +1,17 @@
+;;; Form containing language pragmas.
+
+##(LANGUAGE DeriveDataTypeable DeriveGeneric)
+
+(module Main)
+
+(import Data.Data)
+(import GHC.Generics)
+
+(data (D1 a)
+  (D1 a a)
+  (deriving (Eq Show Data Typeable Generic)))
+
+(:: main (IO ()))
+(= main
+  (do (print (toConstr (D1 True False)))
+      (print (typeOf (D1 \a \b)))))

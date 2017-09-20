@@ -7,12 +7,16 @@ module Language.SK.Reader
   , psexpr
   ) where
 
+-- base
 import Data.Char (toLower)
-import SrcLoc
 
+-- Internal
 import Language.SK.Form
 import Language.SK.GHC
 import Language.SK.Lexer
+
+-- ghc-boot
+import qualified GHC.LanguageExtensions as LangExt
 }
 
 %name sexpr sexp
@@ -178,20 +182,42 @@ pragma orig@(LForm (L l form)) =
       | normalize sym == "unpack" -> return orig
 
     -- Pragma with single argument.
-    List [LForm (L _ (Atom (ASymbol sym))), a1]
+    List [LForm (L _ (Atom (ASymbol sym))), _a1]
       -- Inline pragmas are handled by syntax parser.
       | normalize sym `elem` inlinePragmas -> return orig
 
     -- Pragma with multiple arguments.
     List (LForm (L _ (Atom (ASymbol sym))):rest)
-      -- XXX: Add a filed to keep track of language pragma in SPState,
-      -- return empty code.
-      | normalize sym == "language" ->
-        errorSP orig "LANGUAGE pragma not yet implemented"
+      | normalize sym == "language" -> do
+        let (exts, invalids) = groupExts rest
+        case invalids of
+          [] -> do
+            sp <- getSPState
+            putSPState (sp {langExts = exts ++ langExts sp})
+            return (emptyBody l)
+          _  -> errorSP orig ("LANGUAGE: unsupported pragmas: " ++
+                              show invalids)
     _ -> error ("unknown pragma: " ++ show form)
   where
     normalize = map toLower . unpackFS
     inlinePragmas = ["inline", "noinline", "inlinable"]
+
+groupExts :: [Code] -> ([LangExt.Extension],[Code])
+groupExts = foldr f ([],[])
+  where
+    f form (exts, invalids) =
+      case form of
+        LForm (L _ (Atom (ASymbol sym)))
+          | Just ext <- lookup sym supportedLangExts ->
+            (ext:exts, invalids)
+        _ -> (exts, form:invalids)
+
+supportedLangExts :: [(FastString, LangExt.Extension)]
+supportedLangExts =
+    f [ LangExt.DeriveDataTypeable
+      , LangExt.DeriveGeneric ]
+  where
+    f = map (\ext -> (fsLit (show ext), ext))
 
 emptyBody :: SrcSpan -> Code
 emptyBody l = li l [sym l "begin"]

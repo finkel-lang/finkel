@@ -10,6 +10,7 @@ module Language.SK.Run
   , compileSkModule
   , compileSkModuleForm
   , compileWithSymbolConversion
+  , setLangExtsFromSPState
   , parseSexprs
   , buildHsSyn
   , macroFunction
@@ -20,6 +21,7 @@ module Language.SK.Run
 
 -- base
 import Control.Exception
+import Control.Monad (void)
 import System.Exit
 import Data.Maybe (fromMaybe)
 
@@ -27,6 +29,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.ByteString.Lazy as BL
 
 -- containers
+import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 
 -- ghc-paths
@@ -117,35 +120,8 @@ initialSkEnv = SkEnv
   , envDefaultMacros = specialForms
   , envDebug = False
   , envContextModules = ["Prelude", "Language.SK"]
+  , envDefaultLangExts = (Nothing, IntSet.empty)
   , envSilent = False }
-
-compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
-compileWithSymbolConversion file = go
-  where
-    go = do
-      contents <- liftIO (BL.readFile file)
-      (form, st) <- parseSexprs (Just file) contents
-      form' <- withExpanderSettings (expands form)
-      mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
-      return (mdl, st)
-
-asHaskellSymbols :: Code -> Code
-asHaskellSymbols = f1
-  where
-    f1 orig@(LForm (L l form)) =
-      case form of
-        List forms         -> li (List (map f1 forms))
-        HsList forms       -> li (HsList (map f1 forms))
-        Atom (ASymbol sym) -> li (Atom (ASymbol (f2 sym)))
-        _                  -> orig
-      where
-        li = LForm . (L l)
-    f2 sym
-      | headFS sym `elem` "!@#$%^&*-=+<>?/" = sym
-      | otherwise = fsLit (replace (unpackFS sym))
-    replace = map (\x -> case x of
-                           '-' -> '_'
-                           _   -> x)
 
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =
@@ -164,13 +140,50 @@ compileSkModuleForm form = do
   expanded <- withExpanderSettings (expands form)
   buildHsSyn parseModule expanded
 
+compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
+compileWithSymbolConversion file = go
+  where
+    go = do
+      contents <- liftIO (BL.readFile file)
+      (form, st) <- parseSexprs (Just file) contents
+      setLangExtsFromSPState st
+      form' <- withExpanderSettings (expands form)
+      mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
+      return (mdl, st)
+
 -- | Compile a file containing SK module.
 compileSkModule :: FilePath -> Skc (HModule, SPState)
 compileSkModule file = do
   contents <- liftIO (BL.readFile file)
   (form', st) <- parseSexprs (Just file) contents
+  setLangExtsFromSPState st
   mdl <- compileSkModuleForm form'
   return (mdl, st)
+
+-- | Set language extensions in current 'Skc' from given 'SPState'.
+setLangExtsFromSPState :: SPState -> Skc ()
+setLangExtsFromSPState st = do
+  dflags0 <- getSessionDynFlags
+  let dflags1 = foldl xopt_set dflags0 (langExts st)
+  void (setSessionDynFlags dflags1)
+
+asHaskellSymbols :: Code -> Code
+asHaskellSymbols = f1
+  where
+    f1 orig@(LForm (L l form)) =
+      case form of
+        List forms         -> li (List (map f1 forms))
+        HsList forms       -> li (HsList (map f1 forms))
+        Atom (ASymbol sym) -> li (Atom (ASymbol (f2 sym)))
+        _                  -> orig
+      where
+        li = LForm . (L l)
+    f2 sym
+      | headFS sym `elem` "!@#$%^&*-=+<>?/" = sym
+      | otherwise = fsLit (replace (unpackFS sym))
+    replace = map (\x -> case x of
+                           '-' -> '_'
+                           _   -> x)
 
 -- | Extract function from macro. Uses 'initialSkEnv' to unwrap the
 -- macro from 'Skc'.
@@ -254,14 +267,14 @@ tcHsModule :: GhcMonad m
            -> m TypecheckedModule
 tcHsModule mbfile genFile mdl = do
   let fn = fromMaybe "anon" mbfile
-      langExts = languageExtensions (Just Haskell2010)
+      exts = languageExtensions (Just Haskell2010)
   dflags0 <- getSessionDynFlags
   -- XXX: Does not take care of user specified DynFlags settings.
   let dflags1 =
        if genFile
           then dflags0 {hscTarget = HscAsm, ghcLink = LinkBinary}
           else dflags0 {hscTarget = HscNothing, ghcLink = NoLink}
-  _ <- setSessionDynFlags (foldl xopt_set dflags1 langExts)
+  void (setSessionDynFlags (foldl xopt_set dflags1 exts))
   ms <- mkModSummary mbfile mdl
   let ann = (Map.empty, Map.empty)
       r_s_loc = mkSrcLoc (fsLit fn) 1 1
@@ -271,5 +284,5 @@ tcHsModule mbfile genFile mdl = do
                         , pm_extra_src_files = [fn]
                         , pm_annotations = ann }
   tc <- typecheckModule pm
-  _ <- setSessionDynFlags dflags0
+  void (setSessionDynFlags dflags0)
   return tc

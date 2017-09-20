@@ -167,6 +167,11 @@ pp_nonnull :: Outputable t => [t] -> SDoc
 pp_nonnull [] = empty
 pp_nonnull xs = vcat (map ppr xs)
 
+pp_langExts :: SPState -> SDoc
+pp_langExts sp = vcat (map f (langExts sp))
+  where
+    f e = text "{-# LANGUAGE" <+> text (show e) <+> text "#-}"
+
 hsSrc_nonnull :: HsSrc a => SPState -> [a] -> SDoc
 hsSrc_nonnull st xs =
   case xs of
@@ -213,11 +218,14 @@ instance (HsSrc a, OutputableBndrId a, HasOccName a)
           => HsSrc (Hsrc (HsModule a)) where
   toHsSrc st (Hsrc a) = case a of
     HsModule Nothing _ imports decls _ mbDoc ->
-      pp_mb mbDoc
-        $$ pp_nonnull imports
-        $$ hsSrc_nonnull st (map (Hsrc . unLoc) decls)
+      vcat [ linePragma' st 1
+           , pp_langExts st
+           , pp_mb mbDoc
+           , pp_nonnull imports
+           , hsSrc_nonnull st (map (Hsrc . unLoc) decls) ]
     HsModule (Just name) exports imports decls deprec mbDoc ->
       vcat [ linePragma' st 1
+           , pp_langExts st
            , mbHeaderComment st mbDoc
            , case exports of
                Nothing ->
