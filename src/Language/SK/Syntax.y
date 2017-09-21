@@ -13,6 +13,7 @@ module Language.SK.Syntax
   , evalBuilder
   , parseModule
   , parseImports
+  , parseLImport
   , parseStmt
   , parseDecls
   , parseTopDecls
@@ -610,6 +611,9 @@ parseModule = parse_module
 
 parseImports :: Builder [HImportDecl]
 parseImports = p_imports
+
+parseLImport :: Builder HImportDecl
+parseLImport = p_limport
 
 parseStmt :: Builder HStmt
 parseStmt = p_stmt

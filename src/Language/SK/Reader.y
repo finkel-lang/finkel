@@ -11,9 +11,11 @@ module Language.SK.Reader
 import Data.Char (toLower)
 
 -- Internal
+import Language.SK.Builder
 import Language.SK.Form
 import Language.SK.GHC
 import Language.SK.Lexer
+import Language.SK.Syntax
 
 -- ghc-boot
 import GHC.LanguageExtensions (Extension(..))
@@ -58,16 +60,16 @@ import GHC.LanguageExtensions (Extension(..))
 -- expansion phase.
 
 sexp :: { Code }
-     : atom                   { $1 }
-     | 'quote' sexp           { mkQuote $1 $2 }
-     | '`' sexp               { mkQuasiquote $1 $2 }
-     | ',' sexp               { mkUnquote $1 $2 }
-     | ',@' sexp              { mkUnquoteSplice $1 $2 }
-     | '[' sexps ']'          { mkHsList $1 $2 }
-     | '(' ')'                { mkUnit $1 }
-     | '(' 'require' sexp ')' {% mkRequire $1 $2 $3 }
-     | '(' sexps ')'          { mkList $1 $2 }
-     | '#' rmac               { $2 }
+     : atom                    { $1 }
+     | 'quote' sexp            { mkQuote $1 $2 }
+     | '`' sexp                { mkQuasiquote $1 $2 }
+     | ',' sexp                { mkUnquote $1 $2 }
+     | ',@' sexp               { mkUnquoteSplice $1 $2 }
+     | '[' sexps ']'           { mkHsList $1 $2 }
+     | '(' ')'                 { mkUnit $1 }
+     | '(' 'require' sexps ')' {% mkRequire $1 $2 $3 }
+     | '(' sexps ')'           { mkList $1 $2 }
+     | '#' rmac                { $2 }
 
 rmac :: { Code }
     : '#' sexp      {% pragma $2 }
@@ -131,13 +133,12 @@ mkList :: Located Token -> [Code] -> Code
 mkList (L l _) body = li l body
 {-# INLINE mkList #-}
 
-mkRequire :: Located Token -> Located Token -> Code -> SP Code
-mkRequire lref t1 t2 = do
-  case t2 of
-    LForm (L _ (Atom (ASymbol modName))) ->
-        addRequiredModuleName (unpackFS modName)
+mkRequire :: Located Token -> Located Token -> [Code] -> SP Code
+mkRequire lref req rest = do
+  case evalBuilder parseLImport rest of
+    Right idecl -> addRequiredDecl idecl
     _ -> return ()
-  return (mkList lref [mkASymbol t1, t2])
+  return (mkList lref (mkASymbol req : rest))
 {-# INLINE mkRequire #-}
 
 mkASymbol :: Located Token -> Code
@@ -224,6 +225,14 @@ supportedLangExts =
       , OverloadedLists ]
   where
     f = map (\ext -> (fsLit (show ext), ext))
+
+addRequiredDecl :: HImportDecl -> SP ()
+addRequiredDecl idecl =
+  SP (\st ->
+       let names = requiredModuleNames st
+           name = moduleNameString (unLoc (ideclName (unLoc idecl)))
+           st' = st { requiredModuleNames = name : names }
+       in  return ((), st'))
 
 emptyBody :: SrcSpan -> Code
 emptyBody l = li l [sym l "begin"]

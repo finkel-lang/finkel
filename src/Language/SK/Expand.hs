@@ -21,13 +21,19 @@ import Unsafe.Coerce (unsafeCoerce)
 -- containers
 import qualified Data.Map as Map
 
+-- ghc
+import RdrName (rdrNameOcc)
+import Name (nameOccName)
+
 -- Internal
+import Language.SK.Builder (HImportDecl)
 import Language.SK.Homoiconic
 import Language.SK.Eval
 import Language.SK.Form
 import Language.SK.GHC
-import Language.SK.Syntax (evalBuilder, parseExpr, parseModule)
 import Language.SK.SKC
+import Language.SK.Syntax ( evalBuilder, parseExpr, parseModule
+                          , parseLImport )
 
 
 -- ---------------------------------------------------------------------
@@ -152,9 +158,6 @@ compileMacro form@(LForm (L l _)) self arg body = do
       return (name, decls, unsafeCoerce macro)
     Left err -> skSrcError form err
 
-mkIIDecl :: FastString -> InteractiveImport
-mkIIDecl = IIDecl . simpleImportDecl . mkModuleNameFS
-
 pTyThing :: DynFlags -> TyThing -> Skc ()
 pTyThing dflags ty_thing@(AnId var) = do
   let str :: Outputable p => p -> String
@@ -206,6 +209,33 @@ pTyThing _ _ = return ()
 -- pTyThing' dflags tt =
 --   -- Arguments of `pprTyThing' changed since ghc-8.0.2 release.
 --   liftIO (putStrLn (";;; " ++ (showSDocUnqual dflags (pprTyThing tt))))
+
+getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Skc [TyThing]
+getTyThingsFromIDecl (L _ idecl) minfo = do
+  -- 'toImportList' borrowed from local definition in
+  -- 'TcRnDriver.tcPreludeClashWarn'.
+  let exportedNames = modInfoExports minfo
+      ieName' (L l ie) = L l (ieName ie)
+      toImportList (h, loc) = (h, map ieName' (unLoc loc))
+      getNames =
+        case fmap toImportList (ideclHiding idecl) of
+          -- Import with `hiding' entities. Comparing 'Name' and
+          -- 'RdrName' via OccName'.
+          Just (True, ns)  -> do
+            let f n acc | nameOccName n `elem` ns' = acc
+                        | otherwise             = n : acc
+                ns' = map (rdrNameOcc . unLoc) ns
+            return (foldr f [] exportedNames)
+
+          -- Import with explicit entities.
+          Just (False, ns) -> do
+            hsc_env <- getSession
+            concat <$> mapM (liftIO . hscTcRnLookupRdrName hsc_env) ns
+
+          -- Import whole module.
+          Nothing          -> return exportedNames
+
+  catMaybes <$> (getNames >>= mapM lookupName)
 
 addImportedMacro :: TyThing -> Skc ()
 addImportedMacro ty_thing =
@@ -288,36 +318,45 @@ m_letMacro form =
 
 m_require :: Mfunc
 m_require form =
-  -- The `require' is implemented as special form, to support dependency
+  -- The special form `require' modifies the HscEnv at the time of macro
+  -- expansion, to update the context in compile time session.  The
+  -- `require' is implemented as special form, to support dependency
   -- analysis during compilation of multiple modules with `--make'
   -- command.
   --
-  -- The special form `require' modifies the HscEnv at the time of macro
-  -- expansion, to update the context in compile time session.
+  -- Note that the form body of `require' is parsed twice, once
+  -- in Reader, and again in this module. Parsing twice because the
+  -- first parse is done before expanding macro, to analyse the module
+  -- dependency graph of home package module.
   --
-  -- XXX: Need to clean up the context after compiling each file, but
-  -- not yet done. Reason to clean up the context is, if not cleaned,
-  -- all files passed via "--make" command will use the same interactive
-  -- context, which could be confusing, and may cause unwanted name
-  -- conflicts and overridings.
-  --
-  case unLForm form of
-    L _l1 (List [_,LForm (L _l2 (Atom (ASymbol mname)))]) -> do
-      debugIO (putStrLn (";;; requiring " ++ unpackFS mname))
-      contexts <- getContext
-      setContext (mkIIDecl mname : contexts)
-      mdl <- lookupModule (mkModuleNameFS mname) Nothing
-      mb_minfo <- getModuleInfo mdl
-      case mb_minfo of
-        Just minfo ->
-          do dflags <- getSessionDynFlags
-             let names = modInfoExports minfo
-             mb_tythings <- mapM lookupName names
-             mapM_ (pTyThing dflags) (catMaybes mb_tythings)
-             return emptyForm
-        Nothing -> skSrcError form ("require: cannot find modinfo for "
-                                 ++ unpackFS mname)
-    _ -> skSrcError form "require: malformed syntax."
+  case form of
+    LForm (L _ (List (_:code))) ->
+      case evalBuilder parseLImport code of
+        Right lidecl@(L _ idecl) -> do
+          dflags <- getSessionDynFlags
+          debugIO (putStrLn (";;; require: " ++ showPpr dflags idecl))
+
+          -- Add the module to current compilation context.
+          contexts <- getContext
+          setContext (IIDecl idecl : contexts)
+
+          -- Look up Macros in parsed module, add to SkEnv when found.
+          let mname = unLoc (ideclName idecl)
+              mname' = moduleNameString mname
+          mdl <- lookupModule mname Nothing
+          mb_minfo <- getModuleInfo mdl
+          case mb_minfo of
+            Just minfo -> do
+              things <- getTyThingsFromIDecl lidecl minfo
+              debugIO
+                (putStrLn (";;; things: " ++ showPpr dflags things))
+              mapM_ (pTyThing dflags) things
+              return emptyForm
+            Nothing ->
+              skSrcError form ("require: module " ++ mname' ++
+                               " not found.")
+        Left err -> skSrcError form ("require: " ++ err)
+    _ -> skSrcError form "require: malformed body"
 
 m_evalWhenCompile :: Mfunc
 m_evalWhenCompile form =
@@ -550,3 +589,6 @@ mkQuoted l form = tList l [tSym l "quoted", form]
 
 emptyForm :: Code
 emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
+
+mkIIDecl :: FastString -> InteractiveImport
+mkIIDecl = IIDecl . simpleImportDecl . mkModuleNameFS

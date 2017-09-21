@@ -20,7 +20,6 @@ module Language.SK.Lexer
   , lexErrorSP
   , putSPState
   , getSPState
-  , addRequiredModuleName
   ) where
 
 -- base
@@ -31,15 +30,16 @@ import Data.Maybe (fromMaybe)
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
 
+-- ghc-boot
+import qualified GHC.LanguageExtensions as LangExt
+
 -- transformers
 import Control.Monad.Trans.Except (ExceptT(..), throwE)
 
 -- Internal
+import Language.SK.Builder
 import Language.SK.Form
 import Language.SK.GHC
-
--- ghc-boot
-import qualified GHC.LanguageExtensions as LangExt
 }
 
 %wrapper "monad-bytestring"
@@ -131,11 +131,12 @@ data SPState = SPState
 
 -- | Initial empty state for 'SP'.
 initialSPState :: SPState
-initialSPState = SPState { comments = []
-                         , annotation_comments = []
-                         , targetFile = error "_targetFile: uninitialized"
-                         , requiredModuleNames = []
-                         , langExts = [] }
+initialSPState =
+  SPState { comments = []
+          , annotation_comments = []
+          , targetFile = error "_targetFile: uninitialized"
+          , requiredModuleNames = []
+          , langExts = [] }
 
 -- | A data type for State monad which wraps 'Alex' with 'SPstate'.
 newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
@@ -159,7 +160,7 @@ instance Monad SP where
 runSP :: SP a -> Maybe FilePath -> BL.ByteString
       -> Either String (a, SPState)
 runSP sp target input =
-  let st = initialSPState {targetFile = target'}
+  let st = initialSPState { targetFile = target' }
       target' = maybe (fsLit "anon") fsLit target
   in  runAlex input (unSP sp st)
 
@@ -207,13 +208,6 @@ putSPState st = SP (\_ -> return ((), st))
 
 getSPState :: SP SPState
 getSPState = SP (\st -> return (st, st))
-
-addRequiredModuleName :: String -> SP ()
-addRequiredModuleName name =
-  SP (\st ->
-       let names = requiredModuleNames st
-           st' = st {requiredModuleNames = name : names}
-       in  return ((), st'))
 
 
 -- ---------------------------------------------------------------------
