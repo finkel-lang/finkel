@@ -135,10 +135,14 @@ buildHsSyn bldr forms =
     Right a  -> return a
     Left err -> failS err
 
-compileSkModuleForm :: [Code] -> Skc HModule
-compileSkModuleForm form = do
-  expanded <- withExpanderSettings (expands form)
-  buildHsSyn parseModule expanded
+-- | Compile a file containing SK module.
+compileSkModule :: FilePath -> Skc (HModule, SPState)
+compileSkModule file = do
+  contents <- liftIO (BL.readFile file)
+  (form', st) <- parseSexprs (Just file) contents
+  setLangExtsFromSPState st
+  mdl <- compileSkModuleForm form'
+  return (mdl, st)
 
 compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
 compileWithSymbolConversion file = go
@@ -151,14 +155,10 @@ compileWithSymbolConversion file = go
       mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
       return (mdl, st)
 
--- | Compile a file containing SK module.
-compileSkModule :: FilePath -> Skc (HModule, SPState)
-compileSkModule file = do
-  contents <- liftIO (BL.readFile file)
-  (form', st) <- parseSexprs (Just file) contents
-  setLangExtsFromSPState st
-  mdl <- compileSkModuleForm form'
-  return (mdl, st)
+compileSkModuleForm :: [Code] -> Skc HModule
+compileSkModuleForm form = do
+  expanded <- withExpanderSettings (expands form)
+  buildHsSyn parseModule expanded
 
 -- | Set language extensions in current 'Skc' from given 'SPState'.
 setLangExtsFromSPState :: SPState -> Skc ()

@@ -133,8 +133,8 @@ builderError = do
   st <- getBState
   case lastToken st of
     Nothing -> failB "no location"
-    Just x  ->
-      failB (showLoc x ++ "parse error on input `" ++ show x ++ "'")
+    Just x  -> failB (showLoc x ++
+                      "syntax error on input `" ++ show x ++ "'")
 
 -- ---------------------------------------------------------------------
 --

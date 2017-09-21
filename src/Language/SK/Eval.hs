@@ -95,16 +95,7 @@ evalDecls decls = do
   setSession (hsc_env {hsc_IC = new_ictxt})
   return (new_tythings, new_ictxt)
 
--- GHC head exports this from HscMain, but 8.0.2 doesn't.
-ioMsgMaybe :: IO (Messages, Maybe a) -> Skc a
-ioMsgMaybe ioA = do
-  -- XXX: Show warning messages with DynFlags settings.
-  ((_warns, errs), mb_r) <- liftIO ioA
-  case mb_r of
-    Nothing -> liftIO (throwIO (mkSrcErr errs))
-    Just r  -> return r
-
--- Like 'HscMain.hscDesugar'', but for 'SKC'.
+-- | Like 'HscMain.hscDesugar'', but for 'Skc'.
 skcDesugar' :: ModLocation -> TcGblEnv -> Skc ModGuts
 skcDesugar' mod_location tc_result = do
   hsc_env <- getSession
@@ -116,3 +107,12 @@ skcDesugar' mod_location tc_result = do
   -- handleWarnings
 
   return r
+
+-- | Like 'HscMain.ioMsgMaybe', but for 'Skc'.
+ioMsgMaybe :: IO (Messages, Maybe a) -> Skc a
+ioMsgMaybe ioA = do
+  -- XXX: Show warning messages with DynFlags settings.
+  ((_warns, errs), mb_r) <- liftIO ioA
+  case mb_r of
+    Nothing -> liftIO (throwIO (mkSrcErr errs))
+    Just r  -> return r

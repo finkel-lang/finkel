@@ -3,6 +3,7 @@
 module Language.SK.Make
   ( make
   , asModuleName
+  , TargetSource(..)
   ) where
 
 -- base
