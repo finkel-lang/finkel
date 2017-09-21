@@ -9,9 +9,10 @@ import Test.Hspec
 import Test.QuickCheck
 import Text.Show.Functions ()
 
-import Language.SK.Homoiconic
+import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.GHC
+import Language.SK.Homoiconic
 import Language.SK.Lexer
 import Language.SK.Reader
 
@@ -84,6 +85,8 @@ formTests = do
 
   fromCodeTest Foo
 
+  unquoteSpliceTest
+
 readShow :: String -> Spec
 readShow str =
   describe ("read and show `" ++ str ++ "'") $
@@ -140,9 +143,7 @@ listTest :: Spec
 listTest =
   describe "list from arbitrary form applied to arbitrary function" $
     it "should be a list" $ do
-      let isListL (LForm (L _ (List _))) = True
-          isListL _                      = False
-          f :: (Code -> Code) -> Code -> Bool
+      let f :: (Code -> Code) -> Code -> Bool
           f g form = isListL (toListL (g form))
       property f
 
@@ -274,6 +275,17 @@ fromCodeTest foo =
     it "should return Nothing" $
       (fromCode nil :: Maybe Foo) `shouldBe` Nothing
 
+unquoteSpliceTest :: Spec
+unquoteSpliceTest = do
+  describe "unquote splicing List" $
+    it "should return list contents" $
+      property
+        (\form ->
+           if (isListL form || isHsListL form ||
+               isStringL form || isUnitL form)
+             then (0 <= length (unquoteSplice form)) === True
+             else expectFailure (unquoteSplice form === []))
+
 parseE :: String -> Code
 parseE = parseE' Nothing
 
@@ -282,3 +294,19 @@ parseE' mb_path str =
   case runSP sexpr mb_path (BL.pack str) of
     Right (expr, _) -> expr
     Left err        -> error err
+
+isListL :: Code -> Bool
+isListL (LForm (L _ (List _))) = True
+isListL _                      = False
+
+isHsListL :: Code -> Bool
+isHsListL (LForm (L _ (HsList _))) = True
+isHsListL _                        = False
+
+isStringL :: Code -> Bool
+isStringL (LForm (L _ (Atom (AString _)))) = True
+isStringL _                                = False
+
+isUnitL :: Code -> Bool
+isUnitL (LForm (L _ (Atom AUnit))) = True
+isUnitL _                          = False

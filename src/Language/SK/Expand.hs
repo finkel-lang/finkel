@@ -12,6 +12,7 @@ module Language.SK.Expand
   ) where
 
 -- base
+import Control.Exception (throw)
 import Control.Monad (foldM, when)
 import Data.Char (isLower)
 import Data.Maybe (catMaybes)
@@ -108,9 +109,13 @@ isUnquoteSplice (LForm form) =
 unquoteSplice :: Homoiconic a => a -> [Code]
 unquoteSplice form =
   case unLocLForm (toCode form) of
-    List xs   -> xs
-    HsList xs -> xs
-    _         -> []
+    List xs           -> xs
+    HsList xs         -> xs
+    Atom AUnit        -> []
+    Atom (AString xs) -> map toCode xs
+    _                 -> throw (SkException
+                                  ("unquote splice: got " ++
+                                   show (toCode form)))
 
 -- ---------------------------------------------------------------------
 --
@@ -160,7 +165,8 @@ pTyThing dflags ty_thing@(AnId var) = do
                               str (varName var) ++
                               "' to current compiler session."))
            addImportedMacro ty_thing)
-pTyThing dflags tt = pTyThing' dflags tt
+pTyThing _ _ = return ()
+-- pTyThing dflags tt = pTyThing' dflags tt
 
 -- Currently not in use during macro addition, just for printing out
 -- information.
@@ -169,8 +175,8 @@ pTyThing dflags tt = pTyThing' dflags tt
 -- more safe than comparing the Type of Var, since IfaceDecl contains
 -- more detailed information.
 --
-pTyThing' :: DynFlags -> TyThing -> Skc ()
-pTyThing' _ _ = return ()
+-- pTyThing' :: DynFlags -> TyThing -> Skc ()
+-- pTyThing' _ _ = return ()
 
 -- pTyThing' dflags tt@(AnId _) = do
 --   let ifd = tyThingToIfaceDecl tt
