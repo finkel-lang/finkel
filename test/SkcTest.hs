@@ -32,6 +32,18 @@ exceptionTest = do
                             e2 = SkException str
                         in  e1 == e2 && show e1 == show e2)
 
+  describe "Applicative instance of Skc" $
+    it "should return 42" $ do
+      let act = (*) <$> pure 6 <*> pure 7
+      ret <- runSkcWithoutHandler act initialSkEnv
+      ret `shouldBe` Right 42
+
+  describe "ExceptionMonad instance of Skc" $
+    it "should return 42" $ do
+      let act = gbracket (return 21) return (\x -> return (x * 2))
+      ret <- runSkcWithoutHandler act initialSkEnv
+      ret `shouldBe` Right (42 :: Int)
+
   describe "running Skc action containing `failS'" $
     it "should throw SkException" $ do
       let p :: SkException -> Bool

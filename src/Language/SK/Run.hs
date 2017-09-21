@@ -138,22 +138,23 @@ buildHsSyn bldr forms =
 -- | Compile a file containing SK module.
 compileSkModule :: FilePath -> Skc (HModule, SPState)
 compileSkModule file = do
-  contents <- liftIO (BL.readFile file)
-  (form', sp) <- parseSexprs (Just file) contents
-  setLangExtsFromSPState sp
-  mdl <- compileSkModuleForm form'
+  (form, sp) <- parseFile file
+  mdl <- compileSkModuleForm form
   return (mdl, sp)
 
 compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
-compileWithSymbolConversion file = go
-  where
-    go = do
-      contents <- liftIO (BL.readFile file)
-      (form, sp) <- parseSexprs (Just file) contents
-      setLangExtsFromSPState sp
-      form' <- withExpanderSettings (expands form)
-      mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
-      return (mdl, sp)
+compileWithSymbolConversion file = do
+  (form, sp) <- parseFile file
+  form' <- withExpanderSettings (expands form)
+  mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
+  return (mdl, sp)
+
+parseFile :: FilePath -> Skc ([Code], SPState)
+parseFile file = do
+  contents <- liftIO (BL.readFile file)
+  (form, sp) <- parseSexprs (Just file) contents
+  setLangExtsFromSPState sp
+  return (form, sp)
 
 compileSkModuleForm :: [Code] -> Skc HModule
 compileSkModuleForm form = do
