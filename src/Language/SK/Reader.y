@@ -219,7 +219,9 @@ supportedLangExts =
       , DeriveFunctor
       , DeriveGeneric
       , DeriveTraversable
-      , GeneralizedNewtypeDeriving ]
+      , GeneralizedNewtypeDeriving
+      , OverloadedStrings
+      , OverloadedLists ]
   where
     f = map (\ext -> (fsLit (show ext), ext))
 

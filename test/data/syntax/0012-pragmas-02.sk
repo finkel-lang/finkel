@@ -3,11 +3,14 @@
 ##(LANGUAGE DeriveDataTypeable DeriveFunctor DeriveGeneric)
 ##(LANGUAGE DeriveFoldable DeriveTraversable)
 ##(LANGUAGE GeneralizedNewtypeDeriving)
+##(LANGUAGE OverloadedLists OverloadedStrings)
 
 (module Main)
 
 (import Data.Data)
 (import GHC.Generics)
+(import Data.ByteString ((ByteString)))
+(import Data.Set ((Set)))
 
 ;;; DeriveDataTypeable
 (data (D1 a)
@@ -35,6 +38,14 @@
   (N a)
   (deriving (Eq Show Num)))
 
+;; OverloadedString
+(:: f1 ByteString)
+(= f1 "foo")
+
+;; OverloadedLists
+(:: f2 (Set Char))
+(= f2 [\a \e \i \o \u])
+
 (:: main (IO ()))
 (= main
   (do (print (typeOf (D1 True False)))
@@ -45,4 +56,6 @@
             (= l1 (Cons 1 (Cons 2 (Cons 3 Nil))))))
       (print (foldr + 0 l1))
       (sequence_ (fmap print l1))
-      (print (+ (N (:: 20 Int)) (N 22)))))
+      (print (+ (N (:: 20 Int)) (N 22)))
+      (print f1)
+      (print f2)))
