@@ -139,21 +139,21 @@ buildHsSyn bldr forms =
 compileSkModule :: FilePath -> Skc (HModule, SPState)
 compileSkModule file = do
   contents <- liftIO (BL.readFile file)
-  (form', st) <- parseSexprs (Just file) contents
-  setLangExtsFromSPState st
+  (form', sp) <- parseSexprs (Just file) contents
+  setLangExtsFromSPState sp
   mdl <- compileSkModuleForm form'
-  return (mdl, st)
+  return (mdl, sp)
 
 compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
 compileWithSymbolConversion file = go
   where
     go = do
       contents <- liftIO (BL.readFile file)
-      (form, st) <- parseSexprs (Just file) contents
-      setLangExtsFromSPState st
+      (form, sp) <- parseSexprs (Just file) contents
+      setLangExtsFromSPState sp
       form' <- withExpanderSettings (expands form)
       mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
-      return (mdl, st)
+      return (mdl, sp)
 
 compileSkModuleForm :: [Code] -> Skc HModule
 compileSkModuleForm form = do
@@ -162,9 +162,9 @@ compileSkModuleForm form = do
 
 -- | Set language extensions in current 'Skc' from given 'SPState'.
 setLangExtsFromSPState :: SPState -> Skc ()
-setLangExtsFromSPState st = do
+setLangExtsFromSPState sp = do
   dflags0 <- getSessionDynFlags
-  let dflags1 = foldl xopt_set dflags0 (langExts st)
+  let dflags1 = foldl xopt_set dflags0 (langExts sp)
   void (setSessionDynFlags dflags1)
 
 asHaskellSymbols :: Code -> Code
