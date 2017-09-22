@@ -28,7 +28,12 @@ import Data.Char (toUpper)
 import Data.Maybe (fromMaybe)
 
 -- bytestring
+import Data.ByteString.Internal (w2c)
+import qualified Data.ByteString.Lazy as W8
 import qualified Data.ByteString.Lazy.Char8 as BL
+
+-- ghc
+import Encoding (utf8DecodeByteString)
 
 -- ghc-boot
 import qualified GHC.LanguageExtensions as LangExt
@@ -49,17 +54,17 @@ $nl          = [\n\r\f]
 $whitechar   = [$nl\v\ $unispace]
 $white_no_nl = $whitechar # \n
 
-$alpha = [a-zA-Z]
+$alpha       = [a-zA-Z]
 
-$negative = \-
-$octit    = [0-7]
-$digit    = [0-9]
-$hexit    = [$digit A-F a-f]
+$negative    = \-
+$octit       = [0-7]
+$digit       = [0-9]
+$hexit       = [$digit A-F a-f]
 
-$hsymhead = [^\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
-$hsymtail = [$hsymhead\'\#$digit]
-@hsymbol  = $hsymhead $hsymtail*
+$hsymhead    = [^\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
+$hsymtail    = [$hsymhead\'\#$digit]
 
+@hsymbol     = $hsymhead $hsymtail*
 @signed      = $negative ?
 @octal       = $octit+
 @decimal     = $digit+
@@ -324,22 +329,21 @@ tok_line_comment (_,_,s,_) l = do
 
 tok_symbol :: Action
 tok_symbol (_,_,s,_) l = do
-  let bs = BL.toStrict $! BL.take l s
+  let bs = BL.toStrict $! takeUtf8 l s
   return $ TSymbol $! mkFastStringByteString bs
 {-# INLINE tok_symbol #-}
 
 tok_char :: Action
-tok_char (_,_,s,_) l =
-  case s' of
-    ['\\',c] -> return $ TChar c
-    '\\':cs | Just c' <- lookup (map toUpper cs) charTable
-             -> return $ TChar c'
-    _        -> do
-     (AlexPn _ lno cno, _, _, _) <- alexGetInput
-     alexError ("unknown character token `" ++ s' ++ "' at line " ++
-                show lno ++ ", column " ++ show cno)
+tok_char inp0@(_,_,s,_) l
+  | '\\':cs <- toString (BL.take l s)
+  , Just c <- lookup (map toUpper cs) charTable =
+    return $! TChar c
+  | Just ('\\', inp1) <- alexGetChar' inp0
+  , Just (c, inp2) <- alexGetChar' inp1 = do
+    alexSetInput inp2
+    return $! TChar c
+  | otherwise = alexError "tok_char: panic"
   where
-    s' = toString (BL.take l s)
     charTable =
       [ ("NUL", '\NUL'), ("SOH", '\SOH'), ("STX", '\STX')
       , ("ETX", '\ETX'), ("EOT", '\EOT'), ("ENQ", '\ENQ')
@@ -355,31 +359,32 @@ tok_char (_,_,s,_) l =
 {-# INLINE tok_char #-}
 
 tok_string :: Action
-tok_string _ast0 _l = do
-  inp <- alexGetInput
+tok_string inp _l =
   case alexGetChar' inp of
-    Just ('"', inp') -> alexSetInput inp' >> go BL.empty
-    _                -> alexError "tok_string: panic"
+    Just ('"', inp') -> alexSetInput inp' >> go ""
+    _   -> alexError ("tok_string: panic, inp=" ++ show inp)
   where
     go acc = do
       inp0 <- acc `seq` alexGetInput
       case alexGetChar' inp0 of
         Nothing -> return $ accToTString acc
         Just (c0, inp1)
-          | c0 == '"'  -> return $ accToTString acc
+          | c0 == '"'  -> do
+            alexSetInput inp1
+            return $ accToTString acc
           | c0 == '\\' ->
             case alexGetChar' inp1 of
               Nothing -> alexError "invalid escape in string literal"
               Just (c1, inp2)
                 | Just c2 <- escape c1 ->
-                  putAndGo inp2 $! BL.cons c2 acc
+                  putAndGo inp2 $! (c2 : acc)
                 | c1 == '\n'           ->
                   putAndGo inp2 acc
                 | otherwise            ->
-                  putAndGo inp2 (BL.cons c1 acc)
-          | otherwise  -> putAndGo inp1 (BL.cons c0 acc)
+                  putAndGo inp2 $! (c1 : acc)
+          | otherwise  -> putAndGo inp1 $! (c0 : acc)
     putAndGo inp acc = alexSetInput inp >> go acc
-    accToTString = TString . BL.unpack . BL.reverse
+    accToTString = TString . reverse
     escape x = lookup x tbl
       where
         tbl = [('a','\a'),('b','\b'),('f','\f'),('n','\n'),('r','\r')
@@ -468,13 +473,26 @@ alexEOF = return TEOF
 {-# INLINE alexEOF #-}
 
 alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
-alexGetChar' (AlexPn pos ln col, chr, bs, consumed) =
-  if BL.null bs
-    then Nothing
-    else Just (chr, (p', BL.head bs, BL.tail bs, consumed + 1))
-  where
-    p' = AlexPn (pos+1) ln' col'
-    (ln', col') = if chr == '\n' then (ln+1, 0) else (ln, col+1)
+alexGetChar' inp0 =
+  case alexGetByte inp0 of
+    Just (w0, inp1)
+      | w0 < 0x80 -> return (w2c w0, inp1)
+      | w0 < 0xe0  -> do
+         (w1, inp2) <- alexGetByte inp1
+         return (utf8char [w0,w1], inp2)
+      | w0 < 0xf0  -> do
+         (w1, inp2) <- alexGetByte inp1
+         (w2, inp3) <- alexGetByte inp2
+         return (utf8char [w0,w1,w2], inp3)
+      | otherwise -> do
+         (w1, inp2) <- alexGetByte inp1
+         (w2, inp3) <- alexGetByte inp2
+         (w3, inp4) <- alexGetByte inp3
+         return (utf8char [w0,w1,w2,w3], inp4)
+      where
+        utf8char w8s =
+          head (utf8DecodeByteString (W8.toStrict (W8.pack w8s)))
+    Nothing -> Nothing
 {-# INLINE alexGetChar' #-}
 
 
@@ -499,4 +517,26 @@ annotateComment tok = case tok of
   TLineComment s    -> AnnLineComment s
   _                 -> error ("annotateComment: " ++ show tok)
 {-# INLINE annotateComment #-}
+
+takeUtf8 :: Int64 -> BL.ByteString -> BL.ByteString
+takeUtf8 n bs = fst (splitUtf8 n bs)
+
+splitUtf8 :: Int64 -> BL.ByteString -> (BL.ByteString, BL.ByteString)
+splitUtf8 n0 bs0 = go n0 bs0 BL.empty
+  where
+    go n bs acc
+      | n <= 0    = (acc, bs)
+      | otherwise =
+         case W8.uncons bs of
+           Just (w8, bs0) ->
+             let (acc', bs')
+                   | w8 < 0x80 = (BL.snoc acc (w2c w8), bs0)
+                   | w8 < 0xe0 = split 1
+                   | w8 < 0xf0 = split 2
+                   | otherwise = split 3
+                 split k =
+                   let (pre, bs1) = BL.splitAt k bs0
+                   in  (BL.append (BL.snoc acc (w2c w8)) pre, bs1)
+             in  go (n - 1) bs' acc'
+           Nothing -> error "takeUtf8: empty input"
 }
