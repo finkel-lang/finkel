@@ -13,6 +13,7 @@ module Language.SK.Lexer
     -- * S-expression parser monad
   , SP(..)
   , SPState(..)
+  , initialSPState
   , runSP
   , evalSP
   , incrSP
@@ -26,6 +27,7 @@ module Language.SK.Lexer
 import Control.Monad (ap, liftM)
 import Data.Char (toUpper)
 import Data.Maybe (fromMaybe)
+import Data.Word (Word8)
 
 -- bytestring
 import Data.ByteString.Internal (w2c)
@@ -34,6 +36,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 
 -- ghc
 import Encoding (utf8DecodeByteString)
+import SrcLoc (RealSrcLoc, advanceSrcLoc, srcLocCol, srcLocLine)
 
 -- ghc-boot
 import qualified GHC.LanguageExtensions as LangExt
@@ -47,14 +50,9 @@ import Language.SK.Form
 import Language.SK.GHC
 }
 
-%wrapper "monad-bytestring"
-
-$unispace    = \x05
 $nl          = [\n\r\f]
-$whitechar   = [$nl\v\ $unispace]
+$whitechar   = [$nl\v\ ]
 $white_no_nl = $whitechar # \n
-
-$alpha       = [a-zA-Z]
 
 $negative    = \-
 $octit       = [0-7]
@@ -81,10 +79,6 @@ $whitechar+  ;
 
 \;+ $whitechar \| .* { tok_doc_comment_next }
 \; .*                { tok_line_comment }
-
---- Haskell style pragmas, currently ignored.
-
-"{-#".*              { skip }
 
 --- Parentheses
 \(                   { tok_oparen }
@@ -132,87 +126,160 @@ data SPState = SPState
   , targetFile :: FastString
   , requiredModuleNames :: [String]
   , langExts :: [LangExt.Extension]
+  , buf :: BL.ByteString
+  , currentLoc :: RealSrcLoc
+  , prevChar :: Char
   } deriving (Eq)
 
 -- | Initial empty state for 'SP'.
-initialSPState :: SPState
-initialSPState =
+initialSPState :: FastString -> Int -> Int -> SPState
+initialSPState file linum colnum =
   SPState { comments = []
           , annotation_comments = []
-          , targetFile = error "_targetFile: uninitialized"
+          , targetFile = file
           , requiredModuleNames = []
-          , langExts = [] }
+          , langExts = []
+          , buf = BL.empty
+          , currentLoc = mkRealSrcLoc file linum colnum
+          , prevChar = '\n'}
+
+data SPResult a
+  = SPOK SPState a
+  | SPNG SrcLoc String
+  deriving (Eq)
 
 -- | A data type for State monad which wraps 'Alex' with 'SPstate'.
-newtype SP a = SP { unSP :: SPState -> Alex (a, SPState) }
+newtype SP a = SP { unSP :: SPState -> SPResult a }
 
 instance Functor SP where
-  fmap f (SP sp) = SP (\st -> fmap (\(a,st) -> (f a, st)) (sp st))
+  fmap = liftM
   {-# INLINE fmap #-}
 
 instance Applicative SP where
-  pure a = SP (\st -> pure (a,st))
+  pure = return
   {-# INLINE pure #-}
   (<*>) = ap
   {-# INLINE (<*>) #-}
 
 instance Monad SP where
-  return a = SP (\st -> return (a,st))
+  return a = SP (\st -> SPOK st a)
   {-# INLINE return #-}
-  m >>= k = SP (\st -> unSP m st >>= \(a,st') -> unSP (k a) st')
+  m >>= k = SP (\st -> case unSP m st of
+                   SPOK st' a -> unSP (k a) st'
+                   SPNG l msg -> SPNG l msg)
   {-# INLINE (>>=) #-}
+
+data AlexInput =
+  AlexInput RealSrcLoc
+            {-# UNPACK #-} !Char
+            BL.ByteString
+  deriving (Eq, Show)
+
+alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
+alexGetByte (AlexInput loc _ buf) =
+  case W8.uncons buf of
+    Nothing -> Nothing
+    Just (w8, buf') ->
+      let c = w2c w8
+          loc' = advanceSrcLoc loc c
+      in w8 `seq` c `seq` loc' `seq` buf' `seq`
+         Just (w8, AlexInput loc' c buf')
+
+alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
+alexGetChar' inp0 =
+  case alexGetByte inp0 of
+    Just (w0, inp1)
+      | w0 < 0x80 -> do
+         let c = w2c w0
+         c `seq` return (c, inp1)
+      | w0 < 0xe0  -> do
+         (w1, inp2) <- alexGetByte inp1
+         let c = utf8char [w0,w1]
+         c `seq` return (c, setPrevChar inp2 c)
+      | w0 < 0xf0  -> do
+         (w1, inp2) <- alexGetByte inp1
+         (w2, inp3) <- alexGetByte inp2
+         let c = utf8char [w0,w1,w2]
+         c `seq` return (c, setPrevChar inp3 c)
+      | otherwise -> do
+         (w1, inp2) <- alexGetByte inp1
+         (w2, inp3) <- alexGetByte inp2
+         (w3, inp4) <- alexGetByte inp3
+         let c = utf8char [w0,w1,w2,w3]
+         c `seq` return (c, setPrevChar inp4 c)
+      where
+        utf8char w8s =
+          head (utf8DecodeByteString (W8.toStrict (W8.pack w8s)))
+        setPrevChar (AlexInput l _ b) c = AlexInput l c b
+    Nothing -> Nothing
+{-# INLINE alexGetChar' #-}
+
+alexInputPrevChar :: AlexInput -> Char
+alexInputPrevChar (AlexInput _ c _) = c
+
+alexError :: String -> SP a
+alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st)) msg)
+
+alexGetInput :: SP AlexInput
+alexGetInput =
+  SP (\st@SPState{currentLoc=l,buf=b,prevChar=c} ->
+        SPOK st (AlexInput l c b))
+
+alexSetInput :: AlexInput -> SP ()
+alexSetInput (AlexInput l c b) =
+  SP (\st -> SPOK (st {buf=b,currentLoc=l,prevChar=c}) ())
 
 runSP :: SP a -> Maybe FilePath -> BL.ByteString
       -> Either String (a, SPState)
 runSP sp target input =
-  let st = initialSPState { targetFile = target' }
+  let st0 = initialSPState target' 1 1
+      st1 = st0 {buf = input}
       target' = maybe (fsLit "anon") fsLit target
-  in  runAlex input (unSP sp st)
+  in  case unSP sp st1 of
+        SPOK sp' a -> Right (a, sp')
+        SPNG _loc msg -> Left msg
 
 -- | Incrementally perform computation with parsed result and given
 -- function.
-incrSP :: SP a          -- ^ The parser.
+incrSP :: SP a          -- ^ The partial parser.
        -> (a -> b -> b) -- ^ Function to apply.
        -> b             -- ^ Initial argument to the function.
        -> Maybe FilePath -> BL.ByteString -> Either String (b, SPState)
-incrSP sp f z target input = go ast0 sst0 z
+incrSP sp f z target input = go st1 z
   where
-    go ast sst acc =
-      case unAlex (unSP sp sst) ast of
-        Left msg                ->
-          if BL.all (\c -> c `elem` "\n\r\t ") (alex_inp ast)
-            then return (acc, sst)
-            else Left msg
-        Right (ast', (x, sst')) -> go ast'' sst' $! (f x acc)
-          where
-            ast'' = alex_inp' `seq` ast' {alex_inp = alex_inp'}
-            alex_inp' = BL.cons (alex_chr ast') (alex_inp ast')
-    ast0 = AlexState { alex_pos = alexStartPos
-                     , alex_bpos = 0
-                     , alex_inp = input
-                     , alex_chr = '\n'
-                     , alex_scd = 0 }
-    sst0 = initialSPState { targetFile = target' }
+    go st acc =
+      case unSP sp st of
+        SPNG _loc msg
+          | blank (buf st) -> Right (acc, st)
+          | otherwise       -> Left msg
+        SPOK st' ret       ->
+          let st'' = st' {buf=BL.cons (prevChar st') (buf st')}
+          in  go st'' $! f ret acc
+    blank bl = BL.null bl || BL.all (`elem` "\n\r\t") bl
+    st0 = initialSPState target' 1 1
+    st1 = st0 {buf = input}
     target' = maybe (fsLit "anon") fsLit target
 
 evalSP :: SP a -> Maybe FilePath -> BL.ByteString -> Either String a
 evalSP sp target input = fmap fst (runSP sp target input)
 
 errorSP :: Code -> String -> SP a
-errorSP code msg = SP (\_ -> alexError (showLoc code ++ msg))
+errorSP code msg = alexError (showLoc code ++ msg)
 
 lexErrorSP :: SP a
-lexErrorSP =
-  let go = do (AlexPn _ lno cno, _, _, _) <- alexGetInput
-              alexError ("lexer error at line " ++
-                          show lno ++ ", column " ++ show cno)
-  in  SP (\_ -> go)
+lexErrorSP = do
+  AlexInput loc _ _ <- alexGetInput
+  let lno = srcLocLine loc
+      cno = srcLocCol loc
+      msg = "lexer error at line " ++ show lno ++
+            ", column " ++ show cno
+  alexError msg
 
 putSPState :: SPState -> SP ()
-putSPState st = SP (\_ -> return ((), st))
+putSPState st = SP (\_ -> SPOK st ())
 
 getSPState :: SP SPState
-getSPState = SP (\st -> return (st, st))
+getSPState = SP (\st -> SPOK st st)
 
 
 -- ---------------------------------------------------------------------
@@ -265,7 +332,7 @@ data Token
 
 type LToken = Located Token
 
-type Action = AlexInput -> Int64 -> Alex Token
+type Action = AlexInput -> Int -> SP Token
 
 tok_oparen :: Action
 tok_oparen _ _ = return TOparen
@@ -316,26 +383,26 @@ tok_hash _ _ =  return THash
 {-# INLINE tok_hash #-}
 
 tok_doc_comment_next :: Action
-tok_doc_comment_next (_,_,s,_) l = do
-  let str = toString $ BL.take l s
+tok_doc_comment_next (AlexInput _ _ s) l = do
+  let str = toString $ BL.take (fromIntegral l) s
   return $ TDocCommentNext $ lc2hc str
 {-# INLINE tok_doc_comment_next #-}
 
 tok_line_comment :: Action
-tok_line_comment (_,_,s,_) l = do
-  let str = toString (BL.take l s)
+tok_line_comment (AlexInput _ _ s) l = do
+  let str = toString (BL.take (fromIntegral l) s)
   return (TLineComment (lc2hc str))
 {-# INLINE tok_line_comment #-}
 
 tok_symbol :: Action
-tok_symbol (_,_,s,_) l = do
-  let bs = BL.toStrict $! takeUtf8 l s
+tok_symbol (AlexInput _ _ s) l = do
+  let bs = BL.toStrict $! takeUtf8 (fromIntegral l) s
   return $ TSymbol $! mkFastStringByteString bs
 {-# INLINE tok_symbol #-}
 
 tok_char :: Action
-tok_char inp0@(_,_,s,_) l
-  | '\\':cs <- toString (BL.take l s)
+tok_char inp0@(AlexInput _ _ s) l
+  | '\\':cs <- toString (BL.take (fromIntegral l) s)
   , Just c <- lookup (map toUpper cs) charTable =
     return $! TChar c
   | Just ('\\', inp1) <- alexGetChar' inp0
@@ -392,13 +459,13 @@ tok_string inp _l =
 {-# INLINE tok_string #-}
 
 tok_integer :: Action
-tok_integer (_,_,s,_) l =
-  return $ TInteger $! read $! toString $! BL.take l s
+tok_integer (AlexInput _ _ s) l =
+  return $ TInteger $! read $! toString $! BL.take (fromIntegral l) s
 {-# INLINE tok_integer #-}
 
 tok_fractional :: Action
-tok_fractional (_,_,s,_) l = do
-  let str = toString (BL.take l s)
+tok_fractional (AlexInput _ _ s) l = do
+  let str = toString (BL.take (fromIntegral l) s)
       rat = readRational str
   return $ TFractional $! FL str rat
 {-# INLINE tok_fractional #-}
@@ -414,48 +481,43 @@ tok_fractional (_,_,s,_) l = do
 -- parser made from Happy. This functions will not pass comment tokens
 -- to continuation but add them to 'SPState'.
 tokenLexer :: (Located Token -> SP a) -> SP a
-tokenLexer cont = SP go
-  where
-    go st = do
-      let fn = targetFile st
-      ltok@(L span tok) <- scanToken fn
-      case tok of
-        TLineComment _ -> do
-          let comment = L span (annotateComment tok)
-          go $ pushComment comment st
-        TDocCommentNext _ -> do
-          let comment = L span (annotateComment tok)
-          unSP (cont ltok) $ pushComment comment st
-        _ -> unSP (cont ltok) st
+tokenLexer cont = do
+  st <- getSPState
+  let fn = targetFile st
+  ltok@(L span tok) <- scanToken fn
+  case tok of
+    TLineComment _ -> do
+      let comment = L span (annotateComment tok)
+      SP (\st -> unSP (tokenLexer cont) (pushComment comment st))
+    TDocCommentNext _ -> do
+      let comment = L span (annotateComment tok)
+      SP (\st -> unSP (cont ltok) (pushComment comment st))
+    _ -> cont ltok
 {-# INLINE tokenLexer #-}
 
 pushComment :: Located AnnotationComment -> SPState -> SPState
 pushComment comment st = st { comments = comment : comments st }
 {-# INLINE pushComment #-}
 
-scanToken :: FastString -> Alex (Located Token)
+scanToken :: FastString -> SP (Located Token)
 scanToken fn = do
-    inp@(AlexPn _ ln0 cn0,_,_,_) <- alexGetInput
-    sc <- alexGetStartCode
-    case alexScan inp sc of
-      AlexToken inp'@(AlexPn _ ln1 cn1,_,_,_) len act -> do
-         alexSetInput inp'
-         tok <- act inp (fromIntegral len)
-         let bgn = mkRealSrcLoc fn ln0 cn0
-             end = mkRealSrcLoc fn ln1 cn1
-             span = RealSrcSpan $ mkRealSrcSpan bgn end
-         return $ L span tok
-      AlexError (AlexPn _ ln cn,_,_,_) ->
-        alexError ("lexial error at line " ++ show ln ++ ", column "
-                   ++ show cn)
-      AlexSkip inp' _ -> do
-        alexSetInput inp'
-        scanToken fn
-      AlexEOF -> do
-        eof <- alexEOF
-        let l = mkRealSrcLoc fn 0 0
-            span = RealSrcSpan (mkRealSrcSpan l l)
-        return (L span eof)
+  inp0@(AlexInput loc0 _ _) <- alexGetInput
+  let sc = 0
+  case alexScan inp0 sc of
+    AlexToken inp1@(AlexInput loc1 _ _) len act -> do
+      alexSetInput inp1
+      tok <- act inp0 len
+      let span = RealSrcSpan $ mkRealSrcSpan loc0 loc1
+      return (L span tok)
+    AlexError (AlexInput loc1 _ _) -> do
+      let l = srcLocLine loc1
+          c = srcLocCol loc1
+      alexError ("lexical error at line " ++ show l ++
+                 ", column" ++ show c)
+    AlexSkip inp1 _ -> do
+      alexSetInput inp1
+      scanToken fn
+    AlexEOF -> return (L undefined TEOF)
 {-# INLINE scanToken #-}
 
 -- | Lex the input to list of 'Token's.
@@ -467,33 +529,6 @@ lexTokens input = evalSP go Nothing input
        case tok of
          L _ TEOF -> return []
          _        -> (tok :) <$> go
-
-alexEOF :: Alex Token
-alexEOF = return TEOF
-{-# INLINE alexEOF #-}
-
-alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
-alexGetChar' inp0 =
-  case alexGetByte inp0 of
-    Just (w0, inp1)
-      | w0 < 0x80 -> return (w2c w0, inp1)
-      | w0 < 0xe0  -> do
-         (w1, inp2) <- alexGetByte inp1
-         return (utf8char [w0,w1], inp2)
-      | w0 < 0xf0  -> do
-         (w1, inp2) <- alexGetByte inp1
-         (w2, inp3) <- alexGetByte inp2
-         return (utf8char [w0,w1,w2], inp3)
-      | otherwise -> do
-         (w1, inp2) <- alexGetByte inp1
-         (w2, inp3) <- alexGetByte inp2
-         (w3, inp4) <- alexGetByte inp3
-         return (utf8char [w0,w1,w2,w3], inp4)
-      where
-        utf8char w8s =
-          head (utf8DecodeByteString (W8.toStrict (W8.pack w8s)))
-    Nothing -> Nothing
-{-# INLINE alexGetChar' #-}
 
 
 -- ---------------------------------------------------------------------
@@ -518,10 +553,11 @@ annotateComment tok = case tok of
   _                 -> error ("annotateComment: " ++ show tok)
 {-# INLINE annotateComment #-}
 
-takeUtf8 :: Int64 -> BL.ByteString -> BL.ByteString
+takeUtf8 :: Int -> BL.ByteString -> BL.ByteString
 takeUtf8 n bs = fst (splitUtf8 n bs)
+{-# INLINE takeUtf8 #-}
 
-splitUtf8 :: Int64 -> BL.ByteString -> (BL.ByteString, BL.ByteString)
+splitUtf8 :: Int -> BL.ByteString -> (BL.ByteString, BL.ByteString)
 splitUtf8 n0 bs0 = go n0 bs0 BL.empty
   where
     go n bs acc
@@ -539,4 +575,5 @@ splitUtf8 n0 bs0 = go n0 bs0 BL.empty
                    in  (BL.append (BL.snoc acc (w2c w8)) pre, bs1)
              in  go (n - 1) bs' acc'
            Nothing -> error "takeUtf8: empty input"
+{-# INLINE splitUtf8 #-}
 }

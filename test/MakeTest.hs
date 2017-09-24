@@ -33,11 +33,7 @@ showTargetTest = do
   let sksrc = SkSource "path1" "Foo" [] sp
       hssrc = HsSource "path2"
       otsrc = OtherSource "path3"
-      sp = SPState { comments = []
-                   , annotation_comments = []
-                   , targetFile = fsLit ""
-                   , requiredModuleNames = []
-                   , langExts = [] }
+      sp = initialSPState (fsLit "showTargetTest") 1 1
   describe "show TargetSource" $
     it "should contain filepath" $ do
       let subseq xs ys = any (isPrefixOf xs) (tails ys)

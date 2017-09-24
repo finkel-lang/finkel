@@ -227,12 +227,12 @@ supportedLangExts =
     f = map (\ext -> (fsLit (show ext), ext))
 
 addRequiredDecl :: HImportDecl -> SP ()
-addRequiredDecl idecl =
-  SP (\st ->
-       let names = requiredModuleNames st
-           name = moduleNameString (unLoc (ideclName (unLoc idecl)))
-           st' = st { requiredModuleNames = name : names }
-       in  return ((), st'))
+addRequiredDecl idecl = do
+  st <- getSPState
+  let names = requiredModuleNames st
+      name = moduleNameString (unLoc (ideclName (unLoc idecl)))
+      st' = st { requiredModuleNames = name : names }
+  putSPState st'
 
 emptyBody :: SrcSpan -> Code
 emptyBody l = li l [sym l "begin"]
