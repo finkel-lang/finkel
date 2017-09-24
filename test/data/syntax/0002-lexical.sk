@@ -24,6 +24,7 @@
     ;; 2.6 Character and String Literals.
     (print \a) (print \0) (print \+) (print \')
     (print \)) (print \[) (print \;) (print \\)
+    (print \犬) (print \Я) (print \λ) (print \👺)
 
     (putChar \a)
     (putChar \sp)               ; space
@@ -35,13 +36,18 @@
 
     (putStrLn "string literal") ; Simple string
 
-    ;; String containing escaped `"'
+    ;; String containing escaped `"'.
     (putStrLn "string with \"double quotes\".")
 
     ;; String containing escaped newlines and tabs.
     (putStrLn "string with newlines: \n\n\nand tabs: \t\t\t.")
 
-    ;; Empty string
+    ;; Strings with non-ASCII characters.
+    (putStrLn "᚛᚛ᚉᚑᚅᚔᚉᚉᚔᚋ ᚔᚈᚔ ᚍᚂᚐᚅᚑ ᚅᚔᚋᚌᚓᚅᚐ᚜")
+    (putStrLn "ᛁᚳ᛫ᛗᚨᚷ᛫ᚷᛚᚨᛋ᛫ᛖᚩᛏᚪᚾ᛫ᚩᚾᛞ᛫ᚻᛁᛏ᛫ᚾᛖ᛫ᚻᛖᚪᚱᛗᛁᚪᚧ᛫ᛗᛖ᛬")
+    (putStrLn "私はガラスを食べられます。それは私を傷つけません。")
+
+    ;; Empty string.
     (putStrLn "")
 
     ;; Unit.

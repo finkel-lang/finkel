@@ -44,7 +44,8 @@ import Control.DeepSeq (NFData(..))
 
 -- QuickCheck
 import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
-                       , arbitraryASCIIChar, elements, listOf
+                       , arbitraryASCIIChar
+                       , arbitraryUnicodeChar, elements, listOf
                        , oneof, scale, suchThat, variant )
 
 -- Internal
@@ -105,11 +106,10 @@ instance Arbitrary Atom where
   arbitrary =
     oneof [ return AUnit
           , aSymbol <$> symbolG
-          , AChar <$> (suchThat arbitraryASCIIChar isAlphaNum)
+          , AChar <$> arbitraryUnicodeChar
           , AString <$> stringG
           , AInteger <$> arbitrary
-          , aFractional <$> (arbitrary :: Gen Double)
-          ]
+          , aFractional <$> (arbitrary :: Gen Double) ]
     where
       headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "!$%&*+./:<=>?@^_|~"
       tailChars = headChars ++ "0123456789'-"

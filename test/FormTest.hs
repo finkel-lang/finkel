@@ -16,7 +16,7 @@ import Language.SK.Homoiconic
 import Language.SK.Lexer
 import Language.SK.Reader
 
-import qualified Data.ByteString.Lazy.Char8 as BL
+import Data.ByteString.Builder (stringUtf8, toLazyByteString)
 
 formTests :: Spec
 formTests = do
@@ -291,7 +291,7 @@ parseE = parseE' Nothing
 
 parseE' :: Maybe FilePath -> String -> Code
 parseE' mb_path str =
-  case runSP sexpr mb_path (BL.pack str) of
+  case runSP sexpr mb_path (toLazyByteString (stringUtf8 str)) of
     Right (expr, _) -> expr
     Left err        -> error err
 
