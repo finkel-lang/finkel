@@ -44,8 +44,8 @@ import Control.DeepSeq (NFData(..))
 
 -- QuickCheck
 import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
-                       , arbitraryASCIIChar
-                       , arbitraryUnicodeChar, elements, listOf
+                       , arbitraryASCIIChar, arbitraryUnicodeChar
+                       , elements, listOf
                        , oneof, scale, suchThat, variant )
 
 -- Internal
@@ -75,15 +75,15 @@ instance Show Atom where
       AUnit -> "()"
       ASymbol s -> unpackFS s
       AChar c -> case c of
-        '\a' -> "\\bel"
-        '\b' -> "\\bs"
-        '\f' -> "\\ff"
-        '\n' -> "\\lf"
-        '\r' -> "\\cr"
-        '\t' -> "\\ht"
-        '\v' -> "\\vt"
-        ' '  -> "\\sp"
-        _    -> ['\\',c]
+        '\a' -> "\\\\BEL"
+        '\b' -> "\\\\BS"
+        '\f' -> "\\\\FF"
+        '\n' -> "\\\\LF"
+        '\r' -> "\\\\CR"
+        '\t' -> "\\\\HT"
+        '\v' -> "\\\\VT"
+        ' '  -> "\\\\SP"
+        _    -> ['\\', c]
       AString s -> show s
       AInteger i -> show i
       AFractional f -> fl_text f

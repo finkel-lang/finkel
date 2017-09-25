@@ -24,10 +24,11 @@ module Language.SK.Lexer
   ) where
 
 -- base
-import Control.Monad (ap, liftM)
-import Data.Char (toUpper)
+import Control.Monad (ap, liftM, msum)
+import Data.Char (chr, ord, isDigit, isOctDigit, isHexDigit, toUpper)
 import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
+import qualified GHC.Char as Char
 
 -- bytestring
 import Data.ByteString.Internal (w2c)
@@ -59,7 +60,7 @@ $octit       = [0-7]
 $digit       = [0-9]
 $hexit       = [$digit A-F a-f]
 
-$hsymhead    = [^\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
+$hsymhead    = [^\\\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
 $hsymtail    = [$hsymhead\'\#$digit]
 
 @hsymbol     = $hsymhead $hsymtail*
@@ -81,36 +82,40 @@ $whitechar+  ;
 \; .*                { tok_line_comment }
 
 --- Parentheses
-\(                   { tok_oparen }
-\)                   { tok_cparen }
+\( { tok_oparen }
+\) { tok_cparen }
 
-\[                   { tok_obracket }
-\]                   { tok_cbracket }
+\[ { tok_obracket }
+\] { tok_cbracket }
 
-\{                   { tok_ocurly }
-\}                   { tok_ccurly }
+\{ { tok_ocurly }
+\} { tok_ccurly }
 
 -- Quote, unquote, quasiquote, and unquote splice
-\'                   { tok_quote }
-\`                   { tok_quasiquote }
+\'   { tok_quote }
+\`   { tok_quasiquote }
 
-\,\                  { tok_comma }
-\,\@                 { tok_unquote_splice }
-\,                   { tok_unquote }
+\,\  { tok_comma }
+\,\@ { tok_unquote_splice }
+\,   { tok_unquote }
 
 -- Hash
-\#                   { tok_hash }
+\# { tok_hash }
+
+-- Lambda
+\\\  { tok_lambda }
 
 --- Literal values
-\\[~$white][A-Za-z]*       { tok_char }
-\"                         { tok_string }
-@signed @decimal           { tok_integer }
-@signed 0[oO] @octal       { tok_integer }
-@signed 0[xX] @hexadecimal { tok_integer }
-@signed @frac              { tok_fractional }
+-- \\[~$white][A-Za-z0-9_\^\@\[\]]* { tok_char }
+\\                               { tok_char }
+\"                               { tok_string }
+@signed @decimal                 { tok_integer }
+@signed 0[oO] @octal             { tok_integer }
+@signed 0[xX] @hexadecimal       { tok_integer }
+@signed @frac                    { tok_fractional }
 
---- Symbols
-@hsymbol         { tok_symbol }
+-- Symbols
+@hsymbol { tok_symbol }
 
 {
 -- ---------------------------------------------------------------------
@@ -394,6 +399,9 @@ tok_line_comment (AlexInput _ _ s) l = do
   return (TLineComment (lc2hc str))
 {-# INLINE tok_line_comment #-}
 
+tok_lambda :: Action
+tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
+
 tok_symbol :: Action
 tok_symbol (AlexInput _ _ s) l = do
   let bs = BL.toStrict $! takeUtf8 (fromIntegral l) s
@@ -401,28 +409,23 @@ tok_symbol (AlexInput _ _ s) l = do
 {-# INLINE tok_symbol #-}
 
 tok_char :: Action
-tok_char inp0@(AlexInput _ _ s) l
-  | '\\':cs <- toString (BL.take (fromIntegral l) s)
-  , Just c <- lookup (map toUpper cs) charTable =
-    return $! TChar c
-  | Just ('\\', inp1) <- alexGetChar' inp0
-  , Just (c, inp2) <- alexGetChar' inp1 = do
-    alexSetInput inp2
-    return $! TChar c
-  | otherwise = alexError "tok_char: panic"
+tok_char inp0 _ = do
+  case alexGetChar' inp0 of
+    Just ('\\', inp1) -> go inp1
+    _                 -> alexError "tok_char: panic"
   where
-    charTable =
-      [ ("NUL", '\NUL'), ("SOH", '\SOH'), ("STX", '\STX')
-      , ("ETX", '\ETX'), ("EOT", '\EOT'), ("ENQ", '\ENQ')
-      , ("ACK", '\ACK'), ("BEL", '\BEL'), ("BS", '\BS')
-      , ("HT", '\HT'), ("LF", '\LF'), ("VT", '\VT'), ("FF", '\FF')
-      , ("CR", '\CR'), ("SO", '\SO'), ("SI", '\SI'), ("DLE", '\DLE')
-      , ("DC1", '\DC1'), ("DC2", '\DC2'), ("DC3", '\DC3')
-      , ("DC4", '\DC4'), ("NAK", '\NAK'), ("SYN", '\SYN')
-      , ("ETB", '\ETB'), ("CAN", '\CAN'), ("EM", '\EM')
-      , ("SUB", '\SUB'), ("ESC", '\ESC'), ("FS", '\FS')
-      , ("GS", '\GS'), ("RS", '\RS'), ("US", '\US'), ("SP", '\SP')
-      , ("DEL", '\DEL')]
+    go inp
+      | Just (c, inp') <- alexGetChar' inp =
+        case c of
+          '\\' -> case escapeChar inp' of
+            Just (c', inp'') ->
+              alexSetInput inp'' >> (return $! TChar c')
+            Nothing ->
+              alexSetInput inp' >> (return $! TChar '\\')
+          _    -> do
+            alexSetInput inp'
+            return $! TChar c
+      | otherwise = alexError "tok_char: panic"
 {-# INLINE tok_char #-}
 
 tok_string :: Action
@@ -457,6 +460,63 @@ tok_string inp _l =
         tbl = [('a','\a'),('b','\b'),('f','\f'),('n','\n'),('r','\r')
               ,('t','\t'),('v','\v')]
 {-# INLINE tok_string #-}
+
+escapeChar :: AlexInput -> Maybe (Char, AlexInput)
+escapeChar inp0
+  | Just (c1, inp1) <- alexGetChar' inp0 =
+    let ret x = return (x, inp1)
+        numericChar test acc0 f =
+          let lp inp acc =
+                case alexGetChar' inp of
+                  Just (c2, inp')
+                    | test c2 -> lp inp' (c2:acc)
+                    | otherwise ->
+                      return (Char.chr (read (f (reverse acc))), inp)
+                  Nothing -> Nothing
+          in lp inp1 acc0
+        controlChar
+          | Just (c2, inp2) <- alexGetChar' inp1
+          , c2 >= '@' && c2 <= '_' =
+            return (chr (ord c2 - ord '@'), inp2)
+          | otherwise = Nothing
+        lkupTbl cs = lookup (BL.pack cs) tbl
+        tbl = map (\(str,c) -> (BL.pack str, c)) tbl_str
+        tbl_str =
+          [ ("NUL", '\NUL'), ("SOH", '\SOH'), ("STX", '\STX')
+          , ("ETX", '\ETX'), ("EOT", '\EOT'), ("ENQ", '\ENQ')
+          , ("ACK", '\ACK'), ("BEL", '\BEL'), ("BS", '\BS')
+          , ("HT", '\HT'), ("LF", '\LF'), ("VT", '\VT'), ("FF", '\FF')
+          , ("CR", '\CR'), ("SO", '\SO'), ("SI", '\SI'), ("DLE", '\DLE')
+          , ("DC1", '\DC1'), ("DC2", '\DC2'), ("DC3", '\DC3')
+          , ("DC4", '\DC4'), ("NAK", '\NAK'), ("SYN", '\SYN')
+          , ("ETB", '\ETB'), ("CAN", '\CAN'), ("EM", '\EM')
+          , ("SUB", '\SUB'), ("ESC", '\ESC'), ("FS", '\FS')
+          , ("GS", '\GS'), ("RS", '\RS'), ("US", '\US'), ("SP", '\SP')
+          , ("DEL", '\DEL')]
+    in  case c1 of
+          'a' -> ret '\a'
+          'b' -> ret '\b'
+          'f' -> ret '\f'
+          'n' -> ret '\n'
+          'r' -> ret '\r'
+          't' -> ret '\t'
+          'v' -> ret '\v'
+          '"' -> ret '\"'
+          '\'' -> ret '\''
+          '^' -> controlChar
+          'x' -> numericChar isHexDigit [c1] ('0':)
+          'o' -> numericChar isOctDigit [c1] ('0':)
+          _ | isDigit c1 -> numericChar isDigit [c1] id
+            | Just (c2, inp2) <- alexGetChar' inp1
+            -> case lkupTbl [c1,c2] of
+                 Just c  -> Just (c, inp2)
+                 Nothing
+                   | Just (c3, inp3) <- alexGetChar' inp2
+                   , Just c <- lkupTbl [c1,c2,c3] -> Just (c, inp3)
+                 _ -> Nothing
+            | otherwise -> Nothing
+  | otherwise = Nothing
+{-# INLINE escapeChar #-}
 
 tok_integer :: Action
 tok_integer (AlexInput _ _ s) l =

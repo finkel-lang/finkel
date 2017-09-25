@@ -3,7 +3,6 @@ module FormTest where
 
 import Control.DeepSeq
 import Control.Exception
-import Data.Data
 import Data.List (isPrefixOf, isSubsequenceOf)
 import Test.Hspec
 import Test.QuickCheck
@@ -21,13 +20,12 @@ import Data.ByteString.Builder (stringUtf8, toLazyByteString)
 formTests :: Spec
 formTests = do
   mapM_ readShow
-    ["foo" ,"\a" ,"12345" ,"6.789"
-    ,"(foo bar buzz)"
-    ,"(\\a \\sp \\\\ \"bcd\")"
-    ,"[\\bel \\bs \\ff \\lf \\cr \\ht \\vt]"
-    ,"[()]"
-    ,"(1 -2 345 6.789 0.001)"
-    ]
+    [ "foo", "\a", "12345", "6.789"
+    , "(foo bar buzz)"
+    , "(\\a \\\\SP \\\\ \"bcd\")"
+    , "[\\\\BEL \\\\BS \\\\FF \\\\LF \\\\CR \\\\HT \\\\VT]"
+    , "[()]"
+    , "(1 -2 345 6.789 0.001)" ]
 
   readShowFormProp
 
@@ -99,6 +97,7 @@ readShowFormProp =
     it "should match the input" $
       property (\form ->
                   form == form && parseE (show form) `eqForm` form)
+
 
 eqForm :: Code -> Code -> Bool
 eqForm a b =

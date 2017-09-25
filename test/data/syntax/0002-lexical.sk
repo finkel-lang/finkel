@@ -26,13 +26,23 @@
     (print \)) (print \[) (print \;) (print \\)
     (print \犬) (print \Я) (print \λ) (print \👺)
 
-    (putChar \a)
-    (putChar \sp)               ; space
-    (putChar \b)
-    (putChar \ht)               ; horizontal tab
-    (putChar \c)
-    (putChar \nul)              ; \NUL
-    (putChar \lf)               ; line feed
+    (print \\29356) (print \\1071) (print \\955) (print \\128122)
+    (print \\o71254) (print \\o2057) (print \\o1673) (print \\o372172)
+    (print \\x72ac) (print \\x42f) (print \\x3bb) (print \\x1f47a)
+
+    (putChar \\a)                ; alert
+    (putChar \\SP)               ; space
+    (putChar \\b)                ; backspace
+    (putChar \\HT)               ; horizontal tab
+    (putChar \\n)                ; new line
+    (putChar \\NUL)              ; \NUL
+    (putChar \\LF)               ; line feed
+
+    (putChar \\FF)               ; form feed
+    (putChar \\^L)               ; form feed with control char
+
+    ;; Single element String with escaped character.
+    (putStrLn [\\35])
 
     (putStrLn "string literal") ; Simple string
 
