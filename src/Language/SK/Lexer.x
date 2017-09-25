@@ -106,13 +106,12 @@ $whitechar+  ;
 \\\  { tok_lambda }
 
 --- Literal values
--- \\[~$white][A-Za-z0-9_\^\@\[\]]* { tok_char }
-\\                               { tok_char }
-\"                               { tok_string }
-@signed @decimal                 { tok_integer }
-@signed 0[oO] @octal             { tok_integer }
-@signed 0[xX] @hexadecimal       { tok_integer }
-@signed @frac                    { tok_fractional }
+\\                         { tok_char }
+\"                         { tok_string }
+@signed @decimal           { tok_integer }
+@signed 0[oO] @octal       { tok_integer }
+@signed 0[xX] @hexadecimal { tok_integer }
+@signed @frac              { tok_fractional }
 
 -- Symbols
 @hsymbol { tok_symbol }
@@ -221,6 +220,7 @@ alexGetChar' inp0 =
 
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar (AlexInput _ c _) = c
+{-# INLINE alexInputPrevChar #-}
 
 alexError :: String -> SP a
 alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st)) msg)
@@ -229,10 +229,12 @@ alexGetInput :: SP AlexInput
 alexGetInput =
   SP (\st@SPState{currentLoc=l,buf=b,prevChar=c} ->
         SPOK st (AlexInput l c b))
+{-# INLINE alexGetInput #-}
 
 alexSetInput :: AlexInput -> SP ()
 alexSetInput (AlexInput l c b) =
   SP (\st -> SPOK (st {buf=b,currentLoc=l,prevChar=c}) ())
+{-# INLINE alexSetInput #-}
 
 runSP :: SP a -> Maybe FilePath -> BL.ByteString
       -> Either String (a, SPState)
@@ -282,9 +284,11 @@ lexErrorSP = do
 
 putSPState :: SPState -> SP ()
 putSPState st = SP (\_ -> SPOK st ())
+{-# INLINE putSPState #-}
 
 getSPState :: SP SPState
 getSPState = SP (\st -> SPOK st st)
+{-# INLINE getSPState #-}
 
 
 -- ---------------------------------------------------------------------
@@ -430,41 +434,34 @@ tok_char inp0 _ = do
 
 tok_string :: Action
 tok_string inp _l =
+  -- Currently String tokenizer does not update alex input per
+  -- character. This makes the code a bit more effiicient, but getting
+  -- unhelpful error message on illegal escape sequence.
   case alexGetChar' inp of
-    Just ('"', inp') -> alexSetInput inp' >> go ""
-    _   -> alexError ("tok_string: panic, inp=" ++ show inp)
+    Just ('"', inp')
+      | Just (str, inp'') <- go inp' "" ->
+        alexSetInput inp'' >> return str
+    _ -> alexError ("lexical error in string: " ++ show inp)
   where
-    go acc = do
-      inp0 <- acc `seq` alexGetInput
+    go inp0 acc =
       case alexGetChar' inp0 of
-        Nothing -> return $ accToTString acc
-        Just (c0, inp1)
-          | c0 == '"'  -> do
-            alexSetInput inp1
-            return $ accToTString acc
-          | c0 == '\\' ->
-            case alexGetChar' inp1 of
-              Nothing -> alexError "invalid escape in string literal"
-              Just (c1, inp2)
-                | Just c2 <- escape c1 ->
-                  putAndGo inp2 $! (c2 : acc)
-                | c1 == '\n'           ->
-                  putAndGo inp2 acc
-                | otherwise            ->
-                  putAndGo inp2 $! (c1 : acc)
-          | otherwise  -> putAndGo inp1 $! (c0 : acc)
-    putAndGo inp acc = alexSetInput inp >> go acc
-    accToTString = TString . reverse
-    escape x = lookup x tbl
-      where
-        tbl = [('a','\a'),('b','\b'),('f','\f'),('n','\n'),('r','\r')
-              ,('t','\t'),('v','\v')]
+        Nothing -> Nothing
+        Just (c1, inp1)
+          | c1 == '"'  -> return $! (TString (reverse acc), inp1)
+          | c1 == '\\' ->
+            case escapeChar inp1 of
+              Just (c1, inp2) -> go inp2 $! (c1:acc)
+              _               ->
+                case alexGetChar' inp1 of
+                  Just (c2, inp2) | c2 == '&' -> go inp2 $! acc
+                  _                           -> Nothing
+          | otherwise  -> go inp1 $! (c1 : acc)
 {-# INLINE tok_string #-}
 
 escapeChar :: AlexInput -> Maybe (Char, AlexInput)
 escapeChar inp0
   | Just (c1, inp1) <- alexGetChar' inp0 =
-    let ret x = return (x, inp1)
+    let ret x = return $! (x, inp1)
         numericChar test acc0 f =
           let lp inp acc =
                 case alexGetChar' inp of
@@ -479,20 +476,23 @@ escapeChar inp0
           , c2 >= '@' && c2 <= '_' =
             return (chr (ord c2 - ord '@'), inp2)
           | otherwise = Nothing
-        lkupTbl cs = lookup (BL.pack cs) tbl
-        tbl = map (\(str,c) -> (BL.pack str, c)) tbl_str
-        tbl_str =
+        lkup cs = lookup (BL.pack cs)
+        bstbl = map (\(str,c) -> (BL.pack str, c))
+        tbl2 = bstbl tbl2_str
+        tbl2_str =
+          [ ("BS", '\BS'), ("HT", '\HT'), ("LF", '\LF'), ("VT", '\VT')
+          , ("FF", '\FF'), ("CR", '\CR'), ("SO", '\SO'), ("SI", '\SI')
+          , ("EM", '\EM'), ("FS", '\FS'), ("GS", '\GS'), ("RS", '\RS')
+          , ("US", '\US'), ("SP", '\SP') ]
+        tbl3 = bstbl tbl3_str
+        tbl3_str =
           [ ("NUL", '\NUL'), ("SOH", '\SOH'), ("STX", '\STX')
           , ("ETX", '\ETX'), ("EOT", '\EOT'), ("ENQ", '\ENQ')
-          , ("ACK", '\ACK'), ("BEL", '\BEL'), ("BS", '\BS')
-          , ("HT", '\HT'), ("LF", '\LF'), ("VT", '\VT'), ("FF", '\FF')
-          , ("CR", '\CR'), ("SO", '\SO'), ("SI", '\SI'), ("DLE", '\DLE')
+          , ("ACK", '\ACK'), ("BEL", '\BEL'), ("DLE", '\DLE')
           , ("DC1", '\DC1'), ("DC2", '\DC2'), ("DC3", '\DC3')
           , ("DC4", '\DC4'), ("NAK", '\NAK'), ("SYN", '\SYN')
-          , ("ETB", '\ETB'), ("CAN", '\CAN'), ("EM", '\EM')
-          , ("SUB", '\SUB'), ("ESC", '\ESC'), ("FS", '\FS')
-          , ("GS", '\GS'), ("RS", '\RS'), ("US", '\US'), ("SP", '\SP')
-          , ("DEL", '\DEL')]
+          , ("ETB", '\ETB'), ("CAN", '\CAN'), ("SUB", '\SUB')
+          , ("ESC", '\ESC') , ("DEL", '\DEL') ]
     in  case c1 of
           'a' -> ret '\a'
           'b' -> ret '\b'
@@ -503,16 +503,17 @@ escapeChar inp0
           'v' -> ret '\v'
           '"' -> ret '\"'
           '\'' -> ret '\''
+          '\\' -> ret '\\'
           '^' -> controlChar
           'x' -> numericChar isHexDigit [c1] ('0':)
           'o' -> numericChar isOctDigit [c1] ('0':)
           _ | isDigit c1 -> numericChar isDigit [c1] id
             | Just (c2, inp2) <- alexGetChar' inp1
-            -> case lkupTbl [c1,c2] of
-                 Just c  -> Just (c, inp2)
+            , Just (c3, inp3) <- alexGetChar' inp2
+            -> case lkup [c1,c2,c3] tbl3 of
+                 Just c  -> Just (c, inp3)
                  Nothing
-                   | Just (c3, inp3) <- alexGetChar' inp2
-                   , Just c <- lkupTbl [c1,c2,c3] -> Just (c, inp3)
+                   | Just c <- lkup [c1,c2] tbl2 -> Just (c, inp2)
                  _ -> Nothing
             | otherwise -> Nothing
   | otherwise = Nothing

@@ -35,7 +35,6 @@ module Language.SK.Form
   ) where
 
 -- base
-import Data.Char (isAlphaNum, isLetter)
 import Data.Data (Data, Typeable)
 import GHC.Generics (Generic)
 
@@ -44,9 +43,9 @@ import Control.DeepSeq (NFData(..))
 
 -- QuickCheck
 import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
-                       , arbitraryASCIIChar, arbitraryUnicodeChar
-                       , elements, listOf
-                       , oneof, scale, suchThat, variant )
+                       , arbitraryUnicodeChar, elements
+                       , getUnicodeString, listOf
+                       , oneof, scale, variant )
 
 -- Internal
 import Language.SK.GHC
@@ -117,8 +116,7 @@ instance Arbitrary Atom where
         x <- elements headChars
         xs <- listOf (elements tailChars)
         return (x:xs)
-      stringG = listOf (suchThat arbitraryASCIIChar
-                                 (\c -> isAlphaNum c || isLetter c))
+      stringG = getUnicodeString <$> arbitrary
 
 instance CoArbitrary Atom where
   coarbitrary x =

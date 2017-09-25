@@ -27,6 +27,7 @@ formTests = do
     , "[()]"
     , "(1 -2 345 6.789 0.001)" ]
 
+  readUnicodeStringProp
   readShowFormProp
 
   fracTest 1.23
@@ -91,13 +92,20 @@ readShow str =
     it "should match the input" $
       show (parseE str) `shouldBe` str
 
+readUnicodeStringProp :: Spec
+readUnicodeStringProp =
+  describe "read and show unicode string" $
+    it "should return itself" $
+      property (\uni ->
+                  let str = getUnicodeString uni
+                  in  parseE (show str) == toCode (AString str))
+
 readShowFormProp :: Spec
 readShowFormProp =
   describe "read and show form property" $
     it "should match the input" $
       property (\form ->
                   form == form && parseE (show form) `eqForm` form)
-
 
 eqForm :: Code -> Code -> Bool
 eqForm a b =
