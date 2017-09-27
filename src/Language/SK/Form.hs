@@ -249,6 +249,8 @@ aSymbol = ASymbol . fsLit
 -- 'FractionalLit' value from literal fractional numbers.
 aFractional :: (Real a, Show a) => a -> Atom
 aFractional x = AFractional $! FL (show x) (toRational x)
+{-# SPECIALIZE aFractional :: Double -> Atom #-}
+{-# SPECIALIZE aFractional :: Float -> Atom #-}
 
 -- | A form with empty 'List'.
 nil :: Code
