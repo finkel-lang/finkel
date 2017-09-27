@@ -412,14 +412,14 @@ tok_hash _ _ =  return THash
 
 tok_doc_comment_next :: Action
 tok_doc_comment_next (AlexInput _ _ s) l = do
-  let str = toString $ takeUtf8 l s
-  return $ TDocCommentNext $ lc2hc str
+  let str = unpackUtf8 $! takeUtf8 l s
+  return $! TDocCommentNext $! lc2hc str
 {-# INLINE tok_doc_comment_next #-}
 
 tok_line_comment :: Action
 tok_line_comment (AlexInput _ _ s) l = do
-  let str = takeUtf8 l s
-  return (TLineComment (lc2hc (toString str)))
+  let str = unpackUtf8 $! takeUtf8 l s
+  return $! TLineComment $! lc2hc str
 {-# INLINE tok_line_comment #-}
 
 tok_block_doc_comment_next :: Action
@@ -434,8 +434,7 @@ tok_block_doc_comment_next =
     comment str = TBlockDocCommentNext ("{- | " ++ str ++ " -}")
 
 tok_block_comment :: Action
-tok_block_comment =
-  tok_block_comment_with TBlockComment alexGetChar'
+tok_block_comment = tok_block_comment_with TBlockComment alexGetChar'
 
 tok_block_comment_with :: (String -> Token)
                        -> (AlexInput -> Maybe (Char, AlexInput))
@@ -577,13 +576,14 @@ escapeChar inp0
 {-# INLINE escapeChar #-}
 
 tok_integer :: Action
-tok_integer (AlexInput _ _ s) l =
-  return $ TInteger $! read $! toString $! BL.take (fromIntegral l) s
+tok_integer (AlexInput _ _ s) l = do
+  let str = BL.unpack $! BL.take (fromIntegral l) s
+  return $ TInteger $! read $! str
 {-# INLINE tok_integer #-}
 
 tok_fractional :: Action
 tok_fractional (AlexInput _ _ s) l = do
-  let str = toString (BL.take (fromIntegral l) s)
+  let str = BL.unpack (BL.take (fromIntegral l) s)
       rat = readRational str
   return $ TFractional $! FL str rat
 {-# INLINE tok_fractional #-}
@@ -676,6 +676,10 @@ annotateComment tok = case tok of
   TBlockComment s        -> AnnBlockComment s
   _                      -> error ("annotateComment: " ++ show tok)
 {-# INLINE annotateComment #-}
+
+unpackUtf8 :: BL.ByteString -> String
+unpackUtf8 = utf8DecodeByteString . BL.toStrict
+{-# INLINE unpackUtf8 #-}
 
 takeUtf8 :: Int -> BL.ByteString -> BL.ByteString
 takeUtf8 n bs = fst (splitUtf8 n bs)
