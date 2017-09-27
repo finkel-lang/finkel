@@ -1,4 +1,6 @@
 ;;;; -*- mode: sk -*-
+##(LANGUAGE GeneralizedNewtypeDeriving)
+
 ;;;; | Simple SK REPL.
 
 ;;; This implementation uses two threads: one for read/print, and
@@ -11,23 +13,29 @@
 
 (require SK.Core)
 
-(import Control.Concurrent      ; base
+;; base
+(import Control.Concurrent
         ((MVar) (ThreadId) forkIO killThread newEmptyMVar
                 putMVar takeMVar))
 (import Control.Monad (void))
 (import Control.Monad.IO.Class ((MonadIO ..)))
 (import Data.List (intercalate intersperse nubBy))
-(import Data.String (fromString))
 (import Data.Version (showVersion))
 (import System.Exit (exitWith))
 (import System.IO (hFlush stdout))
 
-(import System.Console.Haskeline) ; haskeline
+;; bytestring
+(import Data.ByteString.Builder (stringUtf8 toLazyByteString))
 
-(import Control.Monad.Trans.Class) ; transformers
+;; haskeline
+(import System.Console.Haskeline)
+
+;; transformers
+(import Control.Monad.Trans.Class)
 (import Control.Monad.Trans.State.Strict)
 
-(import Language.SK)            ; sk-kernel
+;; sk-kernel
+(import Language.SK)
 (import Language.SK.Builder)
 (import Language.SK.Eval)
 (import Language.SK.GHC)
@@ -36,10 +44,10 @@
 (import Language.SK.Run)
 (import Language.SK.Syntax)
 
-(import Paths_sk_repl)          ; internal
+;; internal
+(import Paths_sk_repl)
 (import SK.Repl.Env)
 (import SK.Repl.GHC)
-
 
 
 ;;; Repl, state, and result types
@@ -54,28 +62,8 @@
   (ReplState {pending-input "" input-count 0}))
 
 (newtype (Repl a)
-  (Repl {unRepl (StateT ReplState IO a)}))
-
-(instance (Functor Repl)
-  (= fmap f (Repl a) (Repl (fmap f a))))
-
-(instance (Applicative Repl)
-  (= pure a (Repl (pure a)))
-  (= <*> (Repl f) (Repl a) (Repl (<*> f a))))
-
-(instance (Monad Repl)
-  (= return pure)
-  (= >>= a k (Repl (>>= (unRepl a) (. unRepl k)))))
-
-(instance (MonadIO Repl)
-  (= liftIO io (Repl (liftIO io))))
-
-(instance (MonadException Repl)
-  (= controlIO f
-    (Repl (controlIO
-           (\ (RunIO r0)
-             (let ((= r1 (RunIO (. (fmap Repl) (. r0 unRepl)))))
-               (fmap unRepl (f r1))))))))
+  (Repl {unRepl (StateT ReplState IO a)})
+  (deriving (Functor Applicative Monad MonadIO MonadException)))
 
 (:: run-repl (-> (Repl a) ReplState (IO a)))
 (= run-repl repl st (evalStateT (unRepl repl) st))
@@ -95,7 +83,7 @@
 ;;; Main
 
 (defn (replMain (IO ()))
-    ()
+  ()
   (do (<- in-mv newEmptyMVar)
       (<- out-mv newEmptyMVar)
       (let ((= skc (runSkc (eval-loop in-mv out-mv) repl-env))))
@@ -155,13 +143,14 @@
 (:: read-form (-> String (Repl (Maybe Code))))
 (= read-form input0
   (do (<- st get-repl-state)
-      (let ((= input1 (++ (pending-input st) (: \lf input0)))
+      (let ((= input1 (++ (pending-input st) (++ "\n" input0)))
             (= count (succ (input-count st)))
             (= put-and-return pending ret
               (do (put-repl-state (st {input-count count
                                        pending-input pending}))
                   (return ret))))
-        (case (evalSP sexpr (Just "<repl>") (fromString input1))
+        (case (evalSP sexpr (Just "<repl>")
+                      (toLazyByteString (stringUtf8 input1)))
           (Right forms) (put-and-return "" (Just forms))
           (Left _err)   (put-and-return input1 Nothing)))))
 
@@ -214,7 +203,7 @@
      (otherwise
       (case (evalBuilder parseTopDecls forms)
         (Right decs) (eval-decls decs)
-        (Left err)   (return (Left (concat [err [\lf]])))))))
+        (Left err)   (return (Left (concat [err "\n"])))))))
 
 (:: eval-statement (-> HStmt (Skc Result)))
 (= eval-statement stmt0

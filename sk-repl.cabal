@@ -1,5 +1,5 @@
 name:                sk-repl
-version:             0.1.1.0
+version:             0.1.2.0
 synopsis:            REPL for SK
 description:         REPL for SK
 homepage:            https://github.com/githubuser/sk-repl#readme
@@ -19,7 +19,7 @@ cabal-version:       >= 2.0
 custom-setup
   setup-depends:       base >= 4.7 && < 5
                      , Cabal >= 2.0
-                     , sk-kernel >= 0.1.3
+                     , sk-kernel >= 0.4.0
 
 library
   hs-source-dirs:      src
@@ -31,13 +31,14 @@ library
                        SK.Repl.Macro
                        SK.User
   build-depends:       base >= 4.7 && < 5
+                     , bytestring
                      , directory
                      , filepath
                      , haskeline
                      , ghc
                      , ghci
                      , transformers
-                     , sk-kernel >= 0.1.3
+                     , sk-kernel >= 0.4.0
   default-language:    Haskell2010
   ghc-options:       -Wall
 
@@ -50,7 +51,7 @@ executable sk
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , sk-repl
-                     , sk-kernel >= 0.1.3
+                     , sk-kernel >= 0.4.0
   default-language:    Haskell2010
 
 test-suite sk-repl-test
@@ -61,7 +62,7 @@ test-suite sk-repl-test
                      , base
                      , hspec
                      , sk-repl
-                     , sk-kernel >= 0.1.3
+                     , sk-kernel >= 0.4.0
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       CoreTest
   default-language:    Haskell2010
