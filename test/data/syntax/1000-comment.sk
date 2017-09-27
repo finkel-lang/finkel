@@ -12,6 +12,18 @@
 
 (module Main)
 
+#|
+
+Sample block comment. All literals between character sequence `#' `|',
+and `|' `#' are block comment. Block comments understand UNICODE
+characters:
+
+- 我能吞下玻璃而不伤身体。
+- ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ
+- მინას ვჭამ და არა მტკივა.
+
+|#
+
 ;;; | Main entry function.
 (= main
   ;; This is not a documentation comment.

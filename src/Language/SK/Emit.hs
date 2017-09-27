@@ -11,19 +11,10 @@ module Language.SK.Emit
   , lookupNextDoc
   ) where
 
--- Not yet sure whether the use of LINE pragma is showing helpful error
--- messages.
---
--- Position of S-expression code and generated haskell code does not
--- always match with LINE pragmas in top-level definitions. When
--- generated Haskell source is longer than lisp code (which is likely
--- happen with macros), the line PRAGMAs in top-level bindings only are
--- too sparse to show the precise location of errors.
-
--- From 'base'
+-- containers
 import qualified Data.Map as Map
 
--- From 'ghc'
+-- ghc
 import GHC
 import OccName
 import Outputable
@@ -45,12 +36,11 @@ type DocMap = Map.Map SrcSpan [AnnotationComment]
 isDocComment :: Located AnnotationComment -> Bool
 isDocComment x =
   case unLoc x of
-    AnnDocCommentNext _ -> True
-    AnnDocCommentPrev _ -> True
+    AnnDocCommentNext _  -> True
+    AnnDocCommentPrev _  -> True
     AnnDocCommentNamed _ -> True
     AnnDocSection _ _    -> True
-    -- AnnDocOptions _ -> True
-    _ -> False
+    _                    -> False
 
 buildDocMap :: [Located AnnotationComment] -> DocMap
 buildDocMap acs = go (Map.empty, Nothing, []) (sortLocated acs)
@@ -92,13 +82,13 @@ spanStartLine :: SrcSpan -> Int
 spanStartLine l =
   case l of
     RealSrcSpan s -> srcSpanStartLine s
-    _ -> -1
+    _             -> -1
 
 spanEndLine :: SrcSpan -> Int
 spanEndLine l =
   case l of
     RealSrcSpan s -> srcSpanEndLine s
-    _ -> -1
+    _             -> -1
 
 lookupDoc :: SrcSpan -> DocMap -> Maybe [AnnotationComment]
 lookupDoc l =
@@ -137,9 +127,10 @@ class HsSrc a where
 newtype Hsrc a = Hsrc {unHsrc :: a}
 
 genHsSrc :: (GhcMonad m, HsSrc a) => SPState -> a -> m String
-genHsSrc st x =
-  do flags <- getSessionDynFlags
-     return (showSDocForUser flags neverQualify (toHsSrc st x))
+genHsSrc st x = do
+  flags <- getSessionDynFlags
+  unqual <- getPrintUnqual
+  return (showSDocForUser flags unqual (toHsSrc st x))
 
 unAnnotateComment :: AnnotationComment -> SDoc
 unAnnotateComment c =
@@ -177,6 +168,15 @@ hsSrc_nonnull st xs =
   case xs of
     [] -> empty
     _  -> vcat (map (toHsSrc st) xs)
+
+-- Not yet sure whether the use of LINE pragma is showing helpful error
+-- messages.
+--
+-- Position of S-expression code and generated haskell code does not
+-- always match with LINE pragmas in top-level definitions. When
+-- generated Haskell source is longer than lisp code (which is likely
+-- happen with macros), the line PRAGMAs in top-level bindings only are
+-- too sparse to show the precise location of errors.
 
 linePragma' :: SPState -> Int -> SDoc
 linePragma' st linum =

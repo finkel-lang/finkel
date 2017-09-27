@@ -25,7 +25,8 @@ module Language.SK.Lexer
 
 -- base
 import Control.Monad (ap, liftM, msum)
-import Data.Char (chr, ord, isDigit, isOctDigit, isHexDigit, toUpper)
+import Data.Char ( chr, ord, isDigit, isOctDigit, isHexDigit
+                 , isSpace, toUpper )
 import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
 import qualified GHC.Char as Char
@@ -80,6 +81,9 @@ $whitechar+  ;
 
 \;+ $whitechar \| .* { tok_doc_comment_next }
 \; .*                { tok_line_comment }
+
+\#\| $whitechar \|   { tok_block_doc_comment_next }
+\#\|                 { tok_block_comment }
 
 --- Parentheses
 \( { tok_oparen }
@@ -323,6 +327,10 @@ data Token
   -- ^ Comment string starting with @-- |@.
   | TLineComment String
   -- ^ Non-documentation line comment string.
+  | TBlockComment String
+  -- ^ Non-documentation block comment string.
+  | TBlockDocCommentNext String
+  -- ^ Block documentation comment for next declaration.
   | TSymbol FastString
   -- ^ Symbol data.
   | TChar Char
@@ -342,6 +350,17 @@ data Token
 type LToken = Located Token
 
 type Action = AlexInput -> Int -> SP Token
+
+-- Tokenizer actions for documentation
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Currently, documentation 'Token's are converted to 'AnnotatedComment'
+-- during lexical analysis. Once Token data were converted to
+-- 'AnnotationComment', it cannot distinguish between block
+-- documentation comment and line documentation comment. From this,
+-- character sequences for line documentation prefix (i.e. '-- |') and
+-- block documentation start (i.e. '{- |') and end (i.e. '-}') are added
+-- in tokenizer actions.
 
 tok_oparen :: Action
 tok_oparen _ _ = return TOparen
@@ -393,15 +412,53 @@ tok_hash _ _ =  return THash
 
 tok_doc_comment_next :: Action
 tok_doc_comment_next (AlexInput _ _ s) l = do
-  let str = toString $ BL.take (fromIntegral l) s
+  let str = toString $ takeUtf8 l s
   return $ TDocCommentNext $ lc2hc str
 {-# INLINE tok_doc_comment_next #-}
 
 tok_line_comment :: Action
 tok_line_comment (AlexInput _ _ s) l = do
-  let str = toString (BL.take (fromIntegral l) s)
-  return (TLineComment (lc2hc str))
+  let str = takeUtf8 l s
+  return (TLineComment (lc2hc (toString str)))
 {-# INLINE tok_line_comment #-}
+
+tok_block_doc_comment_next :: Action
+tok_block_doc_comment_next =
+  tok_block_comment_with comment f
+  where
+    f inp =
+      case alexGetChar' inp of
+        Just (c, inp') | isSpace c -> f inp'
+                       | otherwise -> alexGetChar' inp'
+        _                          -> Nothing
+    comment str = TBlockDocCommentNext ("{- | " ++ str ++ " -}")
+
+tok_block_comment :: Action
+tok_block_comment =
+  tok_block_comment_with TBlockComment alexGetChar'
+
+tok_block_comment_with :: (String -> Token)
+                       -> (AlexInput -> Maybe (Char, AlexInput))
+                       -> Action
+tok_block_comment_with tok ini inp0 _ = do
+  case alexGetChar' inp0 of
+    Just ('#', inp1)
+      | Just ('|', inp2) <- alexGetChar' inp1
+      , Just (c, inp3) <- ini inp2
+      , Just (com, inp4) <- go inp3 c ""
+      -> alexSetInput inp4 >> return (tok (reverse com))
+    _ -> alexError "tok_block_comment: panic"
+  where
+    go inp prev acc
+      | prev == '|' =
+        case alexGetChar' inp of
+          Just (c, inp') | c == '#'  -> Just (tail acc, inp')
+                         | otherwise -> go inp' c (c:acc)
+          Nothing                    -> Nothing
+      | otherwise =
+        case alexGetChar' inp of
+          Just (c, inp') -> go inp' c (c:acc)
+          Nothing        -> Nothing
 
 tok_lambda :: Action
 tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
@@ -546,14 +603,18 @@ tokenLexer cont = do
   st <- getSPState
   let fn = targetFile st
   ltok@(L span tok) <- scanToken fn
+  let comment = do
+        let com = L span (annotateComment tok)
+        SP (\st -> unSP (tokenLexer cont) (pushComment com st))
+      docComment = do
+        let com = L span (annotateComment tok)
+        SP (\st -> unSP (cont ltok) (pushComment com st))
   case tok of
-    TLineComment _ -> do
-      let comment = L span (annotateComment tok)
-      SP (\st -> unSP (tokenLexer cont) (pushComment comment st))
-    TDocCommentNext _ -> do
-      let comment = L span (annotateComment tok)
-      SP (\st -> unSP (cont ltok) (pushComment comment st))
-    _ -> cont ltok
+    TLineComment _         -> comment
+    TBlockComment _        -> comment
+    TDocCommentNext _      -> docComment
+    TBlockDocCommentNext _ -> docComment
+    _                      -> cont ltok
 {-# INLINE tokenLexer #-}
 
 pushComment :: Located AnnotationComment -> SPState -> SPState
@@ -609,9 +670,11 @@ lc2hc str = '-':'-':dropWhile (== ';') str
 
 annotateComment :: Token -> AnnotationComment
 annotateComment tok = case tok of
-  TDocCommentNext s -> AnnDocCommentNext s
-  TLineComment s    -> AnnLineComment s
-  _                 -> error ("annotateComment: " ++ show tok)
+  TDocCommentNext s      -> AnnDocCommentNext s
+  TBlockDocCommentNext s -> AnnDocCommentNext s
+  TLineComment s         -> AnnLineComment s
+  TBlockComment s        -> AnnBlockComment s
+  _                      -> error ("annotateComment: " ++ show tok)
 {-# INLINE annotateComment #-}
 
 takeUtf8 :: Int -> BL.ByteString -> BL.ByteString

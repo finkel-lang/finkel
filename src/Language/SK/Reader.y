@@ -51,6 +51,7 @@ import GHC.LanguageExtensions (Extension(..))
 'integer' { L _ (TInteger _) }
 'frac'    { L _ (TFractional _) }
 'comment' { L _ (TDocCommentNext _) }
+'blkdocn' { L _ (TBlockDocCommentNext _) }
 
 %%
 
@@ -89,6 +90,7 @@ atom :: { Code }
      | 'integer' { mkAInteger $1 }
      | 'frac'    { mkAFractional $1 }
      | 'comment' { mkAComment $1 }
+     | 'blkdocn' { mkBlockDocCommentNext $1 }
      | '{'       { mkOcSymbol $1 }
      | '}'       { mkCcSymbol $1 }
 
@@ -164,6 +166,10 @@ mkAFractional (L l (TFractional x)) = atom l $ AFractional x
 mkAComment :: Located Token -> Code
 mkAComment (L l (TDocCommentNext x)) = atom l $ AComment x
 {-# INLINE mkAComment #-}
+
+mkBlockDocCommentNext :: Located Token -> Code
+mkBlockDocCommentNext (L l (TBlockDocCommentNext x)) =
+  atom l $ AComment x
 
 mkOcSymbol :: Located Token -> Code
 mkOcSymbol (L l _) = sym l "{"
