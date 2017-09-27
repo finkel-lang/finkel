@@ -82,7 +82,7 @@ $whitechar+  ;
 \;+ $whitechar \| .* { tok_doc_comment_next }
 \; .*                { tok_line_comment }
 
-\#\| $whitechar \|   { tok_block_doc_comment_next }
+\#\| $whitechar* \|  { tok_block_doc_comment_next }
 \#\|                 { tok_block_comment }
 
 --- Parentheses
@@ -194,31 +194,24 @@ alexGetByte (AlexInput loc _ buf) =
          Just (w8, AlexInput loc' c buf')
 
 alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
-alexGetChar' inp0 =
-  case alexGetByte inp0 of
-    Just (w0, inp1)
-      | w0 < 0x80 -> do
-         let c = w2c w0
-         c `seq` return (c, inp1)
-      | w0 < 0xe0  -> do
-         (w1, inp2) <- alexGetByte inp1
-         let c = utf8char [w0,w1]
-         c `seq` return (c, setPrevChar inp2 c)
-      | w0 < 0xf0  -> do
-         (w1, inp2) <- alexGetByte inp1
-         (w2, inp3) <- alexGetByte inp2
-         let c = utf8char [w0,w1,w2]
-         c `seq` return (c, setPrevChar inp3 c)
-      | otherwise -> do
-         (w1, inp2) <- alexGetByte inp1
-         (w2, inp3) <- alexGetByte inp2
-         (w3, inp4) <- alexGetByte inp3
-         let c = utf8char [w0,w1,w2,w3]
-         c `seq` return (c, setPrevChar inp4 c)
+alexGetChar' (AlexInput l0 _c0 bs0) =
+  case W8.uncons bs0 of
+    Just (w1, bs1)
+      | w1 < 0x80 ->
+        let c = w2c w1
+            l1 = advanceSrcLoc l0 c
+        in Just (c, AlexInput l1 c bs1)
+      | w1 < 0xe0 -> split 1
+      | w1 < 0xf0 -> split 2
+      | otherwise -> split 3
       where
-        utf8char w8s =
-          head (utf8DecodeByteString (W8.toStrict (W8.pack w8s)))
-        setPrevChar (AlexInput l _ b) c = AlexInput l c b
+        split n =
+          let (rest, bs2) = W8.splitAt n bs1
+              c = utf8 w1 rest
+              l1 = advanceSrcLoc l0 c
+          in  Just (c, AlexInput l1 c bs2)
+        utf8 w ws =
+          head (utf8DecodeByteString (W8.toStrict (W8.cons w ws)))
     Nothing -> Nothing
 {-# INLINE alexGetChar' #-}
 
@@ -603,7 +596,8 @@ tokenLexer cont = do
   st <- getSPState
   let fn = targetFile st
   ltok@(L span tok) <- scanToken fn
-  let comment = do
+  let pushComment comment st = st {comments = comment : comments st}
+      comment = do
         let com = L span (annotateComment tok)
         SP (\st -> unSP (tokenLexer cont) (pushComment com st))
       docComment = do
@@ -616,10 +610,6 @@ tokenLexer cont = do
     TBlockDocCommentNext _ -> docComment
     _                      -> cont ltok
 {-# INLINE tokenLexer #-}
-
-pushComment :: Located AnnotationComment -> SPState -> SPState
-pushComment comment st = st { comments = comment : comments st }
-{-# INLINE pushComment #-}
 
 scanToken :: FastString -> SP (Located Token)
 scanToken fn = do
