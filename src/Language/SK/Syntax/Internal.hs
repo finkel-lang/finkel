@@ -375,6 +375,12 @@ b_inlineD ispec (LForm (L l (Atom (ASymbol name)))) =
                               , inl_src = SourceText "{-# INLINABLE" }
         _         -> defaultInlinePragma
 
+b_specializeD :: Code -> (Code, HType) -> Builder HDecl
+b_specializeD (LForm (L l _)) (nameSym, tsig) = do
+  let LForm (L ln (Atom (ASymbol name))) = nameSym
+      lname = L ln (mkRdrName name)
+      ip = defaultInlinePragma {inl_src = SourceText "{-# SPECIALIZE"}
+  return (L l (SigD (SpecSig lname [mkLHsSigType tsig] ip)))
 
 -- ---------------------------------------------------------------------
 --

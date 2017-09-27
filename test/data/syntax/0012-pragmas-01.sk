@@ -24,11 +24,20 @@
 
 ;;; 12.2 Specialization
 
-;;; TODO
+(:: specializeMe1 (=> (Num a) (Show a) (-> a String)))
+(= specializeMe1 x (show (+ x 1)))
 
-;;; 12.3 Language extensions
+##(SPECIALIZE (:: specializeMe1 (-> Int String)))
+##(SPECIALIZE (:: specializeMe1 (-> Integer String)))
+##(SPECIALIZE (:: specializeMe1 (-> Float String)))
+##(SPECIALIZE (:: specializeMe1 (-> Double String)))
 
-;;; TODO
+(:: specprgm (IO ()))
+(= specprgm
+  (do (putStrLn (specializeMe1 (:: 41 Int)))
+      (putStrLn (specializeMe1 (:: 41 Integer)))
+      (putStrLn (specializeMe1 (:: 41 Double)))
+      (putStrLn (specializeMe1 (:: 41 Float)))))
 
 ;;; GHC extension: UNPACK
 
@@ -43,4 +52,5 @@
 (:: main (IO ()))
 (= main
   (do inlineprgm
+      specprgm
       unpackprgm))

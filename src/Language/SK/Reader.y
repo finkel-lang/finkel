@@ -194,7 +194,7 @@ pragma orig@(LForm (L l form)) =
       | normalize sym `elem` inlinePragmas -> return orig
 
     -- Pragma with multiple arguments.
-    List (LForm (L _ (Atom (ASymbol sym))):rest)
+    List (LForm (L l' (Atom (ASymbol sym))):rest)
       | normalize sym == "language" -> do
         let (exts, invalids) = groupExts rest
         case invalids of
@@ -202,12 +202,16 @@ pragma orig@(LForm (L l form)) =
             sp <- getSPState
             putSPState (sp {langExts = exts ++ langExts sp})
             return (emptyBody l)
-          _  -> errorSP orig ("LANGUAGE: unsupported pragmas: " ++
+          _  -> errorSP orig ("Unsupported LANGUAGE pragma: " ++
                               show invalids)
+      | normalize sym `elem` spcls -> do
+         let specialize = LForm (L l' (Atom (ASymbol "SPECIALIZE")))
+         return (LForm (L l (List (specialize:rest))))
     _ -> error ("unknown pragma: " ++ show form)
   where
     normalize = map toLower . unpackFS
     inlinePragmas = ["inline", "noinline", "inlinable"]
+    spcls = ["specialize", "specialise"]
 
 groupExts :: [Code] -> ([Extension],[Code])
 groupExts = foldr f ([],[])

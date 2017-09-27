@@ -42,7 +42,7 @@ import Language.SK.Syntax.Internal
 %name p_decl decl
 %name p_decls decls
 %name p_lqtycl lqtycl
-%name p_ffifn ffifn
+%name p_sfsig sfsig
 %name p_lsname lsname
 
 %name p_type type
@@ -111,10 +111,11 @@ import Language.SK.Syntax.Internal
 '~'  { LForm (L _ (Atom (ASymbol "~"))) }
 
 -- Pragmas
-'unpack'    { LForm (L _ (Atom (ASymbol "UNPACK"))) }
-'inline'    { LForm (L _ (Atom (ASymbol "INLINE"))) }
-'noinline'  { LForm (L _ (Atom (ASymbol "NOINLINE"))) }
-'inlinable' { LForm (L _ (Atom (ASymbol "INLINABLE"))) }
+'unpack'     { LForm (L _ (Atom (ASymbol "UNPACK"))) }
+'inline'     { LForm (L _ (Atom (ASymbol "INLINE"))) }
+'noinline'   { LForm (L _ (Atom (ASymbol "NOINLINE"))) }
+'inlinable'  { LForm (L _ (Atom (ASymbol "INLINABLE"))) }
+'specialize' { LForm (L _ (Atom (ASymbol "SPECIALIZE"))) }
 
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }
@@ -257,10 +258,10 @@ top_decl :: { HDecl }
     | 'default' zero_or_more_types { b_defaultD $2 }
     | fixity 'integer' symbols1    { b_fixityD $1 $2 $3 }
     | 'foreign' 'symbol' ccnv sname 'list'
-      {% parse p_ffifn $5 >>= b_ffiD $1 $2 $3 $4 }
+      {% parse p_sfsig $5 >>= b_ffiD $1 $2 $3 $4 }
     | decl                         { $1 }
 
-ffifn :: { (Code, HType) }
+sfsig :: { (Code, HType) }
     : '::' 'symbol' type { ($2, $3) }
 
 simpletype :: { (FastString, [HTyVarBndr])}
@@ -351,6 +352,7 @@ decl :: { HDecl }
     | 'inline' 'symbol'    { b_inlineD Inline $2 }
     | 'noinline' 'symbol'  { b_inlineD NoInline $2 }
     | 'inlinable' 'symbol' { b_inlineD Inlinable $2 }
+    | 'specialize' 'list'  {% parse p_sfsig $2 >>= b_specializeD $1 }
 
 aguards :: { (([HGRHS],[HDecl]), [HPat]) }
         : guards      { ($1, []) }
