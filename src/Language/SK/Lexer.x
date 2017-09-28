@@ -10,6 +10,8 @@ module Language.SK.Lexer
     -- * Lexer function
   , tokenLexer
   , lexTokens
+    -- * Documentation map
+  , DocMap
     -- * S-expression parser monad
   , SP(..)
   , SPState(..)
@@ -35,6 +37,9 @@ import qualified GHC.Char as Char
 import Data.ByteString.Internal (w2c)
 import qualified Data.ByteString.Lazy as W8
 import qualified Data.ByteString.Lazy.Char8 as BL
+
+-- containers
+import qualified Data.Map as Map
 
 -- ghc
 import Encoding (utf8DecodeByteString)
@@ -127,13 +132,16 @@ $whitechar+  ;
 --
 -- ---------------------------------------------------------------------
 
+-- | Documentation map.
+type DocMap = Map.Map SrcSpan [AnnotationComment]
+
 -- | Data type to hold states while reading source code.
 data SPState = SPState
   { comments :: [Located AnnotationComment]
-  , annotation_comments :: [(SrcSpan, [Located AnnotationComment])]
   , targetFile :: FastString
   , requiredModuleNames :: [String]
   , langExts :: [LangExt.Extension]
+  , docMap :: DocMap
   , buf :: BL.ByteString
   , currentLoc :: RealSrcLoc
   , prevChar :: Char
@@ -143,10 +151,10 @@ data SPState = SPState
 initialSPState :: FastString -> Int -> Int -> SPState
 initialSPState file linum colnum =
   SPState { comments = []
-          , annotation_comments = []
           , targetFile = file
           , requiredModuleNames = []
           , langExts = []
+          , docMap = Map.empty
           , buf = BL.empty
           , currentLoc = mkRealSrcLoc file linum colnum
           , prevChar = '\n'}

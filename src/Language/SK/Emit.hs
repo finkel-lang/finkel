@@ -6,10 +6,10 @@ module Language.SK.Emit
   , Hsrc(..)
   , genHsSrc
   , buildDocMap
-  , lookupDoc
-  , lookupPrevDoc
-  , lookupNextDoc
   ) where
+
+-- base
+import Data.Maybe (fromMaybe)
 
 -- containers
 import qualified Data.Map as Map
@@ -30,8 +30,6 @@ import Language.SK.GHC (unpackFS)
 -- Annotation dictionary
 --
 -- ---------------------------------------------------------------------
-
-type DocMap = Map.Map SrcSpan [AnnotationComment]
 
 isDocComment :: Located AnnotationComment -> Bool
 isDocComment x =
@@ -106,13 +104,9 @@ lookupDoc l =
 lookupPrevDoc :: Int -> SrcSpan -> DocMap -> Maybe [AnnotationComment]
 lookupPrevDoc offset l =
   let line = spanStartLine l
-      f k a = if spanEndLine k == line - offset
-                 then Just a
-                 else Nothing
+      f k a | spanEndLine k == line - offset = Just a
+            | otherwise                      = Nothing
   in  Map.foldMapWithKey f
-
-lookupNextDoc :: SrcLoc -> DocMap -> Maybe [AnnotationComment]
-lookupNextDoc = undefined
 
 
 -- ---------------------------------------------------------------------
@@ -127,28 +121,26 @@ class HsSrc a where
 newtype Hsrc a = Hsrc {unHsrc :: a}
 
 genHsSrc :: (GhcMonad m, HsSrc a) => SPState -> a -> m String
-genHsSrc st x = do
+genHsSrc st0 x = do
   flags <- getSessionDynFlags
   unqual <- getPrintUnqual
-  return (showSDocForUser flags unqual (toHsSrc st x))
+  let st1 = st0 {docMap = buildDocMap (comments st0)}
+  return (showSDocForUser flags unqual (toHsSrc st1 x))
 
 unAnnotateComment :: AnnotationComment -> SDoc
 unAnnotateComment c =
   case c of
-    AnnLineComment str -> text str
+    AnnLineComment str    -> text str
     AnnDocCommentNext str -> text str
-    _ -> ppr c
+    _                     -> ppr c
 
 mbHeaderComment :: Outputable a => SPState -> Maybe (Located a) -> SDoc
 mbHeaderComment st mbdoc =
-  case mbdoc of
-    Nothing -> empty
-    Just a  ->
-      let dm = buildDocMap (comments st)
-          result = case lookupDoc (getLoc a) dm of
-                     Just xs -> vcat (map unAnnotateComment xs)
-                     Nothing -> empty
-      in  result
+  let sd = do
+        a <- mbdoc
+        xs <- lookupDoc (getLoc a) (docMap st)
+        return (vcat (map unAnnotateComment xs))
+  in fromMaybe empty sd
 
 pp_mb :: Outputable t => Maybe t -> SDoc
 pp_mb (Just x) = ppr x
@@ -194,7 +186,7 @@ emitPrevDoc = emitPrevDocWithOffset 1
 
 emitPrevDocWithOffset :: Int -> SPState -> Located a -> SDoc
 emitPrevDocWithOffset offset st ref =
- case lookupPrevDoc offset (getLoc ref) (buildDocMap (comments st)) of
+ case lookupPrevDoc offset (getLoc ref) (docMap st) of
     Nothing -> empty
     Just as -> vcat (map unAnnotateComment as)
 
@@ -237,12 +229,12 @@ instance (HsSrc a, OutputableBndrId a, HasOccName a)
                                               (map ppr (unLoc es))))
                       , nest 4 (text ") where")]
            , pp_nonnull imports
-           , hsSrc_nonnull st (map (Hsrc . unLoc) decls)]
+           , hsSrc_nonnull st (map (Hsrc . unLoc) decls) ]
       where
         pp_header rest =
           case deprec of
             Nothing -> pp_modname <+> rest
-            Just d  -> vcat [ pp_modname, ppr d, rest ]
+            Just d  -> vcat [pp_modname, ppr d, rest]
         pp_modname = text "module" <+> ppr name
 
 instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsExpr a)) where
@@ -255,7 +247,8 @@ instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsDecl a)) where
       SigD sigd  -> toHsSrc st (Hsrc sigd)
       _          -> ppr decl
 
-instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsBindLR a a)) where
+instance (OutputableBndrId a, HsSrc a)
+         => HsSrc (Hsrc (HsBindLR a a)) where
   toHsSrc st (Hsrc binds) =
     case binds of
       FunBind { fun_id = fun
@@ -270,7 +263,6 @@ instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsBindLR a a)) where
            -- Additional operation to `ppr' for `toHsSrc'. Find
            -- corresponding haddock comment for function binding, and
            -- print it out.
-           --- $$ linePragma st fun
            $$ emitPrevDoc st fun
 
            $$ pprFunBind matches
