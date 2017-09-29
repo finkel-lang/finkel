@@ -176,11 +176,11 @@ instance Foldable Form where
       List xs ->
         case xs of
           []   -> z
-          y:ys -> foldr f (foldr f z (unLocLForm y)) (List ys)
+          y:ys -> foldr f (foldr f z (List ys)) (unLocLForm y)
       HsList xs ->
         case xs of
           []   -> z
-          y:ys -> foldr f (foldr f z (unLocLForm y)) (HsList ys)
+          y:ys -> foldr f (foldr f z (HsList ys)) (unLocLForm y)
 
 instance NFData a => NFData (Form a) where
   rnf x =

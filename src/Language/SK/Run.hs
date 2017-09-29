@@ -191,7 +191,7 @@ asHaskellSymbols = f1
 macroFunction :: Macro -> Code -> IO (Either String Code)
 macroFunction mac form = do
   let fn = case mac of
-             Macro f -> f
+             Macro f       -> f
              SpecialForm f -> f
   runSkc (fn form) initialSkEnv
 
