@@ -31,11 +31,13 @@
   ;; Function to make body expression of `defmacro*' and `defmacro'.
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
   (= make-defmacro-body label whole name0 arg0 body0
-    (let ((= err form-name name
-            `(skSrcError ,form-name
-                         (concat
-                          [(show ',name)
-                           "\ninvalid args: `" (show *form*) "'"])))
+    (let ((:: err (-> Code Code Code))
+          (= err form-name name
+               `(skSrcError ,form-name
+                            (concat
+                             [(show ',name)
+                              "\ninvalid args: `" (show *form*) "'"])))
+          (:: atom-body (-> Code Code Code Code Code))
           (= atom-body name arg body form-name
             (if (== arg '())
                 body
@@ -52,12 +54,14 @@
                  ,abind  ,body
                  _       ,(err form-name name)))))
       (case (unLForm arg0)
-        (L l1 (List args)) (return
-                             (list-body l1 name0 args body0 '*form*))
-        (L _l1 (Atom _))   (return
-                             (atom-body name0 arg0 body0 '*form*))
-        _                  (skSrcError whole
-                                       (++ label ": invalid args")))))
+        (L l1 (List args))
+        (return (list-body l1 name0 args body0 '*form*))
+
+        (L _l1 (Atom _))
+        (return (atom-body name0 arg0 body0 '*form*))
+
+        _
+        (skSrcError whole (++ label ": invalid args")))))
 
   ;; Function to make body expression of `macrolet*' and `macrolet'.
   (:: make-macrolet-body (-> String Code (-> Code Code) (Skc Code)))
@@ -130,6 +134,11 @@
     _
     (skSrcError form (++ "defn: invalid form:\n" (show form)))))
 
+;;; Macro to define function for both of compilation time and load time.
+(defmacro defn+ form
+  `(eval-when (compile load)
+     (defn ,@form)))
+
 ;;; Expand given form if the given form is a macro form, otherwise
 ;;; return the given form as is. Note that `macroexpand-1' and
 ;;; `macroexpand' are macro, not function.
@@ -160,14 +169,13 @@
   `(case ()
      _ (| ,@body)))
 
-(eval-when (compile load)
-  (defn (cons (=> (Homoiconic a) (-> a Code Code)))
-    (x (LForm (L _l0 xs)))
-    (let ((= x' (toCode x))
-          (= l1 (getLoc (unLForm x'))))
-      (LForm (L l1 (case xs
-                     (List xs') (List (: x' xs'))
-                     _          (List [x'])))))))
+(defn+ (cons (=> (Homoiconic a) (-> a Code Code)))
+  (x (LForm (L _l0 xs)))
+  (let ((= x' (toCode x))
+        (= l1 (getLoc (unLForm x'))))
+    (LForm (L l1 (case xs
+                   (List xs') (List (: x' xs'))
+                   _          (List [x']))))))
 
 ;;; Below `list' is defined as macro, since Haskell does not support
 ;;; vararg function (actually, vararg is doable in GHC, but requires

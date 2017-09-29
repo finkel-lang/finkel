@@ -9,13 +9,12 @@
 (import Test.QuickCheck)
 (import SK.User)
 
-(eval-when (compile load)
-  (defmacro m1 (x)
-    `(++ "m1 " ,x)))
+(defmacro m1 (x)
+  `(++ "m1 " ,x))
 
 (defn (coreTests Spec) ()
   (do (describe "List" listTests)
-      (describe "Macro" macTests)))
+      (describe "Macro" macroTests)))
 
 (defn (listTests Spec) ()
   (do (let ((= d describe)))
@@ -42,30 +41,131 @@
              (let ((:: f (-> Code Property))
                    (= f x
                      (==> (atom? x) (== 1 (length x)))))
-               (property f))))))
+               (property f))))
+      (d "mapcar"
+         (it "should replace non-symbols"
+             (shouldBe '(foo bar _ buzz _ _)
+                       (mapcar (\ x (if (symbol? x) x '_))
+                               '(foo bar (a b c) buzz 3 "string")))))))
 
-(defn (macTests Spec) ()
+(defmacro expandTo (in out)
+  (let ((= macro (car in)))
+    `(do (let ((= f (macroFunction ,macro))))
+         (<- e (f ',in))
+         (shouldBe e (Right ',out)))))
+
+(defn (macroTests Spec) ()
   (do (let ((= d describe)))
+
       (d "(m1 \"foo\")"
          (it "should be \"m1 foo\""
              (shouldBe (m1 "foo") "m1 foo")))
 
-      (d "expanding defn"
-         (do (let ((= f (macroFunction defn))))
-             (it "should expand to function decl"
-                 (do (<- e (f '(defn foo (a b) (+ a b))))
-                     (shouldBe e (Right '(= foo a b (+ a b))))))
-             (it "should expand to function decl with type sig"
-                 (do (<- e (f '(defn (foo (-> Int Int Int)) (a b)
-                                (+ a b))))
-                     (shouldBe e (Right
-                                  '(begin
-                                    (:: foo (-> Int Int Int))
-                                    (= foo a b
-                                      (+ a b)))))))))
+      (d "expanding eval-when"
+         (it "should expand to (begin (eval-when-compile ...) ....)"
+             (expandTo
+              (eval-when (compile load)
+                (:: foo (-> Int Int))
+                (= foo a (+ a 1)))
+              (begin
+                (eval-when-compile
+                 (:: foo (-> Int Int))
+                 (= foo a (+ a 1)))
+                (:: foo (-> Int Int))
+                (= foo a (+ a 1))))))
 
-      (macrolet ((m1 (a b) `(+ ,a ,b))
-                 (m2 (a b) `(* ,a ,b)))
-        (d "macrolet"
-           (it "should be 42"
-               (shouldBe (m1 (m2 3 4) (m2 5 6)) 42))))))
+      (d "expanding defmacro*"
+         (it "should expand to define-macro"
+             (expandTo
+              (defmacro* m1 (a)
+                (return `(putStrLn (++ "hello, " ,a))))
+              (define-macro m1 *form*
+                (case *form*
+                  (LForm (L _loc (List [_ a])))
+                  (return
+                    (quasiquote
+                     (putStrLn (++ "hello, " (unquote a)))))
+                  _ (skSrcError
+                     *form*
+                     (concat [(show (quote m1))
+                              "\ninvalid args: `"
+                              (show *form*) "'"])))))))
+
+      (d "expanding defmacro"
+         (it "should expand to defmacro*"
+             (expandTo
+              (defmacro m1 (a)
+                `(putStrLn (++ "hello, " ,a)))
+              (defmacro* m1 (a)
+                (return
+                  (quasiquote
+                   (putStrLn (++ "hello, " (unquote a)))))))))
+
+      (d "expanding macrolet*"
+         (it "should expand to let-macro"
+             (expandTo
+              (macrolet* ((m (a b)
+                            (return `(+ ,a ,b))))
+                (m 20 22))
+              (let-macro ((m *form*
+                            (case *form*
+                              (LForm (L _loc (List [_ a b])))
+                              (return (quasiquote
+                                       (+ (unquote a) (unquote b))))
+                              _
+                              (skSrcError
+                               *form*
+                               (concat [(show (quote m))
+                                        "\ninvalid args: `"
+                                        (show *form*)
+                                        "'"])))))
+                (m 20 22)))))
+
+      (d "expanding macrolet"
+         (it "should expand to let-macro with `return'"
+             (expandTo
+              (macrolet ((m (a b)
+                           `(+ ,a ,b)))
+                (m 20 22))
+              (let-macro ((m *form*
+                            (case *form*
+                              (LForm (L _loc (List [_ a b])))
+                              (return (quasiquote (+ (unquote a)
+                                                     (unquote b))))
+                              _
+                              (skSrcError
+                               *form*
+                               (concat [(show (quote m))
+                                        "\ninvalid args: `"
+                                        (show *form*) "'"])))))
+                (m 20 22)))))
+
+      (d "expanding defn"
+         (do (it "should expand to function declaration"
+                 (expandTo
+                  (defn foo (a b) (+ a b))
+                  (= foo a b (+ a b))))
+             (it "should expand to function with type signature"
+                 (expandTo
+                  (defn (foo (-> Int Int Int)) (a b)
+                    (+ a b))
+                  (begin
+                    (:: foo (-> Int Int Int))
+                    (= foo a b (+ a b)))))))
+
+      (d "expanding defn+"
+         (it "should expand to (eval-when (..) (defn ...))"
+             (expandTo
+              (defn+ foo (a b)
+                (+ a b))
+              (eval-when (compile load)
+                (defn foo (a b)
+                  (+ a b))))))
+
+      (d "expanding list"
+         (it "should expand to foldr"
+             (expandTo
+              (list \x \y \z)
+              (foldr cons (quote ()) [(toCode \x)
+                                      (toCode \y)
+                                      (toCode \z)]))))))
