@@ -3,8 +3,8 @@
 
 ;;;; | Simple SK REPL.
 
-;;; This implementation uses two threads: one for read/print, and
-;;; another for evaluating and modifying the SkEnv. Using `MVar'
+;;; This implementation uses two threads: one for reading and printing,
+;;; and another for evaluating and modifying the SkEnv. Using `MVar'
 ;;; containing `Code' to communicate between the threads. This design
 ;;; shall be easier to support reading forms from other sources than
 ;;; line oriented user input, e.g. network sockets.
@@ -116,7 +116,11 @@
               (putStr str)
               (hFlush stdout)))
         (= go
-          (do (let ((= prompt "")))
+          (do (<- st (lift get-repl-state))
+              (let ((= prompt
+                      (if (null (pending-input st))
+                          "SK> "
+                          "... "))))
               (<- mb-input (getInputLine prompt))
               (case mb-input
                 Nothing     quit
@@ -182,13 +186,9 @@
                   (let ((= str (case ret
                                  (Right r) r
                                  (Left err) err))))
-                  (<- ctx getContext)
-                  (let ((= ostr
-                          (concat [str (showContext (head ctx))
-                                   "> "]))))
                   (<- (Session session) (fromGhc (Ghc return)))
                   (liftIO (putTheHscEnv session))
-                  (liftIO (putMVar out-mvar ostr))
+                  (liftIO (putMVar out-mvar str))
                   go)))
     (>> initialize go)))
 
