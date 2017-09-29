@@ -117,17 +117,16 @@
   (case (unLocLForm form)
     (List [_ sig args body])
     (case (unLocLForm sig)
-      (List [name tsig]) (return `(begin
-                                    (:: ,name ,tsig)
-                                    (= ,name ,@args
-                                      ,body)))
-      (Atom _)           (return `(= ,sig ,@args
-                                    ,body))
-      _                  (skSrcError
-                          sig
-                          (concat
-                           ["defn: invalid signature: `"
-                            (show sig) "'"])))
+      (List [name tsig])
+      (return `(begin (:: ,name ,tsig)
+                      (= ,name ,@args ,body)))
+
+      (Atom _)
+      (return `(= ,sig ,@args ,body))
+      _
+      (skSrcError sig
+                  (concat
+                   ["defn: invalid signature: `" (show sig) "'"])))
     _
     (skSrcError form (++ "defn: invalid form:\n" (show form)))))
 
@@ -163,7 +162,7 @@
 
 (eval-when (compile load)
   (defn (cons (=> (Homoiconic a) (-> a Code Code)))
-      (x (LForm (L _l0 xs)))
+    (x (LForm (L _l0 xs)))
     (let ((= x' (toCode x))
           (= l1 (getLoc (unLForm x'))))
       (LForm (L l1 (case xs
@@ -181,13 +180,13 @@
       _                 (skSrcError form "list: invalid args"))))
 
 (defn (car (-> Code Code))
-    ((LForm (L l code)))
+  ((LForm (L l code)))
   (case code
     (List (: x _xs)) x
     _                (LForm (L l (List [])))))
 
 (defn (cdr (-> Code Code))
-    ((LForm (L l code)))
+  ((LForm (L l code)))
   (case code
     (List (: _ xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
                       (case xs
@@ -197,28 +196,28 @@
 
 ;;; 'True' when given 'Code' is a 'List'.
 (defn (list? (-> Code Bool))
-    ((LForm (L _ form)))
+  ((LForm (L _ form)))
   (case form
     (List _) True
     _        False))
 
 ;;; 'True' when given 'Code' is an 'Atom'.
 (defn (atom? (-> Code Bool))
-    ((LForm (L _ form)))
+  ((LForm (L _ form)))
   (case form
     (Atom _) True
     _        False))
 
 ;;; 'True' when given 'Code' is an atom of 'Symbol'.
 (defn (symbol? (-> Code Bool))
-    ((LForm (L _ form)))
+  ((LForm (L _ form)))
   (case form
     (Atom (ASymbol _)) True
     _                  False))
 
 ;;; Apply given function to immediate elements of `List' and `HsList'.
 (defn (mapcar (-> (-> Code Code) Code Code))
-    (f (@ form (LForm (L l lst))))
+  (f (@ form (LForm (L l lst))))
   (case lst
     (List xs)   (LForm (L l (List (map f xs))))
     (HsList xs) (LForm (L l (HsList (map f xs))))
