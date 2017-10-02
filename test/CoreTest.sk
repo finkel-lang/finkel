@@ -49,10 +49,9 @@
                                '(foo bar (a b c) buzz 3 "string")))))))
 
 (defmacro expandTo (in out)
-  (let ((= macro (car in)))
-    `(do (let ((= f (macroFunction ,macro))))
-         (<- e (f ',in))
-         (shouldBe e (Right ',out)))))
+  `(do (let ((= f (macroFunction ,(car in)))))
+       (<- e (f ',in))
+       (shouldBe e (Right ',out))))
 
 (defn (macroTests Spec) ()
   (do (let ((= d describe)))
@@ -100,6 +99,14 @@
                 (return
                   (quasiquote
                    (putStrLn (++ "hello, " (unquote a)))))))))
+
+      (d "expanding macro with `$foo'"
+         (it "should replace `$foo' with gensym"
+             (do (let ((= f (macroFunction defmacro*))))
+                 (<- (Right e) (f '(defmacro* m1 (a b)
+                                    (let ((= $foo (+ ,a ,b)))
+                                      (return $foo)))))
+                 (shouldNotBe (elem (aSymbol "$foo") e) True))))
 
       (d "expanding macrolet*"
          (it "should expand to let-macro"

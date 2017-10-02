@@ -2,7 +2,10 @@
 
 (module SK.Core)
 
+(require Language.SK.GHC (unpackFS))
+
 (import Language.SK)
+(import Language.SK.GHC (unpackFS))
 
 
 ;;; Macro to specify the phases of evaluation.
@@ -28,15 +31,47 @@
                              (show form))))))
 
 (eval-when (compile load)
+  (:: subst-gensyms (-> [(, Atom Atom)] Code Code))
+  (= subst-gensyms kvs
+    (fmap (\ x (case (lookup x kvs)
+                 (Just y) y
+                 Nothing  x))))
+
+  (:: gensym-name? (-> Atom Bool))
+  (= gensym-name? x
+    (case x
+      (ASymbol sym) (| ((<- (: \$ (: c _)) (unpackFS sym))
+                        (elem c [\a .. \z])))
+      _             False))
+
+  (:: collect-names (-> Code [Atom]))
+  (= collect-names form
+    (let ((= f x acc
+            (if (&& (gensym-name? x) (notElem x acc))
+                (: x acc)
+                acc)))
+      (foldr f [] form)))
+
+  (:: gensymfy (-> Code (Skc Code)))
+  (= gensymfy form
+    (do (let ((= to-replace
+                (collect-names form))
+              (= make-replacement (@ x (ASymbol sym))
+                (do (<- (LForm (L _ (Atom g)))
+                        (gensym' (tail (unpackFS sym))))
+                    (return (, x g))))))
+        (<- kvs (mapM make-replacement to-replace))
+        (return (subst-gensyms kvs form))))
+
   ;; Function to make body expression of `defmacro*' and `defmacro'.
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
   (= make-defmacro-body label whole name0 arg0 body0
     (let ((:: err (-> Code Code Code))
           (= err form-name name
-               `(skSrcError ,form-name
-                            (concat
-                             [(show ',name)
-                              "\ninvalid args: `" (show *form*) "'"])))
+            `(skSrcError ,form-name
+                         (concat
+                          [(show ',name)
+                           "\ninvalid args: `" (show *form*) "'"])))
           (:: atom-body (-> Code Code Code Code Code))
           (= atom-body name arg body form-name
             (if (== arg '())
@@ -55,10 +90,10 @@
                  _       ,(err form-name name)))))
       (case (unLForm arg0)
         (L l1 (List args))
-        (return (list-body l1 name0 args body0 '*form*))
+        (gensymfy (list-body l1 name0 args body0 '*form*))
 
         (L _l1 (Atom _))
-        (return (atom-body name0 arg0 body0 '*form*))
+        (gensymfy (atom-body name0 arg0 body0 '*form*))
 
         _
         (skSrcError whole (++ label ": invalid args")))))
@@ -69,10 +104,10 @@
     (let ((:: g (-> Code (Skc Code)))
           (= g code
             (case (unLocLForm code)
-              (List [name arg body])
-              (do (<- body2 (make-defmacro-body label code name
-                                                arg (f body)))
-                  (return `(,name *form* ,body2)))
+              (List [name arg body0])
+              (do (<- body1 (make-defmacro-body label code name
+                                                arg (f body0)))
+                  (return `(,name *form* ,body1)))
               _ (skSrcError whole label))))
       (case (unLocLForm whole)
         (List (: _ (: (LForm (L _ (List forms))) rest)))
@@ -88,11 +123,11 @@
 ;;; body expression should be a value of type `Skc a'.
 (define-macro defmacro* form
   (case (unLocLForm form)
-    (List [_ name arg body])
-    (do (<- body2 (make-defmacro-body "defmacro*" form name arg body))
+    (List [_ name arg body0])
+    (do (<- body1 (make-defmacro-body "defmacro*" form name arg body0))
         (return
           `(define-macro ,name *form*
-             ,body2)))
+             ,body1)))
 
     _
     (skSrcError form "defmacro*: invalid form")))
