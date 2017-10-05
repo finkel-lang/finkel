@@ -60,14 +60,15 @@ quote :: Code -> Code
 quote orig@(LForm (L l form))  =
   case form of
     Atom atom -> quoteAtom l atom
-    List xs ->
-      mkQuoted l (tList l [tSym l "List", tHsList l (map quote xs)])
-    HsList xs ->
-      mkQuoted l (tList l [tSym l "HsList", tHsList l (map quote xs)])
-    _ -> orig
+    List xs   -> quoteList "List" xs
+    HsList xs -> quoteList "HsList" xs
+    _         -> orig
+    where
+      quoteList tag xs =
+        mkQuoted l (tList l [tSym l tag, tHsList l (map quote xs)])
 
--- Quasiquote is currently implemented in Haskell. Though it could be
--- implemented in SK code later. If done in SK code, lexer and reader
+-- Quasiquote is implemented as special form in Haskell. Though it could
+-- be implemented in SK code later. If done in SK code, lexer and reader
 -- still need to handle the special case for backtick, comma, and
 -- comma-at, because currently there's no way to define read macro.
 
@@ -77,24 +78,23 @@ quasiquote orig@(LForm (L l form)) =
     List [LForm (L _ (Atom (ASymbol "unquote"))), x] ->
       tList l [tSym l "toCode", x]
     List forms'
-       | any isUnquoteSplice forms' ->
-          mkQuoted l (tList l [tSym l "List"
-                              ,tList l [ tSym l "concat"
-                                       , tHsList l (go [] forms')]])
-       | otherwise ->
-          mkQuoted l (tList l [tSym l "List"
-                              ,tHsList l (map quasiquote forms')])
+       | [q, body] <- forms'
+       , q == tSym l "quasiquote"   -> quasiquote (quasiquote body)
+       | any isUnquoteSplice forms' -> splicedList "List" forms'
+       | otherwise                  -> nonSplicedList "List" forms'
     HsList forms'
-       | any isUnquoteSplice forms' ->
-         mkQuoted l (tList l [ tSym l "HsList"
-                              , tList l [ tSym l "concat"
-                                        , tHsList l (go [] forms')]])
-       | otherwise ->
-         mkQuoted l (tList l [tSym l "HsList"
-                             ,tHsList l (map quasiquote forms')])
-    Atom atom -> quoteAtom l atom
-    TEnd       -> orig
+       | any isUnquoteSplice forms' -> splicedList "HsList" forms'
+       | otherwise                  -> nonSplicedList "HsList" forms'
+    Atom atom                       -> quoteAtom l atom
+    TEnd                            -> orig
   where
+   splicedList tag forms =
+     mkQuoted l (tList l [ tSym l tag
+                         , tList l [ tSym l "concat"
+                                   , tHsList l (go [] forms)]])
+   nonSplicedList tag forms =
+     mkQuoted l (tList l [ tSym l tag
+                         , tHsList l (map quasiquote forms)])
    go acc forms =
      let (pre, post) = break isUnquoteSplice forms
      in  case post of
@@ -109,7 +109,7 @@ quasiquote orig@(LForm (L l form)) =
 isUnquoteSplice :: Code -> Bool
 isUnquoteSplice (LForm form) =
   case form of
-    L _ (List ((LForm (L _ (Atom (ASymbol "unquote-splice"))):_)))
+    L _ (List (LForm (L _ (Atom (ASymbol "unquote-splice"))):_))
       -> True
     _ -> False
 
@@ -567,30 +567,40 @@ expand1 form =
 
 tSym :: SrcSpan -> FastString -> Code
 tSym l s = LForm (L l (Atom (ASymbol s)))
+{-# INLINE tSym #-}
 
 tChar :: SrcSpan -> Char -> Code
 tChar l c = LForm (L l (Atom (AChar c)))
+{-# INLINE tChar #-}
 
 tString :: SrcSpan -> String -> Code
 tString l s = LForm (L l (Atom (AString s)))
+{-# INLINE tString #-}
 
 tInteger :: SrcSpan -> Integer -> Code
 tInteger l n = LForm (L l (Atom (AInteger n)))
+{-# INLINE tInteger #-}
 
 tFractional :: SrcSpan -> FractionalLit -> Code
 tFractional l n = LForm (L l (Atom (AFractional n)))
+{-# INCLUDE tFractional #-}
 
 tList :: SrcSpan -> [Code] -> Code
 tList l forms = LForm (L l (List forms))
+{-# INCLUDE tList #-}
 
 tHsList :: SrcSpan -> [Code] -> Code
 tHsList l forms = LForm (L l (HsList forms))
+{-# INLINE tHsList #-}
 
 mkQuoted :: SrcSpan -> Code -> Code
 mkQuoted l form = tList l [tSym l "quoted", form]
+{-# INCLUDE mkQuoted #-}
 
 emptyForm :: Code
 emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
+{-# INLINE emptyForm #-}
 
 mkIIDecl :: FastString -> InteractiveImport
 mkIIDecl = IIDecl . simpleImportDecl . mkModuleNameFS
+{-# INCLUDE mkIIDecl #-}
