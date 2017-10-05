@@ -24,6 +24,7 @@ import qualified Data.Map as Map
 -- ghc
 import RdrName (rdrNameOcc)
 import Name (nameOccName)
+import qualified GHC.LanguageExtensions as LangExt
 
 -- Internal
 import Language.SK.Builder (HImportDecl)
@@ -399,7 +400,8 @@ setExpanderSettings = do
                       , ghcLink = LinkInMemory
                       , optLevel = 0 }
       flags2 = gopt_unset flags1 Opt_Hpc
-  _ <- setSessionDynFlags flags2
+      flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
+  _ <- setSessionDynFlags flags3
   contextModules <- envContextModules <$> getSkEnv
   setContext (map (mkIIDecl . fsLit) contextModules)
 
