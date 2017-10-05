@@ -10,7 +10,9 @@
 
 ;;; Macro to specify the phases of evaluation.
 (define-macro eval-when form
-  (let ((= compile? (elem 'compile))
+  (let ((:: compile? (-> [Code] Bool))
+        (= compile? (elem 'compile))
+        (:: load? (-> [Code] Bool))
         (= load? (elem 'load)))
     (case (unLocLForm form)
       (List (: _ (: (LForm (L _ (List phases))) body)))
@@ -18,12 +20,12 @@
           (return
             `(begin
                (eval-when-compile
-                ,@body)
-               ,@body)))
+                ,@(List body))
+               ,@(List body))))
          ((compile? phases)
-          (return `(eval-when-compile ,@body)))
+          (return `(eval-when-compile ,@(List body))))
          ((load? phases)
-          (return `(begin ,@body)))
+          (return `(begin ,@(List body))))
          (otherwise
           (skSrcError form (++ "eval-when: invalid phase: "
                                (show phases)))))
@@ -46,42 +48,49 @@
 
   (:: collect-names (-> Code [Atom]))
   (= collect-names form
-    (let ((= f x acc
+    (let ((:: f (-> Atom [Atom] [Atom]))
+          (= f x acc
             (if (&& (gensym-name? x) (notElem x acc))
                 (: x acc)
                 acc)))
       (foldr f [] form)))
 
   (:: gensymfy (-> Code (Skc Code)))
-  (= gensymfy form
-    (do (let ((= to-replace
-                (collect-names form))
+  (= gensymfy (@ form (LForm (L l0 _)))
+    (do (let ((:: to-replace [Atom])
+              (= to-replace (collect-names form))
+              (:: make-replacement (-> Atom (Skc (, Atom Atom))))
               (= make-replacement (@ x (ASymbol sym))
                 (do (<- (LForm (L _ (Atom g)))
                         (gensym' (tail (unpackFS sym))))
                     (return (, x g))))))
         (<- kvs (mapM make-replacement to-replace))
-        (return (subst-gensyms kvs form))))
+        (case (subst-gensyms kvs form)
+          (LForm (L _ ret)) (return (LForm (L l0 ret))))))
 
   ;; Function to make body expression of `defmacro*' and `defmacro'.
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
   (= make-defmacro-body label whole name0 arg0 body0
     (let ((:: err (-> Code Code Code))
+          ;; (= err undefined)
           (= err form-name name
             `(skSrcError ,form-name
                          (concat
                           [(show ',name)
                            "\ninvalid args: `" (show *form*) "'"])))
+
           (:: atom-body (-> Code Code Code Code Code))
           (= atom-body name arg body form-name
-            (if (== arg '())
+            (if (null arg)
                 body
                 `(case (unLocLForm ,form-name)
                    (List (: _ ,arg)) ,body
                    _                 ,(err form-name name))))
+
           (:: list-body (-> SrcSpan Code [Code] Code Code Code))
           (= list-body l1 name args body form-name
-            (let ((= abind
+            (let ((:: abind Code)
+                  (= abind
                     `(LForm
                       (L _loc
                          (List [_ ,@(LForm (L l1 (List args)))])))))
@@ -216,8 +225,12 @@
 ;;; vararg function (actually, vararg is doable in GHC, but requires
 ;;; some language extensions).
 (define-macro list form
-  (let ((= codes (map (\ arg (cons 'toCode (cons arg '())))))
-        (= body args `(foldr cons '() [,@(codes args)])))
+  (let ((:: codes (-> [Code] [Code]))
+        (= codes
+          (map (\ arg (cons 'toCode (cons arg '())))))
+        (:: body (-> [Code] Code))
+        (= body args
+          `(foldr cons '() [,@(List (codes args))])))
     (case (unLocLForm form)
       (List (: _ args)) (return (body args))
       _                 (skSrcError form "list: invalid args"))))
@@ -265,3 +278,10 @@
     (List xs)   (LForm (L l (List (map f xs))))
     (HsList xs) (LForm (L l (HsList (map f xs))))
     _           (error (++ "mapcar: not a list " (show form)))))
+
+;;; Append two lists.
+(defn (append (-> Code Code Code))
+  (xs ys)
+  (if (null xs)
+      ys
+      (cons (car xs) (append (cdr xs) ys))))

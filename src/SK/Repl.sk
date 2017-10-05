@@ -137,8 +137,10 @@
         (= quit
           (liftIO (killThread eval-tid)))
         (= loop
-          (handleInterrupt (>> (outputStrLn "Interrupd") loop)
-                           go)))
+          (handleInterrupt
+           (do (outputStrLn "Interrupd")
+               loop)
+           go)))
     ;; Print the result from boot expression, then start the loop.
     (do (liftIO print-io)
         (withInterrupt loop))))
@@ -147,7 +149,7 @@
 (:: read-form (-> String (Repl (Maybe Code))))
 (= read-form input0
   (do (<- st get-repl-state)
-      (let ((= input1 (++ (pending-input st) (++ "\n" input0)))
+      (let ((= input1 (++ (pending-input st) (: \\n input0)))
             (= count (succ (input-count st)))
             (= put-and-return pending ret
               (do (put-repl-state (st {input-count count
@@ -172,15 +174,15 @@
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory}))
                     (= dflags2 (addWay' WayDyn dflags1))))
-              (<- _ (setSessionDynFlags dflags2))
+              (void (setSessionDynFlags dflags2))
               (<- (Session session) (fromGhc (Ghc return)))
               (liftIO (putTheHscEnv session))))
-        (= withHandler m
+        (= with-handler m
           (skErrorHandler defaultFatalMessager
                           defaultFlushOut
                           (withSourceErrorHandling m)))
         (= go (do (<- form (liftIO (takeMVar in-mvar)))
-                  (<- ret (withHandler
+                  (<- ret (with-handler
                            (do (<- expanded (expands [form]))
                                (eval-form expanded))))
                   (let ((= str (case ret
