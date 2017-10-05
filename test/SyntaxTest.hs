@@ -84,6 +84,7 @@ mkTest path = do
         _  -> expectationFailure stderr
 
     it "should run executable compiled with ghc" $ do
+      removeWhenExist dotTix
       (ecode, stdout, _stderr) <- runDotO
       writeIORef hsORef stdout
       ecode `shouldBe` ExitSuccess
