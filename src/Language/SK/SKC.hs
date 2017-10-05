@@ -181,6 +181,6 @@ gensym = gensym' "g"
 -- entered from codes written by arbitrary users.
 gensym' :: String -> Skc Code
 gensym' prefix = do
-  s <- liftIO (mkSplitUniqSupply '-')
+  s <- liftIO (mkSplitUniqSupply '_')
   let u = uniqFromSupply s
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))
