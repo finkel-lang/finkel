@@ -26,6 +26,7 @@
 
 ;; bytestring
 (import Data.ByteString.Builder (stringUtf8 toLazyByteString))
+(import (qualified Data.ByteString.Lazy.Char8 as BS))
 
 ;; haskeline
 (import System.Console.Haskeline)
@@ -53,13 +54,13 @@
 ;;; Repl, state, and result types
 
 (data ReplState
-  (ReplState {pending-input String
+  (ReplState {pending-input [BS.ByteString]
               input-count Int})
   (deriving (Eq Show)))
 
 (:: initial-repl-state (ReplState))
 (= initial-repl-state
-  (ReplState {pending-input "" input-count 0}))
+  (ReplState {pending-input [] input-count 0}))
 
 (newtype (Repl a)
   (Repl {unRepl (StateT ReplState IO a)})
@@ -149,15 +150,16 @@
 (:: read-form (-> String (Repl (Maybe Code))))
 (= read-form input0
   (do (<- st get-repl-state)
-      (let ((= input1 (++ (pending-input st) (: \\n input0)))
+      (let ((= input1
+              (++ (pending-input st)
+                  [(toLazyByteString (stringUtf8 (: \\n input0)))]))
             (= count (succ (input-count st)))
             (= put-and-return pending ret
               (do (put-repl-state (st {input-count count
                                        pending-input pending}))
                   (return ret))))
-        (case (evalSP sexpr (Just "<repl>")
-                      (toLazyByteString (stringUtf8 input1)))
-          (Right forms) (put-and-return "" (Just forms))
+        (case (evalSP sexpr (Just "<repl>") (BS.concat input1))
+          (Right forms) (put-and-return [] (Just forms))
           (Left _err)   (put-and-return input1 Nothing)))))
 
 
