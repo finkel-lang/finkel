@@ -1,3 +1,5 @@
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Module containing 'Homoiconic' typeclass and its instances
@@ -6,6 +8,10 @@ module Language.SK.Homoiconic
   ( Homoiconic(..)
   ) where
 
+-- base
+import Data.Data
+
+-- internal
 import Language.SK.GHC
 import Language.SK.Form
 
@@ -21,6 +27,8 @@ import Language.SK.Form
 
 class Homoiconic a where
   toCode :: a -> Code
+  default toCode :: Data a => a -> Code
+  toCode = dataToCode
 
   fromCode :: Code -> Maybe a
   fromCode _ = Nothing
@@ -218,3 +226,27 @@ symbolCode = LForm . genSrc . Atom . aSymbol
 
 showAsSymbolCode :: Show a => a -> Code
 showAsSymbolCode = symbolCode . show
+
+dataToCode :: Data d => d -> Code
+dataToCode x =
+  let constr = toConstr x
+      isTupleStr cs = case cs of
+                        '(':cs1 -> go cs1
+                        _       -> False
+                        where go xs = case xs of
+                                        ',':xs' -> go xs'
+                                        ')':[]  -> True
+                                        _       -> False
+      cstr = case showConstr constr of
+               str | isTupleStr str -> ","
+                   | otherwise  -> str
+      hd = toCode (aSymbol cstr)
+  in  case constrRep constr of
+         IntConstr n   -> toCode (AInteger n)
+         FloatConstr f -> toCode (aFractional
+                                    (fromRational f :: Double))
+         CharConstr c  -> toCode c
+         _             ->
+           case gmapQ dataToCode x of
+             [] -> hd
+             _  -> toCode (List (hd:gmapQ dataToCode x))

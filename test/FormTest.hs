@@ -1,8 +1,10 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 -- | Tests for forms.
 module FormTest where
 
 import Control.DeepSeq
 import Control.Exception
+import Data.Data
 import Data.List (isPrefixOf, isSubsequenceOf)
 import Test.Hspec
 import Test.QuickCheck
@@ -83,6 +85,8 @@ formTests = do
                  ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
 
   fromCodeTest Foo
+
+  dataToCodeTest
 
   unquoteSpliceTest
 
@@ -282,8 +286,68 @@ fromCodeTest foo =
     it "should return Nothing" $
       (fromCode nil :: Maybe Foo) `shouldBe` Nothing
 
+data D1 = D1a | D1b | D1c
+  deriving (Eq, Show, Data, Typeable)
+
+instance Homoiconic D1
+
+data D2 a = D2a a | D2b a a
+  deriving (Eq, Show, Data, Typeable)
+
+instance Data a => Homoiconic (D2 a)
+
+data D3 a b = D3a Int a b
+  deriving (Eq, Show, Data, Typeable)
+
+instance (Data a, Data b) => Homoiconic (D3 a b)
+
+data D4 a = D4a (a, a, a, a)
+  deriving (Eq, Show, Data, Typeable)
+
+instance Data a => Homoiconic (D4 a)
+
+dataToCodeTest :: Spec
+dataToCodeTest = do
+  let s = toCode . aSymbol
+  describe "D1 to Code" $ do
+    let e1 = toCode (HsList (map s ["D1a", "D1b", "D1c"]))
+    it ("should match `" ++ show e1 ++ "'") $
+      toCode [D1a, D1b, D1c] `shouldBe` e1
+  describe "D2 to Code" $ do
+    let e2 = toCode
+               (HsList
+                  [ toCode (List [s "D2a", toCode 'x'])
+                  , toCode (List [s "D2b", toCode 'y', toCode 'z'])])
+    it ("should match `" ++ show e2 ++ "'") $
+      toCode [D2a 'x', D2b 'y' 'z'] `shouldBe` e2
+  describe "D2 with D1 to Code" $ do
+    let e2b = toCode (List [s "D2b", s "D1a", s "D1b"])
+    it ("should match `" ++ show e2b ++ "'") $
+      toCode (D2b D1a D1b) `shouldBe` e2b
+  describe "D2 with Double to Code" $ do
+    let e2c = toCode (List [s "D2a", toCode (1.23 :: Double)])
+    it ("should match `" ++ show e2c ++ "'") $
+      toCode (D2a (1.23 :: Double)) `shouldBe` e2c
+  describe "D3 to Code" $ do
+    let e3 = toCode (List [ s "D3a"
+                          , toCode (42 :: Int)
+                          , toCode False
+                          , toCode 'a' ])
+    it ("should match `" ++ show e3 ++ "'") $
+      toCode (D3a 42 False 'a') `shouldBe` e3
+  describe "D4 to Code" $ do
+    let e4 = toCode (List [ s "D4a"
+                          , toCode (List [ s ","
+                                         , toCode 'w'
+                                         , toCode 'x'
+                                         , toCode 'y'
+                                         , toCode 'z'])])
+    it ("should match `" ++ show e4 ++ "'") $
+       toCode (D4a ('w', 'x', 'y', 'z')) `shouldBe` e4
+
+
 unquoteSpliceTest :: Spec
-unquoteSpliceTest = do
+unquoteSpliceTest =
   describe "unquote splicing List" $
     it "should return list contents" $
       property
