@@ -6,8 +6,12 @@
   (Way ..)
   addWay'
 
+  ;; FamInstEnv
+  (FamInst ..)
+
   ;; GHC
   (ModuleInfo)
+  getBindings
   getGRE
   getPrintUnqual
 
@@ -35,6 +39,7 @@
   showToHeader
 
   ;; InstEnv
+  (ClsInst ..)
   pprInstance
 
   ;; InteractiveEval
@@ -64,6 +69,7 @@
   ;; Outputable
   (SDoc)
   $$
+  printForUserPartWay
   showSDocForUser
   text
   vcat
@@ -79,6 +85,9 @@
   (Var)
   varType
 
+  ;; Debugger
+  pprTypeAndContents
+
   ;; GHCi
   evalStmt
 
@@ -91,12 +100,15 @@
   ;; GHCi.RemoteTypes
   (ForeignHValue))
 
-(import GHC)
+;; ghc
 (import DynFlags)
+(import FamInstEnv hiding (pprFamInst))
+(import GHC)
 (import GhcMonad)
-(import HscMain)                ; ghc
+(import HscMain)
 (import HscTypes)
 (import IfaceSyn)
+(import InstEnv)
 (import Linker)
 (import Name)
 (import NameSet)
@@ -104,5 +116,7 @@
 (import PprTyThing)
 (import Var)
 
-(import GHCi)                   ; ghci
+;; ghci
+(import Debugger)
+(import GHCi)
 (import GHCi.Message)

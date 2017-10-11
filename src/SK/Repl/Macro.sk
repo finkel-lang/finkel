@@ -19,6 +19,7 @@
   (use Data.Maybe)
   (use System.Directory)
   (use System.FilePath)
+  (use System.IO)
   (use Language.SK)
   (use Language.SK.Builder)
   (use Language.SK.GHC)
@@ -130,17 +131,6 @@
                  (find-file (importPaths dflags) path)))
            (fromCode form))))
 
-(defmacro* in-module (form)
-  (case (unLocLForm form)
-    (Atom (ASymbol name)) (do (liftIO (putStrLn
-                                       (++ "; in-module: "
-                                           (unpackFS name))))
-                              (setContext [(mk-ii-fs name)
-                                           (mk-ii "SK.User")])
-                              (return '(begin)))
-    _ (skSrcError form (++ "in-module: not a module name: "
-                           (show form)))))
-
 ;;; Modify settings in REPL.
 (defmacro* set-repl (key val)
   (let ((= set-dflags f
@@ -184,104 +174,6 @@
 
 ;;; Functions for `info' macro.
 (eval-when (compile load)
-  (:: info-context (Skc ()))
-  (= info-context
-    (where (do (<- context getContext)
-               (<- dflags getSessionDynFlags)
-               (liftIO (putStrLn "\n; context:"))
-               (liftIO (mapM_ (printContext dflags)
-                              context)))
-      (= printContext dflags ctx
-        (case ctx
-          (IIDecl decl)    (putStrLn (++ ";  IIDecl: "
-                                         (showSDoc dflags (ppr decl))))
-          (IIModule mname) (putStrLn (++ ";  IIModule: "
-                                         (moduleNameString mname)))))))
-
-  (:: info-info (Skc ()))
-  (= info-info
-    (liftIO
-     (do (putStrLn
-          "USAGE: (info COMMANDS)
-
-DESCRIPTION:
-
-  Show info of current REPL session.
-
-COMMANDS:
-
-  context   - Show current context.
-  dflags    - Show current DynFlags information.
-  info      - Show this help.
-  linker    - Show linker.
-  macros    - Show macros defined in REPL environment.
-  modules   - Show loaded modules.
-  packages  - Show accessible packages.
-  paths     - Show paths.
-"))))
-
-  (:: info-linker (Skc ()))
-  (= info-linker
-    (do (<- hsc-env getSession)
-        (liftIO (do (initDynLinker hsc-env)
-                    (showLinkerState (hsc_dflags hsc-env))))))
-
-  (:: info-packages (Skc ()))
-  (= info-packages
-    (do (<- dflags getDynFlags)
-        (let ((= pr str
-                (putStrLn (++ ";   " str)))
-              (= pr-flag flag
-                (case flag
-                  (ExposePackage n _ _) (pr n)
-                  (HidePackage n)       (pr (++ "hiding " n))))))
-        (liftIO (do (putStrLn "; packages")
-                    (mapM_ pr-flag (packageFlags dflags))))))
-
-  (:: info-paths (Skc ()))
-  (= info-paths
-    (do (<- dflags getDynFlags)
-        (liftIO (do (<- cwd getCurrentDirectory)
-                    (putStrLn "\n; current working directory: ")
-                    (putStrLn (++ ";   " cwd))
-                    (let ((= ipaths (importPaths dflags))))
-                    (putStrLn "; module import search paths: ")
-                    (if (null ipaths)
-                        (putStrLn ";   none")
-                        (mapM_ (\ ipath
-                                 (putStrLn (++ ";   " ipath)))
-                               ipaths))))))
-
-  (:: info-dflags (Skc ()))
-  (= info-dflags
-    (do (<- dflags getDynFlags)
-        (let ((= s
-                ["; dflags:"
-                 (++ ";  ghcLink:   " (show (ghcLink dflags)))
-                 (++ ";  hscTarget: " (show (hscTarget dflags)))
-                 (++ ";  ghcMode:   " (showGhcMode (ghcMode dflags)))])
-              (= showGhcMode m
-                (case m
-                  CompManager "CompManager"
-                  OneShot     "OneShot"
-                  MkDepend    "MkDepend"))))
-        (liftIO (putStrLn (intercalate "\n" s)))))
-
-  (:: info-macros (Skc ()))
-  (= info-macros
-    (do (<- macros (fmap envMacros getSkEnv))
-        (liftIO (putStrLn "; macros:"))
-        (mapM_ (\ m (liftIO (putStrLn (++ ";  " m))))
-               (macroNames macros))))
-
-  (:: info-modules (Skc ()))
-  (= info-modules
-    (do (<- graph0 getModuleGraph)
-        (<- graph1 (filterM (. isLoaded ms_mod_name) graph0))
-        (let ((= show-one m
-                (>>= (showModule m) (. liftIO putStrLn)))))
-        (mapM_ show-one graph1)))
-
   ;; Mostly translated from `GHCi.UI.infoThing'.
   (:: info-name (-> Code (Skc Code)))
   (= info-name thing
@@ -322,11 +214,136 @@ COMMANDS:
             (case (tyThingParent_maybe (get-thing x))
               (Just p) (elemNameSet (getName p) all-names)
               Nothing  False)))
-      (filter (. not has-parent) xs))))
+      (filter (. not has-parent) xs)))
+
+  ;; Almost same as `GHCi.UI.showBindings'.
+  (:: info-bindings (Skc ()))
+  (= info-bindings
+    (where (do (<- bindings getBindings)
+               (<- docs (mapM makeDoc (reverse bindings)))
+               (mapM_ pprForUserPartWay docs))
+      (:: makeDoc (-> TyThing (Skc SDoc)))
+      (= makeDoc tt
+        (case tt
+          (AnId i) (pprTypeAndContents i)
+          _        (do (<- mb-stuff (getInfo False (getName tt)))
+                       (return (maybe (text "") pprTT mb-stuff)))))
+      (:: pprTT (-> (, TyThing Fixity [ClsInst] [FamInst]) SDoc))
+      (= pprTT (, thing _ _ _)
+        (pprTyThing showToHeader thing))
+      (:: pprForUserPartWay (-> SDoc (Skc ())))
+      (= pprForUserPartWay sdoc
+        (do (<- unqual getPrintUnqual)
+            (<- dflags getDynFlags)
+            (liftIO (printForUserPartWay dflags
+                                         stdout
+                                         (pprUserLength dflags)
+                                         unqual
+                                         sdoc))))))
+
+  (:: info-context (Skc ()))
+  (= info-context
+    (where (do (<- context getContext)
+               (<- dflags getSessionDynFlags)
+               (liftIO (putStrLn "\n; context:"))
+               (liftIO (mapM_ (printContext dflags)
+                              context)))
+      (= printContext dflags ctx
+        (case ctx
+          (IIDecl decl)    (putStrLn (++ ";  IIDecl: "
+                                         (showSDoc dflags (ppr decl))))
+          (IIModule mname) (putStrLn (++ ";  IIModule: "
+                                         (moduleNameString mname)))))))
+
+  (:: info-dflags (Skc ()))
+  (= info-dflags
+    (do (<- dflags getDynFlags)
+        (let ((= s
+                ["; dflags:"
+                 (++ ";  ghcLink:   " (show (ghcLink dflags)))
+                 (++ ";  hscTarget: " (show (hscTarget dflags)))
+                 (++ ";  ghcMode:   " (showGhcMode (ghcMode dflags)))])
+              (= showGhcMode m
+                (case m
+                  CompManager "CompManager"
+                  OneShot     "OneShot"
+                  MkDepend    "MkDepend"))))
+        (liftIO (putStrLn (intercalate "\n" s)))))
+
+  (:: info-info (Skc ()))
+  (= info-info
+    (liftIO
+     (do (putStrLn
+          "USAGE: (info COMMANDS)
+
+DESCRIPTION:
+
+  Show info of current REPL session.
+
+COMMANDS:
+
+  'NAME     - Show info of NAME.
+  context   - Show current context.
+  dflags    - Show current DynFlags information.
+  info      - Show this help.
+  linker    - Show linker.
+  macros    - Show macros defined in REPL environment.
+  modules   - Show loaded modules.
+  packages  - Show accessible packages.
+  paths     - Show paths.
+"))))
+
+  (:: info-linker (Skc ()))
+  (= info-linker
+    (do (<- hsc-env getSession)
+        (liftIO (do (initDynLinker hsc-env)
+                    (showLinkerState (hsc_dflags hsc-env))))))
+
+  (:: info-macros (Skc ()))
+  (= info-macros
+    (do (<- macros (fmap envMacros getSkEnv))
+        (liftIO (putStrLn "; macros:"))
+        (mapM_ (\ m (liftIO (putStrLn (++ ";  " m))))
+               (macroNames macros))))
+
+  (:: info-modules (Skc ()))
+  (= info-modules
+    (do (<- graph0 getModuleGraph)
+        (<- graph1 (filterM (. isLoaded ms_mod_name) graph0))
+        (let ((= show-one m
+                (>>= (showModule m) (. liftIO putStrLn)))))
+        (mapM_ show-one graph1)))
+
+  (:: info-packages (Skc ()))
+  (= info-packages
+    (do (<- dflags getDynFlags)
+        (let ((= pr str
+                (putStrLn (++ ";   " str)))
+              (= pr-flag flag
+                (case flag
+                  (ExposePackage n _ _) (pr n)
+                  (HidePackage n)       (pr (++ "hiding " n))))))
+        (liftIO (do (putStrLn "; packages")
+                    (mapM_ pr-flag (packageFlags dflags))))))
+
+  (:: info-paths (Skc ()))
+  (= info-paths
+    (do (<- dflags getDynFlags)
+        (liftIO (do (<- cwd getCurrentDirectory)
+                    (putStrLn "\n; current working directory: ")
+                    (putStrLn (++ ";   " cwd))
+                    (let ((= ipaths (importPaths dflags))))
+                    (putStrLn "; module import search paths: ")
+                    (if (null ipaths)
+                        (putStrLn ";   none")
+                        (mapM_ (\ ipath
+                                 (putStrLn (++ ";   " ipath)))
+                               ipaths)))))))
 
 (defmacro* info (form)
   (let ((= go sym
           (do (case (unpackFS sym)
+                "bindings" info-bindings
                 "context"  info-context
                 "dflags"   info-dflags
                 "linker"   info-linker
