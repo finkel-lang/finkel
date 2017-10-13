@@ -23,7 +23,7 @@ module Language.SK.Run
 import Control.Exception
 import Control.Monad (void)
 import System.Exit
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, maybeToList)
 
 -- bytestring
 import qualified Data.ByteString.Lazy as BL
@@ -206,7 +206,7 @@ mkModSummary mbfile mdl =
       emptyAnns = (Map.empty, Map.empty)
       pm = HsParsedModule
         { hpm_module = noLoc mdl
-        , hpm_src_files = maybe [] (: []) mbfile
+        , hpm_src_files = maybeToList mbfile
         , hpm_annotations = emptyAnns }
   in  mkModSummary' mbfile modName imports (Just pm)
 
@@ -215,12 +215,13 @@ mkModSummary' :: GhcMonad m => Maybe FilePath -> ModuleName
               -> [Located ModuleName] -> Maybe HsParsedModule
               -> m ModSummary
 mkModSummary' mbfile modName imports mb_pm = do
+  dflags0 <- getSessionDynFlags
   let fn = fromMaybe "anonymous" mbfile
-      mmod = mkModule mainUnitId modName
+      unitId = thisPackage dflags0
+      mmod = mkModule unitId modName
       prelude = noLoc (mkModuleName "Prelude")
       imported = map (\x -> (Nothing, x)) imports
       tryGetTimeStamp x = liftIO (tryIO (getModificationUTCTime x))
-  dflags0 <- getSessionDynFlags
   mloc <- liftIO (mkHomeModLocation dflags0 modName fn)
   hs_date <-
     liftIO (maybe getCurrentTime getModificationUTCTime mbfile)

@@ -349,8 +349,6 @@ m_require form =
           case mb_minfo of
             Just minfo -> do
               things <- getTyThingsFromIDecl lidecl minfo
-              debugIO
-                (putStrLn (";;; things: " ++ showPpr dflags things))
               mapM_ (pTyThing dflags) things
               return emptyForm
             Nothing ->

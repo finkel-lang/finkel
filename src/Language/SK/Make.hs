@@ -76,6 +76,7 @@ make inputs no_link mb_output = do
   dflags <- getSessionDynFlags
   _ <- setSessionDynFlags (dflags { ghcMode = CompManager
                                   , outputFile = mb_output })
+  debugIO (putStrLn (";;; make: ghcLink=" ++ show (ghcLink dflags)))
 
   -- Preserve the language extension values in initial dynflags to
   -- SkEnv, to reset the language extension later, to keep fresh set of
@@ -397,7 +398,7 @@ findTargetSource (modName, a) = do
 
 -- | Find imported module.
 findImported :: HscEnv -- ^ Current hsc environment.
-             -> [ModSummary] -- ^ Accumulated 'ModSummary's so far.
+             -> [ModSummary] -- ^ List of accumulated 'ModSummary'.
              -> [TargetUnit] -- ^ Pendingmodules.
              -> String -- ^ Module name to find.
              -> Skc (Maybe TargetUnit)
@@ -406,21 +407,43 @@ findImported hsc_env acc pendings name
   | otherwise = do
     findResult <-
       liftIO (findImportedModule hsc_env (mkModuleName name) Nothing)
+    dflags <- getSessionDynFlags
+    let installedUnitId = thisInstalledUnitId dflags
     case findResult of
-      -- Haskell module returned by `Finder.findImportedModule' may
+      -- Haskell module returned by `Finder.findImportedModule' may not
       -- compiled yet. If the source code has Haskell file extension,
       -- checking whether the module is listed in accumulator containing
       -- compiled modules.
       Found loc mdl    -> do
-        debugIO (putStrLn $ ";;; Found " ++ show loc ++ ", "
-                  ++ moduleNameString (moduleName mdl))
+        debugIO
+          (do putStrLn (";;; Found " ++ show loc ++ ", " ++
+                        moduleNameString (moduleName mdl))
+              putStrLn (";;; moduleUnitId=" ++ show (moduleUnitId mdl))
+              putStrLn (";;; installedUnitId=" ++
+                        showPpr dflags installedUnitId))
         case ml_hs_file loc of
           Just path | takeExtension path `elem` [".hs"] ->
                       if moduleName mdl `elem` map ms_mod_name acc
                          then return Nothing
                          else Just <$> findTargetSource (name, Nothing)
-          _ -> return Nothing
-        -- return Nothing
+          _ | inSameUnit && notInAcc ->
+              -- Workaround for loading home package modules when
+              -- working with cabal package from REPL.
+              -- 'Finder.findImportedModule' uses hard coded source file
+              -- extensions for Haskell source codes, which will not
+              -- find SK source files. When looking up modules in home
+              -- package as dependency, looking up in accumurated
+              -- ModSummary list to avoid using the modules found in
+              -- already compiled linkable package.
+              handleSkException
+                (const (return Nothing))
+                (Just <$> findTargetSource (name, Nothing))
+            | otherwise -> return Nothing
+          where
+            inSameUnit =
+              installedUnitId `installedUnitIdEq` moduleUnitId mdl
+            notInAcc =
+              moduleName mdl `notElem` map ms_mod_name acc
       NoPackage {}     -> failS ("No Package: " ++ name)
       FoundMultiple {} -> failS ("Found multiple modules for " ++ name)
       NotFound {}      -> Just <$> findTargetSource (name, Nothing)
