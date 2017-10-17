@@ -1,8 +1,8 @@
 ;;;; Macros used in REPL.
 
-;;; This module contains macros used inside REPL. Main purpose of using
-;;; macros for REPL is to access runtime value of `SkEnv'. Macro body
-;;; can contain codes accessing `SkEnv', and then the code could be
+;;; This module contains macros accessible from REPL. Main purpose of
+;;; using macros for REPL is to access runtime value of `SkEnv'. Macro
+;;; body can contain codes accessing `SkEnv', and then the code could be
 ;;; invoked from REPL via evaluating the typed in forms.
 
 (module SK.Repl.Macro)
@@ -30,6 +30,9 @@
   (use SK.Repl.GHC))
 
 
+;;; Compilation
+;;; -----------
+
 ;;; Functions for compiling and loading SK module.
 (eval-when (compile load)
   (:: mk-ii-fs (-> FastString InteractiveImport))
@@ -99,18 +102,8 @@
       (Atom (ASymbol sym)) (go sym)
       _                    err)))
 
-;;; Compile module source code file to object code, then link it, and
-;;; then import the compiled module.
-(defmacro* compile-file (form)
-  (maybe (skSrcError form (++ "compile-file: not a FilePath: "
-                              (show form)))
-         (\ file
-           (do (liftIO (putStrLn (++ "; compile-file: " file)))
-               (%compile-link-and-import file)))
-         (fromCode form)))
-
-;;; Load a module source code file. Handles absolute paths, and
-;;; relative paths from import directories.
+;;; Load a module source code file. Handles absolute paths and relative
+;;; paths from import directories.
 (defmacro* load-file (form)
   (let ((= find-file idirs path
           (if (isAbsolute path)
@@ -167,6 +160,10 @@
                  (<- dflags getSessionDynFlags)
                  (find-file (importPaths dflags) path)))
            (fromCode form))))
+
+
+;;; Settings
+;;; --------
 
 ;;; Set command line flags, see `GHCi.UI.newDynFlags'.
 (defmacro* set-flags forms
@@ -465,6 +462,7 @@ COMMANDS:
 
 
 ;;; Package
+;;; -------
 
 ;;; Lookup `PackageConfig' of given package in `DynFlags'.
 (defn+ (lookup-package-config
@@ -475,11 +473,12 @@ COMMANDS:
         (find (. (== pkgname) packageNameString)
               (concat (map snd confs))))))
 
-;;; Set `thisInstalledUnitId' field in current `DynFlags' to component.
-;;; By setting component, REPL will recompile module from SK source
-;;; code, by ignoring module found in pre-compiled library linkable.
-;;; This behaviour may useful when working with cabal package library
-;;; modules from REPL.
+;;; Lookup matching linkable with given name, and set
+;;; `thisInstalledUnitId' field in current `DynFlags' to the component
+;;; when linkable were found.  By setting component, REPL will recompile
+;;; module from SK source code, by ignoring module found in pre-compiled
+;;; library linkable.  This behaviour may useful when working with cabal
+;;; package library modules from REPL.
 (defmacro* in-component (name)
   (do (<- dflags0 getDynFlags)
       (let ((= set-this-unit-id cid
