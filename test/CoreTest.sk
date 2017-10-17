@@ -186,6 +186,13 @@
                    (= f x y z
                      (list? (list x y z))))
                (property f))))
+      (d "filtering string"
+         (it "should be AString"
+             (property (\ x
+                         (==> (string? (toCode x))
+                              (case x
+                                (AString _) True
+                                _           False))))))
       (d "length of atom"
          (it "should be 1"
              (let ((:: f (-> Code Property))

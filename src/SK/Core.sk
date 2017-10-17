@@ -264,11 +264,18 @@
     (Atom _) True
     _        False))
 
-;;; 'True' when given 'Code' is an atom of 'Symbol'.
+;;; 'True' when given 'Code' is an atom of 'ASymbol'.
 (defn (symbol? (-> Code Bool))
   ((LForm (L _ form)))
   (case form
     (Atom (ASymbol _)) True
+    _                  False))
+
+;;; 'True' when given 'Code' is an atom of 'AString'.
+(defn (string? (-> Code Bool))
+  ((LForm (L _ form)))
+  (case form
+    (Atom (AString _)) True
     _                  False))
 
 ;;; Apply given function to immediate elements of `List' and `HsList'.

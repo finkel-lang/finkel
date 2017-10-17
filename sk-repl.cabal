@@ -36,6 +36,7 @@ library
                      , filepath
                      , haskeline
                      , ghc
+                     , ghc-boot
                      , ghci
                      , transformers
                      , sk-kernel >= 0.4.0

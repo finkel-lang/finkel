@@ -1,19 +1,33 @@
 ;;; Modules to re-export functions from `ghc' and `ghci'.
 
 (module SK.Repl.GHC
+  ;; Package: ghc
+
   ;; DynFlags
   (PackageFlag ..)
   (Way ..)
   addWay'
+  thisPackage
 
   ;; FamInstEnv
   (FamInst ..)
+
+  ;; Finder
+  flushFinderCaches
+  uncacheModule
 
   ;; GHC
   (ModuleInfo)
   getBindings
   getGRE
   getPrintUnqual
+  parseDynamicFlags
+  setInteractiveDynFlags
+  setTargets
+
+  ;; GhcMake
+  (LoadHowMuch ..)
+  load
 
   ;; GhcMonad
   (Ghc ..)
@@ -28,8 +42,10 @@
   (FixityEnv)
   (InteractiveContext ..)
   emptyHomePackageTable
+  emptyInteractiveContext
   emptyMG
   extendInteractiveContextWithIds
+  handleFlagWarnings
   tyThingParent_maybe
 
   ;; Id
@@ -43,6 +59,7 @@
   pprInstance
 
   ;; InteractiveEval
+  abandonAll
   getInfo
   parseName
   showModule
@@ -57,6 +74,7 @@
   ;; Name. This module re-exports `OccName' module.
   (Name)
   getName
+  nameIsFromExternalPackage
   nameOccName
   nameModule
   nameSrcSpan
@@ -74,6 +92,12 @@
   text
   vcat
 
+  ;; Packages
+  (PackageConfig)
+  componentId
+  packageNameString
+  readPackageConfigs
+
   ;; PprTyThing
   pprFamInst
   pprTyThingInContextLoc
@@ -84,6 +108,13 @@
   ;; Var
   (Var)
   varType
+
+  ;; Package: ghc-boot
+
+  ;; PackageDb
+  toStringRep
+
+  ;; Package: ghci
 
   ;; Debugger
   pprTypeAndContents
@@ -103,6 +134,7 @@
 ;; ghc
 (import DynFlags)
 (import FamInstEnv hiding (pprFamInst))
+(import Finder)
 (import GHC)
 (import GhcMonad)
 (import HscMain)
@@ -113,8 +145,12 @@
 (import Name)
 (import NameSet)
 (import Outputable)
+(import Packages)
 (import PprTyThing)
 (import Var)
+
+;;; ghc-boot
+(import GHC.PackageDb)
 
 ;; ghci
 (import Debugger)

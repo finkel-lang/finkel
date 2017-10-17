@@ -3,17 +3,20 @@
 ;;; This module contains macros used inside REPL. Main purpose of using
 ;;; macros for REPL is to access runtime value of `SkEnv'. Macro body
 ;;; can contain codes accessing `SkEnv', and then the code could be
-;;; invoked from REPL via evaluating the macro forms.
+;;; invoked from REPL via evaluating the typed in forms.
 
 (module SK.Repl.Macro)
 
 (require SK.Core)
+(import SK.Core)
 
 (macrolet ((use (idecl)
              `(begin
                 (require ,idecl)
                 (import ,idecl))))
   (use Control.Monad)
+  (use (qualified Data.ByteString.Char8 as BS.C8))
+  (use Data.Foldable)
   (use Data.Function)
   (use Data.List)
   (use Data.Maybe)
@@ -60,9 +63,10 @@
   (:: %link-module (-> FastString (Skc Code)))
   (= %link-module name
     (do (<- hsc-env getSession)
-        (let ((= mname (mkModuleNameFS name))))
+        (let ((= mname (mkModuleNameFS name))
+              (= uid (thisPackage (hsc_dflags hsc-env)))))
         (liftIO (do (unload hsc-env [])
-                    (linkModule hsc-env (Module mainUnitId mname))))
+                    (linkModule hsc-env (Module uid mname))))
         (return '(begin))))
 
   (:: %compile-link-and-import (-> FilePath (Skc Code)))
@@ -108,10 +112,10 @@
 ;;; Load a module source code file. Handles absolute paths, and
 ;;; relative paths from import directories.
 (defmacro* load-file (form)
-  (let ((= find-file idirs path0
-          (if (isAbsolute path0)
-              (find-absolute idirs path0)
-              (%compile-link-and-import path0)))
+  (let ((= find-file idirs path
+          (if (isAbsolute path)
+              (find-absolute idirs path)
+              (%compile-link-and-import path)))
         (= find-absolute dirs path
           (case dirs
             (: dir dirs') (find-absolute' dir dirs' path)
@@ -122,14 +126,65 @@
                            (return dir)))
               (find-file dirs (makeRelative dir' path))))
         (= cant-find-err file
-          (skSrcError form (++ "load-file: cannot find: " file))))
+          (skSrcError form (++ "load-file: cannot find: " file)))
+        ;; From `GhcMake.discardIC'.
+        (= discardIC hsc-env
+          (let ((= empty-ic (emptyInteractiveContext dflags))
+                (= new-ic-monad (keep-external-name ic_monad))
+                (= old-ic (hsc_IC hsc-env))
+                (= dflags (hsc_dflags hsc-env))
+                (= keep-external-name ic-name
+                  (where
+                      (| ((nameIsFromExternalPackage this-pkg
+                                                     old-name)
+                          old-name)
+                         (otherwise
+                          (ic-name empty-ic)))
+                    (= this-pkg (thisPackage dflags))
+                    (= old-name (ic-name old-ic)))))
+            (hsc-env {hsc_IC (empty-ic {ic_monad new-ic-monad})})))
+        (= clear-all
+          ;; Cleare various states: resume, finder cache, targets,
+          ;; interactive context ... etc.
+          (do (<- graph0 getModuleGraph)
+              (<- _ abandonAll)
+              (<- _ (setTargets []))
+              (<- _ (load LoadAllTargets))
+              (<- hsc-env getSession)
+              (let ((= uncache
+                      (. (uncacheModule hsc-env) ms_mod_name))))
+              (liftIO (do (mapM_ uncache graph0)
+                          (flushFinderCaches hsc-env)))
+              (setSession (discardIC hsc-env)))))
     (maybe (skSrcError form (++ "load-file: not a FilePath: "
                                 (show form)))
            (\ path
              (do (liftIO (putStrLn (++ "; load-file: " path)))
+                 ;; Clear current state first.
+                 (clear-all)
+                 ;; Find the source file path and compile, load, and
+                 ;; link the module.
                  (<- dflags getSessionDynFlags)
                  (find-file (importPaths dflags) path)))
            (fromCode form))))
+
+;;; Set command line flags, see `GHCi.UI.newDynFlags'.
+(defmacro* set-flags forms
+  (case forms
+    (: _ _)
+    (| ((all symbol? forms)
+        (do (<- dflags0 getSessionDynFlags)
+            (let ((= flags
+                    (map (. noLoc symbolName) forms))))
+            (<- (, dflags1 _leftovers warns)
+                (parseDynamicFlags dflags0 flags))
+            (liftIO (handleFlagWarnings dflags1 warns))
+            (<- _ (setSessionDynFlags dflags1))
+            (<- _ (setInteractiveDynFlags dflags1))
+            (return '(begin)))))
+
+    _
+    (skSrcError nil "set-flags: empty form")))
 
 ;;; Modify settings in REPL.
 (defmacro* set-repl (key val)
@@ -260,9 +315,12 @@
     (do (<- dflags getDynFlags)
         (let ((= s
                 ["; dflags:"
-                 (++ ";  ghcLink:   " (show (ghcLink dflags)))
+                 (++ ";  ghcLink: " (show (ghcLink dflags)))
+                 (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
                  (++ ";  hscTarget: " (show (hscTarget dflags)))
-                 (++ ";  ghcMode:   " (showGhcMode (ghcMode dflags)))])
+                 (++ ";  objectDir: " (show (objectDir dflags)))
+                 (++ ";  thisInstalledUnitId: "
+                     (showPpr dflags (thisInstalledUnitId dflags)))])
               (= showGhcMode m
                 (case m
                   CompManager "CompManager"
@@ -404,3 +462,49 @@ COMMANDS:
     (case (unLocLForm form)
       (Atom (ASymbol sym)) (go (unpackFS sym))
       _                    err)))
+
+
+;;; Package
+
+;;; Lookup `PackageConfig' of given package in `DynFlags'.
+(defn+ (lookup-package-config
+        (-> DynFlags String (IO (Maybe PackageConfig))))
+  (dflags pkgname)
+  (do (<- confs (liftIO (readPackageConfigs dflags)))
+      (return
+        (find (. (== pkgname) packageNameString)
+              (concat (map snd confs))))))
+
+;;; Set `thisInstalledUnitId' field in current `DynFlags' to component.
+;;; By setting component, REPL will recompile module from SK source
+;;; code, by ignoring module found in pre-compiled library linkable.
+;;; This behaviour may useful when working with cabal package library
+;;; modules from REPL.
+(defmacro* in-component (name)
+  (do (<- dflags0 getDynFlags)
+      (let ((= set-this-unit-id cid
+              (do (let ((= flags (map noLoc ["-this-unit-id" cid]))))
+                  (<- (, dflags1 _ _)
+                      (parseDynamicFlags dflags0 flags))
+                  (<- _ (setSessionDynFlags dflags1))
+                  (liftIO
+                   (putStrLn
+                    (concat ["; this unit id set to `" cid "'"])))))
+            (= not-found
+              (liftIO
+               (putStrLn
+                (concat ["; package " (show name) " not found"]))))))
+      (<- mb-component-id
+          (liftIO
+           (do (<- mb-pc (maybe (return Nothing)
+                                (lookup-package-config dflags0)
+                                (code->mb-string name)))
+               (return (fmap (. BS.C8.unpack
+                                (. toStringRep componentId))
+                             mb-pc)))))
+      (case mb-component-id
+        (Just cid) (set-this-unit-id cid)
+        Nothing    (| ((elem name ['this 'main])
+                       (set-this-unit-id (show name)))
+                      (otherwise not-found)))
+      (return '(begin))))
