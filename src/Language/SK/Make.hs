@@ -9,6 +9,7 @@ module Language.SK.Make
 -- base
 import Control.Monad (unless, void)
 import Control.Monad.IO.Class (MonadIO(..))
+import Data.Char (isUpper)
 import Data.List (find)
 import Data.Maybe (catMaybes, fromMaybe)
 
@@ -30,7 +31,7 @@ import System.Directory (doesFileExist)
 
 -- filepath
 import System.FilePath ( dropExtension, pathSeparator
-                       , replaceExtension , splitExtension
+                       , replaceExtension , splitExtension, splitPath
                        , takeExtension, (<.>), (</>))
 
 -- internal
@@ -430,9 +431,10 @@ findImported hsc_env acc pendings name
               -- Workaround for loading home package modules when
               -- working with cabal package from REPL.
               -- 'Finder.findImportedModule' uses hard coded source file
-              -- extensions for Haskell source codes, which will not
-              -- find SK source files. When looking up modules in home
-              -- package as dependency, looking up in accumurated
+              -- extensions in `Finder.findInstalledHomeModule' to find
+              -- Haskell source codes of home package module, which will
+              -- not find SK source files. When looking up modules in
+              -- home package as dependency, looking up in accumurated
               -- ModSummary list to avoid using the modules found in
               -- already compiled linkable package.
               handleSkException
@@ -634,8 +636,10 @@ isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
 asModuleName :: String -> String
 asModuleName name
    | looksLikeModuleName name = name
-   | otherwise = map slash_to_dot (dropExtension name)
+   | otherwise = map slash_to_dot (concat names)
    where
+     names = dropWhile (not . isUpper . head)
+                       (splitPath (dropExtension name))
      slash_to_dot c = if c == pathSeparator then '.' else c
 
 -- [guessOutputFile]
