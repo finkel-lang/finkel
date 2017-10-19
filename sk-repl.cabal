@@ -25,11 +25,11 @@ library
   hs-source-dirs:      src
   exposed-modules:     Paths_sk_repl
                        SK.Core
+                       SK.Prelude
                        SK.Repl
                        SK.Repl.Env
                        SK.Repl.GHC
                        SK.Repl.Macro
-                       SK.User
   build-depends:       base >= 4.7 && < 5
                      , bytestring
                      , directory

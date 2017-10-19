@@ -1,6 +1,6 @@
 ;;;; Default module imported to REPL context.
 
-(module SK.User
+(module SK.Prelude
   (module All))
 
 (import (Prelude as All))

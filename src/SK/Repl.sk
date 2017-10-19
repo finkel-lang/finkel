@@ -93,14 +93,14 @@
             (= reader' (runInputT defaultSettings reader))
             (= init-form
               '(begin
-                (require SK.User)
+                (require SK.Prelude)
                 (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
       (putStrLn (++ "SK REPL " (showVersion version)))
       (putMVar in-mv init-form)
       (run-repl reader' initial-repl-state)))
 
 (:: repl-env SkEnv)
-(= repl-env (initialSkEnv {envContextModules ["SK.User"]}))
+(= repl-env (initialSkEnv {envContextModules ["SK.Prelude"]}))
 
 
 ;;; Read and print

@@ -10,7 +10,7 @@
 (import Language.SK.Run)
 (import Test.Hspec)
 (import Test.QuickCheck)
-(import SK.User)
+(import SK.Prelude)
 
 (defmacro m1 (x)
   `(++ "m1 " ,x))
