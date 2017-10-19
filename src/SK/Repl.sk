@@ -120,8 +120,8 @@
           (do (<- st (lift get-repl-state))
               (let ((= prompt
                       (if (null (pending-input st))
-                          "SK> "
-                          "... "))))
+                          "> "
+                          ""))))
               (<- mb-input (getInputLine prompt))
               (case mb-input
                 Nothing     quit
