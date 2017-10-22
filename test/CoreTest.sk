@@ -140,6 +140,16 @@
                 (defn foo (a b)
                   (+ a b))))))
 
+      (d "defdo"
+         (it "should expand to (defn ... (do ...))"
+             (expandTo
+              (defdo foo (a b)
+                (print a)
+                (print b))
+              (defn foo (a b)
+                (do (print a)
+                    (print b))))))
+
       (d "list"
          (it "should expand to foldr"
              (expandTo

@@ -178,10 +178,21 @@
     _
     (skSrcError form (++ "defn: invalid form:\n" (show form)))))
 
-;;; Macro to define function for both of compilation time and load time.
+;;; Macro to define a function for both of compilation time and load
+;;; time. This macro uses `eval-when' and `defn'.
 (defmacro defn+ form
   `(eval-when (compile load)
      (defn ,@form)))
+
+;;; Macro to define a function with `defn', with wrapping the body
+;;; expressions with `do'.
+(define-macro defdo form
+  (case (unLocLForm form)
+    (List (: _ (: name (: args body))))
+    (return `(defn ,name ,args
+               (do ,@body)))
+    _
+    (skSrcError form (++ "defdo: invalid form: " (show form)))))
 
 ;;; Expand given form if the given form is a macro form, otherwise
 ;;; return the given form as is. Note that `macroexpand-1' and
