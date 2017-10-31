@@ -154,9 +154,9 @@
          (it "should expand to foldr"
              (expandTo
               (list \x \y \z)
-              (foldr cons (quote ()) [(toCode \x)
-                                      (toCode \y)
-                                      (toCode \z)]))))
+              (foldr cons nil [(toCode \x)
+                               (toCode \y)
+                               (toCode \z)]))))
 
       (d "macroexpand-1"
          (it "should expand to '(toCode 3)"

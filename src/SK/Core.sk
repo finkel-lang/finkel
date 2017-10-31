@@ -224,13 +224,15 @@
   `(case ()
      _ (| ,@body)))
 
+;;; Extend the second argument with the first argument by appending to
+;;; the tip.
 (defn+ (cons (=> (Homoiconic a) (-> a Code Code)))
-  (x (LForm (L _l0 xs)))
-  (let ((= x' (toCode x))
-        (= l1 (getLoc (unLForm x'))))
-    (LForm (L l1 (case xs
-                   (List xs') (List (: x' xs'))
-                   _          (List [x']))))))
+  (x (@ whole (LForm (L _ xs))))
+  (let ((= (@ x' (LForm (L l0 _))) (toCode x)))
+    (LForm (L l0 (case xs
+                   (List xs')   (List (: x' xs'))
+                   (HsList xs') (List (: x' xs'))
+                   _            (List [x' whole]))))))
 
 ;;; Below `list' is defined as macro, since Haskell does not support
 ;;; vararg function (actually, vararg is doable in GHC, but requires
@@ -238,10 +240,10 @@
 (define-macro list form
   (let ((:: codes (-> [Code] [Code]))
         (= codes
-          (map (\ arg (cons 'toCode (cons arg '())))))
+          (map (\ arg (cons 'toCode (cons arg nil)))))
         (:: body (-> [Code] Code))
         (= body args
-          `(foldr cons '() [,@(List (codes args))])))
+          `(foldr cons nil [,@(List (codes args))])))
     (case (unLocLForm form)
       (List (: _ args)) (return (body args))
       _                 (skSrcError form "list: invalid args"))))
