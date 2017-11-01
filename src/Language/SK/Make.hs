@@ -77,7 +77,10 @@ make inputs no_link mb_output = do
   dflags <- getSessionDynFlags
   _ <- setSessionDynFlags (dflags { ghcMode = CompManager
                                   , outputFile = mb_output })
-  debugIO (putStrLn (";;; make: ghcLink=" ++ show (ghcLink dflags)))
+  debugIO
+    (do putStrLn ";;; make:"
+        putStrLn (";;;   ghcLink=" ++ show (ghcLink dflags))
+        putStrLn (";;;   ways=" ++ show (ways dflags)))
 
   -- Preserve the language extension values in initial dynflags to
   -- SkEnv, to reset the language extension later, to keep fresh set of

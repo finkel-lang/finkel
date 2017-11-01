@@ -121,6 +121,7 @@ module Language.SK.GHC
     lang_set,
     languageExtensions,
     parseDynamicFilePragma,
+    updOptLevel,
     thisPackage,
     xopt,
     xopt_set,

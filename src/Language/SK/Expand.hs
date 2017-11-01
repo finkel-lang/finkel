@@ -140,7 +140,7 @@ unquoteSplice form =
 -- value to expand macros.
 
 compileMacro :: Code -> Code -> Code -> Code
-         -> Skc (FastString, [Code], Macro)
+             -> Skc (FastString, [Code], Macro)
 compileMacro form@(LForm (L l _)) self arg body = do
   let LForm (L _ (Atom (ASymbol name))) = self
       name' = appendFS (fsLit "__") name
@@ -396,22 +396,21 @@ setExpanderSettings = do
   flags0 <- getSessionDynFlags
   let flags1 = flags0 { hscTarget = HscInterpreted
                       , ghcLink = LinkInMemory
-                      , optLevel = 0 }
+                      }
       flags2 = gopt_unset flags1 Opt_Hpc
       flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
-  _ <- setSessionDynFlags flags3
+      flags4 = updOptLevel 0 flags3
+  _ <- setSessionDynFlags flags4
   contextModules <- envContextModules <$> getSkEnv
   setContext (map (mkIIDecl . fsLit) contextModules)
 
 -- | Perform given action with DynFlags set for macroexpansion, used
 -- this to preserve original DynFlags.
 withExpanderSettings :: Skc a -> Skc a
-withExpanderSettings act = do
-  origFlags <- getSessionDynFlags
-  setExpanderSettings
-  ret <- act
-  _ <- setSessionDynFlags origFlags
-  return ret
+withExpanderSettings act =
+  gbracket getSessionDynFlags
+           setSessionDynFlags
+           (const (setExpanderSettings >> act))
 
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
