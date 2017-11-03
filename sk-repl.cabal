@@ -46,8 +46,8 @@ library
 
 executable sk
   -- Ghc option `-dynamic' is mandatory for runtime HValue lookup.
-  -- This is because to share the object code with the compiled REPL
-  -- code and the expressions typed in to the REPL.
+  -- This is required for shareing the compiled result with object
+  -- code and the expressions typed in from the REPL.
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N

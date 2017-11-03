@@ -263,33 +263,19 @@
                         _  (LForm (L l' (List xs)))))
     _               (LForm (L l (List [])))))
 
-;;; 'True' when given 'Code' is a 'List'.
-(defn (list? (-> Code Bool))
-  ((LForm (L _ form)))
-  (case form
-    (List _) True
-    _        False))
-
-;;; 'True' when given 'Code' is an 'Atom'.
-(defn (atom? (-> Code Bool))
-  ((LForm (L _ form)))
-  (case form
-    (Atom _) True
-    _        False))
-
-;;; 'True' when given 'Code' is an atom of 'ASymbol'.
-(defn (symbol? (-> Code Bool))
-  ((LForm (L _ form)))
-  (case form
-    (Atom (ASymbol _)) True
-    _                  False))
-
-;;; 'True' when given 'Code' is an atom of 'AString'.
-(defn (string? (-> Code Bool))
-  ((LForm (L _ form)))
-  (case form
-    (Atom (AString _)) True
-    _                  False))
+(macrolet ((mk-test (name pat)
+             `(defn (,name (-> Code Bool))
+                ((LForm (L _ form)))
+                (case form
+                  ,pat True
+                  _    False))))
+  (mk-test list? (List _))
+  (mk-test atom? (Atom _))
+  (mk-test symbol? (Atom (ASymbol _)))
+  (mk-test string? (Atom (AString _)))
+  (mk-test char? (Atom (AChar _)))
+  (mk-test integer? (Atom (AInteger _)))
+  (mk-test fractional? (Atom (AFractional _))))
 
 ;;; Apply given function to immediate elements of `List' and `HsList'.
 (defn (mapcar (-> (-> Code Code) Code Code))

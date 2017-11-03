@@ -203,6 +203,27 @@
                               (case x
                                 (AString _) True
                                 _           False))))))
+      (d "filtering char"
+         (it "should be AChar"
+             (property (\ x
+                         (==> (char? (toCode x))
+                              (case x
+                                (AChar _) True
+                                _         False))))))
+      (d "filtering integer"
+         (it "should be AInteger"
+             (property (\ x
+                         (==> (integer? (toCode x))
+                              (case x
+                                (AInteger _) True
+                                _            False))))))
+      (d "filtering fractional"
+         (it "should be AFractional"
+             (property (\ x
+                         (==> (fractional? (toCode x))
+                              (case x
+                                (AFractional _) True
+                                _               False))))))
       (d "length of atom"
          (it "should be 1"
              (let ((:: f (-> Code Property))
