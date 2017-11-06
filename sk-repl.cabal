@@ -1,0 +1,29 @@
+name:                sk-repl
+version:             0.1.0.0
+synopsis:            SK REPL
+description:         SK REPL
+homepage:            https://github.com/githubuser/sk-repl#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2017 Author name here
+category:            Language
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+-- Ghc option `-dynamic' is mandatory for runtime HValue lookup.  This
+-- is required for shareing the compiled result with object code and
+-- the expressions typed in from the REPL.
+executable sk
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , sk-lang
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/githubuser/sk-repl
