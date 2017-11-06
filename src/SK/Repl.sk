@@ -46,7 +46,7 @@
 (import Language.SK.Syntax)
 
 ;; internal
-(import Paths_sk_repl)
+(import Paths_sk_lang)
 (import SK.Repl.Env)
 (import SK.Repl.GHC)
 
@@ -95,7 +95,8 @@
               '(begin
                 (require SK.Prelude)
                 (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
-      (putStrLn (++ "SK REPL " (showVersion version)))
+      (putStrLn
+       (concat ["SK REPL (sk-lang " (showVersion version) ")"]))
       (putMVar in-mv init-form)
       (run-repl reader' initial-repl-state)))
 
