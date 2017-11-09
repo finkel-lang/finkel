@@ -18,6 +18,8 @@ module Language.SK.SKC
   , modifySkEnv
   , insertMacro
   , lookupMacro
+  , makeEnvMacros
+  , mergeMacros
   , macroNames
   , gensym
   , gensym'
@@ -160,6 +162,14 @@ lookupMacro name ske = go (envTmpMacros ske)
     go (t:ts)
       | Just macro <- Map.lookup name t = Just macro
       | otherwise = go ts
+
+-- | Make 'EnvMacros' from list of pair of macro name and value.
+makeEnvMacros :: [(String, Macro)] -> EnvMacros
+makeEnvMacros = Map.fromList . map (\(n,m) -> (fsLit n, m))
+
+-- | Merge macros.
+mergeMacros :: EnvMacros -> EnvMacros -> EnvMacros
+mergeMacros = Map.union
 
 -- | All macros in given macro environment, filtering out the special
 -- forms.
