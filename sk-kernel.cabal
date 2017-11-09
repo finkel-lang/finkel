@@ -47,6 +47,7 @@ library
                        Language.SK.Run
                        Language.SK.SKC
                        Language.SK.Syntax
+                       Paths_sk_kernel
   other-modules:       Language.SK.Syntax.Internal
   build-depends:       Cabal >= 2.0
                      , QuickCheck >= 2.10.0
