@@ -260,8 +260,10 @@
                     (<- dflags getDynFlags)
                     (return (foldr (f dflags) [] mb-things)))))))
     (case (unLocLForm name)
-      (Atom (ASymbol _)) (fmap (. toCode (map toCode))
-                               (get-exported-names (symbolName name)))
+      (Atom (ASymbol _))
+      (do (<- names0 (get-exported-names (symbolName name)))
+          (let ((= names1 (toCode (map toCode names0)))))
+          (return `(:: ,names1 [String])))
       _ (skSrcError name (++ "exported-macros: invalid form: "
                              (show name))))))
 

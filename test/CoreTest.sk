@@ -158,6 +158,12 @@
                                (toCode \y)
                                (toCode \z)]))))
 
+      (d "cond"
+         (it "should expand to case"
+             (expandTo
+              (cond ((even x) 0) (otherwise 1))
+              (case () _ (| ((even x) 0) (otherwise 1))))))
+
       (d "macroexpand-1"
          (it "should expand to '(toCode 3)"
              (expandTo
@@ -168,13 +174,7 @@
          (it "should expand to '(toCode 3)"
              (expandTo
               (macroexpand '(quasiquote (unquote 3)))
-              '(toCode 3))))
-
-      (d "cond"
-         (it "should expand to case"
-             (expandTo
-              (cond ((even x) 0) (otherwise 1))
-              (case () _ (| ((even x) 0) (otherwise 1))))))))
+              '(toCode 3))))))
 
 (defn (listTests Spec) ()
   (do (let ((= d describe)))
