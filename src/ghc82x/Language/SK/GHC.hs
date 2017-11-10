@@ -121,6 +121,7 @@ module Language.SK.GHC
     lang_set,
     languageExtensions,
     parseDynamicFilePragma,
+    unsafeGlobalDynFlags,
     updOptLevel,
     thisPackage,
     xopt,
@@ -310,10 +311,12 @@ module Language.SK.GHC
 
     -- * Outputable
     Outputable(..),
+    alwaysQualify,
     neverQualify,
     showPpr,
     showSDoc,
     showSDocUnqual,
+    showSDocForUser,
     text,
 
     -- * OrdList

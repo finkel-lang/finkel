@@ -159,58 +159,6 @@ compileMacro form@(LForm (L l _)) self arg body = do
       return (name, decls, unsafeCoerce macro)
     Left err -> skSrcError form err
 
-pTyThing :: DynFlags -> TyThing -> Skc ()
-pTyThing dflags ty_thing@(AnId var) = do
-  let str :: Outputable p => p -> String
-      str = showPpr dflags
-      typ = str (varType var)
-  when (typ == "Macro")
-       (do debugIO (putStrLn (";;; adding macro `" ++
-                              str (varName var) ++
-                              "' to current compiler session."))
-           addImportedMacro ty_thing)
-pTyThing _ _ = return ()
--- pTyThing dflags tt = pTyThing' dflags tt
-
--- Currently not in use during macro addition, just for printing out
--- information.
---
--- Using 'IfaceDecl' to detect the Language.SK.SKC.Macro type. This way is
--- more safe than comparing the Type of Var, since IfaceDecl contains
--- more detailed information.
---
--- pTyThing' :: DynFlags -> TyThing -> Skc ()
--- pTyThing' _ _ = return ()
-
--- pTyThing' dflags tt@(AnId _) = do
---   let ifd = tyThingToIfaceDecl tt
---       name = ifName ifd
---       typ = ifType ifd
---       prn = liftIO . putStrLn
---       str :: Outputable p => p -> String
---       str = showPpr dflags
---   prn (concat [";;; an id: name=", str name , " type=", str typ])
---   case typ of
---     -- Constructor name 'IfaceTyVar' changed since ghc 8.0.2 release.
---     IfaceTyVar _ -> prn "free ty var"
---     IfaceLitTy _ -> prn "lit ty"
---     IfaceAppTy _ _ -> prn "app ty"
---     IfaceFunTy _ _ -> prn "fun ty"
---     IfaceDFunTy _ _ -> prn "dfun ty"
---     IfaceForAllTy _ _ -> prn "for all ty"
---     IfaceTyConApp con arg -> do
---       let conName = str (ifaceTyConName con)
---       prn (concat [ ";;; ty con app,"
---                   , " tyConName=", conName
---                   , " tyConArg=", str arg])
---     IfaceCastTy _ _ -> prn "cast ty"
---     IfaceCoercionTy _ -> prn "coercion ty"
---     IfaceTupleTy {} -> prn "tuple ty"
-
--- pTyThing' dflags tt =
---   -- Arguments of `pprTyThing' changed since ghc-8.0.2 release.
---   liftIO (putStrLn (";;; " ++ (showSDocUnqual dflags (pprTyThing tt))))
-
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Skc [TyThing]
 getTyThingsFromIDecl (L _ idecl) minfo = do
   -- 'toImportList' borrowed from local definition in
@@ -239,9 +187,17 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
   catMaybes <$> (getNames >>= mapM lookupName)
 
 addImportedMacro :: TyThing -> Skc ()
-addImportedMacro ty_thing =
+addImportedMacro thing =
+  when (isMacro thing) (addImportedMacro' thing)
+
+addImportedMacro' :: TyThing -> Skc ()
+addImportedMacro' ty_thing = do
+  dflags <- getSessionDynFlags
   case ty_thing of
     AnId var -> do
+      debugIO (putStrLn (";;; adding macro `" ++
+                         showPpr dflags (varName var) ++
+                         "' to current compiler session."))
       hsc_env <- getSession
       let name = varName var
       fhv <- liftIO (getHValue hsc_env name)
@@ -349,7 +305,7 @@ m_require form =
           case mb_minfo of
             Just minfo -> do
               things <- getTyThingsFromIDecl lidecl minfo
-              mapM_ (pTyThing dflags) things
+              mapM_ addImportedMacro things
               return emptyForm
             Nothing ->
               skSrcError form ("require: module " ++ mname' ++
@@ -372,7 +328,7 @@ m_evalWhenCompile form =
 
 specialForms :: EnvMacros
 specialForms =
-  Map.fromList
+  makeEnvMacros
     [("define-macro", SpecialForm m_defineMacro)
     ,("eval-when-compile", SpecialForm m_evalWhenCompile)
     ,("let-macro", SpecialForm m_letMacro)

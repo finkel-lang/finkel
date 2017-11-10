@@ -21,6 +21,7 @@ module Language.SK.SKC
   , makeEnvMacros
   , mergeMacros
   , macroNames
+  , isMacro
   , gensym
   , gensym'
   ) where
@@ -179,6 +180,15 @@ macroNames = Map.foldrWithKey f []
     f k m acc = case m of
                   Macro _ -> unpackFS k : acc
                   _       -> acc
+
+-- | 'True' when given 'TyThing' is a 'Macro'.
+isMacro :: TyThing -> Bool
+isMacro thing =
+  case thing of
+    AnId var -> showSDocForUser unsafeGlobalDynFlags alwaysQualify
+                                (ppr (varType var))
+                == "Language.SK.SKC.Macro"
+    _        -> False
 
 -- | Generate unique symbol with @gensym'@.
 gensym :: Skc Code
