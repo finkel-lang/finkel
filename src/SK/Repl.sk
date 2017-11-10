@@ -44,11 +44,14 @@
 (import Language.SK.Reader)
 (import Language.SK.Run)
 (import Language.SK.Syntax)
+(import (qualified Paths_sk_kernel))
 
 ;; internal
-(import Paths_sk_lang)
+(import SK.Core)
 (import SK.Repl.Env)
 (import SK.Repl.GHC)
+(import SK.Repl.Macro)
+(import (qualified Paths_sk_lang))
 
 
 ;;; Repl, state, and result types
@@ -94,14 +97,34 @@
             (= init-form
               '(begin
                 (require SK.Prelude)
+                (require SK.Repl.Env)
+                (require SK.Repl.Macro)
                 (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
       (putStrLn
-       (concat ["SK REPL (sk-lang " (showVersion version) ")"]))
+       (concat ["SK REPL (sk-lang " (showVersion Paths_sk_lang.version)
+                ", sk-kernel " (showVersion Paths_sk_kernel.version)
+                ")"]))
       (putMVar in-mv init-form)
       (run-repl reader' initial-repl-state)))
 
 (:: repl-env SkEnv)
-(= repl-env (initialSkEnv {envContextModules ["SK.Prelude"]}))
+(= repl-env
+  (where (initialSkEnv {envContextModules modules
+                        envDefaultMacros defaultMacros})
+    (= modules ["SK.Prelude" "SK.Repl.Env" "SK.Repl.Macro"])
+    (= defaultMacros (mergeMacros specialForms replMacros))))
+
+;;; Default macros imported in REPL. These macros always get imported
+;;; after loading compiled modules.
+(macrolet* ((the-macros ()
+              (return
+                `[,@(map (\ mac
+                           `(, ,mac ,(aSymbol mac)))
+                         (++ (exported-macros SK.Core)
+                             (exported-macros SK.Repl.Macro)))])))
+  (:: replMacros EnvMacros)
+  (= replMacros
+    (makeEnvMacros (the-macros))))
 
 
 ;;; Read and print

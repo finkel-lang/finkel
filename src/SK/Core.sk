@@ -2,12 +2,14 @@
 
 (module SK.Core)
 
-(require Language.SK.GHC (unpackFS))
+(require Language.SK.GHC)
 
 (import Language.SK)
-(import Language.SK.GHC (unpackFS))
+(import Language.SK.GHC)
 
 
+;;; Basic
+
 ;;; Macro to specify the phases of evaluation.
 (define-macro eval-when form
   (let ((:: compile? (-> [Code] Bool))
@@ -62,7 +64,7 @@
               (:: make-replacement (-> Atom (Skc (, Atom Atom))))
               (= make-replacement (@ x (ASymbol sym))
                 (do (<- (LForm (L _ (Atom g)))
-                        (gensym' (tail (unpackFS sym))))
+                      (gensym' (tail (unpackFS sym))))
                     (return (, x g))))))
         (<- kvs (mapM make-replacement to-replace))
         (case (subst-gensyms kvs form)
@@ -101,8 +103,11 @@
         (L l1 (List args))
         (gensymfy (list-body l1 name0 args body0 '*form*))
 
-        (L _l1 (Atom _))
+        (L _ (Atom (ASymbol _)))
         (gensymfy (atom-body name0 arg0 body0 '*form*))
+
+        (L _ (Atom AUnit))
+        (gensymfy body0)
 
         _
         (skSrcError whole (++ label ": invalid args")))))
@@ -110,17 +115,21 @@
   ;; Function to make body expression of `macrolet*' and `macrolet'.
   (:: make-macrolet-body (-> String Code (-> Code Code) (Skc Code)))
   (= make-macrolet-body label whole f
-    (let ((:: g (-> Code (Skc Code)))
-          (= g code
+    (let ((:: make-macro (-> Code (Skc Code)))
+          (= make-macro code
             (case (unLocLForm code)
               (List [name arg body0])
               (do (<- body1 (make-defmacro-body label code name
                                                 arg (f body0)))
-                  (return `(,name *form* ,body1)))
+                  (let ((= the-form
+                          (case (unLocLForm arg)
+                            (Atom AUnit) '_
+                            _            '*form*))))
+                  (return `(,name ,the-form ,body1)))
               _ (skSrcError whole label))))
       (case (unLocLForm whole)
         (List (: _ (: (LForm (L _ (List forms))) rest)))
-        (do (<- macros (mapM g forms))
+        (do (<- macros (mapM make-macro forms))
             (return `(let-macro ,(List macros)
                        ,@(List rest))))
         _
@@ -134,8 +143,12 @@
   (case (unLocLForm form)
     (List [_ name arg body0])
     (do (<- body1 (make-defmacro-body "defmacro*" form name arg body0))
+        (let ((= the-form
+                (case (unLocLForm arg)
+                  (Atom AUnit) '_
+                  _            '*form*))))
         (return
-          `(define-macro ,name *form*
+          `(define-macro ,name ,the-form
              ,body1)))
 
     _
@@ -194,6 +207,16 @@
     _
     (skSrcError form (++ "defdo: invalid form: " (show form)))))
 
+;;; The `cond' macro, found in many Lisp languages.  The behaviour is
+;;; same as wrapping the body with `case' expression with dummy unit, or
+;;; `if' with `MultiWayIf' GHC language extension.
+(defmacro cond body
+  `(case ()
+     _ (| ,@body)))
+
+
+;;; Macros for macros
+
 ;;; Expand given form if the given form is a macro form, otherwise
 ;;; return the given form as is. Note that `macroexpand-1' and
 ;;; `macroexpand' are macro, not function.
@@ -217,12 +240,33 @@
                        (go x))))
     _            (return form)))
 
-;;; The `cond' macro, found in many Lisp languages.  The behaviour is
-;;; same as wrapping the body with `case' expression with dummy unit, or
-;;; `if' with `MultiWayIf' GHC language extension.
-(defmacro cond body
-  `(case ()
-     _ (| ,@body)))
+;;; Macro to return a Haskell list of macro name Strings exported from
+;;; given module.
+(defmacro* exported-macros (name)
+  (let ((= f dflags mb-thing acc
+          (case mb-thing
+            (Just (@ thing (AnId var)))
+            (| ((isMacro thing)
+                (: (showSDoc dflags (ppr (varName var))) acc)))
+            _      acc))
+        (= get-exported-names name-str
+          (do (<- mdl (lookupModule (mkModuleName name-str) Nothing))
+              (<- mb-mod-info (getModuleInfo mdl))
+              (case mb-mod-info
+                Nothing      (return [])
+                (Just minfo)
+                (do (<- mb-things
+                      (mapM lookupName (modInfoExports minfo)))
+                    (<- dflags getDynFlags)
+                    (return (foldr (f dflags) [] mb-things)))))))
+    (case (unLocLForm name)
+      (Atom (ASymbol _)) (fmap (. toCode (map toCode))
+                               (get-exported-names (symbolName name)))
+      _ (skSrcError name (++ "exported-macros: invalid form: "
+                             (show name))))))
+
+
+;;; List
 
 ;;; Extend the second argument with the first argument by appending to
 ;;; the tip.
@@ -263,20 +307,6 @@
                         _  (LForm (L l' (List xs)))))
     _               (LForm (L l (List [])))))
 
-(macrolet ((mk-test (name pat)
-             `(defn (,name (-> Code Bool))
-                ((LForm (L _ form)))
-                (case form
-                  ,pat True
-                  _    False))))
-  (mk-test list? (List _))
-  (mk-test atom? (Atom _))
-  (mk-test symbol? (Atom (ASymbol _)))
-  (mk-test string? (Atom (AString _)))
-  (mk-test char? (Atom (AChar _)))
-  (mk-test integer? (Atom (AInteger _)))
-  (mk-test fractional? (Atom (AFractional _))))
-
 ;;; Apply given function to immediate elements of `List' and `HsList'.
 (defn (mapcar (-> (-> Code Code) Code Code))
   (f (@ form (LForm (L l lst))))
@@ -291,3 +321,20 @@
   (if (null xs)
       ys
       (cons (car xs) (append (cdr xs) ys))))
+
+
+;;; Simple predicate
+
+(macrolet ((defpred (name pat)
+             `(defn (,name (-> Code Bool))
+                ((LForm (L _ form)))
+                (case form
+                  ,pat True
+                  _    False))))
+  (defpred list? (List _))
+  (defpred atom? (Atom _))
+  (defpred symbol? (Atom (ASymbol _)))
+  (defpred string? (Atom (AString _)))
+  (defpred char? (Atom (AChar _)))
+  (defpred integer? (Atom (AInteger _)))
+  (defpred fractional? (Atom (AFractional _))))

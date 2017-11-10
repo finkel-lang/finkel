@@ -20,7 +20,7 @@ cabal-version:       >= 2.0
 custom-setup
   setup-depends:       base >= 4.7 && < 5
                      , Cabal >= 2.0
-                     , sk-kernel >= 0.4.0
+                     , sk-kernel >= 0.5.0
 
 library
   hs-source-dirs:      src
@@ -40,7 +40,7 @@ library
                      , ghc-boot
                      , ghci
                      , transformers
-                     , sk-kernel >= 0.4.0
+                     , sk-kernel >= 0.5.0
   default-language:    Haskell2010
   ghc-options:       -Wall
 
@@ -52,7 +52,7 @@ test-suite sk-lang-test
                      , base
                      , hspec
                      , sk-lang
-                     , sk-kernel >= 0.4.0
+                     , sk-kernel >= 0.5.0
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       CoreTest
   default-language:    Haskell2010

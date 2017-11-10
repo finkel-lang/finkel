@@ -1,4 +1,4 @@
-;;;; Default module imported to REPL context.
+;;;; Prelude module for SK.
 
 (module SK.Prelude
   (module All))
@@ -6,5 +6,3 @@
 (import (Prelude as All))
 (import (Language.SK as All))
 (import (SK.Core as All))
-(import (SK.Repl.Env as All))
-(import (SK.Repl.Macro as All))

@@ -453,7 +453,8 @@ COMMANDS:
                                      (putStrLn
                                       (++ "unknown module: " name)))
                     (Just mod-info) (browse-module mdl mod-info))
-                  (return '(begin))))))
+                  (return '(begin))))
+             (otherwise err)))
         (= err
           (skSrcError form (++ "browse: invalid form: " (show form)))))
     (case (unLocLForm form)
