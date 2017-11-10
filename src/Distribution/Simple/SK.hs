@@ -16,7 +16,7 @@ module Distribution.Simple.SK
   , registerSkPPHandler
   , sk2hsProgram
   , stackSk2hsProgram
-  , skcBuildHooks
+  , skcBuildHooksWith
   ) where
 
 -- base
@@ -45,14 +45,14 @@ import Distribution.Simple.Setup
 skcHooks :: UserHooks
 skcHooks = simpleUserHooks
   { hookedPreProcessors = [registerSkPPHandler]
-  , buildHook = skcBuildHooks False
+  , buildHook = skcBuildHooksWith "skc" False
   , haddockHook = stackSkHaddockHooks
   }
 
 -- | UserHooks almost same as'skcHooks', but with SK debug flag turned
 -- on.
 skcDebugHooks :: UserHooks
-skcDebugHooks = skcHooks { buildHook = skcBuildHooks True }
+skcDebugHooks = skcHooks { buildHook = skcBuildHooksWith "skc" True }
 
 -- | Hooks to register @"*.sk"@ files.
 registerSkHooks :: UserHooks
@@ -91,9 +91,11 @@ registerSkPPHandler = ("sk", doNothingPP)
 
 -- | Build hooks to replace the executable path of "ghc" with "skc"
 -- found on system.
-skcBuildHooks :: Bool -> PackageDescription -> LocalBuildInfo
-              -> UserHooks -> BuildFlags -> IO ()
-skcBuildHooks debug pkg_descr lbi hooks flags =
+skcBuildHooksWith :: String -- ^ Name of sk compiler.
+                  -> Bool
+                  -> PackageDescription -> LocalBuildInfo
+                  -> UserHooks -> BuildFlags -> IO ()
+skcBuildHooksWith skc debug pkg_descr lbi hooks flags =
   build pkg_descr lbi' flags (allSuffixHandlers hooks)
     where
       lbi' = lbi {withPrograms = updateProgram ghc (withPrograms lbi)}
@@ -101,12 +103,12 @@ skcBuildHooks debug pkg_descr lbi hooks flags =
         case lookupProgram (simpleProgram "ghc") (withPrograms lbi) of
           Just ghc_orig ->
             ghc_orig {
-                programLocation = FoundOnSystem "skc",
+                programLocation = FoundOnSystem skc,
                 programOverrideArgs =
                   debugs ++ programOverrideArgs ghc_orig
             }
           Nothing ->
-            (simpleConfiguredProgram "ghc" (FoundOnSystem "skc")) {
+            (simpleConfiguredProgram "ghc" (FoundOnSystem skc)) {
               programOverrideArgs = debugs
             }
       debugs = ["--sk-debug"|debug]

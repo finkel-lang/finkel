@@ -1,15 +1,27 @@
 -- | Module containing GHC frontend plugin for skc.
 module Language.SK.Plugin
-   ( frontendPlugin
+   ( -- * SK kernel compiler frontend plugin
+     frontendPlugin
+
+     -- * Helpers
+   , makeSkFrontend
+   , skPluginMain
    ) where
 
 -- base
 import Control.Monad (void, when)
+import Data.Maybe (fromMaybe, isJust)
+import Data.List (find, isPrefixOf, isSuffixOf)
 import System.Console.GetOpt
-import System.Exit (exitFailure)
+import System.Environment (getArgs, lookupEnv)
+import System.Exit (exitFailure, exitWith)
+import System.Process (rawSystem)
 
 -- ghc
 import GhcPlugins (FrontendPlugin(..), defaultFrontendPlugin)
+
+-- ghc-paths
+import qualified GHC.Paths as GhcPaths
 
 -- Internal
 import Language.SK.Emit
@@ -26,16 +38,23 @@ import Language.SK.SKC
 -- ---------------------------------------------------------------------
 
 frontendPlugin :: FrontendPlugin
-frontendPlugin = defaultFrontendPlugin {frontend = skFrontend}
+frontendPlugin =
+  defaultFrontendPlugin {frontend = makeSkFrontend Nothing}
 
-skFrontend :: [String] -> [(String, Maybe Phase)] -> Ghc ()
-skFrontend flags args = do
+-- | Make a frontend plugin.
+makeSkFrontend :: Maybe [(String,Macro)] -- ^ List of macros loaded to
+                                         -- macro expander.
+               -> [String] -> [(String, Maybe Phase)] -> Ghc ()
+makeSkFrontend mb_macros flags args = do
   let options = (parseOptions flags) {input = args}
       act o  = do debugIO (do putStrLn ("flags: " ++ show flags)
                               putStrLn ("args:  " ++ show args))
                   chooseAction (action options) o
       debug = skDebug options
-      sk_env = initialSkEnv {envDebug = debug}
+      macros = maybe (envMacros initialSkEnv) makeEnvMacros mb_macros
+      sk_env = initialSkEnv { envDebug = debug
+                            , envDefaultMacros = macros
+                            , envMacros = macros }
   handleSkException
     (\(SkException se) -> liftIO (do putStrLn se
                                      exitFailure))
@@ -159,3 +178,156 @@ usage =
 
 skcUsage :: String -> String
 skcUsage header = usageInfo header visibleDescrs
+
+
+-- ---------------------------------------------------------------------
+--
+-- Main function builder
+--
+-- ---------------------------------------------------------------------
+
+-- | Make an main action for SK compiler executable with specifying
+-- frontend plugin name and package.
+--
+-- Prepend argument passed to GHC frontend plugin. Wraps input arguments
+-- with "-ffrontend-opt". This function contains codes to intercept some
+-- of the conflicting arguments for frontend plugin.
+--
+skPluginMain :: String -- ^ Frontend module name.
+             -> String -- ^ Package name.
+             -> IO ()
+skPluginMain frontendModuleName packageName = do
+  argIns <- getArgs
+  let argOuts = [ "--frontend", frontendModuleName
+                , "-plugin-package", packageName ]
+      (srcs, skopts, ghcopts) = groupOptions [] [] [] argIns
+      ghcopts' = reverse ghcopts
+      ghc = fromMaybe GhcPaths.ghc (findGhc skopts)
+  debug <- if isJust (find (== "--sk-debug") skopts)
+              then return True
+              else do mbDebug <- lookupEnv "SKC_DEBUG"
+                      case mbDebug of
+                        Nothing -> return False
+                        Just _  -> return True
+  when debug
+       (do putStrLn ("ghc: " ++ show ghc)
+           putStrLn ("argIns: " ++ show argIns)
+           putStrLn ("srcs:" ++ show srcs)
+           putStrLn ("skopts: " ++ show skopts)
+           putStrLn ("ghcopts: " ++ show ghcopts))
+  let skopts' | isJust (find (== "--sk-debug") skopts) = skopts
+              | debug = "-ffrontend-opt":"--sk-debug":skopts
+              | otherwise = skopts
+      getO =
+        let go [] = []
+            go (_:"--sk-o":_:val:_) = [val]
+            go (_:rest) = go rest
+        in  go skopts
+      rawGhcOpts =
+        if null getO
+          then ghcopts'
+          else ghcopts' ++ ("-o":getO)
+      -- Testing whether ghc was invoked for building shared
+      -- library. This may happen when building cabal package, to
+      -- suppress unwanted warning messages.
+      buildingSharedLib =
+        null srcs && elem "-shared" ghcopts' && elem "-dynamic" ghcopts'
+  exitCode <-
+    -- When any of conflicting option with frontend plugin was set, OR
+    -- building shared library, delegate to raw ghc without frontend
+    -- plugin.
+    if any (`elem` conflictingOptions) ghcopts' || buildingSharedLib
+       then do
+         when debug
+              (do putStrLn "Running raw ghc"
+                  putStrLn ("rawGhcOpts: " ++ show rawGhcOpts))
+         rawSystem ghc rawGhcOpts
+       else do
+         let args = concat [argOuts,skopts',ghcopts',"-x":"hs":srcs]
+         rawSystem ghc args
+  exitWith exitCode
+
+-- | Categorize command line options.
+groupOptions :: [String] -> [String] -> [String] -> [String]
+             -> ([String], [String], [String])
+groupOptions = go where
+  go sksrc skopt ghcopt args =
+    case args of
+       -- Irregular pattern for "--sk-pgmf" option. Output file comes
+       -- before the "--gk-pgmf".
+       x:"--sk-pgmf":xs ->
+         go sksrc (fopt:"--sk-pgmf":fopt:x: skopt) ghcopt xs
+
+       -- Separate options one by one with predicates. Some are SK
+       -- source code, some are conflicting flag with '--frontend'
+       -- option, ... etc.
+       x:xs
+         | isSkSrc x ->
+             go (x:sksrc) skopt ghcopt xs
+         | isMake x ->
+             go sksrc (fopt:"--sk-make":skopt) ghcopt xs
+         | isO x ->
+             go sksrc (fopt: "--sk-o":fopt:head xs:skopt) ghcopt (tail xs)
+         | isC x ->
+             go sksrc (fopt:"--sk-c":skopt) ghcopt ("-no-link":xs)
+         | isSkOption x ->
+             go sksrc (fopt:head xs:fopt:x:skopt) ghcopt (tail xs)
+         | isSkFlag x ->
+             go sksrc (fopt:x:skopt) ghcopt xs
+         | otherwise -> go sksrc skopt (x:ghcopt) xs
+
+       -- Done.
+       [] -> (sksrc, skopt, ghcopt)
+     where
+      fopt = "-ffrontend-opt"
+
+-- | When any of options listed here were found, invoke raw @ghc@
+-- without using SK frontend plugin. Otherwise @ghc@ will complain with
+-- error message. These options are listed in "ghc/Main.hs" as
+-- `mode_flags'.
+conflictingOptions :: [String]
+conflictingOptions =
+  [ "--info"
+  , "--show-options"
+  , "--supported-languages"
+  , "--supported-extensions"
+  , "--show-packages"
+  , "--show-iface"
+  , "--print-libdir"
+  , "--abi-hash"
+  ]
+
+-- | Test to find the string sequence "--make". Option "--make" could
+-- not be used as frontend plugin option.
+isMake :: String -> Bool
+isMake = (== "--make")
+
+-- | Another option to intercept.
+isO :: String -> Bool
+isO = (== "-o")
+
+-- | Intercept "-c".
+isC :: String -> Bool
+isC = (== "-c")
+
+-- | SK source code extension is hard coded as ".sk". Surely it would be
+-- better to have alternative choice specified via command line
+-- argument.
+isSkSrc :: String -> Bool
+isSkSrc = isSuffixOf ".sk"
+
+-- | Argument passed to SK plugin with value.
+isSkOption :: String -> Bool
+isSkOption str = str `elem` ["--sk-out", "--sk-ghc"]
+
+-- | Argument passed to SK plugin without value.
+isSkFlag :: String -> Bool
+isSkFlag = isPrefixOf "--sk-"
+
+-- | Find argument passed to "--sk-ghc" option.
+findGhc :: [String] -> Maybe String
+findGhc xs =
+  case xs of
+    ghc:_   :"--sk-ghc":_ -> Just ghc
+    _  :rest              -> findGhc rest
+    []                    -> Nothing
