@@ -77,7 +77,7 @@ mkTest path = do
         Left err -> expectationFailure err
 
     it "should compile resulting Haskell code" $ do
-      let args = ["exec", "ghc", "--", "-o", aDotOut, dotHs]
+      let args = ["--silent", "exec", "ghc", "--", "-o", aDotOut, dotHs]
       (ecode, _, stderr) <- readProcessWithExitCode "stack" args ""
       case stderr of
         [] -> ecode `shouldBe` ExitSuccess
