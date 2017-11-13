@@ -39,22 +39,24 @@ import Language.SK.SKC
 
 frontendPlugin :: FrontendPlugin
 frontendPlugin =
-  defaultFrontendPlugin {frontend = makeSkFrontend Nothing}
+  defaultFrontendPlugin {frontend = makeSkFrontend "skc" []}
 
 -- | Make a frontend plugin.
-makeSkFrontend :: Maybe [(String,Macro)] -- ^ List of macros loaded to
-                                         -- macro expander.
+makeSkFrontend :: String -- ^ Name of executable.
+               -> [(String,Macro)] -- ^ List of macros loaded to
+                                   -- macro expander.
                -> [String] -> [(String, Maybe Phase)] -> Ghc ()
-makeSkFrontend mb_macros flags args = do
+makeSkFrontend name macros flags args = do
   let options = (parseOptions flags) {input = args}
       act o  = do debugIO (do putStrLn ("flags: " ++ show flags)
                               putStrLn ("args:  " ++ show args))
-                  chooseAction (action options) o
+                  chooseAction name (action options) o
       debug = skDebug options
-      macros = maybe (envMacros initialSkEnv) makeEnvMacros mb_macros
+      macros' = mergeMacros (envMacros initialSkEnv)
+                            (makeEnvMacros macros)
       sk_env = initialSkEnv { envDebug = debug
-                            , envDefaultMacros = macros
-                            , envMacros = macros }
+                            , envDefaultMacros = macros'
+                            , envMacros = macros' }
   handleSkException
     (\(SkException se) -> liftIO (do putStrLn se
                                      exitFailure))
@@ -145,12 +147,12 @@ hiddenDescrs =
 --
 -- ---------------------------------------------------------------------
 
-chooseAction :: SkAction -> SkcOptions -> Skc ()
-chooseAction act o =
+chooseAction :: String -> SkAction -> SkcOptions -> Skc ()
+chooseAction name act o =
   case act of
     SkMake -> make (input o) (skC o) (skO o)
     SkHsrc -> hsrc o
-    SkHelp -> help
+    SkHelp -> help name
 
 hsrc :: SkcOptions -> Skc ()
 hsrc o = do
@@ -166,12 +168,12 @@ hsrc o = do
              Nothing -> putStrLn hssrc
              Just out -> writeFile out hssrc)
 
-help :: Skc ()
-help = liftIO (putStrLn (unlines usage))
+help :: String -> Skc ()
+help name = liftIO (putStrLn (unlines (usage name)))
 
-usage :: [String]
-usage =
-  [ "USAGE: skc [OPTIONS] [FILES]"
+usage :: String -> [String]
+usage name =
+  [ "USAGE: " ++ name ++ " [OPTIONS] [FILES]"
   , ""
   , skcUsage "OPTIONS:\n"
   , "  Other options are passed to ghc."]

@@ -3,7 +3,8 @@
 module Distribution.Simple.SK
   (
   -- * Reexport from Cabal
-    defaultMainWithHooks
+    UserHooks
+  , defaultMainWithHooks
 
   -- * UserHooks
   , skcHooks
@@ -16,6 +17,7 @@ module Distribution.Simple.SK
   , registerSkPPHandler
   , sk2hsProgram
   , stackSk2hsProgram
+  , skcHooksWith
   , skcBuildHooksWith
   ) where
 
@@ -43,16 +45,19 @@ import Distribution.Simple.Setup
 -- | A UserHooks to compile SK codes with "skc" executable found on
 -- system.
 skcHooks :: UserHooks
-skcHooks = simpleUserHooks
-  { hookedPreProcessors = [registerSkPPHandler]
-  , buildHook = skcBuildHooksWith "skc" False
-  , haddockHook = stackSkHaddockHooks
-  }
+skcHooks = skcHooksWith "skc" False
 
 -- | UserHooks almost same as'skcHooks', but with SK debug flag turned
 -- on.
 skcDebugHooks :: UserHooks
-skcDebugHooks = skcHooks { buildHook = skcBuildHooksWith "skc" True }
+skcDebugHooks = skcHooksWith "skc" True
+
+-- | A 'UserHooks' to compile SK codes with given executable.
+skcHooksWith :: String -> Bool -> UserHooks
+skcHooksWith exec debug = simpleUserHooks
+  { hookedPreProcessors = [registerSkPPHandler]
+  , buildHook = skcBuildHooksWith exec debug
+  , haddockHook = stackSkHaddockHooks }
 
 -- | Hooks to register @"*.sk"@ files.
 registerSkHooks :: UserHooks
