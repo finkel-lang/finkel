@@ -1,0 +1,14 @@
+;;; Setup script for SK package.
+
+(require SK.Core)
+
+(module SK.Setup
+  defaultMainWithHooks
+  skccHooks)
+
+;; sk-kernel
+(import Distribution.Simple.SK)
+
+(defn (skccHooks UserHooks)
+  ()
+  (skcHooksWith "skcc" False))

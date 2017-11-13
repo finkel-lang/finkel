@@ -25,11 +25,13 @@ custom-setup
 library
   hs-source-dirs:      src
   exposed-modules:     SK.Core
+                       SK.Plugin
                        SK.Prelude
                        SK.Repl
                        SK.Repl.Env
                        SK.Repl.GHC
                        SK.Repl.Macro
+                       SK.Setup
   other-modules:       Paths_sk_lang
   build-depends:       base >= 4.7 && < 5
                      , bytestring

@@ -1,0 +1,23 @@
+;;; Module exporting GHC frontend plugin for sk compiler using `SK.Core'
+;;; module.
+
+(require SK.Core)
+
+(module SK.Plugin
+  frontendPlugin)
+
+;; ghc
+(import GhcPlugins ((FrontendPlugin ..) defaultFrontendPlugin))
+
+;; sk-kernel
+(import SK.Prelude)
+(import Language.SK.Plugin hiding (frontendPlugin))
+
+(macrolet* ((core-macros ()
+              (return
+                `[,@(map (\ mac (, mac (aSymbol mac)))
+                         (exported-macros SK.Core))])))
+  (defn (frontendPlugin FrontendPlugin)
+    ()
+    (defaultFrontendPlugin
+     {frontend (makeSkFrontend "skcc" (core-macros))})))
