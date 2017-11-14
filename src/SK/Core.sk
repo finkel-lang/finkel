@@ -327,6 +327,13 @@
 
 ;;; Simple predicate
 
+(defn (atom? (-> Code Bool))
+  ((LForm (L _ form)))
+  (case form
+    (Atom _)  True
+    (List []) True
+    _         False))
+
 (macrolet ((defpred (name pat)
              `(defn (,name (-> Code Bool))
                 ((LForm (L _ form)))
@@ -334,7 +341,6 @@
                   ,pat True
                   _    False))))
   (defpred list? (List _))
-  (defpred atom? (Atom _))
   (defpred symbol? (Atom (ASymbol _)))
   (defpred string? (Atom (AString _)))
   (defpred char? (Atom (AChar _)))

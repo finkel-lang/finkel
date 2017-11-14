@@ -225,10 +225,11 @@
                                 (AFractional _) True
                                 _               False))))))
       (d "length of atom"
-         (it "should be 1"
+         (it "should be 1 or nil"
              (let ((:: f (-> Code Property))
                    (= f x
-                     (==> (atom? x) (== 1 (length x)))))
+                     (==> (atom? x) (|| (== 1 (length x))
+                                        (null x)))))
                (property f))))
       (d "mapcar"
          (it "should replace non-symbols"
