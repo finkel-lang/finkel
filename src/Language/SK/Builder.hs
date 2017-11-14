@@ -217,9 +217,8 @@ mkRdrName name
     x = headFS name
 
 splitQualName :: FastString -> Maybe (FastString, FastString)
-splitQualName fstr = go str "" []
+splitQualName fstr = go (unpackFS fstr) "" []
   where
-    str = unpackFS fstr
     go str0 tmp acc =
       case str0 of
         [] | null acc  -> Nothing
