@@ -2,7 +2,7 @@
 
 (module Main)
 
-(import (qualified M1))
+(import qualified M1)
 
 (:: main (IO ()))
 (= main

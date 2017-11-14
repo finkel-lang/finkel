@@ -93,9 +93,9 @@ b_ieMdl [LForm (L l (Atom (ASymbol name)))] = L l thing
 --
 -- ---------------------------------------------------------------------
 
-b_importD :: (Code, Bool, Maybe Code) ->  Bool -> Maybe [HIE]
+b_importD :: (Code, Bool, Maybe Code) -> (Bool, Maybe [HIE])
           -> HImportDecl
-b_importD (name, qualified, mb_as) hiding mb_entities =
+b_importD (name, qualified, mb_as) (hiding, mb_entities) =
   case name of
     LForm (L l (Atom (ASymbol m))) ->
       let decl = simpleImportDecl (mkModuleNameFS m)

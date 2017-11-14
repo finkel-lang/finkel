@@ -37,7 +37,7 @@
   main)
 
 (import Data.Char)
-(import (qualified Data.Maybe as Mb))
+(import qualified Data.Maybe as Mb)
 
 ;; Function values
 

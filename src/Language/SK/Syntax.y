@@ -35,7 +35,6 @@ import Language.SK.Syntax.Internal
 %name p_imports imports
 %name p_import import
 %name p_limport limport
-%name p_impdecl0 impdecl0
 
 %name p_top_decls top_decls
 %name p_top_decl top_decl
@@ -210,24 +209,22 @@ import :: { HImportDecl }
     : 'import' {% parse p_limport $1 }
 
 limport :: { HImportDecl }
-    : impdecl                 { b_importD $1 False Nothing }
-    | impdecl 'unit'          { b_importD $1 False (Just []) }
-    | impdecl 'list'          {% do { es <- parse p_entities $2
-                                    ; let es' = Just es
-                                    ; return (b_importD $1 False es') }}
-    | impdecl 'hiding' 'list' {% do { es <- parse p_entities $3
-                                    ; let es' = Just es
-                                    ; return (b_importD $1 True es') }}
+    : 'qualified' 'symbol' as 'symbol' impspec
+      { b_importD ($2, True, Just $4) $5 }
+    | 'qualified' 'symbol' impspec
+      { b_importD ($2, True, Nothing) $3 }
+    | 'symbol' as 'symbol' impspec
+      { b_importD ($1, False, Just $3) $4 }
+    | 'symbol' impspec
+      { b_importD ($1, False, Nothing) $2 }
 
-impdecl :: { (Code, Bool, Maybe Code ) }
-    : 'symbol' { ($1, False, Nothing) }
-    | 'list'   {% parse p_impdecl0 $1 }
-
-impdecl0 :: { (Code, Bool, Maybe Code) }
-    : 'qualified' 'symbol'             { ($2, True, Nothing) }
-    | 'qualified' 'symbol' as 'symbol' { ($2, True, Just $4) }
-    | 'symbol'                         { ($1, False, Nothing) }
-    | 'symbol' as 'symbol'             { ($1, False, Just $3) }
+impspec :: { (Bool, Maybe [HIE]) }
+    : 'hiding' 'list' {% do { es <- parse p_entities $2
+                            ; return (True, Just es) } }
+    | 'list'          {% do { es <- parse p_entities $1
+                            ; return (False, Just es) } }
+    | 'unit'          { (False, Just []) }
+    | {- empty -}     { (False, Nothing) }
 
 as :: { Code }
     : 'symbol' {% b_isAs $1 }

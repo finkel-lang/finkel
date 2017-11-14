@@ -6,15 +6,16 @@
 
 (import Data.Char)
 (import System.IO ())
-(import (Control.Monad as M))
+(import Control.Monad as M)
 (import Data.Complex ((Complex ..) realPart imagPart mkPolar))
 (import Data.Ratio hiding (Ratio Rational numerator %))
 
-(import (qualified Data.List))
-(import (qualified Data.Map as Map))
-(import (qualified Data.Maybe as Mb))
-(import (qualified Data.Bits as Bt) (shiftL shiftR))
-(import (qualified System.Environment as Env) hiding (getArgs getEnv))
+(import qualified Data.List)
+(import qualified Data.Map as Map)
+(import qualified Data.Maybe as Mb)
+(import qualified Data.Bits as Bt (shiftL shiftR))
+(import qualified System.Environment as Env hiding (getArgs getEnv))
+
 
 (:: f1 (Map.Map String Int))
 (= f1
