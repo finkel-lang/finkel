@@ -65,9 +65,10 @@ b_ieAll (LForm (L l (Atom (ASymbol name)))) = thing
 b_ieWith :: Code -> [Code] -> HIE
 b_ieWith (LForm (L l (Atom (ASymbol name)))) names = thing
   where
-    thing =
-      L l (IEThingWith (L l (IEName (L l (mkUnqual tcName name))))
-                       wc ns fs)
+    thing = L l (IEThingWith (L l (IEName (L l name'))) wc ns fs)
+    name' = case splitQualName name of
+              Just qual -> mkQual tcName qual
+              Nothing   -> mkUnqual tcName name
     wc = NoIEWildcard
     (ns, fs) = foldr f ([],[]) names
     f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0)

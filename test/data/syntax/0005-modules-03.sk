@@ -31,9 +31,13 @@
   ;; Module re-export
   (module Data.Char)
 
+  ;; Re-export with qualified renamed module
+  (Mb.Maybe Just Nothing)
+
   main)
 
 (import Data.Char)
+(import (qualified Data.Maybe as Mb))
 
 ;; Function values
 
@@ -91,4 +95,4 @@
 
 (:: main (IO ()))
 (= main
-  (putStrLn "Module containing various exports list"))
+  (putStrLn "Module containing various exports"))
