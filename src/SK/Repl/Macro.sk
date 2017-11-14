@@ -10,12 +10,12 @@
 (require SK.Core)
 (import SK.Core)
 
-(macrolet ((use (idecl)
+(macrolet ((use idecl
              `(begin
-                (require ,idecl)
-                (import ,idecl))))
+                (require ,@idecl)
+                (import ,@idecl))))
   (use Control.Monad)
-  (use (qualified Data.ByteString.Char8 as BS.C8))
+  (use qualified Data.ByteString.Char8 as BS.C8)
   (use Data.Foldable)
   (use Data.Function)
   (use Data.List)

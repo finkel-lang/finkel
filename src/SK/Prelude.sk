@@ -3,6 +3,6 @@
 (module SK.Prelude
   (module All))
 
-(import (Prelude as All))
-(import (Language.SK as All))
-(import (SK.Core as All))
+(import Prelude as All)
+(import Language.SK as All)
+(import SK.Core as All)

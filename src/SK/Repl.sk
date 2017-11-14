@@ -17,6 +17,7 @@
 (import Control.Concurrent
         ((MVar) (ThreadId) forkIO killThread newEmptyMVar
                 putMVar takeMVar))
+(import Control.Exception ((AsyncException ..)))
 (import Control.Monad (void))
 (import Control.Monad.IO.Class ((MonadIO ..)))
 (import Data.List (intercalate intersperse nubBy))
@@ -26,7 +27,7 @@
 
 ;; bytestring
 (import Data.ByteString.Builder (stringUtf8 toLazyByteString))
-(import (qualified Data.ByteString.Lazy.Char8 as BS))
+(import qualified Data.ByteString.Lazy.Char8 as BS)
 
 ;; haskeline
 (import System.Console.Haskeline)
@@ -44,14 +45,14 @@
 (import Language.SK.Reader)
 (import Language.SK.Run)
 (import Language.SK.Syntax)
-(import (qualified Paths_sk_kernel))
+(import qualified Paths_sk_kernel)
 
 ;; internal
 (import SK.Core)
 (import SK.Repl.Env)
 (import SK.Repl.GHC)
 (import SK.Repl.Macro)
-(import (qualified Paths_sk_lang))
+(import qualified Paths_sk_lang)
 
 
 ;;; Repl, state, and result types
@@ -83,29 +84,30 @@
 
 (type Result (Either String String))
 
+
 
 ;;; Main
 
-(defn (replMain (IO ()))
+(defdo (replMain (IO ()))
   ()
-  (do (<- in-mv newEmptyMVar)
-      (<- out-mv newEmptyMVar)
-      (let ((= skc (runSkc (eval-loop in-mv out-mv) repl-env))))
-      (<- eval-tid (forkIO (void skc)))
-      (let ((= reader (read-print-loop in-mv out-mv eval-tid))
-            (= reader' (runInputT defaultSettings reader))
-            (= init-form
-              '(begin
-                (require SK.Prelude)
-                (require SK.Repl.Env)
-                (require SK.Repl.Macro)
-                (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
-      (putStrLn
-       (concat ["SK REPL (sk-lang " (showVersion Paths_sk_lang.version)
-                ", sk-kernel " (showVersion Paths_sk_kernel.version)
-                ")"]))
-      (putMVar in-mv init-form)
-      (run-repl reader' initial-repl-state)))
+  (<- in-mv newEmptyMVar)
+  (<- out-mv newEmptyMVar)
+  (let ((= skc (runSkc (eval-loop in-mv out-mv) repl-env))))
+  (<- eval-tid (forkIO (void skc)))
+  (let ((= reader (read-print-loop in-mv out-mv eval-tid))
+        (= reader' (runInputT defaultSettings reader))
+        (= init-form
+          '(begin
+            (require SK.Prelude)
+            (require SK.Repl.Env)
+            (require SK.Repl.Macro)
+            (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
+  (putStrLn
+   (concat ["SK REPL (sk-lang " (showVersion Paths_sk_lang.version)
+            ", sk-kernel " (showVersion Paths_sk_kernel.version)
+            ")"]))
+  (putMVar in-mv init-form)
+  (run-repl reader' initial-repl-state))
 
 (:: repl-env SkEnv)
 (= repl-env
@@ -134,19 +136,30 @@
 ;;; Tracks the state of intermediate S-expression from input, and
 ;;; continue reading the input until successful parse result.
 (:: read-print-loop
-  (-> (MVar Code) (MVar String) ThreadId (InputT Repl ())))
+  (-> (MVar Code) (MVar Result) ThreadId (InputT Repl ())))
 (= read-print-loop to-mvar from-mvar eval-tid
   (let ((= print-io
-          (do (<- str (takeMVar from-mvar))
-              (putStr str)
-              (hFlush stdout)))
+          (do (<- result (liftIO (takeMVar from-mvar)))
+              (case result
+                (Right str) (outputStr str)
+                (Left str)   (outputStr str))
+              (liftIO (hFlush stdout))))
         (= go
-          (do (<- st (lift get-repl-state))
+          (do (<- st0 (lift get-repl-state))
               (let ((= prompt
-                      (if (null (pending-input st))
+                      (if (null (pending-input st0))
                           "> "
                           ""))))
-              (<- mb-input (getInputLine prompt))
+              (<- mb-input
+                ;; Handle interrupt signals thrown while waiting for
+                ;; input, to handle `Ctrl-C' key presses without valid
+                ;; evaluation form, and refresh intermediate user inputs
+                ;; in Repl state.
+                (handleInterrupt
+                 (lift (do (<- st1 get-repl-state)
+                           (put-repl-state (st1 {pending-input []}))
+                           (return (Just []))))
+                 (getInputLine prompt)))
               (case mb-input
                 Nothing     quit
                 (Just line) (| ((== line "(quit)") quit)
@@ -156,19 +169,20 @@
           (do (<- mb-form (lift (read-form line)))
               (case mb-form
                 Nothing     go
-                (Just form) (do (liftIO (do (putMVar to-mvar form)
-                                            print-io))
+                (Just form) (do (liftIO (putMVar to-mvar form))
+                                print-io
                                 go))))
         (= quit
           (liftIO (killThread eval-tid)))
         (= loop
           (handleInterrupt
-           (do (outputStrLn "Interrupd")
+           (do (throwTo eval-tid UserInterrupt)
+               print-io
                loop)
            go)))
     ;; Print the result from boot expression, then start the loop.
-    (do (liftIO print-io)
-        (withInterrupt loop))))
+    (withInterrupt
+     (>> print-io loop))))
 
 ;;; Read single S-expression form.
 (:: read-form (-> String (Repl (Maybe Code))))
@@ -189,7 +203,7 @@
 
 ;;; Eval
 
-(:: eval-loop (-> (MVar Code) (MVar String) (Skc ())))
+(:: eval-loop (-> (MVar Code) (MVar Result) (Skc ())))
 (= eval-loop in-mvar out-mvar
   (let ((= initialize
           ;; Default target in interactive context is `HscAsm',
@@ -203,21 +217,30 @@
               (void (setSessionDynFlags dflags2))
               (<- (Session session) (fromGhc (Ghc return)))
               (liftIO (putTheHscEnv session))))
-        (= with-handler m
+        (= withAsyncHandler
+          (ghandle
+           (\ e
+             (do (liftIO
+                  (case e
+                    UserInterrupt (return ())
+                    ThreadKilled  (return ())
+                    _             (putStrLn
+                                   (++ "eval-loop: got " (show e)))))
+                 go))))
+        (= withSkHandler m
           (skErrorHandler defaultFatalMessager
                           defaultFlushOut
                           (withSourceErrorHandling m)))
-        (= go (do (<- form (liftIO (takeMVar in-mvar)))
-                  (<- ret (with-handler
-                           (do (<- expanded (expands [form]))
-                               (eval-form expanded))))
-                  (let ((= str (case ret
-                                 (Right r) r
-                                 (Left err) err))))
-                  (<- (Session session) (fromGhc (Ghc return)))
-                  (liftIO (putTheHscEnv session))
-                  (liftIO (putMVar out-mvar str))
-                  go)))
+        (= go
+          (withAsyncHandler
+           (do (<- form (liftIO (takeMVar in-mvar)))
+               (<- ret (withSkHandler
+                        (do (<- expanded (expands [form]))
+                            (eval-form expanded))))
+               (<- (Session session) (fromGhc (Ghc return)))
+               (liftIO (do (putTheHscEnv session)
+                           (putMVar out-mvar ret)))
+               go))))
     (>> initialize go)))
 
 (:: eval-form (-> [Code] (Skc Result)))
@@ -239,7 +262,8 @@
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
       (case stmt1
         (Just (, is h f)) (update-hsc-env hsc-env is h f)
-        Nothing           (return (Left "eval-statement: no result")))))
+        Nothing           (return (Left
+                                   "eval-statement: no result")))))
 
 (:: eval-imports (-> [HImportDecl] (Skc Result)))
 (= eval-imports imports
@@ -303,7 +327,7 @@
           (case serialized
             (EOtherException str) (return (Left str))
             (EExitCode ecode)     (liftIO (exitWith ecode))
-            EUserInterrupt        (return (Right "Interrupt"))))
+            EUserInterrupt        (return (Left "Interrupt"))))
         (= incomplete
           (return (Left "update-hsc-env failed."))))
     (do (<- status (liftIO
