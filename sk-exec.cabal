@@ -1,7 +1,7 @@
-name:                sk-repl
+name:                sk-exec
 version:             0.1.0.0
-synopsis:            SK REPL
-description:         SK REPL
+synopsis:            SK executables
+description:         SK executables
 homepage:            https://github.com/githubuser/sk-repl#readme
 license:             BSD3
 license-file:        LICENSE
@@ -13,15 +13,25 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
--- Ghc option `-dynamic' is mandatory for runtime HValue lookup.  This
--- is required for shareing the compiled result with object code and
--- the expressions typed in from the REPL.
+-- REPL executable. Ghc option `-dynamic' is mandatory for runtime
+-- HValue lookup.  This is required for shareing the compiled result
+-- with object code and the expressions typed in from the REPL.
 executable sk
   hs-source-dirs:      app
-  main-is:             Main.hs
+  main-is:             repl.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , sk-lang
+  default-language:    Haskell2010
+
+-- SK compiler executable, includes macros defined in SK.Core by
+-- default.
+executable skc
+  hs-source-dirs:      app
+  main-is:             skc.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , sk-kernel
   default-language:    Haskell2010
 
 source-repository head
