@@ -74,9 +74,9 @@ flag dynamic
   description:         Link dynamically
   default:             False
 
-executable skc
+executable skkc
   hs-source-dirs:      exec
-  main-is:             skc.hs
+  main-is:             skkc.hs
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   if flag(dynamic)
     ghc-options:       -dynamic

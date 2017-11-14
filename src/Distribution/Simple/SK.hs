@@ -7,8 +7,8 @@ module Distribution.Simple.SK
   , defaultMainWithHooks
 
   -- * UserHooks
-  , skcHooks
-  , skcDebugHooks
+  , skkcHooks
+  , skkcDebugHooks
   , sk2hsHooks
   , stackSk2hsHooks
   , registerSkHooks
@@ -42,15 +42,15 @@ import Distribution.Simple.Setup
 --
 -----------------------------------------------------------------------
 
--- | A UserHooks to compile SK codes with "skc" executable found on
+-- | A UserHooks to compile SK codes with "skkc" executable found on
 -- system.
-skcHooks :: UserHooks
-skcHooks = skcHooksWith "skc" False
+skkcHooks :: UserHooks
+skkcHooks = skcHooksWith "skkc" False
 
 -- | UserHooks almost same as'skcHooks', but with SK debug flag turned
 -- on.
-skcDebugHooks :: UserHooks
-skcDebugHooks = skcHooksWith "skc" True
+skkcDebugHooks :: UserHooks
+skkcDebugHooks = skcHooksWith "skkc" True
 
 -- | A 'UserHooks' to compile SK codes with given executable.
 skcHooksWith :: String -> Bool -> UserHooks
@@ -65,13 +65,13 @@ registerSkHooks = simpleUserHooks {
    hookedPreProcessors = [registerSkPPHandler]
  }
 
--- | Hooks to preprocess @"*.sk"@ files with "skc" found on system.
+-- | Hooks to preprocess @"*.sk"@ files with "skkc" found on system.
 sk2hsHooks :: UserHooks
 sk2hsHooks = simpleUserHooks {
     hookedPreProcessors = [("sk", mkSk2hsPP sk2hsProgram)]
   }
 
--- | Hooks to preprocess @"*.sk"@ files with "skc" via "stack".
+-- | Hooks to preprocess @"*.sk"@ files with "skkc" via "stack".
 stackSk2hsHooks :: UserHooks
 stackSk2hsHooks = simpleUserHooks {
     hookedPreProcessors = [("sk", mkSk2hsPP stackSk2hsProgram)]
@@ -152,11 +152,11 @@ mkSk2hsPP program _ _ _ = PreProcessor
 sk2hsProgram :: ConfiguredProgram
 sk2hsProgram = sk2hs {programDefaultArgs = args}
   where
-    sk2hs = simpleConfiguredProgram "skc" (FoundOnSystem "skc")
+    sk2hs = simpleConfiguredProgram "skkc" (FoundOnSystem "skkc")
     args = ["--sk-hsrc", "--sk-no-typecheck"]
 
 stackSk2hsProgram :: ConfiguredProgram
 stackSk2hsProgram = stack {programDefaultArgs = args}
   where
     stack = simpleConfiguredProgram "stack" (FoundOnSystem "stack")
-    args = ["exec", "skc", "--", "--sk-hsrc", "--sk-no-typecheck"]
+    args = ["exec", "skkc", "--", "--sk-hsrc", "--sk-no-typecheck"]

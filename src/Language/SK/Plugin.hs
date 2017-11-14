@@ -39,7 +39,7 @@ import Language.SK.SKC
 
 frontendPlugin :: FrontendPlugin
 frontendPlugin =
-  defaultFrontendPlugin {frontend = makeSkFrontend "skc" []}
+  defaultFrontendPlugin {frontend = makeSkFrontend "skkc" []}
 
 -- | Make a frontend plugin.
 makeSkFrontend :: String -- ^ Name of executable.
