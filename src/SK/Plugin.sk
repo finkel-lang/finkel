@@ -20,4 +20,4 @@
   (defn (frontendPlugin FrontendPlugin)
     ()
     (defaultFrontendPlugin
-     {frontend (makeSkFrontend "skcc" (core-macros))})))
+     {frontend (makeSkFrontend "skc" (core-macros))})))

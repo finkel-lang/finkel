@@ -4,11 +4,11 @@
 
 (module SK.Setup
   defaultMainWithHooks
-  skccHooks)
+  skcHooks)
 
 ;; sk-kernel
 (import Distribution.Simple.SK)
 
-(defn (skccHooks UserHooks)
+(defn (skcHooks UserHooks)
   ()
-  (skcHooksWith "skcc" False))
+  (skcHooksWith "skc" False))
