@@ -92,16 +92,18 @@
   ()
   (<- in-mv newEmptyMVar)
   (<- out-mv newEmptyMVar)
-  (let ((= skc (runSkc (eval-loop in-mv out-mv) repl-env))))
-  (<- eval-tid (forkIO (void skc)))
+  (<- eval-tid
+    (forkIO (void (runSkc (eval-loop in-mv out-mv) repl-env))))
   (let ((= reader (read-print-loop in-mv out-mv eval-tid))
         (= reader' (runInputT defaultSettings reader))
         (= init-form
           '(begin
+            (require Prelude)
             (require SK.Prelude)
             (require SK.Repl.Env)
             (require SK.Repl.Macro)
-            (putStrLn "REPL ready, hit `Ctrl-d' to exit.")))))
+            (putStrLn
+             "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))))
   (putStrLn
    (concat ["SK REPL (sk-lang " (showVersion Paths_sk_lang.version)
             ", sk-kernel " (showVersion Paths_sk_kernel.version)
@@ -111,10 +113,12 @@
 
 (:: repl-env SkEnv)
 (= repl-env
-  (where (initialSkEnv {envContextModules modules
-                        envDefaultMacros defaultMacros})
-    (= modules ["SK.Prelude" "SK.Repl.Env" "SK.Repl.Macro"])
-    (= defaultMacros (mergeMacros specialForms replMacros))))
+  (let ((= modules
+          ["Prelude" "SK.Prelude" "SK.Repl.Env" "SK.Repl.Macro"])
+        (= defaultMacros
+          (mergeMacros specialForms replMacros)))
+    (initialSkEnv {envContextModules modules
+                   envDefaultMacros defaultMacros})))
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.
