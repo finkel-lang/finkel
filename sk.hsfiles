@@ -18,13 +18,14 @@ cabal-version:       >=2.0
 custom-setup
   setup-depends:       base >= 4.7 && < 5
                      , Cabal >= 2.0
-                     , sk-kernel
+                     , sk-lang
 
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
   build-depends:       base >= 4.7 && < 5
                      , sk-kernel
+                     , sk-lang
   default-language:    Haskell2010
 
 executable {{name}}
@@ -32,7 +33,6 @@ executable {{name}}
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
-                     , sk-kernel
                      , {{name}}
   default-language:    Haskell2010
 
@@ -41,7 +41,7 @@ test-suite {{name}}-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
-                     , sk-kernel
+                     , sk-lang
                      , {{name}}
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
@@ -52,7 +52,7 @@ test-suite {{name}}-test
 
 {-# START_FILE Setup.hs #-}
 module Main where
-import Distribution.Simple.SK
+import SK.Setup
 main :: IO ()
 main = defaultMainWithHooks skcHooks
 
@@ -64,8 +64,9 @@ main = putStrLn "Test suite not yet implemented"
 (module Lib
   someFunc)
 
-(:: someFunc (IO ()))
-(= someFunc (putStrLn "someFunc"))
+(defn (someFunc (IO ()))
+  ()
+  (putStrLn "someFunc"))
 
 {-# START_FILE app/Main.hs #-}
 module Main where
