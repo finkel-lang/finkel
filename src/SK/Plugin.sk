@@ -16,7 +16,7 @@
 (macrolet* ((core-macros ()
               (return
                 `[,@(map (\ mac (, mac (aSymbol mac)))
-                         (exported-macros SK.Core))])))
+                         (exported-macros SK.Prelude))])))
   (defn (frontendPlugin FrontendPlugin)
     ()
     (defaultFrontendPlugin
