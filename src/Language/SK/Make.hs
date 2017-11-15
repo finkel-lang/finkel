@@ -154,12 +154,12 @@ partitionRequired :: [String] -> [TargetUnit]
                   -> ([TargetUnit], [TargetUnit])
 partitionRequired homePkgModules = foldr f ([],[])
   where
-    f (source,mbp) (r,p) =
+    f (target@(source,_)) (ready,pending) =
       case source of
         SkSource _ _ _ sp
           | any (`elem` homePkgModules) (requiredModuleNames sp)
-          -> (r,(source,mbp):p)
-        _ -> ((source,mbp):r, p)
+          -> (ready,target:pending)
+        _ -> (target:ready, pending)
 
 -- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule', then compile
 -- to interface file, and object code.
