@@ -24,7 +24,7 @@ executable sk
                      , sk-lang
   default-language:    Haskell2010
 
--- SK compiler executable, includes macros defined in SK.Core by
+-- SK compiler executable, includes macros defined in SK.Prelude by
 -- default.
 executable skc
   hs-source-dirs:      app
