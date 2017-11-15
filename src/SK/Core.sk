@@ -268,6 +268,46 @@
                              (show name))))))
 
 
+;;; Cxrs
+
+(defn (car (-> Code Code))
+  ((LForm (L l code)))
+  (case code
+    (List (: x _xs)) x
+    _                (LForm (L l (List [])))))
+
+(defn (cdr (-> Code Code))
+  ((LForm (L l code)))
+  (case code
+    (List (: _ xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
+                      (case xs
+                        [] (LForm (L l' (List [])))
+                        _  (LForm (L l' (List xs)))))
+    _               (LForm (L l (List [])))))
+
+(eval-when (compile)
+  (defn (ads [String])
+    ()
+    (let ((= f (concatMap (\ x [(: \a x) (: \d x)]))))
+      (concat (take 3 (tail (iterate f [[\a] [\d]]))))))
+
+  (defn (cxr-name (-> String Code))
+    (x)
+    (toCode (aSymbol (concat ["c" x "r"]))))
+
+  (defn (cxr (-> String [Code]))
+    (xs)
+    [`(defn (,(cxr-name xs) (-> Code Code))
+        ()
+        (. ,(cxr-name [(head xs)]) ,(cxr-name (tail xs))))
+     `##(INLINABLE ,(cxr-name xs))]))
+
+(macrolet ((cxrs ()
+             `(begin
+                ,@(concatMap cxr ads))))
+  (cxrs))
+
+
 ;;; List
 
 ;;; Extend the second argument with the first argument by appending to
@@ -293,21 +333,6 @@
     (case (unLocLForm form)
       (List (: _ args)) (return (body args))
       _                 (skSrcError form "list: invalid args"))))
-
-(defn (car (-> Code Code))
-  ((LForm (L l code)))
-  (case code
-    (List (: x _xs)) x
-    _                (LForm (L l (List [])))))
-
-(defn (cdr (-> Code Code))
-  ((LForm (L l code)))
-  (case code
-    (List (: _ xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
-                      (case xs
-                        [] (LForm (L l' (List [])))
-                        _  (LForm (L l' (List xs)))))
-    _               (LForm (L l (List [])))))
 
 ;;; Apply given function to immediate elements of `List' and `HsList'.
 (defn (mapcar (-> (-> Code Code) Code Code))
