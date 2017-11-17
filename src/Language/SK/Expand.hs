@@ -75,16 +75,17 @@ quote orig@(LForm (L l form))  =
 quasiquote :: Code -> Code
 quasiquote orig@(LForm (L l form)) =
   case form of
-    List [LForm (L _ (Atom (ASymbol "unquote"))), x] ->
-      tList l [tSym l "toCode", x]
+    List [LForm (L _ (Atom (ASymbol "unquote"))), x]
+      | isUnquoteSplice x -> x
+      | otherwise         -> tList l [tSym l "toCode", x]
     List forms'
-       | [q, body] <- forms'
-       , q == tSym l "quasiquote"   -> quasiquote (quasiquote body)
-       | any isUnquoteSplice forms' -> splicedList "List" forms'
-       | otherwise                  -> nonSplicedList "List" forms'
+      | [q, body] <- forms'
+      , q == tSym l "quasiquote"   -> quasiquote (quasiquote body)
+      | any isUnquoteSplice forms' -> splicedList "List" forms'
+      | otherwise                  -> nonSplicedList "List" forms'
     HsList forms'
-       | any isUnquoteSplice forms' -> splicedList "HsList" forms'
-       | otherwise                  -> nonSplicedList "HsList" forms'
+      | any isUnquoteSplice forms' -> splicedList "HsList" forms'
+      | otherwise                  -> nonSplicedList "HsList" forms'
     Atom atom                       -> quoteAtom l atom
     TEnd                            -> orig
   where
