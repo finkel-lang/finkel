@@ -13,18 +13,17 @@
 (import Test.QuickCheck)
 (import SK.Prelude)
 
-(defn (coreTests Spec) ()
-  (do (describe "Macro" macroTests)
-      (describe "Cxr" cxrTests)
-      (describe "List" listTests)))
+(defdo (coreTests Spec) ()
+  (describe "Macro" macroTests)
+  (describe "Cxr" cxrTests)
+  (describe "List" listTests))
 
 (defmacro m1 (x)
   `(++ "m1 " ,x))
 
 (defmacro expandTo (in out)
-  `(do (let ((= f (macroFunction ,(car in)))))
-       (<- e (f ',in))
-       (shouldBe e (Right ',out))))
+  `(do (<- e (macroFunction ,(car in) ',in))
+       (shouldBe (Right ',out) e)))
 
 (defn (macroTests Spec) ()
   (do (let ((= d describe)))

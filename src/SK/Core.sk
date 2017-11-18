@@ -74,7 +74,6 @@
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
   (= make-defmacro-body label whole name0 arg0 body0
     (let ((:: err (-> Code Code Code))
-          ;; (= err undefined)
           (= err form-name name
             `(skSrcError ,form-name
                          (concat

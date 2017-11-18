@@ -12,6 +12,7 @@
 (module SK.Repl)
 
 (require SK.Core)
+(require SK.Repl.Macro)
 
 ;; base
 (import Control.Concurrent
