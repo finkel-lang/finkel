@@ -20,6 +20,7 @@ module Language.SK.SKC
   , lookupMacro
   , makeEnvMacros
   , mergeMacros
+  , deleteMacro
   , macroNames
   , isMacro
   , gensym
@@ -171,6 +172,10 @@ makeEnvMacros = Map.fromList . map (\(n,m) -> (fsLit n, m))
 -- | Merge macros.
 mergeMacros :: EnvMacros -> EnvMacros -> EnvMacros
 mergeMacros = Map.union
+
+-- | Delete macro by macro name.
+deleteMacro :: FastString -> EnvMacros -> EnvMacros
+deleteMacro = Map.delete
 
 -- | All macros in given macro environment, filtering out the special
 -- forms.
