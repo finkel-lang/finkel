@@ -44,7 +44,7 @@
 
   (:: code->mb-string (-> Code (Maybe String)))
   (= code->mb-string code
-    (case (unLocLForm code)
+    (case (unCode code)
       (Atom (ASymbol sym)) (Just (unpackFS sym))
       (Atom (AString str)) (Just str)
       _                    Nothing))
@@ -98,7 +98,7 @@
         (= err
           (skSrcError form (++ "link-module: not a symbol: "
                                (show form)))))
-    (case (unLocLForm form)
+    (case (unCode form)
       (Atom (ASymbol sym)) (go sym)
       _                    err)))
 
@@ -204,7 +204,7 @@
                             (return '(begin)))
             Nothing     (val-err "Bool")))
         (= set-verbosity v
-          (case (unLocLForm v)
+          (case (unCode v)
             (Atom (AInteger n)) (set-dflags
                                  (\ d (d {verbosity (fromInteger n)})))
             _                   (val-err "Integer")))
@@ -216,7 +216,7 @@
             _           set-repl-err))
         (= set-repl-err
           (skSrcError key (++ "set-repl: unknown key: " (show key)))))
-    (case (unLocLForm key)
+    (case (unCode key)
       (Atom (ASymbol k)) (set-symbol k)
       _                  set-repl-err)))
 
@@ -410,7 +410,7 @@ COMMANDS:
               (return '(begin))))
         (= err
           (skSrcError form (++ "info: invalid form: " (show form)))))
-    (case (unLocLForm form)
+    (case (unCode form)
       (Atom (ASymbol sym)) (go sym)
       (List [q name])      (| ((|| (== q 'quote) (== q 'quasiquote))
                                (info-name name)))
@@ -457,7 +457,7 @@ COMMANDS:
              (otherwise err)))
         (= err
           (skSrcError form (++ "browse: invalid form: " (show form)))))
-    (case (unLocLForm form)
+    (case (unCode form)
       (Atom (ASymbol sym)) (go (unpackFS sym))
       _                    err)))
 

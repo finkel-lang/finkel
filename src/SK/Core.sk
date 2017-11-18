@@ -16,7 +16,7 @@
         (= compile? (elem 'compile))
         (:: load? (-> [Code] Bool))
         (= load? (elem 'load)))
-    (case (unLocLForm form)
+    (case (unCode form)
       (List (: _ (: (LForm (L _ (List phases))) body)))
       (| ((&& (compile? phases) (load? phases))
           (return
@@ -85,7 +85,7 @@
           (= atom-body name arg body form-name
             (if (null arg)
                 body
-                `(case (unLocLForm ,form-name)
+                `(case (unCode ,form-name)
                    (List (: _ ,arg)) ,body
                    _                 ,(err form-name name))))
 
@@ -117,17 +117,17 @@
   (= make-macrolet-body label whole f
     (let ((:: make-macro (-> Code (Skc Code)))
           (= make-macro code
-            (case (unLocLForm code)
+            (case (unCode code)
               (List [name arg body0])
               (do (<- body1 (make-defmacro-body label code name
                                                 arg (f body0)))
                   (let ((= the-form
-                          (case (unLocLForm arg)
+                          (case (unCode arg)
                             (Atom AUnit) '_
                             _            '*form*))))
                   (return `(,name ,the-form ,body1)))
               _ (skSrcError whole label))))
-      (case (unLocLForm whole)
+      (case (unCode whole)
         (List (: _ (: (LForm (L _ (List forms))) rest)))
         (do (<- macros (mapM make-macro forms))
             (return `(let-macro ,(List macros)
@@ -140,11 +140,11 @@
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
 (define-macro defmacro* form
-  (case (unLocLForm form)
+  (case (unCode form)
     (List [_ name arg body0])
     (do (<- body1 (make-defmacro-body "defmacro*" form name arg body0))
         (let ((= the-form
-                (case (unLocLForm arg)
+                (case (unCode arg)
                   (Atom AUnit) '_
                   _            '*form*))))
         (return
@@ -175,15 +175,16 @@
 ;;; function name, arguments, and body. Supports function declaration
 ;;; with and without type signature,
 (define-macro defn form
-  (case (unLocLForm form)
+  (case (unCode form)
     (List [_ sig args body])
-    (case (unLocLForm sig)
+    (case (unCode sig)
       (List [name tsig])
       (return `(begin (:: ,name ,tsig)
                       (= ,name ,@args ,body)))
 
       (Atom _)
       (return `(= ,sig ,@args ,body))
+
       _
       (skSrcError sig
                   (concat
@@ -200,7 +201,7 @@
 ;;; Macro to define a function with `defn', with wrapping the body
 ;;; expressions with `do'.
 (define-macro defdo form
-  (case (unLocLForm form)
+  (case (unCode form)
     (List (: _ (: name (: args body))))
     (return `(defn ,name ,args
                (do ,@body)))
@@ -221,7 +222,7 @@
 ;;; return the given form as is. Note that `macroexpand-1' and
 ;;; `macroexpand' are macro, not function.
 (defmacro* macroexpand-1 (form)
-  (case (unLocLForm form)
+  (case (unCode form)
     (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
                      (do (<- expanded (expand1 x))
                          (return `',expanded))))
@@ -230,7 +231,7 @@
 ;;; Macro for expanding macro. This version of `macroexpand' recursively
 ;;; expands all sub forms.
 (defmacro* macroexpand (form)
-  (case (unLocLForm form)
+  (case (unCode form)
     (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
                      (let ((= go expr
                              (do (<- expr' (expand1 expr))
@@ -259,7 +260,7 @@
                       (mapM lookupName (modInfoExports minfo)))
                     (<- dflags getDynFlags)
                     (return (foldr (f dflags) [] mb-things)))))))
-    (case (unLocLForm name)
+    (case (unCode name)
       (Atom (ASymbol _))
       (do (<- names0 (get-exported-names (symbolName name)))
           (let ((= names1 (toCode (map toCode names0)))))
@@ -330,7 +331,7 @@
         (:: body (-> [Code] Code))
         (= body args
           `(foldr cons nil [,@(List (codes args))])))
-    (case (unLocLForm form)
+    (case (unCode form)
       (List (: _ args)) (return (body args))
       _                 (skSrcError form "list: invalid args"))))
 
