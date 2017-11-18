@@ -283,7 +283,7 @@ b_fixityD dir (LForm (L l (Atom (AInteger n)))) syms = L l (SigD fsig)
 b_ffiD :: Code -> Code -> HCCallConv -> (Maybe (Located Safety), Code)
        -> (Code, HType) -> Builder HDecl
 b_ffiD (LForm (L l _)) imp_or_exp ccnv (mb_safety, ename) (nm, ty) =
-  case unLocLForm imp_or_exp of
+  case unCode imp_or_exp of
     Atom (ASymbol ie)
       | ie == "import"
       , Just ispec <- parseCImport ccnv safety name ename' source -> do

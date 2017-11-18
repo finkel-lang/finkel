@@ -16,7 +16,7 @@ module Language.SK.Form
   , toListL
 
   , unLoc
-  , unLocLForm
+  , unCode
   , genSrc
   , getLoc
   , showLoc
@@ -176,11 +176,11 @@ instance Foldable Form where
       List xs ->
         case xs of
           []   -> z
-          y:ys -> foldr f (foldr f z (List ys)) (unLocLForm y)
+          y:ys -> foldr f (foldr f z (List ys)) (unCode y)
       HsList xs ->
         case xs of
           []   -> z
-          y:ys -> foldr f (foldr f z (HsList ys)) (unLocLForm y)
+          y:ys -> foldr f (foldr f z (HsList ys)) (unCode y)
 
 instance NFData a => NFData (Form a) where
   rnf x =
@@ -198,8 +198,8 @@ instance Arbitrary a => Arbitrary (Form a) where
   shrink x =
     case x of
       Atom _    -> []
-      List xs   -> map unLocLForm xs ++ [List xs'|xs' <- shrink xs]
-      HsList xs -> map unLocLForm xs ++ [HsList xs'|xs' <- shrink xs]
+      List xs   -> map unCode xs ++ [List xs'|xs' <- shrink xs]
+      HsList xs -> map unCode xs ++ [HsList xs'|xs' <- shrink xs]
       TEnd      -> []
 
 instance CoArbitrary a => CoArbitrary (Form a) where
@@ -283,9 +283,9 @@ toListL orig@(LForm (L l form)) =
     HsList xs -> LForm (L l (List xs))
     _ -> LForm (L l (List [orig]))
 
-unLocLForm :: LForm a -> Form a
-unLocLForm (LForm (L _ a)) = a
-{-# INLINE unLocLForm #-}
+unCode :: LForm a -> Form a
+unCode (LForm (L _ a)) = a
+{-# INLINE unCode #-}
 
 mkSkSrcSpan :: String -> SrcSpan
 mkSkSrcSpan = UnhelpfulSpan . fsLit

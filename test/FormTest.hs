@@ -113,7 +113,7 @@ readShowFormProp =
 
 eqForm :: Code -> Code -> Bool
 eqForm a b =
-  case (unLocLForm a, unLocLForm b) of
+  case (unCode a, unCode b) of
     -- Ignoring rounding error for fractional literals.
     (Atom (AFractional x), Atom (AFractional y))
       -> abs (fl_value x - fl_value y) <= toRational epsilon

@@ -79,7 +79,7 @@
     (print (m2 1 2 3))))
 
 (let-macro ((identity-form form
-              (case (unLocLForm form)
+              (case (unCode form)
                 (List [_ body]) (return body))))
   (identity-form
    (define-macro m4 _
@@ -89,7 +89,7 @@
 (= m4run (m4))
 
 (define-macro m5 form
-  (case (unLocLForm form)
+  (case (unCode form)
     (List [_ arg1 body])
     (do (<- tmp gensym)
         (return `(let ((= ,tmp (* ,arg1 2)))

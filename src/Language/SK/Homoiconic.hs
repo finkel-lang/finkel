@@ -40,39 +40,39 @@ class Homoiconic a where
      in  LForm (L l (HsList xs'))
 
   listFromCode :: Code -> Maybe [a]
-  listFromCode xs = case unLocLForm xs of
+  listFromCode xs = case unCode xs of
                       HsList as -> mapM fromCode as
                       _         -> Nothing
 
 instance Homoiconic () where
   toCode _ = LForm (genSrc (Atom AUnit))
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       Atom AUnit -> Just ()
       _          -> Nothing
 
 instance Homoiconic Char where
   toCode = LForm . genSrc . Atom . AChar
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       Atom (AChar x)  -> Just x
       _               -> Nothing
   listToCode = LForm . genSrc . Atom . AString
-  listFromCode a = case unLocLForm a of
+  listFromCode a = case unCode a of
                      Atom (AString s) -> Just s
                      _                -> Nothing
 
 instance Homoiconic Int where
   toCode = LForm . genSrc . Atom . AInteger . fromIntegral
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       Atom (AInteger n) -> Just (fromIntegral n)
       _                 -> Nothing
 
 instance Homoiconic Integer where
   toCode = LForm . genSrc . Atom . AInteger
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       Atom (AInteger n) -> Just n
       _                 -> Nothing
 
@@ -91,13 +91,13 @@ instance Homoiconic a => Homoiconic [a] where
 instance Homoiconic Atom where
   toCode = LForm . genSrc . Atom
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       Atom x -> Just x
       _      -> Nothing
 
 instance Homoiconic (Form Atom) where
   toCode = LForm . genSrc
-  fromCode = Just . unLocLForm
+  fromCode = Just . unCode
 
 instance Homoiconic (LForm Atom) where
   toCode = id
@@ -106,7 +106,7 @@ instance Homoiconic (LForm Atom) where
 instance Homoiconic Bool where
   toCode = showAsSymbolCode
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       Atom (ASymbol sym) | sym == "True"  -> Just True
                          | sym == "False" -> Just False
       _                                   -> Nothing
@@ -114,7 +114,7 @@ instance Homoiconic Bool where
 instance Homoiconic Ordering where
   toCode = showAsSymbolCode
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       Atom (ASymbol sym) | sym == "EQ" -> Just EQ
                          | sym == "LT" -> Just LT
                          | sym == "GT" -> Just GT
@@ -126,7 +126,7 @@ instance Homoiconic a => Homoiconic (Maybe a) where
       Nothing -> toCode (aSymbol "Nothing")
       Just x  -> toCode (List [toCode (aSymbol "Just"), toCode x])
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       Atom (ASymbol "Nothing") -> Just Nothing
       List [LForm (L _ (Atom (ASymbol "Just"))), x] -> Just (fromCode x)
       _                                             -> Nothing
@@ -137,7 +137,7 @@ instance (Homoiconic a, Homoiconic b) => Homoiconic (Either a b) where
       Right x -> toCode (List [symbolCode "Right", toCode x])
       Left x  -> toCode (List [symbolCode "Left", toCode x])
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       List [LForm (L _ (Atom (ASymbol x))), y]
         | x == "Right" -> fmap Right (fromCode y)
         | x == "Left"  -> fmap Left (fromCode y)
@@ -147,7 +147,7 @@ instance (Homoiconic a, Homoiconic b) => Homoiconic (a, b) where
   toCode (a1, a2) =
     toCode (List [symbolCode ",", toCode a1, toCode a2])
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2]
         -> (\b1 b2 -> (b1, b2)) <$>
            fromCode a1 <*> fromCode a2
@@ -158,7 +158,7 @@ instance (Homoiconic a, Homoiconic b, Homoiconic c)
   toCode (a1, a2, a3) =
     toCode (List [symbolCode ",", toCode a1, toCode a2, toCode a3])
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3]
         -> (\b1 b2 b3 -> (b1, b2, b3)) <$>
            fromCode a1 <*> fromCode a2 <*> fromCode a3
@@ -170,7 +170,7 @@ instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d)
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4])
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4]
         -> (\b1 b2 b3 b4 -> (b1, b2, b3, b4)) <$>
            fromCode a1 <*> fromCode a2 <*> fromCode a3 <*> fromCode a4
@@ -183,7 +183,7 @@ instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d,
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4, toCode a5])
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4, a5]
         -> (\b1 b2 b3 b4 b5 -> (b1, b2, b3, b4, b5)) <$>
            fromCode a1 <*> fromCode a2 <*> fromCode a3 <*>
@@ -197,7 +197,7 @@ instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d,
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4, toCode a5, toCode a6])
   fromCode a =
-    case unLocLForm a of
+    case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4, a5, a6]
         -> (\b1 b2 b3 b4 b5 b6 -> (b1, b2, b3, b4, b5, b6)) <$>
            fromCode a1 <*> fromCode a2 <*> fromCode a3 <*>
@@ -217,7 +217,7 @@ realFracToCode a =
 
 codeToFractional :: Fractional a => Code -> Maybe a
 codeToFractional a =
-  case unLocLForm a of
+  case unCode a of
     Atom (AFractional x) -> Just (fromRational (fl_value x))
     _                    -> Nothing
 

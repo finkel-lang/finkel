@@ -116,7 +116,7 @@ isUnquoteSplice (LForm form) =
 
 unquoteSplice :: Homoiconic a => a -> [Code]
 unquoteSplice form =
-  case unLocLForm (toCode form) of
+  case unCode (toCode form) of
     List xs           -> xs
     HsList xs         -> xs
     Atom AUnit        -> []
@@ -240,7 +240,7 @@ m_defineMacro form@(LForm (L l _)) = do
   return (tList l (tSym l "begin":decls))
   where
     add x =
-      case unLocLForm x of
+      case unCode x of
         List [_,self,arg,body] -> compileMacro x self arg body
         _ -> skSrcError form ("define-macro: malformed args:\n" ++
                               show x)
@@ -268,7 +268,7 @@ m_letMacro form =
     _ -> skSrcError form ("let-macro: malformed args:\n" ++ show form)
   where
     addLetMacro x =
-      case unLocLForm x of
+      case unCode x of
         List [self,arg,body] -> do
           (name, _decl, macro) <- compileMacro x self arg body
           return (name, macro)
@@ -372,27 +372,27 @@ withExpanderSettings act =
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
 boundedNames form =
-  case unLocLForm form of
+  case unCode form of
     List xs          -> concatMap boundedName xs
     Atom (ASymbol n) -> [n]
     _                -> []
 
 boundedName :: Code -> [FastString]
 boundedName form =
-  case unLocLForm form of
+  case unCode form of
     List ((LForm (L _ (Atom (ASymbol "=")))):n:_) -> boundedNameOne n
     _                                             -> []
 
 boundedNameOne :: Code -> [FastString]
 boundedNameOne form =
-  case unLocLForm form of
+  case unCode form of
     Atom (ASymbol n) -> [n]
     List ns          -> concatMap f ns
     HsList ns        -> concatMap f ns
     _                -> []
   where
     f x =
-      case unLocLForm x of
+      case unCode x of
         Atom (ASymbol n) | isLower (headFS n) -> [n]
         _                                     -> []
 
