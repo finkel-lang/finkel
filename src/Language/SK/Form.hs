@@ -193,8 +193,8 @@ instance NFData a => NFData (Form a) where
 instance Arbitrary a => Arbitrary (Form a) where
   arbitrary =
     oneof [Atom <$> arbitrary
-          ,List <$> listOf (scale (`div` 2) arbitrary)
-          ,HsList <$> listOf (scale (`div` 2) arbitrary)]
+          ,List <$> listOf (scale (`div` 3) arbitrary)
+          ,HsList <$> listOf (scale (`div` 3) arbitrary)]
   shrink x =
     case x of
       Atom _    -> []
