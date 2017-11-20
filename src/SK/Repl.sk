@@ -51,7 +51,7 @@
 ;; internal
 (import SK.Core)
 (import SK.Repl.Env)
-(import SK.Repl.GHC)
+(import SK.Repl.GHC hiding (isGoodSrcSpan load))
 (import SK.Repl.Macro)
 (import qualified Paths_sk_lang)
 

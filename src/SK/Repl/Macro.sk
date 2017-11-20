@@ -104,7 +104,7 @@
 
 ;;; Load a module source code file. Handles absolute paths and relative
 ;;; paths from import directories.
-(defmacro* load-file (form)
+(defmacro* load (form)
   (let ((= find-file idirs path
           (if (isAbsolute path)
               (find-absolute idirs path)
@@ -119,7 +119,7 @@
                            (return dir)))
               (find-file dirs (makeRelative dir' path))))
         (= cant-find-err file
-          (skSrcError form (++ "load-file: cannot find: " file)))
+          (skSrcError form (++ "load: cannot find: " file)))
         ;; From `GhcMake.discardIC'.
         (= discardIC hsc-env
           (let ((= empty-ic (emptyInteractiveContext dflags))
@@ -142,17 +142,17 @@
           (do (<- graph0 getModuleGraph)
               (<- _ abandonAll)
               (<- _ (setTargets []))
-              (<- _ (load LoadAllTargets))
+              (<- _ (SK.Repl.GHC.load LoadAllTargets))
               (<- hsc-env getSession)
               (let ((= uncache
                       (. (uncacheModule hsc-env) ms_mod_name))))
               (liftIO (do (mapM_ uncache graph0)
                           (flushFinderCaches hsc-env)))
               (setSession (discardIC hsc-env)))))
-    (maybe (skSrcError form (++ "load-file: not a FilePath: "
+    (maybe (skSrcError form (++ "load: not a FilePath: "
                                 (show form)))
            (\ path
-             (do (liftIO (putStrLn (++ "; load-file: " path)))
+             (do (liftIO (putStrLn (++ "; load: " path)))
                  ;; Clear current state first.
                  (clear-all)
                  ;; Find the source file path and compile, load, and
@@ -223,6 +223,27 @@
 ;;; Alias macro for a `set-repl' sub-command `cwd'.
 (defmacro cd (path)
   `(set-repl cwd ,path))
+
+(defmacro* pwd ()
+  (do (liftIO (>>= getCurrentDirectory putStrLn))
+      (return '(begin))))
+
+(define-macro ls forms
+  (do (<- path
+        (case (unCode forms)
+          (List [_ (LForm (L _ (Atom (AString s))))])
+          (return s)
+
+          (List [_ (LForm (L _ (Atom (ASymbol s))))])
+          (return (unpackFS s))
+
+          (List [_])
+          (return "./")
+
+          _
+          (skSrcError forms (++ "ls: invalid path: " (show forms)))))
+      (liftIO (>>= (getDirectoryContents path) (mapM_ putStrLn)))
+      (return '(begin))))
 
 ;;; Functions for `info' macro.
 (eval-when (compile load)
