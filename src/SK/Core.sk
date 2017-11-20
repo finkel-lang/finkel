@@ -3,9 +3,12 @@
 (module SK.Core)
 
 (require Language.SK.GHC)
+(require Control.Monad (foldM))
 
 (import Language.SK)
 (import Language.SK.GHC)
+(import Control.Monad (foldM))
+
 
 
 ;;; Basic
@@ -270,13 +273,13 @@
 
 ;;; Cxrs
 
-(defn (car (-> Code Code))
+(defn+ (car (-> Code Code))
   ((LForm (L l code)))
   (case code
     (List (: x _xs)) x
     _                (LForm (L l (List [])))))
 
-(defn (cdr (-> Code Code))
+(defn+ (cdr (-> Code Code))
   ((LForm (L l code)))
   (case code
     (List (: _ xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
@@ -285,26 +288,26 @@
                         _  (LForm (L l' (List xs)))))
     _               (LForm (L l (List [])))))
 
-(eval-when (compile)
-  (defn (ads [String])
-    ()
+(eval-when-compile
+  (:: ads [String])
+  (= ads
     (let ((= f (concatMap (\ x [(: \a x) (: \d x)]))))
       (concat (take 3 (tail (iterate f [[\a] [\d]]))))))
 
-  (defn (cxr-name (-> String Code))
-    (x)
+  (:: cxr-name (-> String Code))
+  (= cxr-name x
     (toCode (aSymbol (concat ["c" x "r"]))))
 
-  (defn (cxr (-> String [Code]))
-    (xs)
-    [`(defn (,(cxr-name xs) (-> Code Code))
-        ()
+  (:: cxr (-> String [Code]))
+  (= cxr xs
+    [`(:: ,(cxr-name xs) (-> Code Code))
+     `(= ,(cxr-name xs)
         (. ,(cxr-name [(head xs)]) ,(cxr-name (tail xs))))
      `##(INLINABLE ,(cxr-name xs))]))
 
-(macrolet ((cxrs ()
-             `(begin
-                ,@(concatMap cxr ads))))
+(let-macro ((cxrs _
+              (return `(begin
+                         ,@(concatMap cxr ads)))))
   (cxrs))
 
 
@@ -335,7 +338,7 @@
       _                 (skSrcError form "list: invalid args"))))
 
 ;;; Apply given function to immediate elements of `List' and `HsList'.
-(defn (mapcar (-> (-> Code Code) Code Code))
+(defn+ (mapcar (-> (-> Code Code) Code Code))
   (f (@ form (LForm (L l lst))))
   (case lst
     (List xs)   (LForm (L l (List (map f xs))))
@@ -343,7 +346,7 @@
     _           (error (++ "mapcar: not a list " (show form)))))
 
 ;;; Append two lists.
-(defn (append (-> Code Code Code))
+(defn+ (append (-> Code Code Code))
   (xs ys)
   (if (null xs)
       ys
@@ -359,6 +362,13 @@
     (List []) True
     _         False))
 
+(defn (pair? (-> Code Bool))
+  ((LForm (L _ form)))
+  (case form
+    (List []) False
+    (List _)  True
+    _         False))
+
 (macrolet ((defpred (name pat)
              `(defn (,name (-> Code Bool))
                 ((LForm (L _ form)))
@@ -366,8 +376,80 @@
                   ,pat True
                   _    False))))
   (defpred list? (List _))
+  (defpred hslist? (HsList _))
   (defpred symbol? (Atom (ASymbol _)))
   (defpred string? (Atom (AString _)))
   (defpred char? (Atom (AChar _)))
   (defpred integer? (Atom (AInteger _)))
   (defpred fractional? (Atom (AFractional _))))
+
+
+;;; defmodule
+
+(define-macro defmodule form
+  ;; XXX: Does not resolve dependency of required modules in home
+  ;; package. Top level `require' is handled specially during
+  ;; S-expression parser during compilation, see
+  ;; `Language.SK.Make.findTargetSource',
+  ;; `Language.SK.Reader.{addRequiredDecl,mkRequire}',
+  ;; `Language.SK.Run.parseSexprs', and `requiredModules' field in
+  ;; `SPState'.
+  (case (unCode form)
+    (List (: _ rest0))
+    (case rest0
+      [name]
+      (return `(module ,name))
+
+      (: name rest1)
+      (do (let ((= merge-sections acc lst
+                  (let ((= label (car lst)))
+                    (cond
+                      ((== label 'export)
+                       (return
+                         (if (null (cdr lst))
+                             (: (, 'export (cons '() nil)) acc)
+                             (: (, 'export (cdr lst)) acc))))
+                      ((== label 'use)
+                       (return
+                         (: (, 'import (mapcar (\ es `(import ,@es))
+                                               (cdr lst)))
+                            acc)))
+                      ((== label 'load)
+                       (return
+                         (: (, 'load (mapcar (\ es `(require ,@es))
+                                             (cdr lst)))
+                            acc)))
+                      ((== label 'load-use)
+                       (return (: (, 'load-use (cdr lst)) acc)))
+
+                      (otherwise
+                       (skSrcError lst
+                                   (++ "defmodule: unknown section: "
+                                       (show lst)))))))))
+          (<- alist (foldM merge-sections [] rest1))
+          (let ((= emit header0
+                  (let ((= header1
+                          ;; Workaround to trick the S-expression
+                          ;; reader.  Using `toCode' and `aSymbol' to
+                          ;; get symbol `require' instead of writing
+                          ;; with quote.
+                          (if (== header0 'load)
+                              (toCode (aSymbol "require"))
+                              header0))
+                        (= e1 (maybe nil id (lookup header0 alist)))
+                        (= e2 (maybe nil
+                                     (mapcar (\ es `(,header1 ,@es)))
+                                     (lookup 'load-use alist))))
+                    (append e1 e2)))))
+          (return
+            `(begin
+               ,@(emit 'load)
+               (module ,name
+                 ,@(maybe nil id (lookup 'export alist)))
+               ,@(emit 'import))))
+
+      _ (skSrcError form (++ "defmodule: invalid form: "
+                             (show form))))
+
+    _ (skSrcError form (++ "defmodule: invalid form: "
+                           (show form)))))

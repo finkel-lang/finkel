@@ -174,7 +174,47 @@
          (it "should expand to '(toCode 3)"
              (expandTo
               (macroexpand '(quasiquote (unquote 3)))
-              '(toCode 3))))))
+              '(toCode 3))))
+
+      (d "defmodule"
+         (do (it "should expand to module header"
+                 (expandTo
+                  (defmodule Foo
+                    (load (Foo.Macro)
+                          (Bar.Macro))
+                    (load-use (Control.Monad))
+                    (use (qualified Foo.Types as Types)
+                         (Foo.Buzz (buzz1 buzz2)))
+                    (export (FooClass ..) f1 f2))
+                  (begin
+                    (require Foo.Macro)
+                    (require Bar.Macro)
+                    (require Control.Monad)
+                    (module Foo (FooClass ..) f1 f2)
+                    (import qualified Foo.Types as Types)
+                    (import Foo.Buzz (buzz1 buzz2))
+                    (import Control.Monad))))
+             (it "should ignore export when not given"
+                 (expandTo
+                  (defmodule Foo
+                    (load (Foo.Macro))
+                    (use (Control.Monad)))
+                  (begin
+                    (require Foo.Macro)
+                    (module Foo)
+                    (import Control.Monad))))
+             (it "should export ()"
+                 (expandTo
+                  (defmodule Foo
+                    (use (Control.Monad))
+                    (export))
+                  (begin
+                    (module Foo ())
+                    (import Control.Monad))))
+             (it "should expand to plain (module ...)"
+                 (expandTo
+                  (defmodule Foo)
+                  (module Foo)))))))
 
 (defdo (cxrTests Spec) ()
   (let ((= d describe)
@@ -258,6 +298,14 @@
                (= f x y z
                  (list? (list x y z))))
            (property f))))
+
+  (d "filtering pair"
+     (it "should be pair"
+         (property (\ x
+                     (==> (not (or [(atom? x)
+                                    (== nil x)
+                                    (hslist? x)]))
+                          (pair? x))))))
 
   (d "filtering string"
      (it "should be AString"
