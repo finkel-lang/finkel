@@ -157,10 +157,12 @@
 
 ;;; Higher Order Functions
 
-;;; | Apply given function to immediate elements of `List' and `HsList'.
+;;; | Apply given function to immediate elements of `List' and
+;;; `HsList'. When the second argument was `HsList', the resulting value
+;;; converted to `List'.
 (:: mapcar (-> (-> Code Code) Code Code))
 (= mapcar f (@ form (LForm (L l lst)))
   (case lst
     (List xs)   (LForm (L l (List (map f xs))))
-    (HsList xs) (LForm (L l (HsList (map f xs))))
+    (HsList xs) (LForm (L l (List (map f xs))))
     _           (error-non-list "mapcar" form)))
