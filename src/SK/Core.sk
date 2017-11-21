@@ -1,4 +1,4 @@
-;;;; Fundamental macros and functions.
+;;;; Fundamental macros.
 
 (module SK.Core
   ;; Basic macros
@@ -8,7 +8,7 @@
   ;; Macros for macros
   macroexpand-1 macroexpand exported-macros
 
-  ;; Macros for functions
+  ;; Macros for expressions
   cond list
 
   ;; Macro for module headers
@@ -54,6 +54,10 @@
                              (show form))))))
 
 (eval-when (compile load)
+  (:: macro-error (-> Code String (Skc a)))
+  (= macro-error form msg
+    (skSrcError form (concat [msg ": " (show form)])))
+
   (:: subst-gensyms (-> [(, Atom Atom)] Code Code))
   (= subst-gensyms kvs
     (fmap (\ x (case (lookup x kvs)
@@ -101,11 +105,9 @@
 
           (:: atom-body (-> Code Code Code Code Code))
           (= atom-body name arg body form-name
-            (if (null arg)
-                body
-                `(case (unCode ,form-name)
-                   (List (: _ ,arg)) ,body
-                   _                 ,(err form-name name))))
+            `(case (unCode ,form-name)
+               (List (: _ ,arg)) ,body
+               _                 ,(err form-name name)))
 
           (:: list-body (-> SrcSpan Code [Code] Code Code Code))
           (= list-body l1 name args body form-name
@@ -136,23 +138,18 @@
           (= make-macro code
             (case (unCode code)
               (List [name arg body0])
-              (do (<- body1 (make-defmacro-body label code name
-                                                arg (f body0)))
-                  (let ((= the-form
-                          (case (unCode arg)
-                            (Atom AUnit) '_
-                            _            '*form*))))
+              (do (<- body1
+                    (make-defmacro-body label code name arg (f body0)))
+                  (let ((= the-form (if (unit? arg) '_ '*form*))))
                   (return `(,name ,the-form ,body1)))
-              _ (skSrcError whole label))))
+              _ (macro-error code (++ label ": invalid form")))))
       (case (unCode whole)
         (List (: _ (: (LForm (L _ (List forms))) rest)))
         (do (<- macros (mapM make-macro forms))
             (return `(let-macro ,(List macros)
                        ,@(List rest))))
-        _
-        (skSrcError whole
-                    (concat
-                     [label ": invalid form: " (show whole)]))))))
+
+        _ (macro-error whole (++ label ": invalid form"))))))
 
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
@@ -160,16 +157,11 @@
   (case (unCode form)
     (List [_ name arg body0])
     (do (<- body1 (make-defmacro-body "defmacro*" form name arg body0))
-        (let ((= the-form
-                (case (unCode arg)
-                  (Atom AUnit) '_
-                  _            '*form*))))
-        (return
-          `(define-macro ,name ,the-form
-             ,body1)))
+        (let ((= the-form (if (unit? arg) '_ '*form*))))
+        (return `(define-macro ,name ,the-form
+                   ,body1)))
 
-    _
-    (skSrcError form "defmacro*: invalid form")))
+    _ (macro-error form "defmacro*: invalid form")))
 
 ;;; The `defmacro' macro, similar to the macro with same name found in
 ;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy
@@ -202,12 +194,9 @@
       (Atom _)
       (return `(= ,sig ,@args ,body))
 
-      _
-      (skSrcError sig
-                  (concat
-                   ["defn: invalid signature: `" (show sig) "'"])))
-    _
-    (skSrcError form (++ "defn: invalid form:\n" (show form)))))
+      _ (macro-error sig "defn: invalid signature"))
+
+    _ (macro-error form "defn: invalid form")))
 
 ;;; Macro to define a function for both of compilation time and load
 ;;; time. This macro uses `eval-when' and `defn'.
@@ -222,8 +211,8 @@
     (List (: _ (: name (: args body))))
     (return `(defn ,name ,args
                (do ,@body)))
-    _
-    (skSrcError form (++ "defdo: invalid form: " (show form)))))
+
+    _ (macro-error form "defdo: invalid form")))
 
 ;;; The `cond' macro, found in many Lisp languages.  The behaviour is
 ;;; same as wrapping the body with `case' expression with dummy unit, or
@@ -282,8 +271,8 @@
       (do (<- names0 (get-exported-names (symbolName name)))
           (let ((= names1 (toCode (map toCode names0)))))
           (return `(:: ,names1 [String])))
-      _ (skSrcError name (++ "exported-macros: invalid form: "
-                             (show name))))))
+
+      _ (macro-error name "exported-macros: invalid form"))))
 
 
 ;;; List
@@ -299,11 +288,12 @@
         (= body args
           `(foldr cons nil [,@(List (codes args))])))
     (case (unCode form)
+      (List (: _ []))   (return 'nil)
       (List (: _ args)) (return (body args))
-      _                 (skSrcError form "list: invalid args"))))
+      _                 (macro-error form "list: invalid form"))))
 
 
-;;; defmodule
+;;; Module header
 
 (define-macro defmodule form
   ;; XXX: Does not resolve dependency of required modules in home
@@ -342,9 +332,8 @@
                        (return (: (, 'load-use (cdr lst)) acc)))
 
                       (otherwise
-                       (skSrcError lst
-                                   (++ "defmodule: unknown section: "
-                                       (show lst)))))))))
+                       (macro-error lst
+                                    "defmodule: unknown section")))))))
           (<- alist (foldM merge-sections [] rest1))
           (let ((= emit header0
                   (let ((= header1
@@ -367,8 +356,6 @@
                  ,@(maybe nil id (lookup 'export alist)))
                ,@(emit 'import))))
 
-      _ (skSrcError form (++ "defmodule: invalid form: "
-                             (show form))))
+      _ (macro-error form "defmodule: invalid form"))
 
-    _ (skSrcError form (++ "defmodule: invalid form: "
-                           (show form)))))
+    _ (macro-error form "defmodule: invalid form")))

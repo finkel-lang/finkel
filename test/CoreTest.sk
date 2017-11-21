@@ -225,6 +225,14 @@
   `(do (<- e (macroFunction ,(car in) ',in))
        (shouldBe (Right ',out) e)))
 
+(defmacro expandFailure (in)
+  `(do (<- e (macroFunction ,(car in) ',in))
+       (let ((= isLeft lr
+               (case lr
+                 (Left _) True
+                 _        False))))
+       (shouldBe (isLeft e) True)))
+
 (defn (macroTests Spec) ()
   (do (let ((= d describe)))
       (d "m1"
@@ -232,34 +240,90 @@
              (shouldBe (m1 "foo") "m1 foo")))
 
       (d "eval-when"
-         (it "should expand to (begin (eval-when-compile ...) ....)"
-             (expandTo
-              (eval-when (compile load)
-                (:: foo (-> Int Int))
-                (= foo a (+ a 1)))
-              (begin
-                (eval-when-compile
-                 (:: foo (-> Int Int))
-                 (= foo a (+ a 1)))
-                (:: foo (-> Int Int))
-                (= foo a (+ a 1))))))
+         (do (it "should expand to (begin (eval-when-compile ...) ...)"
+                 (expandTo
+                  (eval-when (compile load)
+                    (:: foo Int)
+                    (= foo 42))
+                  (begin
+                    (eval-when-compile
+                     (:: foo Int)
+                     (= foo 42))
+                    (:: foo Int)
+                    (= foo 42))))
+             (it "should expand to (eval-when-compile ...)"
+                 (expandTo
+                  (eval-when (compile)
+                    (:: foo Int)
+                    (= foo 42))
+                  (eval-when-compile
+                   (:: foo Int)
+                   (= foo 42))))
+             (it "should expand to (begin ...)"
+                 (expandTo
+                  (eval-when (load)
+                    (:: foo Int)
+                    (= foo 42))
+                  (begin
+                    (:: foo Int)
+                    (= foo 42))))
+             (it "throws an exception with unknown phase"
+                 (expandFailure
+                  (eval-when (foo bar buzz)
+                    (:: foo Int)
+                    (= foo 42))))
+             (it "throws and exception on non-list phase"
+                 (expandFailure
+                  (eval-when compile
+                    (:: foo Int)
+                    (= foo 42))))))
 
       (d "defmacro*"
-         (it "should expand to define-macro"
-             (expandTo
-              (defmacro* m1 (a)
-                (return `(putStrLn (++ "hello, " ,a))))
-              (define-macro m1 *form*
-                (case *form*
-                  (LForm (L _loc (List [_ a])))
-                  (return
-                    (quasiquote
-                     (putStrLn (++ "hello, " (unquote a)))))
-                  _ (skSrcError
-                     *form*
-                     (concat [(show (quote m1))
-                              "\ninvalid args: `"
-                              (show *form*) "'"])))))))
+         (do (it "should expand to define-macro"
+                 (expandTo
+                  (defmacro* m1 (a)
+                    (return `(putStrLn (++ "hello, " ,a))))
+                  (define-macro m1 *form*
+                    (case *form*
+                      (LForm (L _loc (List [_ a])))
+                      (return
+                        (quasiquote
+                         (putStrLn (++ "hello, " (unquote a)))))
+                      _ (skSrcError
+                         *form*
+                         (concat [(show (quote m1))
+                                  "\ninvalid args: `"
+                                  (show *form*) "'"]))))))
+             (it "should replace nil arg with _"
+                 (expandTo
+                  (defmacro* m1 ()
+                    (return `(print True)))
+                  (define-macro m1 _
+                    (return (quasiquote (print True))))))
+             (it "should expand symbol arg to rest"
+                 (expandTo
+                  (defmacro* m1 args
+                    (return `(print ,@args)))
+                  (define-macro m1 *form*
+                    (case (unCode *form*)
+                      (List (: _ args))
+                      (return
+                        (quasiquote
+                         (print (unquote-splice args))))
+
+                      _ (skSrcError
+                         *form*
+                         (concat [(show (quote m1))
+                                  "\ninvalid args: `"
+                                  (show *form*) "'"]))))))
+             (it "should detect invalid arg"
+                 (expandFailure
+                  (defmacro* m1 "string"
+                    (return `(putChar \x)))))
+             (it "should detect invalid form"
+                 (expandFailure
+                  (defmacro* m1 too many parameters
+                    passed)))))
 
       (d "defmacro"
          (it "should expand to defmacro*"
@@ -280,24 +344,40 @@
                  (shouldNotBe (elem (aSymbol "$foo") e) True))))
 
       (d "macrolet*"
-         (it "should expand to let-macro"
-             (expandTo
-              (macrolet* ((m (a b)
-                            (return `(+ ,a ,b))))
-                (m 20 22))
-              (let-macro ((m *form*
-                            (case *form*
-                              (LForm (L _loc (List [_ a b])))
-                              (return (quasiquote
-                                       (+ (unquote a) (unquote b))))
-                              _
-                              (skSrcError
-                               *form*
-                               (concat [(show (quote m))
-                                        "\ninvalid args: `"
-                                        (show *form*)
-                                        "'"])))))
-                (m 20 22)))))
+         (do (it "should expand to let-macro"
+                 (expandTo
+                  (macrolet* ((m (a b)
+                                (return `(+ ,a ,b))))
+                    (m 20 22))
+                  (let-macro ((m *form*
+                                (case *form*
+                                  (LForm (L _loc (List [_ a b])))
+                                  (return (quasiquote
+                                           (+ (unquote a) (unquote b))))
+                                  _
+                                  (skSrcError
+                                   *form*
+                                   (concat [(show (quote m))
+                                            "\ninvalid args: `"
+                                            (show *form*)
+                                            "'"])))))
+                    (m 20 22))))
+             (it "should replace () arg with _"
+                 (expandTo
+                  (macrolet* ((m1 ()
+                                (return `(print \x))))
+                    (m1))
+                  (let-macro ((m1 _
+                                (return (quasiquote (print \x)))))
+                    (m1))))
+             (it "should detect invalid form"
+                 (expandFailure
+                  (macrolet*)))
+             (it "should detect invalid local macro form"
+                 (expandFailure
+                  (macrolet* ((m1 ()
+                                foo bar buzz))
+                    (m1))))))
 
       (d "macrolet"
          (it "should expand to let-macro with `return'"
@@ -329,7 +409,15 @@
                     (+ a b))
                   (begin
                     (:: foo (-> Int Int Int))
-                    (= foo a b (+ a b)))))))
+                    (= foo a b (+ a b)))))
+             (it "should fail on invalid signature"
+                 (expandFailure
+                  (defn (foo (Int) (Int)) (a b)
+                    (+ a b))))
+             (it "should fail on too many parameters"
+                 (expandFailure
+                  (defn (foo (Int)) ()
+                    1 2 3 4 5)))))
 
       (d "defn+"
          (it "should expand to (eval-when (..) (defn ...))"
@@ -341,22 +429,26 @@
                   (+ a b))))))
 
       (d "defdo"
-         (it "should expand to (defn ... (do ...))"
-             (expandTo
-              (defdo foo (a b)
-                (print a)
-                (print b))
-              (defn foo (a b)
-                (do (print a)
-                    (print b))))))
+         (do (it "should expand to (defn ... (do ...))"
+                 (expandTo
+                  (defdo foo (a b)
+                    (print a)
+                    (print b))
+                  (defn foo (a b)
+                    (do (print a)
+                        (print b)))))
+             (it "should fail on too few parameters"
+                 (expandFailure (defdo foo)))))
 
       (d "list"
-         (it "should expand to foldr"
-             (expandTo
-              (list \x \y \z)
-              (foldr cons nil [(toCode \x)
-                               (toCode \y)
-                               (toCode \z)]))))
+         (do (it "should expand to foldr"
+                 (expandTo
+                  (list \x \y \z)
+                  (foldr cons nil [(toCode \x)
+                                   (toCode \y)
+                                   (toCode \z)])))
+             (it "should expand to nil"
+                 (expandTo (list) nil))))
 
       (d "cond"
          (it "should expand to case"
@@ -365,16 +457,34 @@
               (case () _ (| ((even x) 0) (otherwise 1))))))
 
       (d "macroexpand-1"
-         (it "should expand to '(toCode 3)"
-             (expandTo
-              (macroexpand-1 '(quasiquote (unquote 3)))
-              '(toCode 3))))
+         (do (it "should expand to '(toCode 3)"
+                 (expandTo
+                  (macroexpand-1 '(quasiquote (unquote 3)))
+                  '(toCode 3)))
+             (it "should expand to '(toCode 4)"
+                 (expandTo
+                  (macroexpand-1 `(quasiquote (unquote 4)))
+                  '(toCode 4)))
+             (it "should expand to (car nil)"
+                 (expandTo
+                  (macroexpand-1 (car nil)) (car nil)))
+             (it "should expand to itself"
+                 (expandTo (macroexpand-1 42) 42))))
 
       (d "macroexpand"
-         (it "should expand to '(toCode 3)"
-             (expandTo
-              (macroexpand '(quasiquote (unquote 3)))
-              '(toCode 3))))
+         (do (it "should expand to '(toCode 3)"
+                 (expandTo
+                  (macroexpand '(quasiquote (unquote 3)))
+                  '(toCode 3)))
+             (it "should expand to '(toCode 4)"
+                 (expandTo
+                  (macroexpand `(quasiquote (unquote 4)))
+                  '(toCode 4)))
+             (it "should expand to (car nil)"
+                 (expandTo
+                  (macroexpand (car nil)) (car nil)))
+             (it "should expand to itself"
+                 (expandTo (macroexpand 42) 42))))
 
       (d "defmodule"
          (do (it "should expand to module header"
@@ -414,4 +524,11 @@
              (it "should expand to plain (module ...)"
                  (expandTo
                   (defmodule Foo)
-                  (module Foo)))))))
+                  (module Foo)))
+             (it "should fail on unknown section"
+                 (expandFailure
+                  (defmodule Foo
+                    (bar buzz))))
+             (it "should fail on too few parameters"
+                 (expandFailure
+                  (defmodule)))))))
