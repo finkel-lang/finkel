@@ -13,7 +13,7 @@
 
   ;; predicates
   atom? pair? list? hslist?
-  symbol? string? char? integer? fractional?
+  symbol? string? char? integer? fractional? unit?
 
   ;; list constructors
   cons append
@@ -124,7 +124,8 @@
   (defpred string? (Atom (AString _)))
   (defpred char? (Atom (AChar _)))
   (defpred integer? (Atom (AInteger _)))
-  (defpred fractional? (Atom (AFractional _))))
+  (defpred fractional? (Atom (AFractional _)))
+  (defpred unit? (Atom AUnit)))
 
 
 ;;; CONS

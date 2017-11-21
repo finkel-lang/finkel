@@ -157,6 +157,14 @@
                             (AFractional _) True
                             _               False))))))
 
+  (d "filtering ()"
+     (it "should be AUnit"
+         (property (\ x
+                     (==> (unit? (toCode x))
+                          (case x
+                            AUnit True
+                            _     False))))))
+
   (d "length of atom"
      (it "should be 1 or nil"
          (let ((:: f (-> Code Property))
