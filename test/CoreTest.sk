@@ -226,9 +226,25 @@
         (= cdxr x
           (it "should be (t t)" (== tt x)))))
   (d "car"
-     (caxr (car (cons t tt))))
+     (do (caxr (car (cons t tt)))
+         (it "returns t when arg was '[t t]"
+             (== (car '[t t]) t))
+         (it "returns nil when arg was nil"
+             (== (car nil) nil))
+         (it "returns nil when arg was '[]"
+             (== (car '[]) nil))
+         (it "should show error when applied to non-list"
+             (expectFailure (=== nil (car 'foo))))))
   (d "cdr"
-     (cdxr (cdr (cons t tt))))
+     (do (cdxr (cdr (cons t tt)))
+         (it "returns '(t) when arg was '[t t]"
+             (== (cdr '[t t]) '(t)))
+         (it "returns nil when arg was nil"
+             (== (cdr nil) nil))
+         (it "returns nil when arg was '[]"
+             (== (cdr '[]) nil))
+         (it "should show error when applied to non-list"
+             (expectFailure (=== nil (cdr 'foo))))))
 
   (d "caar"
      (caxr (caar '((t _) _ _ _))))
@@ -347,19 +363,36 @@
                                     (null x)))))
            (property f))))
 
-  (d "mapcar"
-     (it "should replace non-symbols"
-         (shouldBe '(foo bar _ buzz _ _)
-                   (mapcar (\ x (if (symbol? x) x '_))
-                           '(foo bar (a b c) buzz 3 "string")))))
+  (d "cons"
+     (do (let ((= x 'x)
+               (= ret1 (cons x '[b c d]))
+               (= ret2 (cons x 'b))))
+         (it "returns a List when consing to List"
+             (list? (cons 'a '(b c d))))
+         (it "returns a List when consing to HsList"
+             (list? ret1))
+         (it "has x at car of HsList-consed-list"
+             (&& (== (car ret1) x)
+                 (== (cdr ret1) '(b c d))))
+         (it "returns a List when consing to Atom"
+             (list? ret2))
+         (it "has x at car of atom-consed-list"
+             (&& (== (car ret2) x)
+                 (== (cdr ret2) '(b))))))
 
   (d "append"
-     (do (it "should return itself when appending nil"
-          (let ((= xs '(a b c)))
-            (&& (== xs (append nil xs))
-                (== xs (append xs nil)))))
-         (it "should show sum of the length"
+     (do (it "returns itself when appending nil"
+             (let ((= xs '(a b c)))
+               (&& (== xs (append nil xs))
+                   (== xs (append xs nil)))))
+         (it "shows sum of the length"
              (let ((= xs '(a b c d e))
                    (= ys '(f g h i j k l)))
                (== (length (append xs ys))
-                   (+ (length xs) (length ys))))))))
+                   (+ (length xs) (length ys)))))))
+
+  (d "mapcar"
+     (it "replaces non-symbols"
+         (shouldBe '(foo bar _ buzz _ _)
+                   (mapcar (\ x (if (symbol? x) x '_))
+                           '(foo bar (a b c) buzz 3 "string"))))))

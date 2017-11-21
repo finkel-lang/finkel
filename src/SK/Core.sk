@@ -1,14 +1,30 @@
 ;;;; Fundamental macros and functions.
 
-(module SK.Core)
+(module SK.Core
+  ;; Basic macros
+  eval-when defmacro* defmacro macrolet* macrolet
+  defn defn+ defdo
 
-(require Language.SK.GHC)
+  ;; Macros for macros
+  macroexpand-1 macroexpand exported-macros
+
+  ;; Macros for functions
+  cond list
+
+  ;; Macro for module headers
+  defmodule
+
+  ;; Reexport
+  (module SK.Core.List))
+
 (require Control.Monad (foldM))
+(require Language.SK.GHC)
+(require SK.Core.List)
 
+(import Control.Monad (foldM))
 (import Language.SK)
 (import Language.SK.GHC)
-(import Control.Monad (foldM))
-
+(import SK.Core.List)
 
 
 ;;; Basic
@@ -111,8 +127,7 @@
         (L _ (Atom AUnit))
         (gensymfy body0)
 
-        _
-        (skSrcError whole (++ label ": invalid args")))))
+        _ (skSrcError whole (++ label ": invalid args")))))
 
   ;; Function to make body expression of `macrolet*' and `macrolet'.
   (:: make-macrolet-body (-> String Code (-> Code Code) (Skc Code)))
@@ -271,61 +286,11 @@
                              (show name))))))
 
 
-;;; Cxrs
-
-(defn+ (car (-> Code Code))
-  ((LForm (L l code)))
-  (case code
-    (List (: x _xs)) x
-    _                (LForm (L l (List [])))))
-
-(defn+ (cdr (-> Code Code))
-  ((LForm (L l code)))
-  (case code
-    (List (: _ xs)) (let ((= l' (getLoc (mkLocatedForm xs))))
-                      (case xs
-                        [] (LForm (L l' (List [])))
-                        _  (LForm (L l' (List xs)))))
-    _               (LForm (L l (List [])))))
-
-(eval-when-compile
-  (:: ads [String])
-  (= ads
-    (let ((= f (concatMap (\ x [(: \a x) (: \d x)]))))
-      (concat (take 3 (tail (iterate f [[\a] [\d]]))))))
-
-  (:: cxr-name (-> String Code))
-  (= cxr-name x
-    (toCode (aSymbol (concat ["c" x "r"]))))
-
-  (:: cxr (-> String [Code]))
-  (= cxr xs
-    [`(:: ,(cxr-name xs) (-> Code Code))
-     `(= ,(cxr-name xs)
-        (. ,(cxr-name [(head xs)]) ,(cxr-name (tail xs))))
-     `##(INLINABLE ,(cxr-name xs))]))
-
-(let-macro ((cxrs _
-              (return `(begin
-                         ,@(concatMap cxr ads)))))
-  (cxrs))
-
-
 ;;; List
 
-;;; Extend the second argument with the first argument by appending to
-;;; the tip.
-(defn+ (cons (=> (Homoiconic a) (-> a Code Code)))
-  (x (@ whole (LForm (L _ xs))))
-  (let ((= (@ x' (LForm (L l0 _))) (toCode x)))
-    (LForm (L l0 (case xs
-                   (List xs')   (List (: x' xs'))
-                   (HsList xs') (List (: x' xs'))
-                   _            (List [x' whole]))))))
-
-;;; Below `list' is defined as macro, since Haskell does not support
-;;; vararg function (actually, vararg is doable in GHC, but requires
-;;; some language extensions).
+;;; In SK, `list' is defined as macro, since Haskell does not support
+;;; vararg function (actually, vararg is possible in GHC, but not
+;;; doing).
 (define-macro list form
   (let ((:: codes (-> [Code] [Code]))
         (= codes
@@ -336,52 +301,6 @@
     (case (unCode form)
       (List (: _ args)) (return (body args))
       _                 (skSrcError form "list: invalid args"))))
-
-;;; Apply given function to immediate elements of `List' and `HsList'.
-(defn+ (mapcar (-> (-> Code Code) Code Code))
-  (f (@ form (LForm (L l lst))))
-  (case lst
-    (List xs)   (LForm (L l (List (map f xs))))
-    (HsList xs) (LForm (L l (HsList (map f xs))))
-    _           (error (++ "mapcar: not a list " (show form)))))
-
-;;; Append two lists.
-(defn+ (append (-> Code Code Code))
-  (xs ys)
-  (if (null xs)
-      ys
-      (cons (car xs) (append (cdr xs) ys))))
-
-
-;;; Simple predicate
-
-(defn (atom? (-> Code Bool))
-  ((LForm (L _ form)))
-  (case form
-    (Atom _)  True
-    (List []) True
-    _         False))
-
-(defn (pair? (-> Code Bool))
-  ((LForm (L _ form)))
-  (case form
-    (List []) False
-    (List _)  True
-    _         False))
-
-(macrolet ((defpred (name pat)
-             `(defn (,name (-> Code Bool))
-                ((LForm (L _ form)))
-                (case form
-                  ,pat True
-                  _    False))))
-  (defpred list? (List _))
-  (defpred hslist? (HsList _))
-  (defpred symbol? (Atom (ASymbol _)))
-  (defpred string? (Atom (AString _)))
-  (defpred char? (Atom (AChar _)))
-  (defpred integer? (Atom (AInteger _)))
-  (defpred fractional? (Atom (AFractional _))))
 
 
 ;;; defmodule

@@ -12,6 +12,7 @@ category:            Language
 build-type:          Custom
 extra-source-files:  README.md
                      src/SK/*.sk
+                     src/SK/Core/*.sk
                      src/SK/Repl/*.sk
                      test/*.sk
 cabal-version:       >= 2.0
@@ -23,7 +24,8 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     SK.Core
+  exposed-modules:     SK.Core.List
+                       SK.Core
                        SK.Plugin
                        SK.Prelude
                        SK.Repl

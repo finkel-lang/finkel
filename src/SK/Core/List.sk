@@ -1,0 +1,166 @@
+;;; Fundamental functions for list
+
+(module SK.Core.List
+  ;; exception
+  (SkListException ..)
+
+  ;; cxrs
+  car caar cadr caaar caadr cadar caddr
+  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+
+  cdr cdar cddr cdaar cdadr cddar cdddr
+  cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+
+  ;; predicates
+  atom? pair? list? hslist?
+  symbol? string? char? integer? fractional?
+
+  ;; list constructors
+  cons append
+
+  ;; higher order functions
+  mapcar)
+
+(import Control.Exception ((Exception ..) throw))
+(import Language.SK)
+
+
+;;; Exception
+
+(data SkListException
+  (NonListValue String))
+
+(instance (Show SkListException)
+  (= show e
+    (case e
+      (NonListValue str) str)))
+
+(instance (Exception SkListException))
+
+(:: error-non-list (-> String Code a))
+(= error-non-list fname what
+  (throw (NonListValue
+          (concat ["SK.Core.List." fname
+                   ": non-list value `" (show what) "'"]))))
+
+
+;;; CXR
+
+(:: car (-> Code Code))
+(= car (@ whole (LForm (L l code)))
+  (case code
+    (List (: x _))   x
+    (List [])        (LForm (L l (List [])))
+    (HsList (: x _)) x
+    (HsList [])      (LForm (L l (List [])))
+    _                (error-non-list "car" whole)))
+
+(:: cdr (-> Code Code))
+(= cdr (@ whole (LForm (L l code)))
+  (let ((= f xs
+          (let ((= l' (getLoc (mkLocatedForm xs))))
+            (case xs
+              [] (LForm (L l' (List [])))
+              _  (LForm (L l' (List xs)))))))
+    (case code
+      (List (: _ xs))   (f xs)
+      (List [])         (LForm (L l (List [])))
+      (HsList (: _ xs)) (f xs)
+      (HsList [])       (LForm (L l (List [])))
+      _                 (error-non-list "cdr" whole))))
+
+(eval-when-compile
+  (:: ads [String])
+  (= ads
+    (let ((= f (concatMap (\ x [(: \a x) (: \d x)]))))
+      (concat (take 3 (tail (iterate f [[\a] [\d]]))))))
+
+  (:: cxr-name (-> String Code))
+  (= cxr-name x
+    (toCode (aSymbol (concat ["c" x "r"]))))
+
+  (:: cxr (-> String [Code]))
+  (= cxr xs
+    [`(:: ,(cxr-name xs) (-> Code Code))
+     `(= ,(cxr-name xs)
+        (. ,(cxr-name [(head xs)]) ,(cxr-name (tail xs))))
+     `##(INLINABLE ,(cxr-name xs))]))
+
+(let-macro ((cxrs _
+              (return `(begin
+                         ,@(concatMap cxr ads)))))
+  (cxrs))
+
+
+;;; Predicates
+
+(:: atom? (-> Code Bool))
+(= atom? (LForm (L _ form))
+  (case form
+    (Atom _)  True
+    (List []) True
+    _         False))
+
+(:: pair? (-> Code Bool))
+(= pair? (LForm (L _ form))
+  (case form
+    (List []) False
+    (List _)  True
+    _         False))
+
+(let-macro ((defpred form
+              (case (unCode form)
+                (List [_ name pat])
+                (return `(begin
+                           (:: ,name (-> Code Bool))
+                           (= ,name (LForm (L _ form))
+                             (case form
+                               ,pat True
+                               _    False))))
+                _ (skSrcError form "defpred"))))
+  (defpred list? (List _))
+  (defpred hslist? (HsList _))
+  (defpred symbol? (Atom (ASymbol _)))
+  (defpred string? (Atom (AString _)))
+  (defpred char? (Atom (AChar _)))
+  (defpred integer? (Atom (AInteger _)))
+  (defpred fractional? (Atom (AFractional _))))
+
+
+;;; CONS
+
+;;; | Extend the second argument with the first argument by appending to
+;;; the tip.
+(:: cons (=> (Homoiconic a) (-> a Code Code)))
+(= cons x (@ whole (LForm (L _ xs)))
+  (let ((= (@ x' (LForm (L l0 _))) (toCode x)))
+    (LForm (L l0 (case xs
+                   (List xs')   (List (: x' xs'))
+                   (HsList xs') (List (: x' xs'))
+                   _            (List [x' whole]))))))
+
+;;; | Append two lists.
+(:: append (-> Code Code Code))
+(= append xs ys
+  (| ((not (|| (list? xs) (hslist? xs)))
+      (error-non-list "append" xs))
+     ((not (|| (list? ys) (hslist? ys)))
+      (error-non-list "append" ys))
+     (otherwise
+      (let ((:: go (-> Code Code Code))
+            (= go as bs
+              (if (null as)
+                  bs
+                  (cons (car as) (go (cdr as) ys)))))
+        (go xs ys)))))
+
+
+;;; Higher Order Functions
+
+;;; | Apply given function to immediate elements of `List' and `HsList'.
+(:: mapcar (-> (-> Code Code) Code Code))
+(= mapcar f (@ form (LForm (L l lst)))
+  (case lst
+    (List xs)   (LForm (L l (List (map f xs))))
+    (HsList xs) (LForm (L l (HsList (map f xs))))
+    _           (error-non-list "mapcar" form)))
