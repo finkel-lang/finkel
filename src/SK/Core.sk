@@ -1,17 +1,20 @@
 ;;;; Fundamental macros.
 
 (module SK.Core
-  ;; Basic macros
-  eval-when defmacro* defmacro macrolet* macrolet
-  defn defn+ defdo
+  ;; Phase control
+  eval-when
 
   ;; Macros for macros
+  defmacro* defmacro macrolet* macrolet
   macroexpand-1 macroexpand exported-macros
 
-  ;; Macros for expressions
+  ;; Function declarations
+  defn defn+ defdo
+
+  ;; Expressions
   cond list
 
-  ;; Macro for module headers
+  ;; Module headers
   defmodule
 
   ;; Reexport
@@ -75,23 +78,22 @@
   (= collect-names form
     (let ((:: f (-> Atom [Atom] [Atom]))
           (= f x acc
-            (if (&& (gensym-name? x) (notElem x acc))
-                (: x acc)
-                acc)))
+            (| ((gensym-name? x) (notElem x acc)
+                (: x acc))
+               (otherwise acc))))
       (foldr f [] form)))
 
   (:: gensymfy (-> Code (Skc Code)))
-  (= gensymfy (@ form (LForm (L l0 _)))
-    (do (let ((:: to-replace [Atom])
-              (= to-replace (collect-names form))
-              (:: make-replacement (-> Atom (Skc (, Atom Atom))))
-              (= make-replacement (@ x (ASymbol sym))
-                (do (<- (LForm (L _ (Atom g)))
-                      (gensym' (tail (unpackFS sym))))
-                    (return (, x g))))))
-        (<- kvs (mapM make-replacement to-replace))
-        (case (subst-gensyms kvs form)
-          (LForm (L _ ret)) (return (LForm (L l0 ret))))))
+  (= gensymfy form
+    (let ((:: make-replacement (-> Atom (Skc (, Atom Atom))))
+          (= make-replacement x
+            (case x
+              (ASymbol sym) (do (<- (LForm (L _ (Atom g)))
+                                  (gensym' (tail (unpackFS sym))))
+                                (return (, x g)))
+              _ (return (, x x)))))
+      (do (<- kvs (mapM make-replacement (collect-names form)))
+          (return (subst-gensyms kvs form)))))
 
   ;; Function to make body expression of `defmacro*' and `defmacro'.
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
