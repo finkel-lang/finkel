@@ -182,6 +182,14 @@ instance Foldable Form where
           []   -> z
           y:ys -> foldr f (foldr f z (HsList ys)) (unCode y)
 
+instance Traversable Form where
+  traverse f form =
+    case form of
+      Atom x    -> fmap Atom (f x)
+      List xs   -> fmap List (traverse (traverse f) xs)
+      HsList xs -> fmap HsList (traverse (traverse f) xs)
+      TEnd      -> pure TEnd
+
 instance NFData a => NFData (Form a) where
   rnf x =
     case x of
@@ -228,6 +236,10 @@ instance Functor LForm where
 
 instance Foldable LForm where
   foldr f z (LForm (L _ form)) = foldr f z form
+
+instance Traversable LForm where
+  traverse f (LForm (L l form)) =
+    fmap (\x -> LForm (L l x)) (traverse f form)
 
 instance NFData a => NFData (LForm a) where
   rnf (LForm (L l a)) = rnf l `seq` rnf a

@@ -40,6 +40,7 @@ formTests = do
   showTest
   functorTest "(a \"foo\" \\x [True False])"
   foldableTest
+  traversableTest
 
   nameTest "foo"
   nameTest "bar-buzz-quux"
@@ -208,14 +209,31 @@ foldableTest = do
                    0
   describe "taking sum of 1 to 10 with foldr" $ do
     let str1 = "(1 2 3 4 5 6 7 8 9 10)"
-    it ("should be 55 for " ++ str1) $ do
+    it ("should be 55 for " ++ str1) $
       fsum (parseE str1) `shouldBe` 55
     it "should be 0 for TEnd" $ do
       let sp = UnhelpfulSpan (fsLit "<foldableTest>")
       fsum (LForm (L sp TEnd)) `shouldBe` 0
-  describe "length of nil" $ do
+  describe "length of nil" $
     it "should be 0" $
       length nil `shouldBe` 0
+
+traversableTest :: Spec
+traversableTest = do
+  let f atom = case atom of
+                 ASymbol sym | '$' : _ <- unpackFS sym
+                             -> return (aSymbol "_")
+                 _ -> return atom
+  describe "replacing symbol with mapM" $ do
+    let str1 = "(a $b c [$d e] [f g $h] ($i $j))"
+        str2 = "(a  _ c [ _ e] [f g  _] ( _  _))"
+    it "should replace $.* with _" $ do
+      let form1 = parseE str1
+          form2 = parseE str2
+      mapM f form1 `shouldBe` Just form2
+  describe "traversing TEnd" $
+    it "should be Just TEnd" $
+      mapM f TEnd `shouldBe` Just TEnd
 
 nameTest :: String -> Spec
 nameTest str =
