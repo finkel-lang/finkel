@@ -531,7 +531,8 @@ b_tupE (LForm (L l _)) args = L l (ExplicitTuple (map mkArg args) Boxed)
 
 b_letE :: Code -> [HDecl] -> HExpr -> HExpr
 b_letE (LForm (L l _)) decls body =
-  L l (HsLet (declsToBinds l decls) body)
+  let (mbs, sigs) = cvBindsAndSigs (toOL decls)
+  in  L l (HsLet (L l (HsValBinds (ValBindsIn mbs sigs))) body)
 
 b_caseE :: Code -> HExpr -> [HMatch] -> HExpr
 b_caseE (LForm (L l _)) expr matches = L l (HsCase expr mg)
@@ -654,7 +655,9 @@ b_bindS :: Code -> HPat -> HExpr -> HStmt
 b_bindS (LForm (L l _)) pat expr = L l (mkBindStmt pat expr)
 
 b_letS :: Code -> [HDecl] -> HStmt
-b_letS (LForm (L l _)) decls = L l (LetStmt (declsToBinds l decls))
+b_letS (LForm (L l _)) decls =
+  let (mbs, sigs) = cvBindsAndSigs (toOL decls)
+  in  L l (LetStmt (L l (HsValBinds (ValBindsIn mbs sigs))))
 
 b_bodyS :: HExpr -> HStmt
 b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
@@ -694,7 +697,7 @@ cfld2ufld :: Located (HsRecField RdrName HExpr)
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
   L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
 
--- | Makes 'HsRecField' with given name and located data.
+-- | Make 'HsRecField' with given name and located data.
 mkcfld :: (FastString, Located a) -> LHsRecField RdrName (Located a)
 mkcfld (name, e@(L fl _)) =
   L fl HsRecField { hsRecFieldLbl = mkfname fl name
@@ -705,3 +708,63 @@ mkcfld (name, e@(L fl _)) =
 
 quotedSourceText :: String -> SourceText
 quotedSourceText s = SourceText $ "\"" ++ s ++ "\""
+
+-- Following `cvBindsAndSigs`, `getMonoBind`, `has_args`, and
+-- `makeFunBind` functions are based on resembling functions defined in
+-- `RdrHsSyn` module in ghc package, since these functions were not
+-- exported.
+--
+-- Unlike the original version, `cvBindsAndSigs` has pattern matches
+-- for 'ValD' and 'SigD' only, and `getMonoBind` ignores 'DocD'
+-- declarations.
+
+cvBindsAndSigs :: OrdList HDecl -> (HBinds, [HSig])
+cvBindsAndSigs fb = go (fromOL fb)
+  where
+    go [] = (emptyBag, [])
+    go (L l (ValD d) : ds)
+      = let (b', ds') = getMonoBind (L l d) ds
+            (bs, ss) = go ds'
+        in  (b' `consBag` bs, ss)
+    go (L l (SigD s) : ds)
+      = let (bs, ss) = go ds
+        in  (bs, L l s : ss)
+
+getMonoBind :: LHsBind RdrName -> [LHsDecl RdrName]
+            -> (LHsBind RdrName, [LHsDecl RdrName])
+getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),
+                               fun_matches
+                                 = MG { mg_alts = L _ mtchs1 }}))
+            binds
+  | has_args mtchs1 = go mtchs1 loc1 binds
+  where
+    go mtchs loc
+       (L loc2 (ValD (FunBind { fun_id = L _ f2,
+                                fun_matches
+                                  = MG { mg_alts = L _ mtchs2 }}))
+                : binds2)
+      | f1 == f2 = go (mtchs2 ++ mtchs)
+                      (combineSrcSpans loc loc2) binds2
+    go mtchs loc binds2
+      = (L loc (makeFunBind fun_id1 (reverse mtchs)), binds2)
+      -- Reverse the final matches, to get it back in the right order
+
+getMonoBind bind binds = (bind, binds)
+
+-- Don't group together FunBinds if they have no arguments.  This is
+-- necessary now that variable bindings with no arguments are now
+-- treated as FunBinds rather than pattern bindings.
+has_args :: [LMatch RdrName (LHsExpr RdrName)] -> Bool
+has_args ((L _ (Match _ args _ _)) : _) = not (null args)
+has_args []                             =
+  error "Language.SK.Syntax.Internal:has_args"
+
+-- Like HsUtils.mkFunBind, but we need to be able to set the fixity too
+makeFunBind :: Located RdrName -> [LMatch RdrName (LHsExpr RdrName)]
+            -> HsBind RdrName
+makeFunBind fn ms
+  = FunBind { fun_id = fn,
+              fun_matches = mkMatchGroup FromSource ms,
+              fun_co_fn = idHsWrapper,
+              bind_fvs = placeHolderNames,
+              fun_tick = [] }

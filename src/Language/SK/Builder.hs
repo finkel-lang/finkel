@@ -17,6 +17,7 @@ module Language.SK.Builder
 
   -- * Type synonyms
   , HBind
+  , HBinds
   , HCCallConv
   , HConDecl
   , HConDeclDetails
@@ -33,6 +34,7 @@ module Language.SK.Builder
   , HMatch
   , HModule
   , HPat
+  , HSig
   , HSigWcType
   , HStmt
   , HTyVarBndr
@@ -144,6 +146,8 @@ builderError = do
 
 type HBind = LHsBind RdrName
 
+type HBinds = Bag (LHsBind RdrName)
+
 type HCCallConv = Located CCallConv
 
 type HConDecl = LConDecl RdrName
@@ -175,6 +179,8 @@ type HMatch = LMatch RdrName HExpr
 type HModule = HsModule RdrName
 
 type HPat = LPat RdrName
+
+type HSig = LSig RdrName
 
 type HSigWcType = LHsSigWcType RdrName
 

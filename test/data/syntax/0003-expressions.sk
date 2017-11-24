@@ -100,10 +100,22 @@
         (= as [n n n]))
     (concat [as as])))
 
+;;; `let' with pattern match
+(= let4 n
+  (let ((:: f (-> Int Int))
+        (= f 1 1)
+        (= f 2 1)
+        (= f k (+ (f (- k 1)) (f (- k 2))))
+        (:: g (-> Int Int))
+        (= g 0 0)
+        (= g n n))
+    (g (f n))))
+
 (= letexprs
   (do (print (let1 7))
       (print (let2 7))
-      (print (let3 7))))
+      (print (let3 7))
+      (print (let4 7))))
 
 ;;; 3.13 Case Expressions
 
@@ -170,6 +182,12 @@
       (<- y [4 5 6])
       [x y]))
 
+(= letdo
+  (do (let ((= f 1 1)
+            (= f 2 1)
+            (= f n (+ (f (- n 1)) (f (- n 2))))))
+      (print (f 10))))
+
 (= doexpres
   (do (putStrLn "foo")
       (<- buzz (showBar "buzz"))
@@ -178,7 +196,8 @@
             (= buzz4 "buzz4")))
       (putStrLn buzz3)
       (putStrLn buzz4)
-      (print listdo)))
+      (print listdo)
+      letdo))
 
 ;;; 3.15 Datatypes with Field Labels
 
@@ -229,10 +248,8 @@
 (= bar Nothing "bar got nothing")
 (= bar _ "bar got something")
 
-(= buzz (Just n)
-  (putStrLn (++ "buzz: " (show n))))
-(= buzz _
-  (putStrLn "buzz got nothing"))
+(= buzz (Just n) (putStrLn (++ "buzz: " (show n))))
+(= buzz _ (putStrLn "buzz got nothing"))
 
 (= addMaybes Nothing Nothing 0)
 (= addMaybes (Just a) Nothing a)

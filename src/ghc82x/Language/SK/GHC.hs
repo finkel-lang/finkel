@@ -17,12 +17,14 @@ module Language.SK.GHC
     HValue,
     LConDecl,
     LHsBind,
+    LHsBinds,
     LHsDecl,
     LHsDocString,
     LHsSigWcType,
     LHsType,
     LImportDecl,
     LPat,
+    LSig,
     ModuleInfo,
     ParsedModule(..),
     Pat(..),
@@ -70,6 +72,9 @@ module Language.SK.GHC
     ApiAnns,
 
     -- * Bag
+    Bag,
+    consBag,
+    emptyBag,
     listToBag,
     unitBag,
 
@@ -320,6 +325,8 @@ module Language.SK.GHC
     text,
 
     -- * OrdList
+    OrdList,
+    fromOL,
     toOL,
 
     -- * Panic
@@ -357,6 +364,7 @@ module Language.SK.GHC
     SrcSpan(..),
 
     combineLocs,
+    combineSrcSpans,
     mkGeneralSrcSpan,
     mkRealSrcLoc,
     mkRealSrcSpan,
@@ -373,6 +381,9 @@ module Language.SK.GHC
 
     -- * StringBuffer
     stringToStringBuffer,
+
+    -- * TcEvidence
+    idHsWrapper,
 
     -- * TysWiredIn
     consDataConName,
@@ -427,6 +438,7 @@ import RdrHsSyn
 import RdrName
 import SrcLoc
 import StringBuffer
+import TcEvidence
 import TysWiredIn
 import UniqSupply
 import Util
