@@ -114,7 +114,7 @@ make inputs no_link mb_output = do
 --
 -- ---------------------------------------------------------------------
 
--- | Data type to differentiate target sources.
+-- | Data type to represent target source.
 data TargetSource
   = SkSource FilePath String [Code] SPState
   -- ^ SK source. Holds file path of the source code, original string
@@ -133,6 +133,9 @@ instance Show TargetSource where
     HsSource path -> "HsSource " ++ show path
     OtherSource path -> "OtherSource " ++ show path
 
+-- | Unit for compilation target.
+--
+-- Simply a 'TargetSource' maybe paired with 'Phase'.
 type TargetUnit = (TargetSource, Maybe Phase)
 
 targetSourcePath :: TargetSource -> FilePath
@@ -180,9 +183,9 @@ make' not_yet_compiled readys0 pendings0 = do
   go [] total total not_yet_compiled readys0 pendings0
   where
     -- No more modules to compile, return the accumulated ModSummary.
-    go acc i _  _ _  _ | i <= 0 = return acc
-    go acc _ _ [] _  _ = return acc
-    go acc _ _ _ [] [] = return acc
+    go acc i _  _  _  _ | i <= 0 = return acc
+    go acc _ _ []  _  _ = return acc
+    go acc _ _  _ [] [] = return acc
 
     -- Compile ready-to-compile targets to ModSummary and
     -- HsModule. Input could be SK source code, Haskell source code, or
