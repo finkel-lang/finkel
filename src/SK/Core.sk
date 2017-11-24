@@ -25,9 +25,10 @@
 (require SK.Core.List)
 
 (import Control.Monad (foldM))
-(import Language.SK)
 (import Language.SK.GHC)
 (import SK.Core.List)
+
+(import Language.SK)
 
 
 ;;; Basic
@@ -67,33 +68,20 @@
                  (Just y) y
                  Nothing  x))))
 
-  (:: gensym-name? (-> Atom Bool))
-  (= gensym-name? x
-    (case x
-      (ASymbol sym) (| ((<- (: \$ (: c _)) (unpackFS sym))
-                        (elem c [\a .. \z])))
-      _             False))
-
-  (:: collect-names (-> Code [Atom]))
-  (= collect-names form
-    (let ((:: f (-> Atom [Atom] [Atom]))
-          (= f x acc
-            (| ((gensym-name? x) (notElem x acc)
-                (: x acc))
-               (otherwise acc))))
-      (foldr f [] form)))
+  (:: acc-gensym-names (-> [(, Atom Atom)] Atom (Skc [(, Atom Atom)])))
+  (= acc-gensym-names acc form
+    (case form
+      (ASymbol sym) (| ((<- (: \$ (@ cs (: c _))) (unpackFS sym))
+                        (elem c [\a .. \z])
+                        (<- Nothing (lookup form acc))
+                        (do (<- (LForm (L _ (Atom gsym))) (gensym' cs))
+                            (return (: (, form gsym) acc)))))
+      _ (return acc)))
 
   (:: gensymfy (-> Code (Skc Code)))
   (= gensymfy form
-    (let ((:: make-replacement (-> Atom (Skc (, Atom Atom))))
-          (= make-replacement x
-            (case x
-              (ASymbol sym) (do (<- (LForm (L _ (Atom g)))
-                                  (gensym' (tail (unpackFS sym))))
-                                (return (, x g)))
-              _ (return (, x x)))))
-      (do (<- kvs (mapM make-replacement (collect-names form)))
-          (return (subst-gensyms kvs form)))))
+    (do (<- kvs (foldM acc-gensym-names [] form))
+        (return (subst-gensyms kvs form))))
 
   ;; Function to make body expression of `defmacro*' and `defmacro'.
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
