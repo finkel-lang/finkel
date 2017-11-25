@@ -266,10 +266,12 @@ module Language.SK.GHC
     batchMsg,
     hscAddSptEntries,
     hscTcRnLookupRdrName,
+    makeSimpleDetails,
 
     -- * HscTypes
     FindResult(..),
     GhcApiError,
+    HomeModInfo(..),
     HscEnv(..),
     SourceError,
     SourceModified(..),
@@ -290,6 +292,9 @@ module Language.SK.GHC
 
     -- * Linker
     getHValue,
+
+    -- * LoadIface
+    readIface,
 
     -- * MkIface
     tyThingToIfaceDecl,
@@ -385,6 +390,9 @@ module Language.SK.GHC
     -- * TcEvidence
     idHsWrapper,
 
+    -- * TcRnDriver
+    runTcInteractive,
+
     -- * TysWiredIn
     consDataConName,
     listTyCon,
@@ -426,6 +434,7 @@ import HscMain
 import HscTypes
 import IfaceSyn
 import Linker
+import LoadIface
 import MkIface
 import Module
 import MonadUtils

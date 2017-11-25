@@ -23,6 +23,7 @@ import qualified Data.IntSet as IntSet
 -- ghc
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
+import qualified Maybes as Maybes
 import ErrUtils (withTiming)
 import Outputable (text)
 
@@ -180,7 +181,8 @@ make' not_yet_compiled readys0 pendings0 = do
               putStrLn (";;;   total: " ++ show total)
               putStrLn (";;;   readys0: " ++ show readys0)
               putStrLn (";;;   pendings0: " ++ show pendings0))
-  go [] total total not_yet_compiled readys0 pendings0
+  timeIt "make' [sk]"
+         (go [] total total not_yet_compiled readys0 pendings0)
   where
     -- No more modules to compile, return the accumulated ModSummary.
     go acc i _  _  _  _ | i <= 0 = return acc
@@ -292,13 +294,17 @@ make' not_yet_compiled readys0 pendings0 = do
 -- when the codes or dependency modules were updated.
 makeOne :: Int -> Int -> ModSummary
         -> HsModule RdrName -> [ModSummary] -> Skc ModSummary
-makeOne i total ms hmdl graph_upto_this = do
-  up_to_date <- checkUpToDate ms graph_upto_this
-  ms' <- if up_to_date
-           then dontMakeOne ms hmdl
-           else doMakeOne (total - i + 1) total ms hmdl
-  modifySession (\e -> e {hsc_mod_graph = ms' : hsc_mod_graph e})
-  return ms'
+makeOne i total ms hmdl graph_upto_this = timeIt label go
+  where
+    label = "MakeOne [" ++ mname ++ "]"
+    mname = moduleNameString (ms_mod_name ms)
+    go = do
+      up_to_date <- checkUpToDate ms graph_upto_this
+      ms' <- if up_to_date
+      then dontMakeOne ms hmdl
+      else doMakeOne (total - i + 1) total ms hmdl
+      modifySession (\e -> e {hsc_mod_graph = ms' : hsc_mod_graph e})
+      return ms'
 
 -- | Compile single module.
 doMakeOne :: Int -> Int -> ModSummary
@@ -332,8 +338,6 @@ doMakeOne i total ms hmdl = do
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
 
--- XXX: Avoid the call to "tcHsModule", not sure how much time
--- difference in compilation elapsed times with this approach.
 dontMakeOne :: GhcMonad m => ModSummary -> HsModule RdrName
             -> m ModSummary
 dontMakeOne ms hmdl = do
@@ -341,19 +345,35 @@ dontMakeOne ms hmdl = do
   tcm <- tcHsModule (Just (ms_hspp_file ms)) False hmdl
   let mn = ms_mod_name ms
       loc = ms_location ms
-      messager = Just batchMsg
       (tcg, _details) = tm_internals_ tcm
+
+  -- Load linkable and interface file, if exist.
   mb_linkable <-
     case ms_obj_date ms of
       Just t -> do
         l <- liftIO (findObjectLinkable (ms_mod ms) (ml_obj_file loc) t)
         return (Just l)
       Nothing -> return Nothing
-  hminfo <- liftIO (compileOne' (Just tcg) messager hsc_env ms 1 1
-                                Nothing mb_linkable
-                                SourceUnmodifiedAndStable)
+  (_msg, mb_mbs_hifile) <-
+    liftIO (runTcInteractive hsc_env
+                             (readIface (ms_mod ms) (ml_hi_file loc)))
 
-  let hpt' = addToHpt (hsc_HPT hsc_env) mn hminfo
+  -- When linkable and interface file were found, make HomeModInfo with
+  -- simple ModDetails value. Otherwise, do the compilation work and get
+  -- a HomeModInfo.
+  hmi <-
+    case mb_mbs_hifile of
+      Just (Maybes.Succeeded hi) -> do
+        mdetails <- liftIO (makeSimpleDetails hsc_env tcg)
+        return HomeModInfo { hm_iface = hi
+                           , hm_details = mdetails
+                           , hm_linkable = mb_linkable }
+      _ ->
+        liftIO (compileOne' (Just tcg) (Just batchMsg) hsc_env ms
+                            1 1 Nothing mb_linkable
+                            SourceUnmodifiedAndStable)
+
+  let hpt' = addToHpt (hsc_HPT hsc_env) mn hmi
   _ <- setSession hsc_env {hsc_HPT = hpt'}
   _ <- liftIO (addHomeModuleToFinder hsc_env mn loc)
   return ms
@@ -494,14 +514,15 @@ compileToHsModule :: TargetUnit
                   -> Skc (Maybe (HsModule RdrName))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
-    SkSource _ _ form sp -> Just <$> compileSkModuleForm' sp form
-    HsSource path        -> (Just . fst) <$> compileHsFile path mbphase
-    OtherSource path     -> compileOtherFile path >> return Nothing
+    SkSource _ mn form sp -> Just <$> compileSkModuleForm' sp mn form
+    HsSource path         -> (Just . fst) <$> compileHsFile path mbphase
+    OtherSource path      -> compileOtherFile path >> return Nothing
 
 -- | Wrapper for 'compileSkModuleForm', to use fresh set of modules,
 -- language extensions, and macros in 'SkEnv'.
-compileSkModuleForm' :: SPState -> [Code] -> Skc (HsModule RdrName)
-compileSkModuleForm' sp forms = do
+compileSkModuleForm' :: SPState -> String -> [Code]
+                     -> Skc (HsModule RdrName)
+compileSkModuleForm' sp mn forms = do
   -- Reset the extension flags first, then update the flags again
   -- with extension flags obtained from current SKSource file.
   resetLanguageExtensions
@@ -513,7 +534,7 @@ compileSkModuleForm' sp forms = do
   contextModules <- envContextModules <$> getSkEnv
   let ii = IIDecl . simpleImportDecl . mkModuleNameFS
   setContext (map (ii . fsLit) contextModules)
-  timeIt "HsModule [sk]" (compileSkModuleForm forms)
+  timeIt ("SkModule [" ++ mn ++ "]") (compileSkModuleForm forms)
 
 resetLanguageExtensions :: Skc ()
 resetLanguageExtensions = do
