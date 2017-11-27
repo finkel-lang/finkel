@@ -5,12 +5,12 @@
   eval-when
 
   ;; Macros for macros
-  defmacro defmacro+ defmacro* defmacro*+
+  defmacro defmacro! defmacro* defmacro*!
   macrolet macrolet*
   macroexpand macroexpand-1 exported-macros
 
   ;; Function declarations
-  defn defn+ defdo
+  defn defn! defdo
 
   ;; Expressions
   cond list
@@ -35,17 +35,17 @@
 ;;; Basic
 
 (eval-when-compile
- (define-macro define-macro+ form
+ (define-macro define-macro! form
    (case (unCode form)
      (List (: _ rest))
      (return `(begin
                 (eval-when-compile
                  (define-macro ,@rest))
                 (define-macro ,@rest)))
-     _ (skSrcError form "define-macro+: impossible happened"))))
+     _ (skSrcError form "define-macro!: impossible happened"))))
 
 ;;; Macro to specify the phases of evaluation.
-(define-macro+ eval-when form
+(define-macro! eval-when form
   (let ((:: compile? (-> [Code] Bool))
         (= compile? (elem 'compile))
         (:: load? (-> [Code] Bool))
@@ -154,7 +154,7 @@
 
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
-(define-macro+ defmacro* form
+(define-macro! defmacro* form
   (case (unCode form)
     (List [_ name arg body0])
     (do (<- body1 (make-defmacro-body "defmacro*" form name arg body0))
@@ -166,23 +166,23 @@
 
 ;;; Variant of `defmacro*'. Wrapped in `eval-when' with `compile' and
 ;;; `load' phases.
-(define-macro+ defmacro*+ form
+(define-macro! defmacro*! form
   (case (unCode form)
     (List (: _ rest)) (return `(eval-when (compile load)
                                  (defmacro* ,@rest)))
-    _ (macro-error form "defmacro*+: impossible happened.")))
+    _ (macro-error form "defmacro*!: impossible happened.")))
 
 ;;; The `defmacro' macro, similar to the macro with same name found in
 ;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy
 ;;; ... etc. Currently does not suuport lambda-list like pattern match
 ;;; in macro argument.
-(defmacro*+ defmacro (name args body)
+(defmacro*! defmacro (name args body)
   (return `(defmacro* ,name ,args
              (return ,body))))
 
 ;;; Variant of `defmacro'. Wrapped in `eval-when' with `compile' and
 ;;; `load' phases.
-(defmacro*+ defmacro+ (name args body)
+(defmacro*! defmacro! (name args body)
   (return `(eval-when (compile load)
              (defmacro ,name ,args
                ,body))))
@@ -217,7 +217,7 @@
 
 ;;; Macro to define a function for both of compilation time and load
 ;;; time. This macro uses `eval-when' and `defn'.
-(defmacro defn+ form
+(defmacro defn! form
   `(eval-when (compile load)
      (defn ,@form)))
 
@@ -235,7 +235,7 @@
 ;;; same as wrapping the body with `case' expression with dummy unit, or
 ;;; `if' with `MultiWayIf' GHC language extension.
 
-(defmacro+ cond body
+(defmacro! cond body
   `(case ()
      _ (| ,@body)))
 
