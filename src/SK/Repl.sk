@@ -124,8 +124,7 @@
 ;;; after loading compiled modules.
 (macrolet* ((the-macros ()
               (return
-                `[,@(map (\ mac
-                           `(, ,mac ,(aSymbol mac)))
+                `[,@(map (\ mac `(, ,mac ,(aSymbol mac)))
                          (++ (exported-macros SK.Core)
                              (exported-macros SK.Repl.Macro)))])))
   (:: replMacros EnvMacros)
@@ -188,8 +187,7 @@
                loop)
            go)))
     ;; Print the result from boot expression, then start the loop.
-    (withInterrupt
-     (>> print-io loop))))
+    (withInterrupt (>> print-io loop))))
 
 ;;; Read single S-expression form.
 (:: read-form (-> String (Repl (Maybe Code))))

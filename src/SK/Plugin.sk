@@ -14,9 +14,9 @@
 (import Language.SK.Plugin hiding (frontendPlugin))
 
 (macrolet* ((core-macros ()
-              (return
-                `[,@(map (\ mac (, mac (aSymbol mac)))
-                         (exported-macros SK.Prelude))])))
+               (return
+                 `[,@(map (\ mac (, mac (aSymbol mac)))
+                          (exported-macros SK.Prelude))])))
   (defn (frontendPlugin FrontendPlugin)
     ()
     (defaultFrontendPlugin
