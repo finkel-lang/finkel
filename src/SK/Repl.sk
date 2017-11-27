@@ -104,11 +104,16 @@
             (putStrLn
              "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))))
   (putStrLn
-   (concat ["SK REPL (sk-lang " (showVersion Paths_sk_lang.version)
-            ", sk-kernel " (showVersion Paths_sk_kernel.version)
-            ")"]))
+   (concat ["SK REPL (sk-lang " sk-lang-version
+            ", sk-kernel " sk-kernel-version ")"]))
   (putMVar in-mv init-form)
   (run-repl reader' initial-repl-state))
+
+(:: sk-lang-version String)
+(= sk-lang-version (showVersion Paths_sk_lang.version))
+
+(:: sk-kernel-version String)
+(= sk-kernel-version (showVersion Paths_sk_kernel.version))
 
 (:: repl-env SkEnv)
 (= repl-env
@@ -128,8 +133,7 @@
                          (++ (exported-macros SK.Core)
                              (exported-macros SK.Repl.Macro)))])))
   (:: replMacros EnvMacros)
-  (= replMacros
-    (makeEnvMacros (the-macros))))
+  (= replMacros (makeEnvMacros (the-macros))))
 
 
 ;;; Read and print
@@ -361,12 +365,6 @@
   (where (| ((all null tvs) "")
             (otherwise      (++ (concat (intersperse "\n" tvs)) "\n")))
     (= tvs (zipWith (var-name-and-type dflags) names vars))))
-
-(:: showContext (-> InteractiveImport String))
-(= showContext ii
-  (case ii
-    (IIDecl idecl) (moduleNameString (unLoc (ideclName idecl)))
-    (IIModule mdl) (moduleNameString mdl)))
 
 (:: eq-ii (-> InteractiveImport InteractiveImport Bool))
 (= eq-ii a b
