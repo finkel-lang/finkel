@@ -218,14 +218,14 @@
              (expectFailure
               (=== nil (mapcar (\ x (cons x x)) 'foo)))))))
 
-(defmacro m1 (x)
+(defmacro+ m1 (x)
   `(++ "m1 " ,x))
 
-(defmacro expandTo (in out)
+(defmacro+ expandTo (in out)
   `(do (<- e (macroFunction ,(car in) ',in))
        (shouldBe (Right ',out) e)))
 
-(defmacro expandFailure (in)
+(defmacro+ expandFailure (in)
   `(do (<- e (macroFunction ,(car in) ',in))
        (let ((= isLeft lr
                (case lr
@@ -272,6 +272,7 @@
                   (eval-when (foo bar buzz)
                     (:: foo Int)
                     (= foo 42))))
+
              (it "throws and exception on non-list phase"
                  (expandFailure
                   (eval-when compile
@@ -325,6 +326,15 @@
                   (defmacro* m1 too many parameters
                     passed)))))
 
+      (d "defmacro*+"
+         (it "expands to (eval-when (...) (defmacro* ...))"
+             (expandTo
+              (defmacro*+ m1 (a)
+                `(return (putStrLn ,a)))
+              (eval-when (compile load)
+                (defmacro* m1 (a)
+                  (quasiquote (return (putStrLn (unquote a)))))))))
+
       (d "defmacro"
          (it "should expand to defmacro*"
              (expandTo
@@ -334,6 +344,15 @@
                 (return
                   (quasiquote
                    (putStrLn (++ "hello, " (unquote a)))))))))
+
+      (d "defmacro+"
+         (it "expands to (eval-when (...) (defmacro ...))"
+             (expandTo
+              (defmacro+ m1 (a)
+                `(putStrLn ,a))
+              (eval-when (compile load)
+                (defmacro m1 (a)
+                  (quasiquote (putStrLn (unquote a))))))))
 
       (d "macro containing `$foo'"
          (it "should replace `$foo' with gensym"

@@ -84,7 +84,6 @@
 
 (type Result (Either String String))
 
-
 
 ;;; Main
 
@@ -118,7 +117,8 @@
         (= defaultMacros
           (mergeMacros specialForms replMacros)))
     (initialSkEnv {envContextModules modules
-                   envDefaultMacros defaultMacros})))
+                   envDefaultMacros defaultMacros
+                   envAddInDefineMacro True})))
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.

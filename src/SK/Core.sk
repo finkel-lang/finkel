@@ -5,8 +5,9 @@
   eval-when
 
   ;; Macros for macros
-  defmacro* defmacro macrolet* macrolet
-  macroexpand-1 macroexpand exported-macros
+  defmacro defmacro+ defmacro* defmacro*+
+  macrolet macrolet*
+  macroexpand macroexpand-1 exported-macros
 
   ;; Function declarations
   defn defn+ defdo
@@ -33,8 +34,18 @@
 
 ;;; Basic
 
+(eval-when-compile
+ (define-macro define-macro+ form
+   (case (unCode form)
+     (List (: _ rest))
+     (return `(begin
+                (eval-when-compile
+                 (define-macro ,@rest))
+                (define-macro ,@rest)))
+     _ (skSrcError form "define-macro+: impossible happened"))))
+
 ;;; Macro to specify the phases of evaluation.
-(define-macro eval-when form
+(define-macro+ eval-when form
   (let ((:: compile? (-> [Code] Bool))
         (= compile? (elem 'compile))
         (:: load? (-> [Code] Bool))
@@ -83,7 +94,7 @@
     (do (<- kvs (foldM acc-gensym-names [] form))
         (return (subst-gensyms kvs form))))
 
-  ;; Function to make body expression of `defmacro*' and `defmacro'.
+  ;; Function to make body of `defmacro*' and `defmacro'.
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
   (= make-defmacro-body label whole name0 arg0 body0
     (let ((:: err (-> Code Code Code))
@@ -143,7 +154,7 @@
 
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
-(define-macro defmacro* form
+(define-macro+ defmacro* form
   (case (unCode form)
     (List [_ name arg body0])
     (do (<- body1 (make-defmacro-body "defmacro*" form name arg body0))
@@ -153,19 +164,34 @@
 
     _ (macro-error form "defmacro*: invalid form")))
 
+;;; Variant of `defmacro*'. Wrapped in `eval-when' with `compile' and
+;;; `load' phases.
+(define-macro+ defmacro*+ form
+  (case (unCode form)
+    (List (: _ rest)) (return `(eval-when (compile load)
+                                 (defmacro* ,@rest)))
+    _ (macro-error form "defmacro*+: impossible happened.")))
+
 ;;; The `defmacro' macro, similar to the macro with same name found in
 ;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy
 ;;; ... etc. Currently does not suuport lambda-list like pattern match
 ;;; in macro argument.
-(defmacro* defmacro (name args body0)
+(defmacro*+ defmacro (name args body)
   (return `(defmacro* ,name ,args
-             (return ,body0))))
+             (return ,body))))
+
+;;; Variant of `defmacro'. Wrapped in `eval-when' with `compile' and
+;;; `load' phases.
+(defmacro*+ defmacro+ (name args body)
+  (return `(eval-when (compile load)
+             (defmacro ,name ,args
+               ,body))))
 
 ;;; Variant of `let-macro', with `make-macro-body'.
 (define-macro macrolet* form
   (make-macrolet-body "macrolet*" form id))
 
-;;; Variant of `let-macro', with `make-macro-body', and body expression
+;;; Variant of `let-macro', with `make-macro-body'. Body expression
 ;;; wrapped with `return'.
 (define-macro macrolet form
   (make-macrolet-body "macrolet" form (\ body `(return ,body))))
@@ -178,8 +204,9 @@
     (List [_ sig args body])
     (case (unCode sig)
       (List [name tsig])
-      (return `(begin (:: ,name ,tsig)
-                      (= ,name ,@args ,body)))
+      (return `(begin
+                 (:: ,name ,tsig)
+                 (= ,name ,@args ,body)))
 
       (Atom _)
       (return `(= ,sig ,@args ,body))
@@ -207,7 +234,8 @@
 ;;; The `cond' macro, found in many Lisp languages.  The behaviour is
 ;;; same as wrapping the body with `case' expression with dummy unit, or
 ;;; `if' with `MultiWayIf' GHC language extension.
-(defmacro cond body
+
+(defmacro+ cond body
   `(case ()
      _ (| ,@body)))
 
@@ -325,7 +353,7 @@
                        (macro-error lst
                                     "defmodule: unknown section")))))))
           (<- alist (foldM merge-sections [] rest1))
-          (let ((= emit header0
+          (let ((= emit add-load-use? header0
                   (let ((= header1
                           ;; Workaround to trick the S-expression
                           ;; reader.  Using `toCode' and `aSymbol' to
@@ -338,13 +366,15 @@
                         (= e2 (maybe nil
                                      (mapcar (\ es `(,header1 ,@es)))
                                      (lookup 'load-use alist))))
-                    (append e1 e2)))))
+                    (if add-load-use?
+                        (append e1 e2)
+                        e1)))))
           (return
             `(begin
-               ,@(emit 'load)
+               ,@(emit True 'load)
                (module ,name
-                 ,@(maybe nil id (lookup 'export alist)))
-               ,@(emit 'import))))
+                 ,@(emit False 'export))
+               ,@(emit True 'import))))
 
       _ (macro-error form "defmodule: invalid form"))
 
