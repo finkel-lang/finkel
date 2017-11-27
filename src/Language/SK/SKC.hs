@@ -93,6 +93,8 @@ data SkEnv = SkEnv
    , envDefaultLangExts :: (Maybe Language, IntSet.IntSet)
      -- | Flag for controling informative output.
    , envSilent :: Bool
+     -- | Flag for adding macros with @define-macro@.
+   , envAddInDefineMacro :: Bool
    }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
@@ -157,6 +159,9 @@ insertMacro k v = Skc go
     go = modify (\e -> e {envMacros = Map.insert k v (envMacros e)})
 
 -- | Lookup macro by name.
+--
+-- Lookup macro from persistent and temporary macros. When macros with
+-- conflicting name exist, the latest temporary macro wins.
 lookupMacro :: FastString -> SkEnv -> Maybe Macro
 lookupMacro name ske = go (envTmpMacros ske)
   where

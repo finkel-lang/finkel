@@ -121,7 +121,8 @@ initialSkEnv = SkEnv
   , envDebug = False
   , envContextModules = ["Prelude", "Language.SK"]
   , envDefaultLangExts = (Nothing, IntSet.empty)
-  , envSilent = False }
+  , envSilent = False
+  , envAddInDefineMacro = False }
 
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =

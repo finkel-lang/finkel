@@ -140,9 +140,9 @@ unquoteSplice form =
 -- in current target file. Need to take some kind of GHC environment
 -- value to expand macros.
 
-compileMacro :: Code -> Code -> Code -> Code
-             -> Skc (FastString, [Code], Macro)
-compileMacro form@(LForm (L l _)) self arg body = do
+compileMacro :: Bool -> Code -> Code -> Code -> Code
+             -> Skc (FastString, [Code], Maybe Macro)
+compileMacro doEval form@(LForm (L l _)) self arg body = do
   let LForm (L _ (Atom (ASymbol name))) = self
       name' = appendFS (fsLit "__") name
   expanded <- expand body
@@ -154,11 +154,13 @@ compileMacro form@(LForm (L l _)) self arg body = do
                      , tList l [tSym l "->", tSym l "Code"
                                ,tList l [tSym l "Skc", tSym l "Code"]]]
       fn = tList l [tSym l "=", tSym l name', arg, expanded]
-  case evalBuilder parseExpr [expr] of
-    Right hexpr -> do
-      macro <- evalExpr hexpr
-      return (name, decls, unsafeCoerce macro)
-    Left err -> skSrcError form err
+  if doEval
+    then case evalBuilder parseExpr [expr] of
+                Right hexpr -> do
+                  macro <- evalExpr hexpr
+                  return (name, decls, Just (unsafeCoerce macro))
+                Left err -> skSrcError form err
+    else return (name, decls, Nothing)
 
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Skc [TyThing]
 getTyThingsFromIDecl (L _ idecl) minfo = do
@@ -235,13 +237,15 @@ m_quasiquote form =
 
 m_defineMacro :: Mfunc
 m_defineMacro form@(LForm (L l _)) = do
-  (name, decls, macro) <- add form
-  insertMacro name macro
+  addToContext <- envAddInDefineMacro <$> getSkEnv
+  (name, decls, mb_macro) <- add addToContext form
+  when addToContext
+       (maybe (return ()) (insertMacro name) mb_macro)
   return (tList l (tSym l "begin":decls))
   where
-    add x =
+    add doEval x =
       case unCode x of
-        List [_,self,arg,body] -> compileMacro x self arg body
+        List [_,self,arg,body] -> compileMacro doEval x self arg body
         _ -> skSrcError form ("define-macro: malformed args:\n" ++
                               show x)
 
@@ -270,7 +274,7 @@ m_letMacro form =
     addLetMacro x =
       case unCode x of
         List [self,arg,body] -> do
-          (name, _decl, macro) <- compileMacro x self arg body
+          (name, _decl, Just macro) <- compileMacro True x self arg body
           return (name, macro)
         _ -> skSrcError x ("let-macro: malformed macro: " ++ show x)
 
@@ -321,7 +325,8 @@ m_evalWhenCompile form =
       expanded <- expands body
       case evalBuilder parseModule expanded of
         Right (HsModule {hsmodDecls = decls}) -> do
-          _ <- evalDecls decls
+          (tythings, _ic) <- evalDecls decls
+          mapM_ addImportedMacro tythings
           return emptyForm
         Left err -> skSrcError (LForm (L l (List body))) err
     _ -> skSrcError form ("eval-when-compile: malformed body: " ++
@@ -537,11 +542,11 @@ tInteger l n = LForm (L l (Atom (AInteger n)))
 
 tFractional :: SrcSpan -> FractionalLit -> Code
 tFractional l n = LForm (L l (Atom (AFractional n)))
-{-# INCLUDE tFractional #-}
+{-# INLINE tFractional #-}
 
 tList :: SrcSpan -> [Code] -> Code
 tList l forms = LForm (L l (List forms))
-{-# INCLUDE tList #-}
+{-# INLINE tList #-}
 
 tHsList :: SrcSpan -> [Code] -> Code
 tHsList l forms = LForm (L l (HsList forms))
@@ -549,7 +554,7 @@ tHsList l forms = LForm (L l (HsList forms))
 
 mkQuoted :: SrcSpan -> Code -> Code
 mkQuoted l form = tList l [tSym l "quoted", form]
-{-# INCLUDE mkQuoted #-}
+{-# INLINE mkQuoted #-}
 
 emptyForm :: Code
 emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
@@ -557,4 +562,4 @@ emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
 
 mkIIDecl :: FastString -> InteractiveImport
 mkIIDecl = IIDecl . simpleImportDecl . mkModuleNameFS
-{-# INCLUDE mkIIDecl #-}
+{-# INLINE mkIIDecl #-}
