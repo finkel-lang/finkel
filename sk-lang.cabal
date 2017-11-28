@@ -27,12 +27,14 @@ library
   exposed-modules:     SK.Core.List
                        SK.Core
                        SK.Plugin
-                       SK.Prelude
-                       SK.Repl
+                       SK.Setup
+                       SK.Repl.Types
                        SK.Repl.Env
                        SK.Repl.GHC
+                       SK.Repl.Loop
                        SK.Repl.Macro
-                       SK.Setup
+                       SK.Repl
+                       SK.Prelude
   other-modules:       Paths_sk_lang
   build-depends:       base >= 4.7 && < 5
                      , bytestring

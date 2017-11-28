@@ -1,0 +1,308 @@
+;;; Loop in REPL.
+
+(require SK.Core)
+
+(defmodule SK.Repl.Loop
+  (use
+   ;; base
+   (Control.Concurrent
+    ((MVar) (ThreadId) forkIO killThread newEmptyMVar putMVar takeMVar))
+   (Control.Exception ((AsyncException ..)))
+   (Control.Monad (void))
+   (Control.Monad.IO.Class (liftIO))
+   (Data.List (intercalate intersperse isSuffixOf nubBy))
+   (System.Exit (exitWith))
+   (System.IO (hFlush stdout))
+
+   ;; bytestring
+   (Data.ByteString.Builder (stringUtf8 toLazyByteString))
+   (qualified Data.ByteString.Lazy.Char8 as BS)
+
+   ;; haskeline
+   (System.Console.Haskeline
+    ((InputT) defaultSettings getInputLine handleInterrupt outputStr
+              outputStrLn runInputT throwTo withInterrupt))
+
+   ;; transformers
+   (Control.Monad.Trans.Class (lift))
+
+   ;; sk-kernel
+   (Language.SK)
+   (Language.SK.Builder ((HDecl) (HImportDecl) (HStmt) evalBuilder))
+   (Language.SK.Eval (evalDecls))
+   (Language.SK.GHC)
+   (Language.SK.Lexer (evalSP))
+   (Language.SK.Reader (sexpr))
+   (Language.SK.Run (runSkc skErrorHandler withSourceErrorHandling))
+   (Language.SK.Syntax (parseImports parseStmt parseTopDecls ))
+
+   ;; internal
+   (SK.Repl.Env)
+   (SK.Repl.GHC)
+   (SK.Repl.Types))
+
+  (export eval-loop read-print-loop start-repl))
+
+
+;;; Starting the REPL
+
+(defdo (start-repl (-> SkEnv (IO ())))
+  (ske)
+  (<- in-mv newEmptyMVar)
+  (<- out-mv newEmptyMVar)
+  (<- tid (forkIO (void (runSkc (eval-loop in-mv out-mv) ske))))
+  (let ((= reader
+          (runInputT defaultSettings
+                     (read-print-loop in-mv out-mv tid)))
+        (= init-form
+          '(begin
+            (require Prelude)
+            (require SK.Prelude)
+            (require SK.Repl.Env)
+            (require SK.Repl.Macro)
+            (putStrLn
+             "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))))
+  ;; (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
+  ;;                    ", sk-kernel " sk-kernel-version ")"]))
+  (putMVar in-mv init-form)
+  (run-repl reader initial-repl-state))
+
+
+;;; Read and print
+
+;;; Loop for reading input and printing the output.
+;;;
+;;; Tracks the state of intermediate S-expression from input, and
+;;; continue reading the input until successful parse result.
+(defn (read-print-loop
+       (-> (MVar Code) (MVar Result) ThreadId (InputT Repl ())))
+  (to-mvar from-mvar eval-tid)
+  (let ((= print-io
+          (do (<- result (liftIO (takeMVar from-mvar)))
+              (case result
+                (Right str) (outputStr str)
+                (Left str)  ((if (isSuffixOf "\n" str)
+                                 outputStr
+                                 outputStrLn)
+                             str))
+              (liftIO (hFlush stdout))))
+        (= go
+          (do (<- st0 (lift get-repl-state))
+              (let ((= prompt
+                      (if (null (pending-input st0))
+                          "> "
+                          ""))))
+              (<- mb-input
+                ;; Handle interrupt signals thrown while waiting for
+                ;; input, to handle `Ctrl-C' key presses without valid
+                ;; evaluation form, and refresh intermediate user inputs
+                ;; in Repl state.
+                (handleInterrupt
+                 (lift (do (<- st1 get-repl-state)
+                           (put-repl-state (st1 {pending-input []}))
+                           (return (Just []))))
+                 (getInputLine prompt)))
+              (case mb-input
+                Nothing     quit
+                (Just line) (| ((== line "(quit)") quit)
+                               ((null line) go)
+                               (otherwise (go' line))))))
+        (= go' line
+          (do (<- mb-form (lift (read-form line)))
+              (case mb-form
+                Nothing     go
+                (Just form) (do (liftIO (putMVar to-mvar form))
+                                print-io
+                                go))))
+        (= quit
+          (liftIO (killThread eval-tid)))
+        (= loop
+          (handleInterrupt
+           (do (throwTo eval-tid UserInterrupt)
+               print-io
+               loop)
+           go)))
+
+    ;; Print the result from boot expression, then start the loop.
+    (withInterrupt (>> print-io loop))))
+
+;;; Read single S-expression form.
+(defn (read-form (-> String (Repl (Maybe Code))))
+  (input0)
+  (do (<- st get-repl-state)
+      (let ((= input1
+              (++ (pending-input st)
+                  [(toLazyByteString (stringUtf8 (: \\n input0)))]))
+            (= count (succ (input-count st)))
+            (= put-and-return pending ret
+              (do (put-repl-state (st {input-count count
+                                       pending-input pending}))
+                  (return ret))))
+        (case (evalSP sexpr (Just "<repl>") (BS.concat input1))
+          (Right forms) (put-and-return [] (Just forms))
+          (Left _err)   (put-and-return input1 Nothing)))))
+
+
+;;; Eval loop
+
+(:: eval-loop (-> (MVar Code) (MVar Result) (Skc ())))
+(= eval-loop in-mvar out-mvar
+  (let ((= initialize
+          ;; Default target in interactive context is `HscAsm',
+          ;; updating to `HscInterpreted'.  Also, `dynamic' option is
+          ;; enabled in REPL.
+          (do (<- hsc-env getSession)
+              (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
+                    (= dflags1 (dflags0 {hscTarget HscInterpreted
+                                         ghcLink LinkInMemory}))
+                    (= dflags2 (addWay' WayDyn dflags1))))
+              (void (setSessionDynFlags dflags2))
+              (<- (Session session) (fromGhc (Ghc return)))
+              (liftIO (putTheHscEnv session))))
+        (= withAsyncHandler
+          (ghandle
+           (\ e
+             (do (liftIO
+                  (case e
+                    UserInterrupt (return ())
+                    ThreadKilled  (return ())
+                    _             (putStrLn
+                                   (++ "eval-loop: got " (show e)))))
+                 go))))
+        (= withSkHandler m
+          (skErrorHandler defaultFatalMessager
+                          defaultFlushOut
+                          (withSourceErrorHandling m)))
+        (= go
+          (withAsyncHandler
+           (do (<- form (liftIO (takeMVar in-mvar)))
+               (<- ret (withSkHandler
+                        (do (<- expanded (expands [form]))
+                            (eval-form expanded))))
+               (<- (Session session) (fromGhc (Ghc return)))
+               (liftIO (do (putTheHscEnv session)
+                           (putMVar out-mvar ret)))
+               go))))
+    (>> initialize go)))
+
+(:: eval-form (-> [Code] (Skc Result)))
+(= eval-form forms
+  (| ((null forms)
+      (return (Right "")))
+     ((<- (Right stmt) (evalBuilder parseStmt forms))
+      (eval-statement stmt))
+     ((<- (Right idecl) (evalBuilder parseImports forms))
+      (eval-imports idecl))
+     (otherwise
+      (case (evalBuilder parseTopDecls forms)
+        (Right decs) (eval-decls decs)
+        (Left err)   (return (Left (concat [err "\n"])))))))
+
+(:: eval-statement (-> HStmt (Skc Result)))
+(= eval-statement stmt0
+  (do (<- hsc-env getSession)
+      (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
+      (case stmt1
+        (Just (, is h f)) (update-hsc-env hsc-env is h f)
+        Nothing           (return (Left
+                                   "eval-statement: no result")))))
+
+(:: eval-imports (-> [HImportDecl] (Skc Result)))
+(= eval-imports imports
+  (do (<- context getContext)
+      (<- dflags getSessionDynFlags)
+      (let ((= mkIIDecl (L _ idecl)
+              (IIDecl idecl))
+            (= mdls
+              (concat ["; "
+                       (intercalate ", " (map (. (showSDoc dflags) ppr)
+                                              imports))
+                       "\n"]))))
+      (setContext (nubBy eq-ii (++ (map mkIIDecl imports) context)))
+      (return (Right mdls))))
+
+(:: eval-decls (-> [HDecl] (Skc Result)))
+(= eval-decls decls
+  (do (<- (, tythings _ic) (evalDecls decls))
+      (<- hsc-env getSession)
+      (let ((= dflags (hsc_dflags hsc-env))
+            (= pr tt
+              (case tt
+                (AnId var) (var-name-and-type dflags (getName var) var)
+                _          (++ "; " (showSDoc dflags (ppr tt)))))
+            (= show-tything tt acc
+              (let ((= nstr
+                      (showSDoc dflags (ppr (getName tt)))))
+                (if (== "$trModule" nstr)
+                    acc
+                    (: (pr tt) acc))))
+            (= tystrs (foldr show-tything [] tythings))
+            (= tystr (unlines tystrs))))
+      (return (Right tystr))))
+
+(:: update-hsc-env
+  (-> HscEnv [Id] ForeignHValue FixityEnv (Skc Result)))
+(= update-hsc-env hsc-env ids hvals-io fixity-env
+  ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
+  ;; `iservCmd' in its body.
+  (let ((= success fhvals
+          (do (let ((= ic (hsc_IC hsc-env))
+                    (= ic2
+                      (extendInteractiveContextWithIds ic ids))
+                    (= ic3 (ic2 {ic_fix_env fixity-env}))
+                    (= final-names (map getName ids))
+                    (= hsc-env-2 (hsc-env {hsc_IC ic3}))))
+              (<- dflags getSessionDynFlags)
+              (liftIO (extendLinkEnv (zip final-names fhvals)))
+
+              ;; InteractiveEval does not export `rttiEnvironment'.
+              ;;
+              ;; (<- hsc-env-3
+              ;;     (liftIO
+              ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
+
+              (setSession hsc-env-2)
+              (return
+                (Right
+                 (show-names-and-types dflags final-names ids)))))
+        (= exception serialized
+          (case serialized
+            (EOtherException str) (return (Left str))
+            (EExitCode ecode)     (liftIO (exitWith ecode))
+            EUserInterrupt        (return (Left "Interrupt"))))
+        (= incomplete
+          (return (Left "update-hsc-env failed."))))
+    (do (<- status (liftIO
+                    (evalStmt hsc-env False (EvalThis hvals-io))))
+        (case status
+          (EvalComplete _ (EvalSuccess hvs)) (success hvs)
+          (EvalComplete _ (EvalException e)) (exception e)
+          _                                  incomplete))))
+
+
+;;; Auxiliary
+
+(:: var-name-and-type (-> DynFlags Name Var String))
+(= var-name-and-type dflags name var
+  (let ((= nstr (occNameString (nameOccName name)))
+        (= typ (showPpr dflags (varType var))))
+    (if (== nstr "it")
+        ""
+        (concat
+         (intersperse "\n"
+                      (map (++ "; ")
+                           (lines (++ nstr (++ " :: " typ)))))))))
+
+(:: show-names-and-types (-> DynFlags [Name] [Var] String))
+(= show-names-and-types dflags names vars
+  (where (| ((all null tvs) "")
+            (otherwise      (++ (concat (intersperse "\n" tvs)) "\n")))
+    (= tvs (zipWith (var-name-and-type dflags) names vars))))
+
+(:: eq-ii (-> InteractiveImport InteractiveImport Bool))
+(= eq-ii a b
+  (case (, a b)
+    (, (IIModule x) (IIModule y)) (== x y)
+    (, (IIDecl x) (IIDecl y))     (== (unLoc (ideclName x))
+                                      (unLoc (ideclName y)))
+    _                             False))
