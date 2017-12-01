@@ -1,14 +1,14 @@
-;;; Loop in REPL.
+;;; Loops in REPL.
 
 (require SK.Core)
 
 (defmodule SK.Repl.Loop
   (use
    ;; base
-   (Control.Concurrent
-    ((MVar) (ThreadId) forkIO killThread newEmptyMVar putMVar takeMVar))
-   (Control.Exception ((AsyncException ..)))
-   (Control.Monad (void))
+   (Control.Concurrent ((ThreadId) forkIO killThread))
+   (Control.Concurrent.MVar ((MVar) newEmptyMVar putMVar takeMVar))
+   (Control.Exception ((AsyncException ..) finally))
+   (Control.Monad (void when))
    (Control.Monad.IO.Class (liftIO))
    (Data.List (intercalate intersperse isSuffixOf nubBy))
    (System.Exit (exitWith))
@@ -17,6 +17,12 @@
    ;; bytestring
    (Data.ByteString.Builder (stringUtf8 toLazyByteString))
    (qualified Data.ByteString.Lazy.Char8 as BS)
+
+   ;; filepath
+   (System.FilePath (</> <.>))
+
+   ;; directory
+   (System.Directory (doesFileExist getTemporaryDirectory removeFile))
 
    ;; haskeline
    (System.Console.Haskeline
@@ -28,17 +34,19 @@
 
    ;; sk-kernel
    (Language.SK)
-   (Language.SK.Builder ((HDecl) (HImportDecl) (HStmt) evalBuilder))
+   (Language.SK.Builder ((HDecl) (HImportDecl)  (HStmt) evalBuilder))
    (Language.SK.Eval (evalDecls))
    (Language.SK.GHC)
    (Language.SK.Lexer (evalSP))
    (Language.SK.Reader (sexpr))
    (Language.SK.Run (runSkc skErrorHandler withSourceErrorHandling))
-   (Language.SK.Syntax (parseImports parseStmt parseTopDecls ))
+   (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
 
    ;; internal
    (SK.Repl.Env)
    (SK.Repl.GHC)
+   (SK.Repl.Listen)
+   (SK.Repl.IORedirect)
    (SK.Repl.Types))
 
   (export eval-loop read-print-loop start-repl))
@@ -46,26 +54,39 @@
 
 ;;; Starting the REPL
 
-(defdo (start-repl (-> SkEnv (IO ())))
-  (ske)
+;;; Start REPL, maybe listen to given port number.
+(defdo (start-repl (-> (Maybe Int) SkEnv (IO ())))
+  (mb-listen ske)
   (<- in-mv newEmptyMVar)
-  (<- out-mv newEmptyMVar)
-  (<- tid (forkIO (void (runSkc (eval-loop in-mv out-mv) ske))))
-  (let ((= reader
-          (runInputT defaultSettings
-                     (read-print-loop in-mv out-mv tid)))
-        (= init-form
-          '(begin
-            (require Prelude)
-            (require SK.Prelude)
-            (require SK.Repl.Env)
-            (require SK.Repl.Macro)
-            (putStrLn
-             "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))))
-  ;; (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
-  ;;                    ", sk-kernel " sk-kernel-version ")"]))
-  (putMVar in-mv init-form)
-  (run-repl reader initial-repl-state))
+  (<- tmpfile (start-listener mb-listen in-mv))
+  (<- eval-tid
+    (forkIO (void (runSkc (eval-loop tmpfile in-mv) ske))))
+  (let ((= rpl (read-print-loop in-mv eval-tid))
+        (= reader (runInputT defaultSettings rpl))))
+  (finally
+   (run-repl reader initial-repl-state)
+   (mb-cleanup-tmpfile mb-listen tmpfile)))
+
+;;; Start listner in separate thread, and return temporary file for
+;;; getting String output from statement.
+(defn (start-listener (-> (Maybe Int) (MVar Input) (IO FilePath)))
+  (mb-listen in-mv)
+  (maybe (return
+           (error "REPL server did not start with listener."))
+         (\ port
+           (do (putStrLn (++ "Listening on port " (show port)))
+               (void (forkIO (listener (fromIntegral port) in-mv)))
+               (<- dir getTemporaryDirectory)
+               (return (</> dir (<.> "sk.repl" (show port))))))
+         mb-listen))
+
+;; Clean up temporary file, if the server was started with listener.
+(defn (mb-cleanup-tmpfile (-> (Maybe Int) FilePath (IO ())))
+  (mb-listen tmpfile)
+  (maybe (return ())
+         (const (do (<- exist (doesFileExist tmpfile))
+                    (when exist (removeFile tmpfile))))
+         mb-listen))
 
 
 ;;; Read and print
@@ -74,24 +95,21 @@
 ;;;
 ;;; Tracks the state of intermediate S-expression from input, and
 ;;; continue reading the input until successful parse result.
-(defn (read-print-loop
-       (-> (MVar Code) (MVar Result) ThreadId (InputT Repl ())))
-  (to-mvar from-mvar eval-tid)
-  (let ((= print-io
-          (do (<- result (liftIO (takeMVar from-mvar)))
+(defn (read-print-loop (-> (MVar Input) ThreadId (InputT Repl ())))
+  (to-mvar eval-tid)
+  (let ((= print-io result-mv
+          (do (<- result (liftIO (takeMVar result-mv)))
               (case result
                 (Right str) (outputStr str)
-                (Left str)  ((if (isSuffixOf "\n" str)
-                                 outputStr
-                                 outputStrLn)
-                             str))
+                (Left str) ((if (isSuffixOf "\n" str)
+                                outputStr
+                                outputStrLn)
+                            str))
               (liftIO (hFlush stdout))))
-        (= go
+        (= go result-mv
           (do (<- st0 (lift get-repl-state))
               (let ((= prompt
-                      (if (null (pending-input st0))
-                          "> "
-                          ""))))
+                      (if (null (pending-input st0)) "> " ""))))
               (<- mb-input
                 ;; Handle interrupt signals thrown while waiting for
                 ;; input, to handle `Ctrl-C' key presses without valid
@@ -103,28 +121,43 @@
                            (return (Just []))))
                  (getInputLine prompt)))
               (case mb-input
-                Nothing     quit
                 (Just line) (| ((== line "(quit)") quit)
-                               ((null line) go)
-                               (otherwise (go' line))))))
-        (= go' line
+                               ((null line) (go result-mv))
+                               (otherwise (go' result-mv line)))
+                Nothing quit)))
+        (= go' result-mv line
           (do (<- mb-form (lift (read-form line)))
               (case mb-form
-                Nothing     go
-                (Just form) (do (liftIO (putMVar to-mvar form))
-                                print-io
-                                go))))
+                (Just form)
+                (do (let ((= input (Input Prompt form result-mv))))
+                    (liftIO (putMVar to-mvar input))
+                    (print-io result-mv)
+                    (go result-mv))
+                Nothing (go result-mv))))
         (= quit
           (liftIO (killThread eval-tid)))
-        (= loop
+        (= init-form
+          '(begin
+            (require Prelude)
+            (require SK.Prelude)
+            (require SK.Repl.Env)
+            (require SK.Repl.Macro)
+            (putStrLn
+             "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))
+        (= loop result-mv
           (handleInterrupt
            (do (throwTo eval-tid UserInterrupt)
-               print-io
-               loop)
-           go)))
+               (print-io result-mv)
+               (loop result-mv))
+           (go result-mv))))
 
     ;; Print the result from boot expression, then start the loop.
-    (withInterrupt (>> print-io loop))))
+    (withInterrupt
+     (do (<- result-mv (liftIO newEmptyMVar))
+         (liftIO
+          (putMVar to-mvar (Input Prompt init-form result-mv)))
+         (print-io result-mv)
+         (loop result-mv)))))
 
 ;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))
@@ -145,8 +178,8 @@
 
 ;;; Eval loop
 
-(:: eval-loop (-> (MVar Code) (MVar Result) (Skc ())))
-(= eval-loop in-mvar out-mvar
+(:: eval-loop (-> FilePath (MVar Input) (Skc ())))
+(= eval-loop tmpfile in-mvar
   (let ((= initialize
           ;; Default target in interactive context is `HscAsm',
           ;; updating to `HscInterpreted'.  Also, `dynamic' option is
@@ -175,37 +208,37 @@
                           (withSourceErrorHandling m)))
         (= go
           (withAsyncHandler
-           (do (<- form (liftIO (takeMVar in-mvar)))
+           (do (<- (Input itype form out-mv)
+                 (liftIO (takeMVar in-mvar)))
                (<- ret (withSkHandler
                         (do (<- expanded (expands [form]))
-                            (eval-form expanded))))
+                            (eval-form tmpfile itype expanded))))
                (<- (Session session) (fromGhc (Ghc return)))
                (liftIO (do (putTheHscEnv session)
-                           (putMVar out-mvar ret)))
+                           (putMVar out-mv ret)))
                go))))
     (>> initialize go)))
 
-(:: eval-form (-> [Code] (Skc Result)))
-(= eval-form forms
+(:: eval-form (-> FilePath InputType [Code] (Skc Result)))
+(= eval-form tmpfile itype forms
   (| ((null forms)
       (return (Right "")))
+     ((<- (Right decls) (evalBuilder parseTopDecls forms))
+      (eval-decls decls))
      ((<- (Right stmt) (evalBuilder parseStmt forms))
-      (eval-statement stmt))
-     ((<- (Right idecl) (evalBuilder parseImports forms))
-      (eval-imports idecl))
+      (eval-statement tmpfile itype stmt))
      (otherwise
-      (case (evalBuilder parseTopDecls forms)
-        (Right decs) (eval-decls decs)
-        (Left err)   (return (Left (concat [err "\n"])))))))
+      (case (evalBuilder parseImports forms)
+        (Right idecl) (eval-imports idecl)
+        (Left err) (return (Left (++ err "\n")))))))
 
-(:: eval-statement (-> HStmt (Skc Result)))
-(= eval-statement stmt0
+(:: eval-statement (-> FilePath InputType HStmt (Skc Result)))
+(= eval-statement tmpfile itype stmt0
   (do (<- hsc-env getSession)
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
       (case stmt1
-        (Just (, is h f)) (update-hsc-env hsc-env is h f)
-        Nothing           (return (Left
-                                   "eval-statement: no result")))))
+        (Just (, is h f)) (update-hsc-env tmpfile itype hsc-env is h f)
+        Nothing (return (Left "eval-statement: no result")))))
 
 (:: eval-imports (-> [HImportDecl] (Skc Result)))
 (= eval-imports imports
@@ -241,19 +274,19 @@
       (return (Right tystr))))
 
 (:: update-hsc-env
-  (-> HscEnv [Id] ForeignHValue FixityEnv (Skc Result)))
-(= update-hsc-env hsc-env ids hvals-io fixity-env
+  (-> FilePath InputType HscEnv [Id] ForeignHValue FixityEnv
+      (Skc Result)))
+(= update-hsc-env tmpfile itype hsc-env ids hvals-io fixity-env
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its body.
-  (let ((= success fhvals
+  (let ((= success fhvals ret
           (do (let ((= ic (hsc_IC hsc-env))
-                    (= ic2
-                      (extendInteractiveContextWithIds ic ids))
+                    (= ic2 (extendInteractiveContextWithIds ic ids))
                     (= ic3 (ic2 {ic_fix_env fixity-env}))
-                    (= final-names (map getName ids))
+                    (= names (map getName ids))
                     (= hsc-env-2 (hsc-env {hsc_IC ic3}))))
               (<- dflags getSessionDynFlags)
-              (liftIO (extendLinkEnv (zip final-names fhvals)))
+              (liftIO (extendLinkEnv (zip names fhvals)))
 
               ;; InteractiveEval does not export `rttiEnvironment'.
               ;;
@@ -262,20 +295,35 @@
               ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
 
               (setSession hsc-env-2)
-              (return
-                (Right
-                 (show-names-and-types dflags final-names ids)))))
+              (case names
+                [name] (| ((== (occNameString (nameOccName name)) "it")
+                           (return (Right ret))))
+                _ (return
+                    (Right (names-and-types dflags names ids))))))
         (= exception serialized
           (case serialized
             (EOtherException str) (return (Left str))
             (EExitCode ecode)     (liftIO (exitWith ecode))
             EUserInterrupt        (return (Left "Interrupt"))))
         (= incomplete
-          (return (Left "update-hsc-env failed."))))
-    (do (<- status (liftIO
-                    (evalStmt hsc-env False (EvalThis hvals-io))))
+          (return (Left "update-hsc-env failed.")))
+        (= eval-hvals-io
+          (evalStmt hsc-env False (EvalThis hvals-io)))
+        (= eval-for-prompt
+          (do (<- stat (liftIO eval-hvals-io))
+              (return (, stat ""))))
+        (= eval-for-connection
+          (liftIO (with-io-redirect tmpfile eval-hvals-io))))
+    (do (<- (, status ret)
+          ;; Switching behaviour between prompt and network
+          ;; connection. Getting printed result as `String' for
+          ;; connection by wrapping the execution of compiled result,
+          ;; which is a value of `IO [HValue]' type.
+          (case itype
+            Prompt eval-for-prompt
+            Connection eval-for-connection))
         (case status
-          (EvalComplete _ (EvalSuccess hvs)) (success hvs)
+          (EvalComplete _ (EvalSuccess hvs)) (success hvs ret)
           (EvalComplete _ (EvalException e)) (exception e)
           _                                  incomplete))))
 
@@ -293,8 +341,8 @@
                       (map (++ "; ")
                            (lines (++ nstr (++ " :: " typ)))))))))
 
-(:: show-names-and-types (-> DynFlags [Name] [Var] String))
-(= show-names-and-types dflags names vars
+(:: names-and-types (-> DynFlags [Name] [Var] String))
+(= names-and-types dflags names vars
   (where (| ((all null tvs) "")
             (otherwise      (++ (concat (intersperse "\n" tvs)) "\n")))
     (= tvs (zipWith (var-name-and-type dflags) names vars))))

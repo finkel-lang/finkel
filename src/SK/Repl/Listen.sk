@@ -1,0 +1,79 @@
+;;; Loop for network connection.
+
+(require SK.Core)
+
+(defmodule SK.Repl.Listen
+  (use
+   ;; base
+   (Control.Concurrent)
+   (Control.Exception ((SomeException ..) handle))
+   (Control.Monad (void when))
+   (Data.Char (isSpace))
+   (System.IO)
+
+   ;; bytestring
+   (qualified Data.ByteString.Char8 as BS)
+   (qualified Data.ByteString.Lazy.Char8 as C8)
+
+   ;; network
+   (Network.Socket
+    ((Family ..)
+     (PortNumber) (SockAddr ..) (Socket) (SocketOption ..)
+     (SocketType ..) accept bind iNADDR_ANY listen
+     socket socketToHandle setSocketOption withSocketsDo))
+
+   ;; sk-kernel
+   (Language.SK.Lexer (evalSP))
+   (Language.SK.Reader (sexpr))
+
+   ;; internal
+   (SK.Repl.Types)))
+
+(defn (listener (-> PortNumber (MVar Input) (IO ())))
+  (pnum mvar)
+  (withSocketsDo
+   (do (<- sock (socket AF_INET Stream 0))
+       (setSocketOption sock ReuseAddr 1)
+       (bind sock (SockAddrInet pnum iNADDR_ANY))
+       (listen sock 2)
+       (accept-loop sock mvar))))
+
+(defdo (accept-loop (-> Socket (MVar Input) (IO ())))
+  (sock mvar)
+  (<- (, conn _) (accept sock))
+  (<- _ (forkIO (run-conn conn mvar)))
+  (accept-loop sock mvar))
+
+(defdo (run-conn (-> Socket (MVar Input) (IO ())))
+  (sock mvar)
+  (<- hdl (socketToHandle sock ReadWriteMode))
+  (hSetBuffering hdl (BlockBuffering Nothing))
+  (hPutStrLn hdl "Connected to SK REPL.")
+  (hFlush hdl)
+  (<- my-mvar newEmptyMVar)
+  (let ((= handler (SomeException e)
+          (do (putStrLn (++ "run-conn: " (show e)))
+              (hClose hdl)))
+        (= put-input form
+          (putMVar mvar (Input Connection form my-mvar)))
+        (= read-loop
+          ;; `BS.hGetSome' returns empty contents when the handle is
+          ;; closed.
+          (do (<- contents (BS.hGetSome hdl 65535))
+              (if (BS.null contents)
+                  (return ())
+                  (do (when (BS.any (. not isSpace) contents)
+                        (case (evalSP sexpr (Just "<repl>")
+                                      (C8.fromStrict contents))
+                          (Right form) (put-input form)
+                          (Left err) (putStrLn err)))
+                      read-loop))))
+        (= print-loop
+          (do (<- result (takeMVar my-mvar))
+              (case result
+                (Right r) (hPutStr hdl r)
+                (Left err) (hPutStrLn hdl err))
+              (hFlush hdl)
+              print-loop))))
+  (void (forkIO print-loop))
+  (handle handler read-loop))

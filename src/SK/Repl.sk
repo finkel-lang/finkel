@@ -12,6 +12,7 @@
 (require SK.Repl.Macro)
 
 ;; base
+(import Control.Monad (mplus))
 (import Data.Version (showVersion))
 (import System.Environment (getArgs))
 (import System.Exit (exitFailure))
@@ -42,15 +43,17 @@
 ;;; Option types
 
 (data ReplMode
-  Help Version Run
+  Help Version Listen Run
   (deriving (Eq Show)))
 
 (data ReplOption
-  (ReplOption {repl-mode ReplMode}))
+  (ReplOption {repl-mode ReplMode
+               repl-listen-port (Maybe Int)}))
 
 (defn (initial-option ReplOption)
   ()
-  (ReplOption {repl-mode Run}))
+  (ReplOption {repl-mode Run
+               repl-listen-port (Just 12305)}))
 
 (defn (descrs [OptDescr (-> ReplOption ReplOption)])
   ()
@@ -59,14 +62,24 @@
            "Show this help and exit.")
    (Option [\V] ["version"]
            (NoArg (\ o (o {repl-mode Version})))
-           "Show version information and exit.")])
+           "Show version information and exit.")
+   (Option [\l] ["listen"]
+           (OptArg (\ mb-port o
+                     (let ((= port
+                             (mplus (fmap read mb-port)
+                                    (repl-listen-port o))))
+                       (o {repl-mode Listen
+                           repl-listen-port port})))
+                   "PORT")
+           "Listen to port (default: 12305)")])
 
 (defn (act (-> ReplOption (IO ())))
   (ro)
   (case (repl-mode ro)
     Help print-usage
     Version print-version
-    Run run))
+    Listen (run (repl-listen-port ro))
+    Run (run Nothing)))
 
 
 ;;; Actions
@@ -92,11 +105,11 @@
   ()
   (putStrLn (++ "sk " sk-lang-version)))
 
-(defdo (run (IO ()))
-  ()
+(defdo (run (-> (Maybe Int) (IO ())))
+  (listen)
   (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
                      ", sk-kernel " sk-kernel-version ")"]))
-  (start-repl repl-env))
+  (start-repl listen repl-env))
 
 (:: sk-lang-version String)
 (= sk-lang-version (showVersion Paths_sk_lang.version))

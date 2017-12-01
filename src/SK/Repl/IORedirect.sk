@@ -1,0 +1,23 @@
+;;;; Module containing function to redirect stdout.
+
+(require SK.Core)
+
+(defmodule SK.Repl.IORedirect
+  (use (GHC.IO.Handle (hDuplicate hDuplicateTo))
+       (System.IO ((IOMode ..) hClose hFlush stdout withFile)))
+  (export with-io-redirect))
+
+(defn (with-io-redirect (-> FilePath (IO a) (IO (, a String))))
+  (path action)
+  (do (<- ret (withFile
+               path WriteMode
+               (\ handle
+                 (do (<- stdout-copy (hDuplicate stdout))
+                     (hDuplicateTo handle stdout)
+                     (<- ret action)
+                     (hDuplicateTo stdout-copy stdout)
+                     (hClose stdout-copy)
+                     (hFlush handle)
+                     (return ret)))))
+      (<- contents (readFile path))
+      (return (, ret contents))))

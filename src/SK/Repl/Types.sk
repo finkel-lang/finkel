@@ -7,6 +7,7 @@
 (defmodule SK.Repl.Types
   (use
    ;; base
+   (Control.Concurrent ((MVar)))
    (Control.Monad.IO.Class ((MonadIO ..)))
 
    ;; bytestring
@@ -17,11 +18,20 @@
 
    ;; transformers
    (Control.Monad.Trans.Class (lift))
-   (Control.Monad.Trans.State.Strict ((StateT ..) evalStateT get put))))
+   (Control.Monad.Trans.State.Strict ((StateT ..) evalStateT get put))
+
+   ;; sk-kernel
+   (Language.SK ((Code))))
+
+  (export
+   (ReplState ..) initial-repl-state
+   (Repl ..) run-repl put-repl-state get-repl-state lift-repl
+   (Input ..) (InputType ..) (Result)))
 
 
 ;;; Repl, state, and result types
 
+;;; Repl state type to hold intermediate line-wise inputs.
 (data ReplState
   (ReplState {pending-input [BS.ByteString]
               input-count Int})
@@ -40,15 +50,23 @@
   (evalStateT (unRepl repl) st))
 
 (defn (put-repl-state (-> ReplState (Repl ())))
-  (st)
-  (Repl (put st)))
+  ()
+  (. Repl put))
 
 (defn (get-repl-state (Repl ReplState))
   ()
   (Repl get))
 
 (defn (lift-repl (-> (IO a) (Repl a)))
-  (m)
-  (Repl (lift m)))
+  ()
+  (. Repl lift))
+
+(data Input
+  (Input InputType Code (MVar Result)))
+
+(data InputType
+  Prompt
+  Connection
+  (deriving (Eq Show)))
 
 (type Result (Either String String))
