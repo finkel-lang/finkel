@@ -3,21 +3,28 @@
 (require SK.Core)
 
 (defmodule SK.Repl.IORedirect
-  (use (GHC.IO.Handle (hDuplicate hDuplicateTo))
-       (System.IO ((IOMode ..) hClose hFlush stdout withFile)))
+  (use
+   (GHC.IO.Handle (hDuplicate hDuplicateTo))
+   (Control.Exception)
+   (System.IO ((IOMode ..) hClose stdout withFile)))
   (export with-io-redirect))
 
+;;; Execute given action with redirecting stdout to given 'FilePath'.
 (defn (with-io-redirect (-> FilePath (IO a) (IO (, a String))))
   (path action)
-  (do (<- ret (withFile
-               path WriteMode
-               (\ handle
-                 (do (<- stdout-copy (hDuplicate stdout))
-                     (hDuplicateTo handle stdout)
-                     (<- ret action)
-                     (hDuplicateTo stdout-copy stdout)
-                     (hClose stdout-copy)
-                     (hFlush handle)
-                     (return ret)))))
+  (do (<- ret (withFile path
+                        WriteMode
+                        (\ hdl
+                          (bracket
+                           (hDuplicate stdout)
+                           (\ stdout2
+                             (do (hDuplicateTo stdout2 stdout)
+                                 (hClose stdout2)))
+                           (const
+                            (do (hDuplicateTo hdl stdout)
+                                action))))))
+
+      ;; Ensure the evaluation of the file contents, so that the
+      ;; exceptions from `action' can avoid file lock.
       (<- contents (readFile path))
-      (return (, ret contents))))
+      (seq contents (return (, ret contents)))))

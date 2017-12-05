@@ -7,22 +7,20 @@
    ;; base
    (Control.Concurrent ((ThreadId) forkIO killThread))
    (Control.Concurrent.MVar ((MVar) newEmptyMVar putMVar takeMVar))
-   (Control.Exception ((AsyncException ..) finally))
-   (Control.Monad (void when))
+   (Control.Exception ((AsyncException ..) bracket catch throwIO))
+   (Control.Monad (void))
    (Control.Monad.IO.Class (liftIO))
-   (Data.List (intercalate intersperse isSuffixOf nubBy))
+   (Data.List (intercalate isSuffixOf nubBy))
    (System.Exit (exitWith))
-   (System.IO (hFlush stdout))
+   (System.IO (hClose hFlush openTempFile stdout))
+   (System.IO.Error (isDoesNotExistError))
 
    ;; bytestring
    (Data.ByteString.Builder (stringUtf8 toLazyByteString))
    (qualified Data.ByteString.Lazy.Char8 as BS)
 
-   ;; filepath
-   (System.FilePath (</> <.>))
-
    ;; directory
-   (System.Directory (doesFileExist getTemporaryDirectory removeFile))
+   (System.Directory (getTemporaryDirectory removeFile))
 
    ;; haskeline
    (System.Console.Haskeline
@@ -57,36 +55,43 @@
 ;;; Start REPL, maybe listen to given port number.
 (defdo (start-repl (-> (Maybe Int) SkEnv (IO ())))
   (mb-listen ske)
-  (<- in-mv newEmptyMVar)
-  (<- tmpfile (start-listener mb-listen in-mv))
-  (<- eval-tid
-    (forkIO (void (runSkc (eval-loop tmpfile in-mv) ske))))
-  (let ((= rpl (read-print-loop in-mv eval-tid))
-        (= reader (runInputT defaultSettings rpl))))
-  (finally
-   (run-repl reader initial-repl-state)
-   (mb-cleanup-tmpfile mb-listen tmpfile)))
+  (bracket
+   make-tmpfile
+   cleanup-tmpfile
+   (\ tmpfile
+     (do (<- in-mv newEmptyMVar)
+         (start-listener mb-listen in-mv)
+         (<- eval-tid
+           (forkIO (void (runSkc (eval-loop tmpfile in-mv) ske))))
+         (let ((= rpl (read-print-loop in-mv eval-tid))
+               (= reader (runInputT defaultSettings rpl))))
+         (run-repl reader initial-repl-state)))))
+
+;;; Return a file path for temporary use.
+(defn (make-tmpfile (IO FilePath))
+  ()
+  (do (<- dir getTemporaryDirectory)
+      (<- (, name hdl) (openTempFile dir "sk-repl-.out"))
+      (hClose hdl)
+      (return name)))
 
 ;;; Start listner in separate thread, and return temporary file for
 ;;; getting String output from statement.
-(defn (start-listener (-> (Maybe Int) (MVar Input) (IO FilePath)))
+(defn (start-listener (-> (Maybe Int) (MVar Input) (IO ())))
   (mb-listen in-mv)
-  (maybe (return
-           (error "REPL server did not start with listener."))
+  (maybe (return ())
          (\ port
            (do (putStrLn (++ "Listening on port " (show port)))
-               (void (forkIO (listener (fromIntegral port) in-mv)))
-               (<- dir getTemporaryDirectory)
-               (return (</> dir (<.> "sk.repl" (show port))))))
+               (void (forkIO (listener (fromIntegral port) in-mv)))))
          mb-listen))
 
 ;; Clean up temporary file, if the server was started with listener.
-(defn (mb-cleanup-tmpfile (-> (Maybe Int) FilePath (IO ())))
-  (mb-listen tmpfile)
-  (maybe (return ())
-         (const (do (<- exist (doesFileExist tmpfile))
-                    (when exist (removeFile tmpfile))))
-         mb-listen))
+(defn (cleanup-tmpfile (-> FilePath (IO ())))
+  (tmpfile)
+  (catch (removeFile tmpfile)
+    (\ e (if (isDoesNotExistError e)
+             (return ())
+             (throwIO e)))))
 
 
 ;;; Read and print
@@ -100,7 +105,8 @@
   (let ((= print-io result-mv
           (do (<- result (liftIO (takeMVar result-mv)))
               (case result
-                (Right str) (outputStr str)
+                (Right str) (>> (outputStr str)
+                                (outputStr "\n"))
                 (Left str) ((if (isSuffixOf "\n" str)
                                 outputStr
                                 outputStrLn)
@@ -129,8 +135,8 @@
           (do (<- mb-form (lift (read-form line)))
               (case mb-form
                 (Just form)
-                (do (let ((= input (Input Prompt form result-mv))))
-                    (liftIO (putMVar to-mvar input))
+                (do (liftIO
+                     (putMVar to-mvar (Input Prompt form result-mv)))
                     (print-io result-mv)
                     (go result-mv))
                 Nothing (go result-mv))))
@@ -142,7 +148,7 @@
             (require SK.Prelude)
             (require SK.Repl.Env)
             (require SK.Repl.Macro)
-            (putStrLn
+            (putStr
              "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))
         (= loop result-mv
           (handleInterrupt
@@ -201,23 +207,28 @@
                     ThreadKilled  (return ())
                     _             (putStrLn
                                    (++ "eval-loop: got " (show e)))))
-                 go))))
+                 loop))))
         (= withSkHandler m
           (skErrorHandler defaultFatalMessager
                           defaultFlushOut
                           (withSourceErrorHandling m)))
-        (= go
-          (withAsyncHandler
-           (do (<- (Input itype form out-mv)
-                 (liftIO (takeMVar in-mvar)))
-               (<- ret (withSkHandler
-                        (do (<- expanded (expands [form]))
-                            (eval-form tmpfile itype expanded))))
-               (<- (Session session) (fromGhc (Ghc return)))
-               (liftIO (do (putTheHscEnv session)
-                           (putMVar out-mv ret)))
-               go))))
-    (>> initialize go)))
+        (= eval-one
+          (do (<- (Input itype form out-mv)
+                (liftIO (takeMVar in-mvar)))
+              (<- ret (withSkHandler
+                       (do (<- expanded (expands [form]))
+                           (eval-form tmpfile itype expanded))))
+              (<- (Session session) (fromGhc (Ghc return)))
+              (liftIO (do (putTheHscEnv session)
+                          (putMVar out-mv ret)))))
+        (= loop
+          (withAsyncHandler (>> eval-one loop)))
+        (= post-eval-init next
+          (do eval-one
+              set-repl-print-name
+              next)))
+    (do initialize
+        (post-eval-init loop))))
 
 (:: eval-form (-> FilePath InputType [Code] (Skc Result)))
 (= eval-form tmpfile itype forms
@@ -247,10 +258,9 @@
       (let ((= mkIIDecl (L _ idecl)
               (IIDecl idecl))
             (= mdls
-              (concat ["; "
-                       (intercalate ", " (map (. (showSDoc dflags) ppr)
-                                              imports))
-                       "\n"]))))
+              (++ "; " (intercalate ", "
+                                    (map (. (showSDoc dflags) ppr)
+                                         imports))))))
       (setContext (nubBy eq-ii (++ (map mkIIDecl imports) context)))
       (return (Right mdls))))
 
@@ -270,7 +280,7 @@
                     acc
                     (: (pr tt) acc))))
             (= tystrs (foldr show-tything [] tythings))
-            (= tystr (unlines tystrs))))
+            (= tystr (intercalate "\n" tystrs))))
       (return (Right tystr))))
 
 (:: update-hsc-env
@@ -278,7 +288,7 @@
       (Skc Result)))
 (= update-hsc-env tmpfile itype hsc-env ids hvals-io fixity-env
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
-  ;; `iservCmd' in its body.
+  ;; `iservCmd' in its implementation.
   (let ((= success fhvals ret
           (do (let ((= ic (hsc_IC hsc-env))
                     (= ic2 (extendInteractiveContextWithIds ic ids))
@@ -336,15 +346,14 @@
         (= typ (showPpr dflags (varType var))))
     (if (== nstr "it")
         ""
-        (concat
-         (intersperse "\n"
-                      (map (++ "; ")
-                           (lines (++ nstr (++ " :: " typ)))))))))
+        (intercalate "\n"
+                     (map (++ "; ")
+                          (lines (++ nstr (++ " :: " typ))))))))
 
 (:: names-and-types (-> DynFlags [Name] [Var] String))
 (= names-and-types dflags names vars
   (where (| ((all null tvs) "")
-            (otherwise      (++ (concat (intersperse "\n" tvs)) "\n")))
+            (otherwise (intercalate "\n" tvs)))
     (= tvs (zipWith (var-name-and-type dflags) names vars))))
 
 (:: eq-ii (-> InteractiveImport InteractiveImport Bool))

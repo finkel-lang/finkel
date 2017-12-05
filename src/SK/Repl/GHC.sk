@@ -18,6 +18,7 @@
 
   ;; GHC
   (ModuleInfo)
+  compileExprRemote
   getBindings
   getGRE
   getPrintUnqual
@@ -46,6 +47,7 @@
   emptyMG
   extendInteractiveContextWithIds
   handleFlagWarnings
+  setInteractivePrintName
   tyThingParent_maybe
 
   ;; Id

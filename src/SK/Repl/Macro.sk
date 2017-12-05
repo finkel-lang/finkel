@@ -27,6 +27,7 @@
   (use Language.SK.Builder)
   (use Language.SK.GHC)
   (use Language.SK.Make)
+  (use SK.Repl.Env)
   (use SK.Repl.GHC))
 
 
@@ -79,6 +80,7 @@
         (<- _ (%link-module (fsLit mname)))
         (<- mods (fmap envContextModules getSkEnv))
         (setContext (map mk-ii (: mname mods)))
+        set-repl-print-name
         (return '(begin)))))
 
 ;;; Compile source code to object code.
