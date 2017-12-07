@@ -11,7 +11,8 @@
    (Control.Monad (void when))
    (Data.Char (isSpace))
    (System.IO
-    ((BufferMode ..) (IOMode ..) hClose hFlush hPutStr hSetBuffering))
+    ((BufferMode ..) (IOMode ..) hClose hFlush hPutStr hSetBuffering
+                     hSetEncoding utf8))
 
    ;; bytestring
    (qualified Data.ByteString.Char8 as BS)
@@ -52,6 +53,7 @@
   (sock mvar)
   (<- hdl (socketToHandle sock ReadWriteMode))
   (hSetBuffering hdl (BlockBuffering Nothing))
+  (hSetEncoding hdl utf8)
   (hPutStr hdl "Connected to SK REPL.")
   (hFlush hdl)
   (<- my-mvar newEmptyMVar)
