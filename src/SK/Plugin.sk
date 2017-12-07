@@ -3,15 +3,17 @@
 
 (require SK.Core)
 
-(module SK.Plugin
-  frontendPlugin)
+(defmodule SK.Plugin
+  (use
+   ;; ghc
+   (GhcPlugins ((FrontendPlugin ..) defaultFrontendPlugin))
 
-;; ghc
-(import GhcPlugins ((FrontendPlugin ..) defaultFrontendPlugin))
+   ;; sk-kernel
+   (Language.SK.Plugin hiding (frontendPlugin))
 
-;; sk-kernel
-(import SK.Prelude)
-(import Language.SK.Plugin hiding (frontendPlugin))
+   ;; internal
+   (SK.Prelude))
+  (export frontendPlugin))
 
 (macrolet* ((core-macros ()
                (return

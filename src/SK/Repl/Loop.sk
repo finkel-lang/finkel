@@ -27,9 +27,6 @@
     ((InputT) defaultSettings getInputLine handleInterrupt outputStr
               outputStrLn runInputT throwTo withInterrupt))
 
-   ;; transformers
-   (Control.Monad.Trans.Class (lift))
-
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Builder ((HDecl) (HImportDecl)  (HStmt) evalBuilder))
@@ -184,8 +181,8 @@
 
 ;;; Eval loop
 
-(:: eval-loop (-> FilePath (MVar Input) (Skc ())))
-(= eval-loop tmpfile in-mvar
+(defn (eval-loop (-> FilePath (MVar Input) (Skc ())))
+  (tmpfile in-mvar)
   (let ((= initialize
           ;; Default target in interactive context is `HscAsm',
           ;; updating to `HscInterpreted'.  Also, `dynamic' option is
@@ -230,8 +227,8 @@
     (do initialize
         (post-eval-init loop))))
 
-(:: eval-form (-> FilePath InputType [Code] (Skc Result)))
-(= eval-form tmpfile itype forms
+(defn (eval-form (-> FilePath InputType [Code] (Skc Result)))
+  (tmpfile itype forms)
   (| ((null forms)
       (return (Right "")))
      ((<- (Right decls) (evalBuilder parseTopDecls forms))
@@ -243,16 +240,16 @@
         (Right idecl) (eval-imports idecl)
         (Left err) (return (Left (++ err "\n")))))))
 
-(:: eval-statement (-> FilePath InputType HStmt (Skc Result)))
-(= eval-statement tmpfile itype stmt0
+(defn (eval-statement (-> FilePath InputType HStmt (Skc Result)))
+  (tmpfile itype stmt0)
   (do (<- hsc-env getSession)
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
       (case stmt1
         (Just (, is h f)) (update-hsc-env tmpfile itype hsc-env is h f)
         Nothing (return (Left "eval-statement: no result")))))
 
-(:: eval-imports (-> [HImportDecl] (Skc Result)))
-(= eval-imports imports
+(defn (eval-imports (-> [HImportDecl] (Skc Result)))
+  (imports)
   (do (<- context getContext)
       (<- dflags getSessionDynFlags)
       (let ((= mkIIDecl (L _ idecl)
@@ -264,8 +261,8 @@
       (setContext (nubBy eq-ii (++ (map mkIIDecl imports) context)))
       (return (Right mdls))))
 
-(:: eval-decls (-> [HDecl] (Skc Result)))
-(= eval-decls decls
+(defn (eval-decls (-> [HDecl] (Skc Result)))
+  (decls)
   (do (<- (, tythings _ic) (evalDecls decls))
       (<- hsc-env getSession)
       (let ((= dflags (hsc_dflags hsc-env))
@@ -283,10 +280,9 @@
             (= tystr (intercalate "\n" tystrs))))
       (return (Right tystr))))
 
-(:: update-hsc-env
-  (-> FilePath InputType HscEnv [Id] ForeignHValue FixityEnv
-      (Skc Result)))
-(= update-hsc-env tmpfile itype hsc-env ids hvals-io fixity-env
+(defn (update-hsc-env (-> FilePath InputType HscEnv [Id] ForeignHValue
+                          FixityEnv (Skc Result)))
+  (tmpfile itype hsc-env ids hvals-io fixity-env)
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its implementation.
   (let ((= success fhvals ret
@@ -340,8 +336,8 @@
 
 ;;; Auxiliary
 
-(:: var-name-and-type (-> DynFlags Name Var String))
-(= var-name-and-type dflags name var
+(defn (var-name-and-type (-> DynFlags Name Var String))
+  (dflags name var)
   (let ((= nstr (occNameString (nameOccName name)))
         (= typ (showPpr dflags (varType var))))
     (if (== nstr "it")
@@ -350,14 +346,14 @@
                      (map (++ "; ")
                           (lines (++ nstr (++ " :: " typ))))))))
 
-(:: names-and-types (-> DynFlags [Name] [Var] String))
-(= names-and-types dflags names vars
+(defn (names-and-types (-> DynFlags [Name] [Var] String))
+  (dflags names vars)
   (where (| ((all null tvs) "")
             (otherwise (intercalate "\n" tvs)))
     (= tvs (zipWith (var-name-and-type dflags) names vars))))
 
-(:: eq-ii (-> InteractiveImport InteractiveImport Bool))
-(= eq-ii a b
+(defn (eq-ii (-> InteractiveImport InteractiveImport Bool))
+  (a b)
   (case (, a b)
     (, (IIModule x) (IIModule y)) (== x y)
     (, (IIDecl x) (IIDecl y))     (== (unLoc (ideclName x))

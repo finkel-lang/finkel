@@ -29,7 +29,9 @@
    (Language.SK.Reader (sexpr))
 
    ;; internal
-   (SK.Repl.Types)))
+   (SK.Repl.Types))
+
+  (export listener accept-loop run-conn))
 
 (defn (listener (-> PortNumber (MVar Input) (IO ())))
   (pnum mvar)
@@ -62,14 +64,13 @@
           ;; `BS.hGetSome' returns empty contents when the handle is
           ;; closed.
           (do (<- contents (BS.hGetSome hdl 65535))
-              (if (BS.null contents)
-                  (return ())
-                  (do (when (BS.any (. not isSpace) contents)
-                        (case (evalSP sexpr (Just "<repl>")
-                                      (C8.fromStrict contents))
-                          (Right form) (put-input form)
-                          (Left err) (putStrLn err)))
-                      read-loop))))
+              (when (not (BS.null contents))
+                (do (when (BS.any (. not isSpace) contents)
+                      (case (evalSP sexpr (Just "<repl>")
+                                    (C8.fromStrict contents))
+                        (Right form) (put-input form)
+                        (Left err) (putStrLn err)))
+                    read-loop))))
         (= print-loop
           (do (<- result (takeMVar my-mvar))
               (case result

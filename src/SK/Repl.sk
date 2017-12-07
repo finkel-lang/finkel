@@ -6,28 +6,29 @@
 ;;;; shall be easier to support reading forms from other sources than
 ;;;; line oriented user input, e.g. network sockets.
 
-(module SK.Repl replMain)
-
 (require SK.Core)
 (require SK.Repl.Macro)
 
-;; base
-(import Control.Monad (mplus))
-(import Data.Version (showVersion))
-(import System.Environment (getArgs))
-(import System.Exit (exitFailure))
-(import System.Console.GetOpt)
+(defmodule SK.Repl
+  (export replMain)
+  (use
+   ;; base
+   (Control.Monad (mplus))
+   (Data.Version (showVersion))
+   (System.Environment (getArgs))
+   (System.Exit (exitFailure))
+   (System.Console.GetOpt)
 
-;; sk-kernel
-(import Language.SK)
-(import Language.SK.Run (initialSkEnv))
-(import qualified Paths_sk_kernel)
+   ;; sk-kernel
+   (Language.SK)
+   (Language.SK.Run (initialSkEnv))
+   (qualified Paths_sk_kernel)
 
-;; internal
-(import SK.Core)
-(import SK.Repl.Macro)
-(import SK.Repl.Loop)
-(import qualified Paths_sk_lang)
+   ;; internal
+   (SK.Core)
+   (SK.Repl.Macro)
+   (SK.Repl.Loop)
+   (qualified Paths_sk_lang)))
 
 
 ;;; Main
@@ -111,14 +112,16 @@
                      ", sk-kernel " sk-kernel-version ")"]))
   (start-repl listen repl-env))
 
-(:: sk-lang-version String)
-(= sk-lang-version (showVersion Paths_sk_lang.version))
+(defn (sk-lang-version String)
+  ()
+  (showVersion Paths_sk_lang.version))
 
-(:: sk-kernel-version String)
-(= sk-kernel-version (showVersion Paths_sk_kernel.version))
+(defn (sk-kernel-version String)
+  ()
+  (showVersion Paths_sk_kernel.version))
 
-(:: repl-env SkEnv)
-(= repl-env
+(defn (repl-env SkEnv)
+  ()
   (let ((= modules
           ["Prelude" "SK.Prelude" "SK.Repl.Env" "SK.Repl.Macro"])
         (= defaultMacros
@@ -134,5 +137,6 @@
                 `[,@(map (\ mac `(, ,mac ,(aSymbol mac)))
                          (++ (exported-macros SK.Core)
                              (exported-macros SK.Repl.Macro)))])))
-  (:: replMacros EnvMacros)
-  (= replMacros (makeEnvMacros (the-macros))))
+  (defn (replMacros EnvMacros)
+    ()
+    (makeEnvMacros (the-macros))))

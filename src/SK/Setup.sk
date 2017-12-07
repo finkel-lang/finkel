@@ -2,12 +2,11 @@
 
 (require SK.Core)
 
-(module SK.Setup
-  defaultMainWithHooks
-  skcHooks)
-
-;; sk-kernel
-(import Distribution.Simple.SK)
+(defmodule SK.Setup
+  (use
+   ;; sk-kernel
+   (Distribution.Simple.SK))
+  (export defaultMainWithHooks skcHooks))
 
 (defn (skcHooks UserHooks)
   ()

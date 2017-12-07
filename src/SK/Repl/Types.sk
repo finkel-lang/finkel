@@ -24,9 +24,17 @@
    (Language.SK ((Code))))
 
   (export
-   (ReplState ..) initial-repl-state
+   ;; repl
    (Repl ..) run-repl put-repl-state get-repl-state lift-repl
-   (Input ..) (InputType ..) (Result)))
+
+   ;; repl state
+   (ReplState ..) initial-repl-state
+
+   ;; input and result
+   (Input ..) (InputType ..) (Result)
+
+   ;; re-export
+   lift))
 
 
 ;;; Repl, state, and result types
