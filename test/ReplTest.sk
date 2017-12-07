@@ -1,0 +1,55 @@
+;;; Tests for REPL.
+
+(require SK.Core)
+
+(defmodule ReplTest
+  (use
+   ;; base
+   (Control.Concurrent)
+   (Control.Monad (void))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; sk-kernel
+   (Language.SK)
+   (Language.SK.Run)
+
+   ;; sk-lang
+   (SK.Repl (repl-env))
+   (SK.Repl.Loop)
+   (SK.Repl.Types))
+
+  (export replTests))
+
+(defdo (replTests Spec)
+  ()
+  (let ((= d describe)))
+  (<- in-mv (runIO newEmptyMVar))
+  (<- out-mv (runIO newEmptyMVar))
+  (<- tmpfile (runIO make-tmpfile))
+  (<- etid
+    (runIO
+     (forkIO (void (runSkc (eval-loop tmpfile in-mv) repl-env)))))
+  (let ((= eval-form ok-or-ng form expect
+          (d (concat ["evaluate " (show form)])
+             (it (concat ["should evaluate to `" expect "'"])
+                 (do (putMVar in-mv (Input Connection form out-mv))
+                     (<- ret (takeMVar out-mv))
+                     (shouldBe (ok-or-ng expect) ret)))))
+        (= eval-ok (eval-form Right))
+        (= eval-ng (eval-form Left))))
+  (beforeAll_
+   (do (putMVar in-mv (Input Connection init-form out-mv))
+       (void (takeMVar out-mv)))
+   (afterAll_
+    (do (killThread etid)
+        (cleanup-tmpfile tmpfile))
+    (d "Repl"
+       (do (eval-ok '(+ 10 32) "42")
+           (eval-ok '(defn (foo (-> Int Int)) (n) (+ n 1))
+                    "; foo :: Int -> Int")
+           (eval-ok '(funcall1 'putStr "foo") "foo")
+           (eval-ok '(exported-macros Prelude) "[]")
+           (eval-ok '(info 'putStrLn) "")
+           (eval-ng '(head []) "Prelude.head: empty list"))))))

@@ -10,7 +10,6 @@
 (require SK.Repl.Macro)
 
 (defmodule SK.Repl
-  (export replMain)
   (use
    ;; base
    (Control.Monad (mplus))
@@ -28,7 +27,8 @@
    (SK.Core)
    (SK.Repl.Macro)
    (SK.Repl.Loop)
-   (qualified Paths_sk_lang)))
+   (qualified Paths_sk_lang))
+  (export replMain repl-env))
 
 
 ;;; Main

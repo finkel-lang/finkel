@@ -61,8 +61,9 @@ test-suite sk-lang-test
                      , hspec
                      , sk-lang
                      , sk-kernel >= 0.6.0
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   other-modules:       CoreTest
+                       ReplTest
   default-language:    Haskell2010
 
 source-repository head

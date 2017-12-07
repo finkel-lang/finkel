@@ -44,7 +44,9 @@
    (SK.Repl.IORedirect)
    (SK.Repl.Types))
 
-  (export eval-loop read-print-loop start-repl))
+  (export
+   eval-loop read-print-loop init-form start-repl
+   make-tmpfile cleanup-tmpfile))
 
 
 ;;; Starting the REPL
@@ -139,14 +141,6 @@
                 Nothing (go result-mv))))
         (= quit
           (liftIO (killThread eval-tid)))
-        (= init-form
-          '(begin
-            (require Prelude)
-            (require SK.Prelude)
-            (require SK.Repl.Env)
-            (require SK.Repl.Macro)
-            (putStr
-             "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))
         (= loop result-mv
           (handleInterrupt
            (do (throwTo eval-tid UserInterrupt)
@@ -161,6 +155,17 @@
           (putMVar to-mvar (Input Prompt init-form result-mv)))
          (print-io result-mv)
          (loop result-mv)))))
+
+;;; Form to initialize the REPL.
+(defn (init-form Code)
+  ()
+  '(begin
+    (require Prelude)
+    (require SK.Prelude)
+    (require SK.Repl.Env)
+    (require SK.Repl.Macro)
+    (putStr
+     "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))
 
 ;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))

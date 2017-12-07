@@ -2,16 +2,16 @@
 
 (require SK.Core)
 
-(module CoreTest
-  coreTests
-  macroTests
-  cxrTests
-  listTests)
-
-(import Language.SK.Run)
-(import Test.Hspec)
-(import Test.QuickCheck)
-(import SK.Prelude)
+(defmodule CoreTest
+  (use
+   (Language.SK.Run)
+   (Test.Hspec)
+   (Test.QuickCheck)
+   (SK.Prelude))
+  (export coreTests
+          macroTests
+          cxrTests
+          listTests))
 
 (defdo (coreTests Spec) ()
   (describe "Cxr" cxrTests)
