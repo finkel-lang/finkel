@@ -28,7 +28,7 @@
 (:: printSomeThing (-> CString (IO ())))
 (= printSomeThing something
   (do (putStrLn "From printSomething")
-      (<- str (peekCAString  something))
+      (<- str (peekCAString something))
       (putStrLn str)))
 
 (foreign export ccall "printSomeThing"
