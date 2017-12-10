@@ -18,7 +18,7 @@ cabal-version:       >=1.10
 -- with object code and the expressions typed in from the REPL.
 executable sk
   hs-source-dirs:      app
-  main-is:             repl.hs
+  main-is:             sk.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , sk-lang
