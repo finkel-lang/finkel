@@ -1,5 +1,5 @@
 name:                sk-kernel
-version:             0.6.0.0
+version:             0.7.0.0
 synopsis:            SK language kernel and compiler
 description:         SK is a dialect of Lisp targetting Haskell.
 homepage:            https://github.com/githubuser/sk-kernel#readme
