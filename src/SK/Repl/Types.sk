@@ -32,7 +32,7 @@
    (ReplState ..) initial-repl-state
 
    ;; input and result
-   (Input ..) (InputType ..) (Result)
+   (Input ..) (InSource ..) (Result)
 
    ;; re-export
    (MonadTrans ..)))
@@ -70,11 +70,11 @@
 ;;; Input data type to hold form to evaluate, and MVar to receive
 ;;; result from evaluation thread.
 (data Input
-  (Input InputType Code (MVar Result)))
+  (Input InSource Code (MVar Result)))
 
 ;;; Type for input, to distinguish prompt from network connections to
 ;;; REPL server.
-(data InputType
+(data InSource
   Prompt
   Connection
   (deriving (Eq Show)))

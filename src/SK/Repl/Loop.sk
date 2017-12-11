@@ -210,7 +210,7 @@
                     _             (putStrLn
                                    (++ "eval-loop: got " (show e)))))
                  loop))))
-        (= withSkHandler m
+        (= withSkErrorHandler m
           (skErrorHandler defaultFatalMessager
                           defaultFlushOut
                           (withSourceErrorHandling m)))
@@ -223,7 +223,7 @@
                         Prompt "Prelude.print"
                         _ "SK.Repl.Env.prit"))))
               (<- ret
-                (withSkHandler
+                (withSkErrorHandler
                  (do (<- expanded (expands [form]))
                      (with-print-name print-name
                        (eval-form tmpfile itype expanded)))))
@@ -245,7 +245,7 @@
           (he {hsc_IC (setInteractivePrintName (hsc_IC he) name)}))
          act))))
 
-(defn (eval-form (-> FilePath InputType [Code] (Skc Result)))
+(defn (eval-form (-> FilePath InSource [Code] (Skc Result)))
   (tmpfile itype forms)
   (| ((null forms)
       (return (Right "")))
@@ -258,7 +258,7 @@
         (Right idecl) (eval-imports idecl)
         (Left err) (return (Left (++ err "\n")))))))
 
-(defn (eval-statement (-> FilePath InputType HStmt (Skc Result)))
+(defn (eval-statement (-> FilePath InSource HStmt (Skc Result)))
   (tmpfile itype stmt0)
   (do (<- hsc-env getSession)
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
@@ -298,7 +298,7 @@
             (= tystr (intercalate "\n" tystrs))))
       (return (Right tystr))))
 
-(defn (update-hsc-env (-> FilePath InputType HscEnv [Id] ForeignHValue
+(defn (update-hsc-env (-> FilePath InSource HscEnv [Id] ForeignHValue
                           FixityEnv (Skc Result)))
   (tmpfile itype hsc-env ids hvals-io fixity-env)
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
