@@ -8,7 +8,7 @@
    (Control.Concurrent ((ThreadId) forkIO killThread))
    (Control.Concurrent.MVar ((MVar) newEmptyMVar putMVar takeMVar))
    (Control.Exception ((AsyncException ..) bracket catch throwIO))
-   (Control.Monad (void))
+   (Control.Monad (void when))
    (Control.Monad.IO.Class (liftIO))
    (Data.List (intercalate isSuffixOf nubBy))
    (System.Exit (exitWith))
@@ -45,6 +45,7 @@
    (SK.Repl.Types))
 
   (export
+   read-form
    eval-loop read-print-loop init-form start-repl
    make-tmpfile cleanup-tmpfile))
 
@@ -104,8 +105,8 @@
   (let ((= print-io result-mv
           (do (<- result (liftIO (takeMVar result-mv)))
               (case result
-                (Right str) (>> (outputStr str)
-                                (outputStr "\n"))
+                (Right str) (when (not (null str))
+                              (outputStrLn str))
                 (Left str) ((if (isSuffixOf "\n" str)
                                 outputStr
                                 outputStrLn)
@@ -164,8 +165,7 @@
     (require SK.Prelude)
     (require SK.Repl.Env)
     (require SK.Repl.Macro)
-    (putStr
-     "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))
+    (putStrLn "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))
 
 ;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))
@@ -178,10 +178,10 @@
             (= put-and-return pending ret
               (do (put-repl-state (st {input-count count
                                        pending-input pending}))
-                  (return ret))))
-        (case (evalSP sexpr (Just "<repl>") (BS.concat input1))
-          (Right forms) (put-and-return [] (Just forms))
-          (Left _err)   (put-and-return input1 Nothing)))))
+                  (return ret)))))
+      (case (evalSP sexpr (Just "<repl>") (BS.concat input1))
+        (Right forms) (put-and-return [] (Just forms))
+        (Left _err)   (put-and-return input1 Nothing))))
 
 
 ;;; Eval loop
@@ -214,23 +214,36 @@
           (skErrorHandler defaultFatalMessager
                           defaultFlushOut
                           (withSourceErrorHandling m)))
+
         (= eval-one
           (do (<- (Input itype form out-mv)
                 (liftIO (takeMVar in-mvar)))
-              (<- ret (withSkHandler
-                       (do (<- expanded (expands [form]))
-                           (eval-form tmpfile itype expanded))))
+              (let ((= print-name
+                      (case itype
+                        Prompt "Prelude.print"
+                        _ "SK.Repl.Env.prit"))))
+              (<- ret
+                (withSkHandler
+                 (do (<- expanded (expands [form]))
+                     (with-print-name print-name
+                       (eval-form tmpfile itype expanded)))))
               (<- (Session session) (fromGhc (Ghc return)))
               (liftIO (do (putTheHscEnv session)
                           (putMVar out-mv ret)))))
         (= loop
-          (withAsyncHandler (>> eval-one loop)))
-        (= post-eval-init next
-          (do eval-one
-              set-repl-print-name
-              next)))
-    (do initialize
-        (post-eval-init loop))))
+          (withAsyncHandler (>> eval-one loop))))
+    (>> initialize loop)))
+
+;;; Temporary set `print-name' as interactive print function and run
+;;; `act'.
+(defn (with-print-name (-> String (Skc a) (Skc a)))
+  (print-name act)
+  (withSession
+   (\ he
+     (do (<- (: name _) (parseName print-name))
+         (setSession
+          (he {hsc_IC (setInteractivePrintName (hsc_IC he) name)}))
+         act))))
 
 (defn (eval-form (-> FilePath InputType [Code] (Skc Result)))
   (tmpfile itype forms)

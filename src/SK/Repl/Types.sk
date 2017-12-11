@@ -17,7 +17,7 @@
    (System.Console.Haskeline ((MonadException ..)))
 
    ;; transformers
-   (Control.Monad.Trans.Class (lift))
+   (Control.Monad.Trans.Class ((MonadTrans ..)))
    (Control.Monad.Trans.State.Strict ((StateT ..) evalStateT get put))
 
    ;; sk-kernel
@@ -25,7 +25,8 @@
 
   (export
    ;; repl
-   (Repl ..) run-repl put-repl-state get-repl-state lift-repl
+   (Repl ..) run-repl put-repl-state get-repl-state
+   ;; lift-repl
 
    ;; repl state
    (ReplState ..) initial-repl-state
@@ -34,7 +35,7 @@
    (Input ..) (InputType ..) (Result)
 
    ;; re-export
-   lift))
+   (MonadTrans ..)))
 
 
 ;;; Repl, state, and result types
@@ -49,6 +50,7 @@
   ()
   (ReplState {pending-input [] input-count 0}))
 
+;;; Monad for REPL prompt.
 (newtype (Repl a)
   (Repl {unRepl (StateT ReplState IO a)})
   (deriving (Functor Applicative Monad MonadIO MonadException)))
@@ -65,16 +67,18 @@
   ()
   (Repl get))
 
-(defn (lift-repl (-> (IO a) (Repl a)))
-  ()
-  (. Repl lift))
-
+;;; Input data type to hold form to evaluate, and MVar to receive
+;;; result from evaluation thread.
 (data Input
   (Input InputType Code (MVar Result)))
 
+;;; Type for input, to distinguish prompt from network connections to
+;;; REPL server.
 (data InputType
   Prompt
   Connection
   (deriving (Eq Show)))
 
-(type Result (Either String String))
+;;; Synonym for evaluation result.
+(type Result
+  (Either String String))

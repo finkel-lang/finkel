@@ -24,6 +24,27 @@
 
 (defdo (replTests Spec)
   ()
+  (describe "Read" readTests)
+  (describe "Eval" evalTests))
+
+(defdo (readTests Spec)
+  ()
+  (let ((= d describe)))
+  (d "reading single line form"
+     (it "returns '(foo bar buzz)"
+         (do (<- form (run-repl (read-form "(foo bar buzz)")
+                                initial-repl-state))
+             (shouldBe (Just '(foo bar buzz)) form))))
+  (d "reading multi line form"
+     (it "returns '(a b c)"
+         (do (<- form (run-repl (do (read-form "(a ")
+                                    (read-form "b ")
+                                    (read-form "c)"))
+                                initial-repl-state))
+             (shouldBe (Just '(a b c)) form)))))
+
+(defdo (evalTests Spec)
+  ()
   (let ((= d describe)))
   (<- in-mv (runIO newEmptyMVar))
   (<- out-mv (runIO newEmptyMVar))
@@ -33,23 +54,38 @@
      (forkIO (void (runSkc (eval-loop tmpfile in-mv) repl-env)))))
   (let ((= eval-form ok-or-ng form expect
           (d (concat ["evaluate " (show form)])
-             (it (concat ["should evaluate to `" expect "'"])
+             (it (concat ["evaluates to " (show expect)])
                  (do (putMVar in-mv (Input Connection form out-mv))
                      (<- ret (takeMVar out-mv))
                      (shouldBe (ok-or-ng expect) ret)))))
-        (= eval-ok (eval-form Right))
-        (= eval-ng (eval-form Left))))
+        (= eok (eval-form Right))
+        (= eng (eval-form Left))))
   (beforeAll_
    (do (putMVar in-mv (Input Connection init-form out-mv))
        (void (takeMVar out-mv)))
    (afterAll_
     (do (killThread etid)
         (cleanup-tmpfile tmpfile))
-    (d "Repl"
-       (do (eval-ok '(+ 10 32) "42")
-           (eval-ok '(defn (foo (-> Int Int)) (n) (+ n 1))
-                    "; foo :: Int -> Int")
-           (eval-ok '(funcall1 'putStr "foo") "foo")
-           (eval-ok '(exported-macros Prelude) "[]")
-           (eval-ok '(info 'putStrLn) "")
-           (eval-ng '(head []) "Prelude.head: empty list"))))))
+    (do (eok '(+ 10 32) "42")
+        (eok '(defn (foo (-> Int Int)) (n) (+ n 1))
+             "; foo :: Int -> Int")
+        (eok '(begin (:: (x y) Int) (= x 1) (= y 2))
+             "; x :: Int\n; y :: Int")
+        (eok '(<- bar (return True))
+             "; bar :: Bool")
+        (eok '(data Foo (Foo Int))
+             (concat ["; $tcFoo :: TyCon\n"
+                      "; $tc'Foo :: TyCon\n"
+                      "; Type constructor ‘Foo’"]))
+        (eok '(import Control.Monad)
+             "; import Control.Monad")
+        (eok '(funcall1 'putStr "foo") "foo")
+        (eok '(exported-macros Prelude) "[]")
+        (eok '(info 'putStrLn) "")
+        (eng 'buzz
+             (concat ["<interactive>:1:1: error: "
+                      "Variable not in scope: buzz\n"]))
+        (eng '(= f a (+ a 1) (+ a 2))
+             (concat ["<quoted code>: syntax error on input "
+                      "`(= f a (+ a 1) (+ a 2))'\n"]))
+        (eng '(head []) "Prelude.head: empty list")))))
