@@ -69,11 +69,11 @@ data Atom
   deriving (Eq, Data, Typeable, Generic)
 
 instance Show Atom where
-  show x =
+  showsPrec d x =
     case x of
-      AUnit -> "()"
-      ASymbol s -> unpackFS s
-      AChar c -> case c of
+      AUnit -> showString "()"
+      ASymbol s -> showString (unpackFS s)
+      AChar c -> showString $ case c of
         '\a' -> "\\\\BEL"
         '\b' -> "\\\\BS"
         '\f' -> "\\\\FF"
@@ -83,10 +83,10 @@ instance Show Atom where
         '\v' -> "\\\\VT"
         ' '  -> "\\\\SP"
         _    -> ['\\', c]
-      AString s -> show s
-      AInteger i -> show i
-      AFractional f -> fl_text f
-      AComment _ -> ""
+      AString s -> showsPrec d s
+      AInteger i -> showsPrec d i
+      AFractional f -> showString (fl_text f)
+      AComment _ -> showString ""
 
 instance NFData Atom where
   rnf x =
@@ -142,17 +142,17 @@ data Form a
   deriving (Eq, Data, Typeable, Generic)
 
 instance Show a => Show (Form a) where
-  showsPrec _ form s =
+  showsPrec d form =
     case form of
-      Atom a    -> show a ++ s
-      List xs   -> showL (Just "nil") '(' ')' xs s
-      HsList xs -> showL Nothing '[' ']' xs s
-      TEnd      -> "TEnd" ++ s
+      Atom a    -> showsPrec d a
+      List xs   -> showL (Just "nil") '(' ')' xs
+      HsList xs -> showL Nothing '[' ']' xs
+      TEnd      -> showString "TEnd"
     where
       showL mb_nil open close xs next =
         case xs of
           []    -> maybe (open : close : next)
-                         (\str -> str ++ next)
+                         (++ next)
                          mb_nil
           x:xs' -> open : shows x (showL' close xs' next)
       showL' close xs next =
@@ -229,7 +229,7 @@ instance Eq a => Eq (LForm a) where
   LForm (L _ a) == LForm (L _ b) = a == b
 
 instance Show a => Show (LForm a) where
-  show (LForm (L _ a)) = show a
+  showsPrec d (LForm (L _ a)) = showsPrec d a
 
 instance Functor LForm where
   fmap f (LForm (L l a)) = LForm (L l (fmap f a))
@@ -239,7 +239,7 @@ instance Foldable LForm where
 
 instance Traversable LForm where
   traverse f (LForm (L l form)) =
-    fmap (\x -> LForm (L l x)) (traverse f form)
+    fmap (LForm . L l) (traverse f form)
 
 instance NFData a => NFData (LForm a) where
   rnf (LForm (L l a)) = rnf l `seq` rnf a

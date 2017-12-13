@@ -62,7 +62,7 @@ handleSkException = ghandle
 
 -- ---------------------------------------------------------------------
 --
--- Skc monad
+-- Macro and Skc monad
 --
 -- ---------------------------------------------------------------------
 
@@ -74,6 +74,12 @@ handleSkException = ghandle
 data Macro
   = Macro (Code -> Skc Code)
   | SpecialForm (Code -> Skc Code)
+
+instance Show Macro where
+  showsPrec _ m =
+    case m of
+      Macro _      -> showString "<macro>"
+      SpecialForm _-> showString "<special-form>"
 
 type EnvMacros = Map.Map FastString Macro
 
