@@ -10,7 +10,8 @@
 (defmodule SK.Repl.Macro
   (use
    ;; base
-   (Control.Monad (filterM))
+   (Control.Exception ((Exception ..) (SomeException ..)))
+   (Control.Monad (filterM void))
    (Data.Function (on))
    (Data.List (find intersperse partition sortBy))
    (Data.Maybe (catMaybes))
@@ -87,6 +88,22 @@
       (setContext (map mk-ii (: mname mods)))
       (return '(begin))))
 
+(defn (env-context-on-exception (-> (Skc a) (Skc ())))
+  (action)
+  (gcatch
+   (void action)
+   (\ e
+     (do (case (:: (fromException e) (Maybe SourceError))
+           (Just se)
+           (do (<- dflags getSessionDynFlags)
+               (liftIO
+                (putStr (unlines (map (showSDoc dflags)
+                                      (pprErrMsgBagWithLoc
+                                       (srcErrorMessages se)))))))
+           _ (liftIO (print e)))
+         (<- mods (fmap envContextModules getSkEnv))
+         (setContext (map mk-ii mods))))))
+
 ;;; Compile source code to object code.
 (defmacro* compile-obj (form)
   (maybe (skSrcError form (++ "compile-obj: not a FilePath: "
@@ -99,7 +116,8 @@
 ;;; Link the object code of given module.
 (defmacro* link-module (form)
   (let ((= go name
-          (do (liftIO (putStrLn (++ "; link-module: " (unpackFS name))))
+          (do (liftIO
+               (putStrLn (++ "; link-module: " (unpackFS name))))
               (%link-module name)))
         (= err
           (skSrcError form (++ "link-module: not a symbol: "
@@ -114,7 +132,8 @@
   (let ((= find-file idirs path
           (if (isAbsolute path)
               (find-absolute idirs path)
-              (%compile-link-and-import path)))
+              (env-context-on-exception
+               (%compile-link-and-import path))))
         (= find-absolute dirs path
           (case dirs
             (: dir dirs') (find-absolute' dir dirs' path)
@@ -155,17 +174,19 @@
               (liftIO (do (mapM_ uncache graph0)
                           (flushFinderCaches hsc-env)))
               (setSession (discardIC hsc-env)))))
-    (maybe (skSrcError form (++ "load: not a FilePath: "
-                                (show form)))
-           (\ path
-             (do (liftIO (putStrLn (++ "; load: " path)))
-                 ;; Clear current state first.
-                 (clear-all)
-                 ;; Find the source file path and compile, load, and
-                 ;; link the module.
-                 (<- dflags getSessionDynFlags)
-                 (find-file (importPaths dflags) path)))
-           (fromCode form))))
+    (maybe
+     (skSrcError form (++ "load: not a FilePath: "
+                          (show form)))
+     (\ path
+       (do (liftIO (putStrLn (++ "; load: " path)))
+           ;; Clear current state first.
+           (clear-all)
+           ;; Find the source file path and compile, load, and
+           ;; link the module.
+           (<- dflags getSessionDynFlags)
+           (find-file (importPaths dflags) path)
+           (return '(begin))))
+     (fromCode form))))
 
 
 ;;; Settings
