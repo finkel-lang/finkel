@@ -12,6 +12,7 @@
 ;;; Execute given action with redirecting stdout to given 'FilePath'.
 (defn (with-io-redirect (-> FilePath (IO a) (IO (, a String))))
   (path action)
+  ;;; XXX: Not thread safe. Use atomicModifyIORef'?
   (do (<- ret (withFile path
                         WriteMode
                         (\ hdl

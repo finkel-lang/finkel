@@ -8,6 +8,9 @@
    (Control.Concurrent)
    (Control.Monad (void))
 
+   ;; directory
+   (System.Directory (getCurrentDirectory))
+
    ;; hspec
    (Test.Hspec)
 
@@ -49,6 +52,7 @@
   (<- in-mv (runIO newEmptyMVar))
   (<- out-mv (runIO newEmptyMVar))
   (<- tmpfile (runIO make-tmpfile))
+  (<- current-dir (runIO getCurrentDirectory))
   (<- etid
     (runIO
      (forkIO (void (runSkc (eval-loop tmpfile in-mv) repl-env)))))
@@ -57,7 +61,7 @@
              (it (concat ["evaluates to " (show expect)])
                  (do (putMVar in-mv (Input Connection form out-mv))
                      (<- ret (takeMVar out-mv))
-                     (shouldBe (ok-or-ng expect) ret)))))
+                     (shouldBe ret (ok-or-ng expect))))))
         (= eok (eval-form Right))
         (= eng (eval-form Left))))
   (beforeAll_
@@ -66,26 +70,39 @@
    (afterAll_
     (do (killThread etid)
         (cleanup-tmpfile tmpfile))
-    (do (eok '(+ 10 32) "42")
-        (eok '(defn (foo (-> Int Int)) (n) (+ n 1))
-             "; foo :: Int -> Int")
-        (eok '(begin (:: (x y) Int) (= x 1) (= y 2))
-             "; x :: Int\n; y :: Int")
-        (eok '(<- bar (return True))
-             "; bar :: Bool")
-        (eok '(data Foo (Foo Int))
-             (concat ["; $tcFoo :: TyCon\n"
-                      "; $tc'Foo :: TyCon\n"
-                      "; Type constructor ‘Foo’"]))
-        (eok '(import Control.Monad)
-             "; import Control.Monad")
-        (eok '(funcall1 'putStr "foo") "foo")
-        (eok '(exported-macros Prelude) "[]")
-        (eok '(info 'putStrLn) "")
-        (eng 'buzz
-             (concat ["<interactive>:1:1: error: "
-                      "Variable not in scope: buzz\n"]))
-        (eng '(= f a (+ a 1) (+ a 2))
-             (concat ["<quoted code>: syntax error on input "
-                      "`(= f a (+ a 1) (+ a 2))'\n"]))
-        (eng '(head []) "Prelude.head: empty list")))))
+    (do
+      ;; Statements and declarations
+      (eok '(+ 10 32) "42")
+      (eok '(funcall1 'putStr "foo") "foo")
+      (eok '(defn (foo (-> Int Int))
+             (n)
+             (+ n 1))
+           "; foo :: Int -> Int")
+      (eok '(begin
+             (:: (x y) Int)
+             (= x 1)
+             (= y 2))
+           "; x :: Int\n; y :: Int")
+      (eok '(<- bar (return True))
+           "; bar :: Bool")
+      (eok '(data Foo (Foo Int))
+           (concat ["; $tcFoo :: TyCon\n"
+                    "; $tc'Foo :: TyCon\n"
+                    "; Type constructor ‘Foo’"]))
+      (eok '(import Control.Monad)
+           "; import Control.Monad")
+
+      ;; REPL macros
+      (eok '(exported-macros Prelude) "[]")
+      (eok '(info 'putStr)
+           "putStr :: String -> IO () \t-- Defined in ‘System.IO’\n")
+      (eok '(pwd) (show current-dir))
+
+      ;; Errors
+      (eng 'buzz
+           (concat ["<interactive>:1:1: error: "
+                    "Variable not in scope: buzz\n"]))
+      (eng '(= f a (+ a 1) (+ a 2))
+           (concat ["<quoted code>: syntax error on input "
+                    "`(= f a (+ a 1) (+ a 2))'\n"]))
+      (eng '(head []) "Prelude.head: empty list")))))

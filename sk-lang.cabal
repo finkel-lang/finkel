@@ -58,6 +58,7 @@ test-suite sk-lang-test
   main-is:             Spec.hs
   build-depends:       QuickCheck
                      , base
+                     , directory
                      , hspec
                      , sk-lang
                      , sk-kernel >= 0.7.0

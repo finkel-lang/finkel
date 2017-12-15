@@ -34,7 +34,6 @@
 
    ;; internal
    (SK.Core)
-   (SK.Repl.Env)
    (SK.Repl.GHC)))
 
 
@@ -233,8 +232,8 @@
   `(set-repl cwd ,path))
 
 (defmacro* pwd ()
-  (do (liftIO (>>= getCurrentDirectory putStrLn))
-      (return '(begin))))
+  (do (<- dir (liftIO getCurrentDirectory))
+      (return (toCode dir))))
 
 (define-macro ls forms
   (do (<- path
@@ -261,8 +260,7 @@
   (do (<- unqual getPrintUnqual)
       (<- dflags getDynFlags)
       (<- sdoc (info-thing True (show thing)))
-      (liftIO (putStrLn (showSDocForUser dflags unqual sdoc)))
-      (return '(begin))))
+      (return `(putStrLn ,(showSDocForUser dflags unqual sdoc)))))
 
 (defn (info-thing (-> Bool String (Skc SDoc)))
   (all-info str)
@@ -275,8 +273,8 @@
               ($$ (pprTyThingInContextLoc thing)
                   ($$ (vcat (map pprInstance cls-insts))
                       (vcat (map pprFamInst fam-insts)))))))
-      (return (vcat (intersperse (text "")
-                                 (map ppr-info filtered))))))
+      (return
+        (vcat (intersperse (text "") (map ppr-info filtered))))))
 
 (defn (parse-name (-> String (Skc [Name])))
   (str)
@@ -413,16 +411,17 @@ COMMANDS:
 (defn (info-paths (Skc ()))
   ()
   (do (<- dflags getDynFlags)
-      (liftIO (do (<- cwd getCurrentDirectory)
-                  (putStrLn "\n; current working directory: ")
-                  (putStrLn (++ ";   " cwd))
-                  (let ((= ipaths (importPaths dflags))))
-                  (putStrLn "; module import search paths: ")
-                  (if (null ipaths)
-                      (putStrLn ";   none")
-                      (mapM_ (\ ipath
-                               (putStrLn (++ ";   " ipath)))
-                             ipaths))))))
+      (liftIO
+       (do (<- cwd getCurrentDirectory)
+           (putStrLn "\n; current working directory: ")
+           (putStrLn (++ ";   " cwd))
+           (let ((= ipaths (importPaths dflags))))
+           (putStrLn "; module import search paths: ")
+           (if (null ipaths)
+               (putStrLn ";   none")
+               (mapM_ (\ ipath
+                        (putStrLn (++ ";   " ipath)))
+                      ipaths))))))
 
 (defmacro* info (form)
   (let ((= go sym

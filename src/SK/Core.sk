@@ -5,8 +5,7 @@
   eval-when
 
   ;; Macros for macros
-  defmacro defmacro! defmacro* defmacro*!
-  macrolet macrolet*
+  defmacro defmacro! defmacro* defmacro*! macrolet macrolet*
   macroexpand macroexpand-1 exported-macros
 
   ;; Function declarations
@@ -34,7 +33,8 @@
 
 ;;; Basic
 
-;;; Auxiliary macro for defining macros. Used only in this module.
+;;; Auxiliary macro for defining macros. Used only in this module until
+;;; `defmacro*!' is defined.
 (eval-when-compile
  (define-macro define-macro! form
    (case (unCode form)
