@@ -12,9 +12,8 @@
    ;; base
    (Control.Monad (filterM))
    (Data.Function (on))
-   (Data.List (find intercalate intersperse partition sortBy))
+   (Data.List (find intersperse partition sortBy))
    (Data.Maybe (catMaybes))
-   (System.IO (stdout))
 
    ;; bytestring
    (qualified Data.ByteString.Char8 as C8)
@@ -296,48 +295,43 @@
     (filter (. not has-parent) xs)))
 
 ;;; Almost same as `GHCi.UI.showBindings'.
-(defn (info-bindings (Skc ()))
+(defn (info-bindings (Skc Code))
   ()
   (where (do (<- bindings getBindings)
-             (<- docs (mapM makeDoc (reverse bindings)))
-             (mapM_ pprForUserPartWay docs))
-    (:: makeDoc (-> TyThing (Skc SDoc)))
-    (= makeDoc tt
+             (<- docs (mapM make-doc (reverse bindings)))
+             (<- unqual getPrintUnqual)
+             (<- dflags getDynFlags)
+             (return
+               `(putStrLn
+                 ,(showSDocForUser dflags unqual (vcat docs)))))
+    (:: make-doc (-> TyThing (Skc SDoc)))
+    (= make-doc tt
       (case tt
         (AnId i) (pprTypeAndContents i)
         _        (do (<- mb-stuff (getInfo False (getName tt)))
-                     (return (maybe (text "") pprTT mb-stuff)))))
-    (:: pprTT (-> (, TyThing Fixity [ClsInst] [FamInst]) SDoc))
-    (= pprTT (, thing _ _ _)
-      (pprTyThing showToHeader thing))
-    (:: pprForUserPartWay (-> SDoc (Skc ())))
-    (= pprForUserPartWay sdoc
-      (do (<- unqual getPrintUnqual)
-          (<- dflags getDynFlags)
-          (liftIO (printForUserPartWay dflags
-                                       stdout
-                                       (pprUserLength dflags)
-                                       unqual
-                                       sdoc))))))
+                     (return (maybe (text "") ppr-tt mb-stuff)))))
+    (:: ppr-tt (-> (, TyThing Fixity [ClsInst] [FamInst]) SDoc))
+    (= ppr-tt (, thing _ _ _)
+      (pprTyThing showToHeader thing))))
 
-(defn (info-context (Skc ()))
+(defn (info-context (Skc Code))
   ()
   (where (do (<- context getContext)
              (<- dflags getSessionDynFlags)
-             (liftIO (putStrLn "\n; context:"))
-             (liftIO (mapM_ (printContext dflags)
-                            context)))
-    (= printContext dflags ctx
+             (return `(putStr ,(result dflags context))))
+    (= result dflags context
+      (unlines (: "; context" (map (context-string dflags) context))))
+    (= context-string dflags ctx
       (case ctx
-        (IIDecl decl)    (putStrLn (++ ";  IIDecl: "
-                                       (showSDoc dflags (ppr decl))))
-        (IIModule mname) (putStrLn (++ ";  IIModule: "
-                                       (moduleNameString mname)))))))
+        (IIDecl decl)
+        (++ ";  IIDecl: " (showSDoc dflags (ppr decl)))
+        (IIModule mname)
+        (++ ";  IIModule: " (moduleNameString mname))))))
 
-(defn (info-dflags (Skc ()))
+(defn (info-dflags (Skc Code))
   ()
   (do (<- dflags getDynFlags)
-      (let ((= s
+      (let ((= ss
               ["; dflags:"
                (++ ";  ghcLink: " (show (ghcLink dflags)))
                (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
@@ -350,13 +344,13 @@
                 CompManager "CompManager"
                 OneShot     "OneShot"
                 MkDepend    "MkDepend"))))
-      (liftIO (putStrLn (intercalate "\n" s)))))
+      (return `(putStr ,(unlines ss)))))
 
-(defn (info-info (Skc ()))
+(defn (info-info (Skc Code))
   ()
-  (liftIO
-   (do (putStrLn
-        "USAGE: (info COMMANDS)
+  (return
+    `(putStrLn
+      "USAGE: (info COMMANDS)
 
 DESCRIPTION:
 
@@ -373,69 +367,75 @@ COMMANDS:
   modules   - Show loaded modules.
   packages  - Show accessible packages.
   paths     - Show paths.
-"))))
+")))
 
-(defn (info-linker (Skc ()))
+(defn (info-linker (Skc Code))
   ()
+  ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
+  ;; which is not exposed from the module its defined ... not sure how
+  ;; to get resulting output as `String' other than redirecting output
+  ;; to stdout.
   (do (<- hsc-env getSession)
       (liftIO (do (initDynLinker hsc-env)
-                  (showLinkerState (hsc_dflags hsc-env))))))
+                  (showLinkerState (hsc_dflags hsc-env))))
+      (return '(begin))))
 
-(defn (info-macros (Skc ()))
+(defn (info-macros (Skc Code))
   ()
   (do (<- macros (fmap envMacros getSkEnv))
-      (liftIO (putStrLn "; macros:"))
-      (mapM_ (\ m (liftIO (putStrLn (++ ";  " m))))
-             (macroNames macros))))
+      (let ((= macro-strings
+              (unlines
+               (: "; macros: "
+                  (map (++ ";  ") (macroNames macros)))))))
+      (return `(putStr ,macro-strings))))
 
-(defn (info-modules (Skc ()))
+(defn (info-modules (Skc Code))
   ()
   (do (<- graph0 getModuleGraph)
       (<- graph1 (filterM (. isLoaded ms_mod_name) graph0))
-      (let ((= show-one m
-              (>>= (showModule m) (. liftIO putStrLn)))))
-      (mapM_ show-one graph1)))
+      (<- mods (mapM showModule graph1))
+      (return `(putStr ,(unlines mods)))))
 
-(defn (info-packages (Skc ()))
+(defn (info-packages (Skc Code))
   ()
   (do (<- dflags getDynFlags)
-      (let ((= pr str
-              (putStrLn (++ ";   " str)))
+      (let ((= pr (++ ";   "))
             (= pr-flag flag
               (case flag
                 (ExposePackage n _ _) (pr n)
-                (HidePackage n)       (pr (++ "hiding " n))))))
-      (liftIO (do (putStrLn "; packages")
-                  (mapM_ pr-flag (packageFlags dflags))))))
+                (HidePackage n)       (pr (++ "hiding " n))))
+            (= pkgs
+              (: "; packages" (map pr-flag (packageFlags dflags))))))
+      (return `(putStr ,(unlines pkgs)))))
 
-(defn (info-paths (Skc ()))
+(defn (info-paths (Skc Code))
   ()
   (do (<- dflags getDynFlags)
-      (liftIO
-       (do (<- cwd getCurrentDirectory)
-           (putStrLn "\n; current working directory: ")
-           (putStrLn (++ ";   " cwd))
-           (let ((= ipaths (importPaths dflags))))
-           (putStrLn "; module import search paths: ")
-           (if (null ipaths)
-               (putStrLn ";   none")
-               (mapM_ (\ ipath
-                        (putStrLn (++ ";   " ipath)))
-                      ipaths))))))
+      (<- cwd (liftIO getCurrentDirectory))
+      (let ((= ipaths (importPaths dflags))
+            (= result
+              (unlines
+               (concat
+                [["; current working directory"
+                  (++ ";   " cwd)
+                  "; module import search paths:"]
+                 (if (null ipaths)
+                     [";    none"]
+                     (map (++ ";    ") ipaths))])))))
+      (return `(putStr ,result))))
 
 (defmacro* info (form)
   (let ((= go sym
-          (do (case (unpackFS sym)
-                "bindings" info-bindings
-                "context"  info-context
-                "dflags"   info-dflags
-                "linker"   info-linker
-                "macros"   info-macros
-                "modules"  info-modules
-                "packages" info-packages
-                "paths"    info-paths
-                _          info-info)
-              (return '(begin))))
+          (case (unpackFS sym)
+            "bindings" info-bindings
+            "context"  info-context
+            "dflags"   info-dflags
+            "linker"   info-linker
+            "macros"   info-macros
+            "modules"  info-modules
+            "packages" info-packages
+            "paths"    info-paths
+            _          info-info))
         (= err
           (skSrcError form (++ "info: invalid form: " (show form)))))
     (case (unCode form)
