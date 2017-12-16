@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 -- | Module exporting the @runSkc@, Haskell compiler, and some utility
 -- functions.
 module Language.SK.Run
@@ -20,9 +19,10 @@ module Language.SK.Run
   ) where
 
 -- base
-import Control.Exception
+import Control.Exception ( AsyncException(..), Exception(..)
+                         , IOException)
 import Control.Monad (void)
-import System.Exit
+import System.Exit (ExitCode(..))
 import Data.Maybe (fromMaybe, maybeToList)
 
 -- bytestring
@@ -85,9 +85,8 @@ skErrorHandler fm (FlushOut flush) work =
     (\e ->
        liftIO
          (do flush
-             case fromException e of
-               Just (ioe :: IOException) ->
-                 fatalErrorMsg'' fm (show ioe)
+             case (fromException e :: Maybe IOException) of
+               Just ioe -> fatalErrorMsg'' fm (show ioe)
                _ ->
                  case fromException e of
                    Just UserInterrupt ->
@@ -95,9 +94,8 @@ skErrorHandler fm (FlushOut flush) work =
                    Just StackOverflow ->
                      fatalErrorMsg'' fm "stack overflow"
                    _ ->
-                     case fromException e of
-                       Just (ec :: ExitCode) ->
-                         throwIO ec
+                     case (fromException e :: Maybe ExitCode) of
+                       Just ec -> throwIO ec
                        _ -> fatalErrorMsg'' fm (show e)
              return (Left (show e))))
     (handleGhcException
