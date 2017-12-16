@@ -53,11 +53,11 @@
         (= delines (intercalate "\n"))))
   (<- in-mv (runIO newEmptyMVar))
   (<- out-mv (runIO newEmptyMVar))
-  (<- tmpfile (runIO make-tmpfile))
+  (<- (, tmpfile hdl) (runIO make-tmpfile))
   (<- current-dir (runIO getCurrentDirectory))
   (<- etid
     (runIO
-     (forkIO (void (runSkc (eval-loop tmpfile in-mv) repl-env)))))
+     (forkIO (void (runSkc (eval-loop hdl in-mv) repl-env)))))
   (let ((= eval-form ok-or-ng form expect
           (d (concat ["evaluate " (show form)])
              (it (concat ["evaluates to " (show expect)])
@@ -77,7 +77,7 @@
        (void (takeMVar out-mv)))
    (afterAll_
     (do (killThread etid)
-        (cleanup-tmpfile tmpfile))
+        (cleanup-tmpfile (, tmpfile hdl)))
     (do
       ;; Statements and declarations
       (ok '(+ 10 32) "42")

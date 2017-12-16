@@ -7,31 +7,28 @@
    (GHC.IO.Handle (hDuplicate hDuplicateTo))
    (Control.Exception)
    (Data.List (intercalate))
-   (System.IO ((Handle) (IOMode ..) (SeekMode ..)
-               hClose hFlush hGetLine hSeek hSetFileSize
-               openFile stdout))
+   (System.IO ((Handle) (SeekMode ..) hFlush hGetLine hSeek
+               hSetFileSize stdout))
    (System.IO.Error (isEOFError)))
   (export with-io-redirect))
 
 ;;; Execute given action with redirecting stdout to given 'FilePath'.
-(defn (with-io-redirect (-> FilePath (IO a) (IO (, a String))))
-  (path action)
+(defn (with-io-redirect (-> Handle (IO a) (IO (, a String))))
+  (hdl action)
   (bracket
-   (do (<- hdl (openFile path ReadWriteMode))
-       (<- stdout2 (hDuplicate stdout))
+   (do (<- stdout2 (hDuplicate stdout))
        (hSetFileSize hdl 0)
        (hSeek hdl AbsoluteSeek 0)
-       (return (, hdl stdout2)))
-   (\ (, hdl stdout2)
-     (do (hDuplicateTo stdout2 stdout)
-         (hClose hdl)))
-   (\ (, hdl _)
-     (do (hDuplicateTo hdl stdout)
-         (<- x action)
-         (hFlush stdout)
-         (hSeek hdl AbsoluteSeek 0)
-         (<- contents (get-lines hdl []))
-         (return (, x (intercalate "\n" contents)))))))
+       (return stdout2))
+   (\ stdout2
+     (hDuplicateTo stdout2 stdout))
+   (const
+    (do (hDuplicateTo hdl stdout)
+        (<- x action)
+        (hFlush stdout)
+        (hSeek hdl AbsoluteSeek 0)
+        (<- contents (get-lines hdl []))
+        (return (, x (intercalate "\n" contents)))))))
 
 (defn (get-lines (-> Handle [String] (IO [String])))
   (hdl acc)

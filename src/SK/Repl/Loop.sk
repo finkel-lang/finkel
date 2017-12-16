@@ -12,7 +12,7 @@
    (Control.Monad.IO.Class (liftIO))
    (Data.List (intercalate isSuffixOf nubBy))
    (System.Exit (exitWith))
-   (System.IO (hClose hFlush openTempFile stdout))
+   (System.IO ((Handle) hClose hFlush openTempFile stdout))
    (System.IO.Error (isDoesNotExistError))
 
    ;; bytestring
@@ -58,22 +58,20 @@
   (bracket
    make-tmpfile
    cleanup-tmpfile
-   (\ tmpfile
+   (\ (, _tmpfile hdl)
      (do (<- in-mv newEmptyMVar)
          (start-listener mb-listen in-mv)
          (<- eval-tid
-           (forkIO (void (runSkc (eval-loop tmpfile in-mv) ske))))
+           (forkIO (void (runSkc (eval-loop hdl in-mv) ske))))
          (let ((= rpl (read-print-loop in-mv eval-tid))
                (= reader (runInputT defaultSettings rpl))))
          (run-repl reader initial-repl-state)))))
 
-;;; Return a file path for temporary use.
-(defn (make-tmpfile (IO FilePath))
+;;; Return a file path and handle for temporary use.
+(defn (make-tmpfile (IO (, FilePath Handle)))
   ()
   (do (<- dir getTemporaryDirectory)
-      (<- (, name hdl) (openTempFile dir "sk-repl-.out"))
-      (hClose hdl)
-      (return name)))
+      (openTempFile dir "sk-repl-.out")))
 
 ;;; Start listner in separate thread, and return temporary file for
 ;;; getting String output from statement.
@@ -85,10 +83,11 @@
                (void (forkIO (listener (fromIntegral port) in-mv)))))
          mb-listen))
 
-;; Clean up temporary file, if the server was started with listener.
-(defn (cleanup-tmpfile (-> FilePath (IO ())))
-  (tmpfile)
-  (catch (removeFile tmpfile)
+;; Clean up temporary file.
+(defn (cleanup-tmpfile (-> (, FilePath Handle) (IO ())))
+  ((, path hdl))
+  (catch (do (hClose hdl)
+             (removeFile path))
     (\ e (if (isDoesNotExistError e)
              (return ())
              (throwIO e)))))
@@ -186,8 +185,8 @@
 
 ;;; Eval loop
 
-(defn (eval-loop (-> FilePath (MVar Input) (Skc ())))
-  (tmpfile in-mvar)
+(defn (eval-loop (-> Handle (MVar Input) (Skc ())))
+  (hdl in-mvar)
   (let ((= initialize
           ;; Default target in interactive context is `HscAsm',
           ;; updating to `HscInterpreted'.  Also, `dynamic' option is
@@ -226,7 +225,7 @@
                 (withSkErrorHandler
                  (do (<- expanded (expands [form]))
                      (with-print-name print-name
-                       (eval-form tmpfile itype expanded)))))
+                       (eval-form hdl itype expanded)))))
               (<- (Session session) (fromGhc (Ghc return)))
               (liftIO (do (putTheHscEnv session)
                           (putMVar out-mv ret)))))
@@ -245,25 +244,25 @@
           (he {hsc_IC (setInteractivePrintName (hsc_IC he) name)}))
          act))))
 
-(defn (eval-form (-> FilePath InSource [Code] (Skc Result)))
-  (tmpfile itype forms)
+(defn (eval-form (-> Handle InSource [Code] (Skc Result)))
+  (hdl itype forms)
   (| ((null forms)
       (return (Right "")))
      ((<- (Right decls) (evalBuilder parseTopDecls forms))
       (eval-decls decls))
      ((<- (Right stmt) (evalBuilder parseStmt forms))
-      (eval-statement tmpfile itype stmt))
+      (eval-statement hdl itype stmt))
      (otherwise
       (case (evalBuilder parseImports forms)
         (Right idecl) (eval-imports idecl)
         (Left err) (return (Left (++ err "\n")))))))
 
-(defn (eval-statement (-> FilePath InSource HStmt (Skc Result)))
-  (tmpfile itype stmt0)
+(defn (eval-statement (-> Handle InSource HStmt (Skc Result)))
+  (hdl itype stmt0)
   (do (<- hsc-env getSession)
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
       (case stmt1
-        (Just (, is h f)) (update-hsc-env tmpfile itype hsc-env is h f)
+        (Just (, is h f)) (update-hsc-env hdl itype hsc-env is h f)
         Nothing (return (Left "eval-statement: no result")))))
 
 (defn (eval-imports (-> [HImportDecl] (Skc Result)))
@@ -298,9 +297,9 @@
             (= tystr (intercalate "\n" tystrs))))
       (return (Right tystr))))
 
-(defn (update-hsc-env (-> FilePath InSource HscEnv [Id] ForeignHValue
+(defn (update-hsc-env (-> Handle InSource HscEnv [Id] ForeignHValue
                           FixityEnv (Skc Result)))
-  (tmpfile itype hsc-env ids hvals-io fixity-env)
+  (hdl itype hsc-env ids hvals-io fixity-env)
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its implementation.
   (let ((= success fhvals ret
@@ -337,7 +336,7 @@
           (do (<- stat (liftIO eval-hvals-io))
               (return (, stat ""))))
         (= eval-for-connection
-          (liftIO (with-io-redirect tmpfile eval-hvals-io))))
+          (liftIO (with-io-redirect hdl eval-hvals-io))))
     (do (<- (, status ret)
           ;; Switching behaviour between prompt and network
           ;; connection. Getting printed result as `String' for
