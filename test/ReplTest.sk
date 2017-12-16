@@ -7,6 +7,7 @@
    ;; base
    (Control.Concurrent)
    (Control.Monad (void))
+   (Data.List (intercalate))
 
    ;; directory
    (System.Directory (getCurrentDirectory))
@@ -48,7 +49,8 @@
 
 (defdo (evalTests Spec)
   ()
-  (let ((= d describe)))
+  (let ((= d describe)
+        (= delines (intercalate "\n"))))
   (<- in-mv (runIO newEmptyMVar))
   (<- out-mv (runIO newEmptyMVar))
   (<- tmpfile (runIO make-tmpfile))
@@ -62,8 +64,14 @@
                  (do (putMVar in-mv (Input Connection form out-mv))
                      (<- ret (takeMVar out-mv))
                      (shouldBe ret (ok-or-ng expect))))))
-        (= eok (eval-form Right))
-        (= eng (eval-form Left))))
+        (= ok (eval-form Right))
+        (= ng (eval-form Left))
+        (= satisfy form pred
+          (d (concat ["evaluate " (show form)])
+             (it "satisfies predicate"
+                 (do (putMVar in-mv (Input Connection form out-mv))
+                     (<- ret (takeMVar out-mv))
+                     (shouldSatisfy ret pred)))))))
   (beforeAll_
    (do (putMVar in-mv (Input Connection init-form out-mv))
        (void (takeMVar out-mv)))
@@ -72,37 +80,95 @@
         (cleanup-tmpfile tmpfile))
     (do
       ;; Statements and declarations
-      (eok '(+ 10 32) "42")
-      (eok '(funcall1 'putStr "foo") "foo")
-      (eok '(defn (foo (-> Int Int))
-             (n)
-             (+ n 1))
-           "; foo :: Int -> Int")
-      (eok '(begin
-             (:: (x y) Int)
-             (= x 1)
-             (= y 2))
-           "; x :: Int\n; y :: Int")
-      (eok '(<- bar (return True))
-           "; bar :: Bool")
-      (eok '(data Foo (Foo Int))
-           (concat ["; $tcFoo :: TyCon\n"
-                    "; $tc'Foo :: TyCon\n"
-                    "; Type constructor ‘Foo’"]))
-      (eok '(import Control.Monad)
-           "; import Control.Monad")
+      (ok '(+ 10 32) "42")
+      (ok '(funcall1 'putStr "foo") "foo")
+      (ok '(defn (foo (-> Int Int))
+            (n)
+            (+ n 1))
+          "; foo :: Int -> Int")
+      (ok '(foo 41) "42")
+      (ok '(begin
+            (:: (x y) Int)
+            (= x 1)
+            (= y 2))
+          "; x :: Int\n; y :: Int")
+      (ok '(<- bar (return True))
+          "; bar :: Bool")
+      (ok '(data Foo (Foo Int))
+          (concat ["; $tcFoo :: TyCon\n"
+                   "; $tc'Foo :: TyCon\n"
+                   "; Type constructor ‘Foo’"]))
+      (ok '(import Control.Monad)
+          "; import Control.Monad")
 
       ;; REPL macros
-      (eok '(exported-macros Prelude) "[]")
-      (eok '(info 'putStr)
-           "putStr :: String -> IO () \t-- Defined in ‘System.IO’\n")
-      (eok '(pwd) (show current-dir))
+      (ok '(exported-macros Prelude) "[]")
+      (satisfy
+       '(info bindings)
+       (\ ret
+         (case ret
+           (Right str) (elem "foo :: Int -> Int = _" (lines str))
+           _ False)))
+      (ok '(info context)
+          (delines
+           ["; context"
+            ";  IIDecl: import Control.Monad"
+            ";  IIDecl: import SK.Repl.Macro"
+            ";  IIDecl: import SK.Repl.Env"
+            ";  IIDecl: import SK.Prelude"
+            ";  IIDecl: import Prelude"]))
+      (ok '(info dflags)
+          (delines
+           ["; dflags:"
+            ";  ghcLink: LinkInMemory"
+            ";  ghcMode: CompManager"
+            ";  hscTarget: HscInterpreted"
+            ";  objectDir: Nothing"
+            ";  thisInstalledUnitId: main"]))
+      (ok '(begin
+            (set-flags -odir /tmp)
+            (info dflags))
+          (delines
+           ["; dflags:"
+            ";  ghcLink: LinkInMemory"
+            ";  ghcMode: CompManager"
+            ";  hscTarget: HscInterpreted"
+            ";  objectDir: Just \"/tmp\""
+            ";  thisInstalledUnitId: main"]))
+      (satisfy
+       '(info macros)
+       (\ ret
+         (case ret
+           (Right str) (elem ";  defmacro*!" (lines str))
+           _ False)))
+      (ok '(info modules) "")
+      (ok '(info packages)
+          "; packages")
+      (ok '(begin
+            (set-flags -package bytestring)
+            (info packages))
+          (delines
+           ["; packages"
+            ";   -package bytestring"]))
+      (ok '(info paths)
+          (concat
+           ["; current working directory:\n"
+            ";   " current-dir "\n"
+            "; module import search paths:\n"
+            ";    ."]))
+      (ok '(info 'putStr)
+          "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
+      (ok '(browse Unsafe.Coerce)
+          "Unsafe.Coerce.unsafeCoerce :: a -> b")
+      (ok '(pwd) (show current-dir))
 
       ;; Errors
-      (eng 'buzz
-           (concat ["<interactive>:1:1: error: "
-                    "Variable not in scope: buzz\n"]))
-      (eng '(= f a (+ a 1) (+ a 2))
-           (concat ["<quoted code>: syntax error on input "
-                    "`(= f a (+ a 1) (+ a 2))'\n"]))
-      (eng '(head []) "Prelude.head: empty list")))))
+      (ng 'buzz
+          (concat ["<interactive>:1:1: error: "
+                   "Variable not in scope: buzz\n"]))
+      (ng '(= f a (+ a 1) (+ a 2))
+          (concat ["<quoted code>: syntax error on input "
+                   "`(= f a (+ a 1) (+ a 2))'\n"]))
+      (ng '(head []) "Prelude.head: empty list")
+      (ng '(info (foo bar))
+          "<quoted code>: error: info: invalid form: (foo bar)\n")))))

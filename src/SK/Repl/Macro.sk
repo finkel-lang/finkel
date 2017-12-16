@@ -10,7 +10,7 @@
 (defmodule SK.Repl.Macro
   (use
    ;; base
-   (Control.Exception ((Exception ..) (SomeException ..)))
+   (Control.Exception ((Exception ..)))
    (Control.Monad (filterM void))
    (Data.Function (on))
    (Data.List (find intersperse partition sortBy))
@@ -38,7 +38,6 @@
 
 
 ;;; Compilation
-;;; -----------
 
 ;;; Functions for compiling and loading SK module.
 (defn (mk-ii-fs (-> FastString InteractiveImport))
@@ -190,7 +189,6 @@
 
 
 ;;; Settings
-;;; --------
 
 ;;; Set command line flags, see `GHCi.UI.newDynFlags'.
 (defmacro* set-flags forms
@@ -274,7 +272,7 @@
 
 ;;; Functions for `info' macro.
 
-;; Mostly translated from `GHCi.UI.infoThing'.
+;;; Mostly translated from `GHCi.UI.infoThing'.
 (defn (info-name (-> Code (Skc Code)))
   (thing)
   (do (<- unqual getPrintUnqual)
@@ -437,7 +435,7 @@ COMMANDS:
             (= result
               (unlines
                (concat
-                [["; current working directory"
+                [["; current working directory:"
                   (++ ";   " cwd)
                   "; module import search paths:"]
                  (if (null ipaths)
@@ -466,7 +464,7 @@ COMMANDS:
       _                    err)))
 
 ;;; Simplified version of `GHCi.UI.browseModule'.
-(defn (browse-module (-> Module ModuleInfo (Skc ())))
+(defn (browse-module (-> Module ModuleInfo (Skc Code)))
   (mdl mod-info)
   (do (let ((= names (modInfoExports mod-info))
             (= sorted-names
@@ -477,18 +475,16 @@ COMMANDS:
             (= loc-sort ns
               (| ((<- (: n _) ns) (isGoodSrcSpan (nameSrcSpan n))
                   (sortBy (on compare nameSrcSpan) ns))
-                 (otherwise
-                  (occ-sort ns))))
+                 (otherwise (occ-sort ns))))
             (= pretty
               (pprTyThing showToHeader))))
       (<- mb-things (mapM lookupName sorted-names))
       (<- dflags getDynFlags)
       (<- unqual getPrintUnqual)
       (let ((= things (catMaybes mb-things))
-            (= prettyThings (map pretty things))))
-      (liftIO
-       (putStrLn
-        (showSDocForUser dflags unqual (vcat prettyThings))))))
+            (= prettyThings (map pretty things))
+            (= strs (showSDocForUser dflags unqual (vcat prettyThings)))))
+      (return `(putStrLn ,strs))))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defmacro* browse (form)
@@ -497,11 +493,10 @@ COMMANDS:
               (do (<- mdl (lookupModule (mkModuleName name) Nothing))
                   (<- mb-mod-info (getModuleInfo mdl))
                   (case mb-mod-info
-                    Nothing         (liftIO
-                                     (putStrLn
-                                      (++ "unknown module: " name)))
-                    (Just mod-info) (browse-module mdl mod-info))
-                  (return '(begin))))
+                    (Just mod-info) (browse-module mdl mod-info)
+                    Nothing (return
+                              `(putStrLn
+                                (++ "unknown module: " ,name))))))
              (otherwise err)))
         (= err
           (skSrcError form (++ "browse: invalid form: " (show form)))))
@@ -511,7 +506,6 @@ COMMANDS:
 
 
 ;;; Package
-;;; -------
 
 ;;; Lookup `PackageConfig' of given package in `DynFlags'.
 (defn (lookup-package-config

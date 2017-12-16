@@ -1,4 +1,4 @@
-;;;; Module containing function to redirect stdout.
+;;;; Module containing function to redirect stdout to file handle.
 
 (require SK.Core)
 
@@ -6,26 +6,38 @@
   (use
    (GHC.IO.Handle (hDuplicate hDuplicateTo))
    (Control.Exception)
-   (System.IO ((IOMode ..) hClose stdout withFile)))
+   (Data.List (intercalate))
+   (System.IO ((Handle) (IOMode ..) (SeekMode ..)
+               hClose hFlush hGetLine hSeek hSetFileSize
+               openFile stdout))
+   (System.IO.Error (isEOFError)))
   (export with-io-redirect))
 
 ;;; Execute given action with redirecting stdout to given 'FilePath'.
 (defn (with-io-redirect (-> FilePath (IO a) (IO (, a String))))
   (path action)
-  ;;; XXX: Not thread safe. Use atomicModifyIORef'?
-  (do (<- ret (withFile path
-                        WriteMode
-                        (\ hdl
-                          (bracket
-                           (hDuplicate stdout)
-                           (\ stdout2
-                             (do (hDuplicateTo stdout2 stdout)
-                                 (hClose stdout2)))
-                           (const
-                            (do (hDuplicateTo hdl stdout)
-                                action))))))
+  (bracket
+   (do (<- hdl (openFile path ReadWriteMode))
+       (<- stdout2 (hDuplicate stdout))
+       (hSetFileSize hdl 0)
+       (hSeek hdl AbsoluteSeek 0)
+       (return (, hdl stdout2)))
+   (\ (, hdl stdout2)
+     (do (hDuplicateTo stdout2 stdout)
+         (hClose hdl)))
+   (\ (, hdl _)
+     (do (hDuplicateTo hdl stdout)
+         (<- x action)
+         (hFlush stdout)
+         (hSeek hdl AbsoluteSeek 0)
+         (<- contents (get-lines hdl []))
+         (return (, x (intercalate "\n" contents)))))))
 
-      ;; Ensure the evaluation of the file contents, so that the
-      ;; exceptions from `action' can avoid file lock.
-      (<- contents (readFile path))
-      (seq contents (return (, ret contents)))))
+(defn (get-lines (-> Handle [String] (IO [String])))
+  (hdl acc)
+  (catch (do (<- l (hGetLine hdl))
+             (get-lines hdl (: l acc)))
+    (\ e
+      (if (isEOFError e)
+          (return (reverse acc))
+          (throwIO e)))))
