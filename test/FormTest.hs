@@ -4,8 +4,23 @@ module FormTest where
 
 import Control.DeepSeq
 import Control.Exception
+import Data.Complex
 import Data.Data
+import qualified Data.Fixed as Fixed
+import Data.Functor.Compose
+import Data.Functor.Const
+import Data.Functor.Identity
+import qualified Data.Functor.Product as Product
+import qualified Data.Functor.Sum as Sum
+import Data.Int
 import Data.List (isPrefixOf, isSubsequenceOf)
+import Data.List.NonEmpty (NonEmpty(..))
+import Data.Monoid
+import Data.Version
+import Data.Ratio
+import qualified Data.Semigroup as Semigroup
+import Data.Word
+import Numeric.Natural
 import Test.Hspec
 import Test.QuickCheck
 import Text.Show.Functions ()
@@ -60,30 +75,7 @@ formTests = do
   rnfTest
   listTest
   symbolNameTest
-
-  homoiconicTest (AInteger 42)
-  homoiconicTest ()
-  homoiconicTest 'x'
-  homoiconicTest "string"
-  homoiconicTest (42 :: Int)
-  homoiconicTest (42 :: Integer)
-  homoiconicTest (0.123456789 :: Double)
-  homoiconicTest (1.234 :: Float)
-  homoiconicTest ([1,2,3] :: [Int])
-  homoiconicTest (Atom (AInteger 42))
-  homoiconicTest (parseE "(foo bar buzz)")
-  homoiconicTest [True, False]
-  homoiconicTest [EQ, LT, GT]
-  homoiconicTest (Just (42 :: Int))
-  homoiconicTest [Just 'a', Nothing, Just 'b']
-  homoiconicTest [Right True, Left "foo"]
-  homoiconicTest (Just 'x', [Right False, Left "foo"])
-  homoiconicTest (Just 'x', [Right False, Left "foo"], EQ)
-  homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int))
-  homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
-                 ,False)
-  homoiconicTest (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
-                 ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
+  homoiconicTests
 
   fromCodeTest Foo
 
@@ -286,12 +278,69 @@ lengthTest n str =
    it ("should be " ++ show n) $
      length (parseE str) `shouldBe` n
 
-homoiconicTest :: (Eq a, Show a, Homoiconic a) => a -> Spec
-homoiconicTest x =
-  describe ("to/from code " ++ show x) $
-   it "should match the input" $
-     case fromCode (toCode x) of
-       Just y -> y `shouldBe` x
+homoiconicTests :: Spec
+homoiconicTests = do
+  let t x = describe ("to/from code " ++ show x) $
+              it "shoult match the input" $
+                 case fromCode (toCode x) of
+                   Just y -> y `shouldBe` x
+  t (AInteger 42)
+  t ()
+  t 'x'
+  t "string"
+  t (42 :: Int)
+  t (42 :: Int8)
+  t (42 :: Int16)
+  t (42 :: Int32)
+  t (42 :: Int64)
+  t (42 :: Integer)
+  t (42 :: Word)
+  t (42 :: Word8)
+  t (42 :: Word16)
+  t (42 :: Word32)
+  t (42 :: Word64)
+  t (0.123456789 :: Double)
+  t (1.234 :: Float)
+  t ([1,2,3] :: [Int])
+  t (Fixed.MkFixed 2 :: Fixed.Pico)
+  t (Identity 'a')
+  t (1 :+ 2 :: Complex Int)
+  t (Compose (Just (Just 'a')))
+  t (Const True :: Const Bool Char)
+  t (Product.Pair (Just 'a') (Just 'b'))
+  t [Sum.InL (Just 'a'), Sum.InR (Right 'b'), Sum.InR (Left "foo")]
+  t ('a' :| ['b', 'c', 'd'])
+  t (All False)
+  t (Alt (Just True))
+  t (Any False)
+  t (Dual 'x')
+  t (First (Just 'a'))
+  t (Last (Just 'a'))
+  t (Product (42 :: Int))
+  t (Sum (42 :: Int))
+  t (Proxy :: Proxy ())
+  t (Version [1,2,3] ["foo", "bar"])
+  t (1 % 3 :: Rational)
+  t (Semigroup.Arg 'x' False)
+  t (Semigroup.First 'a')
+  t (Semigroup.Last 'z')
+  t (Semigroup.Max (42 :: Int))
+  t (Semigroup.Min (42 :: Int))
+  t (Semigroup.Option (Just "foo"))
+  t (Semigroup.WrapMonoid True)
+  t (42 :: Natural)
+  t (Atom (AInteger 42))
+  t (parseE "(foo bar buzz)")
+  t [True, False]
+  t [EQ, LT, GT]
+  t (Just (42 :: Int))
+  t [Right True, Left "foo"]
+  t (Just 'x', [Right False, Left "foo"])
+  t (Just 'x', [Right False, Left "foo"], EQ)
+  t (Just 'x', [Right False, Left "foo"], EQ, (42::Int))
+  t (Just 'x', [Right False, Left "foo"], EQ, (42::Int) ,False)
+  t (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
+    ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
 
 data Foo = Foo deriving (Eq, Show)
 
