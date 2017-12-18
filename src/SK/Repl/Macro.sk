@@ -131,8 +131,7 @@
   (let ((= find-file idirs path
           (if (isAbsolute path)
               (find-absolute idirs path)
-              (env-context-on-exception
-               (%compile-link-and-import path))))
+              (%compile-link-and-import path)))
         (= find-absolute dirs path
           (case dirs
             (: dir dirs') (find-absolute' dir dirs' path)
@@ -183,7 +182,8 @@
            ;; Find the source file path and compile, load, and
            ;; link the module.
            (<- dflags getSessionDynFlags)
-           (find-file (importPaths dflags) path)
+           (env-context-on-exception
+            (find-file (importPaths dflags) path))
            (return '(begin))))
      (fromCode form))))
 
