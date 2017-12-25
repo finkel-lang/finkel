@@ -48,6 +48,8 @@ import Language.SK.Syntax.Internal
 %name p_types types
 %name p_types0 types0
 %name p_lconstr lconstr
+%name p_lqtycon lqtycon
+%name p_lh98constr lh98constr
 
 %name p_pat pat
 %name p_pats pats
@@ -108,6 +110,9 @@ import Language.SK.Syntax.Internal
 '|'  { LForm (L _ (Atom (ASymbol "|"))) }
 '}'  { LForm (L _ (Atom (ASymbol "}"))) }
 '~'  { LForm (L _ (Atom (ASymbol "~"))) }
+
+-- GHC Extensions
+'forall' { LForm (L _ (Atom (ASymbol "forall"))) }
 
 -- Pragmas
 'unpack'     { LForm (L _ (Atom (ASymbol "UNPACK"))) }
@@ -266,7 +271,7 @@ simpletype :: { (FastString, [HTyVarBndr])}
     | 'list'   { b_simpletypeD $1 }
 
 constrs :: { (HDeriving, [HConDecl]) }
-    : rconstrs { let (m,d) = $1 in (m, reverse d) }
+    : rconstrs { let (m,d) = $1 in (m,reverse d) }
 
 rconstrs :: { (HDeriving, [HConDecl]) }
     : {- empty -}            { (noLoc [], []) }
@@ -281,6 +286,34 @@ deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }
 
 lconstr :: { HConDecl }
+    : forall qtycon { b_forallD (snd $1) $2 }
+    -- GADT
+    -- | '::' 'symbol' qtype         { b_gadtD $2 $3 }
+    | lh98constr    { $1 }
+
+forall :: { (Code, [Code]) }
+    : 'forall' lforall { ($1, $2) }
+
+lforall :: { [Code] }
+    : 'symbol' { [$1] }
+    | 'symbol' lforall { $1:$2 }
+
+qtycon :: { (HConDecl, [HType]) }
+    : 'list' {% parse p_lqtycon $1 }
+
+lqtycon :: { (HConDecl, [HType]) }
+    : '=>' 'unit' lh98constr   { ($3, []) }
+    | '=>' type tys_h98constr  { let (c,ts) = $3 in (c,$2:reverse ts) }
+    | lh98constr               { ($1, []) }
+
+tys_h98constr :: { (HConDecl, [HType]) }
+    : h98constr          { ($1, []) }
+    | type tys_h98constr { let (c,ts) = $2 in (c,$1:ts) }
+
+h98constr :: { HConDecl }
+    : 'list' {% parse p_lh98constr $1 }
+
+lh98constr :: { HConDecl }
     : 'symbol' condetails         { b_conD $1 $2 }
     | 'symbol' '{' fielddecls '}' { b_conD $1 $3 }
 
@@ -385,10 +418,11 @@ type :: { HType }
     | 'list'   {% parse p_types0 $1 }
 
 types0 :: { HType }
-    : '->' types {% b_funT $2 }
-    | ',' types  { b_tupT $1 $2 }
-    | '!' type   { b_bangT $1 $2 }
-    | types      { b_appT $1 }
+    : '->' types   {% b_funT $2 }
+    | ',' types    { b_tupT $1 $2 }
+    | '!' type     { b_bangT $1 $2 }
+    | forall qtycl { b_forallT $1 $2 }
+    | types        { b_appT $1 }
 
 types :: { [HType] }
     : rtypes { reverse $1 }
@@ -599,6 +633,10 @@ symbols1 :: { [Code] }
 rsymbols :: { [Code] }
     : 'symbol'          { [$1] }
     | rsymbols 'symbol' { $2:$1 }
+
+symbol_as_list :: { [Code] }
+    : 'symbol' { [$1] }
+    | 'list'   { $1 }
 
 
 {

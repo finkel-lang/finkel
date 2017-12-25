@@ -160,17 +160,30 @@ b_simpletypeD :: [Code] -> (FastString, [HTyVarBndr])
 b_simpletypeD ((LForm (L _ (Atom (ASymbol name)))):tvs) = (name, tvs')
   -- XXX: Kind signatures not supported.
   where
-    tvs' = map (f . unLForm) tvs
-    f (L l (Atom (ASymbol tname))) =
-        L l (UserTyVar (L l (mkUnqual tvName tname)))
+    tvs' = map codeToUserTyVar tvs
 
 b_conD :: Code -> HConDeclDetails -> HConDecl
 b_conD (LForm (L l1 (Atom (ASymbol s1)))) details =
-    L l1 ConDeclH98 { con_name = L l1 (mkUnqual srcDataName s1)
-                     , con_qvars = Nothing
-                     , con_cxt = Nothing
-                     , con_details = details
-                     , con_doc = Nothing }
+  L l1 ConDeclH98 { con_name = L l1 (mkUnqual srcDataName s1)
+                  , con_qvars = Nothing
+                  , con_cxt = Nothing
+                  , con_details = details
+                  , con_doc = Nothing }
+
+b_forallD :: [Code] -> (HConDecl, [HType]) -> HConDecl
+b_forallD vars ((L l cdecl), cxts) =
+  L l cdecl { con_qvars = Just (mkHsQTvs (map codeToUserTyVar vars))
+            , con_cxt = Just (mkLocatedList cxts) }
+
+b_gadtD :: Code -> ([HType], HType) -> HConDecl
+b_gadtD (LForm (L l1 (Atom (ASymbol name)))) (ctxt, bodyty) =
+  let decl = ConDeclGADT { con_names = [nam]
+                         , con_type = mkLHsSigType qty
+                         , con_doc = Nothing }
+      nam = L l1 (mkUnqual srcDataName name)
+      qty = L l1 HsQualTy { hst_ctxt = mkLocatedList ctxt
+                          , hst_body = bodyty }
+  in  L l1 decl
 
 b_conOnlyD :: Code -> HConDecl
 b_conOnlyD name = b_conD name (PrefixCon [])
@@ -433,6 +446,14 @@ b_bangT :: Code -> HType -> HType
 b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang (L l (HsParTy t)))
   where
     srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
+
+b_forallT :: (Code, [Code]) -> ([HType], HType) -> HType
+b_forallT ((LForm (L l0 _)), vars) (ctxts, body) = L l0 forAllTy
+  where
+    forAllTy = HsForAllTy {hst_bndrs = bndrs, hst_body = ty}
+    ty = L l0 HsQualTy { hst_ctxt = mkLocatedList ctxts
+                       , hst_body = body}
+    bndrs = map codeToUserTyVar vars
 
 b_unpackT :: Code -> HType -> HType
 b_unpackT (LForm (L l _)) t = L l (HsBangTy bang t')
@@ -768,3 +789,10 @@ makeFunBind fn ms
               fun_co_fn = idHsWrapper,
               bind_fvs = placeHolderNames,
               fun_tick = [] }
+
+codeToUserTyVar :: Code -> HTyVarBndr
+codeToUserTyVar code =
+  case code of
+    LForm (L l (Atom (ASymbol name))) ->
+      L l (UserTyVar (L l (mkUnqual tvName name)))
+    _ -> error "Language.SK.Syntax.Internal:codeToUserTyVar"

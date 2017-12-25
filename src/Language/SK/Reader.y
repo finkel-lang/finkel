@@ -230,9 +230,12 @@ supportedLangExts =
       , DeriveFunctor
       , DeriveGeneric
       , DeriveTraversable
+      , ExistentialQuantification
+      -- , GADTs
       , GeneralizedNewtypeDeriving
       , OverloadedStrings
-      , OverloadedLists ]
+      , OverloadedLists
+      , RankNTypes]
   where
     f = map (\ext -> (fsLit (show ext), ext))
 

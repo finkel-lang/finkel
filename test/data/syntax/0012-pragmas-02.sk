@@ -1,9 +1,13 @@
 ;;; Form containing language pragmas.
 
-##(LANGUAGE DeriveDataTypeable DeriveFunctor DeriveGeneric)
-##(LANGUAGE DeriveFoldable DeriveTraversable)
+##(LANGUAGE DeriveDataTypeable)
+##(LANGUAGE DeriveFoldable)
+##(LANGUAGE DeriveFunctor)
+##(LANGUAGE DeriveGeneric)
+##(LANGUAGE DeriveTraversable)
 ##(LANGUAGE GeneralizedNewtypeDeriving)
-##(LANGUAGE OverloadedLists OverloadedStrings)
+##(LANGUAGE OverloadedLists)
+##(LANGUAGE OverloadedStrings)
 
 (module Main)
 
@@ -33,16 +37,16 @@
   (Cons a (Lst a))
   (deriving (Eq Show Functor Foldable Traversable)))
 
-;; GeneralizedNewtypeDeriving
+;;; GeneralizedNewtypeDeriving
 (newtype (N a)
   (N a)
   (deriving (Eq Show Num)))
 
-;; OverloadedString
+;;; OverloadedString
 (:: f1 ByteString)
 (= f1 "foo")
 
-;; OverloadedLists
+;;; OverloadedLists
 (:: f2 (Set Char))
 (= f2 [\a \e \i \o \u])
 

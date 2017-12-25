@@ -248,6 +248,7 @@ module Language.SK.GHC
     Promoted(..),
     addToHpt,
     handleSourceError,
+    hsTyGetAppHead_maybe,
     mkFieldOcc,
     mkHsQTvs,
     srcErrorMessages,
