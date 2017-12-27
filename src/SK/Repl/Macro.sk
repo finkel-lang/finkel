@@ -57,17 +57,17 @@
 
 (defn (%compile-obj (-> String (Skc Code)))
   (str)
-  (gbracket (do (<- dflags getSessionDynFlags)
-                (<- context getContext)
-                (return (, dflags context)))
-            (\ (, dflags context)
-              (do (<- _ (setSessionDynFlags dflags))
-                  (setContext context)))
-            (\ (, dflags _context)
-              (do (<- _ (setSessionDynFlags
-                         (dflags {hscTarget HscAsm})))
-                  (make [(, str Nothing)] False Nothing)
-                  (return '(begin))))))
+  (gbracket
+   (do (<- dflags getSessionDynFlags)
+       (<- context getContext)
+       (return (, dflags context)))
+   (\ (, dflags context)
+     (do (<- _ (setSessionDynFlags dflags))
+         (setContext context)))
+   (\ (, dflags _context)
+     (do (<- _ (setSessionDynFlags (dflags {hscTarget HscAsm})))
+         (make [(, str Nothing)] False Nothing)
+         (return '(begin))))))
 
 (defn (%link-module (-> FastString (Skc Code)))
   (name)
