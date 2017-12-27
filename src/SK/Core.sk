@@ -17,6 +17,9 @@
   ;; Module headers
   defmodule
 
+  ;; Convenience
+  ap$
+
   ;; Reexport
   (module SK.Core.List))
 
@@ -380,3 +383,23 @@
       _ (macro-error form "defmodule: invalid form"))
 
     _ (macro-error form "defmodule: invalid form")))
+
+
+;;; Convenience macros
+
+;;; Macro to apply given function in Applicative and Functor context.
+;;; Can handle variable number of arguments.
+;;;
+;;; (macroexpand '(ap$ f (pure a) (pure b) (pure c)))
+;;; ==> (<*> (<*> (<$> f (pure a)) (pure b)) (pure c))
+;;;
+(define-macro ap$ form
+  (let ((= build op args
+          (case args
+            (: arg []) (return `(<$> ,op ,arg))
+            (: arg as) (do (<- ret (build op as))
+                           (return `(<*> ,ret ,arg)))
+            [] (return `(<$> ,op)))))
+    (case (unCode form)
+      (List (: _ (: op args))) (build op (reverse args))
+      _ (macro-error form "ap$: invalid form"))))

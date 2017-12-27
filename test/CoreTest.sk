@@ -550,4 +550,9 @@
                     (bar buzz))))
              (it "should fail on too few parameters"
                  (expandFailure
-                  (defmodule)))))))
+                  (defmodule)))))
+      (d "ap$"
+         (it "should expand to (<*> ... (<$> f ..) ..)"
+             (expandTo
+              (ap$ f (Just a) (Just b) (Just c))
+              (<*> (<*> (<$> f (Just a)) (Just b)) (Just c)))))))
