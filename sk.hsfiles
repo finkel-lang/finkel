@@ -61,8 +61,8 @@ main :: IO ()
 main = putStrLn "Test suite not yet implemented"
 
 {-# START_FILE src/Lib.sk #-}
-(module Lib
-  someFunc)
+(defmodule Lib
+  (export someFunc))
 
 (defn (someFunc (IO ()))
   ()
