@@ -593,7 +593,7 @@ b_recConOrUpdE sym@(LForm (L l _)) flds = L l expr
         _ | isUpper (headFS name) -> mkRdrRecordCon rName cflds
         _ -> mkRdrRecordUpd (b_varE sym) uflds
     name = symbolNameFS sym
-    rName = L l (mkRdrName name)
+    rName = L l (mkVarRdrName name)
     cflds = HsRecFields { rec_flds = map mkcfld flds
                         , rec_dotdot = Nothing }
     uflds = map mkufld flds
@@ -636,7 +636,7 @@ b_floatE (LForm (L l (Atom (AFractional x))))
 
 b_varE :: Code -> HExpr
 b_varE (LForm (L l (Atom (ASymbol x)))) =
-  L l (HsVar (L l (mkRdrName x)))
+  L l (HsVar (L l (mkVarRdrName x)))
 
 b_unitE :: Code -> HExpr
 b_unitE (LForm (L l _)) = L l (ExplicitTuple [] Boxed)

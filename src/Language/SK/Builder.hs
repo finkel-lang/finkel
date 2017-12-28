@@ -13,6 +13,7 @@ module Language.SK.Builder
   , putBState
   , runBuilder
   , mkRdrName
+  , mkVarRdrName
   , splitQualName
 
   -- * Type synonyms
@@ -47,7 +48,7 @@ import Data.Char (isUpper)
 
 -- qualified import of OccName.varName from ghc package. The entity
 -- `varName' conflicts with `Var.varName'.
-import qualified OccName (varName)
+import qualified OccName (NameSpace, varName, srcDataName)
 
 -- transformers
 import Control.Monad.Trans.State (StateT(..), get, put)
@@ -198,7 +199,13 @@ type HType = LHsType RdrName
 -- ---------------------------------------------------------------------
 
 mkRdrName :: FastString -> RdrName
-mkRdrName name
+mkRdrName = mkRdrName' tcName
+
+mkVarRdrName :: FastString -> RdrName
+mkVarRdrName = mkRdrName' OccName.srcDataName
+
+mkRdrName' :: OccName.NameSpace -> FastString -> RdrName
+mkRdrName' upperCaseNameSpace name
   -- ':' is special syntax. It is defined in module "GHC.Types" in
   -- package "ghc-prim", but not exported.
   | name == ":" = nameRdrName consDataConName
@@ -212,7 +219,7 @@ mkRdrName name
     case splitQualName name of
       Nothing -> mkUnqual srcDataName name
       Just q@(_, name')
-         | isUpper y || y == ':' -> mkQual tcName q
+         | isUpper y || y == ':' -> mkQual upperCaseNameSpace q
          | otherwise             -> mkQual OccName.varName q
          where
            y = headFS name'

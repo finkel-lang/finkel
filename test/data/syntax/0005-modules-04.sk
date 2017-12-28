@@ -11,11 +11,11 @@
 (import Data.Ratio hiding (Ratio Rational numerator %))
 
 (import qualified Data.List)
+(import qualified Data.Functor.Identity as Id)
 (import qualified Data.Map as Map)
 (import qualified Data.Maybe as Mb)
 (import qualified Data.Bits as Bt (shiftL shiftR))
 (import qualified System.Environment as Env hiding (getArgs getEnv))
-
 
 (:: f1 (Map.Map String Int))
 (= f1
@@ -26,6 +26,11 @@
   (do (putStrLn (map toUpper "import declarations"))
       (print (Data.List.nub [1 2 3 2 1 2 3 2 1]))
       (print (Mb.fromMaybe 123 Nothing))
+      (print (Mb.Just 42))
+      (let ((= i1 (Id.Identity 100))
+            (= i2 (Id.Identity {Id.runIdentity 101}))
+            (= i3 (i2 {Id.runIdentity 102}))))
+      (mapM_ print [i1 i2 i3])
       (M.when (< 3 5)
               (putStrLn "Control Monad imported as `M'"))
       (let ((= c (mkPolar 1.2 3.4))))
