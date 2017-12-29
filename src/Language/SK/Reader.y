@@ -213,14 +213,14 @@ pragma orig@(LForm (L l form)) =
     inlinePragmas = ["inline", "noinline", "inlinable"]
     spcls = ["specialize", "specialise"]
 
-groupExts :: [Code] -> ([Extension],[Code])
+groupExts :: [Code] -> ([Located Extension],[Code])
 groupExts = foldr f ([],[])
   where
     f form (exts, invalids) =
       case form of
-        LForm (L _ (Atom (ASymbol sym)))
+        LForm (L l (Atom (ASymbol sym)))
           | Just ext <- lookup sym supportedLangExts ->
-            (ext:exts, invalids)
+            (L l ext:exts, invalids)
         _ -> (exts, form:invalids)
 
 supportedLangExts :: [(FastString, Extension)]
@@ -231,7 +231,7 @@ supportedLangExts =
       , DeriveGeneric
       , DeriveTraversable
       , ExistentialQuantification
-      -- , GADTs
+      , GADTs
       , GeneralizedNewtypeDeriving
       , OverloadedStrings
       , OverloadedLists

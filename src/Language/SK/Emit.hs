@@ -153,7 +153,7 @@ pp_nonnull xs = vcat (map ppr xs)
 pp_langExts :: SPState -> SDoc
 pp_langExts sp = vcat (map f (langExts sp))
   where
-    f e = text "{-# LANGUAGE" <+> text (show e) <+> text "#-}"
+    f (L _ e) = text "{-# LANGUAGE" <+> text (show e) <+> text "#-}"
 
 hsSrc_nonnull :: HsSrc a => SPState -> [a] -> SDoc
 hsSrc_nonnull st xs =

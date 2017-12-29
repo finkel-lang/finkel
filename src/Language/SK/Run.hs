@@ -32,6 +32,9 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 
+-- ghc
+import GHC (parseDynamicFlags)
+
 -- ghc-paths
 import GHC.Paths (libdir)
 
@@ -164,7 +167,12 @@ compileSkModuleForm form = do
 setLangExtsFromSPState :: SPState -> Skc ()
 setLangExtsFromSPState sp = do
   dflags0 <- getSessionDynFlags
-  let dflags1 = foldl xopt_set dflags0 (langExts sp)
+
+  -- Adding "-X" to 'String' representation of 'LangExt' data type, as
+  -- done in 'HeaderInfo.checkExtension'.
+  let flg e = fmap (("-X"++) . show) e
+
+  (dflags1, _, _) <- parseDynamicFlags dflags0 (map flg (langExts sp))
   void (setSessionDynFlags dflags1)
 
 asHaskellSymbols :: Code -> Code

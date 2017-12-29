@@ -286,10 +286,9 @@ deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }
 
 lconstr :: { HConDecl }
-    : forall qtycon { b_forallD (snd $1) $2 }
-    -- GADT
-    -- | '::' 'symbol' qtype         { b_gadtD $2 $3 }
-    | lh98constr    { $1 }
+    : forall qtycon       { b_forallD (snd $1) $2 }
+    | '::' 'symbol' qtype { b_gadtD $2 $3 }
+    | lh98constr          { $1 }
 
 forall :: { (Code, [Code]) }
     : 'forall' lforall { ($1, $2) }

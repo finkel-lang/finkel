@@ -140,7 +140,7 @@ data SPState = SPState
   { comments :: [Located AnnotationComment]
   , targetFile :: FastString
   , requiredModuleNames :: [String]
-  , langExts :: [LangExt.Extension]
+  , langExts :: [Located LangExt.Extension]
   , docMap :: DocMap
   , buf :: BL.ByteString
   , currentLoc :: RealSrcLoc
