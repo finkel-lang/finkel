@@ -18,6 +18,9 @@
    (System.Exit (exitFailure))
    (System.Console.GetOpt)
 
+   ;; ghc
+   (Config (cProjectVersion))
+
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Run (initialSkEnv))
@@ -109,7 +112,8 @@
 (defdo (run (-> (Maybe Int) (IO ())))
   (listen)
   (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
-                     ", sk-kernel " sk-kernel-version ")"]))
+                     ", sk-kernel " sk-kernel-version
+                     ", ghc " cProjectVersion ")"]))
   (start-repl listen repl-env))
 
 (defn (sk-lang-version String)
