@@ -459,6 +459,19 @@
              (it "should fail on too few parameters"
                  (expandFailure (defdo foo)))))
 
+      (d "def"
+         (do (it "should expand to (defn foo () 42)"
+                 (expandTo
+                  (def foo 42)
+                  (defn foo () 42)))))
+
+      (d "def!"
+         (do (it "should expand to (eval-when (...) (def ..))"
+                 (expandTo
+                  (def! foo 42)
+                  (eval-when (compile load)
+                    (def foo 42))))))
+
       (d "list"
          (do (it "should expand to foldr"
                  (expandTo

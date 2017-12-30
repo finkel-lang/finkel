@@ -178,7 +178,7 @@
      (\ path
        (do (liftIO (putStrLn (++ "; load: " path)))
            ;; Clear current state first.
-           (clear-all)
+           clear-all
            ;; Find the source file path and compile, load, and
            ;; link the module.
            (<- dflags getSessionDynFlags)

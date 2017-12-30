@@ -9,7 +9,7 @@
   macroexpand macroexpand-1 exported-macros
 
   ;; Function declarations
-  defn defn! defdo
+  def def! defn defn! defdo
 
   ;; Expressions
   cond list
@@ -234,6 +234,18 @@
                (do ,@body)))
 
     _ (macro-error form "defdo: invalid form")))
+
+;;; Variant of `defn' with no arguments.
+(define-macro def form
+  (case (unCode form)
+    (List [_ name body]) (return `(defn ,name ()
+                                    ,body))
+    _ (macro-error form "def: invalid form")))
+
+;;; Compile and load time variant of `def'.
+(defmacro def! form
+  `(eval-when (compile load)
+     (def ,@form)))
 
 ;;; The `cond' macro, found in many Lisp languages.  The behaviour is
 ;;; same as wrapping the body with `case' expression with dummy unit, or
