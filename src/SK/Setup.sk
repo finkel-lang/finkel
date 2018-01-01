@@ -9,5 +9,4 @@
   (export defaultMainWithHooks skcHooks))
 
 (defn (skcHooks UserHooks)
-  ()
   (skcHooksWith "skc" False))

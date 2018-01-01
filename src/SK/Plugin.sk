@@ -20,6 +20,5 @@
                  `[,@(map (\ mac (, mac (aSymbol mac)))
                           (exported-macros SK.Prelude))])))
   (defn (frontendPlugin FrontendPlugin)
-    ()
     (defaultFrontendPlugin
      {frontend (makeSkFrontend "skc" (core-macros))})))

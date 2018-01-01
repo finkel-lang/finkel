@@ -47,7 +47,6 @@
   (deriving (Eq Show)))
 
 (defn (initial-repl-state ReplState)
-  ()
   (ReplState {pending-input [] input-count 0}))
 
 ;;; Monad for REPL prompt.
@@ -60,11 +59,9 @@
   (evalStateT (unRepl repl) st))
 
 (defn (put-repl-state (-> ReplState (Repl ())))
-  ()
   (. Repl put))
 
 (defn (get-repl-state (Repl ReplState))
-  ()
   (Repl get))
 
 ;;; Input data type to hold form to evaluate, and MVar to receive

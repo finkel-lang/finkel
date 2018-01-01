@@ -45,7 +45,6 @@
   (IIDecl (simpleImportDecl (mkModuleNameFS name))))
 
 (defn (mk-ii (-> String InteractiveImport))
-  ()
   (. mk-ii-fs fsLit))
 
 (defn (code->mb-string (-> Code (Maybe String)))
@@ -315,7 +314,6 @@
 
 ;;; Almost same as `GHCi.UI.showBindings'.
 (defn (info-bindings (Skc Code))
-  ()
   (where (do (<- bindings getBindings)
              (<- docs (mapM make-doc (reverse bindings)))
              (<- unqual getPrintUnqual)
@@ -334,7 +332,6 @@
       (pprTyThing showToHeader thing))))
 
 (defn (info-context (Skc Code))
-  ()
   (where (do (<- context getContext)
              (<- dflags getSessionDynFlags)
              (return `(putStr ,(result dflags context))))
@@ -348,7 +345,6 @@
         (++ ";  IIModule: " (moduleNameString mname))))))
 
 (defn (info-dflags (Skc Code))
-  ()
   (do (<- dflags getDynFlags)
       (let ((= ss
               ["; dflags:"
@@ -366,7 +362,6 @@
       (return `(putStr ,(unlines ss)))))
 
 (defn (info-info (Skc Code))
-  ()
   (return
     `(putStrLn
       "USAGE: (info COMMANDS)
@@ -389,7 +384,6 @@ COMMANDS:
 ")))
 
 (defn (info-linker (Skc Code))
-  ()
   ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
   ;; which is not exposed from the module its defined ... not sure how
   ;; to get resulting output as `String' other than redirecting output
@@ -400,7 +394,6 @@ COMMANDS:
       (return '(begin))))
 
 (defn (info-macros (Skc Code))
-  ()
   (do (<- macros (fmap envMacros getSkEnv))
       (let ((= macro-strings
               (unlines
@@ -409,14 +402,12 @@ COMMANDS:
       (return `(putStr ,macro-strings))))
 
 (defn (info-modules (Skc Code))
-  ()
   (do (<- graph0 getModuleGraph)
       (<- graph1 (filterM (. isLoaded ms_mod_name) graph0))
       (<- mods (mapM showModule graph1))
       (return `(putStr ,(unlines mods)))))
 
 (defn (info-packages (Skc Code))
-  ()
   (do (<- dflags getDynFlags)
       (let ((= pr (++ ";   "))
             (= pr-flag flag
@@ -428,7 +419,6 @@ COMMANDS:
       (return `(putStr ,(unlines pkgs)))))
 
 (defn (info-paths (Skc Code))
-  ()
   (do (<- dflags getDynFlags)
       (<- cwd (liftIO getCurrentDirectory))
       (let ((= ipaths (importPaths dflags))

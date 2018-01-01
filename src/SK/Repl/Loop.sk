@@ -69,7 +69,6 @@
 
 ;;; Return a file path and handle for temporary use.
 (defn (make-tmpfile (IO (, FilePath Handle)))
-  ()
   (do (<- dir getTemporaryDirectory)
       (openTempFile dir "sk-repl-.out")))
 
@@ -158,7 +157,6 @@
 
 ;;; Form to initialize the REPL.
 (defn (init-form Code)
-  ()
   '(begin
     (require Prelude)
     (require SK.Prelude)

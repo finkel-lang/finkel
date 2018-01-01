@@ -429,6 +429,10 @@
                   (begin
                     (:: foo (-> Int Int Int))
                     (= foo a b (+ a b)))))
+             (it "should expand to function with no arguments"
+                 (expandTo
+                  (defn foo 42)
+                  (defn foo () 42)))
              (it "should fail on invalid signature"
                  (expandFailure
                   (defn (foo (Int) (Int)) (a b)
@@ -458,19 +462,6 @@
                         (print b)))))
              (it "should fail on too few parameters"
                  (expandFailure (defdo foo)))))
-
-      (d "def"
-         (do (it "should expand to (defn foo () 42)"
-                 (expandTo
-                  (def foo 42)
-                  (defn foo () 42)))))
-
-      (d "def!"
-         (do (it "should expand to (eval-when (...) (def ..))"
-                 (expandTo
-                  (def! foo 42)
-                  (eval-when (compile load)
-                    (def foo 42))))))
 
       (d "list"
          (do (it "should expand to foldr"

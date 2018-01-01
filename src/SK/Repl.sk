@@ -36,12 +36,11 @@
 
 ;;; Main
 
-(defdo (replMain (IO ()))
-  ()
-  (<- args getArgs)
-  (case (getOpt Permute descrs args)
-    (, o _ []) (act (foldl (flip id) initial-option o))
-    (, _ _ es) (print-errors es)))
+(defn (replMain (IO ()))
+  (do (<- args getArgs)
+      (case (getOpt Permute descrs args)
+        (, o _ []) (act (foldl (flip id) initial-option o))
+        (, _ _ es) (print-errors es))))
 
 
 ;;; Option types
@@ -55,12 +54,10 @@
                repl-listen-port (Maybe Int)}))
 
 (defn (initial-option ReplOption)
-  ()
   (ReplOption {repl-mode Run
                repl-listen-port (Just 12305)}))
 
 (defn (descrs [OptDescr (-> ReplOption ReplOption)])
-  ()
   [(Option [\h] ["help"]
            (NoArg (\ o (o {repl-mode Help})))
            "Show this help and exit.")
@@ -96,7 +93,6 @@
   exitFailure)
 
 (defn (print-usage (IO ()))
-  ()
   (putStr
    (unlines
     ["USAGE: sk [OPTIONS]"
@@ -106,7 +102,6 @@
      (usageInfo "OPTIONS:" descrs)])))
 
 (defn (print-version (IO ()))
-  ()
   (putStrLn (++ "sk " sk-lang-version)))
 
 (defdo (run (-> (Maybe Int) (IO ())))
@@ -117,15 +112,12 @@
   (start-repl listen repl-env))
 
 (defn (sk-lang-version String)
-  ()
   (showVersion Paths_sk_lang.version))
 
 (defn (sk-kernel-version String)
-  ()
   (showVersion Paths_sk_kernel.version))
 
 (defn (repl-env SkEnv)
-  ()
   (let ((= modules
           ["Prelude" "SK.Prelude" "SK.Repl.Env" "SK.Repl.Macro"])
         (= defaultMacros
@@ -142,5 +134,4 @@
                          (++ (exported-macros SK.Core)
                              (exported-macros SK.Repl.Macro)))])))
   (defn (replMacros EnvMacros)
-    ()
     (makeEnvMacros (the-macros))))
