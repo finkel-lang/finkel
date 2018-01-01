@@ -338,8 +338,8 @@ rfielddecls :: { [HConDeclField] }
     | rfielddecls fielddecl { $2:$1 }
 
 fielddecl :: { HConDeclField }
-    : 'symbol' type { b_recFieldD [$1] $2 }
-    | symbols  type { b_recFieldD $1 $2 }
+    : 'symbol' dctype { b_recFieldD [$1] $2 }
+    | symbols  dctype { b_recFieldD $1 $2 }
 
 qtycl :: { ([HType], HType) }
     : 'list' {% parse p_lqtycl $1 }
@@ -632,11 +632,6 @@ symbols1 :: { [Code] }
 rsymbols :: { [Code] }
     : 'symbol'          { [$1] }
     | rsymbols 'symbol' { $2:$1 }
-
-symbol_as_list :: { [Code] }
-    : 'symbol' { [$1] }
-    | 'list'   { $1 }
-
 
 {
 happyError :: Builder a

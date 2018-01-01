@@ -45,9 +45,15 @@
   (C1 ##UNPACK (! Int) ##UNPACK (! Char))
   (deriving (Eq Show)))
 
+(data D2
+  (C2 {c2field1 ##UNPACK (! Int)
+       c2field2 ##UNPACK (! Char)})
+  (deriving (Eq Show)))
+
 (:: unpackprgm (IO ()))
 (= unpackprgm
-  (print (C1 42 \x)))
+  (do (print (C1 42 \x))
+      (print (C2 42 \x))))
 
 (:: main (IO ()))
 (= main
