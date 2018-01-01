@@ -167,12 +167,10 @@ compileSkModuleForm form = do
 setLangExtsFromSPState :: SPState -> Skc ()
 setLangExtsFromSPState sp = do
   dflags0 <- getSessionDynFlags
-
   -- Adding "-X" to 'String' representation of 'LangExt' data type, as
   -- done in 'HeaderInfo.checkExtension'.
-  let flg e = fmap (("-X"++) . show) e
-
-  (dflags1, _, _) <- parseDynamicFlags dflags0 (map flg (langExts sp))
+  let mkx = fmap (("-X" ++) . show)
+  (dflags1,_,_) <- parseDynamicFlags dflags0 (map mkx (langExts sp))
   void (setSessionDynFlags dflags1)
 
 asHaskellSymbols :: Code -> Code
