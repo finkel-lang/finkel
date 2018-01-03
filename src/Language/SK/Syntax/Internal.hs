@@ -493,7 +493,7 @@ b_symP (LForm (L l (Atom (ASymbol name))))
    | name == "_"
     = L l (WildPat placeHolderType)
    | isUpper x || x == ':'
-    = L l (ConPatIn (L l (mkRdrName name)) (PrefixCon []))
+    = L l (ConPatIn (L l (mkVarRdrName name)) (PrefixCon []))
    | otherwise
     = L l (VarPat (L l (mkRdrName name)))
    where
@@ -526,10 +526,9 @@ b_lazyP pat@ (L l _) = L l (ParPat (L l (LazyPat pat)))
 b_conP :: Code -> [HPat] -> Builder HPat
 b_conP (LForm (L l (Atom (ASymbol name)))) rest
   | isUpper x || x == ':'
-    = return (L l (ParPat (L l (ConPatIn (L l (mkRdrName name))
+    = return (L l (ParPat (L l (ConPatIn (L l (mkVarRdrName name))
                                          (PrefixCon rest)))))
-  | otherwise
-    = builderError
+  | otherwise = builderError
   where
     x = headFS name
 

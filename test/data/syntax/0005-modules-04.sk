@@ -27,6 +27,13 @@
       (print (Data.List.nub [1 2 3 2 1 2 3 2 1]))
       (print (Mb.fromMaybe 123 Nothing))
       (print (Mb.Just 42))
+      (print (:: (return 42) (Id.Identity Int)))
+      (case (return 42) (Id.Identity n) (print n))
+      (print (case EQ
+               Prelude.EQ True
+               _ False))
+      (print (case (Id.Identity 42)
+               (Id.Identity n) n))
       (let ((= i1 (Id.Identity 100))
             (= i2 (Id.Identity {Id.runIdentity 101}))
             (= i3 (i2 {Id.runIdentity 102}))))
