@@ -9,7 +9,7 @@ module Language.SK.Run
   , compileSkModule
   , compileSkModuleForm
   , compileWithSymbolConversion
-  , setLangExtsFromSPState
+  , setDynFlagsFromSPState
   , parseSexprs
   , buildHsSyn
   , macroFunction
@@ -155,7 +155,7 @@ parseFile :: FilePath -> Skc ([Code], SPState)
 parseFile file = do
   contents <- liftIO (BL.readFile file)
   (form, sp) <- parseSexprs (Just file) contents
-  setLangExtsFromSPState sp
+  _ <- setDynFlagsFromSPState sp
   return (form, sp)
 
 compileSkModuleForm :: [Code] -> Skc HModule
@@ -164,14 +164,16 @@ compileSkModuleForm form = do
   buildHsSyn parseModule expanded
 
 -- | Set language extensions in current 'Skc' from given 'SPState'.
-setLangExtsFromSPState :: SPState -> Skc ()
-setLangExtsFromSPState sp = do
+setDynFlagsFromSPState :: SPState -> Skc DynFlags
+setDynFlagsFromSPState sp = do
   dflags0 <- getSessionDynFlags
   -- Adding "-X" to 'String' representation of 'LangExt' data type, as
   -- done in 'HeaderInfo.checkExtension'.
   let mkx = fmap (("-X" ++) . show)
   (dflags1,_,_) <- parseDynamicFlags dflags0 (map mkx (langExts sp))
-  void (setSessionDynFlags dflags1)
+  (dflags2,_,_) <- parseDynamicFlags dflags1 (ghcOptions sp)
+  void (setSessionDynFlags dflags2)
+  return dflags2
 
 asHaskellSymbols :: Code -> Code
 asHaskellSymbols = f1

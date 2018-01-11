@@ -9,6 +9,7 @@ module Language.SK.Reader
 
 -- base
 import Data.Char (toLower)
+import Data.List (foldl')
 
 -- Internal
 import Language.SK.Builder
@@ -207,6 +208,11 @@ pragma orig@(LForm (L l form)) =
       | normalize sym `elem` spcls -> do
          let specialize = LForm (L l' (Atom (ASymbol "SPECIALIZE")))
          return (LForm (L l (List (specialize:rest))))
+      | normalize sym == "options_ghc" -> do
+        let flags = makeOptionFlags rest
+        sp <- getSPState
+        putSPState (sp {ghcOptions = flags})
+        return (emptyBody l)
     _ -> error ("unknown pragma: " ++ show form)
   where
     normalize = map toLower . unpackFS
@@ -238,6 +244,14 @@ supportedLangExts =
       , RankNTypes]
   where
     f = map (\ext -> (fsLit (show ext), ext))
+
+makeOptionFlags :: [Code] -> [Located String]
+makeOptionFlags = foldl' f []
+  where
+    f acc code =
+      case code of
+        LForm (L l (Atom (ASymbol sym))) -> L l (unpackFS sym) : acc
+        _ -> acc
 
 addRequiredDecl :: HImportDecl -> SP ()
 addRequiredDecl idecl = do

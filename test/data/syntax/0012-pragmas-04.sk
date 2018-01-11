@@ -1,0 +1,9 @@
+;;;; File containing `OPTIONS_GHC' pragma.
+
+##(OPTIONS_GHC -fcontext-stack=100)
+
+(module Main)
+
+(:: main (IO ()))
+(= main
+  (putStrLn "File with OPTIONS_GHC"))

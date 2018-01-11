@@ -201,9 +201,10 @@ make' not_yet_compiled readys0 pendings0 = do
 
       case tsr of
         SkSource path _mn _form sp -> do
-          Just hmdl <- compileToHsModule target
+          Just (hmdl, dflags) <- compileToHsModule target
           summary <- mkModSummary (Just path) hmdl
-          let imports = map import_name (hsmodImports hmdl)
+          let summary' = summary {ms_hspp_opts = dflags}
+              imports = map import_name (hsmodImports hmdl)
           debugIO (putStrLn (concat [ ";;; target=", show target
                                     , " imports=", show imports]))
 
@@ -224,15 +225,16 @@ make' not_yet_compiled readys0 pendings0 = do
                let act = mapM (getModSummary' . mkModuleName)
                               (requiredModuleNames sp)
                    act' = catMaybes <$> act
-               compileIfReady summary hmdl imports act'
+               compileIfReady summary' hmdl imports act'
 
         HsSource path -> do
-          Just hmdl <- compileToHsModule target
+          Just (hmdl, dflags) <- compileToHsModule target
           summary <- mkModSummary (Just path) hmdl
           let imports = map import_name (hsmodImports hmdl)
+              summary' = summary {ms_hspp_opts = dflags}
           debugIO (putStrLn (concat [";;; target=", show target
                                     ," imports=", show imports]))
-          compileIfReady summary hmdl imports (return [])
+          compileIfReady summary' hmdl imports (return [])
 
         OtherSource _ -> do
           _ <- compileToHsModule target
@@ -299,10 +301,17 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
     label = "MakeOne [" ++ mname ++ "]"
     mname = moduleNameString (ms_mod_name ms)
     go = do
+      -- Use cached dynflags from ModSummary before type check. Note
+      -- that the cached dynflags is always used, no matter whether the
+      -- module is updated or not. This is to support loading already
+      -- compiled module objects with language extensions not set in
+      -- currency dynflags.
+      void (setSessionDynFlags (ms_hspp_opts ms))
+
       up_to_date <- checkUpToDate ms graph_upto_this
       ms' <- if up_to_date
-      then dontMakeOne ms hmdl
-      else doMakeOne (total - i + 1) total ms hmdl
+               then dontMakeOne ms hmdl
+               else doMakeOne (total - i + 1) total ms hmdl
       modifySession (\e -> e {hsc_mod_graph = ms' : hsc_mod_graph e})
       return ms'
 
@@ -310,8 +319,9 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
 doMakeOne :: Int -> Int -> ModSummary
           -> HsModule RdrName -> Skc ModSummary
 doMakeOne i total ms hmdl = do
-  dflags <- getSessionDynFlags
-  let p x = showSDoc dflags (ppr x)
+  dflags_orig <- getSessionDynFlags
+  let dflags = ms_hspp_opts ms
+      p x = showSDoc dflags (ppr x)
       loc = ms_location ms
       tryGetTimeStamp x = liftIO (tryIO (getModificationUTCTime x))
       e2mb x = case x of
@@ -326,6 +336,7 @@ doMakeOne i total ms hmdl = do
                   , " (", fromMaybe "unknown input" (ml_hs_file loc)
                   , ", ", ml_obj_file loc, ")"
                   ])))
+
   tc <- tcHsModule (Just (ms_hspp_file ms)) True hmdl
   ds <- desugarModule tc
   _ds' <- loadModule ds
@@ -335,6 +346,7 @@ doMakeOne i total ms hmdl = do
   -- Update the time stamp of generated obj and hi files.
   mb_obj_date <- e2mb <$> tryGetTimeStamp (ml_obj_file loc)
   mb_iface_date <- e2mb <$> tryGetTimeStamp (ml_hi_file loc)
+  void (setSessionDynFlags dflags_orig)
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
 
@@ -502,7 +514,7 @@ mkReadTimeModSummary (target, mbphase) =
   -- ModSummary from target source.
   case target of
     HsSource file -> do
-      Just hsmdl <- compileToHsModule (target, mbphase)
+      Just (hsmdl, _) <- compileToHsModule (target, mbphase)
       fmap Just (mkModSummary (Just file) hsmdl)
     SkSource file mn _form sp -> do
       let modName = mkModuleName mn
@@ -511,33 +523,40 @@ mkReadTimeModSummary (target, mbphase) =
     OtherSource _ -> return Nothing
 
 compileToHsModule :: TargetUnit
-                  -> Skc (Maybe (HsModule RdrName))
+                  -> Skc (Maybe (HsModule RdrName, DynFlags))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
     SkSource _ mn form sp -> Just <$> compileSkModuleForm' sp mn form
-    HsSource path         -> (Just . fst) <$> compileHsFile path mbphase
+    HsSource path         -> Just <$> compileHsFile path mbphase
     OtherSource path      -> compileOtherFile path >> return Nothing
 
 -- | Wrapper for 'compileSkModuleForm', to use fresh set of modules,
--- language extensions, and macros in 'SkEnv'.
+-- language extensions, and macros in 'SkEnv'. Returns tuple of compiled
+-- module and 'Dynflags' to update 'ModSummary'.
 compileSkModuleForm' :: SPState -> String -> [Code]
-                     -> Skc (HsModule RdrName)
-compileSkModuleForm' sp mn forms = do
-  -- Reset the extension flags first, then update the flags again
-  -- with extension flags obtained from current SKSource file.
-  resetLanguageExtensions
-  setLangExtsFromSPState sp
+                     -> Skc (HsModule RdrName, DynFlags)
+compileSkModuleForm' sp mn forms = withPreservedDynFlags act
+  where
+    act = do
+      -- Update the flags again with extensions and ghc options from
+      -- current SKSource file.
+      dflags <- setDynFlagsFromSPState sp
 
-  -- Reset macros in current context.
-  resetEnvMacros
+      -- Reset macros in current context.
+      resetEnvMacros
 
-  contextModules <- envContextModules <$> getSkEnv
-  let ii = IIDecl . simpleImportDecl . mkModuleNameFS
-  setContext (map (ii . fsLit) contextModules)
-  timeIt ("SkModule [" ++ mn ++ "]") (compileSkModuleForm forms)
+      contextModules <- envContextModules <$> getSkEnv
+      let ii = IIDecl . simpleImportDecl . mkModuleNameFS
+      setContext (map (ii . fsLit) contextModules)
+      mdl <- timeIt ("SkModule [" ++ mn ++ "]")
+                    (compileSkModuleForm forms)
+      return (mdl, dflags)
 
-resetLanguageExtensions :: Skc ()
-resetLanguageExtensions = do
+-- | Save 'DynFlags', reset the 'DynFlags' from language extensions set
+-- from command line, then run given action, and then set the saved
+-- 'DynFlags' and return the result of given action.
+withPreservedDynFlags :: Skc a -> Skc a
+withPreservedDynFlags work = do
   dflags_orig <- getSessionDynFlags
   (lang, extFlags) <- envDefaultLangExts <$> getSkEnv
   let exts = map toEnum (IntSet.toList extFlags)
@@ -548,6 +567,9 @@ resetLanguageExtensions = do
           (dflags_orig { language = lang
                        , extensions = extensions dflags2
                        , extensionFlags = extensionFlags dflags2}))
+  ret <- work
+  void (setSessionDynFlags dflags_orig)
+  return ret
 
 resetEnvMacros :: Skc ()
 resetEnvMacros =

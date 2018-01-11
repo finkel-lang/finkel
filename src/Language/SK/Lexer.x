@@ -141,6 +141,7 @@ data SPState = SPState
   , targetFile :: FastString
   , requiredModuleNames :: [String]
   , langExts :: [Located LangExt.Extension]
+  , ghcOptions :: [Located String]
   , docMap :: DocMap
   , buf :: BL.ByteString
   , currentLoc :: RealSrcLoc
@@ -154,6 +155,7 @@ initialSPState file linum colnum =
           , targetFile = file
           , requiredModuleNames = []
           , langExts = []
+          , ghcOptions = []
           , docMap = Map.empty
           , buf = BL.empty
           , currentLoc = mkRealSrcLoc file linum colnum
