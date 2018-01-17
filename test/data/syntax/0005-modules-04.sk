@@ -21,6 +21,11 @@
 (= f1
   (Map.fromList [(, "k1" 1) (, "k2" 2)]))
 
+(:: f2 (-> (Id.Identity a) (IO ())))
+(= f2 i
+  (case i
+    (Id.Identity {}) (putStrLn "Id.Identity pattern match with {}")))
+
 (:: main (IO ()))
 (= main
   (do (putStrLn (map toUpper "import declarations"))
@@ -38,6 +43,7 @@
             (= i2 (Id.Identity {Id.runIdentity 101}))
             (= i3 (i2 {Id.runIdentity 102}))))
       (mapM_ print [i1 i2 i3])
+      (f2 i1)
       (M.when (< 3 5)
               (putStrLn "Control Monad imported as `M'"))
       (let ((= c (mkPolar 1.2 3.4))))

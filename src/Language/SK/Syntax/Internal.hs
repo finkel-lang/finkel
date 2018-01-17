@@ -509,7 +509,7 @@ b_labeledP (LForm (L l (Atom (ASymbol name)))) ps
     let rc = HsRecFields { rec_flds = map mkcfld' ps
                          , rec_dotdot = Nothing }
         mkcfld' (LForm (L _ (Atom (ASymbol n))), p) = mkcfld (n, p)
-    return (L l (ConPatIn (L l (mkRdrName name)) (RecCon rc)))
+    return (L l (ConPatIn (L l (mkVarRdrName name)) (RecCon rc)))
   | otherwise = builderError
   where x = headFS name
 
