@@ -447,7 +447,7 @@ findImported hsc_env acc pendings name
     findResult <-
       liftIO (findImportedModule hsc_env (mkModuleName name) Nothing)
     dflags <- getSessionDynFlags
-    let installedUnitId = thisInstalledUnitId dflags
+    let myInstalledUnitId = thisInstalledUnitId dflags
     case findResult of
       -- Haskell module returned by `Finder.findImportedModule' may not
       -- compiled yet. If the source code has Haskell file extension,
@@ -458,8 +458,8 @@ findImported hsc_env acc pendings name
           (do putStrLn (";;; Found " ++ show loc ++ ", " ++
                         moduleNameString (moduleName mdl))
               putStrLn (";;; moduleUnitId=" ++ show (moduleUnitId mdl))
-              putStrLn (";;; installedUnitId=" ++
-                        showPpr dflags installedUnitId))
+              putStrLn (";;; myInstalledUnitId=" ++
+                        showPpr dflags myInstalledUnitId))
         case ml_hs_file loc of
           Just path | takeExtension path `elem` [".hs"] ->
                       if moduleName mdl `elem` map ms_mod_name acc
@@ -474,14 +474,16 @@ findImported hsc_env acc pendings name
               -- not find SK source files. When looking up modules in
               -- home package as dependency, looking up in accumurated
               -- ModSummary list to avoid using the modules found in
-              -- already compiled linkable package.
+              -- already compiled linkable package. The `linkable'
+              -- mentioned here are those 'libXXX.{a,dll,so}' artifact
+              -- files for library package components.
               handleSkException
                 (const (return Nothing))
                 (Just <$> findTargetSource (name, Nothing))
             | otherwise -> return Nothing
           where
             inSameUnit =
-              installedUnitId `installedUnitIdEq` moduleUnitId mdl
+              myInstalledUnitId `installedUnitIdEq` moduleUnitId mdl
             notInAcc =
               moduleName mdl `notElem` map ms_mod_name acc
       NoPackage {}     -> failS ("No Package: " ++ name)
