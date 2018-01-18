@@ -412,8 +412,7 @@ b_symT (LForm (L l (Atom (ASymbol name)))) =
     namespace
       | isUpper x || ':' == x = tcName
       | otherwise             = tvName
-      where
-        x = headFS name
+    x = headFS name
 
 b_unitT :: Code -> HType
 b_unitT (LForm (L l _)) = L l (HsTupleTy HsBoxedTuple [])
@@ -443,7 +442,7 @@ b_tupT :: Code -> [HType] -> HType
 b_tupT (LForm (L l _)) ts = L l (HsTupleTy HsBoxedTuple ts)
 
 b_bangT :: Code -> HType -> HType
-b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang (L l (HsParTy t)))
+b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)
   where
     srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
 

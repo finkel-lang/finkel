@@ -70,6 +70,7 @@ import Language.SK.Syntax.Internal
 %name p_stmt stmt
 %name p_stmt1 stmt1
 
+%name p_varids1 varids1
 %name p_symbols1 symbols1
 
 %tokentype { Code }
@@ -78,23 +79,29 @@ import Language.SK.Syntax.Internal
 
 %token
 
--- Haskell 2010
-'case'      { LForm (L _ (Atom (ASymbol "case"))) }
-'class'     { LForm (L _ (Atom (ASymbol "class"))) }
-'data'      { LForm (L _ (Atom (ASymbol "data"))) }
-'default'   { LForm (L _ (Atom (ASymbol "default"))) }
-'do'        { LForm (L _ (Atom (ASymbol "do"))) }
-'foreign'   { LForm (L _ (Atom (ASymbol "foreign"))) }
-'hiding'    { LForm (L _ (Atom (ASymbol "hiding"))) }
-'if'        { LForm (L _ (Atom (ASymbol "if"))) }
-'infix'     { LForm (L _ (Atom (ASymbol "infix"))) }
-'infixl'    { LForm (L _ (Atom (ASymbol "infixl"))) }
-'infixr'    { LForm (L _ (Atom (ASymbol "infixr"))) }
-'instance'  { LForm (L _ (Atom (ASymbol "instance"))) }
-'let'       { LForm (L _ (Atom (ASymbol "let"))) }
-'newtype'   { LForm (L _ (Atom (ASymbol "newtype"))) }
-'qualified' { LForm (L _ (Atom (ASymbol "qualified"))) }
-'type'      { LForm (L _ (Atom (ASymbol "type"))) }
+-- Haskell 2010 reserved ids
+'case'     { LForm (L _ (Atom (ASymbol "case"))) }
+'class'    { LForm (L _ (Atom (ASymbol "class"))) }
+'data'     { LForm (L _ (Atom (ASymbol "data"))) }
+'default'  { LForm (L _ (Atom (ASymbol "default"))) }
+'deriving' { LForm (L _ (List [LForm (L _ (Atom (ASymbol "deriving")))
+                              ,LForm (L _ (List $$))])) }
+'do'       { LForm (L _ (Atom (ASymbol "do"))) }
+'foreign'  { LForm (L _ (Atom (ASymbol "foreign"))) }
+'if'       { LForm (L _ (Atom (ASymbol "if"))) }
+'import'   { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "import"))))
+                               :$$))) }
+'infix'    { LForm (L _ (Atom (ASymbol "infix"))) }
+'infixl'   { LForm (L _ (Atom (ASymbol "infixl"))) }
+'infixr'   { LForm (L _ (Atom (ASymbol "infixr"))) }
+'instance' { LForm (L _ (Atom (ASymbol "instance"))) }
+'let'      { LForm (L _ (Atom (ASymbol "let"))) }
+'module'   { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "module"))))
+                               :$$))) }
+'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
+'type'     { LForm (L _ (Atom (ASymbol "type"))) }
+'where'    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "where"))))
+                               :$$))) }
 
 '!'  { LForm (L _ (Atom (ASymbol "!"))) }
 ','  { LForm (L _ (Atom (ASymbol ","))) }
@@ -110,6 +117,11 @@ import Language.SK.Syntax.Internal
 '|'  { LForm (L _ (Atom (ASymbol "|"))) }
 '}'  { LForm (L _ (Atom (ASymbol "}"))) }
 '~'  { LForm (L _ (Atom (ASymbol "~"))) }
+
+-- Non Haskell 2010 reserved id, but treated specially
+'as'        { LForm (L _ (Atom (ASymbol "as"))) }
+'hiding'    { LForm (L _ (Atom (ASymbol "hiding"))) }
+'qualified' { LForm (L _ (Atom (ASymbol "qualified"))) }
 
 -- GHC Extensions
 'forall' { LForm (L _ (Atom (ASymbol "forall"))) }
@@ -128,19 +140,6 @@ import Language.SK.Syntax.Internal
 'frac'    { LForm (L _ (Atom (AFractional _))) }
 'comment' { LForm (L _ (Atom (AComment _))) }
 'unit'    { LForm (L _ (Atom AUnit)) }
-
-'deriving'
-    { LForm (L _ (List [ LForm (L _ (Atom (ASymbol "deriving")))
-                       , LForm (L _ (List $$))])) }
-
-'import'
-    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "import")))):$$))) }
-
-'module'
-    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "module")))):$$))) }
-
-'where'
-    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "where")))):$$))) }
 
 'list'       { LForm (L _ (List $$)) }
 'hslist'     { LForm (L _ (HsList _)) }
@@ -186,7 +185,7 @@ rexports :: { [HIE] }
     | rexports export { $2 : $1 }
 
 export :: { HIE }
-    : 'symbol' { b_ieSym $1 }
+    : varid    { b_ieSym $1 }
     | 'module' { b_ieMdl $1 }
     | 'list'   {% parse p_entity $1 }
 
@@ -200,8 +199,8 @@ entities :: { [HIE] }
 
 rentities :: { [HIE] }
     : {- empty -}        { [] }
-    | rentities 'symbol' { b_ieSym $2 : $1 }
-    | rentities 'list'   {% fmap (:$1) (parse p_entity $2) }
+    | rentities varid  { b_ieSym $2 : $1 }
+    | rentities 'list' {% fmap (:$1) (parse p_entity $2) }
 
 imports :: { [HImportDecl] }
     : rimports { reverse $1 }
@@ -214,11 +213,11 @@ import :: { HImportDecl }
     : 'import' {% parse p_limport $1 }
 
 limport :: { HImportDecl }
-    : 'qualified' 'symbol' as 'symbol' impspec
+    : 'qualified' 'symbol' 'as' 'symbol' impspec
       { b_importD ($2, True, Just $4) $5 }
     | 'qualified' 'symbol' impspec
       { b_importD ($2, True, Nothing) $3 }
-    | 'symbol' as 'symbol' impspec
+    | 'symbol' 'as' 'symbol' impspec
       { b_importD ($1, False, Just $3) $4 }
     | 'symbol' impspec
       { b_importD ($1, False, Nothing) $2 }
@@ -230,9 +229,6 @@ impspec :: { (Bool, Maybe [HIE]) }
                             ; return (False, Just es) } }
     | 'unit'          { (False, Just []) }
     | {- empty -}     { (False, Nothing) }
-
-as :: { Code }
-    : 'symbol' {% b_isAs $1 }
 
 
 -- ---------------------------------------------------------------------
@@ -371,16 +367,16 @@ lsname :: { (Maybe (Located Safety), Code) }
     : 'symbol' 'string' {% b_safety $1 >>= \s -> return (Just s, $2) }
 
 decl :: { HDecl }
-    : '=' 'symbol' aguards { b_funBindD $2 $3 }
+    : '=' varid aguards    { b_funBindD $2 $3 }
     | '=' 'list' guards    {% b_patBindD $3 `fmap` parse p_pats1 $2 }
     | '=' 'hslist' guards  {% do { lp <- parse p_pats0 (unwrapListL $2)
                                  ; let lp' = b_hsListP lp
                                  ; return (b_patBindD $3 lp') }}
-    | '::' 'symbol' dtype  { b_tsigD [$2] $3 }
-    | '::' symbols dtype   { b_tsigD $2 $3 }
-    | 'inline' 'symbol'    { b_inlineD Inline $2 }
-    | 'noinline' 'symbol'  { b_inlineD NoInline $2 }
-    | 'inlinable' 'symbol' { b_inlineD Inlinable $2 }
+    | '::' varid dtype     { b_tsigD [$2] $3 }
+    | '::' varids dtype    { b_tsigD $2 $3 }
+    | 'inline' varid       { b_inlineD Inline $2 }
+    | 'noinline' varid     { b_inlineD NoInline $2 }
+    | 'inlinable' varid    { b_inlineD Inlinable $2 }
     | 'specialize' 'list'  {% parse p_sfsig $2 >>= b_specializeD $1 }
 
 aguards :: { (([HGRHS],[HDecl]), [HPat]) }
@@ -409,7 +405,7 @@ rdecls :: { [HDecl] }
 -- ---------------------------------------------------------------------
 
 type :: { HType }
-    : 'symbol' { b_symT $1 }
+    : varid    { b_symT $1 }
     | 'unit'   { b_unitT $1 }
     | 'hslist' {% case toListL $1 of
                     LForm (L _ (List [])) -> return (b_nilT $1)
@@ -427,16 +423,16 @@ types :: { [HType] }
     : rtypes { reverse $1 }
 
 rtypes :: { [HType] }
-    : type        { [$1] }
-    | rtypes type { $2 : $1 }
+    : type            { [$1] }
+    | rtypes type     { $2 : $1 }
 
 zero_or_more_types :: { [HType] }
     : {- empty -} { [] }
     | types       { $1 }
 
 qtype :: { ([HType], HType) }
-    : 'symbol' { ([],b_symT $1) }
-    | 'unit'   { ([],b_unitT $1) }
+    : 'symbol' { ([], b_symT $1) }
+    | 'unit'   { ([], b_unitT $1) }
     | 'hslist' {% do { typ <- parse p_type [toListL $1]
                      ; return ([], b_listT typ) } }
     | qtycl    { $1 }
@@ -463,13 +459,13 @@ pat :: { HPat }
     : 'integer' { b_intP $1 }
     | 'string'  { b_stringP $1 }
     | 'char'    { b_charP $1 }
-    | 'symbol'  { b_symP $1 }
+    | varid     { b_symP $1 }
     | 'hslist'  {% b_hsListP `fmap` parse p_pats0 (unwrapListL $1) }
     | 'list'    {% parse p_pats1 $1 }
 
 pats1 :: { HPat }
     : ',' pats0             { b_tupP $1 $2 }
-    | '@' 'symbol' pat      { b_asP $2 $3 }
+    | '@' varid pat         { b_asP $2 $3 }
     | '~' pat               { b_lazyP $2 }
     | 'symbol' '{' lblp '}' {% b_labeledP $1 $3 }
     | 'symbol' pats0        {% b_conP $1 $2 }
@@ -493,13 +489,24 @@ expr :: { HExpr }
     | 'list'   {% parse p_exprs $1 }
 
 atom :: { HExpr }
-    : 'symbol'  { b_varE $1 }
+    : varid     { b_varE $1 }
     | 'char'    { b_charE $1 }
     | 'string'  { b_stringE $1 }
     | 'integer' { b_integerE $1 }
     | 'frac'    { b_floatE $1 }
     | 'unit'    { b_unitE $1 }
     | 'hslist'  {% b_hsListE `fmap` parse p_hlist (unwrapListL $1) }
+
+varid :: { Code }
+    : 'symbol'   { $1 }
+    | special_id { $1 }
+
+special_id :: { Code }
+    : '!'         { $1 }
+    | 'as'        { $1 }
+    | 'forall'    { $1 }
+    | 'hiding'    { $1 }
+    | 'qualified' { $1 }
 
 exprs :: { HExpr }
     : '\\' lambda             { b_lamE $2 }
@@ -622,6 +629,16 @@ stmt1 :: { HStmt }
 -- Auxiliary
 --
 -- ---------------------------------------------------------------------
+
+varids :: { [Code] }
+    : 'list' {% parse p_varids1 $1 }
+
+varids1 :: { [Code] }
+    : rvarids { reverse $1 }
+
+rvarids :: { [Code] }
+    : varid         { [$1] }
+    | rvarids varid { $2 : $1 }
 
 symbols :: { [Code] }
     : 'list' {% parse p_symbols1 $1 }

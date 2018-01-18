@@ -37,12 +37,18 @@
 ;;; Strictness Flags
 (data MyData6
   (M6L Int)
-  (M6S (! Int))
+  (M6S1 (! Int))
+  (M6S2 (! (Maybe Int)))
   (deriving (Eq Show)))
 
 (data MyData7
   (M7a {m7aF1 (! Int)
         m7aF2 (! (Maybe String))})
+  (deriving (Eq Show)))
+
+;; Using non-reserved special type variable names.
+(data (MyData8 as ccall forall hiding qualified)
+  (M8a as ccall forall hiding qualified)
   (deriving (Eq Show)))
 
 (:: s4_2_1 (IO ()))
@@ -56,8 +62,9 @@
       (print (MyD3Con3 \a \b \c (Right \z)))
       (print [M4A M4B M4C])
       (print (:: undefined MyData5))
-      (print [(M6L 42) (M6S 42)])
-      (print (M7a {m7aF1 100 m7aF2 (Just "strict Maybe field")}))))
+      (print [(M6L 42) (M6S1 42) (M6S2 Nothing)])
+      (print (M7a {m7aF1 100 m7aF2 (Just "strict Maybe field")}))
+      (print (M8a True True True True True))))
 
 ;;; 4.2.2 Type Synonym Declarations
 

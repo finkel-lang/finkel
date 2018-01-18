@@ -7,6 +7,7 @@
 (import Data.Char)
 (import System.IO ())
 (import Control.Monad as M)
+(import Data.Array (! array))
 (import Data.Complex ((Complex ..) realPart imagPart mkPolar))
 (import Data.Ratio hiding (Ratio Rational numerator %))
 
@@ -46,6 +47,8 @@
       (f2 i1)
       (M.when (< 3 5)
               (putStrLn "Control Monad imported as `M'"))
+      (let ((= arr (array (, 0 15) (zip [0 .. 15] [\a ..])))))
+      (print (! arr 3))
       (let ((= c (mkPolar 1.2 3.4))))
       (print (realPart c))
       (print (imagPart c))

@@ -42,7 +42,8 @@
 ;;; GHC extension: UNPACK
 
 (data D1
-  (C1 ##UNPACK (! Int) ##UNPACK (! Char))
+  (C1 ##UNPACK (! Int)
+      ##UNPACK (! Char))
   (deriving (Eq Show)))
 
 (data D2
