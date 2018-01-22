@@ -4,9 +4,10 @@
 
 (defmodule SK.Repl.IORedirect
   (use
-   (GHC.IO.Handle (hDuplicate hDuplicateTo))
+   ;; base
    (Control.Exception)
    (Data.List (intercalate))
+   (GHC.IO.Handle (hDuplicate hDuplicateTo))
    (System.IO ((Handle) (SeekMode ..) hFlush hGetLine hSeek
                hSetFileSize stdout))
    (System.IO.Error (isEOFError)))
