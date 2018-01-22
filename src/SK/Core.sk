@@ -200,11 +200,25 @@
 (define-macro macrolet form
   (make-macrolet-body "macrolet" form (\ body `(return ,body))))
 
+;;; Pattern match for `LForm' of `Atom' with `AString'.
+(eval-when-compile
+ (defmacro pastring (val)
+   `(LForm (L _ (Atom (AString ,val))))))
+
 ;;; Macro for defining function. This macro preserves the location of
 ;;; function name, arguments, and body. Supports function declaration
 ;;; with and without type signature,
 (define-macro defn form
   (case (unCode form)
+    (List [_ sig (pastring _doc) body])
+    (return `(defn ,sig () ,body))
+
+    (List [_ sig (pastring _doc) args body])
+    (return `(defn ,sig ,args ,body))
+
+    (List [_ sig body])
+    (return `(defn ,sig () ,body))
+
     (List [_ sig args body])
     (case (unCode sig)
       (List [name tsig]) (return `(begin
@@ -212,9 +226,6 @@
                                     (= ,name ,@args ,body)))
       (Atom _) (return `(= ,sig ,@args ,body))
       _ (macro-error sig "defn: invalid signature"))
-
-    (List [_ sig body])
-    (return `(defn ,sig () ,body))
 
     _ (macro-error form "defn: invalid form")))
 
