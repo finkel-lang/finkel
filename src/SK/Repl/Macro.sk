@@ -34,7 +34,15 @@
 
    ;; internal
    (SK.Core)
-   (SK.Repl.GHC)))
+   (SK.Repl.GHC))
+
+  (export *_))
+
+
+;;; Types
+
+(type ReplCommand
+  (-> [Code] (Skc Code)))
 
 
 ;;; Compilation
@@ -54,7 +62,14 @@
     (Atom (AString str)) (Just str)
     _                    Nothing))
 
-(defn (%compile-obj (-> String (Skc Code)))
+(defn (located-list (-> [Code] Code))
+  (xs)
+  (case xs
+    [] nil
+    _ (let ((= l (getLoc (mkLocatedForm xs))))
+        (LForm (L l (List xs))))))
+
+(defn (compile-to-obj-file (-> String (Skc Code)))
   (str)
   (gbracket
    (do (<- dflags getSessionDynFlags)
@@ -68,7 +83,7 @@
          (make [(, str Nothing)] False Nothing)
          (return '(begin))))))
 
-(defn (%link-module (-> FastString (Skc Code)))
+(defn (link-module-obj (-> FastString (Skc Code)))
   (name)
   (do (<- hsc-env getSession)
       (let ((= mname (mkModuleNameFS name))
@@ -77,11 +92,11 @@
                   (linkModule hsc-env (Module uid mname))))
       (return '(begin))))
 
-(defn (%compile-link-and-import (-> FilePath (Skc Code)))
+(defn (compile-link-and-import (-> FilePath (Skc Code)))
   (path)
   (do (let ((= mname (asModuleName path))))
-      (<- _ (%compile-obj path))
-      (<- _ (%link-module (fsLit mname)))
+      (<- _ (compile-to-obj-file path))
+      (<- _ (link-module-obj (fsLit mname)))
       (<- mods (fmap envContextModules getSkEnv))
       (setContext (map mk-ii (: mname mods)))
       (return '(begin))))
@@ -103,34 +118,47 @@
          (setContext (map mk-ii mods))))))
 
 ;;; Compile source code to object code.
-(defmacro* compile-obj (form)
-  (maybe (skSrcError form (++ "compile-obj: not a FilePath: "
-                              (show form)))
-         (\ file
-           (do (liftIO (putStrLn (++ "; compile-obj: " file)))
-               (%compile-obj file)))
-         (code->mb-string form)))
+(defn (compile-obj ReplCommand)
+  (forms)
+  (let ((= err
+          (skSrcError (located-list forms)
+                      (++ "compile-obj: not a FilePath: "
+                          (show forms)))))
+    (case forms
+      [form] (maybe err
+                    (\ src
+                      (do (liftIO
+                           (putStrLn (++ "; compile-obj: " src)))
+                          (compile-to-obj-file src)))
+                    (code->mb-string form))
+      _ err)))
 
 ;;; Link the object code of given module.
-(defmacro* link-module (form)
+(defn (link-module ReplCommand)
+  (forms)
   (let ((= go name
           (do (liftIO
                (putStrLn (++ "; link-module: " (unpackFS name))))
-              (%link-module name)))
+              (link-module-obj name)))
         (= err
           (skSrcError form (++ "link-module: not a symbol: "
-                               (show form)))))
-    (case (unCode form)
-      (Atom (ASymbol sym)) (go sym)
-      _                    err)))
+                               (show form))))
+        (= form
+          (case forms
+            [] nil
+            _ (head forms))))
+    (case (map unCode forms)
+      [(Atom (ASymbol sym))] (go sym)
+      _ err)))
 
 ;;; Load a module source code file. Handles absolute paths and relative
 ;;; paths from import directories.
-(defmacro* load (form)
+(defn (load ReplCommand)
+  (forms)
   (let ((= find-file idirs path
           (if (isAbsolute path)
               (find-absolute idirs path)
-              (%compile-link-and-import path)))
+              (compile-link-and-import path)))
         (= find-absolute dirs path
           (case dirs
             (: dir dirs') (find-absolute' dir dirs' path)
@@ -141,7 +169,8 @@
                            (return dir)))
               (find-file dirs (makeRelative dir' path))))
         (= cant-find-err file
-          (skSrcError form (++ "load: cannot find: " file)))
+          (skSrcError (located-list forms)
+                      (++ "load: cannot find: " file)))
         ;; From `GhcMake.discardIC'.
         (= discardIC hsc-env
           (let ((= empty-ic (emptyInteractiveContext dflags))
@@ -171,103 +200,85 @@
               (liftIO (do (mapM_ uncache graph0)
                           (flushFinderCaches hsc-env)))
               (setSession (discardIC hsc-env)))))
-    (maybe
-     (skSrcError form (++ "load: not a FilePath: "
-                          (show form)))
-     (\ path
-       (do (liftIO (putStrLn (++ "; load: " path)))
-           ;; Clear current state first.
-           clear-all
-           ;; Find the source file path and compile, load, and
-           ;; link the module.
-           (<- dflags getSessionDynFlags)
-           (env-context-on-exception
-            (find-file (importPaths dflags) path))
-           (return '(begin))))
-     (fromCode form))))
+    (case forms
+      [form] (maybe
+              (skSrcError form (++ "load: not a FilePath: "
+                                   (show form)))
+              (\ path
+                (do (liftIO (putStrLn (++ "; load: " path)))
+                    ;; Clear current state first.
+                    clear-all
+                    ;; Find the source file path and compile, load, and
+                    ;; link the module.
+                    (<- dflags getSessionDynFlags)
+                    (env-context-on-exception
+                     (find-file (importPaths dflags) path))
+                    (return '(begin))))
+              (fromCode form))
+      _ (skSrcError (located-list forms)
+                    (++ "load: invalid form: " (show forms))))))
 
 
 ;;; Settings
 
 ;;; Set command line flags, see `GHCi.UI.newDynFlags'.
-(defmacro* set-flags forms
+(defn (set ReplCommand)
+  (forms)
   (case forms
-    (: _ _)
-    (| ((all symbol? forms)
-        (do (<- dflags0 getSessionDynFlags)
-            (let ((= flags
-                    (map (. noLoc symbolName) forms))))
-            (<- (, dflags1 _leftovers warns)
-                (parseDynamicFlags dflags0 flags))
-            (liftIO (handleFlagWarnings dflags1 warns))
-            (<- _ (setSessionDynFlags dflags1))
-            (<- _ (setInteractiveDynFlags dflags1))
-            (return '(begin)))))
+    (: _ _) (| ((all symbol? forms)
+                (do (<- dflags0 getSessionDynFlags)
+                    (let ((= flags (map (. noLoc symbolName) forms))))
+                    (<- (, dflags1 _leftovers warns)
+                      (parseDynamicFlags dflags0 flags))
+                    (liftIO (handleFlagWarnings dflags1 warns))
+                    (<- _ (setSessionDynFlags dflags1))
+                    (<- _ (setInteractiveDynFlags dflags1))
+                    (return '(begin)))))
+    _ (skSrcError nil "$set: empty form")))
 
-    _
-    (skSrcError nil "set-flags: empty form")))
+;;; Modify debug settings in REPL.
+(defn (debug ReplCommand)
+  (forms)
+  (case forms
+    [] (do (<- bool (fmap envDebug getSkEnv))
+           (return (toCode bool)))
+    [form] (| ((<- (Just bool) (fromCode form))
+               (do (modifySkEnv (\ e (e {envDebug bool})))
+                   (return '(begin)))))
+    _ (let ((= lst (located-list forms)))
+        (skSrcError lst (++ "debug: invalid form: " (show lst))))))
 
-;;; Modify settings in REPL.
-(defmacro* set-repl (key val)
-  (let ((= set-dflags f
-          (do (<- dflags getSessionDynFlags)
-              (<- _ (setSessionDynFlags (f dflags)))
-              (return '(begin))))
-        (= val-err expect
-          (skSrcError val (concat ["set-repl (" (show key)
-                                   "): expecting " expect
-                                   ", got " (show val)])))
-        (= set-cwd v
-          (case (code->mb-string v)
-            (Just path) (do (liftIO (setCurrentDirectory path))
-                            (return '(begin)))
-            Nothing     (val-err "Symbol or String")))
-        (= set-debug v
-          (case (fromCode v)
-            (Just bool) (do (modifySkEnv (\ e (e {envDebug bool})))
-                            (return '(begin)))
-            Nothing     (val-err "Bool")))
-        (= set-verbosity v
-          (case (unCode v)
-            (Atom (AInteger n)) (set-dflags
-                                 (\ d (d {verbosity (fromInteger n)})))
-            _                   (val-err "Integer")))
-        (= set-symbol k
-          (case (unpackFS k)
-            "cwd"       (set-cwd val)
-            "debug"     (set-debug val)
-            "verbosity" (set-verbosity val)
-            _           set-repl-err))
-        (= set-repl-err
-          (skSrcError key (++ "set-repl: unknown key: " (show key)))))
-    (case (unCode key)
-      (Atom (ASymbol k)) (set-symbol k)
-      _                  set-repl-err)))
+;;; Function to change current directory.
+(defn (cd ReplCommand)
+  (forms)
+  (case forms
+    [arg1] (| ((<- (Just path) (code->mb-string arg1))
+               (do (liftIO (setCurrentDirectory path))
+                   (return '(begin)))))
+    _ (skSrcError (head forms)
+                  (++ "cd: expecting symbol or string but got "
+                      (show forms)))))
 
-;;; Alias macro for a `set-repl' sub-command `cwd'.
-(defmacro cd (path)
-  `(set-repl cwd ,path))
+;;; Function to show current directory.
+(defn (pwd ReplCommand)
+  (const (fmap toCode (liftIO getCurrentDirectory))))
 
-(defmacro* pwd ()
-  (do (<- dir (liftIO getCurrentDirectory))
-      (return (toCode dir))))
-
-(define-macro ls forms
-  (do (<- path
-        (case (unCode forms)
-          (List [_ (LForm (L _ (Atom (AString s))))])
-          (return s)
-
-          (List [_ (LForm (L _ (Atom (ASymbol s))))])
-          (return (unpackFS s))
-
-          (List [_])
-          (return "./")
-
-          _
-          (skSrcError forms (++ "ls: invalid path: " (show forms)))))
-      (liftIO (>>= (getDirectoryContents path) (mapM_ putStrLn)))
-      (return '(begin))))
+;;; List directory contents.
+(defn (ls ReplCommand)
+  (forms)
+  (do (<- mb-path
+        (case forms
+          [path] (return (code->mb-string path))
+          [] (return (Just "./"))
+          _ (skSrcError (located-list forms)
+                        (++ "ls: invalid args: " (show forms)))))
+      (case mb-path
+        (Just path) (do (liftIO
+                         (>>= (getDirectoryContents path)
+                              (mapM_ putStrLn)))
+                        (return '(begin)))
+        _ (skSrcError (located-list forms)
+                      (++ "ls: invalid path: " (show forms))))))
 
 ;;; Functions for `info' macro.
 
@@ -364,7 +375,7 @@
 (defn (info-info (Skc Code))
   (return
     `(putStrLn
-      "USAGE: (info COMMANDS)
+      "USAGE: ($info COMMANDS)
 
 DESCRIPTION:
 
@@ -433,7 +444,8 @@ COMMANDS:
                      (map (++ ";    ") ipaths))])))))
       (return `(putStr ,result))))
 
-(defmacro* info (form)
+(defn (info ReplCommand)
+  (forms)
   (let ((= go sym
           (case (unpackFS sym)
             "bindings" info-bindings
@@ -445,13 +457,16 @@ COMMANDS:
             "packages" info-packages
             "paths"    info-paths
             _          info-info))
-        (= err
+        (= err form
           (skSrcError form (++ "info: invalid form: " (show form)))))
-    (case (unCode form)
-      (Atom (ASymbol sym)) (go sym)
-      (List [q name])      (| ((|| (== q 'quote) (== q 'quasiquote))
-                               (info-name name)))
-      _                    err)))
+    (case forms
+      [form] (case (unCode form)
+               (Atom (ASymbol sym)) (go sym)
+               (List [q name])      (| ((|| (== q 'quote)
+                                            (== q 'quasiquote))
+                                        (info-name name)))
+               _                    (err form))
+      _ (err (located-list forms)))))
 
 ;;; Simplified version of `GHCi.UI.browseModule'.
 (defn (browse-module (-> Module ModuleInfo (Skc Code)))
@@ -477,7 +492,8 @@ COMMANDS:
       (return `(putStrLn ,strs))))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
-(defmacro* browse (form)
+(defn (browse ReplCommand)
+  (forms)
   (let ((= go name
           (| ((looksLikeModuleName name)
               (do (<- mdl (lookupModule (mkModuleName name) Nothing))
@@ -489,10 +505,11 @@ COMMANDS:
                                 (++ "unknown module: " ,name))))))
              (otherwise err)))
         (= err
-          (skSrcError form (++ "browse: invalid form: " (show form)))))
-    (case (unCode form)
-      (Atom (ASymbol sym)) (go (unpackFS sym))
-      _                    err)))
+          (skSrcError (located-list forms)
+                      (++ "browse: invalid form: " (show forms)))))
+    (case (map unCode forms)
+      [(Atom (ASymbol sym))] (go (unpackFS sym))
+      _ err)))
 
 
 ;;; Package
@@ -512,12 +529,19 @@ COMMANDS:
 ;;; module from SK source code, by ignoring module found in pre-compiled
 ;;; library linkable.  This behaviour may useful when working with cabal
 ;;; package library modules from REPL.
-(defmacro* in-component (name)
-  (do (<- dflags0 getDynFlags)
+(defn (component ReplCommand)
+  (forms)
+  (do (<- name (case forms
+                 [form] (| ((<- (Just str) (fromCode form))
+                            (return str)))
+                 _ (let ((= lst (located-list forms)))
+                     (skSrcError lst (++ "component: invalid form: "
+                                         (show lst))))))
+      (<- dflags0 getDynFlags)
       (let ((= set-this-unit-id cid
               (do (let ((= flags (map noLoc ["-this-unit-id" cid]))))
                   (<- (, dflags1 _ _)
-                      (parseDynamicFlags dflags0 flags))
+                    (parseDynamicFlags dflags0 flags))
                   (<- _ (setSessionDynFlags dflags1))
                   (liftIO
                    (putStrLn
@@ -527,16 +551,38 @@ COMMANDS:
                (putStrLn
                 (concat ["; package " (show name) " not found"]))))))
       (<- mb-component-id
-          (liftIO
-           (do (<- mb-pc (maybe (return Nothing)
-                                (lookup-package-config dflags0)
-                                (code->mb-string name)))
-               (return (fmap (. C8.unpack
-                                (. toStringRep componentId))
-                             mb-pc)))))
+        (liftIO
+         (do (<- mb-pc (maybe (return Nothing)
+                              (lookup-package-config dflags0)
+                              (code->mb-string name)))
+             (return (fmap (. C8.unpack
+                              (. toStringRep componentId))
+                           mb-pc)))))
       (case mb-component-id
         (Just cid) (set-this-unit-id cid)
         Nothing    (| ((elem name ['this 'main])
                        (set-this-unit-id (show name)))
                       (otherwise not-found)))
       (return '(begin))))
+
+;;; REPL command macro
+
+(defn (commands [(, Code ReplCommand)])
+  [(, 'browse browse)
+   (, 'cd cd)
+   (, 'compile-obj compile-obj)
+   (, 'component component)
+   (, 'debug debug)
+   (, 'info info)
+   (, 'link-module link-module)
+   (, 'load SK.Repl.Macro.load)
+   (, 'ls ls)
+   (, 'pwd pwd)
+   (, 'set set)])
+
+(defmacro* *_ form
+  (case form
+    (: cmd args) (| ((<- (Just fn) (lookup cmd commands))
+                     (fn args)))
+    _ (let ((= lst (located-list form)))
+        (skSrcError lst (++ "invalid args: " (show lst))))))

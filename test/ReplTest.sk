@@ -104,12 +104,12 @@
       ;; REPL macros
       (ok '(exported-macros Prelude) "[]")
       (satisfy
-       '(info bindings)
+       '(*_ info bindings)
        (\ ret
          (case ret
            (Right str) (elem "foo :: Int -> Int = _" (lines str))
            _ False)))
-      (ok '(info context)
+      (ok '(*_ info context)
           (delines
            ["; context"
             ";  IIDecl: import Control.Monad"
@@ -117,7 +117,7 @@
             ";  IIDecl: import SK.Repl.Env"
             ";  IIDecl: import SK.Prelude"
             ";  IIDecl: import Prelude"]))
-      (ok '(info dflags)
+      (ok '(*_ info dflags)
           (delines
            ["; dflags:"
             ";  ghcLink: LinkInMemory"
@@ -126,8 +126,8 @@
             ";  objectDir: Nothing"
             ";  thisInstalledUnitId: main"]))
       (ok '(begin
-            (set-flags -odir /tmp)
-            (info dflags))
+            (*_ set -odir /tmp)
+            (*_ info dflags))
           (delines
            ["; dflags:"
             ";  ghcLink: LinkInMemory"
@@ -136,31 +136,31 @@
             ";  objectDir: Just \"/tmp\""
             ";  thisInstalledUnitId: main"]))
       (satisfy
-       '(info macros)
+       '(*_ info macros)
        (\ ret
          (case ret
            (Right str) (elem ";  defmacro*!" (lines str))
            _ False)))
-      (ok '(info modules) "")
-      (ok '(info packages)
+      (ok '(*_ info modules) "")
+      (ok '(*_ info packages)
           "; packages")
       (ok '(begin
-            (set-flags -package bytestring)
-            (info packages))
+            (*_ set -package bytestring)
+            (*_ info packages))
           (delines
            ["; packages"
             ";   -package bytestring"]))
-      (ok '(info paths)
+      (ok '(*_ info paths)
           (concat
            ["; current working directory:\n"
             ";   " current-dir "\n"
             "; module import search paths:\n"
             ";    ."]))
-      (ok '(info 'putStr)
+      (ok '(*_ info 'putStr)
           "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
-      (ok '(browse Unsafe.Coerce)
+      (ok '(*_ browse Unsafe.Coerce)
           "Unsafe.Coerce.unsafeCoerce :: a -> b")
-      (ok '(pwd) (show current-dir))
+      (ok '(*_ pwd) (show current-dir))
 
       ;; Errors
       (ng 'buzz
@@ -170,5 +170,5 @@
           (concat ["<quoted code>: syntax error on input "
                    "`(= f a (+ a 1) (+ a 2))'\n"]))
       (ng '(head []) "Prelude.head: empty list")
-      (ng '(info (foo bar))
+      (ng '(*_ info (foo bar))
           "<quoted code>: error: info: invalid form: (foo bar)\n")))))

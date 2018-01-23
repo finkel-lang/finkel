@@ -85,12 +85,12 @@
 
 ;;; Actions
 
-(defdo (print-errors (-> [String] (IO ())))
+(defn (print-errors (-> [String] (IO ())))
   (errs)
-  (mapM_ putStr errs)
-  (putChar \\n)
-  print-usage
-  exitFailure)
+  (do (mapM_ putStr errs)
+      (putChar \\n)
+      print-usage
+      exitFailure))
 
 (defn (print-usage (IO ()))
   (putStr
@@ -104,12 +104,12 @@
 (defn (print-version (IO ()))
   (putStrLn (++ "sk " sk-lang-version)))
 
-(defdo (run (-> (Maybe Int) (IO ())))
+(defn (run (-> (Maybe Int) (IO ())))
   (listen)
-  (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
-                     ", sk-kernel " sk-kernel-version
-                     ", ghc " cProjectVersion ")"]))
-  (start-repl listen repl-env))
+  (do (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
+                         ", sk-kernel " sk-kernel-version
+                         ", ghc " cProjectVersion ")"]))
+      (start-repl listen repl-env)))
 
 (defn (sk-lang-version String)
   (showVersion Paths_sk_lang.version))
