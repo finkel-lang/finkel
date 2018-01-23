@@ -77,7 +77,7 @@ flag dynamic
 executable skkc
   hs-source-dirs:      exec
   main-is:             skkc.hs
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -threaded -rtsopts
   if flag(dynamic)
     ghc-options:       -dynamic
   build-depends:       base >= 4.10 && < 5
@@ -87,7 +87,7 @@ executable skkc
 executable sk-profile
   hs-source-dirs:      exec
   main-is:             profile.hs
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -threaded -rtsopts
   build-depends:       base
                      , bytestring
                      , sk-kernel
