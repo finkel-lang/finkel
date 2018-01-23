@@ -90,6 +90,9 @@ $whitechar+  ;
 \#\| $whitechar* \|  { tok_block_doc_comment_next }
 \#\|                 { tok_block_comment }
 
+--- Hashes
+\# $hsymtail* { tok_hash }
+
 --- Parentheses
 \( { tok_oparen }
 \) { tok_cparen }
@@ -107,9 +110,6 @@ $whitechar+  ;
 \,\  { tok_comma }
 \,\@ { tok_unquote_splice }
 \,   { tok_unquote }
-
--- Hash
-\# { tok_hash }
 
 -- Lambda
 \\\  { tok_lambda }
@@ -344,7 +344,7 @@ data Token
   -- ^ Literal integer number.
   | TFractional FractionalLit
   -- ^ Literal fractional number.
-  | THash
+  | THash Char
   -- ^ Literal @#@.
   | TEOF
   -- ^ End of form.
@@ -410,7 +410,12 @@ tok_unquote_splice _ _ = return TUnquoteSplice
 {-# INLINE tok_unquote_splice #-}
 
 tok_hash :: Action
-tok_hash _ _ =  return THash
+tok_hash (AlexInput _ _ s) l
+  | l == 2, let c = BL.index s 1, c `notElem` haskellOpChars
+  = return $! THash c
+  | otherwise =
+   let bs = BL.toStrict $! takeUtf8 (fromIntegral l) s
+   in  return $! TSymbol $! mkFastStringByteString bs
 {-# INLINE tok_hash #-}
 
 tok_doc_comment_next :: Action

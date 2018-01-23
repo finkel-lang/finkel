@@ -187,7 +187,7 @@ asHaskellSymbols = f1
       where
         li = LForm . (L l)
     f2 sym
-      | headFS sym `elem` "!@#$%^&*-=+<>?/" = sym
+      | headFS sym `elem` haskellOpChars = sym
       | otherwise = fsLit (replace (unpackFS sym))
     replace = map (\x -> case x of
                            '-' -> '_'

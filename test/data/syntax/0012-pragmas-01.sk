@@ -6,15 +6,15 @@
 
 (:: inlineMe Int)
 (= inlineMe 42)
-##(INLINE inlineMe)
+#p(INLINE inlineMe)
 
 (:: dontInlineMe Int)
 (= dontInlineMe 43)
-##(NOINLINE dontInlineMe)
+#p(NOINLINE dontInlineMe)
 
 (:: iAmInlinable Int)
 (= iAmInlinable 44)
-##(INLINABLE iAmInlinable)
+#p(INLINABLE iAmInlinable)
 
 (:: inlineprgm (IO ()))
 (= inlineprgm
@@ -27,10 +27,10 @@
 (:: specializeMe1 (=> (Num a) (Show a) (-> a String)))
 (= specializeMe1 x (show (+ x 1)))
 
-##(SPECIALIZE (:: specializeMe1 (-> Int String)))
-##(SPECIALIZE (:: specializeMe1 (-> Integer String)))
-##(SPECIALIZE (:: specializeMe1 (-> Float String)))
-##(SPECIALIZE (:: specializeMe1 (-> Double String)))
+#p(SPECIALIZE (:: specializeMe1 (-> Int String)))
+#p(SPECIALIZE (:: specializeMe1 (-> Integer String)))
+#p(SPECIALIZE (:: specializeMe1 (-> Float String)))
+#p(SPECIALIZE (:: specializeMe1 (-> Double String)))
 
 (:: specprgm (IO ()))
 (= specprgm
@@ -42,13 +42,13 @@
 ;;; GHC extension: UNPACK
 
 (data D1
-  (C1 ##UNPACK (! Int)
-      ##UNPACK (! Char))
+  (C1 #p(UNPACK) (! Int)
+      #p(UNPACK) (! Char))
   (deriving (Eq Show)))
 
 (data D2
-  (C2 {c2field1 ##UNPACK (! Int)
-       c2field2 ##UNPACK (! Char)})
+  (C2 {c2field1 #p(UNPACK) (! Int)
+       c2field2 #p(UNPACK) (! Char)})
   (deriving (Eq Show)))
 
 (:: unpackprgm (IO ()))

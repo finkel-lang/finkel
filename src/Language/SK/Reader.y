@@ -43,7 +43,7 @@ import GHC.LanguageExtensions (Extension(..))
 '`'       { L _ TQuasiquote }
 ','       { L _ TUnquote }
 ',@'      { L _ TUnquoteSplice }
-'#'       { L _ THash }
+'#'       { L _ (THash _) }
 'require' { L _ (TSymbol "require") }
 
 'symbol'  { L _ (TSymbol _) }
@@ -71,18 +71,14 @@ sexp :: { Code }
      | '(' ')'                 { mkUnit $1 }
      | '(' 'require' sexps ')' {% mkRequire $1 $2 $3 }
      | '(' sexps ')'           { mkList $1 $2 }
-     | '#' rmac                { $2 }
-
-rmac :: { Code }
-    : '#' sexp      {% pragma $2 }
-    | 'symbol' sexp {% dispatch $1 $2 }
+     | '#' sexp                {% rmac $1 $2 }
 
 sexps :: { [Code] }
-    : rsexps { reverse $1 }
+     : rsexps { reverse $1 }
 
 rsexps :: { [Code] }
-       : {- empty -} { [] }
-       | rsexps sexp { $2 : $1 }
+     : {- empty -} { [] }
+     | rsexps sexp { $2 : $1 }
 
 atom :: { Code }
      : 'symbol'  { mkASymbol $1 }
@@ -180,11 +176,17 @@ mkCcSymbol :: Located Token -> Code
 mkCcSymbol (L l _) = sym l "}"
 {-# INLINE mkCcSymbol #-}
 
-pragma ::  Code -> SP Code
+rmac :: Located Token -> Code -> SP Code
+rmac h expr =
+  case h of
+    L l (THash c) | c == 'p' -> pragma expr
+    _ -> errorSP expr "mkHash: unsupported reader macro char"
+
+pragma :: Code -> SP Code
 pragma orig@(LForm (L l form)) =
   case form of
     -- Pragma with no arguments.
-    Atom (ASymbol sym)
+    List [LForm (L _ (Atom (ASymbol sym)))]
       -- Return the UNPACK form as is. This pragma is handled by
       -- syntax parser of data constructor field.
       | normalize sym == "unpack" -> return orig

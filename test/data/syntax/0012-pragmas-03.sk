@@ -3,8 +3,8 @@
 ;;; `ExistentialQuantification' did not work well with
 ;;; `OverloadedLists', so separate test file.
 
-##(LANGUAGE ExistentialQuantification)
-##(LANGUAGE RankNTypes)
+#p(LANGUAGE ExistentialQuantification)
+#p(LANGUAGE RankNTypes)
 
 (module Main)
 

@@ -127,11 +127,12 @@ import Language.SK.Syntax.Internal
 'forall' { LForm (L _ (Atom (ASymbol "forall"))) }
 
 -- Pragmas
-'unpack'     { LForm (L _ (Atom (ASymbol "UNPACK"))) }
+'inlinable'  { LForm (L _ (Atom (ASymbol "INLINABLE"))) }
 'inline'     { LForm (L _ (Atom (ASymbol "INLINE"))) }
 'noinline'   { LForm (L _ (Atom (ASymbol "NOINLINE"))) }
-'inlinable'  { LForm (L _ (Atom (ASymbol "INLINABLE"))) }
 'specialize' { LForm (L _ (Atom (ASymbol "SPECIALIZE"))) }
+'unpack'     { LForm (L _ (List [LForm
+                                 (L _ (Atom (ASymbol "UNPACK")))])) }
 
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }

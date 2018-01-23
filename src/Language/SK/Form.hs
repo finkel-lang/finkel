@@ -25,6 +25,8 @@ module Language.SK.Form
   , skSrcSpan
   , quoted
 
+  , haskellOpChars
+
   -- * Reexported data from GHC
   , GenLocated(..)
   , SrcLoc(..)
@@ -49,7 +51,6 @@ import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
 
 -- Internal
 import Language.SK.GHC
-
 
 -- -------------------------------------------------------------------
 --
@@ -100,8 +101,7 @@ instance NFData Atom where
       AComment str  -> rnf str
 
 instance Arbitrary Atom where
-   -- XXX: Unicode symbols, characters, and strings are not supported
-   -- yet.
+   -- XXX: Unicode symbols are not generated yet.
   arbitrary =
     oneof [ return AUnit
           , aSymbol <$> symbolG
@@ -110,7 +110,8 @@ instance Arbitrary Atom where
           , AInteger <$> arbitrary
           , aFractional <$> (arbitrary :: Gen Double) ]
     where
-      headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "!$%&*+./:<=>?@^_|~"
+      headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ haskellOpChars'
+      haskellOpChars' = '_' : filter (`notElem` "#-|") haskellOpChars
       tailChars = headChars ++ "0123456789'-"
       symbolG = do
         x <- elements headChars
@@ -320,3 +321,13 @@ mkLocatedForm [] = genSrc []
 mkLocatedForm ms = L (combineLocs (unLForm (head ms))
                                   (unLForm (last ms)))
                      ms
+
+-- -------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- -------------------------------------------------------------------
+
+-- | Characters used in Haskell operators.
+haskellOpChars :: [Char]
+haskellOpChars = "!#$%&*+./<=>?@^|-~:"

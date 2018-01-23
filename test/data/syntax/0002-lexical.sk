@@ -82,4 +82,12 @@
           (= x'' 300)))
     (print x)
     (print x')
-    (print x'')))
+    (print x'')
+
+    (let ((:: (# #. ##) (-> Int Int))
+          (= # a (+ a 1))
+          (= #. a (+ a 2))
+          (= ## a (+ a 3))))
+    (print (# 41))
+    (print (#. 40))
+    (print (## 39))))
