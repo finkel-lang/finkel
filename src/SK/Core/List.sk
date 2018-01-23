@@ -84,7 +84,7 @@
     [`(:: ,(cxr-name xs) (-> Code Code))
      `(= ,(cxr-name xs)
         (. ,(cxr-name [(head xs)]) ,(cxr-name (tail xs))))
-     `##(INLINABLE ,(cxr-name xs))]))
+     `#p(INLINABLE ,(cxr-name xs))]))
 
 (let-macro ((cxrs _
               (return `(begin
