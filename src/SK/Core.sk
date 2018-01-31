@@ -18,7 +18,7 @@
   defmodule
 
   ;; Convenience
-  ap$
+  .ap .pf
 
   ;; Reexport
   (module SK.Core.List))
@@ -400,10 +400,10 @@
 ;;; Macro to apply given function in Applicative and Functor context.
 ;;; Can handle variable number of arguments.
 ;;;
-;;; (macroexpand '(ap$ f (pure a) (pure b) (pure c)))
+;;; (macroexpand '(.ap f (pure a) (pure b) (pure c)))
 ;;; ==> (<*> (<*> (<$> f (pure a)) (pure b)) (pure c))
 ;;;
-(define-macro ap$ form
+(define-macro .ap form
   (let ((= build op args
           (case args
             (: arg []) (return `(<$> ,op ,arg))
@@ -412,4 +412,20 @@
             [] (return `(<$> ,op)))))
     (case (unCode form)
       (List (: _ (: op args))) (build op (reverse args))
-      _ (macro-error form "ap$: invalid form"))))
+      _ (macro-error form ".ap: invalid form"))))
+
+;;; Macro for point free style function composition.
+;;;
+;;; (macroexpand '(.pf f1 (f2 arg1) f3))
+;;; ==> (. f1 (. (f2 arg1) f3))
+;;;
+(define-macro .pf form
+  (let ((= go exprs
+          (case exprs
+            [e1 e2] (return `(. ,e1 ,e2))
+            (: e1 rest) (do (<- e2 (go rest))
+                            (return `(. ,e1 ,e2)))
+            _ (macro-error form ".pf: no args"))))
+    (case (unCode form)
+      (List (: _ rest)) (go rest)
+      _ (macro-error form ".pf: invalid form"))))

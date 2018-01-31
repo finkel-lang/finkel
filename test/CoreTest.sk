@@ -555,8 +555,13 @@
              (it "should fail on too few parameters"
                  (expandFailure
                   (defmodule)))))
-      (d "ap$"
+      (d ".ap"
          (it "should expand to (<*> ... (<$> f ..) ..)"
              (expandTo
-              (ap$ f (Just a) (Just b) (Just c))
-              (<*> (<*> (<$> f (Just a)) (Just b)) (Just c)))))))
+              (.ap f (Just a) (Just b) (Just c))
+              (<*> (<*> (<$> f (Just a)) (Just b)) (Just c)))))
+      (d ".pf"
+         (it "expands to (. f1 (. f2 ...))"
+             (expandTo
+              (.pf f1 (f2 arg1) f3)
+              (. f1 (. (f2 arg1) f3)))))))
