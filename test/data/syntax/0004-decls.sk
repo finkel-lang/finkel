@@ -308,6 +308,21 @@
     (= f x
       (replicate x c))))
 
+;;; Functions with `where', with identical name.
+(:: fpb5 (-> Int Int))
+(= fpb5 k
+  (where (f 0 k)
+    (= f acc 0 acc)
+    (= f acc n (f (+ acc n) (- n 1)))))
+
+;;; Another function with `where', with pattern match.
+(:: fpb6 (-> Int String))
+(= fpb6 n
+  (where (f (lookup n names))
+    (= f Nothing "none")
+    (= f (Just n) n)
+    (= names [(, 1 "one") (, 2 "two") (, 3 "three")])))
+
 ;;; 4.4.3.2 Pattern Bindings
 
 (:: (xs ys) [Int])
@@ -340,6 +355,8 @@
       (putStrLn (fpb2 Nothing Nothing))
       (print fpb3)
       (putStrLn (fpb4 \= 30))
+      (print (fpb5 10))
+      (print (fpb6 2))
       (putStrLn (++ "xs: " (show xs)))
       (putStrLn (++ "ys: " (show ys)))
       (putStrLn (++ "tpb1: " (show tpb1)))

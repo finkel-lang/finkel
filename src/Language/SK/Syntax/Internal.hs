@@ -344,8 +344,8 @@ b_safety (LForm (L l (Atom (ASymbol sym)))) =
 
 b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
 b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
-  let match = L l (Match ctxt args Nothing body)
-      body = GRHSs grhss (declsToBinds l decls)
+  let body = GRHSs grhss (declsToBinds l decls)
+      match = L l (Match ctxt args Nothing body)
       ctxt = FunRhs { mc_fun = lrname
                     , mc_fixity = Prefix
                       -- XXX: Get strictness info from somewhere?
@@ -695,7 +695,11 @@ declsToBinds l decls = L l binds'
     binds' = case decls of
       [] -> emptyLocalBinds
       _  -> HsValBinds (ValBindsIn (listToBag binds) sigs)
-    (binds, sigs) = go ([],[]) decls
+    -- Using 'RdrHsSyn.cvTopDecls' to group same names in where
+    -- clause. Perhaps better to do similar things done in
+    -- 'RdrHsSyn.cvBindGroup', which is dedicated for 'P' monad ...
+    decls' = cvTopDecls (toOL decls)
+    (binds, sigs) = go ([],[]) decls'
     go (bs,ss) ds =
       case ds of
         [] -> (bs, ss)
