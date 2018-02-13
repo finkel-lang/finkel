@@ -188,14 +188,19 @@ skcUsage header = usageInfo header visibleDescrs
 --
 -- ---------------------------------------------------------------------
 
--- | Make an main action for SK compiler executable with specifying
--- frontend plugin name and package.
+-- | Make an main action for SK compiler executable with given frontend
+-- plugin name and package.
 --
--- Prepend argument passed to GHC frontend plugin. Wraps input arguments
--- with "-ffrontend-opt". This function contains codes to intercept some
--- of the conflicting arguments for frontend plugin.
+-- Prepend argument passed to GHC frontend plugin and wraps input
+-- arguments with "-ffrontend-opt". This function intercepts some of the
+-- conflicting arguments for 'ghc' command and frontend plugin.
 --
-skPluginMain :: String -- ^ Frontend module name.
+-- Internally, this function invokes "ghc" executable via
+-- 'System.Process.rawSystem' with custom argument and the frontend
+-- plugin found in the given argument.
+--
+skPluginMain :: String -- ^ Name of the module containing the definition
+                       -- of 'frontendPlugin'.
              -> String -- ^ Package name.
              -> IO ()
 skPluginMain frontendModuleName packageName = do
@@ -235,9 +240,9 @@ skPluginMain frontendModuleName packageName = do
       buildingSharedLib =
         null srcs && elem "-shared" ghcopts' && elem "-dynamic" ghcopts'
   exitCode <-
-    -- When any of conflicting option with frontend plugin was set, OR
-    -- building shared library, delegate to raw ghc without frontend
-    -- plugin.
+    -- When any of the conflicting options with frontend plugin were
+    -- set, OR building shared library, delegate to raw ghc without
+    -- frontend plugin.
     if any (`elem` conflictingOptions) ghcopts' || buildingSharedLib
        then do
          when debug
