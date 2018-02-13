@@ -401,12 +401,24 @@
       (print (lfp2 (Con1 42 False)))
       (print (lfp2 (Con1 6 True)))))
 
+(= unitp1 a
+  (case a
+    () (putStrLn "unitp1: `()' pattern matched.")))
+
+(= unitp2 ()
+  (putStrLn "unitp2: `()' pattern matched."))
+
+(= patexprs6
+  (do (unitp1 ())
+      (unitp2 ())))
+
 (= patexprs
   (do patexprs1
       patexprs2
       patexprs3
       patexprs4
-      patexprs5))
+      patexprs5
+      patexprs6))
 
 ;;; Main
 

@@ -460,6 +460,7 @@ pat :: { HPat }
     : 'integer' { b_intP $1 }
     | 'string'  { b_stringP $1 }
     | 'char'    { b_charP $1 }
+    | 'unit'    { b_unitP $1 }
     | varid     { b_symP $1 }
     | 'hslist'  {% b_hsListP `fmap` parse p_pats0 (unwrapListL $1) }
     | 'list'    {% parse p_pats1 $1 }

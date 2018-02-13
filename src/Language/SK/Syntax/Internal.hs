@@ -487,6 +487,9 @@ b_charP (LForm (L l (Atom (AChar c)))) =
   let lit = HsChar (SourceText (show c)) c
   in  L l (LitPat lit)
 
+b_unitP :: Code -> HPat
+b_unitP (LForm (L l (Atom AUnit))) = L l (TuplePat [] Boxed [])
+
 b_symP :: Code -> HPat
 b_symP (LForm (L l (Atom (ASymbol name))))
    | name == "_"
