@@ -419,17 +419,16 @@ withShadowing toShadow skc = do
 
 -- | Expands form, with taking care of @begin@ special form.
 expands :: [Code] -> Skc [Code]
-expands forms = do
-    -- XXX: Get rid of unnecessary reverses.
-    forms' <- mapM expand forms
-    fmap reverse (foldM f [] forms')
+-- XXX: Avoid using 'reverse'.
+expands = fmap reverse . foldM f []
   where
-    f acc orig@(LForm (L _ form)) =
-      case form of
+    f acc form = do
+      expanded@(LForm (L _ form')) <- expand form
+      case form' of
         List (LForm (L _ (Atom (ASymbol "begin"))) : rest) -> do
           rest' <- expands rest
-          return (reverse rest' ++ acc)
-        _ -> return (orig : acc)
+          return $! (reverse rest' ++ acc)
+        _ -> return $! (expanded : acc)
 
 -- | Recursively expands the given 'Code'.
 expand :: Code -> Skc Code
