@@ -15,6 +15,7 @@ module Language.SK.SKC
   , getSkEnv
   , putSkEnv
   , modifySkEnv
+  , setDynFlags
   , insertMacro
   , lookupMacro
   , makeEnvMacros
@@ -184,6 +185,13 @@ putSkEnv = Skc . put
 modifySkEnv :: (SkEnv -> SkEnv) -> Skc ()
 modifySkEnv f = Skc (get >>= put . f)
 {-# INLINE modifySkEnv #-}
+
+setDynFlags :: DynFlags -> Skc ()
+setDynFlags dflags =
+  fromGhc (modifySession
+            (\h -> h { hsc_dflags = dflags
+                     , hsc_IC = (hsc_IC h) {ic_dflags = dflags}}))
+{-# INLINE setDynFlags #-}
 
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Skc ()

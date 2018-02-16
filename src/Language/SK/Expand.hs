@@ -362,7 +362,7 @@ setExpanderSettings = do
       flags2 = gopt_unset flags1 Opt_Hpc
       flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
       flags4 = updOptLevel 0 flags3
-  _ <- setSessionDynFlags flags4
+  setDynFlags flags4
   contextModules <- envContextModules <$> getSkEnv
   setContext (map (mkIIDecl . fsLit) contextModules)
 
@@ -371,7 +371,7 @@ setExpanderSettings = do
 withExpanderSettings :: Skc a -> Skc a
 withExpanderSettings act =
   gbracket getSessionDynFlags
-           setSessionDynFlags
+           setDynFlags
            (const (setExpanderSettings >> act))
 
 -- | Returns a list of bounded names in let expression.

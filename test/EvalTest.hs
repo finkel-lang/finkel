@@ -13,6 +13,8 @@ import Language.SK.Run (buildHsSyn, initialSkEnv, runSkc)
 import Language.SK.SKC (failS)
 import Language.SK.Syntax (parseExpr)
 
+import MakeTest (initSession)
+
 evalTests :: [FilePath] -> Spec
 evalTests = mapM_ mkTest
 
@@ -24,7 +26,8 @@ mkTest file =
       ret <- runSkc (evalContents contents) initialSkEnv
       ret `shouldBe` Right True
   where
-    evalContents bs =
+    evalContents bs = do
+      initSession
       case evalSP sexprs (Just "<mkTest>") bs of
         Right form0 -> do
           form1 <- withExpanderSettings (expands form0)

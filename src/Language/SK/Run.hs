@@ -172,7 +172,7 @@ setDynFlagsFromSPState sp = do
   let mkx = fmap (("-X" ++) . show)
   (dflags1,_,_) <- parseDynamicFlags dflags0 (map mkx (langExts sp))
   (dflags2,_,_) <- parseDynamicFlags dflags1 (ghcOptions sp)
-  void (setSessionDynFlags dflags2)
+  setDynFlags dflags2
   return dflags2
 
 asHaskellSymbols :: Code -> Code
@@ -269,11 +269,10 @@ isHsSource path = "hs" == suffix
 -- Error location are derived from 'HsModule', locations precisely match
 -- with S-expression source code, pretty much helpful.
 ---
-tcHsModule :: GhcMonad m
-           => Maybe FilePath -- ^ Source of the module.
+tcHsModule :: Maybe FilePath -- ^ Source of the module.
            -> Bool -- ^ True to generate files, otherwise False.
            -> HModule -- ^ Module to typecheck.
-           -> m TypecheckedModule
+           -> Skc TypecheckedModule
 tcHsModule mbfile genFile mdl = do
   let fn = fromMaybe "anon" mbfile
       exts = languageExtensions (Just Haskell2010)
@@ -283,7 +282,7 @@ tcHsModule mbfile genFile mdl = do
        if genFile
           then dflags0 {hscTarget = HscAsm, ghcLink = LinkBinary}
           else dflags0 {hscTarget = HscNothing, ghcLink = NoLink}
-  void (setSessionDynFlags (foldl xopt_set dflags1 exts))
+  setDynFlags (foldl xopt_set dflags1 exts)
   ms <- mkModSummary mbfile mdl
   let ann = (Map.empty, Map.empty)
       r_s_loc = mkSrcLoc (fsLit fn) 1 1
@@ -293,5 +292,5 @@ tcHsModule mbfile genFile mdl = do
                         , pm_extra_src_files = [fn]
                         , pm_annotations = ann }
   tc <- typecheckModule pm
-  void (setSessionDynFlags dflags0)
+  setDynFlags dflags0
   return tc

@@ -1,4 +1,10 @@
-module MakeTest (makeTests, removeArtifacts) where
+-- | Tests for 'make'.
+
+module MakeTest
+  ( makeTests
+  , initSession
+  , removeArtifacts
+  ) where
 
 -- base
 import Control.Monad (void, when)
@@ -79,6 +85,12 @@ removeArtifacts dir = do
     removeObjAndHi file =
       when (takeExtension file `elem` [".o", ".hi"])
            (removeFile (dir </> file))
+
+initSession :: Skc ()
+initSession = do
+  dflags <- getSessionDynFlags
+  _ <- setSessionDynFlags (dflags {ghcMode=CompManager})
+  return ()
 
 buildPackage :: String -> Spec
 buildPackage name =

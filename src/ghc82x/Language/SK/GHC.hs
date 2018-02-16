@@ -243,6 +243,7 @@ module Language.SK.GHC
     HsTupleSort(..),
     HsRecField,
     HsRecUpdField,
+    InteractiveContext(..),
     InteractiveImport(..),
     ModSummary(..),
     Promoted(..),

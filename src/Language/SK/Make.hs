@@ -306,7 +306,7 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
       -- module is updated or not. This is to support loading already
       -- compiled module objects with language extensions not set in
       -- currency dynflags.
-      void (setSessionDynFlags (ms_hspp_opts ms))
+      setDynFlags (ms_hspp_opts ms)
 
       up_to_date <- checkUpToDate ms graph_upto_this
       ms' <- if up_to_date
@@ -346,12 +346,11 @@ doMakeOne i total ms hmdl = do
   -- Update the time stamp of generated obj and hi files.
   mb_obj_date <- e2mb <$> tryGetTimeStamp (ml_obj_file loc)
   mb_iface_date <- e2mb <$> tryGetTimeStamp (ml_hi_file loc)
-  void (setSessionDynFlags dflags_orig)
+  setDynFlags dflags_orig
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
 
-dontMakeOne :: GhcMonad m => ModSummary -> HsModule RdrName
-            -> m ModSummary
+dontMakeOne :: ModSummary -> HsModule RdrName -> Skc ModSummary
 dontMakeOne ms hmdl = do
   hsc_env <- getSession
   tcm <- tcHsModule (Just (ms_hspp_file ms)) False hmdl
@@ -403,7 +402,7 @@ dontMakeOne ms hmdl = do
 
 -- | 'True' if the object code and interface file were up to date,
 -- otherwise 'False'.
-checkUpToDate :: GhcMonad m => ModSummary -> [ModSummary] -> m Bool
+checkUpToDate :: ModSummary -> [ModSummary] -> Skc Bool
 checkUpToDate ms dependencies
   | Nothing <- ms_obj_date ms = return False
   | Nothing <- ms_iface_date ms = return False
@@ -565,12 +564,12 @@ withPreservedDynFlags work = do
       dflags0 = defaultDynFlags (settings dflags_orig)
       dflags1 = lang_set dflags0 lang
       dflags2 = foldl xopt_set dflags1 exts
-  void (setSessionDynFlags
-          (dflags_orig { language = lang
-                       , extensions = extensions dflags2
-                       , extensionFlags = extensionFlags dflags2}))
+  setDynFlags
+    (dflags_orig { language = lang
+                 , extensions = extensions dflags2
+                 , extensionFlags = extensionFlags dflags2})
   ret <- work
-  void (setSessionDynFlags dflags_orig)
+  setDynFlags dflags_orig
   return ret
 
 resetEnvMacros :: Skc ()
@@ -654,12 +653,12 @@ doLink mgraph = do
     Succeeded -> return ()
 
 -- | Set 'dumpPrefix' from file path.
-setDumpPrefix :: GhcMonad m => FilePath -> m ()
+setDumpPrefix :: FilePath -> Skc ()
 setDumpPrefix path = do
   dflags0 <- getSessionDynFlags
   let (basename, _suffix) = splitExtension path
       dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
-  void (setSessionDynFlags dflags1)
+  setDynFlags dflags1
 
 sortTargets :: [ModSummary] -> [TargetUnit] -> [TargetUnit]
 sortTargets summaries targets = foldr f [] summaries
@@ -701,7 +700,7 @@ asModuleName name
 
 -- | If there is no -o option, guess the name of target executable
 -- by using top-level source file name as a base.
-guessOutputFile :: GhcMonad m => [ModSummary] -> m ()
+guessOutputFile :: [ModSummary] -> Skc ()
 guessOutputFile !mod_graph = modifySession $ \env ->
     let dflags = hsc_dflags env
         -- Force mod_graph to avoid leaking env
