@@ -61,8 +61,8 @@ import Language.SK.GHC
 -- | Atom in tokens.
 data Atom
   = AUnit
-  | ASymbol FastString
-  | AChar Char
+  | ASymbol {-# UNPACK #-} !FastString
+  | AChar {-# UNPACK #-} !Char
   | AString String
   | AInteger Integer
   | AFractional FractionalLit
