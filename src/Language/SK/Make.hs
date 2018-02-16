@@ -658,7 +658,7 @@ setDumpPrefix :: GhcMonad m => FilePath -> m ()
 setDumpPrefix path = do
   dflags0 <- getSessionDynFlags
   let (basename, _suffix) = splitExtension path
-      dflags1 = dflags0 { dumpPrefix = Just (basename ++ ".")}
+      dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
   void (setSessionDynFlags dflags1)
 
 sortTargets :: [ModSummary] -> [TargetUnit] -> [TargetUnit]
