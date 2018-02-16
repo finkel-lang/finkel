@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Wrapper for SK code compilation monad.
 
 module Language.SK.SKC
@@ -36,8 +35,8 @@ import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 
 -- transformers
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State.Strict (StateT(..), get, modify, put)
 
 -- Internal
 import Language.SK.Form
@@ -106,7 +105,27 @@ data SkEnv = SkEnv
 -- | Newtype wrapper for compiling SK code to Haskell AST.
 newtype Skc a = Skc {
   unSkc :: StateT SkEnv Ghc a
-} deriving (Functor, Applicative, Monad, MonadIO)
+}
+
+instance Functor Skc where
+  fmap f (Skc m) = Skc (fmap f m)
+  {-# INLINE fmap #-}
+
+instance Applicative Skc where
+  pure = Skc . pure
+  {-# INLINE pure #-}
+  Skc m <*> Skc f = Skc (m <*> f)
+  {-# INLINE (<*>) #-}
+
+instance Monad Skc where
+  return = Skc . return
+  {-# INLINE return #-}
+  Skc m >>= k = Skc (m >>= unSkc . k)
+  {-# INLINE (>>=) #-}
+
+instance MonadIO Skc where
+  liftIO = Skc . liftIO
+  {-# INLINE liftIO #-}
 
 instance ExceptionMonad Skc where
   gcatch m h =
@@ -119,16 +138,21 @@ instance ExceptionMonad Skc where
 
 instance HasDynFlags Skc where
    getDynFlags = Skc (lift getDynFlags)
+   {-# INLINE getDynFlags #-}
 
 instance GhcMonad Skc where
    getSession = Skc (lift getSession)
-   setSession s = Skc (lift (setSession s))
+   {-# INLINE getSession #-}
+   setSession = Skc . lift . setSession
+   {-# INLINE setSession #-}
 
 toGhc :: Skc a -> SkEnv -> Ghc (a, SkEnv)
 toGhc m = runStateT (unSkc m)
+{-# INLINE toGhc #-}
 
 fromGhc :: Ghc a -> Skc a
 fromGhc m = Skc (lift m)
+{-# INLINE fromGhc #-}
 
 failS :: String -> Skc a
 failS msg = liftIO (throwIO (SkException msg))
@@ -151,12 +175,15 @@ debugIO act = Skc go
 
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get
+{-# INLINE getSkEnv #-}
 
 putSkEnv :: SkEnv -> Skc ()
 putSkEnv = Skc . put
+{-# INLINE putSkEnv #-}
 
 modifySkEnv :: (SkEnv -> SkEnv) -> Skc ()
 modifySkEnv f = Skc (get >>= put . f)
+{-# INLINE modifySkEnv #-}
 
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Skc ()
