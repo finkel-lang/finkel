@@ -76,11 +76,11 @@
        (<- context getContext)
        (return (, dflags context)))
    (\ (, dflags context)
-     (do (<- _ (setSessionDynFlags dflags))
+     (do (setDynFlags dflags)
          (setContext context)))
    (\ (, dflags _context)
-     (do (<- _ (setSessionDynFlags (dflags {hscTarget HscAsm})))
-         (make [(, str Nothing)] False Nothing)
+     (do (setDynFlags (dflags {hscTarget HscAsm}))
+         (make [(, str Nothing)] True Nothing)
          (return '(begin))))))
 
 (defn (link-module-obj (-> FastString (Skc Code)))
@@ -92,11 +92,10 @@
                   (linkModule hsc-env (Module uid mname))))
       (return '(begin))))
 
-(defn (compile-link-and-import (-> FilePath (Skc Code)))
+(defn (compile-and-import (-> FilePath (Skc Code)))
   (path)
   (do (let ((= mname (asModuleName path))))
       (<- _ (compile-to-obj-file path))
-      (<- _ (link-module-obj (fsLit mname)))
       (<- mods (fmap envContextModules getSkEnv))
       (setContext (map mk-ii (: mname mods)))
       (return '(begin))))
@@ -158,7 +157,7 @@
   (let ((= find-file idirs path
           (if (isAbsolute path)
               (find-absolute idirs path)
-              (compile-link-and-import path)))
+              (compile-and-import path)))
         (= find-absolute dirs path
           (case dirs
             (: dir dirs') (find-absolute' dir dirs' path)
@@ -226,13 +225,14 @@
   (forms)
   (case forms
     (: _ _) (| ((all symbol? forms)
+                ;; Always using `setSessionDynFlags' for `set' REPL
+                ;; command to support `-package' flag.
                 (do (<- dflags0 getSessionDynFlags)
                     (let ((= flags (map (. noLoc symbolName) forms))))
                     (<- (, dflags1 _leftovers warns)
                       (parseDynamicFlags dflags0 flags))
                     (liftIO (handleFlagWarnings dflags1 warns))
                     (<- _ (setSessionDynFlags dflags1))
-                    (<- _ (setInteractiveDynFlags dflags1))
                     (return '(begin)))))
     _ (skSrcError nil "$set: empty form")))
 
@@ -375,7 +375,7 @@
 (defn (info-info (Skc Code))
   (return
     `(putStrLn
-      "USAGE: ($info COMMANDS)
+      "USAGE: (*_ info COMMANDS)
 
 DESCRIPTION:
 
@@ -542,7 +542,7 @@ COMMANDS:
               (do (let ((= flags (map noLoc ["-this-unit-id" cid]))))
                   (<- (, dflags1 _ _)
                     (parseDynamicFlags dflags0 flags))
-                  (<- _ (setSessionDynFlags dflags1))
+                  (setDynFlags dflags1)
                   (liftIO
                    (putStrLn
                     (concat ["; this unit id set to `" cid "'"])))))
