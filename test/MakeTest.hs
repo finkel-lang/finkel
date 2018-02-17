@@ -2,7 +2,6 @@
 
 module MakeTest
   ( makeTests
-  , initSession
   , removeArtifacts
   ) where
 
@@ -65,7 +64,9 @@ buildFile pre paths =
   before_ (removeArtifacts odir) $
   describe ("files " ++ intercalate ", " paths) $
     it "should compile successfully" $ do
-      ret <- runSkc (pre >> make' targets False Nothing)
+      ret <- runSkc (do pre
+                        initSessionForMake
+                        make' targets False Nothing)
                     (initialSkEnv {envSilent = True})
       ret `shouldBe` Right ()
   where
@@ -85,12 +86,6 @@ removeArtifacts dir = do
     removeObjAndHi file =
       when (takeExtension file `elem` [".o", ".hi"])
            (removeFile (dir </> file))
-
-initSession :: Skc ()
-initSession = do
-  dflags <- getSessionDynFlags
-  _ <- setSessionDynFlags (dflags {ghcMode=CompManager})
-  return ()
 
 buildPackage :: String -> Spec
 buildPackage name =

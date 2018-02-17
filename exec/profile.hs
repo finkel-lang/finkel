@@ -51,7 +51,9 @@ parseHsModule path =
 
 doMake :: [FilePath] -> IO ()
 doMake files =
-  do let act = Make.make (zip files (repeat Nothing)) False Nothing
+  do let act = do
+           Make.initSessionForMake
+           Make.make (zip files (repeat Nothing)) False Nothing
      ret <- Run.runSkc act Run.initialSkEnv
      case ret of
        Left err -> putStrLn err

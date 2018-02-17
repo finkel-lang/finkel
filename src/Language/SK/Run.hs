@@ -21,7 +21,6 @@ module Language.SK.Run
 -- base
 import Control.Exception ( AsyncException(..), Exception(..)
                          , IOException)
-import Control.Monad (void)
 import System.Exit (ExitCode(..))
 import Data.Maybe (fromMaybe, maybeToList)
 
@@ -202,6 +201,36 @@ macroFunction mac form = do
              SpecialForm f -> f
   runSkc (fn form) initialSkEnv
 
+-- | Action to type check module.
+--
+-- Error location are derived from 'HsModule', locations precisely match
+-- with S-expression source code, pretty much helpful.
+---
+tcHsModule :: Maybe FilePath -- ^ Source of the module.
+           -> Bool -- ^ True to generate files, otherwise False.
+           -> HModule -- ^ Module to typecheck.
+           -> Skc TypecheckedModule
+tcHsModule mbfile genFile mdl = do
+  dflags0 <- getDynFlags
+  let fn = fromMaybe "anon" mbfile
+      dflags1 =
+       if genFile
+          then dflags0
+          else dflags0 { hscTarget = HscNothing
+                       , ghcLink = NoLink }
+  setDynFlags dflags1
+  ms <- mkModSummary mbfile mdl
+  let ann = (Map.empty, Map.empty)
+      r_s_loc = mkSrcLoc (fsLit fn) 1 1
+      r_s_span = mkSrcSpan r_s_loc r_s_loc
+      pm = ParsedModule { pm_mod_summary = ms
+                        , pm_parsed_source = L r_s_span mdl
+                        , pm_extra_src_files = [fn]
+                        , pm_annotations = ann }
+  tc <- typecheckModule pm
+  setDynFlags dflags0
+  return tc
+
 -- | Make 'ModSummary'. 'UnitId' is main unit.
 mkModSummary :: GhcMonad m => Maybe FilePath -> HModule
              -> m ModSummary
@@ -263,34 +292,3 @@ isHsSource :: FilePath -> Bool
 isHsSource path = "hs" == suffix
   where
     suffix = reverse (takeWhile (/= '.') (reverse path))
-
--- | Action to type check module.
---
--- Error location are derived from 'HsModule', locations precisely match
--- with S-expression source code, pretty much helpful.
----
-tcHsModule :: Maybe FilePath -- ^ Source of the module.
-           -> Bool -- ^ True to generate files, otherwise False.
-           -> HModule -- ^ Module to typecheck.
-           -> Skc TypecheckedModule
-tcHsModule mbfile genFile mdl = do
-  let fn = fromMaybe "anon" mbfile
-      exts = languageExtensions (Just Haskell2010)
-  dflags0 <- getSessionDynFlags
-  -- XXX: Does not take care of user specified DynFlags settings.
-  let dflags1 =
-       if genFile
-          then dflags0 {hscTarget = HscAsm, ghcLink = LinkBinary}
-          else dflags0 {hscTarget = HscNothing, ghcLink = NoLink}
-  setDynFlags (foldl xopt_set dflags1 exts)
-  ms <- mkModSummary mbfile mdl
-  let ann = (Map.empty, Map.empty)
-      r_s_loc = mkSrcLoc (fsLit fn) 1 1
-      r_s_span = mkSrcSpan r_s_loc r_s_loc
-      pm = ParsedModule { pm_mod_summary = ms
-                        , pm_parsed_source = L r_s_span mdl
-                        , pm_extra_src_files = [fn]
-                        , pm_annotations = ann }
-  tc <- typecheckModule pm
-  setDynFlags dflags0
-  return tc

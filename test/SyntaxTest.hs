@@ -22,11 +22,11 @@ import Language.SK.Make
 import Language.SK.Run
 import Language.SK.SKC
 
-import MakeTest (initSession, removeArtifacts)
+import MakeTest (removeArtifacts)
 
 readCode :: FilePath -> IO (Bool, Maybe HModule, Maybe SPState)
 readCode src = do
-  let go = do initSession
+  let go = do initSessionForMake
               (mdl, st) <- compileSkModule src
               ret <- tcHsModule (Just src) False mdl
               return (ret, mdl, st)
@@ -56,7 +56,9 @@ mkTest path = do
       result `shouldBe` True
 
     it "should compile with skc" $ do
-      let task = make [(path, Nothing)] False (Just aDotOut)
+      let task = do
+            initSessionForMake
+            make [(path, Nothing)] False (Just aDotOut)
       ret <- runSkc task skEnv
       ret `shouldBe` Right ()
 
@@ -68,7 +70,7 @@ mkTest path = do
 
     it "should emit Haskell source" $ do
       let gen = do
-            initSession
+            initSessionForMake
             (mdl, sp) <- compileWithSymbolConversion path
             genHsSrc sp (Hsrc mdl)
       src <- runSkc gen skEnv

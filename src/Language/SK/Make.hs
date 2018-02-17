@@ -1,17 +1,19 @@
 {-# LANGUAGE BangPatterns, CPP #-}
 -- | Make mode for skc.
 module Language.SK.Make
-  ( make
-  , asModuleName
+  ( asModuleName
+  , make
+  , initSessionForMake
   , TargetSource(..)
   ) where
 
 -- base
-import Control.Monad (unless, void)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Char (isUpper)
 import Data.List (find)
 import Data.Maybe (catMaybes, fromMaybe)
+import System.IO (fixIO)
 
 -- bytestring
 import qualified Data.ByteString.Lazy as BL
@@ -26,6 +28,10 @@ import qualified Lexer as GHCLexer
 import qualified Maybes as Maybes
 import ErrUtils (withTiming)
 import Outputable (text)
+import HscMain (dumpIfaceStats)
+import HscTypes (ModIface, ModDetails)
+import TcIface (typecheckIface)
+import TcRnMonad (initIfaceLoad)
 
 -- directory
 import System.Directory (doesFileExist)
@@ -73,14 +79,14 @@ make :: [(FilePath, Maybe Phase)] -- ^ List of input file and phase
      -> Maybe FilePath -- ^ Output file, if any.
      -> Skc ()
 make inputs no_link mb_output = do
-
   -- Setting ghcMode as done in ghc's "Main.hs".
   dflags <- getSessionDynFlags
-  _ <- setSessionDynFlags (dflags { ghcMode = CompManager
-                                  , outputFile = mb_output })
+  setDynFlags (dflags { ghcMode = CompManager
+                      , outputFile = mb_output })
   debugIO
     (do putStrLn ";;; make:"
         putStrLn (";;;   ghcLink=" ++ show (ghcLink dflags))
+        putStrLn (";;;   hscTarget=" ++ show (hscTarget dflags))
         putStrLn (";;;   ways=" ++ show (ways dflags)))
 
   -- Preserve the language extension values in initial dynflags to
@@ -92,8 +98,8 @@ make inputs no_link mb_output = do
   -- Decide the kind of sources of the inputs.
   sources <- mapM findTargetSource inputs
 
-  -- XXX: Assuming modules names were passed as arguments, but inputs
-  -- could be file paths.
+  -- Assuming modules names were passed as arguments, inputs could be
+  -- file paths, or module names.
   let to_compile = map fst inputs
 
   -- Do the compilation work.
@@ -108,6 +114,12 @@ make inputs no_link mb_output = do
         flattenSCCs (topSortModuleGraph True mod_summaries Nothing)
   unless no_link (doLink mgraph_flattened)
 
+-- | Calls 'GHC.setSessionDynFlags' to initialize session.
+initSessionForMake :: Skc ()
+initSessionForMake = do
+  -- Returned list of 'InstalledUnitId's are ignored.
+  _ <- getSessionDynFlags >>= setSessionDynFlags
+  return ()
 
 -- ---------------------------------------------------------------------
 --
@@ -185,6 +197,8 @@ make' not_yet_compiled readys0 pendings0 = do
          (go [] total total not_yet_compiled readys0 pendings0)
   where
     -- No more modules to compile, return the accumulated ModSummary.
+    go :: [ModSummary] -> Int -> Int -> [String] -> [TargetUnit]
+       -> [TargetUnit] -> Skc [ModSummary]
     go acc i _  _  _  _ | i <= 0 = return acc
     go acc _ _ []  _  _ = return acc
     go acc _ _  _ [] [] = return acc
@@ -319,7 +333,7 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
 doMakeOne :: Int -> Int -> ModSummary
           -> HsModule RdrName -> Skc ModSummary
 doMakeOne i total ms hmdl = do
-  dflags_orig <- getSessionDynFlags
+  dflags_orig <- getDynFlags
   let dflags = ms_hspp_opts ms
       p x = showSDoc dflags (ppr x)
       loc = ms_location ms
@@ -327,6 +341,7 @@ doMakeOne i total ms hmdl = do
       e2mb x = case x of
                  Right a -> Just a
                  Left _  -> Nothing
+
   silent <- fmap envSilent getSkEnv
   unless silent
     (liftIO
@@ -353,10 +368,8 @@ doMakeOne i total ms hmdl = do
 dontMakeOne :: ModSummary -> HsModule RdrName -> Skc ModSummary
 dontMakeOne ms hmdl = do
   hsc_env <- getSession
-  tcm <- tcHsModule (Just (ms_hspp_file ms)) False hmdl
   let mn = ms_mod_name ms
       loc = ms_location ms
-      (tcg, _details) = tm_internals_ tcm
 
   -- Load linkable and interface file, if exist.
   mb_linkable <-
@@ -375,11 +388,22 @@ dontMakeOne ms hmdl = do
   hmi <-
     case mb_mbs_hifile of
       Just (Maybes.Succeeded hi) -> do
-        mdetails <- liftIO (makeSimpleDetails hsc_env tcg)
-        return HomeModInfo { hm_iface = hi
-                           , hm_details = mdetails
-                           , hm_linkable = mb_linkable }
-      _ ->
+        -- Found interface file. Doing similar work done in
+        -- 'HscMain.hscInrementalCompile'. See note [Knot-tying
+        -- typecheckIface] in "compiler/iface/TcIface.hs".
+        liftIO (fixIO (\hmi' ->
+          do let hsc_env' =
+                   hsc_env { hsc_HPT = addToHpt (hsc_HPT hsc_env)
+                                                (ms_mod_name ms)
+                                                hmi'}
+             details <- genModDetails hsc_env' hi
+             return HomeModInfo { hm_details = details
+                                , hm_iface = hi
+                                , hm_linkable = mb_linkable }))
+      _ -> do
+        -- No interface file found, generating from parsed HsModule.
+        tcm <- tcHsModule (Just (ms_hspp_file ms)) False hmdl
+        let (tcg, _details) = tm_internals_ tcm
         liftIO (compileOne' (Just tcg) (Just batchMsg) hsc_env ms
                             1 1 Nothing mb_linkable
                             SourceUnmodifiedAndStable)
@@ -388,6 +412,16 @@ dontMakeOne ms hmdl = do
   _ <- setSession hsc_env {hsc_HPT = hpt'}
   _ <- liftIO (addHomeModuleToFinder hsc_env mn loc)
   return ms
+
+-- | Same as 'HscMain.genModDetails' but writing here again, because the
+-- function is not exported ...
+genModDetails :: HscEnv -> ModIface -> IO ModDetails
+genModDetails hsc_env old_iface = do
+  new_details <- {-# SCC "tcRnIface" #-}
+    initIfaceLoad hsc_env (typecheckIface old_iface)
+  dumpIfaceStats hsc_env
+  return new_details
+
 
 -- [Avoiding Recompilation]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -520,7 +554,8 @@ mkReadTimeModSummary (target, mbphase) =
     SkSource file mn _form sp -> do
       let modName = mkModuleName mn
           imports = map (noLoc . mkModuleName) (requiredModuleNames sp)
-      fmap Just (mkModSummary' (Just file) modName imports Nothing)
+      ms <- mkModSummary' (Just file) modName imports Nothing
+      return (Just ms)
     OtherSource _ -> return Nothing
 
 compileToHsModule :: TargetUnit
