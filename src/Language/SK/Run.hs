@@ -9,6 +9,7 @@ module Language.SK.Run
   , compileSkModule
   , compileSkModuleForm
   , compileWithSymbolConversion
+  , getDynFlagsFromSPState
   , setDynFlagsFromSPState
   , parseSexprs
   , buildHsSyn
@@ -30,9 +31,6 @@ import qualified Data.ByteString.Lazy as BL
 -- containers
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
-
--- ghc
-import GHC (parseDynamicFlags)
 
 -- ghc-paths
 import GHC.Paths (libdir)
@@ -162,17 +160,24 @@ compileSkModuleForm form = do
   expanded <- withExpanderSettings (expands form)
   buildHsSyn parseModule expanded
 
--- | Set language extensions in current 'Skc' from given 'SPState'.
-setDynFlagsFromSPState :: SPState -> Skc DynFlags
-setDynFlagsFromSPState sp = do
+-- | Get language extensions in current 'Skc' from given 'SPState'.
+getDynFlagsFromSPState :: SPState -> Skc DynFlags
+getDynFlagsFromSPState sp = do
   dflags0 <- getSessionDynFlags
   -- Adding "-X" to 'String' representation of 'LangExt' data type, as
   -- done in 'HeaderInfo.checkExtension'.
   let mkx = fmap (("-X" ++) . show)
-  (dflags1,_,_) <- parseDynamicFlags dflags0 (map mkx (langExts sp))
-  (dflags2,_,_) <- parseDynamicFlags dflags1 (ghcOptions sp)
-  setDynFlags dflags2
+      exts = map mkx (langExts sp)
+  (dflags1,_,_) <- parseDynamicFilePragma dflags0 exts
+  (dflags2,_,_) <- parseDynamicFilePragma dflags1 (ghcOptions sp)
   return dflags2
+
+-- | Set language extensions in current 'Skc' from given 'SPState'.
+setDynFlagsFromSPState :: SPState -> Skc DynFlags
+setDynFlagsFromSPState sp = do
+  dflags <- getDynFlagsFromSPState sp
+  setDynFlags dflags
+  return dflags
 
 asHaskellSymbols :: Code -> Code
 asHaskellSymbols = f1

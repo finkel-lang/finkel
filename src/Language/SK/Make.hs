@@ -20,7 +20,6 @@ import qualified Data.ByteString.Lazy as BL
 
 -- container
 import Data.Graph (flattenSCCs)
-import qualified Data.IntSet as IntSet
 
 -- ghc
 import qualified Parser as GHCParser
@@ -80,7 +79,7 @@ make :: [(FilePath, Maybe Phase)] -- ^ List of input file and phase
      -> Skc ()
 make inputs no_link mb_output = do
   -- Setting ghcMode as done in ghc's "Main.hs".
-  dflags <- getSessionDynFlags
+  dflags <- getDynFlags
   setDynFlags (dflags { ghcMode = CompManager
                       , outputFile = mb_output })
   debugIO
@@ -315,18 +314,27 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
     label = "MakeOne [" ++ mname ++ "]"
     mname = moduleNameString (ms_mod_name ms)
     go = do
+      -- Keep current DynFlag.
+      dflags <- getDynFlags
+
       -- Use cached dynflags from ModSummary before type check. Note
       -- that the cached dynflags is always used, no matter whether the
       -- module is updated or not. This is to support loading already
       -- compiled module objects with language extensions not set in
-      -- currency dynflags.
+      -- current dynflags.
       setDynFlags (ms_hspp_opts ms)
-
       up_to_date <- checkUpToDate ms graph_upto_this
       ms' <- if up_to_date
                then dontMakeOne ms hmdl
                else doMakeOne (total - i + 1) total ms hmdl
-      modifySession (\e -> e {hsc_mod_graph = ms' : hsc_mod_graph e})
+
+      -- Update module graph with new ModSummary, and restore the
+      -- original DynFlags.
+      modifySession
+        (\e -> e { hsc_mod_graph = ms' : hsc_mod_graph e
+                 , hsc_dflags = dflags
+                 , hsc_IC = (hsc_IC e) {ic_dflags=dflags}})
+
       return ms'
 
 -- | Compile single module.
@@ -534,7 +542,10 @@ getModSummary' name = ghandle handler (Just <$> getModSummary name)
 
 -- | Make list of 'ModSummary' for read time dependency analysis.
 mkReadTimeModSummaries :: [TargetUnit] -> Skc [ModSummary]
-mkReadTimeModSummaries = fmap catMaybes . mapM mkReadTimeModSummary
+mkReadTimeModSummaries =
+  timeIt "mkReadTimeModSummaries" .
+  fmap catMaybes .
+  mapM mkReadTimeModSummary
 
 -- | Make 'ModSummary' for read type dependency analysis.
 --
@@ -571,41 +582,20 @@ compileToHsModule (tsrc, mbphase) =
 -- module and 'Dynflags' to update 'ModSummary'.
 compileSkModuleForm' :: SPState -> String -> [Code]
                      -> Skc (HsModule RdrName, DynFlags)
-compileSkModuleForm' sp mn forms = withPreservedDynFlags act
+compileSkModuleForm' sp mn forms = do
+  dflags <- getDynFlagsFromSPState sp
+  mdl <- withTempSession (\e -> e {hsc_dflags = dflags}) act
+  return (mdl, dflags)
   where
     act = do
-      -- Update the flags again with extensions and ghc options from
-      -- current SKSource file.
-      dflags <- setDynFlagsFromSPState sp
-
       -- Reset macros in current context.
       resetEnvMacros
 
       contextModules <- envContextModules <$> getSkEnv
       let ii = IIDecl . simpleImportDecl . mkModuleNameFS
       setContext (map (ii . fsLit) contextModules)
-      mdl <- timeIt ("SkModule [" ++ mn ++ "]")
-                    (compileSkModuleForm forms)
-      return (mdl, dflags)
-
--- | Save 'DynFlags', reset the 'DynFlags' from language extensions set
--- from command line, then run given action, and then set the saved
--- 'DynFlags' and return the result of given action.
-withPreservedDynFlags :: Skc a -> Skc a
-withPreservedDynFlags work = do
-  dflags_orig <- getSessionDynFlags
-  (lang, extFlags) <- envDefaultLangExts <$> getSkEnv
-  let exts = map toEnum (IntSet.toList extFlags)
-      dflags0 = defaultDynFlags (settings dflags_orig)
-      dflags1 = lang_set dflags0 lang
-      dflags2 = foldl xopt_set dflags1 exts
-  setDynFlags
-    (dflags_orig { language = lang
-                 , extensions = extensions dflags2
-                 , extensionFlags = extensionFlags dflags2})
-  ret <- work
-  setDynFlags dflags_orig
-  return ret
+      timeIt ("SkModule [" ++ mn ++ "]")
+             (compileSkModuleForm forms)
 
 resetEnvMacros :: Skc ()
 resetEnvMacros =
@@ -690,7 +680,7 @@ doLink mgraph = do
 -- | Set 'dumpPrefix' from file path.
 setDumpPrefix :: FilePath -> Skc ()
 setDumpPrefix path = do
-  dflags0 <- getSessionDynFlags
+  dflags0 <- getDynFlags
   let (basename, _suffix) = splitExtension path
       dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
   setDynFlags dflags1

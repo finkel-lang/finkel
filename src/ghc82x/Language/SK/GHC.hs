@@ -170,6 +170,7 @@ module Language.SK.GHC
 
     -- * GhcMonad
     modifySession,
+    withTempSession,
 
     -- * HeaderInfo
     getOptionsFromFile,
