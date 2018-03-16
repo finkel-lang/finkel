@@ -1,0 +1,7 @@
+(require M3)
+
+(module Main)
+
+(:: main (IO ()))
+(= main
+  (greet "From main4.main"))

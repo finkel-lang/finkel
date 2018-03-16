@@ -1,0 +1,22 @@
+(module P01.G1)
+
+(import Language.SK)
+
+;;; Simple definition of `defmacro' used in `p01' package.
+(define-macro defmacro form
+  (case (unLForm form)
+    (L _ (List [_ name args body]))
+    (case (unLForm args)
+      (L l1 (List _))
+      (let ((= body'
+              `(define-macro ,name form
+                 (case (unLForm form)
+                   (L l2 (List [_ ,@args])) (return ,body)
+                   _ (failS (++ (show ',name) ": error"))))))
+        (return body'))
+      (L l1 (Atom _))
+      (let ((= body'
+              `(define-macro ,name ,args
+                 (return ,body))))
+        (return body')))
+    _ (failS (++ (showLoc form) "defmacro: error"))))

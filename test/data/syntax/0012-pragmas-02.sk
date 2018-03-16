@@ -1,0 +1,90 @@
+;;; Form containing language pragmas.
+
+#p(LANGUAGE DeriveDataTypeable
+            DeriveFoldable
+            DeriveFunctor
+            DeriveGeneric
+            DeriveTraversable
+            GADTs
+            GeneralizedNewtypeDeriving
+            OverloadedLists
+            OverloadedStrings)
+
+(module Main)
+
+(import Data.Data)
+(import GHC.Generics)
+(import Data.ByteString ((ByteString)))
+(import Data.Set ((Set)))
+
+;;; DeriveDataTypeable
+(data (D1 a)
+  (D1 a a)
+  (deriving (Eq Show Data Typeable)))
+
+;;; DeriveFunctor
+(data (D2 a)
+  (D2 a)
+  (deriving (Eq Show Functor)))
+
+;;; DeriveGeneric
+(data (D3 a)
+  (D3 a)
+  (deriving (Eq Show Generic)))
+
+;;; DeriveFoldable, DeriveTraversable
+(data (Lst a)
+  Nil
+  (Cons a (Lst a))
+  (deriving (Eq Show Functor Foldable Traversable)))
+
+;;; GADTs
+
+(data (Expr a)
+  (:: I (-> Int (Expr Int)))
+  (:: B (-> Bool (Expr Bool)))
+  (:: Add (-> (Expr Int) (Expr Int) (Expr Int)))
+  (:: Mul (-> (Expr Int) (Expr Int) (Expr Int)))
+  (:: Eq (=> (Eq a) (-> (Expr a) (Expr a) (Expr Bool)))))
+
+(:: eval (-> (Expr a) a))
+(= eval e
+  (case e
+    (I n) n
+    (B b) b
+    (Add x y) (+ (eval x) (eval y))
+    (Mul x y) (* (eval x) (eval y))
+    (Eq x y) (== (eval x) (eval y))))
+
+(:: gadt1 (IO ()))
+(= gadt1
+  (print (eval (Eq (Mul (Add (I 10) (I 11)) (I 2))
+                   (I 42)))))
+
+;;; GeneralizedNewtypeDeriving
+(newtype (N a)
+  (N a)
+  (deriving (Eq Show Num)))
+
+;;; OverloadedString
+(:: f1 ByteString)
+(= f1 "foo")
+
+;;; OverloadedLists
+(:: f2 (Set Char))
+(= f2 [\a \e \i \o \u])
+
+(:: main (IO ()))
+(= main
+  (do (print (typeOf (D1 True False)))
+      (print (dataTypeOf (D1 \a \b)))
+      (print (fmap succ (D2 (:: 41 Int))))
+      (print (from (D3 False)))
+      (let ((:: l1 (Lst Int))
+            (= l1 (Cons 1 (Cons 2 (Cons 3 Nil))))))
+      (print (foldr + 0 l1))
+      (sequence_ (fmap print l1))
+      gadt1
+      (print (+ (N (:: 20 Int)) (N 22)))
+      (print f1)
+      (print f2)))

@@ -1,0 +1,7 @@
+;;;; -*- mode: sk -*-
+
+(module Main)
+
+(:: main (IO ()))
+(= main
+  (putStrLn "From main1.sk"))

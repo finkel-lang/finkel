@@ -1,0 +1,74 @@
+;;;; -*- mode: sk -*-
+
+;;; Expression to test name shadowing with conflictinging names bounded
+;;; to macro with `let-macro' and locally declared function with `let'.
+
+(let-macro ((foo (LForm (L _ (List [_ body])))
+              (return `(++ "let-macro: " ,body))))
+  (all id [(== (foo "bar")
+               "let-macro: bar")
+
+           ;; Bind `foo' to locally declared function.
+           (== (let ((= foo body
+                       (++ "let: " body)))
+                 (foo "bar"))
+               "let: bar")
+
+           ;; The macro `foo' is still in current scope.
+           (== (foo "bar")
+               "let-macro: bar")
+
+           ;; Bind `foo' with pattern matching.
+           (== (let ((= (: foo _)
+                       ["local let"
+                        "local bar"
+                        "local buzz"]))
+                 foo)
+               "local let")
+           (== (let ((= (@ bar (Just foo))
+                       (return "let: bar")))
+                 foo)
+               "let: bar")
+           (== (let ((= (@ foo (Just bar))
+                       (return "let: bar")))
+                 foo)
+               (Just "let: bar"))
+           (== (let ((= [foo _ _]
+                       ["let: bar" "" ""]))
+                 foo)
+               "let: bar")
+
+           ;; Bind `foo' to function binding argument.
+           (== (let ((= f1 foo
+                       (foo "bar")))
+                 (f1 (++ "let: ")))
+               "let: bar")
+
+           ;; Bind `foo' to lambda argument.
+           (== (let ((= f2
+                       (\ foo (foo "bar"))))
+                 (f2 (++ "let: ")))
+               "let: bar")
+
+           ;; Pattern match in `case' expression
+           (== (case (Just (++ "let: "))
+                 (Just foo) (foo "bar")
+                 _          "blahblah")
+               "let: bar")
+
+           (== (case (Just (++ "let: "))
+                 (Just foo) (where bar
+                              (= bar (foo "bar")))
+                 _          "")
+               "let: bar")
+
+           ;; Shadowing with `where'
+           (== (case ()
+                 _ (where (foo "bar")
+                     (= foo (++ "let: "))))
+               "let: bar")
+           (== (case ()
+                 _ (where (bar "bar")
+                     (= bar foo
+                       (++ "let: " foo))))
+               "let: bar")]))

@@ -1,0 +1,11 @@
+(module P01.A)
+
+(import P01.B)
+(import P01.C)
+(import P01.D)
+(import P01.H)
+(import P01.J)
+
+(:: p01a [String])
+(= p01a
+  (concat [["p01a" p01b p01c] p01d p01h [p01j]]))

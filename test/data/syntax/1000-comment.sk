@@ -1,0 +1,56 @@
+;;; -*- mode: sk -*-
+
+;;;; | File with documentation header comments.
+;;;;
+;;;; Some more documentation strings in consequent lines. Some more
+;;;; documentation strings in consequent lines. Some more documentation
+;;;; strings in consequent lines.
+;;;;
+;;;; Foo foo foo foo. Foo foo foo foo. Foo foo foo foo. Foo foo foo
+;;;; foo. Foo foo foo foo. Foo foo foo foo. Foo foo foo foo. Foo foo foo
+;;;; foo.
+
+(module Main)
+
+#|
+
+Sample block comment. All literals between character sequence `#' `|',
+and `|' `#' are block comment. Block comments understand UNICODE
+characters:
+
+- 我能吞下玻璃而不伤身体。
+- ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ
+- მინას ვჭამ და არა მტკივა.
+
+|#
+
+;;; | Main entry function.
+(= main
+  ;; This is not a documentation comment.
+  (foo "Module with doc comments."))
+
+;;; | Comment for function foo.
+(= foo str
+  (>> (putStrLn str)
+      (bar 15 27)))
+
+;;; | Comment for function bar.
+;;;
+;;; This comment spans multiple lines. Bar bar bar bar bar bar bar bar
+;;; bar bar bar bar bar bar bar bar bar bar.
+;;;
+;;; Bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar
+;;; bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar bar
+;;; bar bar bar.
+;;;
+(= bar a b
+  (putStrLn (++ "From bar: " (show (+ a b)))))
+
+
+;;; | Comment for function buzz.
+;;;
+;;; This comment is written on the line above type signature of buzz.
+;;;
+(:: buzz (-> Int Int))
+(= buzz n
+  (+ n n))

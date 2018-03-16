@@ -1,0 +1,377 @@
+;;;; Forms containing type declarations.
+
+(module Main)
+
+;;; 4.2 User-Defined Datatypes
+
+;;; 4.2.1 Algebraic Datatype Declarations
+
+(data MyData1
+  (MyD1Con1 Int Bool ())
+  (MyD1Con2 [(, Int Int)] Double Char)
+  (deriving (Eq Show)))
+
+(data (MyData2 a b)
+  (MyD2Con1 a b)
+  (MyD2Con2 a a Bool)
+  (deriving (Eq Show)))
+
+(data (MyData3 a)
+  (MyD3Con1 {d3f1 a
+             d3f2 (Maybe FilePath)})
+  (MyD3Con2 Int Int Int)
+  (MyD3Con3 {(d3f1 d3f1b d3f1c) a
+             d3f4 (Either Bool Char)})
+  (deriving (Eq Show)))
+
+(data MyData4
+  M4A M4B M4C M4D
+  (deriving (Eq Show Enum)))
+
+;;; Empty data declaration.
+(data MyData5)
+
+(instance (Show MyData5)
+  (= show _ "MyData5"))
+
+;;; Strictness Flags
+(data MyData6
+  (M6L Int)
+  (M6S1 (! Int))
+  (M6S2 (! (Maybe Int)))
+  (deriving (Eq Show)))
+
+(data MyData7
+  (M7a {m7aF1 (! Int)
+        m7aF2 (! (Maybe String))})
+  (deriving (Eq Show)))
+
+;; Using non-reserved special type variable names.
+(data (MyData8 as ccall forall hiding qualified)
+  (M8a as ccall forall hiding qualified)
+  (deriving (Eq Show)))
+
+(:: s4_2_1 (IO ()))
+(= s4_2_1
+  (do (print (MyD1Con1 123 True ()))
+      (print (MyD1Con2 [(, 1 2) (, 3 4)] 1.23 \z))
+      (print [(MyD2Con1 (:: 123 Int) \z)
+              (MyD2Con2 (:: 789 Int) 0 False)])
+      (print (MyD3Con1 \x (Just "/foo/bar")))
+      (print (:: (MyD3Con2 1 2 3) (MyData3 Double)))
+      (print (MyD3Con3 \a \b \c (Right \z)))
+      (print [M4A M4B M4C])
+      (print (:: undefined MyData5))
+      (print [(M6L 42) (M6S1 42) (M6S2 Nothing)])
+      (print (M7a {m7aF1 100 m7aF2 (Just "strict Maybe field")}))
+      (print (M8a True True True True True))))
+
+;;; 4.2.2 Type Synonym Declarations
+
+(type (Synonym1 a) (Maybe (Either String a)))
+(type Synonym2 (Synonym1 Int))
+
+(:: syn1a (Synonym1 Bool))
+(= syn1a (Just (Left "syn1a")))
+
+(:: syn2a Synonym2)
+(= syn2a Nothing)
+
+(:: s4_2_2 (IO ()))
+(= s4_2_2
+  (do (print syn1a)
+      (print syn2a)))
+
+;;; 4.2.3 Datatype Renamings
+
+(newtype (N1 a) (N1 a))
+
+(instance (=> (Show a) (Show (N1 a)))
+  (= show (N1 a)
+    (++ "N1 " (show a))))
+
+(newtype (N2 a) (N2 a) (deriving (Eq Show)))
+
+(newtype (N3 a) (N3 {unN3 a}))
+
+(instance (=> (Show a) (Show (N3 a)))
+  (= show (N3 a)
+    (++ "N3 " (show a))))
+
+(newtype (N4 a) (N4 {unN4 a}) (deriving (Eq Show)))
+
+(:: s4_2_3 (IO ()))
+(= s4_2_3
+  (do (print (N1 1))
+      (print (N2 2))
+      (print (N3 3))
+      (print (N4 4))))
+
+(:: s4_2 (IO ()))
+(= s4_2
+  (do s4_2_1
+      s4_2_2
+      s4_2_3))
+
+;;; 4.3 Type Classes and Overloading
+
+;;; 4.3.1 Class Declarations
+
+;;; Simple type class.
+(class (MyShow a)
+  (:: myShow (-> a String)))
+
+;;; Instance declaration of `MyShow' for `Bool'.
+(instance (MyShow Bool)
+  (= myShow b
+    (case b
+      True "t"
+      False "f")))
+
+;;; Typeclass with context and default method.
+(class (=> (Show a) (MyShow2 a))
+  (:: myShow2 (-> a String))
+  (= myShow2 show))
+
+(instance (MyShow2 Bool))
+
+(:: s4_3_1 (IO ()))
+(= s4_3_1
+  (do (print (map myShow [True False]))
+      (print (map myShow2 [True False]))))
+
+;;; 4.3.2 Instance Declarations
+
+(data (MyFnct a)
+  (MyFnct {unMyFnct a})
+  (deriving (Eq Show)))
+
+(instance (Functor MyFnct)
+  (= fmap f (MyFnct a)
+    (MyFnct (f a))))
+
+(data (EmptyContext a) (EmptyContext Int))
+
+(instance (=> () (Show (EmptyContext a)))
+  (= show (EmptyContext n)
+    (++ "EmptyContext " (show n))))
+
+(data (MCs a b) (MCs a b))
+
+(instance (=> (Show a) (Show b) (Show (MCs a b)))
+  (= show (MCs a b)
+    (concat ["MCs " (show a) " " (show b)])))
+
+(class (C1 c)
+  (:: c1m1 (-> (c a) String)))
+
+(instance (C1 [])
+  (= c1m1 li
+    (case li
+      [] "null"
+      _  "list")))
+
+(:: s4_3_2 (IO ()))
+(= s4_3_2
+  (do (print (fmap (* 2) (MyFnct 21)))
+      (print (EmptyContext 42))
+      (print (MCs True \a))
+      (putStrLn (c1m1 []))
+      (putStrLn (c1m1 [() () ()]))))
+
+;;; 4.3.4 Ambiguous Types, and Defaults for Overloaded Numeric Options
+
+(default Integer Double)
+
+(:: s4_3 (IO ()))
+(= s4_3
+  (do s4_3_1
+      s4_3_2))
+
+
+;;; 4.4 Nested Declarations
+
+;;; 4.4.1 Type signatures
+
+;; Unit type.
+(:: ts1 ())
+(= ts1 ())
+
+;;; Simple function type.
+(:: ts2 (-> String (IO ())))
+(= ts2 str
+  (putStrLn (++ "From ts2: " str)))
+
+;;; Another function type, taking multiple arguments.
+(:: ts3 (-> Int (-> Bool (-> String (IO ())))))
+(= ts3 i b s
+  (do (putStrLn (++ "Int: " (show i)))
+      (putStrLn (++ "Bool: " (show b)))
+      (putStrLn (++ "String: " (show s)))))
+
+;;; Function type operator '->' takes variable arguments, explicit
+;;; parentheses are optional.
+(:: ts3b (-> Int Bool String (IO ())))
+(= ts3b i b s
+  (do (putStrLn (++ "Int: " (show i)))
+      (putStrLn (++ "Bool: " (show b)))
+      (putStrLn (++ "String: " (show s)))))
+
+;;; Function taking higher order function.
+(:: ts4 (-> (-> Int Int) Int))
+(= ts4 f
+  (f 6))
+
+;;; Function taking list.
+(:: ts5 (-> [Int] (IO ())))
+(= ts5 xs
+  (mapM_ print xs))
+
+;;; Function with type variables.
+(:: ts6 (-> a [b] Int))
+(= ts6 x ys
+  (length ys))
+
+;;; Type signature with context.
+(:: ts7 (=> (Show a) (-> a String)))
+(= ts7 x
+  (++ (show x) (++ ", " (show x))))
+
+;;; Another type signature with context.
+(:: ts8 (=> (Functor f) (Show a) (-> (f a) (f String))))
+(= ts8 m
+  (fmap ts7 m))
+
+(:: s4_4_1 (IO ()))
+(= s4_4_1
+  (do (print ts1)
+      (ts2 "BAR")
+      (ts3 1 True "buzz")
+      (ts3b 2 False "buzzz")
+      (print (ts4 (\ n (* (+ n 1) n))))
+      (ts5 [1 2 3])
+      (print (ts6 True [1 2 3]))
+      (putStrLn (ts7 False))
+      (print (ts8 (Just True)))))
+
+;;; 4.4.2 Fixity Declarations
+
+(= $^+^$ a b (+ a b))
+(= $^-^$ a b (- a b))
+(= $^*^$ a b (* a b))
+(= $^/^$ a b (/ a b))
+
+(infixl 6 $^+^$)
+(infixl 6 $^-^$)
+(infixl 7 $^*^$ $^/^$)
+
+(:: s4_4_2 (IO ()))
+(= s4_4_2
+  (print ($^*^$ ($^+^$ 3 4) ($^/^$ 48 8))))
+
+;;; 4.4.3 Function and Pattern Bindinds
+
+;;; 4.4.3.1 Function bindings
+
+;;; Function without guards.
+(:: fpb0 (-> Int String))
+(= fpb0 n
+  (++ "f0 got " (show n)))
+
+;;; Function with guards.
+(:: fpb1 (-> Int String))
+(= fpb1 n
+  (| ((even n) "even")
+     (otherwise "odd")))
+
+;;; Function with pattern guards.
+(:: fpb2 (-> (Maybe Int) (Maybe Int) String))
+(= fpb2 a b
+  (| ((<- (Just n) a) (<- (Just m) b) (even n) (even m)
+      "f2: got two even numbers.")
+     ((<- (Just n) a) (<- (Just m) b)
+      (++ "f2: got two numbers, sum = " (show (+ n m))))
+     ((<- (Just n) a)
+      "f2: b was nothing.")
+     ((<- (Just n) b)
+      "f2: a was nothing")
+     (otherwise
+      "f2: no numbers.")))
+
+(:: fpb3 [String])
+(= fpb3 ["string" "expression" "without" "guards"])
+
+;;; Function with `where'
+(:: fpb4 (-> Char Int String))
+(= fpb4 c n
+  (where (f n)
+    (= f x
+      (replicate x c))))
+
+;;; Functions with `where', with identical name.
+(:: fpb5 (-> Int Int))
+(= fpb5 k
+  (where (f 0 k)
+    (= f acc 0 acc)
+    (= f acc n (f (+ acc n) (- n 1)))))
+
+;;; Another function with `where', with pattern match.
+(:: fpb6 (-> Int String))
+(= fpb6 n
+  (where (f (lookup n names))
+    (= f Nothing "none")
+    (= f (Just n) n)
+    (= names [(, 1 "one") (, 2 "two") (, 3 "three")])))
+
+;;; 4.4.3.2 Pattern Bindings
+
+(:: (xs ys) [Int])
+(= (, xs ys)
+  (break (> 5) (enumFromTo 1 10)))
+
+(:: addJust (-> Int Int (Maybe Int)))
+(= addJust a b (Just (+ a b)))
+
+(:: tpb1 Int)
+(= (Just tpb1) (addJust 16 27))
+
+(:: tpb2 Int)
+(= [_ _ tpb2 _]
+  (enumFromTo 40 43))
+
+(:: tpb3 Int)
+(= (: tpb3 _)
+  (enumFrom 42))
+
+(:: s4_4_3 (IO ()))
+(= s4_4_3
+  (do (putStrLn (fpb0 42))
+      (putStrLn (fpb1 10))
+      (putStrLn (fpb1 11))
+      (putStrLn (fpb2 (Just 2) (Just 4)))
+      (putStrLn (fpb2 (Just 2) (Just 5)))
+      (putStrLn (fpb2 (Just 100) Nothing))
+      (putStrLn (fpb2 (Nothing) (Just 8)))
+      (putStrLn (fpb2 Nothing Nothing))
+      (print fpb3)
+      (putStrLn (fpb4 \= 30))
+      (print (fpb5 10))
+      (print (fpb6 2))
+      (putStrLn (++ "xs: " (show xs)))
+      (putStrLn (++ "ys: " (show ys)))
+      (putStrLn (++ "tpb1: " (show tpb1)))
+      (putStrLn (++ "tpb2: " (show tpb2)))
+      (putStrLn (++ "tpb3: " (show tpb3)))))
+
+(:: s4_4 (IO ()))
+(= s4_4
+  (do s4_4_1
+      s4_4_2
+      s4_4_3))
+
+;;; Main.
+(:: main (IO ()))
+(= main
+  (do s4_2
+      s4_3
+      s4_4))

@@ -1,0 +1,38 @@
+;;;; Form containing language pragmas, part 2.
+
+;;; `ExistentialQuantification' did not work well with
+;;; `OverloadedLists', so separate test file.
+
+#p(LANGUAGE ExistentialQuantification)
+#p(LANGUAGE RankNTypes)
+
+(module Main)
+
+;;; ExistentialQuantification
+(data AnyShow1
+  (forall a (=> (Show a) (AnyShow1 a))))
+
+(instance (Show AnyShow1)
+  (= show (AnyShow1 a)
+    (concat ["(AnyShow " (show a) ")"])))
+
+(data AnyShow2
+  (forall a b (=> (Show a) (Show b) (AnyShow2 {as2a a as2b b}))))
+
+(instance (Show AnyShow2)
+  (= show (AnyShow2 {as2a a as2b b})
+    (concat ["(AnyShow2 " (show a) " " (show b) ")"])))
+
+;; RankNtypes
+(:: f3 (-> (forall a (-> a a)) (, Char Bool)))
+(= f3 f (, (f \a) (f True)))
+
+(:: main (IO ()))
+(= main
+  (do (print [(AnyShow1 (:: 42 Int))
+              (AnyShow1 False)
+              (AnyShow1 \x)])
+      (print [(AnyShow2 (:: 42 Int) (:: 43 Integer))
+              (AnyShow2 False (Just \x))
+              (AnyShow2 \x "bar")])
+      (print (f3 id))))

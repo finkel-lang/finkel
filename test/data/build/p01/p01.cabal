@@ -1,0 +1,50 @@
+name:                p01
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/githubuser/p01#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2017 Author name here
+category:            Test
+build-type:          Custom
+extra-source-files:  src/P01/*.sk
+cabal-version:       >=1.10
+
+custom-setup
+  setup-depends:       base >= 4.7 && < 5
+                     , Cabal >= 1.10
+                     , sk-kernel
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     P01.A
+                       P01.B
+                       P01.C
+                       P01.D
+                       P01.E
+                       P01.F
+                       P01.G1
+                       P01.G2
+                       P01.H
+                       P01.I
+                       P01.J
+  build-depends:       base >= 4.7 && < 5
+                     , sk-kernel
+  default-language:    Haskell2010
+
+test-suite p01-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , sk-kernel
+                     , p01
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/githubuser/p01

@@ -1,0 +1,14 @@
+;;;; Module using macros defined in `P01.G2'.
+
+;;; [Requiring Home Package Module]
+;;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;;;
+;;; This module contains `require' special form which adds `P01.G2'
+;;; module to the context during macro expansion phase in skc.
+
+(require P01.G2)
+
+(define-p01-module P01.H P01.I)
+
+(define-p01-function p01h [String]
+  ["p01h" p01i])

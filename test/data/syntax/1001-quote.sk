@@ -1,0 +1,43 @@
+;;; Tests for quote, quasiquote, unquote, and unquote-splice.
+
+(module Main)
+
+(import Language.SK)
+
+(= f1 arg
+  (print ['a 'b arg 'd]))
+
+(= f2 arg
+  (print `(a b ,arg d)))
+
+(= f3 arg
+  (print `(a b ,@arg d)))
+
+(:: main (IO ()))
+(= main
+  (do
+    ;; Character "'foo" is same as "(quote foo)".
+    (print 'foo)
+    (print (quote foo))
+
+    ;; Quotes can nest.
+    (print ''foo)
+    (print '''foo)
+
+    ;; Quoting literals
+    (print '"string")
+    (print '42)
+    (print '1.23)
+    (print '\c)
+    (print '[1 2 3])
+    (print '())
+
+    ;; Quasiquote.
+    (print `foo)
+    (print (quasiquote foo))
+
+    (f1 'foo)
+    (f2 'foo)
+    (f3 '(foo bar buzz))
+    (f3 '[\x \y \z])
+    (f3 ['foo 'bar 'buzz])))

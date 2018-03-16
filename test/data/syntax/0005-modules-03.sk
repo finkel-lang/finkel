@@ -1,0 +1,98 @@
+;;; -*- mode: sk -*-
+;;;
+;;; 5.2 Export Lists
+
+(module Main
+  ;; Value entities
+  f1 f3
+
+  ;; Data constructor only ... is impossible. From section 5.2 of
+  ;; Haskell 2010 report:
+  ;;
+  ;;  ... Data cnstructros cannot be named in export lists except as
+  ;;  subordinate names, because they cannot otherwise be distinguished
+  ;;  from type constructors.
+  ;;
+
+  ;; D1A
+
+  ;; Typeclass method only.
+  c1a
+
+  ;; Type constructor only.
+  (D2) (C2)
+
+  ;; Type constructor and all data constructors.
+  (D3 ..) (C3 ..)
+
+  ;; Type constructor and specified data constructors.
+  (D4 D4a D4c) (D5 d5f1 d5f3) (C4 c4a c4c)
+
+  ;; Module re-export
+  (module Data.Char)
+
+  ;; Re-export with qualified renamed module
+  (Mb.Maybe Just Nothing)
+
+  main)
+
+(import Data.Char)
+(import qualified Data.Maybe as Mb)
+
+;; Function values
+
+(:: f1 (-> Int Int))
+(= f1 (+ 1))
+
+(:: f2 (-> Int Int))
+(= f2 (* 2))
+
+(:: f3 (-> Int Int))
+(= f3 (. f1 f2))
+
+;;; Data types
+
+(data D1
+  (D1A Int Int))
+
+(data (D2 a)
+  (D2A a)
+  (D2B a a))
+
+(data (D3 a)
+  (D3a a)
+  (D3b a a)
+  (D3c a a a))
+
+(data (D4 a b c)
+  (D4a a)
+  (D4b b)
+  (D4c c))
+
+(data (D5 a)
+  (D5a {d5f1 a d5f2 a d5f3 Int})
+  (D5b {d5f1 a})
+  (D5c {d5f2 a}))
+
+;;; Typeclasses
+
+(class (C1 a)
+  (:: c1a (-> a String)))
+
+(class (C2 a)
+  (:: c2a (-> a String))
+  (:: c2b (-> a Int)))
+
+(class (C3 a)
+  (:: c3a (-> a String))
+  (:: c3b (-> a Int))
+  (:: c3c (-> a Bool)))
+
+(class (C4 a)
+  (:: c4a (-> a String))
+  (:: c4b (-> a Int))
+  (:: c4c (-> a Bool)))
+
+(:: main (IO ()))
+(= main
+  (putStrLn "Module containing various exports"))
