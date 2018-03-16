@@ -1,0 +1,41 @@
+;;;; Module containing function to redirect stdout to file handle.
+
+(require SK.Core)
+
+(defmodule SK.Repl.IORedirect
+  (use
+   ;; base
+   (Control.Exception)
+   (Data.List (intercalate))
+   (GHC.IO.Handle (hDuplicate hDuplicateTo))
+   (System.IO ((Handle) (SeekMode ..) hFlush hGetLine hSeek
+               hSetFileSize stdout))
+   (System.IO.Error (isEOFError)))
+  (export with-io-redirect))
+
+;;; Execute given action with redirecting stdout to given 'FilePath'.
+(defn (with-io-redirect (-> Handle (IO a) (IO (, a String))))
+  (hdl action)
+  (bracket
+   (do (<- stdout2 (hDuplicate stdout))
+       (hSetFileSize hdl 0)
+       (hSeek hdl AbsoluteSeek 0)
+       (return stdout2))
+   (\ stdout2
+     (hDuplicateTo stdout2 stdout))
+   (const
+    (do (hDuplicateTo hdl stdout)
+        (<- x action)
+        (hFlush stdout)
+        (hSeek hdl AbsoluteSeek 0)
+        (<- contents (get-lines hdl []))
+        (return (, x (intercalate "\n" contents)))))))
+
+(defn (get-lines (-> Handle [String] (IO [String])))
+  (hdl acc)
+  (catch (do (<- l (hGetLine hdl))
+             (get-lines hdl (: l acc)))
+    (\ e
+      (if (isEOFError e)
+          (return (reverse acc))
+          (throwIO e)))))

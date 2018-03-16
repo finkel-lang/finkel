@@ -1,0 +1,174 @@
+;;; Tests for REPL.
+
+(require SK.Core)
+
+(defmodule ReplTest
+  (use
+   ;; base
+   (Control.Concurrent)
+   (Control.Monad (void))
+   (Data.List (intercalate))
+
+   ;; directory
+   (System.Directory (getCurrentDirectory))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; sk-kernel
+   (Language.SK)
+   (Language.SK.Run)
+
+   ;; sk-lang
+   (SK.Repl (repl-env))
+   (SK.Repl.Loop)
+   (SK.Repl.Types))
+
+  (export replTests))
+
+(defdo (replTests Spec)
+  ()
+  (describe "Read" readTests)
+  (describe "Eval" evalTests))
+
+(defdo (readTests Spec)
+  ()
+  (let ((= d describe)))
+  (d "reading single line form"
+     (it "returns '(foo bar buzz)"
+         (do (<- form (run-repl (read-form "(foo bar buzz)")
+                                initial-repl-state))
+             (shouldBe (Just '(foo bar buzz)) form))))
+  (d "reading multi line form"
+     (it "returns '(a b c)"
+         (do (<- form (run-repl (do (read-form "(a ")
+                                    (read-form "b ")
+                                    (read-form "c)"))
+                                initial-repl-state))
+             (shouldBe (Just '(a b c)) form)))))
+
+(defdo (evalTests Spec)
+  ()
+  (let ((= d describe)
+        (= delines (intercalate "\n"))))
+  (<- in-mv (runIO newEmptyMVar))
+  (<- out-mv (runIO newEmptyMVar))
+  (<- (, tmpfile hdl) (runIO make-tmpfile))
+  (<- current-dir (runIO getCurrentDirectory))
+  (<- etid
+    (runIO
+     (forkIO (void (runSkc (eval-loop hdl in-mv) repl-env)))))
+  (let ((= eval-form ok-or-ng form expect
+          (d (concat ["evaluate " (show form)])
+             (it (concat ["evaluates to " (show expect)])
+                 (do (putMVar in-mv (Input Connection form out-mv))
+                     (<- ret (takeMVar out-mv))
+                     (shouldBe ret (ok-or-ng expect))))))
+        (= ok (eval-form Right))
+        (= ng (eval-form Left))
+        (= satisfy form pred
+          (d (concat ["evaluate " (show form)])
+             (it "satisfies predicate"
+                 (do (putMVar in-mv (Input Connection form out-mv))
+                     (<- ret (takeMVar out-mv))
+                     (shouldSatisfy ret pred)))))))
+  (beforeAll_
+   (do (putMVar in-mv (Input Connection init-form out-mv))
+       (void (takeMVar out-mv)))
+   (afterAll_
+    (do (killThread etid)
+        (cleanup-tmpfile (, tmpfile hdl)))
+    (do
+      ;; Statements and declarations
+      (ok '(+ 10 32) "42")
+      (ok '(funcall1 'putStr "foo") "foo")
+      (ok '(defn (foo (-> Int Int))
+            (n)
+            (+ n 1))
+          "; foo :: Int -> Int")
+      (ok '(foo 41) "42")
+      (ok '(begin
+            (:: (x y) Int)
+            (= x 1)
+            (= y 2))
+          "; x :: Int\n; y :: Int")
+      (ok '(<- bar (return True))
+          "; bar :: Bool")
+      (ok '(data Foo (Foo Int))
+          (concat ["; $tcFoo :: TyCon\n"
+                   "; $tc'Foo :: TyCon\n"
+                   "; Type constructor ‘Foo’"]))
+      (ok '(import Control.Monad)
+          "; import Control.Monad")
+
+      ;; REPL macros
+      (ok '(exported-macros Prelude) "[]")
+      (satisfy
+       '(*_ info bindings)
+       (\ ret
+         (case ret
+           (Right str) (elem "foo :: Int -> Int = _" (lines str))
+           _ False)))
+      (ok '(*_ info context)
+          (delines
+           ["; context"
+            ";  IIDecl: import Control.Monad"
+            ";  IIDecl: import SK.Repl.Macro"
+            ";  IIDecl: import SK.Repl.Env"
+            ";  IIDecl: import SK.Prelude"
+            ";  IIDecl: import Prelude"]))
+      (ok '(*_ info dflags)
+          (delines
+           ["; dflags:"
+            ";  ghcLink: LinkInMemory"
+            ";  ghcMode: CompManager"
+            ";  hscTarget: HscInterpreted"
+            ";  objectDir: Nothing"
+            ";  thisInstalledUnitId: main"]))
+      (ok '(begin
+            (*_ set -odir /tmp)
+            (*_ info dflags))
+          (delines
+           ["; dflags:"
+            ";  ghcLink: LinkInMemory"
+            ";  ghcMode: CompManager"
+            ";  hscTarget: HscInterpreted"
+            ";  objectDir: Just \"/tmp\""
+            ";  thisInstalledUnitId: main"]))
+      (satisfy
+       '(*_ info macros)
+       (\ ret
+         (case ret
+           (Right str) (elem ";  defmacro*!" (lines str))
+           _ False)))
+      (ok '(*_ info modules) "")
+      (ok '(*_ info packages)
+          "; packages")
+      (ok '(begin
+            (*_ set -package bytestring)
+            (*_ info packages))
+          (delines
+           ["; packages"
+            ";   -package bytestring"]))
+      (ok '(*_ info paths)
+          (concat
+           ["; current working directory:\n"
+            ";   " current-dir "\n"
+            "; module import search paths:\n"
+            ";    ."]))
+      (ok '(*_ info 'putStr)
+          "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
+      (ok '(*_ browse Unsafe.Coerce)
+          "Unsafe.Coerce.unsafeCoerce :: a -> b")
+      (ok '(*_ pwd) (show current-dir))
+
+      ;; Errors
+      (ng 'buzz
+          (concat ["<interactive>:1:1: error: "
+                   "Variable not in scope: buzz\n"]))
+      (ng '(= f a (+ a 1) (+ a 2))
+          (concat ["<quoted code>: syntax error on input "
+                   "`(= f a (+ a 1) (+ a 2))'\n"]))
+      (ng '(head []) "Prelude.head: empty list")
+      (ng '(*_ info (foo bar))
+          "<quoted code>: error: info: invalid form: (foo bar)\n")))))

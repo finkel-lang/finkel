@@ -1,0 +1,431 @@
+;;;; Fundamental macros.
+
+(module SK.Core
+  ;; Phase control
+  eval-when
+
+  ;; Macros for macros
+  defmacro defmacro! defmacro* defmacro*! macrolet macrolet*
+  macroexpand macroexpand-1 exported-macros
+
+  ;; Function declarations
+  defn defn! defdo
+
+  ;; Expressions
+  cond list
+
+  ;; Module headers
+  defmodule
+
+  ;; Convenience
+  .ap .pf
+
+  ;; Reexport
+  (module SK.Core.List))
+
+(require Control.Monad (foldM))
+(require Language.SK.GHC)
+(require SK.Core.List)
+
+(import Control.Monad (foldM))
+(import Language.SK.GHC)
+(import SK.Core.List)
+
+(import Language.SK)
+
+
+;;; Basic
+
+;;; Auxiliary macro for defining macros. Used only in this module until
+;;; `defmacro*!' is defined.
+(eval-when-compile
+ (define-macro define-macro! form
+   (case (unCode form)
+     (List (: _ rest))
+     (return `(begin
+                (eval-when-compile
+                 (define-macro ,@rest))
+                (define-macro ,@rest)))
+     _ (skSrcError form "define-macro!: impossible happened"))))
+
+;;; Macro to specify the phases of evaluation.
+(define-macro! eval-when form
+  (let ((:: compile? (-> [Code] Bool))
+        (= compile? (elem 'compile))
+        (:: load? (-> [Code] Bool))
+        (= load? (elem 'load)))
+    (case (unCode form)
+      (List (: _ (: (LForm (L _ (List phases))) body)))
+      (| ((&& (compile? phases) (load? phases))
+          (return
+            `(begin
+               (eval-when-compile
+                ,@(List body))
+               ,@(List body))))
+         ((compile? phases)
+          (return `(eval-when-compile ,@(List body))))
+         ((load? phases)
+          (return `(begin ,@(List body))))
+         (otherwise
+          (skSrcError form (++ "eval-when: invalid phase: "
+                               (show phases)))))
+      _ (skSrcError form (++ "eval-when: invalid form: "
+                             (show form))))))
+
+(eval-when (compile load)
+  (:: macro-error (-> Code String (Skc a)))
+  (= macro-error form msg
+    (skSrcError form (concat [msg ": " (show form)])))
+
+  (:: subst-gensyms (-> [(, Atom Atom)] Code Code))
+  (= subst-gensyms kvs
+    (fmap (\ x (case (lookup x kvs)
+                 (Just y) y
+                 Nothing  x))))
+
+  (:: acc-gensym-names (-> [(, Atom Atom)] Atom (Skc [(, Atom Atom)])))
+  (= acc-gensym-names acc form
+    (case form
+      (ASymbol sym) (| ((<- (: \$ (@ cs (: c _))) (unpackFS sym))
+                        (elem c [\a .. \z])
+                        (<- Nothing (lookup form acc))
+                        (do (<- (LForm (L _ (Atom gsym))) (gensym' cs))
+                            (return (: (, form gsym) acc)))))
+      _ (return acc)))
+
+  (:: gensymfy (-> Code (Skc Code)))
+  (= gensymfy form
+    (do (<- kvs (foldM acc-gensym-names [] form))
+        (return (subst-gensyms kvs form))))
+
+  ;; Function to make body of `defmacro*' and `defmacro'.
+  (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
+  (= make-defmacro-body label whole name0 arg0 body0
+    (let ((:: err (-> Code Code Code))
+          (= err form-name name
+            `(skSrcError ,form-name
+                         (concat
+                          [(show ',name)
+                           "\ninvalid args: `" (show *form*) "'"])))
+
+          (:: atom-body (-> Code Code Code Code Code))
+          (= atom-body name arg body form-name
+            `(case (unCode ,form-name)
+               (List (: _ ,arg)) ,body
+               _                 ,(err form-name name)))
+
+          (:: list-body (-> SrcSpan Code [Code] Code Code Code))
+          (= list-body l1 name args body form-name
+            (let ((:: abind Code)
+                  (= abind
+                    `(LForm
+                      (L _loc
+                         (List [_ ,@(LForm (L l1 (List args)))])))))
+              `(case ,form-name
+                 ,abind  ,body
+                 _       ,(err form-name name)))))
+      (case (unLForm arg0)
+        (L l1 (List args))
+        (gensymfy (list-body l1 name0 args body0 '*form*))
+
+        (L _ (Atom (ASymbol _)))
+        (gensymfy (atom-body name0 arg0 body0 '*form*))
+
+        (L _ (Atom AUnit))
+        (gensymfy body0)
+
+        _ (skSrcError whole (++ label ": invalid args")))))
+
+  ;; Function to make body expression of `macrolet*' and `macrolet'.
+  (:: make-macrolet-body (-> String Code (-> Code Code) (Skc Code)))
+  (= make-macrolet-body label whole f
+    (let ((:: make-macro (-> Code (Skc Code)))
+          (= make-macro code
+            (case (unCode code)
+              (List [name arg body0])
+              (do (<- body1
+                    (make-defmacro-body label code name arg (f body0)))
+                  (let ((= the-form (if (unit? arg) '_ '*form*))))
+                  (return `(,name ,the-form ,body1)))
+              _ (macro-error code (++ label ": invalid form")))))
+      (case (unCode whole)
+        (List (: _ (: (LForm (L _ (List forms))) rest)))
+        (do (<- macros (mapM make-macro forms))
+            (return `(let-macro ,(List macros)
+                       ,@(List rest))))
+
+        _ (macro-error whole (++ label ": invalid form"))))))
+
+;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
+;;; body expression should be a value of type `Skc a'.
+(define-macro! defmacro* form
+  (case (unCode form)
+    (List [_ name arg body0])
+    (do (<- body1 (make-defmacro-body "defmacro*" form name arg body0))
+        (let ((= the-form (if (unit? arg) '_ '*form*))))
+        (return `(define-macro ,name ,the-form
+                   ,body1)))
+
+    _ (macro-error form "defmacro*: invalid form")))
+
+;;; Variant of `defmacro*'. Wrapped in `eval-when' with `compile' and
+;;; `load' phases.
+(define-macro! defmacro*! form
+  (case (unCode form)
+    (List (: _ rest)) (return `(eval-when (compile load)
+                                 (defmacro* ,@rest)))
+    _ (macro-error form "defmacro*!: impossible happened.")))
+
+;;; The `defmacro' macro, similar to the macro with same name found in
+;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy
+;;; ... etc. Currently does not suuport lambda-list like pattern match
+;;; in macro argument.
+(defmacro*! defmacro (name args body)
+  (return `(defmacro* ,name ,args
+             (return ,body))))
+
+;;; Variant of `defmacro'. Wrapped in `eval-when' with `compile' and
+;;; `load' phases.
+(defmacro*! defmacro! (name args body)
+  (return `(eval-when (compile load)
+             (defmacro ,name ,args
+               ,body))))
+
+;;; Variant of `let-macro', with `make-macro-body'.
+(define-macro macrolet* form
+  (make-macrolet-body "macrolet*" form id))
+
+;;; Variant of `let-macro', with `make-macro-body'. Body expression
+;;; wrapped with `return'.
+(define-macro macrolet form
+  (make-macrolet-body "macrolet" form (\ body `(return ,body))))
+
+;;; Pattern match for `LForm' of `Atom' with `AString'.
+(eval-when-compile
+ (defmacro pastring (val)
+   `(LForm (L _ (Atom (AString ,val))))))
+
+;;; Macro for defining function. This macro preserves the location of
+;;; function name, arguments, and body. Supports function declaration
+;;; with and without type signature,
+(define-macro defn form
+  (case (unCode form)
+    (List [_ sig (pastring _doc) body])
+    (return `(defn ,sig () ,body))
+
+    (List [_ sig (pastring _doc) args body])
+    (return `(defn ,sig ,args ,body))
+
+    (List [_ sig body])
+    (return `(defn ,sig () ,body))
+
+    (List [_ sig args body])
+    (case (unCode sig)
+      (List [name tsig]) (return `(begin
+                                    (:: ,name ,tsig)
+                                    (= ,name ,@args ,body)))
+      (Atom _) (return `(= ,sig ,@args ,body))
+      _ (macro-error sig "defn: invalid signature"))
+
+    _ (macro-error form "defn: invalid form")))
+
+;;; Macro to define a function for both of compilation time and load
+;;; time. This macro uses `eval-when' and `defn'.
+(defmacro defn! form
+  `(eval-when (compile load)
+     (defn ,@form)))
+
+;;; Macro to define a function with `defn', with wrapping the body
+;;; expressions with `do'.
+(define-macro defdo form
+  (case (unCode form)
+    (List (: _ (: name (: args body))))
+    (return `(defn ,name ,args
+               (do ,@body)))
+
+    _ (macro-error form "defdo: invalid form")))
+
+;;; The `cond' macro, found in many Lisp languages.  The behaviour is
+;;; same as wrapping the body with `case' expression with dummy unit, or
+;;; `if' with `MultiWayIf' GHC language extension.
+
+(defmacro! cond body
+  `(case ()
+     _ (| ,@body)))
+
+
+;;; Macros for macros
+
+;;; Expand given form if the given form is a macro form, otherwise
+;;; return the given form as is. Note that `macroexpand-1' and
+;;; `macroexpand' are macro, not function.
+(defmacro* macroexpand-1 (form)
+  (case (unCode form)
+    (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
+                     (do (<- expanded (expand1 x))
+                         (return `',expanded))))
+    _            (return form)))
+
+;;; Macro for expanding macro. This version of `macroexpand' recursively
+;;; expands all sub forms.
+(defmacro* macroexpand (form)
+  (case (unCode form)
+    (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
+                     (let ((= go expr
+                             (do (<- expr' (expand1 expr))
+                                 (if (== expr expr')
+                                     (return `',expr)
+                                     (go expr')))))
+                       (go x))))
+    _            (return form)))
+
+;;; Macro to return a Haskell list of macro name Strings exported from
+;;; given module.
+(defmacro* exported-macros (name)
+  (let ((= f dflags mb-thing acc
+          (case mb-thing
+            (Just (@ thing (AnId var)))
+            (| ((isMacro thing)
+                (: (showSDoc dflags (ppr (varName var))) acc)))
+            _      acc))
+        (= get-exported-names name-str
+          (do (<- mdl (lookupModule (mkModuleName name-str) Nothing))
+              (<- mb-mod-info (getModuleInfo mdl))
+              (case mb-mod-info
+                Nothing      (return [])
+                (Just minfo)
+                (do (<- mb-things
+                      (mapM lookupName (modInfoExports minfo)))
+                    (<- dflags getDynFlags)
+                    (return (foldr (f dflags) [] mb-things)))))))
+    (case (unCode name)
+      (Atom (ASymbol _))
+      (do (<- names0 (get-exported-names (symbolName name)))
+          (let ((= names1 (toCode (map toCode names0)))))
+          (return `(:: ,names1 [String])))
+
+      _ (macro-error name "exported-macros: invalid form"))))
+
+
+;;; List
+
+;;; In SK, `list' is defined as macro, since Haskell does not support
+;;; vararg function (actually, vararg is possible in GHC, but not
+;;; doing).
+(define-macro list form
+  (let ((:: codes (-> [Code] [Code]))
+        (= codes
+          (map (\ arg (cons 'toCode (cons arg nil)))))
+        (:: body (-> [Code] Code))
+        (= body args
+          `(foldr cons nil [,@(List (codes args))])))
+    (case (unCode form)
+      (List (: _ []))   (return 'nil)
+      (List (: _ args)) (return (body args))
+      _                 (macro-error form "list: invalid form"))))
+
+
+;;; Module header
+
+(define-macro defmodule form
+  ;; XXX: Does not resolve dependency of required modules in home
+  ;; package. Top level `require' is handled specially during
+  ;; S-expression parser during compilation, see
+  ;; `Language.SK.Make.findTargetSource',
+  ;; `Language.SK.Reader.{addRequiredDecl,mkRequire}',
+  ;; `Language.SK.Run.parseSexprs', and `requiredModules' field in
+  ;; `SPState'.
+  (case (unCode form)
+    (List (: _ rest0))
+    (case rest0
+      [name]
+      (return `(module ,name))
+
+      (: name rest1)
+      (do (let ((= merge-sections acc lst
+                  (let ((= label (car lst)))
+                    (cond
+                      ((== label 'export)
+                       (return
+                         (if (null (cdr lst))
+                             (: (, 'export (cons '() nil)) acc)
+                             (: (, 'export (cdr lst)) acc))))
+                      ((== label 'use)
+                       (return
+                         (: (, 'import (mapcar (\ es `(import ,@es))
+                                               (cdr lst)))
+                            acc)))
+                      ((== label 'load)
+                       (return
+                         (: (, 'load (mapcar (\ es `(require ,@es))
+                                             (cdr lst)))
+                            acc)))
+                      ((== label 'load-use)
+                       (return (: (, 'load-use (cdr lst)) acc)))
+
+                      (otherwise
+                       (macro-error lst
+                                    "defmodule: unknown section")))))))
+          (<- alist (foldM merge-sections [] rest1))
+          (let ((= emit add-load-use? header0
+                  (let ((= header1
+                          ;; Workaround to trick the S-expression
+                          ;; reader.  Using `toCode' and `aSymbol' to
+                          ;; get symbol `require' instead of writing
+                          ;; with quote.
+                          (if (== header0 'load)
+                              (toCode (aSymbol "require"))
+                              header0))
+                        (= e1 (maybe nil id (lookup header0 alist)))
+                        (= e2 (maybe nil
+                                     (mapcar (\ es `(,header1 ,@es)))
+                                     (lookup 'load-use alist))))
+                    (if add-load-use?
+                        (append e1 e2)
+                        e1)))))
+          (return
+            `(begin
+               ,@(emit True 'load)
+               (module ,name
+                 ,@(emit False 'export))
+               ,@(emit True 'import))))
+
+      _ (macro-error form "defmodule: invalid form"))
+
+    _ (macro-error form "defmodule: invalid form")))
+
+
+;;; Convenience macros
+
+;;; Macro to apply given function in Applicative and Functor context.
+;;; Can handle variable number of arguments.
+;;;
+;;; (macroexpand '(.ap f (pure a) (pure b) (pure c)))
+;;; ==> (<*> (<*> (<$> f (pure a)) (pure b)) (pure c))
+;;;
+(define-macro .ap form
+  (let ((= build op args
+          (case args
+            (: arg []) (return `(<$> ,op ,arg))
+            (: arg as) (do (<- ret (build op as))
+                           (return `(<*> ,ret ,arg)))
+            [] (return `(<$> ,op)))))
+    (case (unCode form)
+      (List (: _ (: op args))) (build op (reverse args))
+      _ (macro-error form ".ap: invalid form"))))
+
+;;; Macro for point free style function composition.
+;;;
+;;; (macroexpand '(.pf f1 (f2 arg1) f3))
+;;; ==> (. f1 (. (f2 arg1) f3))
+;;;
+(define-macro .pf form
+  (let ((= go exprs
+          (case exprs
+            [e1 e2] (return `(. ,e1 ,e2))
+            (: e1 rest) (do (<- e2 (go rest))
+                            (return `(. ,e1 ,e2)))
+            _ (macro-error form ".pf: no args"))))
+    (case (unCode form)
+      (List (: _ rest)) (go rest)
+      _ (macro-error form ".pf: invalid form"))))

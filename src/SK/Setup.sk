@@ -1,0 +1,12 @@
+;;; Setup script for SK package.
+
+(require SK.Core)
+
+(defmodule SK.Setup
+  (use
+   ;; sk-kernel
+   (Distribution.Simple.SK))
+  (export defaultMainWithHooks skcHooks))
+
+(defn (skcHooks UserHooks)
+  (skcHooksWith "skc" False))

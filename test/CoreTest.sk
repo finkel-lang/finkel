@@ -1,0 +1,567 @@
+;;;; Module to test macros.
+
+(require SK.Core)
+
+(defmodule CoreTest
+  (use
+   (Language.SK.Run)
+   (Test.Hspec)
+   (Test.QuickCheck)
+   (SK.Prelude))
+  (export coreTests
+          macroTests
+          cxrTests
+          listTests))
+
+(defdo (coreTests Spec) ()
+  (describe "Cxr" cxrTests)
+  (describe "List" listTests)
+  (describe "Macro" macroTests))
+
+(defdo (cxrTests Spec) ()
+  (let ((= d describe)
+        (= t 't)
+        (= tt '(t t))
+        (= fs '(f f f f f f))
+        (= caxr x
+          (it "should be t" (== t x)))
+        (= cdxr x
+          (it "should be (t t)" (== tt x)))))
+  (d "car"
+     (do (caxr (car (cons t tt)))
+         (it "returns t when arg was '[t t]"
+             (== (car '[t t]) t))
+         (it "returns nil when arg was nil"
+             (== (car nil) nil))
+         (it "returns nil when arg was '[]"
+             (== (car '[]) nil))
+         (it "should show error when applied to non-list"
+             (expectFailure (=== nil (car 'foo))))))
+  (d "cdr"
+     (do (cdxr (cdr (cons t tt)))
+         (it "returns '(t) when arg was '[t t]"
+             (== (cdr '[t t]) '(t)))
+         (it "returns nil when arg was nil"
+             (== (cdr nil) nil))
+         (it "returns nil when arg was '[]"
+             (== (cdr '[]) nil))
+         (it "should show error when applied to non-list"
+             (expectFailure (=== nil (cdr 'foo))))))
+
+  (d "caar"
+     (caxr (caar '((t _) _ _ _))))
+  (d "cadr"
+     (caxr (cadr '(_ t _ _ _))))
+  (d "cdar"
+     (cdxr (cdar '((_ t t) _ _ _))))
+  (d "cddr"
+     (cdxr (cddr '((_ _ _) _ t t))))
+
+  (d "caaar"
+     (caxr (caaar '(((t _) _ _) _ _ _))))
+  (d "caadr"
+     (caxr (caadr '(_ (t _ _) _ _))))
+  (d "cadar"
+     (caxr (cadar '((_ t _) _ _ _))))
+  (d "caddr"
+     (caxr (caddr '(_ _ t _))))
+  (d "cdaar"
+     (cdxr (cdaar '(((_ t t) _) _))))
+  (d "cdadr"
+     (cdxr (cdadr '(_ (_ t t) _))))
+  (d "cddar"
+     (cdxr (cddar '((_ _ t t) _))))
+  (d "cdddr"
+     (cdxr (cdddr '(_ _ _ t t))))
+
+  (d "caaaar"
+     (caxr (caaaar '((((t _) _) _) _))))
+  (d "caaadr"
+     (caxr (caaadr '(_ ((t _) _)))))
+  (d "caadar"
+     (caxr (caadar '((_ (t _)) _))))
+  (d "caaddr"
+     (caxr (caaddr '(_ _ (t _)))))
+  (d "cadaar"
+     (caxr (cadaar '(((_ t) _)))))
+  (d "cadadr"
+     (caxr (cadadr '(_ ((_ _) t)))))
+  (d "caddar"
+     (caxr (caddar '((_ _ t)))))
+  (d "cadddr"
+     (caxr (cadddr '(_ _ _ t))))
+
+  (d "cdaaar"
+     (cdxr (cdaaar '((((_ t t) _) _) _))))
+  (d "cdaadr"
+     (cdxr (cdaadr '(_ ((_ t t) _)))))
+  (d "cdadar"
+     (cdxr (cdadar '((_ (_ t t)) _))))
+  (d "cdaddr"
+     (cdxr (cdaddr '(_ _ (_ t t)))))
+  (d "cddaar"
+     (cdxr (cddaar '(((_ _ t t) _) _))))
+  (d "cddadr"
+     (cdxr (cddadr '(_ (_ _ t t)))))
+  (d "cdddar"
+     (cdxr (cdddar '((_ _ _ t t) _))))
+  (d "cddddr"
+     (cdxr (cddddr '(_ _ _ _ t t)))))
+
+(defdo (listTests Spec) ()
+  (let ((= d describe)))
+  (d "list of x, y, and z"
+     (it "should be a list"
+         (let ((:: f (-> Int Char String Bool))
+               (= f x y z
+                 (list? (list x y z))))
+           (property f))))
+
+  (d "filtering pair"
+     (it "should be pair"
+         (property (\ x
+                     (or [(&& (atom? x) (not (pair? x)))
+                          (&& (== nil x) (not (pair? x)))
+                          (&& (hslist? x) (not (pair? x)))
+                          (pair? x)])))))
+
+  (d "filtering string"
+     (it "should be AString"
+         (property (\ x
+                     (==> (string? (toCode x))
+                          (case x
+                            (AString _) True
+                            _           False))))))
+
+  (d "filtering char"
+     (it "should be AChar"
+         (property (\ x
+                     (==> (char? (toCode x))
+                          (case x
+                            (AChar _) True
+                            _         False))))))
+
+  (d "filtering integer"
+     (it "should be AInteger"
+         (property (\ x
+                     (==> (integer? (toCode x))
+                          (case x
+                            (AInteger _) True
+                            _            False))))))
+
+  (d "filtering fractional"
+     (it "should be AFractional"
+         (property (\ x
+                     (==> (fractional? (toCode x))
+                          (case x
+                            (AFractional _) True
+                            _               False))))))
+
+  (d "filtering ()"
+     (it "should be AUnit"
+         (property (\ x
+                     (==> (unit? (toCode x))
+                          (case x
+                            AUnit True
+                            _     False))))))
+
+  (d "length of atom"
+     (it "should be 1 or nil"
+         (let ((:: f (-> Code Property))
+               (= f x
+                 (==> (atom? x) (|| (== 1 (length x))
+                                    (null x)))))
+           (property f))))
+
+  (d "cons"
+     (do (let ((= x 'x)
+               (= ret1 (cons x '[b c d]))
+               (= ret2 (cons x 'b))))
+         (it "returns a List when consing to List"
+             (list? (cons 'a '(b c d))))
+         (it "returns a List when consing to HsList"
+             (list? ret1))
+         (it "has x at car of HsList-consed-list"
+             (&& (== (car ret1) x)
+                 (== (cdr ret1) '(b c d))))
+         (it "returns a List when consing to Atom"
+             (list? ret2))
+         (it "has x at car of atom-consed-list"
+             (&& (== (car ret2) x)
+                 (== (cdr ret2) '(b))))))
+
+  (d "append"
+     (do (it "returns itself when appending nil"
+             (let ((= xs '(a b c)))
+               (&& (== xs (append nil xs))
+                   (== xs (append xs nil)))))
+         (it "shows sum of the length"
+             (let ((= xs '(a b c d e))
+                   (= ys '(f g h i j k l)))
+               (== (length (append xs ys))
+                   (+ (length xs) (length ys)))))
+         (it "throws an exception with non-list arg1"
+             (expectFailure (=== nil (append 'foo nil))))
+         (it "throws an exception with non-list arg2"
+             (expectFailure (=== nil (append nil 'foo))))))
+
+  (d "mapcar"
+     (do (it "replaces non-symbols"
+             (== '(foo bar _ buzz _ _)
+                 (mapcar (\ x (if (symbol? x) x '_))
+                         '(foo bar (a b c) buzz 3 "string"))))
+         (it "replaces non-symbols in HsList"
+             (== '(foo bar _ buzz _ _)
+                 (mapcar (\ x (if (symbol? x) x '_))
+                         '[foo bar (a b c) buzz 3 "string"])))
+         (it "throws an exception on non-list arg2"
+             (expectFailure
+              (=== nil (mapcar (\ x (cons x x)) 'foo)))))))
+
+(defmacro! m1 (x)
+  `(++ "m1 " ,x))
+
+(defmacro! expandTo (in out)
+  `(do (<- e (macroFunction ,(car in) ',in))
+       (shouldBe (Right ',out) e)))
+
+(defmacro! expandFailure (in)
+  `(do (<- e (macroFunction ,(car in) ',in))
+       (let ((= isLeft lr
+               (case lr
+                 (Left _) True
+                 _        False))))
+       (shouldBe (isLeft e) True)))
+
+(defn (macroTests Spec) ()
+  (do (let ((= d describe)))
+      (d "m1"
+         (it "should be \"m1 foo\""
+             (shouldBe (m1 "foo") "m1 foo")))
+
+      (d "eval-when"
+         (do (it "should expand to (begin (eval-when-compile ...) ...)"
+                 (expandTo
+                  (eval-when (compile load)
+                    (:: foo Int)
+                    (= foo 42))
+                  (begin
+                    (eval-when-compile
+                     (:: foo Int)
+                     (= foo 42))
+                    (:: foo Int)
+                    (= foo 42))))
+             (it "should expand to (eval-when-compile ...)"
+                 (expandTo
+                  (eval-when (compile)
+                    (:: foo Int)
+                    (= foo 42))
+                  (eval-when-compile
+                   (:: foo Int)
+                   (= foo 42))))
+             (it "should expand to (begin ...)"
+                 (expandTo
+                  (eval-when (load)
+                    (:: foo Int)
+                    (= foo 42))
+                  (begin
+                    (:: foo Int)
+                    (= foo 42))))
+             (it "throws an exception with unknown phase"
+                 (expandFailure
+                  (eval-when (foo bar buzz)
+                    (:: foo Int)
+                    (= foo 42))))
+
+             (it "throws and exception on non-list phase"
+                 (expandFailure
+                  (eval-when compile
+                    (:: foo Int)
+                    (= foo 42))))))
+
+      (d "defmacro*"
+         (do (it "should expand to define-macro"
+                 (expandTo
+                  (defmacro* m1 (a)
+                    (return `(putStrLn (++ "hello, " ,a))))
+                  (define-macro m1 *form*
+                    (case *form*
+                      (LForm (L _loc (List [_ a])))
+                      (return
+                        (quasiquote
+                         (putStrLn (++ "hello, " (unquote a)))))
+                      _ (skSrcError
+                         *form*
+                         (concat [(show (quote m1))
+                                  "\ninvalid args: `"
+                                  (show *form*) "'"]))))))
+             (it "should replace nil arg with _"
+                 (expandTo
+                  (defmacro* m1 ()
+                    (return `(print True)))
+                  (define-macro m1 _
+                    (return (quasiquote (print True))))))
+             (it "should expand symbol arg to rest"
+                 (expandTo
+                  (defmacro* m1 args
+                    (return `(print ,@args)))
+                  (define-macro m1 *form*
+                    (case (unCode *form*)
+                      (List (: _ args))
+                      (return
+                        (quasiquote
+                         (print (unquote-splice args))))
+
+                      _ (skSrcError
+                         *form*
+                         (concat [(show (quote m1))
+                                  "\ninvalid args: `"
+                                  (show *form*) "'"]))))))
+             (it "should detect invalid arg"
+                 (expandFailure
+                  (defmacro* m1 "string"
+                    (return `(putChar \x)))))
+             (it "should detect invalid form"
+                 (expandFailure
+                  (defmacro* m1 too many parameters
+                    passed)))))
+
+      (d "defmacro*!"
+         (it "expands to (eval-when (...) (defmacro* ...))"
+             (expandTo
+              (defmacro*! m1 (a)
+                `(return (putStrLn ,a)))
+              (eval-when (compile load)
+                (defmacro* m1 (a)
+                  (quasiquote (return (putStrLn (unquote a)))))))))
+
+      (d "defmacro"
+         (it "should expand to defmacro*"
+             (expandTo
+              (defmacro m1 (a)
+                `(putStrLn (++ "hello, " ,a)))
+              (defmacro* m1 (a)
+                (return
+                  (quasiquote
+                   (putStrLn (++ "hello, " (unquote a)))))))))
+
+      (d "defmacro!"
+         (it "expands to (eval-when (...) (defmacro ...))"
+             (expandTo
+              (defmacro! m1 (a)
+                `(putStrLn ,a))
+              (eval-when (compile load)
+                (defmacro m1 (a)
+                  (quasiquote (putStrLn (unquote a))))))))
+
+      (d "macro containing `$foo'"
+         (it "should replace `$foo' with gensym"
+             (do (let ((= f (macroFunction defmacro*))))
+                 (<- (Right e) (f '(defmacro* m1 (a b)
+                                    (let ((= $foo (+ ,a ,b)))
+                                      (return $foo)))))
+                 (shouldNotBe (elem (aSymbol "$foo") e) True))))
+
+      (d "macrolet*"
+         (do (it "should expand to let-macro"
+                 (expandTo
+                  (macrolet* ((m (a b)
+                                (return `(+ ,a ,b))))
+                    (m 20 22))
+                  (let-macro ((m *form*
+                                (case *form*
+                                  (LForm (L _loc (List [_ a b])))
+                                  (return (quasiquote
+                                           (+ (unquote a) (unquote b))))
+                                  _
+                                  (skSrcError
+                                   *form*
+                                   (concat [(show (quote m))
+                                            "\ninvalid args: `"
+                                            (show *form*)
+                                            "'"])))))
+                    (m 20 22))))
+             (it "should replace () arg with _"
+                 (expandTo
+                  (macrolet* ((m1 ()
+                                (return `(print \x))))
+                    (m1))
+                  (let-macro ((m1 _
+                                (return (quasiquote (print \x)))))
+                    (m1))))
+             (it "should detect invalid form"
+                 (expandFailure
+                  (macrolet*)))
+             (it "should detect invalid local macro form"
+                 (expandFailure
+                  (macrolet* ((m1 ()
+                                foo bar buzz))
+                    (m1))))))
+
+      (d "macrolet"
+         (it "should expand to let-macro with `return'"
+             (expandTo
+              (macrolet ((m (a b)
+                           `(+ ,a ,b)))
+                (m 20 22))
+              (let-macro ((m *form*
+                            (case *form*
+                              (LForm (L _loc (List [_ a b])))
+                              (return (quasiquote (+ (unquote a)
+                                                     (unquote b))))
+                              _
+                              (skSrcError
+                               *form*
+                               (concat [(show (quote m))
+                                        "\ninvalid args: `"
+                                        (show *form*) "'"])))))
+                (m 20 22)))))
+
+      (d "defn"
+         (do (it "should expand to function declaration"
+                 (expandTo
+                  (defn foo (a b) (+ a b))
+                  (= foo a b (+ a b))))
+             (it "should expand to function with type signature"
+                 (expandTo
+                  (defn (foo (-> Int Int Int)) (a b)
+                    (+ a b))
+                  (begin
+                    (:: foo (-> Int Int Int))
+                    (= foo a b (+ a b)))))
+             (it "should expand to function with no arguments"
+                 (expandTo
+                  (defn foo 42)
+                  (defn foo () 42)))
+             (it "should fail on invalid signature"
+                 (expandFailure
+                  (defn (foo (Int) (Int)) (a b)
+                    (+ a b))))
+             (it "should fail on too many parameters"
+                 (expandFailure
+                  (defn (foo (Int)) ()
+                    1 2 3 4 5)))))
+
+      (d "defn!"
+         (it "should expand to (eval-when (..) (defn ...))"
+             (expandTo
+              (defn! foo (a b)
+                (+ a b))
+              (eval-when (compile load)
+                (defn foo (a b)
+                  (+ a b))))))
+
+      (d "defdo"
+         (do (it "should expand to (defn ... (do ...))"
+                 (expandTo
+                  (defdo foo (a b)
+                    (print a)
+                    (print b))
+                  (defn foo (a b)
+                    (do (print a)
+                        (print b)))))
+             (it "should fail on too few parameters"
+                 (expandFailure (defdo foo)))))
+
+      (d "list"
+         (do (it "should expand to foldr"
+                 (expandTo
+                  (list \x \y \z)
+                  (foldr cons nil [(toCode \x)
+                                   (toCode \y)
+                                   (toCode \z)])))
+             (it "should expand to nil"
+                 (expandTo (list) nil))))
+
+      (d "cond"
+         (it "should expand to case"
+             (expandTo
+              (cond ((even x) 0) (otherwise 1))
+              (case () _ (| ((even x) 0) (otherwise 1))))))
+
+      (d "macroexpand-1"
+         (do (it "should expand to '(toCode 3)"
+                 (expandTo
+                  (macroexpand-1 '(quasiquote (unquote 3)))
+                  '(toCode 3)))
+             (it "should expand to '(toCode 4)"
+                 (expandTo
+                  (macroexpand-1 `(quasiquote (unquote 4)))
+                  '(toCode 4)))
+             (it "should expand to (car nil)"
+                 (expandTo
+                  (macroexpand-1 (car nil)) (car nil)))
+             (it "should expand to itself"
+                 (expandTo (macroexpand-1 42) 42))))
+
+      (d "macroexpand"
+         (do (it "should expand to '(toCode 3)"
+                 (expandTo
+                  (macroexpand '(quasiquote (unquote 3)))
+                  '(toCode 3)))
+             (it "should expand to '(toCode 4)"
+                 (expandTo
+                  (macroexpand `(quasiquote (unquote 4)))
+                  '(toCode 4)))
+             (it "should expand to (car nil)"
+                 (expandTo
+                  (macroexpand (car nil)) (car nil)))
+             (it "should expand to itself"
+                 (expandTo (macroexpand 42) 42))))
+
+      (d "defmodule"
+         (do (it "should expand to module header"
+                 (expandTo
+                  (defmodule Foo
+                    (load (Foo.Macro)
+                          (Bar.Macro))
+                    (load-use (Control.Monad))
+                    (use (qualified Foo.Types as Types)
+                         (Foo.Buzz (buzz1 buzz2)))
+                    (export (FooClass ..) f1 f2))
+                  (begin
+                    (require Foo.Macro)
+                    (require Bar.Macro)
+                    (require Control.Monad)
+                    (module Foo (FooClass ..) f1 f2)
+                    (import qualified Foo.Types as Types)
+                    (import Foo.Buzz (buzz1 buzz2))
+                    (import Control.Monad))))
+             (it "should ignore export when not given"
+                 (expandTo
+                  (defmodule Foo
+                    (load (Foo.Macro))
+                    (use (Control.Monad)))
+                  (begin
+                    (require Foo.Macro)
+                    (module Foo)
+                    (import Control.Monad))))
+             (it "should export ()"
+                 (expandTo
+                  (defmodule Foo
+                    (use (Control.Monad))
+                    (export))
+                  (begin
+                    (module Foo ())
+                    (import Control.Monad))))
+             (it "should expand to plain (module ...)"
+                 (expandTo
+                  (defmodule Foo)
+                  (module Foo)))
+             (it "should fail on unknown section"
+                 (expandFailure
+                  (defmodule Foo
+                    (bar buzz))))
+             (it "should fail on too few parameters"
+                 (expandFailure
+                  (defmodule)))))
+      (d ".ap"
+         (it "should expand to (<*> ... (<$> f ..) ..)"
+             (expandTo
+              (.ap f (Just a) (Just b) (Just c))
+              (<*> (<*> (<$> f (Just a)) (Just b)) (Just c)))))
+      (d ".pf"
+         (it "expands to (. f1 (. f2 ...))"
+             (expandTo
+              (.pf f1 (f2 arg1) f3)
+              (. f1 (. (f2 arg1) f3)))))))

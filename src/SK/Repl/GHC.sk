@@ -1,0 +1,160 @@
+;;; Modules to re-export functions from `ghc' and `ghci'.
+
+(module SK.Repl.GHC
+  ;; Package: ghc
+
+  ;; DynFlags
+  (PackageFlag ..)
+  (Way ..)
+  addWay'
+  thisPackage
+
+  ;; FamInstEnv
+  (FamInst ..)
+
+  ;; Finder
+  flushFinderCaches
+  uncacheModule
+
+  ;; GHC
+  (ModuleInfo)
+  compileExprRemote
+  getBindings
+  getGRE
+  getPrintUnqual
+  parseDynamicFlags
+  setInteractiveDynFlags
+  setTargets
+
+  ;; GhcMake
+  (LoadHowMuch ..)
+  load
+
+  ;; GhcMonad
+  (Ghc ..)
+  (Session ..)
+  withSession
+
+  ;; HscMain
+  hscParsedStmt
+  hscTcRnLookupRdrName
+
+  ;; HscTypes
+  (FixityEnv)
+  (InteractiveContext ..)
+  emptyHomePackageTable
+  emptyInteractiveContext
+  emptyMG
+  extendInteractiveContextWithIds
+  handleFlagWarnings
+  setInteractivePrintName
+  tyThingParent_maybe
+
+  ;; Id
+  (Id)
+
+  ;; IfaceSyn
+  showToHeader
+
+  ;; InstEnv
+  (ClsInst ..)
+  pprInstance
+
+  ;; InteractiveEval
+  abandonAll
+  getInfo
+  parseName
+  showModule
+
+  ;; Linker
+  extendLinkEnv
+  initDynLinker
+  linkModule
+  showLinkerState
+  unload
+
+  ;; Name. This module re-exports `OccName' module.
+  (Name)
+  getName
+  nameIsFromExternalPackage
+  nameOccName
+  nameModule
+  nameSrcSpan
+  occNameString
+
+  ;; NameSet
+  elemNameSet
+  mkNameSet
+
+  ;; Outputable
+  (SDoc)
+  $$
+  printForUserPartWay
+  showSDocForUser
+  text
+  vcat
+
+  ;; Packages
+  (PackageConfig)
+  componentId
+  packageNameString
+  readPackageConfigs
+
+  ;; PprTyThing
+  pprFamInst
+  pprTyThingInContextLoc
+
+  ;; SrcLoc
+  isGoodSrcSpan
+
+  ;; Var
+  (Var)
+  varType
+
+  ;; Package: ghc-boot
+
+  ;; PackageDb
+  toStringRep
+
+  ;; Package: ghci
+
+  ;; Debugger
+  pprTypeAndContents
+
+  ;; GHCi
+  evalStmt
+
+  ;; GHCi.Message
+  (EvalExpr ..)
+  (EvalStatus_ ..)
+  (EvalResult ..)
+  (SerializableException ..)
+
+  ;; GHCi.RemoteTypes
+  (ForeignHValue))
+
+;; ghc
+(import DynFlags)
+(import FamInstEnv hiding (pprFamInst))
+(import Finder)
+(import GHC)
+(import GhcMonad)
+(import HscMain)
+(import HscTypes)
+(import IfaceSyn)
+(import InstEnv)
+(import Linker)
+(import Name)
+(import NameSet)
+(import Outputable)
+(import Packages)
+(import PprTyThing)
+(import Var)
+
+;;; ghc-boot
+(import GHC.PackageDb)
+
+;; ghci
+(import Debugger)
+(import GHCi)
+(import GHCi.Message)

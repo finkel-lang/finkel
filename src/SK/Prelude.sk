@@ -1,0 +1,7 @@
+;;;; Prelude module for SK.
+
+(module SK.Prelude
+  (module All))
+
+(import Language.SK as All)
+(import SK.Core as All)

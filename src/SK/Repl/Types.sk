@@ -1,0 +1,81 @@
+#p(LANGUAGE GeneralizedNewtypeDeriving)
+
+;;;; Types for REPL.
+
+(require SK.Core)
+
+(defmodule SK.Repl.Types
+  (use
+   ;; base
+   (Control.Concurrent ((MVar)))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+
+   ;; bytestring
+   (qualified Data.ByteString.Lazy.Char8 as BS)
+
+   ;; haskeline
+   (System.Console.Haskeline ((MonadException ..)))
+
+   ;; transformers
+   (Control.Monad.Trans.Class ((MonadTrans ..)))
+   (Control.Monad.Trans.State.Strict ((StateT ..) evalStateT get put))
+
+   ;; sk-kernel
+   (Language.SK ((Code))))
+
+  (export
+   ;; repl
+   (Repl ..) run-repl put-repl-state get-repl-state
+   ;; lift-repl
+
+   ;; repl state
+   (ReplState ..) initial-repl-state
+
+   ;; input and result
+   (Input ..) (InSource ..) (Result)
+
+   ;; re-export
+   (MonadTrans ..)))
+
+
+;;; Repl, state, and result types
+
+;;; Repl state type to hold intermediate line-wise inputs.
+(data ReplState
+  (ReplState {pending-input [BS.ByteString]
+              input-count Int})
+  (deriving (Eq Show)))
+
+(defn (initial-repl-state ReplState)
+  (ReplState {pending-input [] input-count 0}))
+
+;;; Monad for REPL prompt.
+(newtype (Repl a)
+  (Repl {unRepl (StateT ReplState IO a)})
+  (deriving (Functor Applicative Monad MonadIO MonadException)))
+
+(defn (run-repl (-> (Repl a) ReplState (IO a)))
+  (repl st)
+  (evalStateT (unRepl repl) st))
+
+(defn (put-repl-state (-> ReplState (Repl ())))
+  (. Repl put))
+
+(defn (get-repl-state (Repl ReplState))
+  (Repl get))
+
+;;; Input data type to hold form to evaluate, and MVar to receive
+;;; result from evaluation thread.
+(data Input
+  (Input InSource Code (MVar Result)))
+
+;;; Type for input, to distinguish prompt from network connections to
+;;; REPL server.
+(data InSource
+  Prompt
+  Connection
+  (deriving (Eq Show)))
+
+;;; Synonym for evaluation result.
+(type Result
+  (Either String String))

@@ -1,0 +1,72 @@
+name:                sk-lang
+version:             0.4.0.0
+synopsis:            SK core language
+description:         SK core language
+homepage:            https://github.com/githubuser/sk-lang#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2017, 2018 Author name here
+category:            Language
+build-type:          Custom
+extra-source-files:  README.md
+                     src/SK/*.sk
+                     src/SK/Core/*.sk
+                     src/SK/Repl/*.sk
+                     test/*.sk
+cabal-version:       >= 2.0
+
+custom-setup
+  setup-depends:       base >= 4.7 && < 5
+                     , Cabal >= 2.0
+                     , sk-kernel >= 0.12.0
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     SK.Core.List
+                       SK.Core
+                       SK.Plugin
+                       SK.Setup
+                       SK.Repl.Types
+                       SK.Repl.Env
+                       SK.Repl.GHC
+                       SK.Repl.IORedirect
+                       SK.Repl.Listen
+                       SK.Repl.Loop
+                       SK.Repl.Macro
+                       SK.Repl
+                       SK.Prelude
+  other-modules:       Paths_sk_lang
+  build-depends:       base >= 4.7 && < 5
+                     , bytestring
+                     , directory
+                     , filepath
+                     , haskeline
+                     , ghc
+                     , ghc-boot
+                     , ghci
+                     , network
+                     , transformers
+                     , sk-kernel >= 0.12.0
+  default-language:    Haskell2010
+  ghc-options:       -Wall
+
+test-suite sk-lang-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       QuickCheck
+                     , base
+                     , directory
+                     , hspec
+                     , sk-lang
+                     , sk-kernel >= 0.12.0
+  ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
+  other-modules:       CoreTest
+                       ReplTest
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/githubuser/sk-repl
