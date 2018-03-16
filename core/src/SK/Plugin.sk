@@ -9,7 +9,7 @@
    (GhcPlugins ((FrontendPlugin ..) defaultFrontendPlugin))
 
    ;; sk-kernel
-   (Language.SK.Plugin hiding (frontendPlugin))
+   (Language.SK.Plugin (makeSkFrontend))
 
    ;; internal
    (SK.Prelude))

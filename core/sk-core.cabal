@@ -1,4 +1,4 @@
-name:                sk-lang
+name:                sk-core
 version:             0.4.0.0
 synopsis:            SK core language
 description:         SK core language
@@ -37,7 +37,7 @@ library
                        SK.Repl.Macro
                        SK.Repl
                        SK.Prelude
-  other-modules:       Paths_sk_lang
+  other-modules:       Paths_sk_core
   build-depends:       base >= 4.7 && < 5
                      , bytestring
                      , directory
@@ -52,7 +52,7 @@ library
   default-language:    Haskell2010
   ghc-options:       -Wall
 
-test-suite sk-lang-test
+test-suite sk-core-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
@@ -60,7 +60,7 @@ test-suite sk-lang-test
                      , base
                      , directory
                      , hspec
-                     , sk-lang
+                     , sk-core
                      , sk-kernel >= 0.12.0
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   other-modules:       CoreTest
@@ -69,4 +69,4 @@ test-suite sk-lang-test
 
 source-repository head
   type:     git
-  location: https://github.com/githubuser/sk-repl
+  location: https://github.com/githubuser/sk-core

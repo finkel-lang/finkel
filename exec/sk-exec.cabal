@@ -21,7 +21,7 @@ executable sk
   main-is:             sk.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
-                     , sk-lang
+                     , sk-core
   default-language:    Haskell2010
 
 -- SK compiler executable, includes macros defined in SK.Prelude by
@@ -31,6 +31,7 @@ executable skc
   main-is:             skc.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
+                     , sk-core
                      , sk-kernel
   default-language:    Haskell2010
 

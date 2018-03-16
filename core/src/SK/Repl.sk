@@ -30,7 +30,7 @@
    (SK.Core)
    (SK.Repl.Macro)
    (SK.Repl.Loop)
-   (qualified Paths_sk_lang))
+   (qualified Paths_sk_core))
   (export replMain repl-env))
 
 
@@ -112,7 +112,7 @@
       (start-repl listen repl-env)))
 
 (defn (sk-lang-version String)
-  (showVersion Paths_sk_lang.version))
+  (showVersion Paths_sk_core.version))
 
 (defn (sk-kernel-version String)
   (showVersion Paths_sk_kernel.version))
