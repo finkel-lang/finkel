@@ -104,12 +104,12 @@
       ;; REPL macros
       (ok '(exported-macros Prelude) "[]")
       (satisfy
-       '(*_ info bindings)
+       '(*_ bindings)
        (\ ret
          (case ret
            (Right str) (elem "foo :: Int -> Int = _" (lines str))
            _ False)))
-      (ok '(*_ info context)
+      (ok '(*_ context)
           (delines
            ["; context"
             ";  IIDecl: import Control.Monad"
@@ -117,7 +117,7 @@
             ";  IIDecl: import SK.Repl.Env"
             ";  IIDecl: import SK.Prelude"
             ";  IIDecl: import Prelude"]))
-      (ok '(*_ info dflags)
+      (ok '(*_ dflags)
           (delines
            ["; dflags:"
             ";  ghcLink: LinkInMemory"
@@ -127,7 +127,7 @@
             ";  thisInstalledUnitId: main"]))
       (ok '(begin
             (*_ set -odir /tmp)
-            (*_ info dflags))
+            (*_ dflags))
           (delines
            ["; dflags:"
             ";  ghcLink: LinkInMemory"
@@ -136,27 +136,27 @@
             ";  objectDir: Just \"/tmp\""
             ";  thisInstalledUnitId: main"]))
       (satisfy
-       '(*_ info macros)
+       '(*_ macros)
        (\ ret
          (case ret
            (Right str) (elem ";  defmacro*!" (lines str))
            _ False)))
-      (ok '(*_ info modules) "")
-      (ok '(*_ info packages)
+      (ok '(*_ modules) "")
+      (ok '(*_ packages)
           "; packages")
       (ok '(begin
             (*_ set -package bytestring)
-            (*_ info packages))
+            (*_ packages))
           (delines
            ["; packages"
             ";   -package bytestring"]))
-      (ok '(*_ info paths)
+      (ok '(*_ paths)
           (concat
            ["; current working directory:\n"
             ";   " current-dir "\n"
             "; module import search paths:\n"
             ";    ."]))
-      (ok '(*_ info 'putStr)
+      (ok '(*_ info putStr)
           "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
       (ok '(*_ browse Unsafe.Coerce)
           "Unsafe.Coerce.unsafeCoerce :: a -> b")

@@ -39,15 +39,11 @@
   (export *_))
 
 
-;;; Types
+;;; Auxiliary
 
 (type ReplCommand
   (-> [Code] (Skc Code)))
 
-
-;;; Compilation
-
-;;; Functions for compiling and loading SK module.
 (defn (mk-ii-fs (-> FastString InteractiveImport))
   (name)
   (IIDecl (simpleImportDecl (mkModuleNameFS name))))
@@ -116,8 +112,84 @@
          (<- mods (fmap envContextModules getSkEnv))
          (setContext (map mk-ii mods))))))
 
-;;; Compile source code to object code.
-(defn (compile-obj ReplCommand)
+(defn (lookup-package-config
+       (-> DynFlags String (IO (Maybe PackageConfig))))
+  "Lookup `PackageConfig' of given package in `DynFlags'."
+  (dflags pkgname)
+  (do (<- confs (liftIO (readPackageConfigs dflags)))
+      (return
+        (find (. (== pkgname) packageNameString)
+              (concat (map snd confs))))))
+
+(defn (browse-module (-> Module ModuleInfo (Skc Code)))
+  "Simplified version of `GHCi.UI.browseModule'."
+  (mdl mod-info)
+  (do (let ((= names (modInfoExports mod-info))
+            (= sorted-names
+              (++ (loc-sort local) (occ-sort external)))
+            (= (, local external)
+              (partition (. (== mdl) nameModule) names))
+            (= occ-sort (sortBy (on compare nameOccName)))
+            (= loc-sort ns
+              (| ((<- (: n _) ns) (isGoodSrcSpan (nameSrcSpan n))
+                  (sortBy (on compare nameSrcSpan) ns))
+                 (otherwise (occ-sort ns))))
+            (= pretty
+              (pprTyThing showToHeader))))
+      (<- mb-things (mapM lookupName sorted-names))
+      (<- dflags getDynFlags)
+      (<- unqual getPrintUnqual)
+      (let ((= things (catMaybes mb-things))
+            (= prettyThings (map pretty things))
+            (= strs (showSDocForUser dflags unqual (vcat prettyThings)))))
+      (return `(putStrLn ,strs))))
+
+;;; Mostly translated from `GHCi.UI.infoThing'.
+(defn (info-name (-> Code (Skc Code)))
+  (thing)
+  (do (<- unqual getPrintUnqual)
+      (<- dflags getDynFlags)
+      (<- sdoc (info-thing True (show thing)))
+      (return `(putStrLn ,(showSDocForUser dflags unqual sdoc)))))
+
+(defn (info-thing (-> Bool String (Skc SDoc)))
+  (all-info str)
+  (do (<- names (parse-name str))
+      (<- mb_stuffs (mapM (getInfo all-info) names))
+      (let ((= filtered (filter-out-children
+                         (\ (, t _f _ci _fi) t)
+                         (catMaybes mb_stuffs)))
+            (= ppr-info (, thing _fixity cls-insts fam-insts)
+              ($$ (pprTyThingInContextLoc thing)
+                  ($$ (vcat (map pprInstance cls-insts))
+                      (vcat (map pprFamInst fam-insts)))))))
+      (return
+        (vcat (intersperse (text "") (map ppr-info filtered))))))
+
+(defn (parse-name (-> String (Skc [Name])))
+  (str)
+  (if (elem str ["()" "[]"])
+      (parseName str)
+      (withSession
+       (\ hsc-env
+         (liftIO
+          (let ((= lrdr-name (genSrc (mkRdrName (fsLit str)))))
+            (hscTcRnLookupRdrName hsc-env lrdr-name)))))))
+
+(defn (filter-out-children (-> (-> a TyThing) [a] [a]))
+  (get-thing xs)
+  (let ((= all-names (mkNameSet (map (. getName get-thing) xs)))
+        (= has-parent x
+          (case (tyThingParent_maybe (get-thing x))
+            (Just p) (elemNameSet (getName p) all-names)
+            Nothing  False)))
+    (filter (. not has-parent) xs)))
+
+
+;;; REPL commands
+
+(defn (compile-obj-cmd ReplCommand)
+  "Compile source code to object code."
   (forms)
   (let ((= err
           (skSrcError (located-list forms)
@@ -132,8 +204,8 @@
                     (code->mb-string form))
       _ err)))
 
-;;; Link the object code of given module.
-(defn (link-module ReplCommand)
+(defn (link-module-cmd ReplCommand)
+  "Link the object code of given module."
   (forms)
   (let ((= go name
           (do (liftIO
@@ -150,9 +222,9 @@
       [(Atom (ASymbol sym))] (go sym)
       _ err)))
 
-;;; Load a module source code file. Handles absolute paths and relative
-;;; paths from import directories.
-(defn (load ReplCommand)
+(defn (load-cmd ReplCommand)
+  "Load a module source code file. Handles absolute paths and relative
+paths from import directories."
   (forms)
   (let ((= find-file idirs path
           (if (isAbsolute path)
@@ -217,11 +289,8 @@
       _ (skSrcError (located-list forms)
                     (++ "load: invalid form: " (show forms))))))
 
-
-;;; Settings
-
-;;; Set command line flags, see `GHCi.UI.newDynFlags'.
-(defn (set ReplCommand)
+(defn (set-cmd ReplCommand)
+  "Set command line flags, see `GHCi.UI.newDynFlags'."
   (forms)
   (case forms
     (: _ _) (| ((all symbol? forms)
@@ -236,8 +305,8 @@
                     (return '(begin)))))
     _ (skSrcError nil "$set: empty form")))
 
-;;; Modify debug settings in REPL.
-(defn (debug ReplCommand)
+(defn (debug-cmd ReplCommand)
+  "Modify debug settings in REPL."
   (forms)
   (case forms
     [] (do (<- bool (fmap envDebug getSkEnv))
@@ -248,8 +317,8 @@
     _ (let ((= lst (located-list forms)))
         (skSrcError lst (++ "debug: invalid form: " (show lst))))))
 
-;;; Function to change current directory.
-(defn (cd ReplCommand)
+(defn (cd-cmd ReplCommand)
+  "Function to change current directory."
   (forms)
   (case forms
     [arg1] (| ((<- (Just path) (code->mb-string arg1))
@@ -259,12 +328,12 @@
                   (++ "cd: expecting symbol or string but got "
                       (show forms)))))
 
-;;; Function to show current directory.
-(defn (pwd ReplCommand)
+(defn (pwd-cmd ReplCommand)
+  "Function to show current directory."
   (const (fmap toCode (liftIO getCurrentDirectory))))
 
-;;; List directory contents.
-(defn (ls ReplCommand)
+(defn (ls-cmd ReplCommand)
+  "List directory contents."
   (forms)
   (do (<- mb-path
         (case forms
@@ -280,53 +349,11 @@
         _ (skSrcError (located-list forms)
                       (++ "ls: invalid path: " (show forms))))))
 
-;;; Functions for `info' macro.
-
-;;; Mostly translated from `GHCi.UI.infoThing'.
-(defn (info-name (-> Code (Skc Code)))
-  (thing)
-  (do (<- unqual getPrintUnqual)
-      (<- dflags getDynFlags)
-      (<- sdoc (info-thing True (show thing)))
-      (return `(putStrLn ,(showSDocForUser dflags unqual sdoc)))))
-
-(defn (info-thing (-> Bool String (Skc SDoc)))
-  (all-info str)
-  (do (<- names (parse-name str))
-      (<- mb_stuffs (mapM (getInfo all-info) names))
-      (let ((= filtered (filter-out-children
-                         (\ (, t _f _ci _fi) t)
-                         (catMaybes mb_stuffs)))
-            (= ppr-info (, thing _fixity cls-insts fam-insts)
-              ($$ (pprTyThingInContextLoc thing)
-                  ($$ (vcat (map pprInstance cls-insts))
-                      (vcat (map pprFamInst fam-insts)))))))
-      (return
-        (vcat (intersperse (text "") (map ppr-info filtered))))))
-
-(defn (parse-name (-> String (Skc [Name])))
-  (str)
-  (if (elem str ["()" "[]"])
-      (parseName str)
-      (withSession
-       (\ hsc-env
-         (liftIO
-          (let ((= lrdr-name (genSrc (mkRdrName (fsLit str)))))
-            (hscTcRnLookupRdrName hsc-env lrdr-name)))))))
-
-(defn (filter-out-children (-> (-> a TyThing) [a] [a]))
-  (get-thing xs)
-  (let ((= all-names (mkNameSet (map (. getName get-thing) xs)))
-        (= has-parent x
-          (case (tyThingParent_maybe (get-thing x))
-            (Just p) (elemNameSet (getName p) all-names)
-            Nothing  False)))
-    (filter (. not has-parent) xs)))
-
-;;; Almost same as `GHCi.UI.showBindings'.
-(defn (info-bindings (Skc Code))
-  (where (do (<- bindings getBindings)
-             (<- docs (mapM make-doc (reverse bindings)))
+(defn (bindings-cmd ReplCommand)
+  "Almost same as `GHCi.UI.showBindings'."
+  (_forms)
+  (where (do (<- bs getBindings)
+             (<- docs (mapM make-doc (reverse bs)))
              (<- unqual getPrintUnqual)
              (<- dflags getDynFlags)
              (return
@@ -342,7 +369,8 @@
     (= ppr-tt (, thing _ _ _)
       (pprTyThing showToHeader thing))))
 
-(defn (info-context (Skc Code))
+(defn (context-cmd ReplCommand)
+  (_form)
   (where (do (<- context getContext)
              (<- dflags getSessionDynFlags)
              (return `(putStr ,(result dflags context))))
@@ -355,7 +383,8 @@
         (IIModule mname)
         (++ ";  IIModule: " (moduleNameString mname))))))
 
-(defn (info-dflags (Skc Code))
+(defn (dflags-cmd ReplCommand)
+  (_form)
   (do (<- dflags getDynFlags)
       (let ((= ss
               ["; dflags:"
@@ -372,29 +401,8 @@
                 MkDepend    "MkDepend"))))
       (return `(putStr ,(unlines ss)))))
 
-(defn (info-info (Skc Code))
-  (return
-    `(putStrLn
-      "USAGE: (*_ info COMMANDS)
-
-DESCRIPTION:
-
-  Show info of current REPL session.
-
-COMMANDS:
-
-  'NAME     - Show info of NAME.
-  context   - Show current context.
-  dflags    - Show current DynFlags information.
-  info      - Show this help.
-  linker    - Show linker.
-  macros    - Show macros defined in REPL environment.
-  modules   - Show loaded modules.
-  packages  - Show accessible packages.
-  paths     - Show paths.
-")))
-
-(defn (info-linker (Skc Code))
+(defn (linker-cmd ReplCommand)
+  (_form)
   ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
   ;; which is not exposed from the module its defined ... not sure how
   ;; to get resulting output as `String' other than redirecting output
@@ -404,7 +412,8 @@ COMMANDS:
                   (showLinkerState (hsc_dflags hsc-env))))
       (return '(begin))))
 
-(defn (info-macros (Skc Code))
+(defn (macros-cmd ReplCommand)
+  (_form)
   (do (<- macros (fmap envMacros getSkEnv))
       (let ((= macro-strings
               (unlines
@@ -412,13 +421,15 @@ COMMANDS:
                   (map (++ ";  ") (macroNames macros)))))))
       (return `(putStr ,macro-strings))))
 
-(defn (info-modules (Skc Code))
+(defn (modules-cmd ReplCommand)
+  (_form)
   (do (<- graph0 getModuleGraph)
       (<- graph1 (filterM (. isLoaded ms_mod_name) graph0))
       (<- mods (mapM showModule graph1))
       (return `(putStr ,(unlines mods)))))
 
-(defn (info-packages (Skc Code))
+(defn (packages-cmd ReplCommand)
+  (_form)
   (do (<- dflags getDynFlags)
       (let ((= pr (++ ";   "))
             (= pr-flag flag
@@ -429,7 +440,8 @@ COMMANDS:
               (: "; packages" (map pr-flag (packageFlags dflags))))))
       (return `(putStr ,(unlines pkgs)))))
 
-(defn (info-paths (Skc Code))
+(defn (paths-cmd ReplCommand)
+  (_form)
   (do (<- dflags getDynFlags)
       (<- cwd (liftIO getCurrentDirectory))
       (let ((= ipaths (importPaths dflags))
@@ -444,55 +456,17 @@ COMMANDS:
                      (map (++ ";    ") ipaths))])))))
       (return `(putStr ,result))))
 
-(defn (info ReplCommand)
+(defn (info-cmd ReplCommand)
   (forms)
-  (let ((= go sym
-          (case (unpackFS sym)
-            "bindings" info-bindings
-            "context"  info-context
-            "dflags"   info-dflags
-            "linker"   info-linker
-            "macros"   info-macros
-            "modules"  info-modules
-            "packages" info-packages
-            "paths"    info-paths
-            _          info-info))
-        (= err form
+  (let ((= err form
           (skSrcError form (++ "info: invalid form: " (show form)))))
     (case forms
-      [form] (case (unCode form)
-               (Atom (ASymbol sym)) (go sym)
-               (List [q name])      (| ((|| (== q 'quote)
-                                            (== q 'quasiquote))
-                                        (info-name name)))
-               _                    (err form))
-      _ (err (located-list forms)))))
-
-;;; Simplified version of `GHCi.UI.browseModule'.
-(defn (browse-module (-> Module ModuleInfo (Skc Code)))
-  (mdl mod-info)
-  (do (let ((= names (modInfoExports mod-info))
-            (= sorted-names
-              (++ (loc-sort local) (occ-sort external)))
-            (= (, local external)
-              (partition (. (== mdl) nameModule) names))
-            (= occ-sort (sortBy (on compare nameOccName)))
-            (= loc-sort ns
-              (| ((<- (: n _) ns) (isGoodSrcSpan (nameSrcSpan n))
-                  (sortBy (on compare nameSrcSpan) ns))
-                 (otherwise (occ-sort ns))))
-            (= pretty
-              (pprTyThing showToHeader))))
-      (<- mb-things (mapM lookupName sorted-names))
-      (<- dflags getDynFlags)
-      (<- unqual getPrintUnqual)
-      (let ((= things (catMaybes mb-things))
-            (= prettyThings (map pretty things))
-            (= strs (showSDocForUser dflags unqual (vcat prettyThings)))))
-      (return `(putStrLn ,strs))))
+      [form] (| ((<- (Atom (ASymbol _)) (unCode form))
+                 (info-name form)))
+      _ (err (car (located-list forms))))))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
-(defn (browse ReplCommand)
+(defn (browse-cmd ReplCommand)
   (forms)
   (let ((= go name
           (| ((looksLikeModuleName name)
@@ -511,25 +485,13 @@ COMMANDS:
       [(Atom (ASymbol sym))] (go (unpackFS sym))
       _ err)))
 
-
-;;; Package
-
-;;; Lookup `PackageConfig' of given package in `DynFlags'.
-(defn (lookup-package-config
-       (-> DynFlags String (IO (Maybe PackageConfig))))
-  (dflags pkgname)
-  (do (<- confs (liftIO (readPackageConfigs dflags)))
-      (return
-        (find (. (== pkgname) packageNameString)
-              (concat (map snd confs))))))
-
 ;;; Lookup matching linkable with given name, and set
 ;;; `thisInstalledUnitId' field in current `DynFlags' to the component
 ;;; when linkable were found.  By setting component, REPL will recompile
 ;;; module from SK source code, by ignoring module found in pre-compiled
 ;;; library linkable.  This behaviour may useful when working with cabal
 ;;; package library modules from REPL.
-(defn (component ReplCommand)
+(defn (component-cmd ReplCommand)
   (forms)
   (do (<- name (case forms
                  [form] (| ((<- (Just str) (fromCode form))
@@ -565,20 +527,58 @@ COMMANDS:
                       (otherwise not-found)))
       (return '(begin))))
 
+(defn (help-cmd ReplCommand)
+  (_form)
+  (return
+    `(putStrLn "USAGE: (*_ COMMAND ARGS ...)
+
+DESCRIPTION:
+
+  REPL meta macro, ARGS varies per COMMAND.
+
+COMMANDS:
+
+  bindings      - show current bindings in REPL
+  cd DIR        - change working directory to DIR
+  context       - show current REPL context
+  dflags        - show current DynFlags information
+  help          - show this help
+  info NAME     - show info of NAME
+  linker        - show linker information
+  load FILE     - compile and load FILE
+  ls            - list files in currency directory
+  macros        - show macros defined in REPL environment
+  modules       - show loaded modules
+  packages      - show accessible packages
+  paths         - show paths
+  pwd           - print working directory
+  set FLAGS ... - parse and set FLAGS
+")))
+
+
 ;;; REPL command macro
 
 (defn (commands [(, Code ReplCommand)])
-  [(, 'browse browse)
-   (, 'cd cd)
-   (, 'compile-obj compile-obj)
-   (, 'component component)
-   (, 'debug debug)
-   (, 'info info)
-   (, 'link-module link-module)
-   (, 'load SK.Repl.Macro.load)
-   (, 'ls ls)
-   (, 'pwd pwd)
-   (, 'set set)])
+  [(, 'bindings bindings-cmd)
+   (, 'browse browse-cmd)
+   (, 'cd cd-cmd)
+   (, 'compile-obj compile-obj-cmd)
+   (, 'component component-cmd)
+   (, 'context context-cmd)
+   (, 'debug debug-cmd)
+   (, 'dflags dflags-cmd)
+   (, 'help help-cmd)
+   (, 'info info-cmd)
+   (, 'link-module link-module-cmd)
+   (, 'linker linker-cmd)
+   (, 'load load-cmd)
+   (, 'ls ls-cmd)
+   (, 'macros macros-cmd)
+   (, 'modules modules-cmd)
+   (, 'packages packages-cmd)
+   (, 'paths paths-cmd)
+   (, 'pwd pwd-cmd)
+   (, 'set set-cmd)])
 
 (defmacro* *_ form
   (case form
