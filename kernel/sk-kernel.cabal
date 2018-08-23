@@ -18,7 +18,7 @@ extra-source-files:  README.md
                      test/data/build/p01/src/P01/*.hs
                      test/data/build/p01/src/P01/*.sk
                      test/data/build/p01/test/*.hs
-cabal-version:       >= 2.0
+cabal-version:       2.0
 
 custom-setup
   setup-depends:       base >= 4.7 && < 5
@@ -49,6 +49,7 @@ library
                        Language.SK.Syntax
                        Paths_sk_kernel
   other-modules:       Language.SK.Syntax.Internal
+  autogen-modules:     Paths_sk_kernel
   build-depends:       Cabal >= 2.0
                      , QuickCheck >= 2.10.0
                      , array >= 0.5.2
