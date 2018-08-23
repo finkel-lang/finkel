@@ -37,7 +37,7 @@ library
                        SK.Repl.Macro
                        SK.Repl
                        SK.Prelude
-  other-modules:       Paths_sk_core
+                       Paths_sk_core
   autogen-modules:     Paths_sk_core
   build-depends:       base >= 4.7 && < 5
                      , bytestring
