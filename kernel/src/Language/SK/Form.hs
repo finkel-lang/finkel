@@ -32,6 +32,7 @@ module Language.SK.Form
   , GenLocated(..)
   , SrcLoc(..)
   , SrcSpan(..)
+  , mkFractionalLit
   , mkSrcLoc
   , mkSrcSpan
   , fsLit
@@ -346,7 +347,7 @@ haskellOpChars :: [Char]
 haskellOpChars = "!#$%&*+./<=>?@^|-~:"
 
 #if !MIN_VERSION_ghc(8,4,0)
--- | 'FractionalLit' did not exist in 8.2.x.
+-- | 'mkFractionalLit' did not exist in 8.2.x.
 mkFractionalLit :: Real a => a -> FractionalLit
 mkFractionalLit x = FL (show (realToFrac x :: Double)) (toRational x)
 #endif

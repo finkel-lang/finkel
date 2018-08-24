@@ -42,8 +42,13 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.Map as Map
 
 -- ghc
+import ApiAnnotation (AnnotationComment(..))
+import BasicTypes (FractionalLit)
 import Encoding (utf8DecodeByteString)
-import SrcLoc (RealSrcLoc, advanceSrcLoc, srcLocCol, srcLocLine)
+import FastString (FastString, mkFastStringByteString)
+import SrcLoc ( Located, RealSrcLoc, advanceSrcLoc, mkRealSrcLoc
+              , mkRealSrcSpan, srcLocCol, srcLocLine )
+import Util (readRational)
 
 -- ghc-boot
 import qualified GHC.LanguageExtensions as LangExt
@@ -54,7 +59,7 @@ import Control.Monad.Trans.Except (ExceptT(..), throwE)
 -- Internal
 import Language.SK.Builder
 import Language.SK.Form
-import Language.SK.GHC
+
 }
 
 $nl          = [\n\r\f]
@@ -593,7 +598,8 @@ tok_fractional :: Action
 tok_fractional (AlexInput _ _ s) l = do
   let str = BL.unpack (BL.take (fromIntegral l) s)
       rat = readRational str
-  return $ TFractional $! FL str rat
+  -- return $ TFractional $! FL str rat
+  return $ TFractional $! mkFractionalLit rat
 {-# INLINE tok_fractional #-}
 
 
