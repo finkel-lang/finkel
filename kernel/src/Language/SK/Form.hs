@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 -- | Form and Atom data.
@@ -40,6 +41,19 @@ module Language.SK.Form
 import Data.Data (Data, Typeable)
 import GHC.Generics (Generic)
 
+-- ghc
+import BasicTypes ( FractionalLit (..)
+#if MIN_VERSION_ghc(8,4,0)
+                  , mkFractionalLit
+#endif
+                  )
+import FastString (FastString, fsLit, unpackFS)
+import Outputable (ppr, showSDocUnsafe)
+import SrcLoc ( GenLocated(..), Located, SrcLoc(..)
+              , SrcSpan(..), combineLocs, getLoc, mkSrcLoc, mkSrcSpan
+              , srcSpanFile, srcSpanStartCol, srcSpanStartLine
+              , unLoc )
+
 -- deepseq
 import Control.DeepSeq (NFData(..))
 
@@ -49,8 +63,6 @@ import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
                        , getUnicodeString, listOf
                        , oneof, scale, variant )
 
--- Internal
-import Language.SK.GHC
 
 -- -------------------------------------------------------------------
 --
@@ -86,7 +98,8 @@ instance Show Atom where
         _    -> ['\\', c]
       AString s -> showsPrec d s
       AInteger i -> showsPrec d i
-      AFractional f -> showString (fl_text f)
+      -- AFractional f -> showString (fl_text f)
+      AFractional f -> showString (showSDocUnsafe (ppr f))
       AComment _ -> showString ""
 
 instance NFData Atom where
@@ -261,7 +274,7 @@ aSymbol = ASymbol . fsLit
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.
 aFractional :: (Real a, Show a) => a -> Atom
-aFractional x = AFractional $! FL (show x) (toRational x)
+aFractional x = AFractional $! mkFractionalLit x
 {-# SPECIALIZE aFractional :: Double -> Atom #-}
 {-# SPECIALIZE aFractional :: Float -> Atom #-}
 
@@ -331,3 +344,9 @@ mkLocatedForm ms = L (combineLocs (unLForm (head ms))
 -- | Characters used in Haskell operators.
 haskellOpChars :: [Char]
 haskellOpChars = "!#$%&*+./<=>?@^|-~:"
+
+#if !MIN_VERSION_ghc(8,4,0)
+-- | 'FractionalLit' did not exist in 8.2.x.
+mkFractionalLit :: Real a => a -> FractionalLit
+mkFractionalLit x = FL (show (realToFrac x :: Double)) (toRational x)
+#endif
