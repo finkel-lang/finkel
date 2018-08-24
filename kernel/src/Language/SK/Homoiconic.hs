@@ -25,8 +25,11 @@ import qualified Data.Functor.Product as Product
 import qualified Data.Functor.Sum as Sum
 import qualified Data.Semigroup as Semigroup
 
+-- ghc
+import BasicTypes (fl_value)
+import FastString (FastString)
+
 -- internal
-import Language.SK.GHC
 import Language.SK.Form
 
 
@@ -464,8 +467,7 @@ instance Homoiconic (LForm Atom) where
 -- -------------------------------------------------------------------
 
 realFracToCode :: (Real a, Show a) => a -> Code
-realFracToCode a =
-  LForm (genSrc (Atom (AFractional (FL (show a) (toRational a)))))
+realFracToCode a = LForm (genSrc (Atom (aFractional a)))
 
 fractionalFromCode :: Fractional a => Code -> Maybe a
 fractionalFromCode a =
