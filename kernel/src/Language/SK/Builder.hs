@@ -46,15 +46,26 @@ module Language.SK.Builder
 import Control.Monad (ap, liftM)
 import Data.Char (isUpper)
 
--- qualified import of OccName.varName from ghc package. The entity
--- `varName' conflicts with `Var.varName'.
-import qualified OccName (NameSpace, varName, srcDataName)
+-- ghc
+import Bag (Bag)
+import FastString (FastString, headFS, unpackFS)
+import ForeignCall (CCallConv(..))
+import OccName (NameSpace, srcDataName, tcName, varName)
+import HsBinds (HsLocalBinds, LHsBind, LSig)
+import HsDecls (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
+import HsExpr (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
+import HsImpExp (LIE, LIEWrappedName, LImportDecl)
+import HsPat (LPat)
+import HsSyn (HsModule)
+import HsTypes (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
+import RdrName (RdrName, mkQual, mkUnqual, mkVarUnqual, nameRdrName)
+import SrcLoc (Located)
+import TysWiredIn (consDataConName)
 
 -- transformers
 import Control.Monad.Trans.State (StateT(..), get, put)
 
 -- Internal
-import Language.SK.GHC
 import Language.SK.Form
 
 
@@ -202,9 +213,9 @@ mkRdrName :: FastString -> RdrName
 mkRdrName = mkRdrName' tcName
 
 mkVarRdrName :: FastString -> RdrName
-mkVarRdrName = mkRdrName' OccName.srcDataName
+mkVarRdrName = mkRdrName' srcDataName
 
-mkRdrName' :: OccName.NameSpace -> FastString -> RdrName
+mkRdrName' :: NameSpace -> FastString -> RdrName
 mkRdrName' upperCaseNameSpace name
   -- ':' is special syntax. It is defined in module "GHC.Types" in
   -- package "ghc-prim", but not exported.
@@ -220,7 +231,7 @@ mkRdrName' upperCaseNameSpace name
       Nothing -> mkUnqual srcDataName name
       Just q@(_, name')
          | isUpper y || y == ':' -> mkQual upperCaseNameSpace q
-         | otherwise             -> mkQual OccName.varName q
+         | otherwise             -> mkQual varName q
          where
            y = headFS name'
 
