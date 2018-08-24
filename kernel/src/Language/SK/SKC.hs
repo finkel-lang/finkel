@@ -28,12 +28,29 @@ module Language.SK.SKC
   ) where
 
 -- base
-import Control.Exception (Exception(..))
+import Control.Exception (Exception(..), throwIO)
 import Control.Monad (when)
+import Control.Monad.IO.Class (MonadIO(..))
 
 -- containers
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
+
+-- ghc
+import Bag (unitBag)
+import DynFlags ( DynFlags(..), HasDynFlags(..), Language(..)
+                , unsafeGlobalDynFlags )
+import FastString (FastString, unpackFS)
+import ErrUtils (mkErrMsg)
+import Exception (ExceptionMonad(..), ghandle)
+import GhcMonad ( Ghc(..), GhcMonad(..), getSessionDynFlags
+                , modifySession )
+import HscTypes ( HscEnv(..), InteractiveContext(..), TyThing(..)
+                , mkSrcErr )
+import Outputable ( alwaysQualify, neverQualify, showSDocForUser, text
+                  , ppr )
+import UniqSupply (mkSplitUniqSupply, uniqFromSupply)
+import Var (varType)
 
 -- transformers
 import Control.Monad.Trans.Class (lift)
@@ -41,7 +58,6 @@ import Control.Monad.Trans.State.Strict (StateT(..), get, modify, put)
 
 -- Internal
 import Language.SK.Form
-import Language.SK.GHC
 
 
 -- ---------------------------------------------------------------------
