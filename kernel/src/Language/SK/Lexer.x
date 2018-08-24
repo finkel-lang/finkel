@@ -598,7 +598,6 @@ tok_fractional :: Action
 tok_fractional (AlexInput _ _ s) l = do
   let str = BL.unpack (BL.take (fromIntegral l) s)
       rat = readRational str
-  -- return $ TFractional $! FL str rat
   return $ TFractional $! mkFractionalLit rat
 {-# INLINE tok_fractional #-}
 
