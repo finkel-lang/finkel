@@ -1,5 +1,9 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+#if MIN_VERSION_ghc(8,4,0)
+{-# LANGUAGE UndecidableInstances #-}
+#endif
 -- | Emit Haskell source code from Haskell syntax data type.
 module Language.SK.Emit
   ( HsSrc(..)
@@ -10,19 +14,46 @@ module Language.SK.Emit
 
 -- base
 import Data.Maybe (fromMaybe)
+#if MIN_VERSION_base(4,11,0)
+import Prelude hiding ((<>))
+#endif
 
 -- containers
 import qualified Data.Map as Map
 
 -- ghc
-import GHC
-import OccName
-import Outputable
-import SrcLoc
+import GHC (OutputableBndrId, getPrintUnqual)
+
+import ApiAnnotation (AnnotationComment(..))
+import FastString (unpackFS)
+import GhcMonad (GhcMonad(..), getSessionDynFlags)
+import HsBinds (HsBindLR(..), Sig(..), pprTicks, pprVarSig)
+import HsDecls (HsDecl(..))
+import HsExpr (HsExpr(..), pprFunBind)
+import HsSyn (HsModule(..))
+import OccName (HasOccName(..))
+import Outputable ( ($$), (<+>), (<>)
+                  , BindingSite(..), Outputable(..), SDoc
+                  , comma, doubleQuotes, empty, fsep
+                  , int, lparen, nest, pprBndr, punctuate
+                  , showSDocForUser, text, vcat
+#if !MIN_VERSION_ghc(8,4,0)
+                  , ifPprDebug
+#else
+                  , whenPprDebug
+#endif
+                  )
+import RdrName (RdrName)
+import SrcLoc ( Located, GenLocated(..), SrcLoc, SrcSpan(..)
+              , combineSrcSpans, getLoc, unLoc
+              , sortLocated, srcSpanEndLine, srcSpanStartLine )
+
+#if MIN_VERSION_ghc(8,4,0)
+import HsExtension (SourceTextX)
+#endif
 
 -- Internal
 import Language.SK.Lexer
-import Language.SK.GHC (unpackFS)
 
 
 -- ---------------------------------------------------------------------
@@ -206,8 +237,12 @@ instance HsSrc SrcLoc where
 instance (HsSrc b) => HsSrc (GenLocated a b) where
   toHsSrc st (L _ e) = toHsSrc st e
 
+#if !MIN_VERSION_ghc(8,4,0)
 instance (HsSrc a, OutputableBndrId a, HasOccName a)
-          => HsSrc (Hsrc (HsModule a)) where
+#else
+instance (HsSrc a, OutputableBndrId a, HasOccName a, SourceTextX a)
+#endif
+         => HsSrc (Hsrc (HsModule a)) where
   toHsSrc st (Hsrc a) = case a of
     HsModule Nothing _ imports decls _ mbDoc ->
       vcat [ linePragma' st 1
@@ -237,17 +272,31 @@ instance (HsSrc a, OutputableBndrId a, HasOccName a)
             Just d  -> vcat [pp_modname, ppr d, rest]
         pp_modname = text "module" <+> ppr name
 
-instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsExpr a)) where
+#if !MIN_VERSION_ghc(8,4,0)
+instance (OutputableBndrId a, HsSrc a)
+#else
+instance (OutputableBndrId a, HsSrc a, SourceTextX a)
+#endif
+         => HsSrc (Hsrc (HsExpr a)) where
   toHsSrc _ = ppr . unHsrc
 
-instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (HsDecl a)) where
+#if !MIN_VERSION_ghc(8,4,0)
+instance (OutputableBndrId a, HsSrc a)
+#else
+instance (OutputableBndrId a, HsSrc a, SourceTextX a)
+#endif
+         => HsSrc (Hsrc (HsDecl a)) where
   toHsSrc st (Hsrc decl) =
     case decl of
       ValD binds -> toHsSrc st (Hsrc binds)
       SigD sigd  -> toHsSrc st (Hsrc sigd)
       _          -> ppr decl
 
+#if !MIN_VERSION_ghc(8,4,0)
 instance (OutputableBndrId a, HsSrc a)
+#else
+instance (OutputableBndrId a, HsSrc a, SourceTextX a)
+#endif
          => HsSrc (Hsrc (HsBindLR a a)) where
   toHsSrc st (Hsrc binds) =
     case binds of
@@ -258,7 +307,7 @@ instance (OutputableBndrId a, HsSrc a)
         -> pprTicks empty (if null ticks
                               then empty
                               else text "-- ticks = " <> ppr ticks)
-           $$ ifPprDebug (pprBndr LetBind (unLoc fun))
+           $$ whenPprDebug (pprBndr LetBind (unLoc fun))
 
            -- Additional operation to `ppr' for `toHsSrc'. Find
            -- corresponding haddock comment for function binding, and
@@ -266,11 +315,15 @@ instance (OutputableBndrId a, HsSrc a)
            $$ emitPrevDoc st fun
 
            $$ pprFunBind matches
-           $$ ifPprDebug (ppr wrap)
+           $$ whenPprDebug (ppr wrap)
       _ -> ppr binds
 
--- instance (OutputableBndrId a, HsSrc a) => HsSrc (Sig a) where
-instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (Sig a)) where
+#if !MIN_VERSION_ghc(8,4,0)
+instance (OutputableBndrId a, HsSrc a)
+#else
+instance (OutputableBndrId a, HsSrc a, SourceTextX a)
+#endif
+         => HsSrc (Hsrc (Sig a)) where
   toHsSrc st (Hsrc sig) =
     case sig of
       TypeSig vars ty ->
@@ -279,3 +332,18 @@ instance (OutputableBndrId a, HsSrc a) => HsSrc (Hsrc (Sig a)) where
            var:_ -> emitPrevDoc st var)
         $$ pprVarSig (map unLoc vars) (ppr ty)
       _               -> ppr sig
+
+
+-- -------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- -------------------------------------------------------------------
+
+#if !MIN_VERSION_ghc(8,4,0)
+-- | 'whenPprDebug' does not exist in ghc 8.2. Defining one with
+-- 'ifPprDebug'. Also, number of arguments in 'ifPprDebug' changed in
+-- ghc 8.4.
+whenPprDebug :: SDoc -> SDoc
+whenPprDebug d = ifPprDebug d
+#endif
