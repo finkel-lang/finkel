@@ -1,4 +1,5 @@
 -- | Auxiliary module for syntax.
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Language.SK.Syntax.Internal where
@@ -9,9 +10,36 @@ import Data.Char (isUpper)
 import Data.List (foldl1')
 import Data.Maybe (fromMaybe)
 
+-- ghc
+import HsSyn
+
+import Bag (emptyBag, consBag, listToBag)
+import BasicTypes ( Boxity(..), Fixity(..), FixityDirection(..)
+                  , InlinePragma(..), InlineSpec(..), LexicalFixity(..)
+                  , Origin(..), SourceText(..)
+                  , alwaysInlinePragma
+                  , fl_value
+                  , defaultInlinePragma
+#if MIN_VERSION_ghc(8,4,0)
+                  , IntegralLit(..)
+#endif
+                  )
+import FastString (FastString, headFS)
+import FieldLabel (FieldLbl(..))
+import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
+import HsUtils (mkHsIntegral)
+import OccName (srcDataName, tcName, tvName)
+import OrdList (OrdList, fromOL, toOL)
+import Module (mkModuleNameFS)
+import RdrHsSyn ( cvTopDecls, parseCImport, mkRdrRecordCon
+                , mkRdrRecordUpd)
+import RdrName (RdrName, getRdrName, mkQual, mkUnqual)
+import SrcLoc (Located, combineLocs, combineSrcSpans, noLoc)
+import TcEvidence (idHsWrapper)
+import TysWiredIn (listTyCon)
+
 -- Internal
 import Language.SK.Builder
-import Language.SK.GHC
 import Language.SK.Form
 
 
@@ -345,7 +373,11 @@ b_safety (LForm (L l (Atom (ASymbol sym)))) =
 b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
 b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
   let body = GRHSs grhss (declsToBinds l decls)
+#if !MIN_VERSION_ghc(8,4,0)
       match = L l (Match ctxt args Nothing body)
+#else
+      match = L l (Match ctxt args body)
+#endif
       ctxt = FunRhs { mc_fun = lrname
                     , mc_fixity = Prefix
                       -- XXX: Get strictness info from somewhere?
@@ -472,9 +504,7 @@ b_unpackT (LForm (L l _)) t = L l (HsBangTy bang t')
 
 b_intP :: Code -> HPat
 b_intP (LForm (L l (Atom (AInteger n)))) =
-  L l (mkNPat (L l lit) Nothing)
-  where
-     lit = mkHsIntegral (SourceText (show n)) n placeHolderType
+  L l (mkNPat (L l (mkHsIntegral_compat n)) Nothing)
 
 b_stringP :: Code -> HPat
 b_stringP (LForm (L l (Atom (AString s)))) =
@@ -562,7 +592,11 @@ b_caseE (LForm (L l _)) expr matches = L l (HsCase expr mg)
 
 b_match :: HPat -> ([HGRHS],[HDecl]) -> HMatch
 b_match pat@(L l _) (grhss,decls) =
+#if !MIN_VERSION_ghc(8,4,0)
     L l (Match ctxt [pat] Nothing grhss')
+#else
+    L l (Match ctxt [pat] grhss')
+#endif
   where
     grhss' = GRHSs grhss (declsToBinds l decls)
     ctxt = CaseAlt
@@ -625,8 +659,7 @@ b_integerE (LForm (L l (Atom (AInteger x))))
    | x < 0     = L l (HsPar expr)
    | otherwise = expr
   where
-    expr =     L l (HsOverLit $! mkHsIntegral st x placeHolderType)
-    st = SourceText (show x)
+    expr =     L l (HsOverLit $! mkHsIntegral_compat x)
 
 b_floatE :: Code -> HExpr
 b_floatE (LForm (L l (Atom (AFractional x))))
@@ -717,14 +750,14 @@ mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
 
 -- | Convert record field constructor expression to record field update
 -- expression.
-cfld2ufld :: Located (HsRecField RdrName HExpr)
-          -> Located (HsRecUpdField RdrName)
+cfld2ufld :: LHsRecField PARSED HExpr
+          -> LHsRecUpdField PARSED
 -- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
   L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
 
 -- | Make 'HsRecField' with given name and located data.
-mkcfld :: (FastString, Located a) -> LHsRecField RdrName (Located a)
+mkcfld :: (FastString, Located a) -> LHsRecField PARSED (Located a)
 mkcfld (name, e@(L fl _)) =
   L fl HsRecField { hsRecFieldLbl = mkfname fl name
                   , hsRecFieldArg = e
@@ -756,8 +789,8 @@ cvBindsAndSigs fb = go (fromOL fb)
       = let (bs, ss) = go ds
         in  (bs, L l s : ss)
 
-getMonoBind :: LHsBind RdrName -> [LHsDecl RdrName]
-            -> (LHsBind RdrName, [LHsDecl RdrName])
+getMonoBind :: LHsBind PARSED -> [LHsDecl PARSED]
+            -> (LHsBind PARSED, [LHsDecl PARSED])
 getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),
                                fun_matches
                                  = MG { mg_alts = L _ mtchs1 }}))
@@ -780,14 +813,18 @@ getMonoBind bind binds = (bind, binds)
 -- Don't group together FunBinds if they have no arguments.  This is
 -- necessary now that variable bindings with no arguments are now
 -- treated as FunBinds rather than pattern bindings.
-has_args :: [LMatch RdrName (LHsExpr RdrName)] -> Bool
+has_args :: [LMatch PARSED (LHsExpr PARSED)] -> Bool
+#if !MIN_VERSION_ghc(8,4,0)
 has_args ((L _ (Match _ args _ _)) : _) = not (null args)
+#else
+has_args ((L _ (Match _ args _)) : _) = not (null args)
+#endif
 has_args []                             =
   error "Language.SK.Syntax.Internal:has_args"
 
 -- Like HsUtils.mkFunBind, but we need to be able to set the fixity too
-makeFunBind :: Located RdrName -> [LMatch RdrName (LHsExpr RdrName)]
-            -> HsBind RdrName
+makeFunBind :: Located RdrName -> [LMatch PARSED (LHsExpr PARSED)]
+            -> HsBind PARSED
 makeFunBind fn ms
   = FunBind { fun_id = fn,
               fun_matches = mkMatchGroup FromSource ms,
@@ -801,3 +838,16 @@ codeToUserTyVar code =
     LForm (L l (Atom (ASymbol name))) ->
       L l (UserTyVar (L l (mkUnqual tvName name)))
     _ -> error "Language.SK.Syntax.Internal:codeToUserTyVar"
+
+-- | Auxiliary function to absorb version compatibiity of
+-- 'mkHsIntegral'.
+mkHsIntegral_compat :: Integer -> HsOverLit PARSED
+mkHsIntegral_compat n =
+#if !MIN_VERSION_ghc(8,4,0)
+  mkHsIntegral (SourceText (show n)) n placeHolderType
+#else
+  let il = IL { il_text = SourceText (show n)
+              , il_neg = if n < 0 then True else False
+              , il_value = n }
+  in  mkHsIntegral il placeHolderType
+#endif
