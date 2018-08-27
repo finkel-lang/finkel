@@ -1,4 +1,5 @@
 -- | Builder functions for Haskell syntax data type.
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Language.SK.Builder
   ( -- * Builders type and functions
@@ -40,6 +41,9 @@ module Language.SK.Builder
   , HStmt
   , HTyVarBndr
   , HType
+
+  -- * For ghc version compatibility
+  , PARSED
   ) where
 
 -- base
@@ -61,6 +65,10 @@ import HsTypes (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
 import RdrName (RdrName, mkQual, mkUnqual, mkVarUnqual, nameRdrName)
 import SrcLoc (Located)
 import TysWiredIn (consDataConName)
+
+#if MIN_VERSION_ghc (8,4,0)
+import HsExtension (GhcPs)
+#endif
 
 -- transformers
 import Control.Monad.Trans.State (StateT(..), get, put)
@@ -156,51 +164,57 @@ builderError = do
 --
 -- ---------------------------------------------------------------------
 
-type HBind = LHsBind RdrName
+#if !MIN_VERSION_ghc(8,4,0)
+type PARSED = RdrName
+#else
+type PARSED = GhcPs
+#endif
 
-type HBinds = Bag (LHsBind RdrName)
+type HBind = LHsBind PARSED
+
+type HBinds = Bag (LHsBind PARSED)
 
 type HCCallConv = Located CCallConv
 
-type HConDecl = LConDecl RdrName
+type HConDecl = LConDecl PARSED
 
-type HConDeclDetails = HsConDeclDetails RdrName
+type HConDeclDetails = HsConDeclDetails PARSED
 
-type HConDeclField = LConDeclField RdrName
+type HConDeclField = LConDeclField PARSED
 
-type HDecl = LHsDecl RdrName
+type HDecl = LHsDecl PARSED
 
-type HDeriving = HsDeriving RdrName
+type HDeriving = HsDeriving PARSED
 
-type HExpr = LHsExpr RdrName
+type HExpr = LHsExpr PARSED
 
-type HGRHS = LGRHS RdrName HExpr
+type HGRHS = LGRHS PARSED HExpr
 
-type HGuardLStmt = GuardLStmt RdrName
+type HGuardLStmt = GuardLStmt PARSED
 
-type HIE = LIE RdrName
+type HIE = LIE PARSED
 
-type HIEWrappedName = LIEWrappedName RdrName
+type HIEWrappedName = LIEWrappedName PARSED
 
-type HImportDecl = LImportDecl RdrName
+type HImportDecl = LImportDecl PARSED
 
-type HLocalBinds = Located (HsLocalBinds RdrName)
+type HLocalBinds = Located (HsLocalBinds PARSED)
 
-type HMatch = LMatch RdrName HExpr
+type HMatch = LMatch PARSED HExpr
 
-type HModule = HsModule RdrName
+type HModule = HsModule PARSED
 
-type HPat = LPat RdrName
+type HPat = LPat PARSED
 
-type HSig = LSig RdrName
+type HSig = LSig PARSED
 
-type HSigWcType = LHsSigWcType RdrName
+type HSigWcType = LHsSigWcType PARSED
 
-type HStmt = ExprLStmt RdrName
+type HStmt = ExprLStmt PARSED
 
-type HTyVarBndr = LHsTyVarBndr RdrName
+type HTyVarBndr = LHsTyVarBndr PARSED
 
-type HType = LHsType RdrName
+type HType = LHsType PARSED
 
 
 -- ---------------------------------------------------------------------
