@@ -20,9 +20,17 @@ module Language.SK.Syntax
   , parseExpr
   ) where
 
+-- ghc
+import BasicTypes (FixityDirection(..), InlineSpec(..))
+import FastString (FastString)
+import ForeignCall (Safety)
+import HsDoc (LHsDocString)
+import HsExpr (GRHS(..))
+import SrcLoc (Located, noLoc)
+
+-- Internal
 import Language.SK.Builder
 import Language.SK.Form
-import Language.SK.GHC
 import Language.SK.Syntax.Internal
 }
 
