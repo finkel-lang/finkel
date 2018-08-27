@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
 -- | Module for code evaluation.
 module Language.SK.Eval
@@ -7,33 +8,49 @@ module Language.SK.Eval
 
 -- base
 import Control.Monad.IO.Class (liftIO)
+#if MIN_VERSION_ghc(8,4,0)
+import Data.IORef (readIORef)
+#endif
 
 -- ghc
 import ByteCodeGen (byteCodeGen)
 import ConLike (ConLike(..))
 import CorePrep (corePrepPgm)
-import CoreSyn (bindersOfBinds)
+import CoreSyn (CoreProgram, bindersOfBinds)
 import Desugar (deSugar)
 import ErrUtils (Messages)
+import Exception (throwIO)
+import FastString (fsLit)
+import GhcMonad (GhcMonad(..))
 import InteractiveEval (compileParsedExprRemote)
-import HscMain (hscSimplify)
-import HscTypes ( CgGuts(..), ModDetails(..), ModGuts(..)
-                , InteractiveContext(..), extendInteractiveContext )
+import HscMain (hscAddSptEntries, hscSimplify)
+import HscTypes ( CgGuts(..), ModDetails(..), HscEnv(..), ModGuts(..)
+                , InteractiveContext(..), TyThing(..)
+                , extendInteractiveContext, mkSrcErr )
 import Id (idName, isDFunId, isImplicitId)
 import Linker (linkDecls)
+import Module (Module, ModLocation(..), moduleName, moduleNameString)
 import Name (isExternalName)
-import SrcLoc (srcLocSpan)
+import SrcLoc (SrcLoc(..), srcLocSpan)
 import TcRnDriver (tcRnDeclsi)
 import TcRnTypes (TcGblEnv(..))
 import TidyPgm (tidyProgram)
-import TyCon (isDataTyCon, isImplicitTyCon)
+import TyCon (TyCon, isDataTyCon, isImplicitTyCon)
 import Util (filterOut)
+
+-- ghci
+import GHCi.RemoteTypes (HValue, localRef, withForeignRef)
 
 -- internal
 import Language.SK.Builder
-import Language.SK.GHC
 import Language.SK.SKC
 
+
+-- ---------------------------------------------------------------------
+--
+-- Eval functions
+--
+-- ---------------------------------------------------------------------
 
 -- | Evaluate given expression to haskell value.
 evalExpr :: HExpr -> Skc HValue
@@ -57,7 +74,7 @@ evalDecls decls = do
                      , ml_hi_file = error "ewc:ml_hi_file"
                      , ml_obj_file = error "ewc:ml_obj_file"}
   ds_result <- skcDesugar' interactive_loc tc_gblenv
-  simpl_mg <- liftIO (hscSimplify hsc_env ds_result)
+  simpl_mg <- liftIO (hscSimplify_compat hsc_env ds_result tc_gblenv)
   (tidy_cg, mod_details) <- liftIO (tidyProgram hsc_env simpl_mg)
   let !CgGuts { cg_module = this_mod
               , cg_binds = core_binds
@@ -70,8 +87,8 @@ evalDecls decls = do
              ("[Language.SK.Eval.envDecls] this_mod=" ++
               moduleNameString (moduleName this_mod)))
   prepd_binds <-
-    liftIO (corePrepPgm hsc_env this_mod interactive_loc core_binds
-                        data_tycons)
+    liftIO (corePrepPgm_compat hsc_env this_mod interactive_loc
+                               core_binds data_tycons)
   cbc <- liftIO (byteCodeGen hsc_env this_mod prepd_binds
                              data_tycons mod_breaks)
   let evalDeclsSrcLoc =
@@ -95,6 +112,12 @@ evalDecls decls = do
   setSession (hsc_env {hsc_IC = new_ictxt})
   return (new_tythings, new_ictxt)
 
+-- ---------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- ---------------------------------------------------------------------
+
 -- | Like 'HscMain.hscDesugar'', but for 'Skc'.
 skcDesugar' :: ModLocation -> TcGblEnv -> Skc ModGuts
 skcDesugar' mod_location tc_result = do
@@ -116,3 +139,26 @@ ioMsgMaybe ioA = do
   case mb_r of
     Nothing -> liftIO (throwIO (mkSrcErr errs))
     Just r  -> return r
+
+-- | GHC version compatibility helper for combining 'hscSimplify'
+-- and 'tcg_th_coreplugins'.
+hscSimplify_compat :: HscEnv -> ModGuts -> TcGblEnv -> IO ModGuts
+#if !MIN_VERSION_ghc(8,4,0)
+hscSimplify_compat hsc_env modguts _tc_gblenv =
+  hscSimplify hsc_env modguts
+#else
+hscSimplify_compat hsc_env modguts tc_gblenv = do
+  plugins <- readIORef (tcg_th_coreplugins tc_gblenv)
+  hscSimplify hsc_env plugins modguts
+#endif
+
+-- | GHC version compatibility helper for 'corePrepPgm'.
+corePrepPgm_compat :: HscEnv -> Module -> ModLocation -> CoreProgram
+                   -> [TyCon] -> IO CoreProgram
+#if !MIN_VERSION_ghc(8,4,0)
+corePrepPgm_compat hsc_env this_mod mod_loc binds data_tycons =
+  corePrepPgm hsc_env this_mod mod_loc binds data_tycons
+#else
+corePrepPgm_compat hsc_env this_mod mod_loc binds data_tycons =
+  fmap fst (corePrepPgm hsc_env this_mod mod_loc binds data_tycons)
+#endif
