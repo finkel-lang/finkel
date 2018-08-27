@@ -11,15 +11,20 @@ module Language.SK.Reader
 import Data.Char (toLower)
 import Data.List (foldl')
 
--- Internal
-import Language.SK.Builder
-import Language.SK.Form
-import Language.SK.GHC
-import Language.SK.Lexer
-import Language.SK.Syntax
+-- ghc
+import FastString (FastString, unpackFS)
+import HsImpExp (ideclName)
+import Module (moduleNameString)
+import SrcLoc (Located(..))
 
 -- ghc-boot
 import GHC.LanguageExtensions (Extension(..))
+
+-- Internal
+import Language.SK.Builder
+import Language.SK.Form
+import Language.SK.Lexer
+import Language.SK.Syntax
 }
 
 %name sexpr sexp
