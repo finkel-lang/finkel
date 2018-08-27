@@ -43,7 +43,11 @@ import qualified Data.Map as Map
 
 -- ghc
 import ApiAnnotation (AnnotationComment(..))
-import BasicTypes (FractionalLit)
+import BasicTypes ( FractionalLit(..)
+#if MIN_VERSION_ghc(8,4,0)
+                  , SourceText(..)
+#endif
+                  )
 import Encoding (utf8DecodeByteString)
 import FastString (FastString, mkFastStringByteString)
 import SrcLoc ( Located, RealSrcLoc, advanceSrcLoc, mkRealSrcLoc
@@ -598,7 +602,13 @@ tok_fractional :: Action
 tok_fractional (AlexInput _ _ s) l = do
   let str = BL.unpack (BL.take (fromIntegral l) s)
       rat = readRational str
-  return $ TFractional $! mkFractionalLit rat
+#if !MIN_VERSION_ghc(8,4,0)
+  return $ TFractional $! FL str rat
+#else
+  let stxt = SourceText str
+      is_neg = if 0 < rat then True else False
+  return $ TFractional $! FL stxt is_neg rat
+#endif
 {-# INLINE tok_fractional #-}
 
 

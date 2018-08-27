@@ -45,11 +45,11 @@ import GHC.Generics (Generic)
 -- ghc
 import BasicTypes ( FractionalLit (..)
 #if MIN_VERSION_ghc(8,4,0)
+                  , SourceText(..)
                   , mkFractionalLit
 #endif
                   )
 import FastString (FastString, fsLit, unpackFS)
-import Outputable (ppr, showSDocUnsafe)
 import SrcLoc ( GenLocated(..), Located, SrcLoc(..)
               , SrcSpan(..), combineLocs, getLoc, mkSrcLoc, mkSrcSpan
               , srcSpanFile, srcSpanStartCol, srcSpanStartLine
@@ -99,9 +99,18 @@ instance Show Atom where
         _    -> ['\\', c]
       AString s -> showsPrec d s
       AInteger i -> showsPrec d i
-      -- AFractional f -> showString (fl_text f)
-      AFractional f -> showString (showSDocUnsafe (ppr f))
+      AFractional f -> showString (fl_text_compat f)
       AComment _ -> showString ""
+
+fl_text_compat :: FractionalLit -> String
+fl_text_compat fl =
+#if !MIN_VERSION_ghc(8,4,0)
+  fl_text fl
+#else
+  case fl_text fl of
+    NoSourceText -> error "fractional literal with no source"
+    SourceText s -> s
+#endif
 
 instance NFData Atom where
   rnf x =
