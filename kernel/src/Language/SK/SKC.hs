@@ -1,8 +1,9 @@
 -- | Wrapper for SK code compilation monad.
-
+{-# LANGUAGE CPP #-}
 module Language.SK.SKC
   ( Skc(..)
   , SkEnv(..)
+  , FlagSet
   , SkException(..)
   , Macro(..)
   , EnvMacros
@@ -15,6 +16,7 @@ module Language.SK.SKC
   , getSkEnv
   , putSkEnv
   , modifySkEnv
+  , emptyFlagSet
   , setDynFlags
   , insertMacro
   , lookupMacro
@@ -33,8 +35,11 @@ import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO(..))
 
 -- containers
-import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
+
+#if !MIN_VERSION_ghc(8,4,0)
+import qualified Data.IntSet as IntSet
+#endif
 
 -- ghc
 import Bag (unitBag)
@@ -51,6 +56,15 @@ import Outputable ( alwaysQualify, neverQualify, showSDocForUser, text
                   , ppr )
 import UniqSupply (mkSplitUniqSupply, uniqFromSupply)
 import Var (varType)
+
+#if MIN_VERSION_ghc(8,4,0)
+import qualified EnumSet
+#endif
+
+-- ghc-boot
+#if MIN_VERSION_ghc(8,4,0)
+import GHC.LanguageExtensions as LangExt
+#endif
 
 -- transformers
 import Control.Monad.Trans.Class (lift)
@@ -112,12 +126,18 @@ data SkEnv = SkEnv
      -- | Modules to import to context.
    , envContextModules :: [String]
      -- | Default values to reset the language extensions.
-   , envDefaultLangExts :: (Maybe Language, IntSet.IntSet)
+   , envDefaultLangExts :: (Maybe Language, FlagSet)
      -- | Flag for controling informative output.
    , envSilent :: Bool
      -- | Flag for adding macros with @define-macro@.
    , envAddInDefineMacro :: Bool
    }
+
+#if !MIN_VERSION_ghc(8,4,0)
+type FlagSet = IntSet.IntSet
+#else
+type FlagSet = EnumSet.EnumSet LangExt.Extension
+#endif
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
 newtype Skc a = Skc {
@@ -271,3 +291,11 @@ gensym' prefix = do
   s <- liftIO (mkSplitUniqSupply '_')
   let u = uniqFromSupply s
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))
+
+-- | Auxiliary function for empty language extension flag set.
+emptyFlagSet :: FlagSet
+#if !MIN_VERSION_ghc(8,4,0)
+emptyFlagSet = IntSet.empty
+#else
+emptyFlagSet = EnumSet.empty
+#endif

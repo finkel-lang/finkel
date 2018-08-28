@@ -30,7 +30,6 @@ import Data.Maybe (fromMaybe, maybeToList)
 import qualified Data.ByteString.Lazy as BL
 
 -- containers
-import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 
 -- ghc
@@ -142,7 +141,7 @@ initialSkEnv = SkEnv
   , envDefaultMacros = specialForms
   , envDebug = False
   , envContextModules = ["Prelude", "Language.SK"]
-  , envDefaultLangExts = (Nothing, IntSet.empty)
+  , envDefaultLangExts = (Nothing, emptyFlagSet)
   , envSilent = False
   , envAddInDefineMacro = False }
 

@@ -22,15 +22,49 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Graph (flattenSCCs)
 
 -- ghc
+import BasicTypes (SuccessFlag(..))
+import DriverPhases (Phase(..))
+import DriverPipeline (compileOne', link, oneShot, preprocess)
+import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
+                , GhcMode(..), getDynFlags, gopt)
+import ErrUtils (withTiming)
+import Exception (ghandle, tryIO)
+import Finder ( addHomeModuleToFinder, findImportedModule
+              , findObjectLinkable )
+import GHC ( TypecheckedModule(..), desugarModule, getModSummary
+           , loadModule, setSessionDynFlags)
+import GhcMake (topSortModuleGraph)
+import GhcMonad ( GhcMonad(..), getSessionDynFlags, modifySession
+                , withTempSession )
+import Outputable (ppr, text, showPpr, showSDoc)
+import HscMain (batchMsg, dumpIfaceStats)
+import HscTypes ( FindResult(..), GhcApiError, ModIface, ModDetails
+                , ModSummary(..), HomeModInfo (..), HscEnv(..)
+                , InteractiveContext(..), InteractiveImport(..)
+                , ModuleGraph, SourceModified(..)
+                , addToHpt, ms_mod_name, pprHPT
+#if MIN_VERSION_ghc(8,4,0)
+                , mkModuleGraph, extendMG
+#endif
+                )
+import HsImpExp (ImportDecl(..), simpleImportDecl)
+import HsSyn (HsModule(..))
+import InteractiveEval (setContext)
+import LoadIface (readIface)
+import Module ( ModLocation(..), ModuleName, installedUnitIdEq
+              , mkModuleName, mkModuleNameFS, moduleName
+              , moduleNameSlashes, moduleNameString, moduleUnitId )
+import Panic (GhcException(..), throwGhcException)
+import TcIface (typecheckIface)
+import TcRnDriver (runTcInteractive)
+import TcRnMonad (initIfaceLoad)
+import Util (getModificationUTCTime, looksLikeModuleName)
+import SrcLoc (mkRealSrcLoc, noLoc)
+import StringBuffer (stringToStringBuffer)
+
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
 import qualified Maybes as Maybes
-import ErrUtils (withTiming)
-import Outputable (text)
-import HscMain (dumpIfaceStats)
-import HscTypes (ModIface, ModDetails)
-import TcIface (typecheckIface)
-import TcRnMonad (initIfaceLoad)
 
 -- directory
 import System.Directory (doesFileExist)
@@ -41,11 +75,12 @@ import System.FilePath ( dropExtension, pathSeparator
                        , takeExtension, (<.>), (</>))
 
 -- internal
+import Language.SK.Builder
 import Language.SK.Form
-import Language.SK.GHC
 import Language.SK.Lexer
 import Language.SK.Run
 import Language.SK.SKC
+
 
 -- ---------------------------------------------------------------------
 --
@@ -77,7 +112,7 @@ make :: [(FilePath, Maybe Phase)] -- ^ List of input file and phase
      -> Bool -- ^ Skip linking when 'True'.
      -> Maybe FilePath -- ^ Output file, if any.
      -> Skc ()
-make inputs no_link mb_output = do
+make infiles no_link mb_output = do
   -- Setting ghcMode as done in ghc's "Main.hs".
   dflags <- getDynFlags
   setDynFlags (dflags { ghcMode = CompManager
@@ -95,11 +130,11 @@ make inputs no_link mb_output = do
   modifySkEnv (\e -> e {envDefaultLangExts = lexts})
 
   -- Decide the kind of sources of the inputs.
-  sources <- mapM findTargetSource inputs
+  sources <- mapM findTargetSource infiles
 
   -- Assuming modules names were passed as arguments, inputs could be
   -- file paths, or module names.
-  let to_compile = map fst inputs
+  let to_compile = map fst infiles
 
   -- Do the compilation work.
   mod_summaries <- make' to_compile [] sources
@@ -109,8 +144,9 @@ make inputs no_link mb_output = do
 
   -- Update current module graph for linker. Linking work is delegated
   -- to deriver pipelin's `link' function.
-  let mgraph_flattened =
-        flattenSCCs (topSortModuleGraph True mod_summaries Nothing)
+  let module_graph = mkModuleGraph' mod_summaries
+      mgraph_flattened =
+        flattenSCCs (topSortModuleGraph True module_graph Nothing)
   unless no_link (doLink mgraph_flattened)
 
 -- | Calls 'GHC.setSessionDynFlags' to initialize session.
@@ -119,6 +155,7 @@ initSessionForMake = do
   -- Returned list of 'InstalledUnitId's are ignored.
   _ <- getSessionDynFlags >>= setSessionDynFlags
   return ()
+
 
 -- ---------------------------------------------------------------------
 --
@@ -276,7 +313,8 @@ make' not_yet_compiled readys0 pendings0 = do
                  -- XXX: Test whether required modules are all ready to
                  -- compile.
                  let graph_upto_this =
-                       topSortModuleGraph True (summary:acc) (Just mn)
+                       topSortModuleGraph True mgraph (Just mn)
+                     mgraph = mkModuleGraph' (summary:acc)
                      mn = ms_mod_name summary
                      mNameString = moduleNameString mn
                      nycs' = filter (/= mNameString) nycs
@@ -295,7 +333,8 @@ make' not_yet_compiled readys0 pendings0 = do
       | otherwise = do
          let (readies', pendings') = partitionRequired nycs pendings
          rt_mss <- mkReadTimeModSummaries readies'
-         let graph = topSortModuleGraph True rt_mss Nothing
+         let pre_graph = mkModuleGraph' rt_mss
+             graph = topSortModuleGraph True pre_graph Nothing
              readies'' = sortTargets (flattenSCCs graph) readies'
          go acc i k nycs readies'' pendings'
 
@@ -308,7 +347,7 @@ make' not_yet_compiled readys0 pendings0 = do
 -- | Check whether recompilation is required, and compile the 'HsModule'
 -- when the codes or dependency modules were updated.
 makeOne :: Int -> Int -> ModSummary
-        -> HsModule RdrName -> [ModSummary] -> Skc ModSummary
+        -> HsModule PARSED -> [ModSummary] -> Skc ModSummary
 makeOne i total ms hmdl graph_upto_this = timeIt label go
   where
     label = "MakeOne [" ++ mname ++ "]"
@@ -331,7 +370,7 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
       -- Update module graph with new ModSummary, and restore the
       -- original DynFlags.
       modifySession
-        (\e -> e { hsc_mod_graph = ms' : hsc_mod_graph e
+        (\e -> e { hsc_mod_graph = extendMG' (hsc_mod_graph e) ms'
                  , hsc_dflags = dflags
                  , hsc_IC = (hsc_IC e) {ic_dflags=dflags}})
 
@@ -339,7 +378,7 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
 
 -- | Compile single module.
 doMakeOne :: Int -> Int -> ModSummary
-          -> HsModule RdrName -> Skc ModSummary
+          -> HsModule PARSED -> Skc ModSummary
 doMakeOne i total ms hmdl = do
   dflags_orig <- getDynFlags
   let dflags = ms_hspp_opts ms
@@ -373,7 +412,7 @@ doMakeOne i total ms hmdl = do
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
 
-dontMakeOne :: ModSummary -> HsModule RdrName -> Skc ModSummary
+dontMakeOne :: ModSummary -> HsModule PARSED -> Skc ModSummary
 dontMakeOne ms hmdl = do
   hsc_env <- getSession
   let mn = ms_mod_name ms
@@ -570,7 +609,7 @@ mkReadTimeModSummary (target, mbphase) =
     OtherSource _ -> return Nothing
 
 compileToHsModule :: TargetUnit
-                  -> Skc (Maybe (HsModule RdrName, DynFlags))
+                  -> Skc (Maybe (HsModule PARSED, DynFlags))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
     SkSource _ mn form sp -> Just <$> compileSkModuleForm' sp mn form
@@ -581,7 +620,7 @@ compileToHsModule (tsrc, mbphase) =
 -- language extensions, and macros in 'SkEnv'. Returns tuple of compiled
 -- module and 'Dynflags' to update 'ModSummary'.
 compileSkModuleForm' :: SPState -> String -> [Code]
-                     -> Skc (HsModule RdrName, DynFlags)
+                     -> Skc (HsModule PARSED, DynFlags)
 compileSkModuleForm' sp mn forms = do
   dflags <- getDynFlagsFromSPState sp
   mdl <- withTempSession (\e -> e {hsc_dflags = dflags}) act
@@ -602,7 +641,7 @@ resetEnvMacros =
   modifySkEnv (\ske -> ske {envMacros = envDefaultMacros ske})
 
 compileHsFile :: FilePath -> Maybe Phase
-               -> Skc (HsModule RdrName, DynFlags)
+               -> Skc (HsModule PARSED, DynFlags)
 compileHsFile source mbphase = do
   hsc_env <- getSession
   (dflags, source') <- liftIO (preprocess hsc_env (source, mbphase))
@@ -611,8 +650,8 @@ compileHsFile source mbphase = do
       sbuf = stringToStringBuffer contents
       parseState = GHCLexer.mkPState dflags sbuf location
   case GHCLexer.unP GHCParser.parseModule parseState of
-    GHCLexer.POk _ m     -> return (unLoc m, dflags)
-    GHCLexer.PFailed _ _ -> failS ("Parser error with " ++ source)
+    GHCLexer.POk _ m    -> return (unLoc m, dflags)
+    GHCLexer.PFailed {} -> failS ("Parser error with " ++ source)
 
 compileOtherFile :: FilePath -> Skc ()
 compileOtherFile path = do
@@ -757,3 +796,21 @@ guessOutputFile !mod_graph = modifySession $ \env ->
      case outputFile dflags of
          Just _ -> env
          Nothing -> env { hsc_dflags = dflags { outputFile = name_exe } }
+
+-- | GHC version compatibility helper function for creating
+-- 'ModuleGraph' from list of 'ModSummary's.
+mkModuleGraph' :: [ModSummary] -> ModuleGraph
+#if !MIN_VERSION_ghc(8,4,0)
+mkModuleGraph' = id
+#else
+mkModuleGraph' = mkModuleGraph
+#endif
+
+-- | GHC version compatibility helper function for extending
+-- 'ModuleGraph' with 'ModSummary'.
+extendMG' :: ModuleGraph -> ModSummary -> ModuleGraph
+#if !MIN_VERSION_ghc(8,4,0)
+extendMG' mg ms = ms : mg
+#else
+extendMG' mg ms = extendMG mg ms
+#endif
