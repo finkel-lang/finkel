@@ -14,6 +14,7 @@ module Language.SK.Expand
 -- base
 import Control.Exception (throw)
 import Control.Monad (foldM, when)
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Char (isLower)
 import Data.Maybe (catMaybes)
 import Unsafe.Coerce (unsafeCoerce)
@@ -22,16 +23,38 @@ import Unsafe.Coerce (unsafeCoerce)
 import qualified Data.Map as Map
 
 -- ghc
-import RdrName (rdrNameOcc)
+import BasicTypes (FractionalLit(..))
+import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
+                , HscTarget(..), gopt_unset, updOptLevel, xopt_unset )
+import Exception (gbracket)
+import FastString (FastString, appendFS, headFS, unpackFS)
+import GHC ( ModuleInfo, getModuleInfo, lookupModule, lookupName
+           , modInfoExports, setContext )
+import GhcMonad (GhcMonad(..), getSessionDynFlags)
+import HscMain (hscTcRnLookupRdrName)
+import HscTypes (InteractiveImport(..), HscEnv(..))
+import HsImpExp (ImportDecl(..), ieName, simpleImportDecl)
+import HsSyn (HsModule(..))
+import InteractiveEval (getContext)
+import Linker (getHValue)
+import Module (mkModuleNameFS, moduleNameString)
 import Name (nameOccName)
+import Outputable (showPpr)
+import RdrName (rdrNameOcc)
+import TyCoRep (TyThing(..))
+import Var (varName)
+
+-- ghc-boot
 import qualified GHC.LanguageExtensions as LangExt
+
+-- ghci
+import GHCi.RemoteTypes (localRef, withForeignRef)
 
 -- Internal
 import Language.SK.Builder (HImportDecl)
 import Language.SK.Homoiconic
 import Language.SK.Eval
 import Language.SK.Form
-import Language.SK.GHC
 import Language.SK.SKC
 import Language.SK.Syntax ( evalBuilder, parseExpr, parseModule
                           , parseLImport )
@@ -124,6 +147,7 @@ unquoteSplice form =
     _                 -> throw (SkException
                                   ("unquote splice: got " ++
                                    show (toCode form)))
+
 
 -- ---------------------------------------------------------------------
 --
