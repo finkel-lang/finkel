@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 #if MIN_VERSION_ghc(8,4,0)
@@ -30,8 +31,11 @@ import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HsBinds (HsBindLR(..), Sig(..), pprTicks, pprVarSig)
 import HsDecls (HsDecl(..))
 import HsExpr (HsExpr(..), pprFunBind)
-import HsSyn (HsModule(..))
-import OccName (HasOccName(..))
+import HsSyn ( HsModule(..)
+#if MIN_VERSION_ghc(8,4,0)
+             , NameOrRdrName
+#endif
+             )
 import Outputable ( ($$), (<+>), (<>)
                   , BindingSite(..), Outputable(..), SDoc
                   , comma, doubleQuotes, empty, fsep
@@ -48,8 +52,10 @@ import SrcLoc ( Located, GenLocated(..), SrcLoc, SrcSpan(..)
               , combineSrcSpans, getLoc, unLoc
               , sortLocated, srcSpanEndLine, srcSpanStartLine )
 
-#if MIN_VERSION_ghc(8,4,0)
-import HsExtension (SourceTextX)
+#if !MIN_VERSION_ghc(8,4,0)
+import OccName (HasOccName(..))
+#else
+import HsExtension (SourceTextX, IdP)
 #endif
 
 -- Internal
@@ -237,10 +243,14 @@ instance HsSrc SrcLoc where
 instance (HsSrc b) => HsSrc (GenLocated a b) where
   toHsSrc st (L _ e) = toHsSrc st e
 
+#if MIN_VERSION_ghc(8,4,0)
+type HsSrcId a = (HsSrc (NameOrRdrName (IdP a)), HsSrc (IdP a))
+#endif
+
 #if !MIN_VERSION_ghc(8,4,0)
 instance (HsSrc a, OutputableBndrId a, HasOccName a)
 #else
-instance (HsSrc a, OutputableBndrId a, HasOccName a, SourceTextX a)
+instance (HsSrcId a, OutputableBndrId a, SourceTextX a)
 #endif
          => HsSrc (Hsrc (HsModule a)) where
   toHsSrc st (Hsrc a) = case a of
@@ -275,7 +285,7 @@ instance (HsSrc a, OutputableBndrId a, HasOccName a, SourceTextX a)
 #if !MIN_VERSION_ghc(8,4,0)
 instance (OutputableBndrId a, HsSrc a)
 #else
-instance (OutputableBndrId a, HsSrc a, SourceTextX a)
+instance (OutputableBndrId a, HsSrcId a, SourceTextX a)
 #endif
          => HsSrc (Hsrc (HsExpr a)) where
   toHsSrc _ = ppr . unHsrc
@@ -283,7 +293,7 @@ instance (OutputableBndrId a, HsSrc a, SourceTextX a)
 #if !MIN_VERSION_ghc(8,4,0)
 instance (OutputableBndrId a, HsSrc a)
 #else
-instance (OutputableBndrId a, HsSrc a, SourceTextX a)
+instance (OutputableBndrId a, HsSrcId a, SourceTextX a)
 #endif
          => HsSrc (Hsrc (HsDecl a)) where
   toHsSrc st (Hsrc decl) =
@@ -295,7 +305,7 @@ instance (OutputableBndrId a, HsSrc a, SourceTextX a)
 #if !MIN_VERSION_ghc(8,4,0)
 instance (OutputableBndrId a, HsSrc a)
 #else
-instance (OutputableBndrId a, HsSrc a, SourceTextX a)
+instance (OutputableBndrId a, HsSrcId a, SourceTextX a)
 #endif
          => HsSrc (Hsrc (HsBindLR a a)) where
   toHsSrc st (Hsrc binds) =
@@ -321,7 +331,7 @@ instance (OutputableBndrId a, HsSrc a, SourceTextX a)
 #if !MIN_VERSION_ghc(8,4,0)
 instance (OutputableBndrId a, HsSrc a)
 #else
-instance (OutputableBndrId a, HsSrc a, SourceTextX a)
+instance (OutputableBndrId a, HsSrcId a, SourceTextX a)
 #endif
          => HsSrc (Hsrc (Sig a)) where
   toHsSrc st (Hsrc sig) =

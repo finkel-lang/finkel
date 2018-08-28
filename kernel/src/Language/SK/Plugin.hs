@@ -10,6 +10,7 @@ module Language.SK.Plugin
 
 -- base
 import Control.Monad (void, when)
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (find, isPrefixOf, isSuffixOf)
 import System.Console.GetOpt
@@ -18,6 +19,8 @@ import System.Exit (exitFailure, exitWith)
 import System.Process (rawSystem)
 
 -- ghc
+import DriverPhases (Phase(..))
+import GhcMonad (Ghc(..))
 import GhcPlugins (FrontendPlugin(..), defaultFrontendPlugin)
 
 -- ghc-paths
@@ -25,7 +28,6 @@ import qualified GHC.Paths as GhcPaths
 
 -- Internal
 import Language.SK.Emit
-import Language.SK.GHC
 import Language.SK.Make
 import Language.SK.Run
 import Language.SK.SKC
