@@ -21,7 +21,8 @@ module Language.SK.Run
 
 -- base
 import Control.Exception ( AsyncException(..), Exception(..)
-                         , IOException)
+                         , IOException, throwIO )
+import Control.Monad.IO.Class (MonadIO(..))
 import System.Exit (ExitCode(..))
 import Data.Maybe (fromMaybe, maybeToList)
 
@@ -31,6 +32,30 @@ import qualified Data.ByteString.Lazy as BL
 -- containers
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
+
+-- ghc
+import DynFlags ( DynFlags(..), FatalMessager, FlushOut(..)
+                , GhcLink(..), HscTarget(..)
+                , defaultFatalMessager, defaultFlushOut
+                , getDynFlags, parseDynamicFilePragma, thisPackage )
+import DriverPhases (HscSource(..))
+import ErrUtils (fatalErrorMsg'', pprErrMsgBagWithLoc)
+import Exception (ExceptionMonad(..), ghandle, tryIO)
+import FastString (headFS, unpackFS)
+import Finder (mkHomeModLocation)
+import GHC ( ParsedModule(..), TypecheckedModule(..)
+           , typecheckModule, runGhc )
+import GhcMonad (GhcMonad(..), getSessionDynFlags)
+import HeaderInfo (getOptionsFromFile)
+import HscTypes ( HsParsedModule(..), ModSummary(..), handleSourceError
+                , srcErrorMessages )
+import HsImpExp (ImportDecl(..))
+import HsSyn (HsModule(..))
+import Module (ModLocation(..), ModuleName, mkModule, mkModuleName)
+import Outputable (showSDoc)
+import Panic (GhcException(..), handleGhcException)
+import SrcLoc (Located, noLoc)
+import Util (getModificationUTCTime)
 
 -- ghc-paths
 import GHC.Paths (libdir)
@@ -42,7 +67,6 @@ import Data.Time (getCurrentTime)
 import Language.SK.Builder (HModule)
 import Language.SK.Expand
 import Language.SK.Form
-import Language.SK.GHC
 import Language.SK.SKC
 import Language.SK.Syntax
 import Language.SK.Lexer
