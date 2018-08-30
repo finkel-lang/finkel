@@ -1,21 +1,34 @@
 module SkcTest where
 
+-- base
 import Control.Exception
 import Data.List (isPrefixOf, tails)
+
+-- bytestring
+import qualified Data.ByteString.Lazy.Char8 as BL
+
+-- containers
+import qualified Data.Set as Set
+
+-- ghc-paths
 import GHC.Paths (libdir)
+
+-- ghc
+import GHC (runGhc)
+import Exception (gbracket)
+import HscTypes (SourceError(..))
+
+-- hspec
 import Test.Hspec
 import Test.QuickCheck
 
+-- Internal
 import Language.SK.Expand
 import Language.SK.Form
-import Language.SK.GHC
 import Language.SK.Homoiconic
 import Language.SK.Run
 import Language.SK.SKC
 import Language.SK.Syntax
-
-import qualified Data.ByteString.Lazy.Char8 as BL
-import qualified Data.Set as Set
 
 skcTests :: Spec
 skcTests = do

@@ -25,9 +25,11 @@ import Test.Hspec
 import Test.QuickCheck
 import Text.Show.Functions ()
 
+import BasicTypes (fl_value)
+import FastString (unpackFS)
+
 import Language.SK.Expand
 import Language.SK.Form
-import Language.SK.GHC
 import Language.SK.Homoiconic
 import Language.SK.Lexer
 import Language.SK.Reader
@@ -37,7 +39,7 @@ import Data.ByteString.Builder (stringUtf8, toLazyByteString)
 formTests :: Spec
 formTests = do
   mapM_ readShow
-    [ "foo", "\a", "12345", "6.789"
+    [ "foo", "\a", "12345", "6.789", "0.001"
     , "(foo bar buzz)"
     , "(\\a \\\\SP \\\\ \"bcd\")"
     , "[\\\\BEL \\\\BS \\\\FF \\\\LF \\\\CR \\\\HT \\\\VT]"
@@ -72,10 +74,10 @@ formTests = do
   lengthTest 8 "[a (b (c d e) [f g]) h]"
   lengthTest 1 "foo"
 
+  homoiconicTests
   rnfTest
   listTest
   symbolNameTest
-  homoiconicTests
 
   fromCodeTest Foo
 
@@ -103,66 +105,6 @@ readShowFormProp =
     it "should match the input" $
       property (\form ->
                   form == form && parseE (show form) `eqForm` form)
-
-eqForm :: Code -> Code -> Bool
-eqForm a b =
-  case (unCode a, unCode b) of
-    -- Ignoring rounding error for fractional literals.
-    (Atom (AFractional x), Atom (AFractional y))
-      -> abs (fl_value x - fl_value y) <= toRational epsilon
-
-    -- Recursively compare with `eqForm' for 'List' and 'HsList'.
-    (List [], List []) -> True
-    (List (x:xs), List (y:ys)) ->
-      eqForm x y && eqForm (quoted (List xs)) (quoted (List ys))
-
-    (HsList [], HsList []) -> True
-    (HsList (x:xs), HsList (y:ys)) ->
-      eqForm x y && eqForm (quoted (HsList xs)) (quoted (HsList ys))
-
-    -- Treating empty 'List' and Atom symbol 'nil' as same value.
-    (Atom (ASymbol sym), List []) | sym == fsLit "nil" -> True
-    (List [], Atom (ASymbol sym)) | sym == fsLit "nil" -> True
-
-    -- Using '==' for other Atom values.
-    (Atom x, Atom y) -> x == y
-
-    _ -> False
-  where
-    epsilon = 1e-7
-
-rnfTest :: Spec
-rnfTest = do
-  describe "rnf of arbitrary form" $
-    it "should return ()" $
-       property (rnf :: Code -> ())
-  describe "rnf of comment" $
-    it "should return ()" $
-      rnf (AComment "foo") `shouldBe` ()
-  describe "rnf of TEnd" $
-    it "should return ()" $
-      rnf (TEnd :: Form Atom) `shouldBe` ()
-
-listTest :: Spec
-listTest =
-  describe "list from arbitrary form applied to arbitrary function" $
-    it "should be a list" $ do
-      let f :: (Code -> Code) -> Code -> Bool
-          f g form = isListL (toListL (g form))
-      property f
-
-symbolNameTest :: Spec
-symbolNameTest =
-  describe "symbolName" $ do
-    let isSym (LForm (L _ (Atom (ASymbol _)))) = True
-        isSym _                                = False
-    it "should return name of symbol" $
-      property (\form ->
-                  not (isSym form) || length (symbolName form) >= 1)
-    it "should throw error when applied to non-symbol" $ do
-      let p :: ErrorCall -> Bool
-          p _ = True
-      print (symbolName nil) `shouldThrow` p
 
 fracTest :: Double -> Spec
 fracTest x =
@@ -342,6 +284,39 @@ homoiconicTests = do
   t (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
     ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
 
+rnfTest :: Spec
+rnfTest = do
+  describe "rnf of arbitrary form" $
+    it "should return ()" $
+       property (rnf :: Code -> ())
+  describe "rnf of comment" $
+    it "should return ()" $
+      rnf (AComment "foo") `shouldBe` ()
+  describe "rnf of TEnd" $
+    it "should return ()" $
+      rnf (TEnd :: Form Atom) `shouldBe` ()
+
+listTest :: Spec
+listTest =
+  describe "list from arbitrary form applied to arbitrary function" $
+    it "should be a list" $ do
+      let f :: (Code -> Code) -> Code -> Bool
+          f g form = isListL (toListL (g form))
+      property f
+
+symbolNameTest :: Spec
+symbolNameTest =
+  describe "symbolName" $ do
+    let isSym (LForm (L _ (Atom (ASymbol _)))) = True
+        isSym _                                = False
+    it "should return name of symbol" $
+      property (\form ->
+                  not (isSym form) || length (symbolName form) >= 1)
+    it "should throw error when applied to non-symbol" $ do
+      let p :: ErrorCall -> Bool
+          p _ = True
+      print (symbolName nil) `shouldThrow` p
+
 data Foo = Foo deriving (Eq, Show)
 
 instance Homoiconic Foo where
@@ -412,17 +387,42 @@ dataToCodeTest = do
     it ("should match `" ++ show e4 ++ "'") $
        toCode (D4a ('w', 'x', 'y', 'z')) `shouldBe` e4
 
-
 unquoteSpliceTest :: Spec
 unquoteSpliceTest =
   describe "unquote splicing List" $
     it "should return list contents" $
       property
         (\form ->
-           if (isListL form || isHsListL form ||
-               isStringL form || isUnitL form)
-             then (0 <= length (unquoteSplice form)) === True
-             else expectFailure (unquoteSplice form === []))
+           (isListL form || isHsListL form ||
+            isStringL form || isUnitL form)
+           ==> (0 <= length (unquoteSplice form)))
+
+eqForm :: Code -> Code -> Bool
+eqForm a b =
+  case (unCode a, unCode b) of
+    -- Ignoring rounding error for fractional literals.
+    (Atom (AFractional x), Atom (AFractional y))
+      -> abs (fl_value x - fl_value y) <= toRational epsilon
+
+    -- Recursively compare with `eqForm' for 'List' and 'HsList'.
+    (List [], List []) -> True
+    (List (x:xs), List (y:ys)) ->
+      eqForm x y && eqForm (quoted (List xs)) (quoted (List ys))
+
+    (HsList [], HsList []) -> True
+    (HsList (x:xs), HsList (y:ys)) ->
+      eqForm x y && eqForm (quoted (HsList xs)) (quoted (HsList ys))
+
+    -- Treating empty 'List' and Atom symbol 'nil' as same value.
+    (Atom (ASymbol sym), List []) | sym == fsLit "nil" -> True
+    (List [], Atom (ASymbol sym)) | sym == fsLit "nil" -> True
+
+    -- Using '==' for other Atom values.
+    (Atom x, Atom y) -> x == y
+
+    _ -> False
+  where
+    epsilon = 1e-7
 
 parseE :: String -> Code
 parseE = parseE' Nothing

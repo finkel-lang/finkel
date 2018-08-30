@@ -13,11 +13,16 @@ import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeExtension)
 import System.Process (rawSystem)
 
+-- ghc
+import DynFlags (DynFlags(..), GhcLink(..))
+import FastString (fsLit)
+import GHC (setSessionDynFlags )
+import GhcMonad (getSessionDynFlags)
+
 -- hspec
 import Test.Hspec
 
--- sk-core
-import Language.SK.GHC
+-- Internal
 import Language.SK.Lexer
 import Language.SK.Make
 import Language.SK.Run
