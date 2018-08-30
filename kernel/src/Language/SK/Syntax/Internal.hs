@@ -452,8 +452,8 @@ b_unitT (LForm (L l _)) = L l (HsTupleTy HsBoxedTuple [])
 b_funT :: [HType] -> Builder HType
 b_funT ts =
   case ts of
-    [] -> builderError
-    _  -> return (foldr1 f ts)
+    []          -> builderError
+    (L l0 _):_  -> return (L l0 (HsParTy (foldr1 f ts)))
   where
     f a@(L l1 _) b = L l1 (HsFunTy a b)
 
@@ -461,7 +461,7 @@ b_appT :: [HType] -> HType
 b_appT whole@(x:xs) = L l0 (HsParTy (foldl f x xs))
   where
     l0 = getLoc (mkLocatedList whole)
-    f b a = L (getLoc b) (HsAppTy b a)
+    f b a = mkHsAppTy b a
 
 b_listT :: HType -> HType
 b_listT ty@(L l _) = L l (HsListTy ty)
@@ -481,7 +481,8 @@ b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)
 b_forallT :: (Code, [Code]) -> ([HType], HType) -> HType
 b_forallT ((LForm (L l0 _)), vars) (ctxts, body) = L l0 forAllTy
   where
-    forAllTy = HsForAllTy {hst_bndrs = bndrs, hst_body = ty}
+    forAllTy = HsParTy (L l0 forAllTy')
+    forAllTy' = HsForAllTy {hst_bndrs = bndrs, hst_body = ty}
     ty = L l0 HsQualTy { hst_ctxt = mkLocatedList ctxts
                        , hst_body = body}
     bndrs = map codeToUserTyVar vars
