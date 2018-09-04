@@ -1,5 +1,5 @@
 name:                sk-core
-version:             0.6.0.0
+version:             0.7.0.0
 synopsis:            SK core language
 description:         SK core functions and macros.
 homepage:            https://github.com/githubuser/sk-lang#readme
