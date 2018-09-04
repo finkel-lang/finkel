@@ -22,16 +22,40 @@
    ;; directory
    (System.Directory (getTemporaryDirectory removeFile))
 
+   ;; ghc
+   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..) (Way ..)
+              addWay' defaultFatalMessager defaultFlushOut))
+   (Exception (ghandle))
+   (GHC (setSessionDynFlags))
+   (GhcMonad ((Ghc ..) (GhcMonad ..) (Session ..) getSessionDynFlags
+              withSession))
+   (HscMain (hscParsedStmt))
+   (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
+              (FixityEnv) extendInteractiveContextWithIds
+              setInteractivePrintName))
+   (HsImpExp ((ImportDecl ..)))
+   (InteractiveEval (getContext parseName setContext))
+   (Linker (extendLinkEnv))
+   (Name ((Name) getName nameOccName occNameString))
+   (Outputable (ppr showPpr showSDoc))
+   (TyCoRep ((TyThing ..)))
+   (Var ((Id) (Var) varType))
+
+   ;; ghci
+   (GHCi (evalStmt))
+   (GHCi.Message ((EvalExpr ..) (EvalResult ..) (EvalStatus_ ..)
+                  (SerializableException ..)))
+   (GHCi.RemoteTypes ((ForeignHValue)))
+
    ;; haskeline
    (System.Console.Haskeline
     ((InputT) defaultSettings getInputLine handleInterrupt outputStr
-              outputStrLn runInputT throwTo withInterrupt))
+     outputStrLn runInputT throwTo withInterrupt))
 
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Builder ((HDecl) (HImportDecl)  (HStmt) evalBuilder))
    (Language.SK.Eval (evalDecls))
-   (Language.SK.GHC)
    (Language.SK.Lexer (evalSP))
    (Language.SK.Reader (sexpr))
    (Language.SK.Run (runSkc skErrorHandler withSourceErrorHandling))
@@ -39,7 +63,6 @@
 
    ;; internal
    (SK.Repl.Env)
-   (SK.Repl.GHC)
    (SK.Repl.Listen)
    (SK.Repl.IORedirect)
    (SK.Repl.Types))

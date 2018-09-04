@@ -5,6 +5,10 @@
 ;;; body can contain codes accessing `SkEnv', and then the code could be
 ;;; invoked from REPL via evaluating the typed in forms.
 
+;; ghc
+(require Config (cProjectVersionInt))
+
+;; Internal
 (require SK.Core)
 
 (defmodule SK.Repl.Macro
@@ -12,6 +16,7 @@
    ;; base
    (Control.Exception ((Exception ..)))
    (Control.Monad (filterM void))
+   (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
    (Data.List (find intersperse partition sortBy))
    (Data.Maybe (catMaybes))
@@ -26,17 +31,98 @@
    ;; filepath
    (System.FilePath (isAbsolute makeRelative))
 
+   ;; ghc
+   ;; (Config (cProjectVersionInt))
+   (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
+              (HscTarget ..) (PackageFlag ..) thisPackage))
+   (ErrUtils (pprErrMsgBagWithLoc))
+   (Exception (gcatch gbracket))
+   (FamInstEnv (pprFamInst))
+   (FastString ((FastString) unpackFS))
+   (Finder (flushFinderCaches uncacheModule))
+   (GHC ((ModuleInfo) getBindings getModuleGraph getModuleInfo
+         getPrintUnqual isLoaded lookupName lookupModule modInfoExports
+         parseDynamicFlags setSessionDynFlags setTargets))
+   (GhcMake ((LoadHowMuch ..)))
+   (GhcMonad ((GhcMonad ..) getSessionDynFlags withSession))
+   (HscMain (hscTcRnLookupRdrName))
+   (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
+              (ModSummary) (ModuleGraph) (SourceError)
+              emptyInteractiveContext handleFlagWarnings ms_mod_name
+              srcErrorMessages tyThingParent_maybe))
+   (HsImpExp (simpleImportDecl))
+   (IfaceSyn (showToHeader))
+   (InstEnv (pprInstance))
+   (InteractiveEval (abandonAll getContext getInfo parseName setContext
+                                showModule))
+   (Linker (initDynLinker linkModule showLinkerState unload))
+   (Module (mkModuleNameFS moduleNameString))
+   (Name ((Name) getName nameIsFromExternalPackage nameModule
+          nameOccName nameSrcSpan))
+   (NameSet (elemNameSet mkNameSet))
+   (Outputable ((SDoc) $$ ppr showPpr showSDoc showSDocForUser text
+                vcat))
+   (Module ((Module ..) mkModuleName))
+   (Packages ((PackageConfig) componentId packageNameString
+              readPackageConfigs))
+   (PprTyThing (pprTyThing pprTyThingInContextLoc))
+   (SrcLoc (isGoodSrcSpan noLoc))
+   (TyCoRep ((TyThing ..)))
+   (Util (looksLikeModuleName))
+
+   (qualified GhcMake as GhcMake)
+
+   ;; ghc-boot
+   (GHC.PackageDb (toStringRep))
+
+   ;; ghci
+   (Debugger (pprTypeAndContents))
+
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Builder (mkRdrName))
-   (Language.SK.GHC)
    (Language.SK.Make (asModuleName make))
 
    ;; internal
-   (SK.Core)
-   (SK.Repl.GHC))
+   (SK.Core))
 
   (export *_))
+
+
+;;; Compile time helper for GHC version compatibility
+
+(eval-when (compile)
+  (defn (ghc-version Int)
+    (read cProjectVersionInt)))
+
+(macrolet ((extra-imports _
+              (if (<= 804 ghc-version)
+                  '(import qualified HscTypes as HscTypes)
+                  '(begin))))
+  (extra-imports))
+
+(eval-when (compile)
+  (defmacro child-filter _
+    (if (< ghc-version 804)
+        '(\ (, t _f _ci _fi) t)
+        '(\ (, t _f _ci _fi _sd) t)))
+
+  (defmacro ppr-info-args _
+    (if (< ghc-version 804)
+        '(, thing _fixity cls-insts fam-insts)
+        '(, thing _fixity cls-insts fam-insts _sd)))
+
+  (defmacro ppr-tt-args _
+    (if (< ghc-version 804)
+        '(, thing _fixity _cls-insts _fam-insts)
+        '(, thing _fixity _cls-insts _fam-insts _sd))))
+
+(defn (graph->summaries (-> ModuleGraph [ModSummary]))
+  (macrolet ((body _
+               (if (< ghc-version 804)
+                   'id
+                   'HscTypes.mgModSummaries)))
+    (body)))
 
 
 ;;; Auxiliary
@@ -157,9 +243,9 @@
   (do (<- names (parse-name str))
       (<- mb_stuffs (mapM (getInfo all-info) names))
       (let ((= filtered (filter-out-children
-                         (\ (, t _f _ci _fi) t)
+                         (child-filter)
                          (catMaybes mb_stuffs)))
-            (= ppr-info (, thing _fixity cls-insts fam-insts)
+            (= ppr-info (ppr-info-args)
               ($$ (pprTyThingInContextLoc thing)
                   ($$ (vcat (map pprInstance cls-insts))
                       (vcat (map pprFamInst fam-insts)))))))
@@ -264,11 +350,12 @@ paths from import directories."
           (do (<- graph0 getModuleGraph)
               (<- _ abandonAll)
               (<- _ (setTargets []))
-              (<- _ (SK.Repl.GHC.load LoadAllTargets))
+              (<- _ (GhcMake.load LoadAllTargets))
               (<- hsc-env getSession)
-              (let ((= uncache
+              (let ((= graph1 (graph->summaries graph0))
+                    (= uncache
                       (. (uncacheModule hsc-env) ms_mod_name))))
-              (liftIO (do (mapM_ uncache graph0)
+              (liftIO (do (mapM_ uncache graph1)
                           (flushFinderCaches hsc-env)))
               (setSession (discardIC hsc-env)))))
     (case forms
@@ -365,8 +452,7 @@ paths from import directories."
         (AnId i) (pprTypeAndContents i)
         _        (do (<- mb-stuff (getInfo False (getName tt)))
                      (return (maybe (text "") ppr-tt mb-stuff)))))
-    (:: ppr-tt (-> (, TyThing Fixity [ClsInst] [FamInst]) SDoc))
-    (= ppr-tt (, thing _ _ _)
+    (= ppr-tt (ppr-tt-args)
       (pprTyThing showToHeader thing))))
 
 (defn (context-cmd ReplCommand)
@@ -424,8 +510,9 @@ paths from import directories."
 (defn (modules-cmd ReplCommand)
   (_form)
   (do (<- graph0 getModuleGraph)
-      (<- graph1 (filterM (. isLoaded ms_mod_name) graph0))
-      (<- mods (mapM showModule graph1))
+      (let ((= graph1 (graph->summaries graph0))))
+      (<- graph2 (filterM (. isLoaded ms_mod_name) graph1))
+      (<- mods (mapM showModule graph2))
       (return `(putStr ,(unlines mods)))))
 
 (defn (packages-cmd ReplCommand)

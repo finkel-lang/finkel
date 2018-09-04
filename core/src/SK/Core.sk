@@ -24,14 +24,28 @@
   (module SK.Core.List))
 
 (require Control.Monad (foldM))
-(require Language.SK.GHC)
+(require FastString (unpackFS))
 (require SK.Core.List)
 
+
+;; base
 (import Control.Monad (foldM))
-(import Language.SK.GHC)
+
+;; ghc
+(import DynFlags ((HasDynFlags ..)))
+(import FastString (unpackFS))
+(import GHC (getModuleInfo lookupModule lookupName modInfoExports))
+(import Module (mkModuleName))
+(import Outputable (ppr showSDoc))
+(import TyCoRep ((TyThing ..)))
+(import Var (varName))
+
+;; sk-kernel
+(import Language.SK)
+
+;; Internal
 (import SK.Core.List)
 
-(import Language.SK)
 
 
 ;;; Basic

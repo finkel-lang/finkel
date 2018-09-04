@@ -20,23 +20,22 @@ cabal-version:       2.0
 custom-setup
   setup-depends:       base >= 4.7 && < 5
                      , Cabal >= 2.0
-                     , sk-kernel >= 0.12.0
+                     , sk-kernel >= 0.14.0
 
 library
   hs-source-dirs:      src
   exposed-modules:     SK.Core.List
                        SK.Core
-                       SK.Plugin
                        SK.Setup
                        SK.Repl.Types
                        SK.Repl.Env
-                       SK.Repl.GHC
                        SK.Repl.IORedirect
                        SK.Repl.Listen
                        SK.Repl.Loop
                        SK.Repl.Macro
                        SK.Repl
                        SK.Prelude
+                       SK.Plugin
                        Paths_sk_core
   autogen-modules:     Paths_sk_core
   build-depends:       base >= 4.7 && < 5
