@@ -30,7 +30,7 @@
    (SK.Core)
    (SK.Repl.Macro)
    (SK.Repl.Loop)
-   (qualified Paths_sk_core))
+   (qualified Paths_sk_lang))
   (export replMain repl-env))
 
 
@@ -102,17 +102,17 @@
      (usageInfo "OPTIONS:" descrs)])))
 
 (defn (print-version (IO ()))
-  (putStrLn (++ "sk " sk-core-version)))
+  (putStrLn (++ "sk " sk-lang-version)))
 
 (defn (run (-> (Maybe Int) (IO ())))
   (listen)
-  (do (putStrLn (concat ["SK REPL (sk-core " sk-core-version
+  (do (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
                          ", sk-kernel " sk-kernel-version
                          ", ghc " cProjectVersion ")"]))
       (start-repl listen repl-env)))
 
-(defn (sk-core-version String)
-  (showVersion Paths_sk_core.version))
+(defn (sk-lang-version String)
+  (showVersion Paths_sk_lang.version))
 
 (defn (sk-kernel-version String)
   (showVersion Paths_sk_kernel.version))
