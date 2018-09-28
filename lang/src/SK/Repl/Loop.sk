@@ -147,19 +147,27 @@
                            (put-repl-state (st1 {pending-input []}))
                            (return (Just []))))
                  (getInputLine prompt)))
-              (case mb-input
-                (Just line) (| ((== line "(quit)") quit)
-                               ((null line) (go result-mv))
-                               (otherwise (go' result-mv line)))
-                Nothing quit)))
-        (= go' result-mv line
+              (maybe quit (go1 st0 result-mv) mb-input)))
+        (= go1 st0 result-mv line
+          (case line
+            [] (go result-mv)
+            (: h tl) (| ((== line "(quit)") quit)
+                        ((&& (null (pending-input st0))
+                             (== \, h))
+                         (if (== tl "quit")
+                             quit
+                             (let ((= line' (concat ["(*_ " tl ")"])))
+                               (go2 result-mv line'))))
+                        (otherwise
+                         (go2 result-mv line)))))
+        (= go2 result-mv line
           (do (<- mb-form (lift (read-form line)))
+              (let ((= input form
+                      (Input Prompt form result-mv))))
               (case mb-form
-                (Just form)
-                (do (liftIO
-                     (putMVar to-mvar (Input Prompt form result-mv)))
-                    (print-io result-mv)
-                    (go result-mv))
+                (Just form) (do (liftIO (putMVar to-mvar (input form)))
+                                (print-io result-mv)
+                                (go result-mv))
                 Nothing (go result-mv))))
         (= quit
           (liftIO (killThread eval-tid)))
@@ -185,7 +193,8 @@
     (require SK.Prelude)
     (require SK.Repl.Env)
     (require SK.Repl.Macro)
-    (putStrLn "REPL ready, hit `Ctrl-d' or type `(quit)' to exit.")))
+    (putStrLn
+     "Hit `Ctrl-d' to quit, type `,help' for more information.")))
 
 ;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))

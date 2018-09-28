@@ -32,7 +32,6 @@
    (System.FilePath (isAbsolute makeRelative))
 
    ;; ghc
-   ;; (Config (cProjectVersionInt))
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
               (HscTarget ..) (PackageFlag ..) thisPackage))
    (ErrUtils (pprErrMsgBagWithLoc))
@@ -617,9 +616,7 @@ paths from import directories."
 (defn (help-cmd ReplCommand)
   (_form)
   (return
-    `(putStrLn "USAGE: (*_ COMMAND ARGS ...)
-
-DESCRIPTION:
+    `(putStrLn "DESCRIPTION:
 
   REPL meta macro, ARGS varies per COMMAND.
 
