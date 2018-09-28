@@ -159,7 +159,7 @@ unquoteSplice form =
 -- ~~~~~~~~~~~~~~~
 --
 -- Still considering how to support and what shall be supported with
--- User defined macros. Need to load the form transforming functions
+-- user defined macros. Need to load the form transforming functions
 -- defined by the user. May restrict those functions to imported module
 -- in current target file. Need to take some kind of GHC environment
 -- value to expand macros.

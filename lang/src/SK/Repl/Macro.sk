@@ -59,12 +59,12 @@
    (Name ((Name) getName nameIsFromExternalPackage nameModule
           nameOccName nameSrcSpan))
    (NameSet (elemNameSet mkNameSet))
-   (Outputable ((SDoc) $$ ppr showPpr showSDoc showSDocForUser text
-                vcat))
+   (Outputable ((SDoc) $$ <+> dcolon nest ppr sep showPpr showSDoc
+                showSDocForUser text vcat))
    (Module ((Module ..) mkModuleName))
    (Packages ((PackageConfig) componentId packageNameString
               readPackageConfigs))
-   (PprTyThing (pprTyThing pprTyThingInContextLoc))
+   (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
    (SrcLoc (isGoodSrcSpan noLoc))
    (TyCoRep ((TyThing ..)))
    (Util (looksLikeModuleName))
@@ -80,7 +80,10 @@
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Builder (mkRdrName))
+   (Language.SK.Eval (evalExprType))
    (Language.SK.Make (asModuleName make))
+   (Language.SK.Run (buildHsSyn))
+   (Language.SK.Syntax (parseExpr))
 
    ;; internal
    (SK.Core))
@@ -149,6 +152,12 @@
     [] nil
     _ (let ((= l (getLoc (mkLocatedForm xs))))
         (LForm (L l (List xs))))))
+
+(defn (show-sdoc-for-user-m (-> SDoc (Skc String)))
+  (sdoc)
+  (do (<- dflags getDynFlags)
+      (<- unqual getPrintUnqual)
+      (return (showSDocForUser dflags unqual sdoc))))
 
 (defn (compile-to-obj-file (-> String (Skc Code)))
   (str)
@@ -222,20 +231,17 @@
             (= pretty
               (pprTyThing showToHeader))))
       (<- mb-things (mapM lookupName sorted-names))
-      (<- dflags getDynFlags)
-      (<- unqual getPrintUnqual)
       (let ((= things (catMaybes mb-things))
-            (= prettyThings (map pretty things))
-            (= strs (showSDocForUser dflags unqual (vcat prettyThings)))))
-      (return `(putStrLn ,strs))))
+            (= prettyThings (map pretty things))))
+      (<- str (show-sdoc-for-user-m (vcat prettyThings)))
+      (return `(putStrLn ,str))))
 
 ;;; Mostly translated from `GHCi.UI.infoThing'.
 (defn (info-name (-> Code (Skc Code)))
   (thing)
-  (do (<- unqual getPrintUnqual)
-      (<- dflags getDynFlags)
-      (<- sdoc (info-thing True (show thing)))
-      (return `(putStrLn ,(showSDocForUser dflags unqual sdoc)))))
+  (do (<- sdoc (info-thing True (show thing)))
+      (<- str (show-sdoc-for-user-m sdoc))
+      (return `(putStrLn ,str))))
 
 (defn (info-thing (-> Bool String (Skc SDoc)))
   (all-info str)
@@ -440,11 +446,8 @@ paths from import directories."
   (_forms)
   (where (do (<- bs getBindings)
              (<- docs (mapM make-doc (reverse bs)))
-             (<- unqual getPrintUnqual)
-             (<- dflags getDynFlags)
-             (return
-               `(putStrLn
-                 ,(showSDocForUser dflags unqual (vcat docs)))))
+             (<- str (show-sdoc-for-user-m (vcat docs)))
+             (return `(putStrLn ,str)))
     (:: make-doc (-> TyThing (Skc SDoc)))
     (= make-doc tt
       (case tt
@@ -551,6 +554,21 @@ paths from import directories."
                  (info-name form)))
       _ (err (car (located-list forms))))))
 
+;; From `GHCi.UI.typeOfExpr'.
+(defn (type-cmd ReplCommand)
+  (forms)
+  (case forms
+    [form] (do (<- expr (buildHsSyn parseExpr forms))
+               (<- ty (evalExprType expr))
+               (let ((= sdoc
+                       (sep [(text (show form))
+                             (nest 2 (<+> dcolon
+                                          (pprTypeForUser ty)))]))))
+               (<- str (show-sdoc-for-user-m sdoc))
+               (return `(putStrLn ,str)))
+    _ (let ((= form (car (located-list forms))))
+        (skSrcError form (++ "type: invalid form: " (show forms))))))
+
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defn (browse-cmd ReplCommand)
   (forms)
@@ -637,6 +655,7 @@ COMMANDS:
   paths         - show paths
   pwd           - print working directory
   set FLAGS ... - parse and set FLAGS
+  type FORM     - show type of FORM
 ")))
 
 
@@ -662,7 +681,8 @@ COMMANDS:
    (, 'packages packages-cmd)
    (, 'paths paths-cmd)
    (, 'pwd pwd-cmd)
-   (, 'set set-cmd)])
+   (, 'set set-cmd)
+   (, 'type type-cmd)])
 
 (defmacro* *_ form
   (case form

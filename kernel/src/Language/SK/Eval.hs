@@ -4,6 +4,7 @@
 module Language.SK.Eval
   ( evalDecls
   , evalExpr
+  , evalExprType
   ) where
 
 -- base
@@ -32,11 +33,13 @@ import Linker (linkDecls)
 import Module (Module, ModLocation(..), moduleName, moduleNameString)
 import Name (isExternalName)
 import SrcLoc (SrcLoc(..), srcLocSpan)
-import TcRnDriver (tcRnDeclsi)
+import TcRnDriver (TcRnExprMode(..), tcRnDeclsi, tcRnExpr)
 import TcRnTypes (TcGblEnv(..))
 import TidyPgm (tidyProgram)
+import TyCoRep (Type(..), tidyType)
 import TyCon (TyCon, isDataTyCon, isImplicitTyCon)
 import Util (filterOut)
+import VarEnv (emptyTidyEnv)
 
 -- ghci
 import GHCi.RemoteTypes (HValue, localRef, withForeignRef)
@@ -58,6 +61,20 @@ evalExpr expr = do
   fhv <- compileParsedExprRemote expr
   liftIO (withForeignRef fhv localRef)
 {-# INLINE evalExpr #-}
+
+-- | Evaluate type of given expression.
+evalExprType :: HExpr -> Skc Type
+evalExprType expr = do
+  -- See `InteractiveType.exprType' and `HscMain.hscTcExpr'. As in
+  -- `evalDecls', taking HExpr instead of Haskell source code String.
+  --
+  -- XXX: Currently, `TcRnExprMode' is hard coded as `TM_Inst' in below
+  -- call to `tcRnExpr'. In ghci, user can type in and specify the mode
+  -- from REPL session.
+  --
+  hsc_env <- getSession
+  ty <- ioMsgMaybe $ tcRnExpr hsc_env TM_Inst expr
+  return $ tidyType emptyTidyEnv ty
 
 -- | Evaluate given declarations.
 evalDecls :: [HDecl] -> Skc ([TyThing], InteractiveContext)
