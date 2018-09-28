@@ -5,6 +5,7 @@ module Language.SK.Eval
   ( evalDecls
   , evalExpr
   , evalExprType
+  , evalTypeKind
   ) where
 
 -- base
@@ -33,10 +34,10 @@ import Linker (linkDecls)
 import Module (Module, ModLocation(..), moduleName, moduleNameString)
 import Name (isExternalName)
 import SrcLoc (SrcLoc(..), srcLocSpan)
-import TcRnDriver (TcRnExprMode(..), tcRnDeclsi, tcRnExpr)
+import TcRnDriver (TcRnExprMode(..), tcRnDeclsi, tcRnExpr, tcRnType)
 import TcRnTypes (TcGblEnv(..))
 import TidyPgm (tidyProgram)
-import TyCoRep (Type(..), tidyType)
+import TyCoRep (Type(..), Kind, tidyType)
 import TyCon (TyCon, isDataTyCon, isImplicitTyCon)
 import Util (filterOut)
 import VarEnv (emptyTidyEnv)
@@ -65,7 +66,7 @@ evalExpr expr = do
 -- | Evaluate type of given expression.
 evalExprType :: HExpr -> Skc Type
 evalExprType expr = do
-  -- See `InteractiveType.exprType' and `HscMain.hscTcExpr'. As in
+  -- See `InteractiveEval.exprType' and `HscMain.hscTcExpr'. As in
   -- `evalDecls', taking HExpr instead of Haskell source code String.
   --
   -- XXX: Currently, `TcRnExprMode' is hard coded as `TM_Inst' in below
@@ -75,6 +76,16 @@ evalExprType expr = do
   hsc_env <- getSession
   ty <- ioMsgMaybe $ tcRnExpr hsc_env TM_Inst expr
   return $ tidyType emptyTidyEnv ty
+
+evalTypeKind :: HType -> Skc (Type, Kind)
+evalTypeKind ty = do
+  -- See `InteractiveEval.typeKind' and `HscMain.hscKcType'.
+  --
+  -- XXX: The second argument passed to `tcRnType' is hard coded as
+  -- `True' in below code.
+  --
+  hsc_env <- getSession
+  ioMsgMaybe $ tcRnType hsc_env True ty
 
 -- | Evaluate given declarations.
 evalDecls :: [HDecl] -> Skc ([TyThing], InteractiveContext)

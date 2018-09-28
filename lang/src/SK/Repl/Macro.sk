@@ -80,10 +80,10 @@
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Builder (mkRdrName))
-   (Language.SK.Eval (evalExprType))
+   (Language.SK.Eval (evalExprType evalTypeKind))
    (Language.SK.Make (asModuleName make))
    (Language.SK.Run (buildHsSyn))
-   (Language.SK.Syntax (parseExpr))
+   (Language.SK.Syntax (parseExpr parseType))
 
    ;; internal
    (SK.Core))
@@ -158,6 +158,12 @@
   (do (<- dflags getDynFlags)
       (<- unqual getPrintUnqual)
       (return (showSDocForUser dflags unqual sdoc))))
+
+(defn (invalid-form-error (-> String [Code] (Skc a)))
+  [label forms]
+  (let ((= form (car (located-list forms)))
+        (= msg (concat [label ": invalid form `" (show form) "'"])))
+    (skSrcError form msg)))
 
 (defn (compile-to-obj-file (-> String (Skc Code)))
   (str)
@@ -547,12 +553,10 @@ paths from import directories."
 
 (defn (info-cmd ReplCommand)
   (forms)
-  (let ((= err form
-          (skSrcError form (++ "info: invalid form: " (show form)))))
-    (case forms
-      [form] (| ((<- (Atom (ASymbol _)) (unCode form))
-                 (info-name form)))
-      _ (err (car (located-list forms))))))
+  (case forms
+    [form] (| ((<- (Atom (ASymbol _)) (unCode form))
+               (info-name form)))
+    _ (invalid-form-error "info" forms)))
 
 ;; From `GHCi.UI.typeOfExpr'.
 (defn (type-cmd ReplCommand)
@@ -566,8 +570,20 @@ paths from import directories."
                                           (pprTypeForUser ty)))]))))
                (<- str (show-sdoc-for-user-m sdoc))
                (return `(putStrLn ,str)))
-    _ (let ((= form (car (located-list forms))))
-        (skSrcError form (++ "type: invalid form: " (show forms))))))
+    _ (invalid-form-error "type" forms)))
+
+;; From `GHCi.UI.kindOfType'
+(defn (kind-cmd ReplCommand)
+  (forms)
+  (case forms
+    [form] (do (<- ty0 (buildHsSyn parseType forms))
+               (<- (, _ kind) (evalTypeKind ty0))
+               (let ((= sdoc
+                       (<+> (text (show form))
+                            (<+> dcolon (pprTypeForUser kind))))))
+               (<- str (show-sdoc-for-user-m sdoc))
+               (return `(putStrLn ,str)))
+    _ (invalid-form-error "kind" forms)))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defn (browse-cmd ReplCommand)
@@ -672,6 +688,7 @@ COMMANDS:
    (, 'dflags dflags-cmd)
    (, 'help help-cmd)
    (, 'info info-cmd)
+   (, 'kind kind-cmd)
    (, 'link-module link-module-cmd)
    (, 'linker linker-cmd)
    (, 'load load-cmd)

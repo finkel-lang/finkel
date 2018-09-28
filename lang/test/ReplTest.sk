@@ -171,4 +171,4 @@
                    "`(= f a (+ a 1) (+ a 2))'\n"]))
       (ng '(head []) "Prelude.head: empty list")
       (ng '(*_ info (foo bar))
-          "<quoted code>: error: info: invalid form: (foo bar)\n")))))
+          "<quoted code>: error: info: invalid form `(foo bar)'\n")))))

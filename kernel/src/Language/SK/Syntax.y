@@ -18,6 +18,7 @@ module Language.SK.Syntax
   , parseDecls
   , parseTopDecls
   , parseExpr
+  , parseType
   ) where
 
 -- ghc
@@ -684,6 +685,9 @@ parseTopDecls = p_top_decls
 
 parseExpr :: Builder HExpr
 parseExpr = p_expr
+
+parseType :: Builder HType
+parseType = p_type
 
 -- | Unwrap the element of 'List' and 'HsList', otherwise returns '[]'.
 unwrapListL :: Code -> [Code]
