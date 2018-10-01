@@ -1,9 +1,10 @@
 ;;;; Macros used in REPL.
 
-;;; This module contains macros accessible from REPL. Main purpose of
-;;; using macros for REPL is to access runtime value of `SkEnv'. Macro
-;;; body can contain codes accessing `SkEnv', and then the code could be
-;;; invoked from REPL via evaluating the typed in forms.
+;;; This module contains macros accessible only from REPL. Main purpose
+;;; of using macros for REPL is to access runtime value of
+;;; `SkEnv'. Macro body can contain codes accessing `SkEnv', and then
+;;; the code could be invoked from REPL via evaluating the typed in
+;;; forms.
 
 ;; ghc
 (require Config (cProjectVersionInt))
@@ -18,8 +19,9 @@
    (Control.Monad (filterM void))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
-   (Data.List (find intersperse partition sortBy))
+   (Data.List (find intersperse isPrefixOf partition sortBy))
    (Data.Maybe (catMaybes))
+   (Text.Printf (printf))
 
    ;; bytestring
    (qualified Data.ByteString.Char8 as C8)
@@ -91,7 +93,7 @@
   (export *_))
 
 
-;;; Compile time helper for GHC version compatibility
+;;; GHC version compatibility compile time helper
 
 (eval-when (compile)
   (defn (ghc-version Int)
@@ -129,8 +131,14 @@
 
 ;;; Auxiliary
 
-(type ReplCommand
+(type ReplAction
   (-> [Code] (Skc Code)))
+
+(data ReplCmd
+  (ReplCmd {rc-name String
+            rc-args (Maybe [String])
+            rc-action ReplAction
+            rc-help String}))
 
 (defn (mk-ii-fs (-> FastString InteractiveImport))
   (name)
@@ -202,12 +210,12 @@
    (void action)
    (\ e
      (do (case (:: (fromException e) (Maybe SourceError))
-           (Just se)
-           (do (<- dflags getSessionDynFlags)
-               (liftIO
-                (putStr (unlines (map (showSDoc dflags)
-                                      (pprErrMsgBagWithLoc
-                                       (srcErrorMessages se)))))))
+           (Just se) (do (<- dflags getSessionDynFlags)
+                         (liftIO
+                          (putStr (unlines
+                                   (map (showSDoc dflags)
+                                        (pprErrMsgBagWithLoc
+                                         (srcErrorMessages se)))))))
            _ (liftIO (print e)))
          (<- mods (fmap envContextModules getSkEnv))
          (setContext (map mk-ii mods))))))
@@ -285,23 +293,23 @@
 
 ;;; REPL commands
 
-(defn (compile-obj-cmd ReplCommand)
+(defn (compile-cmd ReplAction)
   "Compile source code to object code."
   (forms)
   (let ((= err
           (skSrcError (located-list forms)
-                      (++ "compile-obj: not a FilePath: "
+                      (++ "compile: not a FilePath: "
                           (show forms)))))
     (case forms
       [form] (maybe err
                     (\ src
                       (do (liftIO
-                           (putStrLn (++ "; compile-obj: " src)))
+                           (putStrLn (++ "; compile: " src)))
                           (compile-to-obj-file src)))
                     (code->mb-string form))
       _ err)))
 
-(defn (link-module-cmd ReplCommand)
+(defn (link-module-cmd ReplAction)
   "Link the object code of given module."
   (forms)
   (let ((= go name
@@ -319,7 +327,7 @@
       [(Atom (ASymbol sym))] (go sym)
       _ err)))
 
-(defn (load-cmd ReplCommand)
+(defn (load-cmd ReplAction)
   "Load a module source code file. Handles absolute paths and relative
 paths from import directories."
   (forms)
@@ -383,11 +391,11 @@ paths from import directories."
                     (env-context-on-exception
                      (find-file (importPaths dflags) path))
                     (return '(begin))))
-              (fromCode form))
+              (code->mb-string form))
       _ (skSrcError (located-list forms)
                     (++ "load: invalid form: " (show forms))))))
 
-(defn (set-cmd ReplCommand)
+(defn (set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
   (forms)
   (case forms
@@ -403,7 +411,7 @@ paths from import directories."
                     (return '(begin)))))
     _ (skSrcError nil "$set: empty form")))
 
-(defn (debug-cmd ReplCommand)
+(defn (debug-cmd ReplAction)
   "Modify debug settings in REPL."
   (forms)
   (case forms
@@ -415,7 +423,7 @@ paths from import directories."
     _ (let ((= lst (located-list forms)))
         (skSrcError lst (++ "debug: invalid form: " (show lst))))))
 
-(defn (cd-cmd ReplCommand)
+(defn (cd-cmd ReplAction)
   "Function to change current directory."
   (forms)
   (case forms
@@ -426,11 +434,11 @@ paths from import directories."
                   (++ "cd: expecting symbol or string but got "
                       (show forms)))))
 
-(defn (pwd-cmd ReplCommand)
+(defn (pwd-cmd ReplAction)
   "Function to show current directory."
   (const (fmap toCode (liftIO getCurrentDirectory))))
 
-(defn (ls-cmd ReplCommand)
+(defn (ls-cmd ReplAction)
   "List directory contents."
   (forms)
   (do (<- mb-path
@@ -447,7 +455,7 @@ paths from import directories."
         _ (skSrcError (located-list forms)
                       (++ "ls: invalid path: " (show forms))))))
 
-(defn (bindings-cmd ReplCommand)
+(defn (bindings-cmd ReplAction)
   "Almost same as `GHCi.UI.showBindings'."
   (_forms)
   (where (do (<- bs getBindings)
@@ -463,7 +471,7 @@ paths from import directories."
     (= ppr-tt (ppr-tt-args)
       (pprTyThing showToHeader thing))))
 
-(defn (context-cmd ReplCommand)
+(defn (context-cmd ReplAction)
   (_form)
   (where (do (<- context getContext)
              (<- dflags getSessionDynFlags)
@@ -477,7 +485,7 @@ paths from import directories."
         (IIModule mname)
         (++ ";  IIModule: " (moduleNameString mname))))))
 
-(defn (dflags-cmd ReplCommand)
+(defn (dflags-cmd ReplAction)
   (_form)
   (do (<- dflags getDynFlags)
       (let ((= ss
@@ -495,7 +503,7 @@ paths from import directories."
                 MkDepend    "MkDepend"))))
       (return `(putStr ,(unlines ss)))))
 
-(defn (linker-cmd ReplCommand)
+(defn (linker-cmd ReplAction)
   (_form)
   ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
   ;; which is not exposed from the module its defined ... not sure how
@@ -506,7 +514,7 @@ paths from import directories."
                   (showLinkerState (hsc_dflags hsc-env))))
       (return '(begin))))
 
-(defn (macros-cmd ReplCommand)
+(defn (macros-cmd ReplAction)
   (_form)
   (do (<- macros (fmap envMacros getSkEnv))
       (let ((= macro-strings
@@ -515,7 +523,7 @@ paths from import directories."
                   (map (++ ";  ") (macroNames macros)))))))
       (return `(putStr ,macro-strings))))
 
-(defn (modules-cmd ReplCommand)
+(defn (modules-cmd ReplAction)
   (_form)
   (do (<- graph0 getModuleGraph)
       (let ((= graph1 (graph->summaries graph0))))
@@ -523,7 +531,7 @@ paths from import directories."
       (<- mods (mapM showModule graph2))
       (return `(putStr ,(unlines mods)))))
 
-(defn (packages-cmd ReplCommand)
+(defn (packages-cmd ReplAction)
   (_form)
   (do (<- dflags getDynFlags)
       (let ((= pr (++ ";   "))
@@ -535,7 +543,7 @@ paths from import directories."
               (: "; packages" (map pr-flag (packageFlags dflags))))))
       (return `(putStr ,(unlines pkgs)))))
 
-(defn (paths-cmd ReplCommand)
+(defn (paths-cmd ReplAction)
   (_form)
   (do (<- dflags getDynFlags)
       (<- cwd (liftIO getCurrentDirectory))
@@ -551,7 +559,7 @@ paths from import directories."
                      (map (++ ";    ") ipaths))])))))
       (return `(putStr ,result))))
 
-(defn (info-cmd ReplCommand)
+(defn (info-cmd ReplAction)
   (forms)
   (case forms
     [form] (| ((<- (Atom (ASymbol _)) (unCode form))
@@ -559,7 +567,7 @@ paths from import directories."
     _ (invalid-form-error "info" forms)))
 
 ;; From `GHCi.UI.typeOfExpr'.
-(defn (type-cmd ReplCommand)
+(defn (type-cmd ReplAction)
   (forms)
   (case forms
     [form] (do (<- expr (buildHsSyn parseExpr forms))
@@ -573,7 +581,7 @@ paths from import directories."
     _ (invalid-form-error "type" forms)))
 
 ;; From `GHCi.UI.kindOfType'
-(defn (kind-cmd ReplCommand)
+(defn (kind-cmd ReplAction)
   (forms)
   (case forms
     [form] (do (<- ty0 (buildHsSyn parseType forms))
@@ -586,7 +594,7 @@ paths from import directories."
     _ (invalid-form-error "kind" forms)))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
-(defn (browse-cmd ReplCommand)
+(defn (browse-cmd ReplAction)
   (forms)
   (let ((= go name
           (| ((looksLikeModuleName name)
@@ -611,7 +619,7 @@ paths from import directories."
 ;;; module from SK source code, by ignoring module found in pre-compiled
 ;;; library linkable.  This behaviour may useful when working with cabal
 ;;; package library modules from REPL.
-(defn (component-cmd ReplCommand)
+(defn (component-cmd ReplAction)
   (forms)
   (do (<- name (case forms
                  [form] (| ((<- (Just str) (fromCode form))
@@ -647,63 +655,82 @@ paths from import directories."
                       (otherwise not-found)))
       (return '(begin))))
 
-(defn (help-cmd ReplCommand)
+(defn (help-cmd ReplAction)
   (_form)
   (return
-    `(putStrLn "DESCRIPTION:
+    `(putStrLn ,(++ "DESCRIPTION:
 
   REPL meta macro, ARGS varies per COMMAND.
 
 COMMANDS:
 
-  bindings      - show current bindings in REPL
-  cd DIR        - change working directory to DIR
-  context       - show current REPL context
-  dflags        - show current DynFlags information
-  help          - show this help
-  info NAME     - show info of NAME
-  linker        - show linker information
-  load FILE     - compile and load FILE
-  ls            - list files in currency directory
-  macros        - show macros defined in REPL environment
-  modules       - show loaded modules
-  packages      - show accessible packages
-  paths         - show paths
-  pwd           - print working directory
-  set FLAGS ... - parse and set FLAGS
-  type FORM     - show type of FORM
-")))
+" (unlines
+   (map (\ rc
+          (let ((= pre
+                  (++ (rc-name rc)
+                      (maybe ""
+                             (. (++ " ") unwords)
+                             (rc-args rc)))))
+            (concat
+             ["  ," (printf "%-14s" pre) " - " (rc-help rc)])))
+        commands))))))
 
 
 ;;; REPL command macro
 
-(defn (commands [(, Code ReplCommand)])
-  [(, 'bindings bindings-cmd)
-   (, 'browse browse-cmd)
-   (, 'cd cd-cmd)
-   (, 'compile-obj compile-obj-cmd)
-   (, 'component component-cmd)
-   (, 'context context-cmd)
-   (, 'debug debug-cmd)
-   (, 'dflags dflags-cmd)
-   (, 'help help-cmd)
-   (, 'info info-cmd)
-   (, 'kind kind-cmd)
-   (, 'link-module link-module-cmd)
-   (, 'linker linker-cmd)
-   (, 'load load-cmd)
-   (, 'ls ls-cmd)
-   (, 'macros macros-cmd)
-   (, 'modules modules-cmd)
-   (, 'packages packages-cmd)
-   (, 'paths paths-cmd)
-   (, 'pwd pwd-cmd)
-   (, 'set set-cmd)
-   (, 'type type-cmd)])
+(defn (commands [ReplCmd])
+  (let ((= c ReplCmd))
+    [(c "?" Nothing help-cmd
+        "show this help")
+     (c "bindings" Nothing bindings-cmd
+        "show current bindings in REPL")
+     (c "browse" (Just ["MODULE"]) browse-cmd
+        "browse module")
+     (c "cd" (Just ["DIR"]) cd-cmd
+        "change working directory to DIR")
+     (c "compile" (Just ["FILE"]) compile-cmd
+        "compile FILE to object code")
+     (c "component" (Just ["NAME"]) component-cmd
+        "set current component to NAME")
+     (c "context" Nothing context-cmd
+        "show current context")
+     (c "debug" (Just ["FLAG"]) debug-cmd
+        "set sk debug to FLAG")
+     (c "dflags" Nothing dflags-cmd
+        "show dflags information")
+     (c "info" (Just ["NAME"]) info-cmd
+        "show info of NAME")
+     (c "kind" (Just ["TYPE"]) kind-cmd
+        "show kind of TYPE")
+     (c "link" (Just ["MODULE"]) link-module-cmd
+        "link given MODULE")
+     (c "linker" Nothing linker-cmd
+        "show linker information")
+     (c "load" (Just ["FILE"]) load-cmd
+        "compile and load FILE")
+     (c "ls" (Just ["DIR"]) ls-cmd
+        "list contents in DIR or CWD if empty")
+     (c "macros" Nothing macros-cmd
+        "show macros in REPL environment")
+     (c "modules" Nothing modules-cmd
+        "show loaded modules")
+     (c "packages" Nothing packages-cmd
+        "show accessible package")
+     (c "paths" Nothing paths-cmd
+        "show paths")
+     (c "pwd" Nothing pwd-cmd
+        "show working directory")
+     (c "set" (Just ["FLAGS" "..."]) set-cmd
+        "parse and set FLAGS")
+     (c "type" (Just ["EXPR"]) type-cmd
+        "show type of EXPR")]))
 
 (defmacro* *_ form
   (case form
-    (: cmd args) (| ((<- (Just fn) (lookup cmd commands))
-                     (fn args)))
+    (: name args) (| ((<- (Just rc)
+                        (do (<- name' (code->mb-string name))
+                            (find (. (isPrefixOf name') rc-name)
+                                  commands)))
+                      (rc-action rc args)))
     _ (let ((= lst (located-list form)))
         (skSrcError lst (++ "invalid args: " (show lst))))))

@@ -10,7 +10,7 @@
    (Control.Exception ((AsyncException ..) bracket catch throwIO))
    (Control.Monad (void when))
    (Control.Monad.IO.Class (liftIO))
-   (Data.List (intercalate isSuffixOf nubBy))
+   (Data.List (inits intercalate isSuffixOf nubBy))
    (System.Exit (exitWith))
    (System.IO ((Handle) hClose hFlush openTempFile stdout))
    (System.IO.Error (isDoesNotExistError))
@@ -133,6 +133,8 @@
                                 outputStrLn)
                             str))
               (liftIO (hFlush stdout))))
+        (= as-repl-macro str
+          (concat ["(*_ " str ")"]))
         (= go result-mv
           (do (<- st0 (lift get-repl-state))
               (let ((= prompt
@@ -154,10 +156,9 @@
             (: h tl) (| ((== line "(quit)") quit)
                         ((&& (null (pending-input st0))
                              (== \, h))
-                         (if (== tl "quit")
+                         (if (elem tl (tail (inits "quit")))
                              quit
-                             (let ((= line' (concat ["(*_ " tl ")"])))
-                               (go2 result-mv line'))))
+                             (go2 result-mv (as-repl-macro tl))))
                         (otherwise
                          (go2 result-mv line)))))
         (= go2 result-mv line
@@ -194,7 +195,7 @@
     (require SK.Repl.Env)
     (require SK.Repl.Macro)
     (putStrLn
-     "Hit `Ctrl-d' to quit, type `,help' for more information.")))
+     "Hit `Ctrl-d' to quit, type `,?' for more information.")))
 
 ;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))
