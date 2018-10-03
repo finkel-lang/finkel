@@ -18,7 +18,7 @@ import HsSyn
 import Bag (emptyBag, consBag, listToBag)
 import BasicTypes ( Boxity(..), Fixity(..), FixityDirection(..)
                   , InlinePragma(..), InlineSpec(..), LexicalFixity(..)
-                  , Origin(..), SourceText(..)
+                  , Origin(..), OverlapMode(..), SourceText(..)
                   , alwaysInlinePragma
                   , fl_value
                   , defaultInlinePragma
@@ -26,7 +26,7 @@ import BasicTypes ( Boxity(..), Fixity(..), FixityDirection(..)
                   , IntegralLit(..)
 #endif
                   )
-import FastString (FastString, headFS)
+import FastString (FastString, headFS, unpackFS)
 import FieldLabel (FieldLbl(..))
 import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
 import HsUtils (mkHsIntegral)
@@ -282,15 +282,16 @@ b_classD (tys,ty) decls = do
                         , tcdFVs = placeHolderNames }
     return (L l (TyClD cls))
 
-b_instD :: ([HType], HType) -> [HDecl] -> HDecl
-b_instD (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
+b_instD :: Maybe (Located OverlapMode) -> ([HType], HType)
+        -> [HDecl] -> HDecl
+b_instD overlap (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
   where
     decl = ClsInstDecl { cid_poly_ty = mkLHsSigType qty
                        , cid_binds = listToBag binds
                        , cid_sigs = mkClassOpSigs []
                        , cid_tyfam_insts = []
                        , cid_datafam_insts = []
-                       , cid_overlap_mode = Nothing }
+                       , cid_overlap_mode = overlap }
     qty = L l HsQualTy { hst_ctxt = mkLocatedList ctxts
                        , hst_body = ty }
     binds = foldr declToBind [] decls
@@ -299,6 +300,21 @@ b_instD (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
       case d of
         L l1 (ValD bind) -> L l1 bind : acc
         _  -> acc
+
+b_overlapP :: Code -> Maybe (Located OverlapMode)
+b_overlapP (LForm (L _ lst)) =
+  case mode of
+    "OVERLAPPABLE" -> pragma Overlappable
+    "OVERLAPPING"  -> pragma Overlapping
+    "OVERLAPS"     -> pragma Overlaps
+    "INCOHERENT"   -> pragma Incoherent
+    _              -> Nothing
+  where
+    pragma con = Just (L l (con stxt))
+    (List [(LForm (L l (Atom (ASymbol mode))))]) = lst
+    -- XXX: Adding extra pragma comment header to support translation to
+    -- Haskell source code.
+    stxt = SourceText ("{-# " ++ unpackFS mode)
 
 b_qtyclC :: [HType] -> Builder ([HType], HType)
 b_qtyclC ts =
@@ -752,6 +768,7 @@ declsToBinds l decls = L l binds'
 mkLocatedList ::  [Located a] -> Located [Located a]
 mkLocatedList [] = noLoc []
 mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
+{-# INLINE mkLocatedList #-}
 
 -- | Convert record field constructor expression to record field update
 -- expression.
@@ -760,6 +777,7 @@ cfld2ufld :: LHsRecField PARSED HExpr
 -- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
   L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
+{-# INLINE cfld2ufld #-}
 
 -- | Make 'HsRecField' with given name and located data.
 mkcfld :: (FastString, Located a) -> LHsRecField PARSED (Located a)
@@ -769,9 +787,11 @@ mkcfld (name, e@(L fl _)) =
                   , hsRecPun = False }
   where
     mkfname nl n = L nl (mkFieldOcc (L nl (mkRdrName n)))
+{-# INLINE mkcfld #-}
 
 quotedSourceText :: String -> SourceText
 quotedSourceText s = SourceText $ "\"" ++ s ++ "\""
+{-# INLINE quotedSourceText #-}
 
 -- Following `cvBindsAndSigs`, `getMonoBind`, `has_args`, and
 -- `makeFunBind` functions are based on resembling functions defined in
@@ -836,6 +856,7 @@ makeFunBind fn ms
               fun_co_fn = idHsWrapper,
               bind_fvs = placeHolderNames,
               fun_tick = [] }
+{-# INLINE makeFunBind #-}
 
 codeToUserTyVar :: Code -> HTyVarBndr
 codeToUserTyVar code =
@@ -843,6 +864,7 @@ codeToUserTyVar code =
     LForm (L l (Atom (ASymbol name))) ->
       L l (UserTyVar (L l (mkUnqual tvName name)))
     _ -> error "Language.SK.Syntax.Internal:codeToUserTyVar"
+{-# INLINE codeToUserTyVar #-}
 
 -- | Auxiliary function to absorb version compatibiity of
 -- 'mkHsIntegral'.
@@ -856,3 +878,4 @@ mkHsIntegral_compat n =
               , il_value = n }
   in  mkHsIntegral il placeHolderType
 #endif
+{-# INLINE mkHsIntegral_compat #-}

@@ -22,7 +22,7 @@ module Language.SK.Syntax
   ) where
 
 -- ghc
-import BasicTypes (FixityDirection(..), InlineSpec(..))
+import BasicTypes (FixityDirection(..), InlineSpec(..), OverlapMode(..))
 import FastString (FastString)
 import ForeignCall (Safety)
 import HsDoc (LHsDocString)
@@ -142,6 +142,18 @@ import Language.SK.Syntax.Internal
 'specialize' { LForm (L _ (Atom (ASymbol "SPECIALIZE"))) }
 'unpack'     { LForm (L _ (List [LForm
                                  (L _ (Atom (ASymbol "UNPACK")))])) }
+'overlappable' { LForm
+                 (L _ (List [LForm
+                              (L _ (Atom (ASymbol "OVERLAPPABLE")))])) }
+'overlapping' { LForm
+                (L _ (List [LForm
+                             (L _ (Atom (ASymbol "OVERLAPPING")))])) }
+'overlaps' { LForm
+             (L _ (List [LForm
+                          (L _ (Atom (ASymbol "OVERLAPS")))])) }
+'incoherent' { LForm
+               (L _ (List [LForm
+                            (L _ (Atom (ASymbol "INCOHERENT")))])) }
 
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }
@@ -258,16 +270,23 @@ top_decl_with_doc :: { HDecl }
     : mbdoc 'list' {% parse p_top_decl $2 }
 
 top_decl :: { HDecl }
-    : 'data' simpletype constrs    { b_dataD $1 $2 $3 }
-    | 'type' simpletype type       { b_typeD $1 $2 $3 }
-    | 'newtype' simpletype constrs { b_newtypeD $1 $2 $3 }
-    | 'class' qtycl cdecls         {% b_classD $2 $3 }
-    | 'instance' qtycl idecls      { b_instD $2 $3 }
-    | 'default' zero_or_more_types { b_defaultD $2 }
-    | fixity 'integer' symbols1    { b_fixityD $1 $2 $3 }
+    : 'data' simpletype constrs       { b_dataD $1 $2 $3 }
+    | 'type' simpletype type          { b_typeD $1 $2 $3 }
+    | 'newtype' simpletype constrs    { b_newtypeD $1 $2 $3 }
+    | 'class' qtycl cdecls            {% b_classD $2 $3 }
+    | 'instance' overlap qtycl idecls { b_instD $2 $3 $4 }
+    | 'default' zero_or_more_types    { b_defaultD $2 }
+    | fixity 'integer' symbols1       { b_fixityD $1 $2 $3 }
     | 'foreign' 'symbol' ccnv sname 'list'
       {% parse p_sfsig $5 >>= b_ffiD $1 $2 $3 $4 }
     | decl                         { $1 }
+
+overlap :: { Maybe (Located OverlapMode) }
+    : 'overlappable' { b_overlapP $1 }
+    | 'overlapping'  { b_overlapP $1 }
+    | 'overlaps'     { b_overlapP $1 }
+    | 'incoherent'   { b_overlapP $1 }
+    | {- empty -}    { Nothing }
 
 sfsig :: { (Code, HType) }
     : '::' 'symbol' type { ($2, $3) }

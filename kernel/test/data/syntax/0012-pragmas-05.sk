@@ -34,11 +34,52 @@
   (= c2 bool (++ "bool: " (show bool))))
 
 ;; Context `(C2 a String)' requires `FLexibleContexts'.
-(:: c2s (=> (C2 a String) (-> a String)))
-(= c2s c2)
+(:: c2str (=> (C2 a String) (-> a String)))
+(= c2str c2)
+
+;;; GHC Extension: overlap mode
+
+(instance #p(OVERLAPS) (=> (Show a) (C2 a String))
+  (= c2 show))
+
+(class (C2b a b)
+  (:: c2b (-> a b)))
+
+(instance (C2b Bool String)
+  (= c2b bool (++ "[c2b] bool:" (show bool))))
+
+(instance #p(OVERLAPPABLE) (=> (Show a) (C2b a String))
+  (= c2b (. (++ "[c2b] ") show)))
+
+(class (C2c a b)
+  (:: c2c (-> a b)))
+
+(instance #p(OVERLAPPING) (C2c Bool String)
+  (= c2c bool (++ "[c2c] bool:" (show bool))))
+
+(instance (=> (Show a) (C2c a String))
+  (= c2c (. (++ "[c2c] ") show)))
+
+(class (C2d a b)
+  (:: c2d (-> a b)))
+
+(instance (C2d Bool String)
+  (= c2d bool (++ "[c2d] bool:" (show bool))))
+
+(instance #p(INCOHERENT) (=> (Show a) (C2d a String))
+  (= c2d (. (++ "[c2d] ") show)))
 
 (:: main (IO ()))
 (= main
   (do (c1 (:: (return False) (IO Bool)) (return \x))
       (c1 (:: (return True) (Either String Bool)) (return \y))
-      (putStrLn (c2s True))))
+      (let ((:: n Int)
+            (= n 42)))
+      (putStrLn (c2str True))
+      (putStrLn (c2str n))
+      (putStrLn (c2b True))
+      (putStrLn (c2b n))
+      (putStrLn (c2c True))
+      (putStrLn (c2c n))
+      (putStrLn (c2d True))
+      (putStrLn (c2d n))))

@@ -194,7 +194,7 @@ pragma orig@(LForm (L l form)) =
     List [LForm (L _ (Atom (ASymbol sym)))]
       -- Return the UNPACK form as is. This pragma is handled by
       -- syntax parser of data constructor field.
-      | normalize sym == "unpack" -> return orig
+      | normalize sym `elem` noArgPragmas -> return orig
 
     -- Pragma with single argument.
     List [LForm (L _ (Atom (ASymbol sym))), _a1]
@@ -225,6 +225,11 @@ pragma orig@(LForm (L l form)) =
     normalize = map toLower . unpackFS
     inlinePragmas = ["inline", "noinline", "inlinable"]
     spcls = ["specialize", "specialise"]
+
+noArgPragmas :: [String]
+noArgPragmas =
+    [ "unpack"
+    , "overlappable", "overlapping", "overlaps", "incoherent"]
 
 groupExts :: [Code] -> ([Located Extension],[Code])
 groupExts = foldr f ([],[])
