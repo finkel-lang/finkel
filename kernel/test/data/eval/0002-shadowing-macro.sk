@@ -50,6 +50,19 @@
                  (f2 (++ "let: ")))
                "let: bar")
 
+           ;; Bind `foo' in do-notation.
+           (== (do (<- foo (return (\ x (Just (++ "do: " x)))))
+                   (foo "bar"))
+               (Just "do: bar"))
+
+           ;; Bind `foo' in do-notation after using `foo'. The first use
+           ;; of `foo' is from `let-macro', and the second use is
+           ;; locally bounded function.
+           (== (do (<- x (return (foo "bar")))
+                   (<- foo (return (\ x (++ "do: " x))))
+                   (return (, x (foo "buzz"))))
+               (Just (, "let-macro: bar" "do: buzz")))
+
            ;; Pattern match in `case' expression
            (== (case (Just (++ "let: "))
                  (Just foo) (foo "bar")

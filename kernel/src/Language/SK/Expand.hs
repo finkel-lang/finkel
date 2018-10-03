@@ -465,12 +465,12 @@ expand form =
         -- names. Expansion of other forms are done without name
         -- shadowing.
         kw@(LForm (L _ (Atom (ASymbol x)))):y:rest
-          | x == "let"   -> expandLet l kw y rest
-          | x == "case"  -> expandCase l kw y rest
-          | x == "where" -> expandWhere l kw y rest
-          | x == "=" ||
-            x == "\\"    -> expandFunBind l kw (y:rest)
-        _                -> expandList l List forms
+          | x == "let"            -> expandLet l kw y rest
+          | x == "do"             -> expandDo l kw (y:rest)
+          | x == "case"           -> expandCase l kw y rest
+          | x == "where"          -> expandWhere l kw y rest
+          | x == "=" || x == "\\" -> expandFunBind l kw (y:rest)
+        _                         -> expandList l List forms
 
     L l (HsList forms) ->
       -- Without recursively calling 'expand' on the result, cannot
@@ -485,6 +485,10 @@ expand form =
       let bounded = boundedNames binds'
       body' <- withShadowing bounded (mapM expand body)
       return (LForm (L l (List (kw:binds':body'))))
+
+    expandDo l kw body = do
+      (_, body') <- foldM expandInDo ([], []) body
+      return (LForm (L l (List (kw:reverse body'))))
 
     expandFunBind l kw rest = do
       let args = init rest
@@ -526,6 +530,18 @@ expand form =
         _ -> do
           forms' <- mapM expand forms
           return (LForm (L l (constr forms')))
+
+expandInDo ::
+   ([FastString], [Code]) -> Code -> Skc ([FastString], [Code])
+expandInDo (bounded, xs) x = do
+  let newbind =
+        case x of
+          LForm (L _ (List ((LForm (L _ (Atom (ASymbol sym)))):n:_)))
+            | sym == "<-" -> boundedNameOne n
+          _               -> []
+  x' <- withShadowing bounded (expand x)
+  return (newbind ++ bounded, (x' : xs))
+{-# INLINE expandInDo #-}
 
 -- | Expand given form once if the form is a macro form, otherwise
 -- return the given form.
