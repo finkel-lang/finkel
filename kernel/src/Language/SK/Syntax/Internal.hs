@@ -1,7 +1,9 @@
 -- | Auxiliary module for syntax.
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+
 module Language.SK.Syntax.Internal where
 
 -- base
@@ -247,27 +249,30 @@ b_derivD (_, cs) tys = (L l dcs, cs)
 
 b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do
-    -- XXX: Does not support multi-arg type class.
     let categorize (ms,ss) (L ld decl) =
           case decl of
             SigD d -> return (ms, L ld d : ss)
             ValD d -> return (L ld d : ms, ss)
             _      -> builderError
+        -- Recursing in `HsAppTy' to support MultiParamTypeClasses.
         unAppTy t =
           case t of
-            L l (HsAppTy (L _ (HsTyVar _promo1 n))
-                         (L _ (HsTyVar _promo2 v))) ->
-              return (l, n, v)
+            L l (HsTyVar _p n) -> return (l, n, [])
+            L _ (HsAppTy t1 (L lv (HsTyVar _ v))) -> do
+              (l, n, vs) <- unAppTy t1
+              return (l, n, L lv (UserTyVar v):vs)
             L _ (HsParTy t') -> unAppTy t'
             _                -> builderError
-    (l, name, L lv tvar) <- unAppTy ty
+    (l, name, bndrs) <- unAppTy ty
     (meths,sigs) <- foldM categorize ([],[]) decls
 
-    let bndrs = [L lv (UserTyVar (L lv tvar))]
+    -- Note that the `bndrs' are gathered from left to right,
+    -- re-ordering with reverse at this point.
+    let bndrs' = reverse bndrs
         cls = ClassDecl { tcdCtxt = mkLocatedList tys
                         , tcdLName = name
                         , tcdFixity = Prefix
-                        , tcdTyVars = mkHsQTvs bndrs
+                        , tcdTyVars = mkHsQTvs bndrs'
                         , tcdFDs = []
                         , tcdSigs = mkClassOpSigs sigs
                         , tcdMeths = listToBag meths
@@ -435,9 +440,9 @@ b_specializeD (LForm (L l _)) (nameSym, tsig) = do
 -- ---------------------------------------------------------------------
 
 b_symT :: Code -> HType
-b_symT (LForm (L l (Atom (ASymbol name)))) =
-  L l (HsTyVar NotPromoted (L l ty))
+b_symT (LForm (L l (Atom (ASymbol name)))) = L l tyvar
   where
+    tyvar = HsTyVar NotPromoted (L l ty)
     ty = case splitQualName name of
            Nothing   -> mkUnqual namespace name
            Just qual -> mkQual namespace qual
@@ -458,10 +463,9 @@ b_funT ts =
     f a@(L l1 _) b = L l1 (HsFunTy a b)
 
 b_appT :: [HType] -> HType
-b_appT whole@(x:xs) = L l0 (HsParTy (foldl f x xs))
+b_appT whole@(x:xs) = L l0 (HsParTy (mkHsAppTys x xs))
   where
     l0 = getLoc (mkLocatedList whole)
-    f b a = mkHsAppTy b a
 
 b_listT :: HType -> HType
 b_listT ty@(L l _) = L l (HsListTy ty)

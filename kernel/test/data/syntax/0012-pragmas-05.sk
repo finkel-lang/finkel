@@ -1,0 +1,44 @@
+;;;; File containing language pragmas, part 5.
+
+#p(LANGUAGE MultiParamTypeClasses)
+#p(LANGUAGE FlexibleContexts)
+#p(LANGUAGE FlexibleInstances)
+
+(module Main)
+
+;; Class `C1' requires `MultiParamTypeClasses'.
+(class (C1 m a b)
+  (:: c1 (-> (m a) (m b) (IO ()))))
+
+(instance (C1 IO Bool Char)
+  (= c1 a b
+    (do (<- a' a)
+        (<- b' b)
+        (putStrLn (concat ["c1: " (show a') ", " (show b')])))))
+
+;; Use of `Either String' requires `FlexibleInstances'.
+(instance (C1 (Either String) Bool Char)
+  (= c1 a b
+    (where (f a b)
+      (= f (Right b) (Right c) (pr (show b) (show c)))
+      (= f (Right b) (Left s2) (pr (show b) s2))
+      (= f (Left s1) (Right c) (pr s1 (show c)))
+      (= f (Left s1) (Left s2) (pr s1 s2))
+      (= pr x y
+        (putStrLn (concat ["c1: " x ", " y]))))))
+
+(class (C2 a b)
+  (:: c2 (-> a b)))
+
+(instance (C2 Bool String)
+  (= c2 bool (++ "bool: " (show bool))))
+
+;; Context `(C2 a String)' requires `FLexibleContexts'.
+(:: c2s (=> (C2 a String) (-> a String)))
+(= c2s c2)
+
+(:: main (IO ()))
+(= main
+  (do (c1 (:: (return False) (IO Bool)) (return \x))
+      (c1 (:: (return True) (Either String Bool)) (return \y))
+      (putStrLn (c2s True))))

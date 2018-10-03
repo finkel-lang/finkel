@@ -244,8 +244,11 @@ supportedLangExts =
       , DeriveGeneric
       , DeriveTraversable
       , ExistentialQuantification
+      , FlexibleContexts
+      , FlexibleInstances
       , GADTs
       , GeneralizedNewtypeDeriving
+      , MultiParamTypeClasses
       , OverloadedStrings
       , OverloadedLists
       , RankNTypes]
