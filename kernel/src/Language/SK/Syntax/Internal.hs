@@ -287,19 +287,14 @@ b_instD :: Maybe (Located OverlapMode) -> ([HType], HType)
 b_instD overlap (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
   where
     decl = ClsInstDecl { cid_poly_ty = mkLHsSigType qty
-                       , cid_binds = listToBag binds
+                       , cid_binds = binds
                        , cid_sigs = mkClassOpSigs []
                        , cid_tyfam_insts = []
                        , cid_datafam_insts = []
                        , cid_overlap_mode = overlap }
     qty = L l HsQualTy { hst_ctxt = mkLocatedList ctxts
                        , hst_body = ty }
-    binds = foldr declToBind [] decls
-    -- XXX: Skipping non-functional bindings.
-    declToBind d acc =
-      case d of
-        L l1 (ValD bind) -> L l1 bind : acc
-        _  -> acc
+    (binds, _) = cvBindsAndSigs (toOL decls)
 
 b_overlapP :: Code -> Maybe (Located OverlapMode)
 b_overlapP (LForm (L _ lst)) =

@@ -128,6 +128,10 @@
       True "t"
       False "f")))
 
+(instance (MyShow Char)
+  (= myShow \d "dddddddddddddddddddd")
+  (= myShow c (++ "myShow: " (show c))))
+
 ;;; Typeclass with context and default method.
 (class (=> (Show a) (MyShow2 a))
   (:: myShow2 (-> a String))
@@ -138,6 +142,7 @@
 (:: s4_3_1 (IO ()))
 (= s4_3_1
   (do (print (map myShow [True False]))
+      (print (map myShow [\a \b \c \d \e]))
       (print (map myShow2 [True False]))))
 
 ;;; 4.3.2 Instance Declarations
