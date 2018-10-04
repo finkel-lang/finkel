@@ -402,9 +402,7 @@
     (= tvs (zipWith (var-name-and-type dflags) names vars))))
 
 (defn (eq-ii (-> InteractiveImport InteractiveImport Bool))
-  (a b)
-  (case (, a b)
-    (, (IIModule x) (IIModule y)) (== x y)
-    (, (IIDecl x) (IIDecl y))     (== (unLoc (ideclName x))
-                                      (unLoc (ideclName y)))
-    _                             False))
+  [(IIModule x) (IIModule y)] (== x y)
+  [(IIDecl x)   (IIDecl y)  ] (== (unLoc (ideclName x))
+                                  (unLoc (ideclName y)))
+  [_            _           ] False)

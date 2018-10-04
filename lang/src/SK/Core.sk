@@ -27,9 +27,8 @@
 (require FastString (unpackFS))
 (require SK.Core.List)
 
-
 ;; base
-(import Control.Monad (foldM))
+(import Control.Monad (foldM when))
 
 ;; ghc
 (import DynFlags ((HasDynFlags ..)))
@@ -220,26 +219,35 @@
    `(LForm (L _ (Atom (AString ,val))))))
 
 ;;; Macro for defining function. This macro preserves the location of
-;;; function name, arguments, and body. Supports function declaration
-;;; with and without type signature,
+;;; function name, arguments, and body. Supports optional function type
+;;; signature.
 (define-macro defn form
   (case (unCode form)
     (List [_ sig (pastring _doc) body])
     (return `(defn ,sig () ,body))
 
-    (List [_ sig (pastring _doc) args body])
-    (return `(defn ,sig ,args ,body))
+    (List (: _ (: sig (: (pastring _doc) rest))))
+    (return `(defn ,sig ,@rest))
 
     (List [_ sig body])
     (return `(defn ,sig () ,body))
 
-    (List [_ sig args body])
-    (case (unCode sig)
-      (List [name tsig]) (return `(begin
-                                    (:: ,name ,tsig)
-                                    (= ,name ,@args ,body)))
-      (Atom _) (return `(= ,sig ,@args ,body))
-      _ (macro-error sig "defn: invalid signature"))
+    (List (: _ (: sig bodies)))
+    (let ((= build name
+            (let ((= go (: args (: body rest))
+                    (: `(= ,name ,@args ,body) (go rest)))
+                  (= go _ []))
+              go)))
+      (do (when (odd (length bodies))
+            (macro-error form "defn: odd number of parameters"))
+          (case (unCode sig)
+            (List [name tsig]) (return `(begin
+                                          (:: ,name ,tsig)
+                                          ,@(build name bodies)))
+            (Atom _)           (case (build sig bodies)
+                                 [x] (return x)
+                                 xs  (return `(begin ,@xs)))
+            _ (macro-error sig "defn: invalid signature"))))
 
     _ (macro-error form "defn: invalid form")))
 

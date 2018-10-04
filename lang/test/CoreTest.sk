@@ -223,7 +223,7 @@
 
 (defmacro! expandTo (in out)
   `(do (<- e (macroFunction ,(car in) ',in))
-       (shouldBe (Right ',out) e)))
+       (shouldBe e (Right ',out))))
 
 (defmacro! expandFailure (in)
   `(do (<- e (macroFunction ,(car in) ',in))
@@ -231,7 +231,7 @@
                (case lr
                  (Left _) True
                  _        False))))
-       (shouldBe (isLeft e) True)))
+       (shouldBe True (isLeft e))))
 
 (defn (macroTests Spec) ()
   (do (let ((= d describe)))
@@ -433,14 +433,33 @@
                  (expandTo
                   (defn foo 42)
                   (defn foo () 42)))
+             (it "should expand argument patterns"
+                 (expandTo
+                  (defn foo
+                    [a 0] (* a 2)
+                    [a b] (+ a b))
+                  (begin
+                    (= foo a 0 (* a 2))
+                    (= foo a b (+ a b)))))
+             (it "should expand argument patterns with type signature"
+                 (expandTo
+                  (defn (foo (-> Int Int Int))
+                    [a 0] (* a 2)
+                    [a b] (+ a b))
+                  (begin
+                    (:: foo (-> Int Int Int))
+                    (= foo a 0 (* a 2))
+                    (= foo a b (+ a b)))))
              (it "should fail on invalid signature"
                  (expandFailure
                   (defn (foo (Int) (Int)) (a b)
                     (+ a b))))
-             (it "should fail on too many parameters"
+             (it "should fail on odd number of body forms"
                  (expandFailure
-                  (defn (foo (Int)) ()
-                    1 2 3 4 5)))))
+                  (defn (foo (Int))
+                    () 1
+                    2  3
+                    4)))))
 
       (d "defn!"
          (it "should expand to (eval-when (..) (defn ...))"
