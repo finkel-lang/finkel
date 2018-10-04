@@ -219,9 +219,10 @@
 (defn (eval-loop (-> Handle (MVar Input) (Skc ())))
   (hdl in-mvar)
   (let ((= initialize
-          ;; Default target in interactive context is `HscAsm',
-          ;; updating to `HscInterpreted'.  Also, `dynamic' option is
-          ;; enabled in REPL.
+          ;; Default target in interactive context is `HscAsm', updating
+          ;; to `HscInterpreted'.  Also, `dynamic' option is enabled in
+          ;; REPL, since `sk' executable is compiled with `dynamic'
+          ;; option specified in cabal configuration file.
           (do (<- hsc-env getSession)
               (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
                     (= dflags1 (dflags0 {hscTarget HscInterpreted

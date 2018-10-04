@@ -81,8 +81,12 @@ executable skc
   default-language:    Haskell2010
 
 -- REPL executable. Ghc option `-dynamic' is mandatory for runtime
--- HValue lookup.  This is required for shareing the compiled result
+-- HValue lookup. This is required for shareing the compiled result
 -- with object code and the expressions typed in from the REPL.
+--
+-- Compiling with `-dynamic' option makes REPL start up time a bit
+-- faster.
+--
 executable sk
   hs-source-dirs:      app
   main-is:             sk.hs
