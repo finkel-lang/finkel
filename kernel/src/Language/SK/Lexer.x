@@ -149,7 +149,7 @@ data SPState = SPState
   { comments :: [Located AnnotationComment]
   , targetFile :: FastString
   , requiredModuleNames :: [String]
-  , langExts :: [Located LangExt.Extension]
+  , langExts :: [Located String]
   , ghcOptions :: [Located String]
   , docMap :: DocMap
   , buf :: BL.ByteString

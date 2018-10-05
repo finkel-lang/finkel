@@ -1,0 +1,16 @@
+;;;; File containing language pragmas, part 6.
+
+#p(LANGUAGE NoMonomorphismRestriction)
+
+(module Main)
+
+(class (C1 a)
+  (:: int (-> Int a))
+  (:: add (-> a a a)))
+
+;; Fail to compile with `f1', unless monomorphism restriction is absent.
+(= f1 (add (int 1) (add (int 2) (int 3))))
+
+(:: main (IO ()))
+(= main
+  (putStrLn "test file for no-monomorphism-restrictions."))

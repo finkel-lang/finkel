@@ -187,6 +187,19 @@ rmac h expr =
     L l (THash c) | c == 'p' -> pragma expr
     _ -> errorSP expr "mkHash: unsupported reader macro char"
 
+-- Module from ghc package with codes related to language pragma:
+--
+-- + libraries/ghc-boot-th/GHC/LanguageExtensions/Type.hs: The file
+--   containing definition of language extensions.
+--
+-- + compiler/main/HeaderInfo.hs: Parses header information.
+--
+-- + compiler/main/DynFlags.hs: Contains 'supportedExtensions ::
+--   [String]'. This is a list of language extension names, and the
+--   names with "No" prefix. 'xFlagsDeps' contains list of pair language
+--   extension and deprecation messages.
+--
+
 pragma :: Code -> SP Code
 pragma orig@(LForm (L l form)) =
   case form of
@@ -231,7 +244,7 @@ noArgPragmas =
     [ "unpack"
     , "overlappable", "overlapping", "overlaps", "incoherent"]
 
-groupExts :: [Code] -> ([Located Extension],[Code])
+groupExts :: [Code] -> ([Located String],[Code])
 groupExts = foldr f ([],[])
   where
     f form (exts, invalids) =
@@ -241,7 +254,7 @@ groupExts = foldr f ([],[])
             (L l ext:exts, invalids)
         _ -> (exts, form:invalids)
 
-supportedLangExts :: [(FastString, Extension)]
+supportedLangExts :: [(FastString, String)]
 supportedLangExts =
     f [ DeriveDataTypeable
       , DeriveFoldable
@@ -254,11 +267,20 @@ supportedLangExts =
       , GADTs
       , GeneralizedNewtypeDeriving
       , MultiParamTypeClasses
+      , MonomorphismRestriction
       , OverloadedStrings
       , OverloadedLists
-      , RankNTypes]
+      , RankNTypes ]
   where
-    f = map (\ext -> (fsLit (show ext), ext))
+    -- Adding `"No"' prefix, as done in `DynFlags.supportedExtensions'.
+    -- Might worth looking up `DynFlags.xFlags' to get string
+    -- representation of language extension instead of applying `show'
+    -- function.
+    f = concatMap g
+    g ext = [(fsLit name, name), (fsLit noname, noname)]
+      where
+        name = show ext
+        noname = "No" ++ name
 
 makeOptionFlags :: [Code] -> [Located String]
 makeOptionFlags = foldl' f []

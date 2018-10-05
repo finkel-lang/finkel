@@ -189,7 +189,7 @@ getDynFlagsFromSPState sp = do
   dflags0 <- getSessionDynFlags
   -- Adding "-X" to 'String' representation of 'LangExt' data type, as
   -- done in 'HeaderInfo.checkExtension'.
-  let mkx = fmap (("-X" ++) . show)
+  let mkx = fmap ("-X" ++)
       exts = map mkx (langExts sp)
   (dflags1,_,_) <- parseDynamicFilePragma dflags0 exts
   (dflags2,_,_) <- parseDynamicFilePragma dflags1 (ghcOptions sp)

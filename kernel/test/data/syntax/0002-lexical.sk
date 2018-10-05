@@ -84,6 +84,7 @@
     (print x')
     (print x'')
 
+    ;; Function names starting with `#'.
     (let ((:: (# #. ##) (-> Int Int))
           (= # a (+ a 1))
           (= #. a (+ a 2))
