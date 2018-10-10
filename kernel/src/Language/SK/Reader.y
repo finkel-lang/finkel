@@ -50,6 +50,7 @@ import Language.SK.Syntax
 ',@'      { L _ TUnquoteSplice }
 '#'       { L _ (THash _) }
 'require' { L _ (TSymbol "require") }
+'pcommas' { L _ (TPcommas _) }
 
 'symbol'  { L _ (TSymbol _) }
 'char'    { L _ (TChar _) }
@@ -73,28 +74,29 @@ sexp :: { Code }
      | ',' sexp                { mkUnquote $1 $2 }
      | ',@' sexp               { mkUnquoteSplice $1 $2 }
      | '[' sexps ']'           { mkHsList $1 $2 }
+     | 'pcommas'               { mkPcommas $1 }
      | '(' ')'                 { mkUnit $1 }
      | '(' 'require' sexps ')' {% mkRequire $1 $2 $3 }
      | '(' sexps ')'           { mkList $1 $2 }
      | '#' sexp                {% rmac $1 $2 }
 
 sexps :: { [Code] }
-     : rsexps { reverse $1 }
+    : rsexps { reverse $1 }
 
 rsexps :: { [Code] }
-     : {- empty -} { [] }
-     | rsexps sexp { $2 : $1 }
+    : {- empty -} { [] }
+    | rsexps sexp { $2 : $1 }
 
 atom :: { Code }
-     : 'symbol'  { mkASymbol $1 }
-     | 'char'    { mkAChar $1 }
-     | 'string'  { mkAString $1 }
-     | 'integer' { mkAInteger $1 }
-     | 'frac'    { mkAFractional $1 }
-     | 'comment' { mkAComment $1 }
-     | 'blkdocn' { mkBlockDocCommentNext $1 }
-     | '{'       { mkOcSymbol $1 }
-     | '}'       { mkCcSymbol $1 }
+    : 'symbol'  { mkASymbol $1 }
+    | 'char'    { mkAChar $1 }
+    | 'string'  { mkAString $1 }
+    | 'integer' { mkAInteger $1 }
+    | 'frac'    { mkAFractional $1 }
+    | 'comment' { mkAComment $1 }
+    | 'blkdocn' { mkBlockDocCommentNext $1 }
+    | '{'       { mkOcSymbol $1 }
+    | '}'       { mkCcSymbol $1 }
 
 {
 atom :: SrcSpan -> Atom -> Code
@@ -128,6 +130,10 @@ mkUnquoteSplice (L l _) body = li l [sym l "unquote-splice", body]
 mkHsList :: Located Token -> [Code] -> Code
 mkHsList (L l _) body = LForm $ L l $ HsList body
 {-# INLINE mkHsList #-}
+
+mkPcommas :: Located Token -> Code
+mkPcommas (L l (TPcommas n)) = li l [sym l (fsLit (replicate n ','))]
+{-# INLINE mkPcommas #-}
 
 mkUnit :: Located Token -> Code
 mkUnit (L l _) = atom l AUnit

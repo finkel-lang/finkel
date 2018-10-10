@@ -4,8 +4,8 @@
 -- | Module for parsing form data.
 --
 -- Unlike the lexer for reading source code, parser defined in this
--- module expects list of 'Form' data as input, converts to Haskell
--- AST defined in GHC.
+-- module takes a list of 'Code' data as input, and converts to internal
+-- abstract syntax tree data defined in GHC.
 --
 module Language.SK.Syntax
   ( Builder(..)
@@ -442,11 +442,11 @@ type :: { HType }
     | 'list'   {% parse p_types0 $1 }
 
 types0 :: { HType }
-    : '->' types   {% b_funT $2 }
-    | ',' types    { b_tupT $1 $2 }
-    | '!' type     { b_bangT $1 $2 }
-    | forall qtycl { b_forallT $1 $2 }
-    | types        { b_appT $1 }
+    : '->' types             {% b_funT $2 }
+    | ',' zero_or_more_types { b_tupT $1 $2 }
+    | '!' type               { b_bangT $1 $2 }
+    | forall qtycl           { b_forallT $1 $2 }
+    | types                  { b_appT $1 }
 
 types :: { [HType] }
     : rtypes { reverse $1 }

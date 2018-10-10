@@ -49,7 +49,7 @@ import BasicTypes ( FractionalLit(..)
 #endif
                   )
 import Encoding (utf8DecodeByteString)
-import FastString (FastString, mkFastStringByteString)
+import FastString (FastString, mkFastStringByteString, unpackFS)
 import SrcLoc ( Located, RealSrcLoc, advanceSrcLoc, mkRealSrcLoc
               , mkRealSrcSpan, srcLocCol, srcLocLine )
 import Util (readRational)
@@ -102,6 +102,9 @@ $whitechar+  ;
 --- Hashes
 \# $hsymtail* { tok_hash }
 
+--- Parenthesized commas, handled before parentheses
+\( $whitechar* \,+ $whitechar* \) { tok_pcommas }
+
 --- Parentheses
 \( { tok_oparen }
 \) { tok_cparen }
@@ -117,6 +120,7 @@ $whitechar+  ;
 \`   { tok_quasiquote }
 
 \,\  { tok_comma }
+
 \,\@ { tok_unquote_splice }
 \,   { tok_unquote }
 
@@ -291,11 +295,14 @@ errorSP code msg = alexError (showLoc code ++ msg)
 
 lexErrorSP :: SP a
 lexErrorSP = do
-  AlexInput loc _ _ <- alexGetInput
+  st <- getSPState
+  AlexInput loc c _ <- alexGetInput
   let lno = srcLocLine loc
       cno = srcLocCol loc
-      msg = "lexer error at line " ++ show lno ++
-            ", column " ++ show cno
+      trg = unpackFS (targetFile st)
+      msg = trg ++ ": lexer error at line " ++ show lno ++
+            ", column " ++ show cno ++
+            ", near " ++ show c
   alexError msg
 
 putSPState :: SPState -> SP ()
@@ -355,6 +362,8 @@ data Token
   -- ^ Literal fractional number.
   | THash Char
   -- ^ Literal @#@.
+  | TPcommas Int
+  -- ^ Parenthesized commas.
   | TEOF
   -- ^ End of form.
   deriving (Eq, Show)
@@ -405,6 +414,13 @@ tok_quote _ _ = return TQuote
 tok_quasiquote :: Action
 tok_quasiquote _ _ = return TQuasiquote
 {-# INLINE tok_quasiquote #-}
+
+tok_pcommas :: Action
+tok_pcommas (AlexInput _ _ s) l = do
+  let cs0 = BL.take (fromIntegral l) s
+      cs1 = BL.filter (not . isSpace) cs0
+  return $! TPcommas (fromIntegral (BL.length cs1 - 2))
+{-# INLINE tok_pcommas #-}
 
 tok_comma :: Action
 tok_comma _ _ = return $ TSymbol $! fsLit ","
@@ -478,6 +494,7 @@ tok_block_comment_with tok ini inp0 _ = do
 
 tok_lambda :: Action
 tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
+{-# INLINE tok_lambda #-}
 
 tok_symbol :: Action
 tok_symbol (AlexInput _ _ s) l = do
@@ -651,11 +668,12 @@ scanToken fn = do
       tok <- act inp0 len
       let span = RealSrcSpan $ mkRealSrcSpan loc0 loc1
       return (L span tok)
-    AlexError (AlexInput loc1 _ _) -> do
+    AlexError (AlexInput loc1 ch _) -> do
       let l = srcLocLine loc1
           c = srcLocCol loc1
       alexError ("lexical error at line " ++ show l ++
-                 ", column" ++ show c)
+                 ", column" ++ show c ++
+                 ", near " ++ show ch)
     AlexSkip inp1 _ -> do
       alexSetInput inp1
       scanToken fn

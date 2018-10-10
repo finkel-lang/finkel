@@ -26,7 +26,7 @@ import BasicTypes ( Boxity(..), Fixity(..), FixityDirection(..)
                   , IntegralLit(..)
 #endif
                   )
-import FastString (FastString, headFS, unpackFS)
+import FastString (FastString, headFS, lengthFS, unpackFS)
 import FieldLabel (FieldLbl(..))
 import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
 import HsUtils (mkHsIntegral)
@@ -38,7 +38,7 @@ import RdrHsSyn ( cvTopDecls, parseCImport, mkRdrRecordCon
 import RdrName (RdrName, getRdrName, mkQual, mkUnqual)
 import SrcLoc (Located, combineLocs, combineSrcSpans, noLoc)
 import TcEvidence (idHsWrapper)
-import TysWiredIn (listTyCon)
+import TysWiredIn (listTyCon, tupleTyCon)
 
 -- Internal
 import Language.SK.Builder
@@ -455,12 +455,15 @@ b_symT (LForm (L l (Atom (ASymbol name)))) = L l tyvar
   where
     tyvar = HsTyVar NotPromoted (L l ty)
     ty = case splitQualName name of
-           Nothing   -> mkUnqual namespace name
+           Nothing
+             | ',' == x  -> getRdrName (tupleTyCon Boxed arity)
+             | otherwise -> mkUnqual namespace name
            Just qual -> mkQual namespace qual
     namespace
       | isUpper x || ':' == x = tcName
       | otherwise             = tvName
     x = headFS name
+    arity = 1 + lengthFS name
 
 b_unitT :: Code -> HType
 b_unitT (LForm (L l _)) = L l (HsTupleTy HsBoxedTuple [])
@@ -474,7 +477,10 @@ b_funT ts =
     f a@(L l1 _) b = L l1 (HsFunTy a b)
 
 b_appT :: [HType] -> HType
-b_appT whole@(x:xs) = L l0 (HsParTy (mkHsAppTys x xs))
+b_appT whole@(x:xs) =
+  case xs of
+    [] -> x
+    _  -> L l0 (HsParTy (mkHsAppTys x xs))
   where
     l0 = getLoc (mkLocatedList whole)
 
@@ -486,7 +492,12 @@ b_nilT (LForm (L l _)) =
   L l (HsTyVar NotPromoted (L l (getRdrName listTyCon)))
 
 b_tupT :: Code -> [HType] -> HType
-b_tupT (LForm (L l _)) ts = L l (HsTupleTy HsBoxedTuple ts)
+b_tupT (LForm (L l _)) ts =
+  case ts of
+   [] -> L l (HsTyVar NotPromoted (L l tup))
+     where
+       tup = getRdrName (tupleTyCon Boxed 2)
+   _  -> L l (HsTupleTy HsBoxedTuple ts)
 
 b_bangT :: Code -> HType -> HType
 b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)

@@ -139,11 +139,32 @@
 
 (instance (MyShow2 Bool))
 
+(class (Tup2 k)
+  (:: tup2 (-> (k a b) String)))
+
+(instance (Tup2 (,))
+  (= tup2 _ "tup2 for (,)"))
+
+(class (Tup3 k)
+  (:: tup3 (-> (k a b c) String)))
+
+(instance (Tup3 ( ,, ))
+  (= tup3 _ "tup3 for (,,)"))
+
+(class (Tup4 k)
+  (:: tup4 (-> (k a b c d) String)))
+
+(instance (Tup4 (,,,))
+  (= tup4 _ "tup4 for (,,,)"))
+
 (:: s4_3_1 (IO ()))
 (= s4_3_1
   (do (print (map myShow [True False]))
       (print (map myShow [\a \b \c \d \e]))
-      (print (map myShow2 [True False]))))
+      (print (map myShow2 [True False]))
+      (putStrLn (tup2 (, undefined undefined)))
+      (putStrLn (tup3 (, undefined undefined undefined)))
+      (putStrLn (tup4 (, undefined undefined undefined undefined)))))
 
 ;;; 4.3.2 Instance Declarations
 
