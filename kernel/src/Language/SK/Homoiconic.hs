@@ -8,19 +8,21 @@ module Language.SK.Homoiconic
   ) where
 
 -- base
-import Data.Complex
+import Data.Complex (Complex(..))
 import Data.Data
-import Data.Fixed
-import Data.Functor.Compose
-import Data.Functor.Const
-import Data.Functor.Identity
-import Data.Int
+import Data.Fixed (Fixed(..))
+import Data.Functor.Compose (Compose(..))
+import Data.Functor.Const (Const(..))
+import Data.Functor.Identity (Identity(..))
+import Data.Int (Int8, Int16, Int32, Int64)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid
-import Data.Ratio
-import Data.Version
-import Numeric.Natural
-import Data.Word
+import Data.Monoid ( All(..), Alt(..), Any(..), Dual(..), First(..)
+                   , Last(..), Product(..), Sum(..) )
+import Data.Ratio (Ratio, (%), numerator, denominator)
+import Data.Version (Version(..))
+import Data.Word (Word8, Word16, Word32, Word64)
+import Numeric.Natural (Natural)
+
 import qualified Data.Functor.Product as Product
 import qualified Data.Functor.Sum as Sum
 import qualified Data.Semigroup as Semigroup
