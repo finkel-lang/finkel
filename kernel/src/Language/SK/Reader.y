@@ -276,7 +276,8 @@ supportedLangExts =
       , MonomorphismRestriction
       , OverloadedStrings
       , OverloadedLists
-      , RankNTypes ]
+      , RankNTypes
+      , TypeSynonymInstances ]
   where
     -- Adding `"No"' prefix, as done in `DynFlags.supportedExtensions'.
     -- Might worth looking up `DynFlags.xFlags' to get string
