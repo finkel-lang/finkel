@@ -13,6 +13,7 @@ import Control.Monad (void, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (find, isPrefixOf, isSuffixOf)
+import Data.Version (showVersion)
 import System.Console.GetOpt
 import System.Environment (getArgs, lookupEnv)
 import System.Exit (exitFailure, exitWith)
@@ -31,6 +32,7 @@ import Language.SK.Emit
 import Language.SK.Make
 import Language.SK.Run
 import Language.SK.SKC
+import Paths_sk_kernel (version)
 
 
 -- ---------------------------------------------------------------------
@@ -76,6 +78,7 @@ data SkAction
   = SkHsrc
   | SkMake
   | SkHelp
+  | SkVersion
   deriving (Eq, Show)
 
 -- | Options specified from command line arguments.
@@ -127,6 +130,9 @@ visibleDescrs =
   , option ["sk-help"]
            (NoArg (\o -> o {action=SkHelp}))
            "Show this help."
+  , option ["sk-version"]
+           (NoArg (\o -> o {action=SkVersion}))
+           "Show sk kernel version."
   ]
 
 hiddenDescrs :: [OptDescr (SkcOptions -> SkcOptions)]
@@ -152,9 +158,10 @@ hiddenDescrs =
 chooseAction :: String -> SkAction -> SkcOptions -> Skc ()
 chooseAction name act o =
   case act of
-    SkMake -> make (input o) (skC o) (skO o)
-    SkHsrc -> hsrc o
-    SkHelp -> help name
+    SkMake    -> make (input o) (skC o) (skO o)
+    SkHsrc    -> hsrc o
+    SkHelp    -> help name
+    SkVersion -> printVersion
 
 hsrc :: SkcOptions -> Skc ()
 hsrc o = do
@@ -182,6 +189,11 @@ usage name =
 
 skcUsage :: String -> String
 skcUsage header = usageInfo header visibleDescrs
+
+printVersion :: Skc ()
+printVersion = liftIO (putStrLn v)
+  where
+    v = "sk kernel version " ++ showVersion version
 
 
 -- ---------------------------------------------------------------------
