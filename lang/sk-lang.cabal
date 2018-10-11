@@ -18,9 +18,12 @@ extra-source-files:  README.md
                      test/*.sk
 cabal-version:       2.0
 
+tested-with:           GHC == 8.2.2
+                     , GHC == 8.4.3
+
 custom-setup
-  setup-depends:       base >= 4.7 && < 5
-                     , Cabal >= 2.0
+  setup-depends:       base      >= 4.7 && < 5
+                     , Cabal     >= 2.0
                      , sk-kernel >= 0.14.0
 
 library
@@ -40,7 +43,7 @@ library
                        Paths_sk_lang
   autogen-modules:     Paths_sk_lang
   reexported-modules:  Language.SK
-  build-depends:       base >= 4.7 && < 5
+  build-depends:       base         >= 4.7 && < 5
                      , bytestring
                      , directory
                      , filepath
@@ -50,7 +53,7 @@ library
                      , ghci
                      , network
                      , transformers
-                     , sk-kernel >= 0.12.0
+                     , sk-kernel    >= 0.12.0
   default-language:    Haskell2010
   ghc-options:       -Wall
 
@@ -61,11 +64,13 @@ test-suite sk-lang-test
   build-depends:       QuickCheck
                      , base
                      , directory
+                     , ghc
                      , hspec
                      , sk-lang
-                     , sk-kernel >= 0.12.0
+                     , sk-kernel
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
-  other-modules:       CoreTest
+  other-modules:       Orphan
+                       CoreTest
                        ReplTest
   default-language:    Haskell2010
 

@@ -7,7 +7,8 @@
    (Language.SK.Run)
    (Test.Hspec)
    (Test.QuickCheck)
-   (SK.Prelude))
+   (SK.Prelude)
+   (Orphan))
   (export coreTests
           macroTests
           cxrTests

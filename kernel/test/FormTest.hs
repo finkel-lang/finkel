@@ -36,6 +36,8 @@ import Language.SK.Reader
 
 import Data.ByteString.Builder (stringUtf8, toLazyByteString)
 
+import Orphan
+
 formTests :: Spec
 formTests = do
   mapM_ readShow
