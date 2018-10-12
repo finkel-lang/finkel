@@ -731,6 +731,7 @@ COMMANDS:
                         (do (<- name' (code->mb-string name))
                             (find (. (isPrefixOf name') rc-name)
                                   commands)))
-                      (rc-action rc args)))
+                      (rc-action rc args))
+                     (otherwise (help-cmd [])))
     _ (let ((= lst (located-list form)))
         (skSrcError lst (++ "invalid args: " (show lst))))))
