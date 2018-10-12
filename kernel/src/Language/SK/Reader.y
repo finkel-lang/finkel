@@ -272,6 +272,7 @@ supportedLangExts =
       , FlexibleInstances
       , GADTs
       , GeneralizedNewtypeDeriving
+      , ImplicitPrelude
       , MultiParamTypeClasses
       , MonomorphismRestriction
       , OverloadedStrings
