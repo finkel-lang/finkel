@@ -12,7 +12,7 @@
    (Data.Char (isSpace))
    (System.IO
     ((BufferMode ..) (IOMode ..) hClose hFlush hPutStr hSetBuffering
-                     hSetEncoding utf8))
+     hSetEncoding utf8))
 
    ;; bytestring
    (qualified Data.ByteString.Char8 as BS)
@@ -20,10 +20,10 @@
 
    ;; network
    (Network.Socket
-    ((Family ..)
-     (PortNumber) (SockAddr ..) (Socket) (SocketOption ..)
-     (SocketType ..) accept bind iNADDR_ANY listen
-     socket socketToHandle setSocketOption withSocketsDo))
+    ((AddrInfo ..) (AddrInfoFlag ..) (PortNumber)
+     (Socket) (SocketOption ..) (SocketType ..)
+     accept bind defaultHints getAddrInfo listen socket socketToHandle
+     setSocketOption withSocketsDo))
 
    ;; sk-kernel
    (Language.SK.Lexer (evalSP))
@@ -37,11 +37,20 @@
 (defn (listener (-> PortNumber (MVar Input) (IO ())))
   (pnum mvar)
   (withSocketsDo
-   (do (<- sock (socket AF_INET Stream 0))
-       (setSocketOption sock ReuseAddr 1)
-       (bind sock (SockAddrInet pnum iNADDR_ANY))
-       (listen sock 2)
-       (accept-loop sock mvar))))
+   (do (let ((= hints (defaultHints {addrFlags [AI_PASSIVE]
+                                     addrSocketType Stream}))
+             (= start-loop addr
+               (do (<- sock (socket (addrFamily addr)
+                                    (addrSocketType addr)
+                                    (addrProtocol addr)))
+                   (setSocketOption sock ReuseAddr 1)
+                   (bind sock (addrAddress addr))
+                   (listen sock 2)
+                   (accept-loop sock mvar)))))
+       (<- addrs (getAddrInfo (Just hints) Nothing (Just (show pnum))))
+       (case addrs
+         (: addr _) (start-loop addr)
+         _          (putStrLn "listener: unable to open address.")))))
 
 (defdo (accept-loop (-> Socket (MVar Input) (IO ())))
   (sock mvar)

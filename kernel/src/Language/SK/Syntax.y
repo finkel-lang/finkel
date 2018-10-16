@@ -612,11 +612,11 @@ hlist0 :: { [HExpr] }
 guards :: { ([HGRHS],[HDecl]) }
     : 'where' {% parse p_where $1 }
     | 'list'  {% parse p_guards0 $1 >>= \gs -> return (gs,[]) }
-    | atom    { ([L (getLoc $1) (GRHS [] $1)], []) }
+    | atom    { ([L (getLoc $1) (b_GRHS [] $1)], []) }
 
 guards0 :: { [HGRHS] }
     : '|' guards1 { $2 }
-    | exprs       { [L (getLoc $1) (GRHS [] $1)] }
+    | exprs       { [L (getLoc $1) (b_GRHS [] $1)] }
 
 guards1 :: { [HGRHS] }
     : 'list'         {% b_hgrhs [] `fmap` parse p_guard $1 }
@@ -628,7 +628,7 @@ guard :: { (HExpr, [HGuardLStmt]) }
 
 where :: { [HGRHS],[HDecl] }
     : 'list' lbinds0 {% parse p_guards0 $1 >>= \gs -> return (gs,$2) }
-    | atom lbinds0   { ([L (getLoc $1) (GRHS [] $1)], $2) }
+    | atom lbinds0   { ([L (getLoc $1) (b_GRHS [] $1)], $2) }
 
 
 -- ---------------------------------------------------------------------

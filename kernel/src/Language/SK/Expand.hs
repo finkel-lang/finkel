@@ -298,8 +298,10 @@ m_letMacro form =
     addLetMacro x =
       case unCode x of
         List [self,arg,body] -> do
-          (name, _decl, Just macro) <- compileMacro True x self arg body
-          return (name, macro)
+          (name, _decl, mb_macro) <- compileMacro True x self arg body
+          case mb_macro of
+            Nothing    -> skSrcError x "let-macro: compilation error"
+            Just macro -> return (name, macro)
         _ -> skSrcError x ("let-macro: malformed macro: " ++ show x)
 
 m_require :: Mfunc

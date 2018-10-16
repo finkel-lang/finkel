@@ -251,40 +251,47 @@ make' not_yet_compiled readys0 pendings0 = do
 
       case tsr of
         SkSource path _mn _form sp -> do
-          Just (hmdl, dflags) <- compileToHsModule target
-          summary <- mkModSummary (Just path) hmdl
-          let summary' = summary {ms_hspp_opts = dflags}
-              imports = map import_name (hsmodImports hmdl)
-          debugIO (putStrLn (concat [ ";;; target=", show target
-                                    , " imports=", show imports]))
+          mb_result <- compileToHsModule target
+          case mb_result of
+            Nothing             -> failS "compileToHsModule failed"
+            Just (hmdl, dflags) -> do
+              summary <- mkModSummary (Just path) hmdl
+              let summary' = summary {ms_hspp_opts = dflags}
+                  imports = map import_name (hsmodImports hmdl)
+              debugIO (putStrLn (concat [ ";;; target=", show target
+                                        , " imports=", show imports]))
 
-          -- Test whether imported modules are in pendings. If found,
-          -- skip the compilation and add this module to the list of
-          -- pending modules.
-          --
-          -- N.B. For SK source target, dependency modules passed to
-          -- 'makeOne' contains imported modules and required modules.
-          --
-          let notYetReady =
-                any (\m -> m `elem` map (skmn . fst) pendings ||
-                           m `elem` map (skmn . fst) summarised)
-                     imports
-          if notYetReady
-             then go acc i k nycs summarised (target:pendings)
-             else do
-               let act = mapM (getModSummary' . mkModuleName)
-                              (requiredModuleNames sp)
-                   act' = catMaybes <$> act
-               compileIfReady summary' hmdl imports act'
+              -- Test whether imported modules are in pendings. If
+              -- found, skip the compilation and add this module to the
+              -- list of pending modules.
+              --
+              -- N.B. For SK source target, dependency modules passed to
+              -- 'makeOne' contains imported modules and required
+              -- modules.
+              --
+              let notYetReady =
+                    any (\m -> m `elem` map (skmn . fst) pendings ||
+                               m `elem` map (skmn . fst) summarised)
+                         imports
+              if notYetReady
+                 then go acc i k nycs summarised (target:pendings)
+                 else do
+                   let act = mapM (getModSummary' . mkModuleName)
+                                  (requiredModuleNames sp)
+                       act' = catMaybes <$> act
+                   compileIfReady summary' hmdl imports act'
 
         HsSource path -> do
-          Just (hmdl, dflags) <- compileToHsModule target
-          summary <- mkModSummary (Just path) hmdl
-          let imports = map import_name (hsmodImports hmdl)
-              summary' = summary {ms_hspp_opts = dflags}
-          debugIO (putStrLn (concat [";;; target=", show target
-                                    ," imports=", show imports]))
-          compileIfReady summary' hmdl imports (return [])
+          mb_result <- compileToHsModule target
+          case mb_result of
+            Nothing             -> failS "compileToHsModule failed"
+            Just (hmdl, dflags) -> do
+              summary <- mkModSummary (Just path) hmdl
+              let imports = map import_name (hsmodImports hmdl)
+                  summary' = summary {ms_hspp_opts = dflags}
+              debugIO (putStrLn (concat [";;; target=", show target
+                                        ," imports=", show imports]))
+              compileIfReady summary' hmdl imports (return [])
 
         OtherSource _ -> do
           _ <- compileToHsModule target
@@ -599,8 +606,10 @@ mkReadTimeModSummary (target, mbphase) =
   -- ModSummary from target source.
   case target of
     HsSource file -> do
-      Just (hsmdl, _) <- compileToHsModule (target, mbphase)
-      fmap Just (mkModSummary (Just file) hsmdl)
+      mb_hsmdl <- compileToHsModule (target, mbphase)
+      case mb_hsmdl of
+        Nothing         -> return Nothing
+        Just (hsmdl, _) -> fmap Just (mkModSummary (Just file) hsmdl)
     SkSource file mn _form sp -> do
       let modName = mkModuleName mn
           imports = map (noLoc . mkModuleName) (requiredModuleNames sp)

@@ -17,7 +17,8 @@ import HsSyn
 
 import Bag (emptyBag, consBag, listToBag)
 import BasicTypes ( Boxity(..), Fixity(..), FixityDirection(..)
-                  , InlinePragma(..), InlineSpec(..), LexicalFixity(..)
+                  , FractionalLit(..), InlinePragma(..)
+                  , InlineSpec(..), LexicalFixity(..)
                   , Origin(..), OverlapMode(..), SourceText(..)
                   , alwaysInlinePragma
                   , fl_value
@@ -29,20 +30,40 @@ import BasicTypes ( Boxity(..), Fixity(..), FixityDirection(..)
 import FastString (FastString, headFS, lengthFS, unpackFS)
 import FieldLabel (FieldLbl(..))
 import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
-import HsUtils (mkHsIntegral)
+#if MIN_VERSION_ghc(8,6,0)
+import HsDoc (mkHsDocString)
+import HsExtension (noExt)
+#endif
+import HsUtils (mkHsIntegral, mkLHsTupleExpr)
 import OccName (srcDataName, tcName, tvName)
 import OrdList (OrdList, fromOL, toOL)
 import Module (mkModuleNameFS)
-import RdrHsSyn ( cvTopDecls, parseCImport, mkRdrRecordCon
-                , mkRdrRecordUpd)
-import RdrName (RdrName, getRdrName, mkQual, mkUnqual)
+import RdrHsSyn ( cvTopDecls, parseCImport, mkConDeclH98
+                , mkGadtDecl, mkRdrRecordCon, mkRdrRecordUpd )
+import RdrName (getRdrName, mkQual, mkUnqual)
 import SrcLoc (Located, combineLocs, combineSrcSpans, noLoc)
-import TcEvidence (idHsWrapper)
 import TysWiredIn (listTyCon, tupleTyCon)
 
 -- Internal
 import Language.SK.Builder
 import Language.SK.Form
+
+-- ---------------------------------------------------------------------
+--
+-- C macro for GHC
+--
+-- ---------------------------------------------------------------------
+
+-- From ghc 8.6.0, many number of data type used by the internal AST in
+-- GHC were modified to take extra argument. Following `NOEXT' macro
+-- will pass the `noExt' argument to such constructors, and behaves as
+-- empty code when compiling with GHC version prior to 8.6.0.
+
+#if MIN_VERSION_ghc(8,6,0)
+#define NOEXT noExt
+#else
+#define NOEXT {- empty -}
+#endif
 
 
 -- ---------------------------------------------------------------------
@@ -80,22 +101,26 @@ b_implicitMainModule =
 
 b_ieSym :: Code -> HIE
 b_ieSym (LForm (L l (Atom (ASymbol name)))) = thing
-  where thing = L l (IEVar (L l (IEName (L l (mkRdrName name)))))
+  where
+    thing = L l (iEVar (L l (IEName (L l (mkRdrName name)))))
+    iEVar = IEVar NOEXT
 
 b_ieAbs :: Code -> HIE
 b_ieAbs (LForm (L l (Atom (ASymbol name)))) = thing
   where
-    thing = L l (IEThingAbs (L l (IEName (L l (mkUnqual tcName name)))))
+    thing = L l (iEThingAbs (L l (IEName (L l (mkUnqual tcName name)))))
+    iEThingAbs = IEThingAbs NOEXT
 
 b_ieAll :: Code -> HIE
 b_ieAll (LForm (L l (Atom (ASymbol name)))) = thing
   where
-    thing = L l (IEThingAll (L l (IEName (L l (mkUnqual tcName name)))))
+    thing = L l (iEThingAll (L l (IEName (L l (mkUnqual tcName name)))))
+    iEThingAll = IEThingAll NOEXT
 
 b_ieWith :: Code -> [Code] -> HIE
 b_ieWith (LForm (L l (Atom (ASymbol name)))) names = thing
   where
-    thing = L l (IEThingWith (L l (IEName (L l name'))) wc ns fs)
+    thing = L l (iEThingWith (L l (IEName (L l name'))) wc ns fs)
     name' = case splitQualName name of
               Just qual -> mkQual tcName qual
               Nothing   -> mkUnqual tcName name
@@ -111,10 +136,13 @@ b_ieWith (LForm (L l (Atom (ASymbol name)))) names = thing
     fl x = FieldLabel { flLabel = x
                       , flIsOverloaded = False
                       , flSelector = mkRdrName x }
+    iEThingWith = IEThingWith NOEXT
 
 b_ieMdl :: [Code] -> HIE
 b_ieMdl [LForm (L l (Atom (ASymbol name)))] = L l thing
-  where thing = IEModuleContents (L l (mkModuleNameFS name))
+  where
+    thing = iEModuleContents (L l (mkModuleNameFS name))
+    iEModuleContents = IEModuleContents NOEXT
 
 
 -- ---------------------------------------------------------------------
@@ -162,29 +190,43 @@ mkNewtypeOrDataD :: NewOrData -> Code
                  -> (HDeriving, [HConDecl])
                  -> HDecl
 mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
-  L l (TyClD decl)
+  L l (mkTyClD decl)
   where
     decl = DataDecl { tcdLName = L l (mkUnqual tcName name)
                     , tcdFixity = Prefix
                     , tcdTyVars = mkHsQTvs tvs
                     , tcdDataDefn = defn
+#if MIN_VERSION_ghc(8,6,0)
+                    , tcdDExt = noExt
+#else
                     , tcdDataCusk = PlaceHolder
-                    , tcdFVs = placeHolderNames }
+                    , tcdFVs = placeHolderNames
+#endif
+                    }
     defn = HsDataDefn { dd_ND = newOrData
                       , dd_ctxt = noLoc []
                       , dd_cType = Nothing
                       , dd_kindSig = Nothing
                       , dd_cons = cs
-                      , dd_derivs = derivs }
+                      , dd_derivs = derivs
+#if MIN_VERSION_ghc(8,6,0)
+                      , dd_ext = noExt
+#endif
+                      }
 
 b_typeD :: Code -> (FastString, [HTyVarBndr]) -> HType -> HDecl
-b_typeD (LForm (L l _)) (name, tvs) ty = L l (TyClD synonym)
+b_typeD (LForm (L l _)) (name, tvs) ty = L l (mkTyClD synonym)
   where
     synonym = SynDecl { tcdLName = L l (mkUnqual tcName name)
                       , tcdFixity = Prefix
                       , tcdTyVars = mkHsQTvs tvs
                       , tcdRhs = ty
-                      , tcdFVs = placeHolderNames }
+#if MIN_VERSION_ghc(8,6,0)
+                      , tcdSExt = noExt
+#else
+                      , tcdFVs = placeHolderNames
+#endif
+                      }
 
 b_simpletypeD :: [Code] -> (FastString, [HTyVarBndr])
 b_simpletypeD ((LForm (L _ (Atom (ASymbol name)))):tvs) = (name, tvs')
@@ -194,26 +236,40 @@ b_simpletypeD ((LForm (L _ (Atom (ASymbol name)))):tvs) = (name, tvs')
 
 b_conD :: Code -> HConDeclDetails -> HConDecl
 b_conD (LForm (L l1 (Atom (ASymbol s1)))) details =
-  L l1 ConDeclH98 { con_name = L l1 (mkUnqual srcDataName s1)
-                  , con_qvars = Nothing
-                  , con_cxt = Nothing
-                  , con_details = details
-                  , con_doc = Nothing }
+  L l1 (mkConDeclH98 name Nothing cxt details)
+    where
+      name = L l1 (mkUnqual srcDataName s1)
+#if MIN_VERSION_ghc(8,6,0)
+      cxt = Nothing
+#else
+      cxt = L l1 []
+#endif
 
 b_forallD :: [Code] -> (HConDecl, [HType]) -> HConDecl
 b_forallD vars ((L l cdecl), cxts) =
+#if MIN_VERSION_ghc(8,6,0)
+  L l cdecl { con_forall = noLoc True
+            , con_ex_tvs = map codeToUserTyVar vars
+            , con_mb_cxt = Just (mkLocatedList cxts) }
+#else
   L l cdecl { con_qvars = Just (mkHsQTvs (map codeToUserTyVar vars))
             , con_cxt = Just (mkLocatedList cxts) }
+#endif
 
 b_gadtD :: Code -> ([HType], HType) -> HConDecl
 b_gadtD (LForm (L l1 (Atom (ASymbol name)))) (ctxt, bodyty) =
-  let decl = ConDeclGADT { con_names = [nam]
-                         , con_type = mkLHsSigType qty
-                         , con_doc = Nothing }
-      nam = L l1 (mkUnqual srcDataName name)
-      qty = L l1 HsQualTy { hst_ctxt = mkLocatedList ctxt
-                          , hst_body = bodyty }
-  in  L l1 decl
+  let name' = L l1 (mkUnqual srcDataName name)
+      ty = L l1 qty
+      qty = mkHsQualTy_compat (mkLocatedList ctxt) bodyty
+      decl = mkGadtDecl [name'] ty'
+#if MIN_VERSION_ghc(8,6,0)
+      ty' = ty
+      decl' = fst decl
+#else
+      ty' = mkLHsSigType ty
+      decl' = decl
+#endif
+  in L l1 decl'
 
 b_conOnlyD :: Code -> HConDecl
 b_conOnlyD name = b_conD name (PrefixCon [])
@@ -229,6 +285,9 @@ b_recFieldD :: [Code] -> HType -> HConDeclField
 b_recFieldD names ty = L loc field
   where
     field = ConDeclField { cd_fld_names = names'
+#if MIN_VERSION_ghc(8,6,0)
+                         , cd_fld_ext = noExt
+#endif
                          , cd_fld_type = ty
                          , cd_fld_doc = Nothing }
     loc = getLoc (mkLocatedForm names)
@@ -245,24 +304,41 @@ b_derivD (_, cs) tys = (L l dcs, cs)
     l = getLoc (mkLocatedList tys)
     dcs = [L l (HsDerivingClause
                  { deriv_clause_strategy = Nothing
+#if MIN_VERSION_ghc(8,6,0)
+                 , deriv_clause_ext = noExt
+#endif
                  , deriv_clause_tys = L l (map mkLHsSigType tys)})]
 
 b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do
     let categorize (ms,ss) (L ld decl) =
           case decl of
+#if MIN_VERSION_ghc(8,6,0)
+            SigD _ d -> return (ms, L ld d : ss)
+            ValD _ d -> return (L ld d : ms, ss)
+#else
             SigD d -> return (ms, L ld d : ss)
             ValD d -> return (L ld d : ms, ss)
+#endif
             _      -> builderError
         -- Recursing in `HsAppTy' to support MultiParamTypeClasses.
         unAppTy t =
           case t of
+#if MIN_VERSION_ghc(8,6,0)
+            L l (HsTyVar _p _ n) -> return (l, n, [])
+            L _ (HsAppTy _ t1 (L lv (HsTyVar _ _ v))) -> do
+              (l, n, vs) <- unAppTy t1
+              return (l, n, L lv (UserTyVar noExt v):vs)
+            L _ (HsParTy _ t')   -> unAppTy t'
+            _                    -> builderError
+#else
             L l (HsTyVar _p n) -> return (l, n, [])
             L _ (HsAppTy t1 (L lv (HsTyVar _ v))) -> do
               (l, n, vs) <- unAppTy t1
               return (l, n, L lv (UserTyVar v):vs)
             L _ (HsParTy t') -> unAppTy t'
             _                -> builderError
+#endif
     (l, name, bndrs) <- unAppTy ty
     (meths,sigs) <- foldM categorize ([],[]) decls
 
@@ -279,22 +355,33 @@ b_classD (tys,ty) decls = do
                         , tcdATs = []
                         , tcdATDefs = []
                         , tcdDocs = []
-                        , tcdFVs = placeHolderNames }
-    return (L l (TyClD cls))
+#if MIN_VERSION_ghc(8,6,0)
+                        , tcdCExt = noExt
+#else
+                        , tcdFVs = placeHolderNames
+#endif
+                        }
+    return (L l (mkTyClD cls))
 
 b_instD :: Maybe (Located OverlapMode) -> ([HType], HType)
         -> [HDecl] -> HDecl
-b_instD overlap (ctxts,ty@(L l _)) decls = L l (InstD (ClsInstD decl))
+b_instD overlap (ctxts,ty@(L l _)) decls =
+  L l (instD (clsInstD decl))
   where
     decl = ClsInstDecl { cid_poly_ty = mkLHsSigType qty
                        , cid_binds = binds
                        , cid_sigs = mkClassOpSigs []
                        , cid_tyfam_insts = []
                        , cid_datafam_insts = []
-                       , cid_overlap_mode = overlap }
-    qty = L l HsQualTy { hst_ctxt = mkLocatedList ctxts
-                       , hst_body = ty }
+                       , cid_overlap_mode = overlap
+#if MIN_VERSION_ghc(8,6,0)
+                       , cid_ext = noExt
+#endif
+                       }
+    qty = L l (mkHsQualTy_compat (mkLocatedList ctxts) ty)
     (binds, _) = cvBindsAndSigs (toOL decls)
+    instD = InstD NOEXT
+    clsInstD = ClsInstD NOEXT
 
 b_overlapP :: Code -> Maybe (Located OverlapMode)
 b_overlapP (LForm (L _ lst)) =
@@ -321,14 +408,17 @@ b_qtyclC ts =
       return (ctxt, head t)
 
 b_defaultD :: [HType] -> HDecl
-b_defaultD types = L l (DefD (DefaultDecl types))
+b_defaultD types = L l (defD (defaultDecl types))
   where
     l = getLoc (mkLocatedList types)
+    defD = DefD NOEXT
+    defaultDecl = DefaultDecl NOEXT
 
 b_fixityD :: FixityDirection -> Code -> [Code] -> HDecl
-b_fixityD dir (LForm (L l (Atom (AInteger n)))) syms = L l (SigD fsig)
+b_fixityD dir (LForm (L l (Atom (AInteger n)))) syms =
+    L l (mkSigD_compat fsig)
   where
-    fsig = FixSig (FixitySig names fixity)
+    fsig = fixSig (fixitySig names fixity)
     names = map lname syms
     lname (LForm (L l0 (Atom (ASymbol name)))) = L l0 (mkRdrName name)
     fixity = Fixity dir' (fromIntegral n) dir
@@ -336,6 +426,8 @@ b_fixityD dir (LForm (L l (Atom (AInteger n)))) syms = L l (SigD fsig)
              InfixL -> SourceText "infixl"
              InfixR -> SourceText "infixr"
              InfixN -> SourceText "infix"
+    fixSig = FixSig NOEXT
+    fixitySig = FixitySig NOEXT
 
 b_ffiD :: Code -> Code -> HCCallConv -> (Maybe (Located Safety), Code)
        -> (Code, HType) -> Builder HDecl
@@ -346,19 +438,27 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv (mb_safety, ename) (nm, ty) =
       , Just ispec <- parseCImport ccnv safety name ename' source -> do
         let fi = ForeignImport { fd_name = lname
                                , fd_sig_ty = tsig
+#if MIN_VERSION_ghc(8,6,0)
+                               , fd_i_ext = noExt
+#else
                                , fd_co = noForeignImportCoercionYet
-                               , fd_fi = ispec }
-        return (L l (ForD fi))
+#endif
+                               , fd_fi = ispec}
+        return (L l (forD fi))
       | ie == "export" -> do
         let fe = ForeignExport { fd_name = lname
                                , fd_sig_ty = tsig
+#if MIN_VERSION_ghc(8,6,0)
+                               , fd_e_ext = noExt
+#else
                                , fd_co = noForeignExportCoercionYet
+#endif
                                , fd_fe = e }
             e = CExport (L l (CExportStatic (SourceText ename')
                                             (fsLit ename')
                                             (unLoc ccnv)))
                         (L l (SourceText ename'))
-        return (L l (ForD fe))
+        return (L l (forD fe))
     _ -> builderError
     where
       lname = L ln (mkRdrName name)
@@ -367,6 +467,7 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv (mb_safety, ename) (nm, ty) =
       LForm (L _ls (Atom (AString ename'))) = ename
       source = L l (quotedSourceText ename')
       safety = fromMaybe (noLoc PlayRisky) mb_safety
+      forD = ForD NOEXT
 
 b_callConv :: Code -> Builder (Located CCallConv)
 b_callConv (LForm (L l (Atom (ASymbol sym)))) =
@@ -388,11 +489,13 @@ b_safety (LForm (L l (Atom (ASymbol sym)))) =
 
 b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
 b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
-  let body = GRHSs grhss (declsToBinds l decls)
-#if !MIN_VERSION_ghc(8,4,0)
-      match = L l (Match ctxt args Nothing body)
-#else
+  let body = mkGRHSs grhss decls l
+#if MIN_VERSION_ghc(8,6,0)
+      match = L l (Match noExt ctxt args body)
+#elif MIN_VERSION_ghc(8,4,0)
       match = L l (Match ctxt args body)
+#else
+      match = L l (Match ctxt args Nothing body)
 #endif
       ctxt = FunRhs { mc_fun = lrname
                     , mc_fixity = Prefix
@@ -400,32 +503,38 @@ b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
                     , mc_strictness = NoSrcStrict }
       lrname = L l (mkRdrName name)
       bind = mkFunBind lrname [match]
-  in  L l (ValD bind)
+  in  L l (mkValD_compat bind)
 
 b_patBindD :: ([HGRHS],[HDecl]) -> HPat -> HDecl
 b_patBindD (grhss,decls) pat@(L l _) =
   let bind = PatBind { pat_lhs = pat
-                     , pat_rhs = GRHSs grhss (declsToBinds l decls)
+                     , pat_rhs = mkGRHSs grhss decls l
+#if MIN_VERSION_ghc(8,6,0)
+                     , pat_ext = noExt
+#else
                      , pat_rhs_ty = placeHolderType
                      , bind_fvs = placeHolderNames
+#endif
                      , pat_ticks = ([],[]) }
-  in  L l (ValD bind)
+  in  L l (mkValD_compat bind)
 
 b_tsigD :: [Code] -> ([HType], HType) -> HDecl
 b_tsigD names (ctxts,typ) =
   let typ' = mkLHsSigWcType qtyp
       qtyp | null ctxts = typ
-           | otherwise = L l HsQualTy { hst_ctxt = mkLocatedList ctxts
-                                      , hst_body = typ }
+           | otherwise =
+             L l (mkHsQualTy_compat (mkLocatedList ctxts) typ)
       mkName (LForm (L l1 (Atom (ASymbol name)))) =
         L l1 (mkRdrName name)
       l = getLoc (mkLocatedForm names)
-  in  L l (SigD (TypeSig (map mkName names) typ'))
+      typeSig = TypeSig NOEXT
+  in  L l (mkSigD_compat (typeSig (map mkName names) typ'))
 
 b_inlineD :: InlineSpec -> Code -> HDecl
 b_inlineD ispec (LForm (L l (Atom (ASymbol name)))) =
-  L l (SigD (InlineSig (L l (mkRdrName name)) ipragma))
+  L l (mkSigD_compat (inlineSig (L l (mkRdrName name)) ipragma))
   where
+    inlineSig = InlineSig NOEXT
     ipragma =
       case ispec of
         Inline    -> alwaysInlinePragma
@@ -442,7 +551,19 @@ b_specializeD (LForm (L l _)) (nameSym, tsig) = do
   let LForm (L ln (Atom (ASymbol name))) = nameSym
       lname = L ln (mkRdrName name)
       ip = defaultInlinePragma {inl_src = SourceText "{-# SPECIALIZE"}
-  return (L l (SigD (SpecSig lname [mkLHsSigType tsig] ip)))
+      specSig = SpecSig NOEXT
+      ssig = specSig lname [mkLHsSigType tsig] ip
+  return (L l (mkSigD_compat ssig))
+
+mkTyClD :: TyClDecl PARSED -> HsDecl PARSED
+mkTyClD = TyClD NOEXT
+
+mkValD_compat :: HsBind PARSED -> HsDecl PARSED
+mkValD_compat = ValD NOEXT
+
+mkSigD_compat :: Sig PARSED -> HsDecl PARSED
+mkSigD_compat = SigD NOEXT
+
 
 -- ---------------------------------------------------------------------
 --
@@ -453,7 +574,7 @@ b_specializeD (LForm (L l _)) (nameSym, tsig) = do
 b_symT :: Code -> HType
 b_symT (LForm (L l (Atom (ASymbol name)))) = L l tyvar
   where
-    tyvar = HsTyVar NotPromoted (L l ty)
+    tyvar = mkHsTyVar_compat NotPromoted (L l ty)
     ty = case splitQualName name of
            Nothing
              | ',' == x  -> getRdrName (tupleTyCon Boxed arity)
@@ -466,61 +587,99 @@ b_symT (LForm (L l (Atom (ASymbol name)))) = L l tyvar
     arity = 1 + lengthFS name
 
 b_unitT :: Code -> HType
-b_unitT (LForm (L l _)) = L l (HsTupleTy HsBoxedTuple [])
+b_unitT (LForm (L l _)) = L l (mkHsTupleTy_compat HsBoxedTuple [])
 
 b_funT :: [HType] -> Builder HType
 b_funT ts =
   case ts of
     []          -> builderError
-    (L l0 _):_  -> return (L l0 (HsParTy (foldr1 f ts)))
+    (L l0 _):_  -> return (L l0 (mkHsParTy_compat (foldr1 f ts)))
   where
-    f a@(L l1 _) b = L l1 (HsFunTy a b)
+    f a@(L l1 _) b = L l1 (hsFunTy a b)
+    hsFunTy = HsFunTy NOEXT
 
 b_appT :: [HType] -> HType
 b_appT whole@(x:xs) =
   case xs of
     [] -> x
-    _  -> L l0 (HsParTy (mkHsAppTys x xs))
+    _  -> L l0 (mkHsParTy_compat (mkHsAppTys x xs))
   where
     l0 = getLoc (mkLocatedList whole)
 
 b_listT :: HType -> HType
-b_listT ty@(L l _) = L l (HsListTy ty)
+b_listT ty@(L l _) = L l lty
+  where
+    lty = HsListTy NOEXT ty
 
 b_nilT :: Code -> HType
 b_nilT (LForm (L l _)) =
-  L l (HsTyVar NotPromoted (L l (getRdrName listTyCon)))
+  L l (mkHsTyVar_compat NotPromoted (L l (getRdrName listTyCon)))
 
 b_tupT :: Code -> [HType] -> HType
 b_tupT (LForm (L l _)) ts =
   case ts of
-   [] -> L l (HsTyVar NotPromoted (L l tup))
+   [] -> L l (mkHsTyVar_compat NotPromoted (L l tup))
      where
        tup = getRdrName (tupleTyCon Boxed 2)
-   _  -> L l (HsTupleTy HsBoxedTuple ts)
+   _  -> L l (mkHsTupleTy_compat HsBoxedTuple ts)
 
 b_bangT :: Code -> HType -> HType
-b_bangT (LForm (L l _)) t = L l (HsBangTy srcBang t)
+b_bangT (LForm (L l _)) t = L l (mkHsBangTy srcBang t)
   where
     srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
 
 b_forallT :: (Code, [Code]) -> ([HType], HType) -> HType
 b_forallT ((LForm (L l0 _)), vars) (ctxts, body) = L l0 forAllTy
   where
-    forAllTy = HsParTy (L l0 forAllTy')
-    forAllTy' = HsForAllTy {hst_bndrs = bndrs, hst_body = ty}
-    ty = L l0 HsQualTy { hst_ctxt = mkLocatedList ctxts
-                       , hst_body = body}
+    forAllTy = mkHsParTy_compat (L l0 forAllTy')
+    forAllTy' = mkForAllTy_compat bndrs ty
+    ty = L l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
     bndrs = map codeToUserTyVar vars
 
 b_unpackT :: Code -> HType -> HType
-b_unpackT (LForm (L l _)) t = L l (HsBangTy bang t')
+b_unpackT (LForm (L l _)) t = L l (mkHsBangTy bang t')
   where
     bang = HsSrcBang (SourceText "b_unpackT") SrcUnpack strictness
     (strictness, t') =
       case t of
+#if MIN_VERSION_ghc(8,6,0)
+        L _ (HsBangTy _ (HsSrcBang _ _ st) t0) -> (st, t0)
+#else
         L _ (HsBangTy (HsSrcBang _ _ st) t0) -> (st, t0)
+#endif
         _                                    -> (NoSrcStrict, t)
+
+mkHsTupleTy_compat :: HsTupleSort -> [HType] -> HsType PARSED
+mkHsTupleTy_compat = HsTupleTy NOEXT
+
+mkHsBangTy :: HsSrcBang -> HType -> HsType PARSED
+mkHsBangTy = HsBangTy NOEXT
+
+mkHsQualTy_compat :: LHsContext PARSED -> HType -> HsType PARSED
+mkHsQualTy_compat ctxt body =
+  HsQualTy { hst_ctxt = ctxt
+#if MIN_VERSION_ghc(8,6,0)
+           , hst_xqual = noExt
+#endif
+           , hst_body = body }
+
+mkForAllTy_compat :: [LHsTyVarBndr PARSED] -> HType -> HsType PARSED
+mkForAllTy_compat bndrs body =
+  HsForAllTy { hst_bndrs = bndrs
+#if MIN_VERSION_ghc(8,6,0)
+             , hst_xforall = noExt
+#endif
+             , hst_body = body }
+
+mkHsParTy_compat :: HType -> HsType PARSED
+mkHsParTy_compat = HsParTy NOEXT
+
+#if MIN_VERSION_ghc(8,4,0)
+mkHsTyVar_compat :: Promoted -> Located (IdP PARSED) -> HsType PARSED
+#else
+mkHsTyVar_compat :: Promoted -> Located name -> HsType name
+#endif
+mkHsTyVar_compat = HsTyVar NOEXT
 
 
 -- ---------------------------------------------------------------------
@@ -534,33 +693,51 @@ b_intP (LForm (L l (Atom (AInteger n)))) =
   L l (mkNPat (L l (mkHsIntegral_compat n)) Nothing)
 
 b_stringP :: Code -> HPat
-b_stringP (LForm (L l (Atom (AString s)))) =
+b_stringP (LForm (L l (Atom (AString str)))) =
   L l (mkNPat (L l lit) Nothing)
   where
-    lit = mkHsIsString (SourceText (show s)) (fsLit s) placeHolderType
+    lit = hsIsString (SourceText (show str)) (fsLit str)
+    hsIsString s t =
+#if MIN_VERSION_ghc(8,6,0)
+      mkHsIsString s t
+#else
+      mkHsIsString s t placeHolderType
+#endif
 
 b_charP :: Code -> HPat
-b_charP (LForm (L l (Atom (AChar c)))) =
-  let lit = HsChar (SourceText (show c)) c
-  in  L l (LitPat lit)
+b_charP (LForm (L l (Atom (AChar c)))) = L l (litPat lit)
+  where
+    lit = HsChar (SourceText (show c)) c
+    litPat = LitPat NOEXT
 
 b_unitP :: Code -> HPat
-b_unitP (LForm (L l (Atom AUnit))) = L l (TuplePat [] Boxed [])
+b_unitP (LForm (L l (Atom AUnit))) = L l (mkTuplePat_compat [])
 
 b_symP :: Code -> HPat
 b_symP (LForm (L l (Atom (ASymbol name))))
    | name == "_"
-    = L l (WildPat placeHolderType)
+    = L l mkWildPat_compat
    | isUpper x || x == ':'
     = L l (ConPatIn (L l (mkVarRdrName name)) (PrefixCon []))
    | otherwise
-    = L l (VarPat (L l (mkRdrName name)))
+    = L l (varPat (L l (mkRdrName name)))
    where
      x = headFS name
+     varPat = VarPat NOEXT
+
+mkWildPat_compat :: Pat PARSED
+mkWildPat_compat = case nlWildPat of L _ pat -> pat
 
 b_hsListP :: [HPat] -> HPat
-b_hsListP pats = L l (ListPat pats placeHolderType Nothing)
-  where l = getLoc (mkLocatedList pats)
+b_hsListP pats = L l (listPat pats)
+  where
+    l = getLoc (mkLocatedList pats)
+    listPat ps =
+#if MIN_VERSION_ghc(8,6,0)
+      ListPat noExt ps
+#else
+      ListPat ps placeHolderType Nothing
+#endif
 
 b_labeledP :: Code -> [(Code, HPat)] -> Builder HPat
 b_labeledP (LForm (L l (Atom (ASymbol name)))) ps
@@ -573,23 +750,43 @@ b_labeledP (LForm (L l (Atom (ASymbol name)))) ps
   where x = headFS name
 
 b_tupP :: Code -> [HPat] -> HPat
-b_tupP (LForm (L l _)) ps = L l (TuplePat ps Boxed [])
+b_tupP (LForm (L l _)) ps = L l (mkTuplePat_compat ps)
+
+mkTuplePat_compat :: [HPat] -> Pat PARSED
+mkTuplePat_compat ps = tuplePat ps Boxed
+  where
+    tuplePat pats boxity =
+#if MIN_VERSION_ghc(8,6,0)
+      TuplePat noExt pats boxity
+#else
+      TuplePat pats boxity []
+#endif
 
 b_asP :: Code -> HPat -> HPat
 b_asP (LForm (L l (Atom (ASymbol name)))) pat =
-  L l (AsPat (L l (mkRdrName name)) (mkParPat pat))
+  L l (asPat (L l (mkRdrName name)) (mkParPat_compat pat))
+  where
+    asPat = AsPat NOEXT
 
 b_lazyP :: HPat -> HPat
-b_lazyP pat@ (L l _) = L l (ParPat (L l (LazyPat pat)))
+b_lazyP pat@ (L l _) = mkParPat_compat (L l (lazyPat pat))
+  where
+    lazyPat = LazyPat NOEXT
 
 b_conP :: Code -> [HPat] -> Builder HPat
 b_conP (LForm (L l (Atom (ASymbol name)))) rest
   | isUpper x || x == ':'
-    = return (L l (ParPat (L l (ConPatIn (L l (mkVarRdrName name))
-                                         (PrefixCon rest)))))
+    = return (mkParPat_compat
+               (L l (ConPatIn (L l (mkVarRdrName name))
+                              (PrefixCon rest))))
   | otherwise = builderError
   where
     x = headFS name
+
+mkParPat_compat :: HPat -> HPat
+mkParPat_compat (p @ (L l _)) = L l (parPat p)
+  where
+    parPat = ParPat NOEXT
 
 
 -- ---------------------------------------------------------------------
@@ -605,36 +802,54 @@ b_lamE :: (HExpr,[HPat]) -> HExpr
 b_lamE (body,pats) = mkHsLam pats body
 
 b_tupE :: Code -> [HExpr] -> HExpr
-b_tupE (LForm (L l _)) args = L l (ExplicitTuple (map mkArg args) Boxed)
-  where mkArg x@(L al _) = L al (Present x)
+b_tupE (LForm (L l _)) args = L l e
+  where
+    e = explicitTuple (map mkArg args) Boxed
+    mkArg x@(L al _) = L al (present x)
+    explicitTuple = ExplicitTuple NOEXT
+    present = Present NOEXT
 
 b_letE :: Code -> [HDecl] -> HExpr -> HExpr
 b_letE (LForm (L l _)) decls body =
   let (mbs, sigs) = cvBindsAndSigs (toOL decls)
-  in  L l (HsLet (L l (HsValBinds (ValBindsIn mbs sigs))) body)
+      valbinds = mkHsValBinds_compat mbs sigs
+      hsLet = HsLet NOEXT
+  in  L l (hsLet (L l valbinds) body)
 
 b_caseE :: Code -> HExpr -> [HMatch] -> HExpr
-b_caseE (LForm (L l _)) expr matches = L l (HsCase expr mg)
-  where mg = mkMatchGroup FromSource matches
+b_caseE (LForm (L l _)) expr matches = L l (hsCase expr mg)
+  where
+    hsCase = HsCase NOEXT
+    mg = mkMatchGroup FromSource matches
 
 b_match :: HPat -> ([HGRHS],[HDecl]) -> HMatch
 b_match pat@(L l _) (grhss,decls) =
-#if !MIN_VERSION_ghc(8,4,0)
-    L l (Match ctxt [pat] Nothing grhss')
-#else
+#if MIN_VERSION_ghc(8,6,0)
+    L l (Match noExt ctxt [pat] grhss')
+#elif MIN_VERSION_ghc(8,4,0)
     L l (Match ctxt [pat] grhss')
+#else
+    L l (Match ctxt [pat] Nothing grhss')
 #endif
   where
-    grhss' = GRHSs grhss (declsToBinds l decls)
+    grhss' = mkGRHSs grhss decls l
     ctxt = CaseAlt
+
+mkGRHSs :: [LGRHS PARSED t] -> [HDecl] -> SrcSpan -> GRHSs PARSED t
+mkGRHSs grhss decls l = gRHSs grhss (declsToBinds l decls)
+  where
+    gRHSs = GRHSs NOEXT
 
 b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
-  let rhs = GRHS gs body
-      lrhs = case gs of
+  let lrhs = case gs of
         [] -> noLoc rhs
         _  -> let l = getLoc (mkLocatedList gs) in L l rhs
+      rhs = b_GRHS gs body
   in  (lrhs:rhss)
+
+b_GRHS :: [HGuardLStmt] -> HExpr -> GRHS PARSED HExpr
+b_GRHS = GRHS NOEXT
 
 b_doE :: Code -> [HStmt] -> HExpr
 b_doE (LForm (L l _)) exprs = L l (mkHsDo DoExpr exprs)
@@ -643,9 +858,13 @@ b_tsigE :: Code -> HExpr -> ([HType], HType) -> HExpr
 b_tsigE (LForm (L l _)) e (ctxt,t) =
   let t' = case ctxt of
              [] -> t
-             _  -> L l HsQualTy { hst_ctxt = mkLocatedList ctxt
-                                , hst_body = t }
-  in  mkLHsPar (L l (ExprWithTySig e (mkLHsSigWcType t')))
+             _  -> L l (mkHsQualTy_compat (mkLocatedList ctxt) t)
+#if MIN_VERSION_ghc(8,6,0)
+      e' = ExprWithTySig (mkLHsSigWcType t') e
+#else
+      e' = ExprWithTySig e (mkLHsSigWcType t')
+#endif
+  in  mkLHsPar (L l e')
 
 b_recConOrUpdE :: Code -> [(FastString,HExpr)] -> HExpr
 b_recConOrUpdE sym@(LForm (L l _)) flds = L l expr
@@ -675,47 +894,69 @@ b_appE = foldl1' f
 
 b_charE :: Code -> HExpr
 b_charE (LForm (L l (Atom (AChar x)))) =
-  L l (HsLit (HsChar (SourceText (show x)) x))
+  L l (mkHsLit_compat (HsChar (SourceText (show x)) x))
 
 b_stringE :: Code -> HExpr
 b_stringE (LForm (L l (Atom (AString x)))) =
-  L l (HsLit (HsString (SourceText (show x)) (fsLit x)))
+  L l (mkHsLit_compat (HsString (SourceText (show x)) (fsLit x)))
+
+#if MIN_VERSION_ghc(8,4,0)
+mkHsLit_compat :: HsLit PARSED -> HsExpr PARSED
+#else
+mkHsLit_compat :: HsLit -> HsExpr PARSED
+#endif
+
+mkHsLit_compat = HsLit NOEXT
 
 b_integerE :: Code -> HExpr
 b_integerE (LForm (L l (Atom (AInteger x))))
-   | x < 0     = L l (HsPar expr)
+   | x < 0     = L l (mkHsPar_compat expr)
    | otherwise = expr
   where
-    expr =     L l (HsOverLit $! mkHsIntegral_compat x)
+    expr =     L l (mkHsOverLit_compat $! mkHsIntegral_compat x)
 
 b_floatE :: Code -> HExpr
 b_floatE (LForm (L l (Atom (AFractional x))))
-  | fl_value x < 0 = L l (HsPar expr)
+  | fl_value x < 0 = L l (mkHsPar_compat expr)
   | otherwise      = expr
   where
-    expr = L l (HsOverLit $! mkHsFractional x placeHolderType)
+    expr = L l (mkHsOverLit_compat $! mkHsFractional_compat x)
 
 b_varE :: Code -> HExpr
-b_varE (LForm (L l (Atom (ASymbol x)))) =
-  L l (HsVar (L l (mkVarRdrName x)))
+b_varE (LForm (L l (Atom (ASymbol x)))) = L l (hsVar (L l rname))
+  where
+    hsVar = HsVar NOEXT
+    rname = mkVarRdrName x
 
 b_unitE :: Code -> HExpr
-b_unitE (LForm (L l _)) = L l (ExplicitTuple [] Boxed)
+b_unitE (LForm (L l _)) =
+  let L _ tuple = mkLHsTupleExpr []
+  in  L l tuple
 
 b_commentStringE :: Code -> Located HsDocString
 b_commentStringE (LForm (L l (Atom (AComment x)))) =
-  L l (HsDocString (fsLit x))
+  L l (mkHsDocString_compat x)
 
 b_hsListE :: Either HExpr [HExpr] -> HExpr
 b_hsListE expr =
   case expr of
-    Right exprs -> L l (ExplicitList placeHolderType Nothing exprs)
-      where l = getLoc (mkLocatedList exprs)
+    Right exprs -> L l (ExplicitList xEXPLICITLIST Nothing exprs)
+      where
+        l = getLoc (mkLocatedList exprs)
+#if MIN_VERSION_ghc(8,6,0)
+        xEXPLICITLIST = noExt
+#else
+        xEXPLICITLIST = placeHolderType
+#endif
     Left arithSeqExpr -> arithSeqExpr
 
 b_arithSeqE :: HExpr -> Maybe HExpr -> Maybe HExpr -> HExpr
 b_arithSeqE fromE thenE toE =
+#if MIN_VERSION_ghc(8,6,0)
+  L l (ArithSeq noExt Nothing info)
+#else
   L l (ArithSeq noPostTcExpr Nothing info)
+#endif
   where
     info | Just thenE' <- thenE, Just toE' <- toE =
            FromThenTo fromE thenE' toE'
@@ -725,6 +966,29 @@ b_arithSeqE fromE thenE toE =
            FromTo fromE toE'
          | otherwise = From fromE
     l = getLoc fromE
+
+mkHsDocString_compat :: String -> HsDocString
+#if MIN_VERSION_ghc(8,6,0)
+mkHsDocString_compat = mkHsDocString
+#else
+mkHsDocString_compat = HsDocString . fsLit
+#endif
+{-# INLINE mkHsDocString_compat #-}
+
+mkHsPar_compat :: HExpr -> HsExpr PARSED
+mkHsPar_compat = HsPar NOEXT
+{-# INLINE mkHsPar_compat #-}
+
+mkHsOverLit_compat :: HsOverLit PARSED -> HsExpr PARSED
+mkHsOverLit_compat = HsOverLit NOEXT
+{-# INLINE mkHsOverLit_compat #-}
+
+mkHsFractional_compat :: FractionalLit -> HsOverLit PARSED
+#if MIN_VERSION_ghc(8,6,0)
+mkHsFractional_compat = mkHsFractional
+#else
+mkHsFractional_compat x = mkHsFractional x placeHolderType
+#endif
 
 
 -- ---------------------------------------------------------------------
@@ -739,10 +1003,20 @@ b_bindS (LForm (L l _)) pat expr = L l (mkBindStmt pat expr)
 b_letS :: Code -> [HDecl] -> HStmt
 b_letS (LForm (L l _)) decls =
   let (mbs, sigs) = cvBindsAndSigs (toOL decls)
-  in  L l (LetStmt (L l (HsValBinds (ValBindsIn mbs sigs))))
+      valbinds = mkHsValBinds_compat mbs sigs
+      letStmt = LetStmt NOEXT
+  in  L l (letStmt (L l valbinds))
 
 b_bodyS :: HExpr -> HStmt
 b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
+
+mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
+mkHsValBinds_compat binds sigs =
+#if MIN_VERSION_ghc(8,6,0)
+  HsValBinds noExt (ValBinds noExt binds sigs)
+#else
+  HsValBinds (ValBindsIn binds sigs)
+#endif
 
 
 -- ---------------------------------------------------------------------
@@ -757,7 +1031,7 @@ declsToBinds l decls = L l binds'
   where
     binds' = case decls of
       [] -> emptyLocalBinds
-      _  -> HsValBinds (ValBindsIn (listToBag binds) sigs)
+      _  -> mkHsValBinds_compat (listToBag binds) sigs
     -- Using 'RdrHsSyn.cvTopDecls' to group same names in where
     -- clause. Perhaps better to do similar things done in
     -- 'RdrHsSyn.cvBindGroup', which is dedicated for 'P' monad ...
@@ -765,10 +1039,15 @@ declsToBinds l decls = L l binds'
     (binds, sigs) = go ([],[]) decls'
     go (bs,ss) ds =
       case ds of
-        [] -> (bs, ss)
+        []    -> (bs, ss)
         d:ds' -> case d of
+#if MIN_VERSION_ghc(8,6,0)
+          L ld (ValD _ b) -> go (L ld b:bs,ss) ds'
+          L ld (SigD _ s) -> go (bs,L ld s:ss) ds'
+#else
           L ld (ValD b) -> go (L ld b:bs,ss) ds'
           L ld (SigD s) -> go (bs,L ld s:ss) ds'
+#endif
 
 -- Function defined in 'HsUtils', not exported.
 mkLocatedList ::  [Located a] -> Located [Located a]
@@ -781,8 +1060,17 @@ mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
 cfld2ufld :: LHsRecField PARSED HExpr
           -> LHsRecUpdField PARSED
 -- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
+#if MIN_VERSION_ghc(8,6,0)
+cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
+  L l0 (HsRecField (L l1 unambiguous) arg pun)
+  where
+    unambiguous = Unambiguous noExt rdr
+#else
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
-  L l0 (HsRecField (L l1 (Unambiguous rdr PlaceHolder)) arg pun)
+  L l0 (HsRecField (L l1 unambiguous) arg pun)
+  where
+    unambiguous = Unambiguous rdr PlaceHolder
+#endif
 {-# INLINE cfld2ufld #-}
 
 -- | Make 'HsRecField' with given name and located data.
@@ -812,11 +1100,19 @@ cvBindsAndSigs :: OrdList HDecl -> (HBinds, [HSig])
 cvBindsAndSigs fb = go (fromOL fb)
   where
     go [] = (emptyBag, [])
+#if MIN_VERSION_ghc(8,6,0)
+    go (L l (ValD _ d) : ds)
+#else
     go (L l (ValD d) : ds)
+#endif
       = let (b', ds') = getMonoBind (L l d) ds
             (bs, ss) = go ds'
         in  (b' `consBag` bs, ss)
+#if MIN_VERSION_ghc(8,6,0)
+    go (L l (SigD _ s) : ds)
+#else
     go (L l (SigD s) : ds)
+#endif
       = let (bs, ss) = go ds
         in  (bs, L l s : ss)
 
@@ -829,46 +1125,38 @@ getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),
   | has_args mtchs1 = go mtchs1 loc1 binds
   where
     go mtchs loc
+#if MIN_VERSION_ghc(8,6,0)
+       (L loc2 (ValD _ (FunBind { fun_id = L _ f2,
+                                  fun_matches
+                                    = MG { mg_alts = L _ mtchs2 }}))
+
+#else
        (L loc2 (ValD (FunBind { fun_id = L _ f2,
                                 fun_matches
                                   = MG { mg_alts = L _ mtchs2 }}))
+#endif
                 : binds2)
       | f1 == f2 = go (mtchs2 ++ mtchs)
                       (combineSrcSpans loc loc2) binds2
     go mtchs loc binds2
-      = (L loc (makeFunBind fun_id1 (reverse mtchs)), binds2)
+      = (L loc (mkFunBind fun_id1 (reverse mtchs)), binds2)
       -- Reverse the final matches, to get it back in the right order
 
 getMonoBind bind binds = (bind, binds)
 
 -- Don't group together FunBinds if they have no arguments.  This is
--- necessary now that variable bindings with no arguments are now
--- treated as FunBinds rather than pattern bindings.
+-- necessary that variable bindings with no arguments are now treated as
+-- FunBinds rather than pattern bindings.
 has_args :: [LMatch PARSED (LHsExpr PARSED)] -> Bool
-#if !MIN_VERSION_ghc(8,4,0)
-has_args ((L _ (Match _ args _ _)) : _) = not (null args)
-#else
-has_args ((L _ (Match _ args _)) : _) = not (null args)
-#endif
+has_args (L _ mtch:_) = not (null (m_pats mtch))
 has_args []                             =
   error "Language.SK.Syntax.Internal:has_args"
-
--- Like HsUtils.mkFunBind, but we need to be able to set the fixity too
-makeFunBind :: Located RdrName -> [LMatch PARSED (LHsExpr PARSED)]
-            -> HsBind PARSED
-makeFunBind fn ms
-  = FunBind { fun_id = fn,
-              fun_matches = mkMatchGroup FromSource ms,
-              fun_co_fn = idHsWrapper,
-              bind_fvs = placeHolderNames,
-              fun_tick = [] }
-{-# INLINE makeFunBind #-}
 
 codeToUserTyVar :: Code -> HTyVarBndr
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
-      L l (UserTyVar (L l (mkUnqual tvName name)))
+      L l (UserTyVar NOEXT (L l (mkUnqual tvName name)))
     _ -> error "Language.SK.Syntax.Internal:codeToUserTyVar"
 {-# INLINE codeToUserTyVar #-}
 
@@ -876,12 +1164,17 @@ codeToUserTyVar code =
 -- 'mkHsIntegral'.
 mkHsIntegral_compat :: Integer -> HsOverLit PARSED
 mkHsIntegral_compat n =
-#if !MIN_VERSION_ghc(8,4,0)
-  mkHsIntegral (SourceText (show n)) n placeHolderType
-#else
+#if MIN_VERSION_ghc(8,6,0)
   let il = IL { il_text = SourceText (show n)
-              , il_neg = if n < 0 then True else False
+              , il_neg = n < 0
+              , il_value = n }
+  in  mkHsIntegral il
+#elif MIN_VERSION_ghc(8,4,0)
+  let il = IL { il_text = SourceText (show n)
+              , il_neg = n < 0
               , il_value = n }
   in  mkHsIntegral il placeHolderType
+#else
+  mkHsIntegral (SourceText (show n)) n placeHolderType
 #endif
 {-# INLINE mkHsIntegral_compat #-}

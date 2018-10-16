@@ -102,9 +102,11 @@
       (ASymbol sym) (| ((<- (: \$ (@ cs (: c _))) (unpackFS sym))
                         (elem c [\a .. \z])
                         (<- Nothing (lookup form acc))
-                        (do (<- (LForm (L _ (Atom gsym))) (gensym' cs))
-                            (return (: (, form gsym) acc)))))
-      _ (return acc)))
+                        (do (<- (LForm (L _ x)) (gensym' cs))
+                            (return (case x
+                                      (Atom gsym) (: (, form gsym) acc)
+                                      _           acc)))))
+      _             (return acc)))
 
   (:: gensymfy (-> Code (Skc Code)))
   (= gensymfy form

@@ -271,10 +271,15 @@
   (print-name act)
   (withSession
    (\ he
-     (do (<- (: name _) (parseName print-name))
-         (setSession
-          (he {hsc_IC (setInteractivePrintName (hsc_IC he) name)}))
-         act))))
+     (do (<- names (parseName print-name))
+         (case names
+           (: name _) (>> (setSession
+                           (he {hsc_IC
+                                (setInteractivePrintName (hsc_IC he)
+                                                         name)}))
+                          act)
+           _          (>> (failS "with-print-name: parse error")
+                          act))))))
 
 (defn (eval-form (-> Handle InSource [Code] (Skc Result)))
   (hdl itype forms)
