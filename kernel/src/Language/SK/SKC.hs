@@ -8,7 +8,7 @@ module Language.SK.SKC
   , Macro(..)
   , EnvMacros
   , handleSkException
-  , debugIO
+  , debugSkc
   , toGhc
   , fromGhc
   , failS
@@ -33,6 +33,7 @@ module Language.SK.SKC
 import Control.Exception (Exception(..), throwIO)
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO(..))
+import System.IO (hPutStrLn, stderr)
 
 -- containers
 import qualified Data.Map as Map
@@ -202,13 +203,13 @@ skSrcError (LForm (L l _)) msg = do
   liftIO (throwIO (mkSrcErr (unitBag em)))
 
 -- | Perform given IO action iff debug flag is turned on.
-debugIO :: IO () -> Skc ()
-debugIO act = Skc go
+debugSkc :: String -> Skc ()
+debugSkc str = Skc go
   where
     go = do
       sk_env <- get
       when (envDebug sk_env)
-           (liftIO act)
+           (liftIO (hPutStrLn stderr str))
 
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get

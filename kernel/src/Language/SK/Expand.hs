@@ -222,9 +222,9 @@ addImportedMacro' ty_thing = do
   dflags <- getSessionDynFlags
   case ty_thing of
     AnId var -> do
-      debugIO (putStrLn (";;; adding macro `" ++
-                         showPpr dflags (varName var) ++
-                         "' to current compiler session."))
+      debugSkc (";;; adding macro `" ++
+                showPpr dflags (varName var) ++
+                "' to current compiler session.")
       hsc_env <- getSession
       let name = varName var
       fhv <- liftIO (getHValue hsc_env name)
@@ -322,7 +322,7 @@ m_require form =
       case evalBuilder parseLImport code of
         Right lidecl@(L _ idecl) -> do
           dflags <- getSessionDynFlags
-          debugIO (putStrLn (";;; require: " ++ showPpr dflags idecl))
+          (debugSkc (";;; require: " ++ showPpr dflags idecl))
 
           -- Add the module to current compilation context.
           contexts <- getContext

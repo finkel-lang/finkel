@@ -115,11 +115,11 @@ make infiles no_link mb_output = do
   dflags <- getDynFlags
   setDynFlags (dflags { ghcMode = CompManager
                       , outputFile = mb_output })
-  debugIO
-    (do putStrLn ";;; make:"
-        putStrLn (";;;   ghcLink=" ++ show (ghcLink dflags))
-        putStrLn (";;;   hscTarget=" ++ show (hscTarget dflags))
-        putStrLn (";;;   ways=" ++ show (ways dflags)))
+  debugSkc
+    (concat [ ";;; make:\n"
+            , ";;;   ghcLink=" ++ show (ghcLink dflags) ++ "\n"
+            , ";;;   hscTarget=" ++ show (hscTarget dflags) ++ "\n"
+            , ";;;   ways=" ++ show (ways dflags)])
 
   -- Preserve the language extension values in initial dynflags to
   -- SkEnv, to reset the language extension later, to keep fresh set of
@@ -138,7 +138,7 @@ make infiles no_link mb_output = do
   mod_summaries <- make' to_compile [] sources
 
   hpt2 <- hsc_HPT <$> getSession
-  debugIO $ putStrLn (showSDoc dflags $ pprHPT hpt2)
+  debugSkc (showSDoc dflags $ pprHPT hpt2)
 
   -- Update current module graph for linker. Linking work is delegated
   -- to deriver pipelin's `link' function.
@@ -222,11 +222,12 @@ partitionRequired homePkgModules = foldr f ([],[])
 --
 make' :: [String] -> [TargetUnit] -> [TargetUnit] -> Skc [ModSummary]
 make' not_yet_compiled readys0 pendings0 = do
-  debugIO (do putStrLn ";;; make'"
-              putStrLn (";;;   nycs: " ++ show not_yet_compiled)
-              putStrLn (";;;   total: " ++ show total)
-              putStrLn (";;;   readys0: " ++ show readys0)
-              putStrLn (";;;   pendings0: " ++ show pendings0))
+  debugSkc
+    (concat [ ";;; make'\n"
+            , ";;;   nycs: " ++ show not_yet_compiled ++ "\n"
+            , ";;;   total: " ++ show total ++ "\n"
+            , ";;;   readys0: " ++ show readys0 ++ "\n"
+            , ";;;   pendings0: " ++ show pendings0])
   timeIt "make' [sk]"
          (go [] total total not_yet_compiled readys0 pendings0)
   where
@@ -256,8 +257,8 @@ make' not_yet_compiled readys0 pendings0 = do
               summary <- mkModSummary (Just path) hmdl
               let summary' = summary {ms_hspp_opts = dflags}
                   imports = map import_name (hsmodImports hmdl)
-              debugIO (putStrLn (concat [ ";;; target=", show target
-                                        , " imports=", show imports]))
+              debugSkc (concat [ ";;; target=", show target
+                               , " imports=", show imports])
 
               -- Test whether imported modules are in pendings. If
               -- found, skip the compilation and add this module to the
@@ -287,8 +288,8 @@ make' not_yet_compiled readys0 pendings0 = do
               summary <- mkModSummary (Just path) hmdl
               let imports = map import_name (hsmodImports hmdl)
                   summary' = summary {ms_hspp_opts = dflags}
-              debugIO (putStrLn (concat [";;; target=", show target
-                                        ," imports=", show imports]))
+              debugSkc (concat [";;; target=", show target
+                               ," imports=", show imports])
               compileIfReady summary' hmdl imports (return [])
 
         OtherSource _ -> do
@@ -299,9 +300,9 @@ make' not_yet_compiled readys0 pendings0 = do
           compileIfReady summary hmdl imports getReqs = do
             hsc_env <- getSession
             is <- mapM (findImported hsc_env acc summarised) imports
-            debugIO (putStrLn (";;; is = " ++ show is))
+            debugSkc (";;; is = " ++ show is)
             let is' = catMaybes is
-            debugIO (putStrLn (";;; is' = " ++ show is'))
+            debugSkc (";;; is' = " ++ show is')
             if not (null is')
                then do
                  -- Imported modules are not fully compiled yet. Move
@@ -402,8 +403,7 @@ doMakeOne i total ms hmdl = do
           (concat [ "; [", show i, "/", show total,  "] compiling "
                   , p (ms_mod_name ms)
                   , " (", fromMaybe "unknown input" (ml_hs_file loc)
-                  , ", ", ml_obj_file loc, ")"
-                  ])))
+                  , ", ", ml_obj_file loc, ")" ])))
 
   tc <- tcHsModule (Just (ms_hspp_file ms)) True hmdl
   ds <- desugarModule tc
@@ -453,13 +453,13 @@ mightNotMakeOne ms hmdl = do
   (rr, mb_hi) <-
      liftIO (checkOldIface hsc_env ms SourceUnmodified Nothing)
 
-  debugIO
-    (do let mnstr = showPpr (hsc_dflags hsc_env) mn
-        putStr (";;; checkOldIface [" ++ mnstr ++ "]: ")
-        putStrLn (case rr of
-                    UpToDate             -> "up to date"
-                    MustCompile          -> "must compile"
-                    RecompBecause reason -> reason))
+  debugSkc
+    (let mnstr = showPpr (hsc_dflags hsc_env) mn
+     in  ";;; checkOldIface [" ++ mnstr ++ "]: " ++
+         case rr of
+            UpToDate             -> "up to date"
+            MustCompile          -> "must compile"
+            RecompBecause reason -> reason)
 
   -- Get HomeModInfo from linkble and interface files. When linkable
   -- and interface file were found and the interface file does not need
@@ -549,12 +549,13 @@ findImported hsc_env acc pendings name
       -- checking whether the module is listed in accumulator containing
       -- compiled modules.
       Found loc mdl    -> do
-        debugIO
-          (do putStrLn (";;; Found " ++ show loc ++ ", " ++
-                        moduleNameString (moduleName mdl))
-              putStrLn (";;; moduleUnitId=" ++ show (moduleUnitId mdl))
-              putStrLn (";;; myInstalledUnitId=" ++
-                        showPpr dflags myInstalledUnitId))
+        debugSkc
+          (concat [";;; Found " ++ show loc ++ ", " ++
+                    moduleNameString (moduleName mdl) ++ "\n"
+                  , ";;;   moduleUnitId=" ++
+                    show (moduleUnitId mdl) ++ "\n"
+                  , ";;;   myInstalledUnitId=" ++
+                    showPpr dflags myInstalledUnitId])
         case ml_hs_file loc of
           Just path | takeExtension path `elem` [".hs"] ->
                       if moduleName mdl `elem` map ms_mod_name acc
@@ -671,7 +672,7 @@ compileHsFile source mbphase = do
 
 compileOtherFile :: FilePath -> Skc ()
 compileOtherFile path = do
-  debugIO (putStrLn ("Compiling other code: " ++ path))
+  debugSkc (";;; Compiling other code: " ++ path)
   hsc_env <- getSession
   liftIO (oneShot hsc_env StopLn [(path, Nothing)])
 
@@ -708,9 +709,9 @@ findFileInImportPaths dirs modName = do
                     else search ds'
       dirs' | "." `elem` dirs = dirs
             | otherwise     = dirs ++ ["."]
-  debugIO (putStrLn (";;; moduleName: " ++ show modName))
+  debugSkc (";;; moduleName: " ++ show modName)
   found <- search dirs'
-  debugIO (putStrLn (";;; File found: " ++ found))
+  debugSkc (";;; File found: " ++ found)
   return found
 
 -- | Link 'ModSummary's, when required.

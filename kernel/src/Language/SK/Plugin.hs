@@ -52,8 +52,8 @@ makeSkFrontend :: String -- ^ Name of executable.
                -> [String] -> [(String, Maybe Phase)] -> Ghc ()
 makeSkFrontend name macros flags args = do
   let options = (parseOptions flags) {input = args}
-      act o  = do debugIO (do putStrLn ("flags: " ++ show flags)
-                              putStrLn ("args:  " ++ show args))
+      act o  = do debugSkc (concat [ "flags: " ++ show flags ++ "\n"
+                                   , "args:  " ++ show args ])
                   chooseAction name (action options) o
       debug = skDebug options
       macros' = mergeMacros (envMacros initialSkEnv)
