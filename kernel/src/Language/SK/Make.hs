@@ -30,7 +30,7 @@ import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
 import ErrUtils (withTiming)
 import Exception (ghandle, tryIO)
 import Finder ( addHomeModuleToFinder, findImportedModule
-              , findObjectLinkable )
+              , findObjectLinkableMaybe )
 import GHC ( TypecheckedModule(..), desugarModule, getModSummary
            , loadModule, setSessionDynFlags)
 import GhcMake (topSortModuleGraph)
@@ -50,13 +50,12 @@ import HscTypes ( FindResult(..), GhcApiError, ModIface, ModDetails
 import HsImpExp (ImportDecl(..), simpleImportDecl)
 import HsSyn (HsModule(..))
 import InteractiveEval (setContext)
-import LoadIface (readIface)
+import MkIface ( RecompileRequired(..), checkOldIface )
 import Module ( ModLocation(..), ModuleName, installedUnitIdEq
               , mkModuleName, mkModuleNameFS, moduleName
               , moduleNameSlashes, moduleNameString, moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
 import TcIface (typecheckIface)
-import TcRnDriver (runTcInteractive)
 import TcRnMonad (initIfaceLoad)
 import Util (getModificationUTCTime, looksLikeModuleName)
 import SrcLoc (mkRealSrcLoc, noLoc)
@@ -64,7 +63,6 @@ import StringBuffer (stringToStringBuffer)
 
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
-import qualified Maybes as Maybes
 
 -- directory
 import System.Directory (doesFileExist)
@@ -303,6 +301,7 @@ make' not_yet_compiled readys0 pendings0 = do
             is <- mapM (findImported hsc_env acc summarised) imports
             debugIO (putStrLn (";;; is = " ++ show is))
             let is' = catMaybes is
+            debugIO (putStrLn (";;; is' = " ++ show is'))
             if not (null is')
                then do
                  -- Imported modules are not fully compiled yet. Move
@@ -371,7 +370,7 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
       setDynFlags (ms_hspp_opts ms)
       up_to_date <- checkUpToDate ms graph_upto_this
       ms' <- if up_to_date
-               then dontMakeOne ms hmdl
+               then mightNotMakeOne ms hmdl
                else doMakeOne (total - i + 1) total ms hmdl
 
       -- Update module graph with new ModSummary, and restore the
@@ -419,29 +418,21 @@ doMakeOne i total ms hmdl = do
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
 
-dontMakeOne :: ModSummary -> HsModule PARSED -> Skc ModSummary
-dontMakeOne ms hmdl = do
+mightNotMakeOne :: ModSummary -> HsModule PARSED -> Skc ModSummary
+mightNotMakeOne ms hmdl = do
   hsc_env <- getSession
   let mn = ms_mod_name ms
       loc = ms_location ms
 
-  -- Load linkable and interface file, if exist.
-  mb_linkable <-
-    case ms_obj_date ms of
-      Just t -> do
-        l <- liftIO (findObjectLinkable (ms_mod ms) (ml_obj_file loc) t)
-        return (Just l)
-      Nothing -> return Nothing
-  (_msg, mb_mbs_hifile) <-
-    liftIO (runTcInteractive hsc_env
-                             (readIface (ms_mod ms) (ml_hi_file loc)))
+      recomp mb_linkable = do
+        -- No interface file found, recompiling.
+        tcm <- tcHsModule (Just (ms_hspp_file ms)) False hmdl
+        let (tcg, _details) = tm_internals_ tcm
+        liftIO (compileOne' (Just tcg) (Just batchMsg) hsc_env ms
+                            1 1 Nothing mb_linkable
+                            SourceUnmodifiedAndStable)
 
-  -- When linkable and interface file were found, make HomeModInfo with
-  -- simple ModDetails value. Otherwise, do the compilation work and get
-  -- a HomeModInfo.
-  hmi <-
-    case mb_mbs_hifile of
-      Just (Maybes.Succeeded hi) -> do
+      norecomp mb_linkable hi =
         -- Found interface file. Doing similar work done in
         -- 'HscMain.hscInrementalCompile'. See note [Knot-tying
         -- typecheckIface] in "compiler/iface/TcIface.hs".
@@ -453,14 +444,31 @@ dontMakeOne ms hmdl = do
              details <- genModDetails hsc_env' hi
              return HomeModInfo { hm_details = details
                                 , hm_iface = hi
-                                , hm_linkable = mb_linkable }))
-      _ -> do
-        -- No interface file found, generating from parsed HsModule.
-        tcm <- tcHsModule (Just (ms_hspp_file ms)) False hmdl
-        let (tcg, _details) = tm_internals_ tcm
-        liftIO (compileOne' (Just tcg) (Just batchMsg) hsc_env ms
-                            1 1 Nothing mb_linkable
-                            SourceUnmodifiedAndStable)
+                                , hm_linkable = mb_linkable}))
+
+  -- Load linkable if exist.
+  mb_linkable <- liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
+
+  -- Load interface file if exist.
+  (rr, mb_hi) <-
+     liftIO (checkOldIface hsc_env ms SourceUnmodified Nothing)
+
+  debugIO
+    (do let mnstr = showPpr (hsc_dflags hsc_env) mn
+        putStr (";;; checkOldIface [" ++ mnstr ++ "]: ")
+        putStrLn (case rr of
+                    UpToDate             -> "up to date"
+                    MustCompile          -> "must compile"
+                    RecompBecause reason -> reason))
+
+  -- Get HomeModInfo from linkble and interface files. When linkable
+  -- and interface file were found and the interface file does not need
+  -- recompilation, make HomeModInfo with simple ModDetails
+  -- value. Otherwise, do the compilation work and get a HomeModInfo.
+  hmi <- case mb_hi of
+           -- XXX: Check `rr' with `MkIface.recompileRequired'.
+           Just hi -> norecomp mb_linkable hi
+           _       -> recomp mb_linkable
 
   let hpt' = addToHpt (hsc_HPT hsc_env) mn hmi
   _ <- setSession hsc_env {hsc_HPT = hpt'}
@@ -642,8 +650,7 @@ compileSkModuleForm' sp mn forms = do
       contextModules <- envContextModules <$> getSkEnv
       let ii = IIDecl . simpleImportDecl . mkModuleNameFS
       setContext (map (ii . fsLit) contextModules)
-      timeIt ("SkModule [" ++ mn ++ "]")
-             (compileSkModuleForm forms)
+      timeIt ("SkModule [" ++ mn ++ "]") (compileSkModuleForm forms)
 
 resetEnvMacros :: Skc ()
 resetEnvMacros =
