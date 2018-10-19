@@ -234,11 +234,12 @@ macroFunction mac form = do
 -- Error location are derived from 'HsModule', locations precisely match
 -- with S-expression source code, pretty much helpful.
 ---
-tcHsModule :: Maybe FilePath -- ^ Source of the module.
+tcHsModule :: Maybe FilePath   -- ^ Source of the module.
+           -> Maybe ModSummary -- ^ Old ModSummary, if any.
            -> Bool -- ^ True to generate files, otherwise False.
            -> HModule -- ^ Module to typecheck.
            -> Skc TypecheckedModule
-tcHsModule mbfile genFile mdl = do
+tcHsModule mbfile mb_ms genFile mdl = do
   dflags0 <- getDynFlags
   let fn = fromMaybe "anon" mbfile
       dflags1 =
@@ -247,7 +248,7 @@ tcHsModule mbfile genFile mdl = do
           else dflags0 { hscTarget = HscNothing
                        , ghcLink = NoLink }
   setDynFlags dflags1
-  ms <- mkModSummary mbfile mdl
+  ms <- maybe (mkModSummary mbfile mdl) return mb_ms
   let ann = (Map.empty, Map.empty)
       r_s_loc = mkSrcLoc (fsLit fn) 1 1
       r_s_span = mkSrcSpan r_s_loc r_s_loc
@@ -260,22 +261,25 @@ tcHsModule mbfile genFile mdl = do
   return tc
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.
-mkModSummary :: GhcMonad m => Maybe FilePath -> HModule
-             -> m ModSummary
+mkModSummary :: GhcMonad m => Maybe FilePath -> HModule -> m ModSummary
 mkModSummary mbfile mdl =
   let modName = case hsmodName mdl of
                   Just name -> unLoc name
                   Nothing -> mkModuleName "Main"
       imports = map (ideclName . unLoc) (hsmodImports mdl)
       emptyAnns = (Map.empty, Map.empty)
+      file = fromMaybe "<unknown>" mbfile
+      r_s_loc = mkSrcLoc (fsLit file) 1 1
+      r_s_span = mkSrcSpan r_s_loc r_s_loc
       pm = HsParsedModule
-        { hpm_module = noLoc mdl
+        { hpm_module = L r_s_span mdl
         , hpm_src_files = maybeToList mbfile
         , hpm_annotations = emptyAnns }
   in  mkModSummary' mbfile modName imports (Just pm)
 
 -- | Make 'ModSummary' from source file, module name, and imports.
-mkModSummary' :: GhcMonad m => Maybe FilePath -> ModuleName
+mkModSummary' :: GhcMonad m
+              => Maybe FilePath -> ModuleName
               -> [Located ModuleName] -> Maybe HsParsedModule
               -> m ModSummary
 mkModSummary' mbfile modName imports mb_pm = do

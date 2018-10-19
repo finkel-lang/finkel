@@ -81,7 +81,7 @@ buildFile pre paths =
       dflags <- getSessionDynFlags
       let dflags' = dflags {importPaths = [".", odir]}
       _ <- setSessionDynFlags dflags'
-      make sources doLink out
+      make sources doLink True out
 
 removeArtifacts :: FilePath -> IO ()
 removeArtifacts dir = do

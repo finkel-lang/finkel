@@ -53,7 +53,7 @@ doMake :: [FilePath] -> IO ()
 doMake files =
   do let act = do
            Make.initSessionForMake
-           Make.make (zip files (repeat Nothing)) False Nothing
+           Make.make (zip files (repeat Nothing)) False False Nothing
      ret <- Run.runSkc act Run.initialSkEnv
      case ret of
        Left err -> putStrLn err

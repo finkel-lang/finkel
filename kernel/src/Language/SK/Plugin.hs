@@ -17,6 +17,7 @@ import Data.Version (showVersion)
 import System.Console.GetOpt
 import System.Environment (getArgs, lookupEnv)
 import System.Exit (exitFailure, exitWith)
+import System.IO (hPutStr, stderr)
 import System.Process (rawSystem)
 
 -- ghc
@@ -46,14 +47,19 @@ frontendPlugin =
   defaultFrontendPlugin {frontend = makeSkFrontend "skkc" []}
 
 -- | Make a frontend plugin.
-makeSkFrontend :: String -- ^ Name of executable.
-               -> [(String,Macro)] -- ^ List of macros loaded to
-                                   -- macro expander.
-               -> [String] -> [(String, Maybe Phase)] -> Ghc ()
+makeSkFrontend :: String
+                   -- ^ Name of executable.
+               -> [(String,Macro)]
+                   -- ^ List of macros loaded to macro expander.
+               -> [String]
+                   -- ^ Plugin options
+               -> [(FilePath, Maybe Phase)]
+                   -- ^ Pairs of source file and phase.
+               -> Ghc ()
 makeSkFrontend name macros flags args = do
   let options = (parseOptions flags) {input = args}
-      act o  = do debugSkc (concat [ "flags: " ++ show flags ++ "\n"
-                                   , "args:  " ++ show args ])
+      act o  = do debugSkc (concat [ ";;; flags: ", show flags, "\n"
+                                   , ";;; args:  ", show args ])
                   chooseAction name (action options) o
       debug = skDebug options
       macros' = mergeMacros (envMacros initialSkEnv)
@@ -74,6 +80,11 @@ makeSkFrontend name macros flags args = do
 -- ---------------------------------------------------------------------
 
 -- | Action to perform in modal manner.
+--
+-- Note that ghc make mode does not work when frontend plugin were
+-- used. So when "--make" option were passed to sk compiler executable,
+-- converts the "--make" flag to "--sk-make".
+--
 data SkAction
   = SkHsrc
   | SkMake
@@ -94,6 +105,8 @@ data SkcOptions = SkcOptions {
     skC :: Bool,
     -- | The action to perform.
     action :: SkAction,
+    -- | Field to store explicitly specified force recompilation.
+    skForceRecomp :: Bool,
     -- | Flag value for debugging.
     skDebug :: Bool
   } deriving (Eq, Show)
@@ -105,6 +118,7 @@ initialSkcOptions =
              , skO = Nothing
              , skC = False
              , action = SkMake
+             , skForceRecomp = False
              , skDebug = False }
 
 parseOptions :: [String] -> SkcOptions
@@ -146,6 +160,9 @@ hiddenDescrs =
   , option ["sk-c"]
            (NoArg (\o -> o {skC=True}))
            "Intercept '-c'"
+  , option ["sk-force-recomp"]
+           (NoArg (\o -> o {skForceRecomp=True}))
+           "Intercept '-fforce-recomp'"
   ]
 
 
@@ -158,7 +175,7 @@ hiddenDescrs =
 chooseAction :: String -> SkAction -> SkcOptions -> Skc ()
 chooseAction name act o =
   case act of
-    SkMake    -> make (input o) (skC o) (skO o)
+    SkMake    -> make (input o) (skC o) (skForceRecomp o) (skO o)
     SkHsrc    -> hsrc o
     SkHelp    -> help name
     SkVersion -> printVersion
@@ -171,7 +188,7 @@ hsrc o = do
     _   -> failS "hsrc: Multiple input files not supported."
   (mdl, sp) <- compileWithSymbolConversion file
   when (performTypecheck o)
-       (void (tcHsModule (Just file) False mdl))
+       (void (tcHsModule (Just file) Nothing False mdl))
   hssrc <- genHsSrc sp (Hsrc mdl)
   liftIO (case skO o of
              Nothing -> putStrLn hssrc
@@ -202,12 +219,13 @@ printVersion = liftIO (putStrLn v)
 --
 -- ---------------------------------------------------------------------
 
--- | Make an main action for SK compiler executable with given frontend
+-- | Make the main action for SK compiler executable with given frontend
 -- plugin name and package.
 --
 -- Prepend argument passed to GHC frontend plugin and wraps input
 -- arguments with "-ffrontend-opt". This function intercepts some of the
--- conflicting arguments for 'ghc' command and frontend plugin.
+-- conflicting arguments for 'ghc' command and frontend plugin, such as
+-- "--show-info" option.
 --
 -- Internally, this function invokes "ghc" executable via
 -- 'System.Process.rawSystem' with custom argument and the frontend
@@ -231,11 +249,12 @@ skPluginMain frontendModuleName packageName = do
                         Nothing -> return False
                         Just _  -> return True
   when debug
-       (do putStrLn ("ghc: " ++ show ghc)
-           putStrLn ("argIns: " ++ show argIns)
-           putStrLn ("srcs:" ++ show srcs)
-           putStrLn ("skopts: " ++ show skopts)
-           putStrLn ("ghcopts: " ++ show ghcopts))
+       (hPutStr stderr
+                (unlines [ ";;; ghc: " ++ show ghc
+                         , ";;; argIns: " ++ show argIns
+                         , ";;; srcs: " ++ show srcs
+                         , ";;; skopts: " ++ show skopts
+                         , ";;; ghcopts': " ++ show ghcopts']))
   let skopts' | isJust (find (== "--sk-debug") skopts) = skopts
               | debug = "-ffrontend-opt":"--sk-debug":skopts
               | otherwise = skopts
@@ -291,6 +310,8 @@ groupOptions = go where
              go sksrc (fopt: "--sk-o":fopt:head xs:skopt) ghcopt (tail xs)
          | isC x ->
              go sksrc (fopt:"--sk-c":skopt) ghcopt ("-no-link":xs)
+         | isForceRecomp x ->
+             go sksrc (fopt:"--sk-force-recomp":skopt) (x:ghcopt) xs
          | isSkOption x ->
              go sksrc (fopt:head xs:fopt:x:skopt) ghcopt (tail xs)
          | isSkFlag x ->
@@ -330,6 +351,11 @@ isO = (== "-o")
 -- | Intercept "-c".
 isC :: String -> Bool
 isC = (== "-c")
+
+-- | Intercept "-fforce-recomp".
+isForceRecomp :: String -> Bool
+isForceRecomp = (== "-fforce-recomp")
+
 
 -- | SK source code extension is hard coded as ".sk". Surely it would be
 -- better to have alternative choice specified via command line

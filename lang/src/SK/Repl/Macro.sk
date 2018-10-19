@@ -35,7 +35,8 @@
 
    ;; ghc
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
-              (HscTarget ..) (PackageFlag ..) thisPackage))
+              (HscTarget ..) (PackageFlag ..) (GeneralFlag ..)
+              thisPackage gopt))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (gcatch gbracket))
    (FamInstEnv (pprFamInst))
@@ -184,7 +185,8 @@
          (setContext context)))
    (\ (, dflags _context)
      (do (setDynFlags (dflags {hscTarget HscAsm}))
-         (make [(, str Nothing)] True Nothing)
+         (let ((= force-recomp (gopt Opt_ForceRecomp dflags))))
+         (make [(, str Nothing)] True force-recomp Nothing)
          (return '(begin))))))
 
 (defn (link-module-obj (-> FastString (Skc Code)))

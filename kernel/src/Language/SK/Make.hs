@@ -12,8 +12,7 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Char (isUpper)
 import Data.List (find)
-import Data.Maybe (catMaybes, fromMaybe)
-import System.IO (fixIO)
+import Data.Maybe (catMaybes)
 
 -- bytestring
 import qualified Data.ByteString.Lazy as BL
@@ -25,24 +24,24 @@ import Data.Graph (flattenSCCs)
 import BasicTypes (SuccessFlag(..))
 import DriverPhases (Phase(..))
 import DriverPipeline (compileOne', link, oneShot, preprocess)
-import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
-                , GhcMode(..), getDynFlags, gopt)
+import DynFlags ( DynFlags(..), DumpFlag(..), GeneralFlag(..)
+                , GhcLink(..), GhcMode(..), dopt, getDynFlags
+                , gopt, gopt_set, gopt_unset )
 import ErrUtils (withTiming)
 import Exception (ghandle, tryIO)
 import Finder ( addHomeModuleToFinder, findImportedModule
               , findObjectLinkableMaybe )
-import GHC ( TypecheckedModule(..), desugarModule, getModSummary
-           , loadModule, setSessionDynFlags)
+import GHC ( getModSummary, setSessionDynFlags )
 import GhcMake (topSortModuleGraph)
 import GhcMonad ( GhcMonad(..), getSessionDynFlags, modifySession
                 , withTempSession )
-import Outputable (ppr, text, showPpr, showSDoc)
-import HscMain (batchMsg, dumpIfaceStats)
-import HscTypes ( FindResult(..), GhcApiError, ModIface, ModDetails
-                , ModSummary(..), HomeModInfo (..), HscEnv(..)
-                , InteractiveContext(..), InteractiveImport(..)
-                , ModuleGraph, SourceModified(..)
-                , addToHpt, ms_mod_name, pprHPT
+import Outputable ( text, showPpr )
+import HscMain (batchMsg)
+import HscTypes ( FindResult(..), GhcApiError, ModSummary(..)
+                , HscEnv(..), InteractiveContext(..)
+                , InteractiveImport(..), ModuleGraph
+                , SourceModified(..)
+                , addToHpt, ms_mod_name
 #if MIN_VERSION_ghc(8,4,0)
                 , mkModuleGraph, extendMG
 #endif
@@ -50,13 +49,10 @@ import HscTypes ( FindResult(..), GhcApiError, ModIface, ModDetails
 import HsImpExp (ImportDecl(..), simpleImportDecl)
 import HsSyn (HsModule(..))
 import InteractiveEval (setContext)
-import MkIface ( RecompileRequired(..), checkOldIface )
 import Module ( ModLocation(..), ModuleName, installedUnitIdEq
               , mkModuleName, mkModuleNameFS, moduleName
               , moduleNameSlashes, moduleNameString, moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
-import TcIface (typecheckIface)
-import TcRnMonad (initIfaceLoad)
 import Util (getModificationUTCTime, looksLikeModuleName)
 import SrcLoc (mkRealSrcLoc, noLoc)
 import StringBuffer (stringToStringBuffer)
@@ -99,32 +95,50 @@ import Language.SK.SKC
 -- sources to modules which containing `require' syntax of home package
 -- modules, and which doesn't.
 --
--- Once the dependency resolution work were tried with custom user hooks
--- in cabal setup script. However, as of Cabal version 1.24.2, building
--- part of some modules from contents of cabal configuration file were
--- not so easy. Though when cabal support multiple libraraies, situation
--- might change.
+-- Once these dependency resolution works were tried with custom user
+-- hooks in cabal setup script. However, as of Cabal version 1.24.2,
+-- building part of some modules from contents of cabal configuration
+-- file were not so easy. Though when cabal support multiple libraraies,
+-- situation might change.
 
 -- | SK variant of @ghc --make@.
 make :: [(FilePath, Maybe Phase)] -- ^ List of input file and phase
      -> Bool -- ^ Skip linking when 'True'.
+     -> Bool -- ^ Force recompilation when 'True'.
      -> Maybe FilePath -- ^ Output file, if any.
      -> Skc ()
-make infiles no_link mb_output = do
+make infiles no_link force_recomp mb_output = do
+
   -- Setting ghcMode as done in ghc's "Main.hs".
-  dflags <- getDynFlags
-  setDynFlags (dflags { ghcMode = CompManager
-                      , outputFile = mb_output })
+  --
+  -- Also setting force recompilation field from argument, since ghc
+  -- running in OneShot mode instead of CompManager mode until this
+  -- point. Some of the dump flags will turn force recompilation flag
+  -- on. Ghc does this switching off of recompilation checker in
+  -- DynFlags.{setDumpFlag',forceRecompile}.
+  dflags0 <- getSessionDynFlags
+  let dflags1 = dflags0 { ghcMode = CompManager
+                        , outputFile = mb_output }
+      dflags2 | force_recomp = gopt_set dflags1 Opt_ForceRecomp
+              | no_link      = gopt_set dflags1 Opt_ForceRecomp
+              | otherwise    = gopt_unset dflags1 Opt_ForceRecomp
+  _ <- setSessionDynFlags dflags2
+  dflags3 <- getSessionDynFlags
+
   debugSkc
-    (concat [ ";;; make:\n"
-            , ";;;   ghcLink=" ++ show (ghcLink dflags) ++ "\n"
-            , ";;;   hscTarget=" ++ show (hscTarget dflags) ++ "\n"
-            , ";;;   ways=" ++ show (ways dflags)])
+    (concat
+       [ ";;; make:\n"
+       , ";;;   ghcLink=", show (ghcLink dflags3), "\n"
+       , ";;;   ghcMode=", showPpr dflags3 (ghcMode dflags3), "\n"
+       , ";;;   hscTarget=", show (hscTarget dflags3), "\n"
+       , ";;;   ways=", show (ways dflags3), "\n"
+       , ";;;   forceRecomp=", show (gopt Opt_ForceRecomp dflags3), "\n"
+       , ";;;   -ddump-if=", show (dopt Opt_D_dump_hi dflags3) ])
 
   -- Preserve the language extension values in initial dynflags to
   -- SkEnv, to reset the language extension later, to keep fresh set of
   -- language extensios per module.
-  let lexts = (language dflags, extensionFlags dflags)
+  let lexts = (language dflags3, extensionFlags dflags3)
   modifySkEnv (\e -> e {envDefaultLangExts = lexts})
 
   -- Decide the kind of sources of the inputs.
@@ -136,9 +150,6 @@ make infiles no_link mb_output = do
 
   -- Do the compilation work.
   mod_summaries <- make' to_compile [] sources
-
-  hpt2 <- hsc_HPT <$> getSession
-  debugSkc (showSDoc dflags $ pprHPT hpt2)
 
   -- Update current module graph for linker. Linking work is delegated
   -- to deriver pipelin's `link' function.
@@ -189,8 +200,8 @@ targetSourcePath :: TargetSource -> FilePath
 targetSourcePath mt =
   case mt of
     SkSource path _ _ _ -> path
-    HsSource path -> path
-    OtherSource path -> path
+    HsSource path       -> path
+    OtherSource path    -> path
 
 isOtherSource :: TargetSource -> Bool
 isOtherSource ts =
@@ -257,8 +268,9 @@ make' not_yet_compiled readys0 pendings0 = do
               summary <- mkModSummary (Just path) hmdl
               let summary' = summary {ms_hspp_opts = dflags}
                   imports = map import_name (hsmodImports hmdl)
-              debugSkc (concat [ ";;; target=", show target
-                               , " imports=", show imports])
+
+              debugSkc (concat [ ";;; target=", show target, "\n"
+                               , ";;; imports=", show imports])
 
               -- Test whether imported modules are in pendings. If
               -- found, skip the compilation and add this module to the
@@ -278,31 +290,30 @@ make' not_yet_compiled readys0 pendings0 = do
                    let act = mapM (getModSummary' . mkModuleName)
                                   (requiredModuleNames sp)
                        act' = catMaybes <$> act
-                   compileIfReady summary' hmdl imports act'
+                   compileIfReady summary' imports act'
 
         HsSource path -> do
           mb_result <- compileToHsModule target
           case mb_result of
-            Nothing             -> failS "compileToHsModule failed"
+            Nothing             -> failS "compileToHsModule"
             Just (hmdl, dflags) -> do
               summary <- mkModSummary (Just path) hmdl
               let imports = map import_name (hsmodImports hmdl)
                   summary' = summary {ms_hspp_opts = dflags}
               debugSkc (concat [";;; target=", show target
                                ," imports=", show imports])
-              compileIfReady summary' hmdl imports (return [])
+              compileIfReady summary' imports (return [])
 
         OtherSource _ -> do
           _ <- compileToHsModule target
           go acc i k nycs summarised pendings
 
         where
-          compileIfReady summary hmdl imports getReqs = do
+          compileIfReady summary imports getReqs = do
             hsc_env <- getSession
             is <- mapM (findImported hsc_env acc summarised) imports
-            debugSkc (";;; is = " ++ show is)
             let is' = catMaybes is
-            debugSkc (";;; is' = " ++ show is')
+            debugSkc (";;; filtered imports = " ++ show is')
             if not (null is')
                then do
                  -- Imported modules are not fully compiled yet. Move
@@ -326,7 +337,7 @@ make' not_yet_compiled readys0 pendings0 = do
                      mNameString = moduleNameString mn
                      nycs' = filter (/= mNameString) nycs
                      deps = flattenSCCs graph_upto_this ++ reqs
-                 summary' <- makeOne i k summary hmdl deps
+                 summary' <- makeOne i k summary deps
                  go (summary':acc) (i-1) k nycs' summarised pendings
 
     -- Ready to compile pending modules to read time ModSummary.
@@ -348,14 +359,14 @@ make' not_yet_compiled readys0 pendings0 = do
     import_name = moduleNameString . unLoc . ideclName . unLoc
     skmn t = case t of
                SkSource _ mn _ _ -> mn
-               _ -> "module-name-unknown"
+               _                 -> "module-name-unknown"
     total = length readys0 + length pendings0
 
 -- | Check whether recompilation is required, and compile the 'HsModule'
 -- when the codes or dependency modules were updated.
 makeOne :: Int -> Int -> ModSummary
-        -> HsModule PARSED -> [ModSummary] -> Skc ModSummary
-makeOne i total ms hmdl graph_upto_this = timeIt label go
+        -> [ModSummary] -> Skc ModSummary
+makeOne i total ms graph_upto_this = timeIt label go
   where
     label = "MakeOne [" ++ mname ++ "]"
     mname = moduleNameString (ms_mod_name ms)
@@ -369,10 +380,12 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
       -- compiled module objects with language extensions not set in
       -- current dynflags.
       setDynFlags (ms_hspp_opts ms)
+
       up_to_date <- checkUpToDate ms graph_upto_this
-      ms' <- if up_to_date
-               then mightNotMakeOne ms hmdl
-               else doMakeOne (total - i + 1) total ms hmdl
+      let midx = total - i + 1
+          src_modified | up_to_date = SourceUnmodified
+                       | otherwise  = SourceModified
+      ms' <- doMakeOne midx total ms src_modified
 
       -- Update module graph with new ModSummary, and restore the
       -- original DynFlags.
@@ -384,106 +397,41 @@ makeOne i total ms hmdl graph_upto_this = timeIt label go
       return ms'
 
 -- | Compile single module.
-doMakeOne :: Int -> Int -> ModSummary
-          -> HsModule PARSED -> Skc ModSummary
-doMakeOne i total ms hmdl = do
+doMakeOne :: Int -- ^ Module index number.
+          -> Int -- ^ Total number of modules.
+          -> ModSummary -- ^ Summary of module to compile.
+          -> SourceModified -- ^ Source modified?
+          -> Skc ModSummary -- ^ Updated summary.
+doMakeOne i total ms src_modified = do
+  debugSkc ";;; Taking doMakeOne path"
   dflags_orig <- getDynFlags
   let dflags = ms_hspp_opts ms
-      p x = showSDoc dflags (ppr x)
       loc = ms_location ms
+      mname = ms_mod_name ms
       tryGetTimeStamp x = liftIO (tryIO (getModificationUTCTime x))
       e2mb x = case x of
                  Right a -> Just a
                  Left _  -> Nothing
 
-  silent <- fmap envSilent getSkEnv
-  unless silent
-    (liftIO
-       (putStrLn
-          (concat [ "; [", show i, "/", show total,  "] compiling "
-                  , p (ms_mod_name ms)
-                  , " (", fromMaybe "unknown input" (ml_hs_file loc)
-                  , ", ", ml_obj_file loc, ")" ])))
-
-  tc <- tcHsModule (Just (ms_hspp_file ms)) True hmdl
-  ds <- desugarModule tc
-  _ds' <- loadModule ds
   hsc_env <- getSession
-  _m <- liftIO (addHomeModuleToFinder hsc_env (ms_mod_name ms) loc)
+  let hsc_env' = hsc_env {hsc_dflags = dflags}
+  mb_linkable <-
+    liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
+  home_mod_info <-
+    liftIO (compileOne' Nothing (Just batchMsg) hsc_env' ms
+                        i total Nothing mb_linkable src_modified)
+  _ <- liftIO (addHomeModuleToFinder hsc_env mname loc)
+
+  modifySession
+    (\e -> e {hsc_HPT = addToHpt (hsc_HPT e) mname home_mod_info})
 
   -- Update the time stamp of generated obj and hi files.
   mb_obj_date <- e2mb <$> tryGetTimeStamp (ml_obj_file loc)
   mb_iface_date <- e2mb <$> tryGetTimeStamp (ml_hi_file loc)
   setDynFlags dflags_orig
+
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
-
-mightNotMakeOne :: ModSummary -> HsModule PARSED -> Skc ModSummary
-mightNotMakeOne ms hmdl = do
-  hsc_env <- getSession
-  let mn = ms_mod_name ms
-      loc = ms_location ms
-
-      recomp mb_linkable = do
-        -- No interface file found, recompiling.
-        tcm <- tcHsModule (Just (ms_hspp_file ms)) False hmdl
-        let (tcg, _details) = tm_internals_ tcm
-        liftIO (compileOne' (Just tcg) (Just batchMsg) hsc_env ms
-                            1 1 Nothing mb_linkable
-                            SourceUnmodifiedAndStable)
-
-      norecomp mb_linkable hi =
-        -- Found interface file. Doing similar work done in
-        -- 'HscMain.hscInrementalCompile'. See note [Knot-tying
-        -- typecheckIface] in "compiler/iface/TcIface.hs".
-        liftIO (fixIO (\hmi' ->
-          do let hsc_env' =
-                   hsc_env { hsc_HPT = addToHpt (hsc_HPT hsc_env)
-                                                (ms_mod_name ms)
-                                                hmi'}
-             details <- genModDetails hsc_env' hi
-             return HomeModInfo { hm_details = details
-                                , hm_iface = hi
-                                , hm_linkable = mb_linkable}))
-
-  -- Load linkable if exist.
-  mb_linkable <- liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
-
-  -- Load interface file if exist.
-  (rr, mb_hi) <-
-     liftIO (checkOldIface hsc_env ms SourceUnmodified Nothing)
-
-  debugSkc
-    (let mnstr = showPpr (hsc_dflags hsc_env) mn
-     in  ";;; checkOldIface [" ++ mnstr ++ "]: " ++
-         case rr of
-            UpToDate             -> "up to date"
-            MustCompile          -> "must compile"
-            RecompBecause reason -> reason)
-
-  -- Get HomeModInfo from linkble and interface files. When linkable
-  -- and interface file were found and the interface file does not need
-  -- recompilation, make HomeModInfo with simple ModDetails
-  -- value. Otherwise, do the compilation work and get a HomeModInfo.
-  hmi <- case mb_hi of
-           -- XXX: Check `rr' with `MkIface.recompileRequired'.
-           Just hi -> norecomp mb_linkable hi
-           _       -> recomp mb_linkable
-
-  let hpt' = addToHpt (hsc_HPT hsc_env) mn hmi
-  _ <- setSession hsc_env {hsc_HPT = hpt'}
-  _ <- liftIO (addHomeModuleToFinder hsc_env mn loc)
-  return ms
-
--- | Same as 'HscMain.genModDetails' but writing here again, because the
--- function is not exported ...
-genModDetails :: HscEnv -> ModIface -> IO ModDetails
-genModDetails hsc_env old_iface = do
-  new_details <- {-# SCC "tcRnIface" #-}
-    initIfaceLoad hsc_env (typecheckIface old_iface)
-  dumpIfaceStats hsc_env
-  return new_details
-
 
 -- [Avoiding Recompilation]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -829,5 +777,5 @@ extendMG' :: ModuleGraph -> ModSummary -> ModuleGraph
 #if !MIN_VERSION_ghc(8,4,0)
 extendMG' mg ms = ms : mg
 #else
-extendMG' mg ms = extendMG mg ms
+extendMG' = extendMG
 #endif

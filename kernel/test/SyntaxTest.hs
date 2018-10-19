@@ -28,7 +28,7 @@ readCode :: FilePath -> IO (Bool, Maybe HModule, Maybe SPState)
 readCode src = do
   let go = do initSessionForMake
               (mdl, st) <- compileSkModule src
-              ret <- tcHsModule (Just src) False mdl
+              ret <- tcHsModule (Just src) Nothing False mdl
               return (ret, mdl, st)
   compiled <- runSkc go initialSkEnv
   case compiled of
@@ -58,7 +58,7 @@ mkTest path = do
     it "should compile with skc" $ do
       let task = do
             initSessionForMake
-            make [(path, Nothing)] False (Just aDotOut)
+            make [(path, Nothing)] False True (Just aDotOut)
       ret <- runSkc task skEnv
       ret `shouldBe` Right ()
 
