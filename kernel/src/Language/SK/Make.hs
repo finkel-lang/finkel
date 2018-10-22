@@ -403,7 +403,8 @@ doMakeOne :: Int -- ^ Module index number.
           -> SourceModified -- ^ Source modified?
           -> Skc ModSummary -- ^ Updated summary.
 doMakeOne i total ms src_modified = do
-  debugSkc ";;; Taking doMakeOne path"
+  debugSkc ";;; Entering doMakeOne"
+
   dflags_orig <- getDynFlags
   let dflags = ms_hspp_opts ms
       loc = ms_location ms
@@ -415,8 +416,7 @@ doMakeOne i total ms src_modified = do
 
   hsc_env <- getSession
   let hsc_env' = hsc_env {hsc_dflags = dflags}
-  mb_linkable <-
-    liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
+  mb_linkable <- liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
   home_mod_info <-
     liftIO (compileOne' Nothing (Just batchMsg) hsc_env' ms
                         i total Nothing mb_linkable src_modified)

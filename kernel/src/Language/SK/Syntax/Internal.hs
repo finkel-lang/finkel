@@ -65,7 +65,6 @@ import Language.SK.Form
 #define NOEXT {- empty -}
 #endif
 
-
 -- ---------------------------------------------------------------------
 --
 -- Module

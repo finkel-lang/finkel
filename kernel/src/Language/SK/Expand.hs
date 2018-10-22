@@ -214,8 +214,7 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
   catMaybes <$> (getNames >>= mapM lookupName)
 
 addImportedMacro :: TyThing -> Skc ()
-addImportedMacro thing =
-  when (isMacro thing) (addImportedMacro' thing)
+addImportedMacro thing = when (isMacro thing) (addImportedMacro' thing)
 
 addImportedMacro' :: TyThing -> Skc ()
 addImportedMacro' ty_thing = do
@@ -322,7 +321,7 @@ m_require form =
       case evalBuilder parseLImport code of
         Right lidecl@(L _ idecl) -> do
           dflags <- getSessionDynFlags
-          (debugSkc (";;; require: " ++ showPpr dflags idecl))
+          debugSkc (";;; require: " ++ showPpr dflags idecl)
 
           -- Add the module to current compilation context.
           contexts <- getContext

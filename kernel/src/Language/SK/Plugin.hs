@@ -356,7 +356,6 @@ isC = (== "-c")
 isForceRecomp :: String -> Bool
 isForceRecomp = (== "-fforce-recomp")
 
-
 -- | SK source code extension is hard coded as ".sk". Surely it would be
 -- better to have alternative choice specified via command line
 -- argument.
