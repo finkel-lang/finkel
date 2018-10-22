@@ -15,7 +15,7 @@ import Data.Maybe (fromMaybe, isJust)
 import Data.List (find, isPrefixOf, isSuffixOf)
 import Data.Version (showVersion)
 import System.Console.GetOpt
-import System.Environment (getArgs, lookupEnv)
+import System.Environment (getArgs)
 import System.Exit (exitFailure, exitWith)
 import System.IO (hPutStr, stderr)
 import System.Process (rawSystem)
@@ -244,10 +244,7 @@ skPluginMain frontendModuleName packageName = do
       ghc = fromMaybe GhcPaths.ghc (findGhc skopts)
   debug <- if isJust (find (== "--sk-debug") skopts)
               then return True
-              else do mbDebug <- lookupEnv "SKC_DEBUG"
-                      case mbDebug of
-                        Nothing -> return False
-                        Just _  -> return True
+              else getSkcDebug
   when debug
        (hPutStr stderr
                 (unlines [ ";;; ghc: " ++ show ghc

@@ -1,7 +1,8 @@
 -- | Wrapper for SK code compilation monad.
 {-# LANGUAGE CPP #-}
 module Language.SK.SKC
-  ( Skc(..)
+  ( -- * SKC monad
+    Skc(..)
   , SkEnv(..)
   , FlagSet
   , SkException(..)
@@ -18,6 +19,9 @@ module Language.SK.SKC
   , modifySkEnv
   , emptyFlagSet
   , setDynFlags
+  , getSkcDebug
+
+  -- * Macro related functions
   , insertMacro
   , lookupMacro
   , makeEnvMacros
@@ -33,6 +37,7 @@ module Language.SK.SKC
 import Control.Exception (Exception(..), throwIO)
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO(..))
+import System.Environment (lookupEnv)
 import System.IO (hPutStrLn, stderr)
 
 -- containers
@@ -229,6 +234,15 @@ setDynFlags dflags =
             (\h -> h { hsc_dflags = dflags
                      , hsc_IC = (hsc_IC h) {ic_dflags = dflags}}))
 {-# INLINE setDynFlags #-}
+
+-- | Get sk debug setting from environment variable /SKC_DEBUG/.
+getSkcDebug :: MonadIO m => m Bool
+getSkcDebug =
+  do mb_debug <- liftIO (lookupEnv "SKC_DEBUG")
+     case mb_debug of
+       Nothing -> return False
+       Just _  -> return True
+{-# INLINE getSkcDebug #-}
 
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Skc ()

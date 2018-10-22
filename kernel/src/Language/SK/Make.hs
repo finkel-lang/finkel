@@ -163,7 +163,8 @@ initSessionForMake :: Skc ()
 initSessionForMake = do
   -- Returned list of 'InstalledUnitId's are ignored.
   _ <- getSessionDynFlags >>= setSessionDynFlags
-  return ()
+  debug <- getSkcDebug
+  modifySkEnv (\e -> e {envDebug = debug})
 
 
 -- ---------------------------------------------------------------------
