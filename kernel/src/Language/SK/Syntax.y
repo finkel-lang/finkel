@@ -32,7 +32,11 @@ import SrcLoc (Located, noLoc)
 -- Internal
 import Language.SK.Builder
 import Language.SK.Form
-import Language.SK.Syntax.Internal
+import Language.SK.Syntax.HDecl
+import Language.SK.Syntax.HExpr
+import Language.SK.Syntax.HIE
+import Language.SK.Syntax.HPat
+import Language.SK.Syntax.HType
 }
 
 %name parse_module module
@@ -504,7 +508,7 @@ lblp :: { [(Code, HPat)] }
     : rlblp { reverse $1 }
 
 rlblp :: { [(Code, HPat)] }
-    : {- empty -}       { [] }
+    : {- empty -}        { [] }
     | rlblp 'symbol' pat { ($2, $3):$1 }
 
 

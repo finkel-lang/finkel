@@ -11,6 +11,7 @@ copyright:           2017 8c6794b6
 category:            Language
 build-type:          Custom
 extra-source-files:  README.md
+                     include/Syntax.h
                      test/data/syntax/*.sk
                      test/data/build/*.sk
                      test/data/build/p01/*.cabal
@@ -30,7 +31,8 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Distribution.Simple.SK
+  exposed-modules:     Paths_sk_kernel
+                       Distribution.Simple.SK
                        Language.SK
                        Language.SK.Builder
                        Language.SK.Emit
@@ -45,9 +47,15 @@ library
                        Language.SK.Run
                        Language.SK.SKC
                        Language.SK.Syntax
-                       Paths_sk_kernel
-  other-modules:       Language.SK.Syntax.Internal
+  other-modules:       Language.SK.Syntax.HDecl
+                       Language.SK.Syntax.HExpr
+                       Language.SK.Syntax.HIE
+                       Language.SK.Syntax.HPat
+                       Language.SK.Syntax.HType
+                       Language.SK.Syntax.SynUtils
   autogen-modules:     Paths_sk_kernel
+  includes:            Syntax.h
+  include-dirs:        include
   build-depends:       Cabal        >= 2.0
                      , array        >= 0.5.2
                      , base         >= 4.10 && < 5

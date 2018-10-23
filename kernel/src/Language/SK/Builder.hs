@@ -164,10 +164,10 @@ builderError = do
 --
 -- ---------------------------------------------------------------------
 
-#if !MIN_VERSION_ghc(8,4,0)
-type PARSED = RdrName
-#else
+#if MIN_VERSION_ghc(8,4,0)
 type PARSED = GhcPs
+#else
+type PARSED = RdrName
 #endif
 
 type HBind = LHsBind PARSED
