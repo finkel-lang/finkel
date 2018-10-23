@@ -186,7 +186,7 @@
    (\ (, dflags _context)
      (do (setDynFlags (dflags {hscTarget HscAsm}))
          (let ((= force-recomp (gopt Opt_ForceRecomp dflags))))
-         (make [(, str Nothing)] True force-recomp Nothing)
+         (make [(, str Nothing)] False force-recomp Nothing)
          (return '(begin))))))
 
 (defn (link-module-obj (-> FastString (Skc Code)))
@@ -696,8 +696,8 @@ COMMANDS:
         "set current component to NAME")
      (c "context" Nothing context-cmd
         "show current context")
-     (c "debug" (Just ["FLAG"]) debug-cmd
-        "set sk debug to FLAG")
+     (c "debug" (Just ["BOOL"]) debug-cmd
+        "set sk debug to BOOL")
      (c "dflags" Nothing dflags-cmd
         "show dflags information")
      (c "info" (Just ["NAME"]) info-cmd
