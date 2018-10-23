@@ -24,9 +24,9 @@ import Data.Graph (flattenSCCs)
 import BasicTypes (SuccessFlag(..))
 import DriverPhases (Phase(..))
 import DriverPipeline (compileOne', link, oneShot, preprocess)
-import DynFlags ( DynFlags(..), DumpFlag(..), GeneralFlag(..)
-                , GhcLink(..), GhcMode(..), dopt, getDynFlags
-                , gopt, gopt_set, gopt_unset )
+import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
+                , GhcMode(..), getDynFlags, gopt, gopt_set
+                , gopt_unset, interpWays )
 import ErrUtils (withTiming)
 import Exception (ghandle, tryIO)
 import Finder ( addHomeModuleToFinder, findImportedModule
@@ -133,7 +133,7 @@ make infiles no_link force_recomp mb_output = do
        , ";;;   hscTarget=", show (hscTarget dflags3), "\n"
        , ";;;   ways=", show (ways dflags3), "\n"
        , ";;;   forceRecomp=", show (gopt Opt_ForceRecomp dflags3), "\n"
-       , ";;;   -ddump-if=", show (dopt Opt_D_dump_hi dflags3) ])
+       , ";;;   interpWays=", show interpWays])
 
   -- Preserve the language extension values in initial dynflags to
   -- SkEnv, to reset the language extension later, to keep fresh set of

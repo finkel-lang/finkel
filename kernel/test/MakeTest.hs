@@ -14,10 +14,12 @@ import System.FilePath ((</>), takeExtension)
 import System.Process (rawSystem)
 
 -- ghc
-import DynFlags (DynFlags(..), GhcLink(..))
+import DynFlags ( DynFlags(..), GhcLink(..), Way(..), interpWays
+                , parseDynamicFlagsCmdLine )
 import FastString (fsLit)
 import GHC (setSessionDynFlags )
 import GhcMonad (getSessionDynFlags)
+import SrcLoc (noLoc)
 
 -- hspec
 import Test.Hspec
@@ -69,19 +71,29 @@ buildFile pre paths =
   before_ (removeArtifacts odir) $
   describe ("files " ++ intercalate ", " paths) $
     it "should compile successfully" $ do
-      ret <- runSkc (do pre
-                        initSessionForMake
-                        make' targets False Nothing)
+      ret <- runSkc
+               (do pre
+                   initSessionForMake
+                   -- Use dflags setttings for profile when running test
+                   -- executable with "+RTS -p" option.
+                   if WayProf `elem` interpWays
+                      then make_profile targets False Nothing
+                      else make_simple targets False Nothing)
                     (initialSkEnv {envSilent = True})
       ret `shouldBe` Right ()
   where
     targets = map (\path -> (path, Nothing)) paths
     odir = "test" </> "data" </> "build"
-    make' sources doLink out = do
-      dflags <- getSessionDynFlags
-      let dflags' = dflags {importPaths = [".", odir]}
-      _ <- setSessionDynFlags dflags'
+    make' flags sources doLink out = do
+      dflags0 <- getSessionDynFlags
+      let dflags1 = dflags0 {importPaths = [".", odir]}
+          flags' = map noLoc flags
+      (dflags2,_,_) <- parseDynamicFlagsCmdLine dflags1 flags'
+      _ <- setSessionDynFlags dflags2
       make sources doLink True out
+    make_simple = make' []
+    make_profile = make' ["-prof", "-fprof-auto", "-fprof-cafs"
+                         , "-hisuf", "p_hi", "-osuf", "p_o"]
 
 removeArtifacts :: FilePath -> IO ()
 removeArtifacts dir = do
@@ -89,7 +101,7 @@ removeArtifacts dir = do
   mapM_ removeObjAndHi contents
   where
     removeObjAndHi file =
-      when (takeExtension file `elem` [".o", ".hi"])
+      when (takeExtension file `elem` [".o", ".hi", ".p_o", ".p_hi"])
            (removeFile (dir </> file))
 
 buildPackage :: String -> Spec
