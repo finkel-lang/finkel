@@ -104,12 +104,12 @@
       ;; REPL macros
       (ok '(exported-macros Prelude) "[]")
       (satisfy
-       '(*_ bindings)
+       '(*_ show bindings)
        (\ ret
          (case ret
            (Right str) (elem "foo :: Int -> Int = _" (lines str))
            _ False)))
-      (ok '(*_ context)
+      (ok '(*_ show context)
           (delines
            ["; context"
             ";  IIDecl: import Control.Monad"
@@ -117,7 +117,7 @@
             ";  IIDecl: import SK.Repl.Env"
             ";  IIDecl: import SK.Prelude"
             ";  IIDecl: import Prelude"]))
-      (ok '(*_ dflags)
+      (ok '(*_ show dflags)
           (delines
            ["; dflags:"
             ";  ghcLink: LinkInMemory"
@@ -127,7 +127,7 @@
             ";  thisInstalledUnitId: main"]))
       (ok '(begin
             (*_ set -odir /tmp)
-            (*_ dflags))
+            (*_ show dflags))
           (delines
            ["; dflags:"
             ";  ghcLink: LinkInMemory"
@@ -136,21 +136,21 @@
             ";  objectDir: Just \"/tmp\""
             ";  thisInstalledUnitId: main"]))
       (satisfy
-       '(*_ macros)
+       '(*_ show macros)
        (\ ret
          (case ret
            (Right str) (elem ";  defmacro*!" (lines str))
            _ False)))
-      (ok '(*_ modules) "")
-      (ok '(*_ packages)
+      (ok '(*_ show modules) "")
+      (ok '(*_ show packages)
           "; packages")
       (ok '(begin
             (*_ set -package bytestring)
-            (*_ packages))
+            (*_ show packages))
           (delines
            ["; packages"
             ";   -package bytestring"]))
-      (ok '(*_ paths)
+      (ok '(*_ show paths)
           (concat
            ["; current working directory:\n"
             ";   " current-dir "\n"

@@ -295,6 +295,104 @@
     (filter (. not has-parent) xs)))
 
 
+;;; Functions for show command
+
+(defn (show-bindings (Skc Code))
+  (where (do (<- bs getBindings)
+             (<- docs (mapM make-doc (reverse bs)))
+             (<- str (show-sdoc-for-user-m (vcat docs)))
+             (return `(putStrLn ,str)))
+    (:: make-doc (-> TyThing (Skc SDoc)))
+    (= make-doc tt
+      (case tt
+        (AnId i) (pprTypeAndContents i)
+        _        (do (<- mb-stuff (getInfo False (getName tt)))
+                     (return (maybe (text "") ppr-tt mb-stuff)))))
+    (= ppr-tt (ppr-tt-args thing)
+      (pprTyThing showToHeader thing))))
+
+(defn (show-context (Skc Code))
+  (where (do (<- context getContext)
+             (<- dflags getSessionDynFlags)
+             (return `(putStr ,(result dflags context))))
+    (= result dflags context
+      (unlines (: "; context" (map (context-string dflags) context))))
+    (= context-string dflags ctx
+      (case ctx
+        (IIDecl decl)
+        (++ ";  IIDecl: " (showSDoc dflags (ppr decl)))
+        (IIModule mname)
+        (++ ";  IIModule: " (moduleNameString mname))))))
+
+(defn (show-dflags (Skc Code))
+  (do (<- dflags getDynFlags)
+      (let ((= ss
+              ["; dflags:"
+               (++ ";  ghcLink: " (show (ghcLink dflags)))
+               (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
+               (++ ";  hscTarget: " (show (hscTarget dflags)))
+               (++ ";  objectDir: " (show (objectDir dflags)))
+               (++ ";  thisInstalledUnitId: "
+                   (showPpr dflags (thisInstalledUnitId dflags)))])
+            (= showGhcMode m
+              (case m
+                CompManager "CompManager"
+                OneShot     "OneShot"
+                MkDepend    "MkDepend"))))
+      (return `(putStr ,(unlines ss)))))
+
+(defn (show-linker (Skc Code))
+  ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
+  ;; which is not exposed from the module its defined ... not sure how
+  ;; to get resulting output as `String' other than redirecting output
+  ;; to stdout.
+  (do (<- hsc-env getSession)
+      (liftIO (do (initDynLinker hsc-env)
+                  (showLinkerState (hsc_dflags hsc-env))))
+      (return '(begin))))
+
+(defn (show-macros (Skc Code))
+  (do (<- macros (fmap envMacros getSkEnv))
+      (let ((= macro-strings
+              (unlines
+               (: "; macros: "
+                  (map (++ ";  ") (macroNames macros)))))))
+      (return `(putStr ,macro-strings))))
+
+(defn (show-modules (Skc Code))
+  (do (<- graph0 getModuleGraph)
+      (let ((= graph1 (graph->summaries graph0))))
+      (<- graph2 (filterM (. isLoaded ms_mod_name) graph1))
+      (<- mods (mapM showModule graph2))
+      (return `(putStr ,(unlines mods)))))
+
+(defn (show-packages (Skc Code))
+  (do (<- dflags getDynFlags)
+      (let ((= pr (++ ";   "))
+            (= pr-flag flag
+              (case flag
+                (ExposePackage n _ _) (pr n)
+                (HidePackage n)       (pr (++ "hiding " n))))
+            (= pkgs
+              (: "; packages" (map pr-flag (packageFlags dflags))))))
+      (return `(putStr ,(unlines pkgs)))))
+
+(defn (show-paths (Skc Code))
+  (do (<- dflags getDynFlags)
+      (<- cwd (liftIO getCurrentDirectory))
+      (let ((= ipaths (importPaths dflags))
+            (= result
+              (unlines
+               (concat
+                [["; current working directory:"
+                  (++ ";   " cwd)
+                  "; module import search paths:"]
+                 (if (null ipaths)
+                     [";    none"]
+                     (map (++ ";    ") ipaths))])))))
+      (return `(putStr ,result))))
+
+
 ;;; REPL commands
 
 (defn (help-cmd ReplAction)
@@ -326,22 +424,6 @@ COMMANDS:
      (otherwise
       (let ((= x (located-list forms)))
         (skSrcError x (++ "system: invalid form: " (show x)))))))
-
-(defn (bindings-cmd ReplAction)
-  "Almost same as `GHCi.UI.showBindings'."
-  [_forms]
-  (where (do (<- bs getBindings)
-             (<- docs (mapM make-doc (reverse bs)))
-             (<- str (show-sdoc-for-user-m (vcat docs)))
-             (return `(putStrLn ,str)))
-    (:: make-doc (-> TyThing (Skc SDoc)))
-    (= make-doc tt
-      (case tt
-        (AnId i) (pprTypeAndContents i)
-        _        (do (<- mb-stuff (getInfo False (getName tt)))
-                     (return (maybe (text "") ppr-tt mb-stuff)))))
-    (= ppr-tt (ppr-tt-args thing)
-      (pprTyThing showToHeader thing))))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defn (browse-cmd ReplAction)
@@ -432,20 +514,6 @@ COMMANDS:
                       (otherwise not-found)))
       (return '(begin))))
 
-(defn (context-cmd ReplAction)
-  [_form]
-  (where (do (<- context getContext)
-             (<- dflags getSessionDynFlags)
-             (return `(putStr ,(result dflags context))))
-    (= result dflags context
-      (unlines (: "; context" (map (context-string dflags) context))))
-    (= context-string dflags ctx
-      (case ctx
-        (IIDecl decl)
-        (++ ";  IIDecl: " (showSDoc dflags (ppr decl)))
-        (IIModule mname)
-        (++ ";  IIModule: " (moduleNameString mname))))))
-
 (defn (debug-cmd ReplAction)
   "Modify debug settings in REPL."
   [forms]
@@ -457,24 +525,6 @@ COMMANDS:
                    (return '(begin)))))
     _      (let ((= l (located-list forms)))
              (skSrcError l (++ "debug: invalid form: " (show l))))))
-
-(defn (dflags-cmd ReplAction)
-  [_form]
-  (do (<- dflags getDynFlags)
-      (let ((= ss
-              ["; dflags:"
-               (++ ";  ghcLink: " (show (ghcLink dflags)))
-               (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
-               (++ ";  hscTarget: " (show (hscTarget dflags)))
-               (++ ";  objectDir: " (show (objectDir dflags)))
-               (++ ";  thisInstalledUnitId: "
-                   (showPpr dflags (thisInstalledUnitId dflags)))])
-            (= showGhcMode m
-              (case m
-                CompManager "CompManager"
-                OneShot     "OneShot"
-                MkDepend    "MkDepend"))))
-      (return `(putStr ,(unlines ss)))))
 
 (defn (info-cmd ReplAction)
   [forms]
@@ -507,17 +557,6 @@ COMMANDS:
     (= err
       (skSrcError form (++ "link-module: not a symbol: " (show form))))
     (= form (located-list forms))))
-
-(defn (linker-cmd ReplAction)
-  [_form]
-  ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
-  ;; which is not exposed from the module its defined ... not sure how
-  ;; to get resulting output as `String' other than redirecting output
-  ;; to stdout.
-  (do (<- hsc-env getSession)
-      (liftIO (do (initDynLinker hsc-env)
-                  (showLinkerState (hsc_dflags hsc-env))))
-      (return '(begin))))
 
 (defn (load-cmd ReplAction)
   "Load a module source code file. Handles absolute paths and relative
@@ -587,51 +626,6 @@ paths from import directories."
       _      (skSrcError (located-list forms)
                          (++ "load: invalid form: " (show forms))))))
 
-(defn (macros-cmd ReplAction)
-  [_form]
-  (do (<- macros (fmap envMacros getSkEnv))
-      (let ((= macro-strings
-              (unlines
-               (: "; macros: "
-                  (map (++ ";  ") (macroNames macros)))))))
-      (return `(putStr ,macro-strings))))
-
-(defn (modules-cmd ReplAction)
-  [_form]
-  (do (<- graph0 getModuleGraph)
-      (let ((= graph1 (graph->summaries graph0))))
-      (<- graph2 (filterM (. isLoaded ms_mod_name) graph1))
-      (<- mods (mapM showModule graph2))
-      (return `(putStr ,(unlines mods)))))
-
-(defn (packages-cmd ReplAction)
-  [_form]
-  (do (<- dflags getDynFlags)
-      (let ((= pr (++ ";   "))
-            (= pr-flag flag
-              (case flag
-                (ExposePackage n _ _) (pr n)
-                (HidePackage n)       (pr (++ "hiding " n))))
-            (= pkgs
-              (: "; packages" (map pr-flag (packageFlags dflags))))))
-      (return `(putStr ,(unlines pkgs)))))
-
-(defn (paths-cmd ReplAction)
-  [_form]
-  (do (<- dflags getDynFlags)
-      (<- cwd (liftIO getCurrentDirectory))
-      (let ((= ipaths (importPaths dflags))
-            (= result
-              (unlines
-               (concat
-                [["; current working directory:"
-                  (++ ";   " cwd)
-                  "; module import search paths:"]
-                 (if (null ipaths)
-                     [";    none"]
-                     (map (++ ";    ") ipaths))])))))
-      (return `(putStr ,result))))
-
 (defn (pwd-cmd ReplAction)
   "Function to show current directory."
   [_forms]
@@ -661,6 +655,32 @@ paths from import directories."
      (otherwise
       (skSrcError nil "set-cmd: empty-form"))))
 
+(defn (show-cmd ReplAction)
+  [forms]
+  (where go
+    (= go
+      (case forms
+        [form] (| ((symbol? form) (work (symbolName form))))
+        _      show-cmd-error))
+    (= work thing
+      (maybe show-cmd-error id (lookup thing things)))
+    (= nyi str
+      (do (liftIO (putStrLn (++ "NYI: " str)))
+          (return '(begin))))
+    (= show-cmd-error
+      (skSrcError nil (++ "show-cmd: expecting one of:\n"
+                          (intercalate ", " (map fst things)))))
+    (= things
+      [(, "bindings" show-bindings)
+       (, "context" show-context)
+       (, "dflags" show-dflags)
+       (, "language" (nyi "language"))
+       (, "linker" show-linker)
+       (, "macros" show-macros)
+       (, "modules" show-modules)
+       (, "packages" show-packages)
+       (, "paths" show-paths)])))
+
 ;; From `GHCi.UI.typeOfExpr'.
 (defn (type-cmd ReplAction)
   [forms]
@@ -684,8 +704,6 @@ paths from import directories."
         "run system CMD with ARGS")
      (c "?" Nothing help-cmd
         "show this help")
-     (c "bindings" Nothing bindings-cmd
-        "show current bindings in REPL")
      (c "browse" (Just ["MODULE"]) browse-cmd
         "browse module")
      (c "cd" (Just ["DIR"]) cd-cmd
@@ -694,34 +712,22 @@ paths from import directories."
         "compile FILE to object code")
      (c "component" (Just ["NAME"]) component-cmd
         "set current component to NAME")
-     (c "context" Nothing context-cmd
-        "show current context")
      (c "debug" (Just ["BOOL"]) debug-cmd
         "set sk debug to BOOL")
-     (c "dflags" Nothing dflags-cmd
-        "show dflags information")
      (c "info" (Just ["NAME"]) info-cmd
         "show info of NAME")
      (c "kind" (Just ["TYPE"]) kind-cmd
         "show kind of TYPE")
      (c "link" (Just ["MODULE"]) link-module-cmd
         "link given MODULE")
-     (c "linker" Nothing linker-cmd
-        "show linker information")
      (c "load" (Just ["FILE"]) load-cmd
         "compile and load FILE")
-     (c "macros" Nothing macros-cmd
-        "show macros in REPL environment")
-     (c "modules" Nothing modules-cmd
-        "show loaded modules")
-     (c "packages" Nothing packages-cmd
-        "show accessible package")
-     (c "paths" Nothing paths-cmd
-        "show paths")
      (c "pwd" Nothing pwd-cmd
         "show working directory")
      (c "set" (Just ["FLAGS" "..."]) set-cmd
         "parse and set FLAGS")
+     (c "show" (Just ["ARG"]) show-cmd
+        "show information of ARG")
      (c "type" (Just ["EXPR"]) type-cmd
         "show type of EXPR")]))
 
