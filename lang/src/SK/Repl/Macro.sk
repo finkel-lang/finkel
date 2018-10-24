@@ -16,10 +16,11 @@
   (use
    ;; base
    (Control.Exception ((Exception ..)))
-   (Control.Monad (filterM void))
+   (Control.Monad (filterM unless void))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
-   (Data.List (find intersperse isPrefixOf partition sortBy))
+   (Data.List
+    (find intercalate intersperse isPrefixOf partition sortBy))
    (Data.Maybe (catMaybes))
    (Text.Printf (printf))
 
@@ -36,7 +37,7 @@
    ;; ghc
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
               (HscTarget ..) (PackageFlag ..) (GeneralFlag ..)
-              thisPackage gopt))
+              parseDynamicFlagsCmdLine thisPackage gopt))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (gcatch gbracket))
    (FamInstEnv (pprFamInst))
@@ -44,7 +45,7 @@
    (Finder (flushFinderCaches uncacheModule))
    (GHC ((ModuleInfo) getBindings getModuleGraph getModuleInfo
          getPrintUnqual isLoaded lookupName lookupModule modInfoExports
-         parseDynamicFlags setSessionDynFlags setTargets))
+         setSessionDynFlags setTargets))
    (GhcMake ((LoadHowMuch ..)))
    (GhcMonad ((GhcMonad ..) getSessionDynFlags withSession))
    (HscMain (hscTcRnLookupRdrName))
@@ -394,8 +395,8 @@ paths from import directories."
                      (find-file (importPaths dflags) path))
                     (return '(begin))))
               (code->mb-string form))
-      _ (skSrcError (located-list forms)
-                    (++ "load: invalid form: " (show forms))))))
+      _      (skSrcError (located-list forms)
+                         (++ "load: invalid form: " (show forms))))))
 
 (defn (set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
@@ -405,13 +406,20 @@ paths from import directories."
                 ;; Always using `setSessionDynFlags' for `set' REPL
                 ;; command to support `-package' flag.
                 (do (<- dflags0 getSessionDynFlags)
-                    (let ((= flags (map (. noLoc symbolName) forms))))
-                    (<- (, dflags1 _leftovers warns)
-                      (parseDynamicFlags dflags0 flags))
-                    (liftIO (handleFlagWarnings dflags1 warns))
+                    (let ((= flags (map (. noLoc symbolName) forms))
+                          (= complain fs
+                            (putStrLn
+                             (++ "ignored flags: "
+                                 (intercalate ", " (map unLoc fs)))))))
+                    (<- (, dflags1 leftovers warns)
+                      (parseDynamicFlagsCmdLine dflags0 flags))
+                    (liftIO
+                     (do (handleFlagWarnings dflags1 warns)
+                         (unless (null leftovers)
+                           (complain leftovers))))
                     (<- _ (setSessionDynFlags dflags1))
                     (return '(begin)))))
-    _ (skSrcError nil "$set: empty form")))
+    _       (skSrcError nil "$set: empty form")))
 
 (defn (debug-cmd ReplAction)
   "Modify debug settings in REPL."
@@ -633,7 +641,7 @@ paths from import directories."
       (let ((= set-this-unit-id cid
               (do (let ((= flags (map noLoc ["-this-unit-id" cid]))))
                   (<- (, dflags1 _ _)
-                    (parseDynamicFlags dflags0 flags))
+                    (parseDynamicFlagsCmdLine dflags0 flags))
                   (setDynFlags dflags1)
                   (liftIO
                    (putStrLn

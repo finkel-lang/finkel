@@ -67,10 +67,8 @@
    (SK.Repl.IORedirect)
    (SK.Repl.Types))
 
-  (export
-   read-form
-   eval-loop read-print-loop init-form start-repl
-   make-tmpfile cleanup-tmpfile))
+  (export read-form eval-loop read-print-loop init-form start-repl
+          make-tmpfile cleanup-tmpfile))
 
 
 ;;; Starting the REPL
