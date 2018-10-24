@@ -118,12 +118,8 @@ b_unpackT (LForm (L l _)) t = L l (hsBangTy bang t')
     bang = HsSrcBang (SourceText "b_unpackT") SrcUnpack strictness
     (strictness, t') =
       case t of
-#if MIN_VERSION_ghc(8,6,0)
-        L _ (HsBangTy _ (HsSrcBang _ _ st) t0) -> (st, t0)
-#else
-        L _ (HsBangTy   (HsSrcBang _ _ st) t0) -> (st, t0)
-#endif
-        _                                      -> (NoSrcStrict, t)
+        L _ (HsBangTy _EXT (HsSrcBang _ _ st) t0) -> (st, t0)
+        _                                         -> (NoSrcStrict, t)
 {-# INLINE b_unpackT #-}
 
 hsTupleTy :: HsTupleSort -> [HType] -> HsType PARSED

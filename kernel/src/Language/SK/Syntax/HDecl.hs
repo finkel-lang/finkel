@@ -209,32 +209,19 @@ b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do
     let categorize (ms,ss) (L ld decl) =
           case decl of
-#if MIN_VERSION_ghc(8,6,0)
-            SigD _ d -> return (ms, L ld d : ss)
-            ValD _ d -> return (L ld d : ms, ss)
-#else
-            SigD   d -> return (ms, L ld d : ss)
-            ValD   d -> return (L ld d : ms, ss)
-#endif
-            _      -> builderError
+            SigD _EXT d -> return (ms, L ld d : ss)
+            ValD _EXT d -> return (L ld d : ms, ss)
+            _           -> builderError
+        userTyVar = UserTyVar NOEXT
         -- Recursing in `HsAppTy' to support MultiParamTypeClasses.
         unAppTy t =
           case t of
-#if MIN_VERSION_ghc(8,6,0)
-            L l (HsTyVar _p _ n) -> return (l, n, [])
-            L _ (HsAppTy _ t1 (L lv (HsTyVar _ _ v))) -> do
-              (l, n, vs) <- unAppTy t1
-              return (l, n, L lv (UserTyVar noExt v):vs)
-            L _ (HsParTy _ t')   -> unAppTy t'
-            _                    -> builderError
-#else
-            L l (HsTyVar _p   n) -> return (l, n, [])
-            L _ (HsAppTy   t1 (L lv (HsTyVar _   v))) -> do
-              (l, n, vs) <- unAppTy t1
-              return (l, n, L lv (UserTyVar v):vs)
-            L _ (HsParTy   t')   -> unAppTy t'
-            _                    -> builderError
-#endif
+            L l (HsTyVar _ _EXT n) -> return (l, n, [])
+            L _ (HsAppTy _EXT t1 (L lv (HsTyVar _ _EXT v))) ->
+              do (l, n, vs) <- unAppTy t1
+                 return (l, n, L lv (userTyVar v):vs)
+            L _ (HsParTy _EXT t')  -> unAppTy t'
+            _                      -> builderError
     (l, name, bndrs) <- unAppTy ty
     (meths,sigs) <- foldM categorize ([],[]) decls
 
