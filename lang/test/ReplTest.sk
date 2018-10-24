@@ -160,7 +160,7 @@
           "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
       (ok '(*_ browse Unsafe.Coerce)
           "Unsafe.Coerce.unsafeCoerce :: a -> b")
-      (ok '(*_ pwd) (show current-dir))
+      (ok '(*_ pwd) current-dir)
 
       ;; Errors
       (ng 'buzz

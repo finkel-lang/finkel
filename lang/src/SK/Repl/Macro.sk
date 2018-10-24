@@ -28,8 +28,7 @@
    (qualified Data.ByteString.Char8 as C8)
 
    ;; directory
-   (System.Directory
-    (getCurrentDirectory getDirectoryContents setCurrentDirectory))
+   (System.Directory (getCurrentDirectory setCurrentDirectory))
 
    ;; filepath
    (System.FilePath (isAbsolute makeRelative))
@@ -81,6 +80,9 @@
    ;; ghci
    (Debugger (pprTypeAndContents))
 
+   ;; process
+   (System.Process (rawSystem))
+
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Builder (mkRdrName))
@@ -113,15 +115,15 @@
         '(\ (, t _f _ci _fi) t)
         '(\ (, t _f _ci _fi _sd) t)))
 
-  (defmacro ppr-info-args _
+  (defmacro ppr-info-args (thing cls fam)
     (if (< ghc-version 804)
-        '(, thing _fixity cls-insts fam-insts)
-        '(, thing _fixity cls-insts fam-insts _sd)))
+        `(, ,thing _fixity ,cls ,fam)
+        `(, ,thing _fixity ,cls ,fam _sd)))
 
-  (defmacro ppr-tt-args _
+  (defmacro ppr-tt-args (name)
     (if (< ghc-version 804)
-        '(, thing _fixity _cls-insts _fam-insts)
-        '(, thing _fixity _cls-insts _fam-insts _sd))))
+        `(, ,name _fixity _cls-insts _fam-insts)
+        `(, ,name _fixity _cls-insts _fam-insts _sd))))
 
 (defn (graph->summaries (-> ModuleGraph [ModSummary]))
   (macrolet ((body _
@@ -267,7 +269,7 @@
       (let ((= filtered (filter-out-children
                          (child-filter)
                          (catMaybes mb_stuffs)))
-            (= ppr-info (ppr-info-args)
+            (= ppr-info (ppr-info-args thing cls-insts fam-insts)
               ($$ (pprTyThingInContextLoc thing)
                   ($$ (vcat (map pprInstance cls-insts))
                       (vcat (map pprFamInst fam-insts)))))))
@@ -419,7 +421,18 @@ paths from import directories."
                            (complain leftovers))))
                     (<- _ (setSessionDynFlags dflags1))
                     (return '(begin)))))
-    _       (skSrcError nil "$set: empty form")))
+    _       (skSrcError nil "set-cmd: empty form")))
+
+(defn (system-cmd ReplAction)
+  "Invoke system command."
+  [forms]
+  (let ((= forms' (map code->mb-string forms))
+        (= x (located-list forms)))
+    (case (catMaybes forms')
+      (: cmd args) (>> (liftIO (rawSystem cmd args))
+                       (return '(begin)))
+      _            (skSrcError x (++ "system: invalid form: "
+                                     (show x))))))
 
 (defn (debug-cmd ReplAction)
   "Modify debug settings in REPL."
@@ -446,24 +459,9 @@ paths from import directories."
 
 (defn (pwd-cmd ReplAction)
   "Function to show current directory."
-  (const (fmap toCode (liftIO getCurrentDirectory))))
-
-(defn (ls-cmd ReplAction)
-  "List directory contents."
-  (forms)
-  (do (<- mb-path
-        (case forms
-          [path] (return (code->mb-string path))
-          [] (return (Just "./"))
-          _ (skSrcError (located-list forms)
-                        (++ "ls: invalid args: " (show forms)))))
-      (case mb-path
-        (Just path) (do (liftIO
-                         (>>= (getDirectoryContents path)
-                              (mapM_ putStrLn)))
-                        (return '(begin)))
-        _ (skSrcError (located-list forms)
-                      (++ "ls: invalid path: " (show forms))))))
+  [_forms]
+  (do (<- dir (liftIO getCurrentDirectory))
+      (return `(aSymbol ,dir))))
 
 (defn (bindings-cmd ReplAction)
   "Almost same as `GHCi.UI.showBindings'."
@@ -478,7 +476,7 @@ paths from import directories."
         (AnId i) (pprTypeAndContents i)
         _        (do (<- mb-stuff (getInfo False (getName tt)))
                      (return (maybe (text "") ppr-tt mb-stuff)))))
-    (= ppr-tt (ppr-tt-args)
+    (= ppr-tt (ppr-tt-args thing)
       (pprTyThing showToHeader thing))))
 
 (defn (context-cmd ReplAction)
@@ -692,6 +690,8 @@ COMMANDS:
   (let ((= c ReplCmd))
     [(c "?" Nothing help-cmd
         "show this help")
+     (c "!" (Just ["CMD" "ARGS" "..."]) system-cmd
+        "run system CMD with ARGS")
      (c "bindings" Nothing bindings-cmd
         "show current bindings in REPL")
      (c "browse" (Just ["MODULE"]) browse-cmd
@@ -718,8 +718,6 @@ COMMANDS:
         "show linker information")
      (c "load" (Just ["FILE"]) load-cmd
         "compile and load FILE")
-     (c "ls" (Just ["DIR"]) ls-cmd
-        "list contents in DIR or CWD if empty")
      (c "macros" Nothing macros-cmd
         "show macros in REPL environment")
      (c "modules" Nothing modules-cmd

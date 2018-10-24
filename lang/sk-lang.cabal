@@ -52,6 +52,7 @@ library
                      , ghc-boot
                      , ghci
                      , network
+                     , process
                      , transformers
                      , sk-kernel    >= 0.12.0
   default-language:    Haskell2010
