@@ -33,51 +33,59 @@ import Language.SK.Syntax.SynUtils
 --
 -- ---------------------------------------------------------------------
 
-b_intP :: Code -> HPat
-b_intP (LForm (L l (Atom (AInteger n)))) =
-  L l (mkNPat (L l (mkHsIntegral_compat n)) Nothing)
-b_intP _ = error "b_intP"
+b_intP :: Code -> Builder HPat
+b_intP (LForm (L l form))
+  | (Atom (AInteger n)) <- form
+  = return (L l (mkNPat (L l (mkHsIntegral_compat n)) Nothing))
+  | otherwise
+  = builderError
 {-# INLINE b_intP #-}
 
-b_stringP :: Code -> HPat
-b_stringP (LForm (L l (Atom (AString str)))) =
-  L l (mkNPat (L l lit) Nothing)
+b_stringP :: Code -> Builder HPat
+b_stringP (LForm (L l form))
+  | (Atom (AString str)) <- form
+  = return (L l (mkNPat (L l (lit str)) Nothing))
+  | otherwise
+  = builderError
   where
-    lit = hsIsString (SourceText (show str)) (fsLit str)
+    lit str = hsIsString (SourceText (show str)) (fsLit str)
     hsIsString s t =
 #if MIN_VERSION_ghc(8,6,0)
       mkHsIsString s t
 #else
       mkHsIsString s t placeHolderType
 #endif
-b_stringP _ = error "b_stringP"
 {-# INLINE b_stringP #-}
 
-b_charP :: Code -> HPat
-b_charP (LForm (L l (Atom (AChar c)))) = L l (litPat lit)
+b_charP :: Code -> Builder HPat
+b_charP (LForm (L l form))
+  | (Atom (AChar c)) <- form = return (L l (litPat (lit c)))
+  | otherwise                = builderError
   where
-    lit = HsChar (SourceText (show c)) c
+    lit c = HsChar (SourceText (show c)) c
     litPat = LitPat NOEXT
-b_charP _ = error "b_charP"
 {-# INLINE b_charP #-}
 
-b_unitP :: Code -> HPat
-b_unitP (LForm (L l (Atom AUnit))) = L l (mkTuplePat_compat [])
-b_unitP _ = error "b_unitP"
+b_unitP :: Code -> Builder HPat
+b_unitP (LForm (L l form))
+  | Atom AUnit <- form = return (L l (mkTuplePat_compat []))
+  | otherwise          = builderError
 {-# INLINE b_unitP #-}
 
-b_symP :: Code -> HPat
-b_symP (LForm (L l (Atom (ASymbol name))))
-   | name == fsLit "_"
-    = L l mkWildPat_compat
-   | isUpper x || x == ':'
-    = L l (ConPatIn (L l (mkVarRdrName name)) (PrefixCon []))
-   | otherwise
-    = L l (varPat (L l (mkRdrName name)))
-   where
-     x = headFS name
-     varPat = VarPat NOEXT
-b_symP _ = error "b_symP: not a symbol"
+b_symP :: Code -> Builder HPat
+b_symP (LForm (L l form))
+  | (Atom (ASymbol name)) <- form
+  = case () of
+      _ | name == fsLit "_"
+        -> return (L l wildPat)
+        | let x = headFS name, isUpper x || x == ':'
+        -> return (L l (ConPatIn (L l (mkVarRdrName name))
+                                 (PrefixCon [])))
+        | otherwise
+        -> return (L l (varPat (L l (mkRdrName name))))
+  | otherwise = builderError
+  where
+    varPat = VarPat NOEXT
 {-# INLINE b_symP #-}
 
 b_hsListP :: [HPat] -> HPat
@@ -93,29 +101,33 @@ b_hsListP pats = L l (listPat pats)
 {-# INLINE b_hsListP #-}
 
 b_labeledP :: Code -> [(Code, HPat)] -> Builder HPat
-b_labeledP (LForm (L l (Atom (ASymbol name)))) ps
-  | isUpper x || x == ':' =  do
-    let rc = HsRecFields { rec_flds = map mkcfld' ps
+b_labeledP (LForm (L l form)) ps
+  | Atom (ASymbol name) <- form
+  , let x = headFS name
+  , isUpper x || x == ':' = do
+    let mkcfld' (LForm (L _ sym), p)
+          | (Atom (ASymbol n)) <- sym = return (mkcfld (n, p))
+          | otherwise                 = builderError
+    flds <- mapM mkcfld' ps
+    let rc = HsRecFields { rec_flds = flds
                          , rec_dotdot = Nothing }
-        mkcfld' (LForm (L _ (Atom (ASymbol n))), p) = mkcfld (n, p)
-        mkcfld' _ = error "b_labeledP.mkfld'"
     return (L l (ConPatIn (L l (mkVarRdrName name)) (RecCon rc)))
   | otherwise = builderError
-  where
-     x = headFS name
-b_labeledP _ _ = error "b_labeledP"
+
 {-# INLINE b_labeledP #-}
 
 b_tupP :: Code -> [HPat] -> HPat
 b_tupP (LForm (L l _)) ps = L l (mkTuplePat_compat ps)
 {-# INLINE b_tupP #-}
 
-b_asP :: Code -> HPat -> HPat
-b_asP (LForm (L l (Atom (ASymbol name)))) pat =
-  L l (asPat (L l (mkRdrName name)) (mkParPat_compat pat))
+b_asP :: Code -> HPat -> Builder HPat
+b_asP (LForm (L l form)) pat
+  | (Atom (ASymbol name)) <- form
+  = return (L l (asPat (L l (mkRdrName name)) (mkParPat_compat pat)))
+  | otherwise
+  = builderError
   where
     asPat = AsPat NOEXT
-b_asP _ _ = error "b_asP: not a symbol"
 {-# INLINE b_asP #-}
 
 b_lazyP :: HPat -> HPat
@@ -125,20 +137,19 @@ b_lazyP pat@ (L l _) = mkParPat_compat (L l (lazyPat pat))
 {-# INLINE b_lazyP #-}
 
 b_conP :: Code -> [HPat] -> Builder HPat
-b_conP (LForm (L l (Atom (ASymbol name)))) rest
-  | isUpper x || x == ':'
-    = return (mkParPat_compat
-               (L l (ConPatIn (L l (mkVarRdrName name))
-                              (PrefixCon rest))))
+b_conP (LForm (L l form)) rest
+  | Atom (ASymbol name) <- form
+  , let x = headFS name
+  , isUpper x || x == ':'
+  = return (mkParPat_compat
+              (L l (ConPatIn (L l (mkVarRdrName name))
+                             (PrefixCon rest))))
   | otherwise = builderError
-  where
-    x = headFS name
-b_conP _ _ = error "b_conP"
 {-# INLINE b_conP #-}
 
-mkWildPat_compat :: Pat PARSED
-mkWildPat_compat = case nlWildPat of L _ pat -> pat
-{-# INLINE mkWildPat_compat #-}
+wildPat :: Pat PARSED
+wildPat = case nlWildPat of L _ pat -> pat
+{-# INLINE wildPat #-}
 
 mkTuplePat_compat :: [HPat] -> Pat PARSED
 mkTuplePat_compat ps = tuplePat ps Boxed

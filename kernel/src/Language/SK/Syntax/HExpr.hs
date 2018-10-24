@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 -- | Syntax for expression.
 module Language.SK.Syntax.HExpr where
 
@@ -40,17 +39,6 @@ import Language.SK.Builder
 import Language.SK.Form
 import Language.SK.Syntax.SynUtils
 
--- ---------------------------------------------------------------------
---
--- C macro for GHC
---
--- ---------------------------------------------------------------------
-
--- From ghc 8.6.0, many number of data type used by the internal AST in
--- GHC were modified to take extension argument. Following `NOEXT' macro
--- will pass the `noExt' argument to such constructors, and behaves as
--- empty code when compiling with GHC version prior to 8.6.0.
-
 #include "Syntax.h"
 
 -- ---------------------------------------------------------------------
@@ -60,7 +48,7 @@ import Language.SK.Syntax.SynUtils
 -- ---------------------------------------------------------------------
 
 b_ifE :: Code -> HExpr -> HExpr -> HExpr -> HExpr
-b_ifE (LForm (L l (Atom _))) p t f = L l (mkHsIf p t f)
+b_ifE (LForm (L l _)) p t f = L l (mkHsIf p t f)
 {-# INLINE b_ifE #-}
 
 b_lamE :: (HExpr,[HPat]) -> HExpr
@@ -135,13 +123,14 @@ b_tsigE (LForm (L l _)) e (ctxt,t) =
   in  mkLHsPar (L l e')
 {-# INLINE b_tsigE #-}
 
-b_recConOrUpdE :: Code -> [(FastString,HExpr)] -> HExpr
-b_recConOrUpdE sym@(LForm (L l _)) flds = L l expr
+b_recConOrUpdE :: Code -> [(FastString,HExpr)] -> Builder HExpr
+b_recConOrUpdE sym@(LForm (L l _)) flds
+  | isUpper (headFS name)
+  = return (L l (mkRdrRecordCon rName cflds))
+  | otherwise
+  = do v <- b_varE sym
+       return (L l (mkRdrRecordUpd v uflds))
   where
-    expr =
-      case () of
-        _ | isUpper (headFS name) -> mkRdrRecordCon rName cflds
-        _ -> mkRdrRecordUpd (b_varE sym) uflds
     name = symbolNameFS sym
     rName = L l (mkVarRdrName name)
     cflds = HsRecFields { rec_flds = map mkcfld flds
@@ -164,48 +153,63 @@ b_appE = foldl1' f
     f a b = mkHsApp a (mkLHsPar b)
 {-# INLINE b_appE #-}
 
-b_charE :: Code -> HExpr
-b_charE (LForm (L l (Atom (AChar x)))) =
-  L l (mkHsLit_compat (HsChar (SourceText (show x)) x))
+b_charE :: Code -> Builder HExpr
+b_charE (LForm (L l form))
+  | (Atom (AChar x)) <- form
+  = return (L l (hsLit (HsChar (SourceText (show x)) x)))
+  | otherwise
+  = builderError
 {-# INLINE b_charE #-}
 
-b_stringE :: Code -> HExpr
-b_stringE (LForm (L l (Atom (AString x)))) =
-  L l (mkHsLit_compat (HsString (SourceText (show x)) (fsLit x)))
+b_stringE :: Code -> Builder HExpr
+b_stringE (LForm (L l form))
+  | (Atom (AString x)) <- form
+  = return
+      (L l (hsLit (HsString (SourceText (show x)) (fsLit x))))
+  | otherwise
+  = builderError
 {-# INLINE b_stringE #-}
 
-b_integerE :: Code -> HExpr
-b_integerE (LForm (L l (Atom (AInteger x))))
-   | x < 0     = L l (mkHsPar_compat expr)
-   | otherwise = expr
+b_integerE :: Code -> Builder HExpr
+b_integerE (LForm (L l form))
+  | (Atom (AInteger x)) <- form
+  = if x < 0
+       then return (L l (hsPar (expr x)))
+       else return (expr x)
+  | otherwise = builderError
   where
-    expr =     L l (mkHsOverLit_compat $! mkHsIntegral_compat x)
+    expr x = L l (hsOverLit $! mkHsIntegral_compat x)
 {-# INLINE b_integerE #-}
 
-b_floatE :: Code -> HExpr
-b_floatE (LForm (L l (Atom (AFractional x))))
-  | fl_value x < 0 = L l (mkHsPar_compat expr)
-  | otherwise      = expr
+b_floatE :: Code -> Builder HExpr
+b_floatE (LForm (L l form))
+  | (Atom (AFractional x)) <- form
+  = if fl_value x < 0
+       then return (L l (hsPar (expr x)))
+       else return (expr x)
+  | otherwise
+  = builderError
   where
-    expr = L l (mkHsOverLit_compat $! mkHsFractional_compat x)
+    expr x = L l (hsOverLit $! hsFractional x)
 {-# INLINE b_floatE #-}
 
-b_varE :: Code -> HExpr
-b_varE (LForm (L l (Atom (ASymbol x)))) = L l (hsVar (L l rname))
-  where
-    hsVar = HsVar NOEXT
-    rname = mkVarRdrName x
+b_varE :: Code -> Builder HExpr
+b_varE (LForm (L l form))
+  | Atom (ASymbol x) <- form =
+    let rname = mkVarRdrName x
+        hsVar = HsVar NOEXT
+    in  return (L l (hsVar (L l rname)))
+  | otherwise = builderError
 {-# INLINE b_varE #-}
 
 b_unitE :: Code -> HExpr
-b_unitE (LForm (L l _)) =
-  case mkLHsTupleExpr [] of
-    L _ tuple -> L l tuple
+b_unitE (LForm (L l _)) = case mkLHsTupleExpr [] of L _ t -> L l t
 {-# INLINE b_unitE #-}
 
-b_commentStringE :: Code -> Located HsDocString
-b_commentStringE (LForm (L l (Atom (AComment x)))) =
-  L l (mkHsDocString_compat x)
+b_commentStringE :: Code -> Builder (Located HsDocString)
+b_commentStringE (LForm (L l form))
+  | (Atom (AComment x)) <- form = return (L l (hsDocString x))
+  | otherwise                   = builderError
 {-# INLINE b_commentStringE #-}
 
 b_hsListE :: Either HExpr [HExpr] -> HExpr
@@ -241,36 +245,36 @@ b_arithSeqE fromE thenE toE =
 {-# INLINE b_arithSeqE #-}
 
 #if MIN_VERSION_ghc(8,4,0)
-mkHsLit_compat :: HsLit PARSED -> HsExpr PARSED
+hsLit :: HsLit PARSED -> HsExpr PARSED
 #else
-mkHsLit_compat :: HsLit -> HsExpr PARSED
+hsLit :: HsLit -> HsExpr PARSED
 #endif
-mkHsLit_compat = HsLit NOEXT
-{-# INLINE mkHsLit_compat #-}
+hsLit = HsLit NOEXT
+{-# INLINE hsLit #-}
 
-mkHsDocString_compat :: String -> HsDocString
+hsDocString :: String -> HsDocString
 #if MIN_VERSION_ghc(8,6,0)
-mkHsDocString_compat = mkHsDocString
+hsDocString = mkHsDocString
 #else
-mkHsDocString_compat = HsDocString . fsLit
+hsDocString = HsDocString . fsLit
 #endif
-{-# INLINE mkHsDocString_compat #-}
+{-# INLINE hsDocString #-}
 
-mkHsPar_compat :: HExpr -> HsExpr PARSED
-mkHsPar_compat = HsPar NOEXT
-{-# INLINE mkHsPar_compat #-}
+hsPar :: HExpr -> HsExpr PARSED
+hsPar = HsPar NOEXT
+{-# INLINE hsPar #-}
 
-mkHsOverLit_compat :: HsOverLit PARSED -> HsExpr PARSED
-mkHsOverLit_compat = HsOverLit NOEXT
-{-# INLINE mkHsOverLit_compat #-}
+hsOverLit :: HsOverLit PARSED -> HsExpr PARSED
+hsOverLit = HsOverLit NOEXT
+{-# INLINE hsOverLit #-}
 
-mkHsFractional_compat :: FractionalLit -> HsOverLit PARSED
+hsFractional :: FractionalLit -> HsOverLit PARSED
 #if MIN_VERSION_ghc(8,6,0)
-mkHsFractional_compat = mkHsFractional
+hsFractional = mkHsFractional
 #else
-mkHsFractional_compat x = mkHsFractional x placeHolderType
+hsFractional x = mkHsFractional x placeHolderType
 #endif
-{-# INLINE mkHsFractional_compat #-}
+{-# INLINE hsFractional #-}
 
 
 -- ---------------------------------------------------------------------

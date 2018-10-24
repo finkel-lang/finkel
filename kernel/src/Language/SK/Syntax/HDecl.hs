@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 -- | Syntax for declaration.
 module Language.SK.Syntax.HDecl where
 
@@ -71,7 +70,7 @@ mkNewtypeOrDataD :: NewOrData -> Code
                  -> (HDeriving, [HConDecl])
                  -> HDecl
 mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
-  L l (mkTyClD decl)
+  L l (tyClD decl)
   where
     decl = DataDecl { tcdLName = L l (mkUnqual tcName name)
                     , tcdFixity = Prefix
@@ -97,7 +96,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
 {-# INLINE mkNewtypeOrDataD #-}
 
 b_typeD :: Code -> (FastString, [HTyVarBndr]) -> HType -> HDecl
-b_typeD (LForm (L l _)) (name, tvs) ty = L l (mkTyClD synonym)
+b_typeD (LForm (L l _)) (name, tvs) ty = L l (tyClD synonym)
   where
     synonym = SynDecl { tcdLName = L l (mkUnqual tcName name)
                       , tcdFixity = Prefix
@@ -111,23 +110,27 @@ b_typeD (LForm (L l _)) (name, tvs) ty = L l (mkTyClD synonym)
                       }
 {-# INLINE b_typeD #-}
 
-b_simpletypeD :: [Code] -> (FastString, [HTyVarBndr])
-b_simpletypeD ((LForm (L _ (Atom (ASymbol name)))):tvs) = (name, tvs')
+b_simpletypeD :: [Code] -> Builder (FastString, [HTyVarBndr])
+b_simpletypeD codes
+  | ((LForm (L _ (Atom (ASymbol name)))):tvs) <- codes
   -- XXX: Kind signatures not supported.
-  where
-    tvs' = map codeToUserTyVar tvs
+  = return (name, map codeToUserTyVar tvs)
+  | otherwise
+  = builderError
 {-# INLINE b_simpletypeD #-}
 
-b_conD :: Code -> HConDeclDetails -> HConDecl
-b_conD (LForm (L l1 (Atom (ASymbol s1)))) details =
-  L l1 (mkConDeclH98 name Nothing cxt details)
-    where
-      name = L l1 (mkUnqual srcDataName s1)
+b_conD :: Code -> HConDeclDetails -> Builder HConDecl
+b_conD form details
+ | (LForm (L l (Atom (ASymbol name)))) <- form
+ = let name' = L l (mkUnqual srcDataName name)
 #if MIN_VERSION_ghc(8,6,0)
-      cxt = Nothing
+       cxt = Nothing
 #else
-      cxt = L l1 []
+       cxt = L l []
 #endif
+   in  return (L l (mkConDeclH98 name' Nothing cxt details))
+ | otherwise
+ = builderError
 {-# INLINE b_conD #-}
 
 b_forallD :: [Code] -> (HConDecl, [HType]) -> HConDecl
@@ -142,23 +145,22 @@ b_forallD vars ((L l cdecl), cxts) =
 #endif
 {-# INLINE b_forallD #-}
 
-b_gadtD :: Code -> ([HType], HType) -> HConDecl
-b_gadtD (LForm (L l1 (Atom (ASymbol name)))) (ctxt, bodyty) =
-  let name' = L l1 (mkUnqual srcDataName name)
-      ty = L l1 qty
-      qty = mkHsQualTy_compat (mkLocatedList ctxt) bodyty
-      decl = mkGadtDecl [name'] ty'
+b_gadtD :: Code -> ([HType], HType) -> Builder HConDecl
+b_gadtD (LForm (L l1 form)) (ctxt, bodyty)
+  | Atom (ASymbol name) <- form
+  = let name' = L l1 (mkUnqual srcDataName name)
+        ty = L l1 qty
+        qty = mkHsQualTy_compat (mkLocatedList ctxt) bodyty
 #if MIN_VERSION_ghc(8,6,0)
-      ty' = ty
-      decl' = fst decl
+        decl = fst (mkGadtDecl [name'] ty)
 #else
-      ty' = mkLHsSigType ty
-      decl' = decl
+        decl = mkGadtDecl [name'] (mkLHsSigType ty)
 #endif
-  in L l1 decl'
+    in  return (L l1 decl)
+  | otherwise = builderError
 {-# INLINE b_gadtD #-}
 
-b_conOnlyD :: Code -> HConDecl
+b_conOnlyD :: Code -> Builder HConDecl
 b_conOnlyD name = b_conD name (PrefixCon [])
 {-# INLINE b_conOnlyD #-}
 
@@ -171,22 +173,24 @@ b_recFieldsD :: [HConDeclField] -> HConDeclDetails
 b_recFieldsD flds = RecCon (mkLocatedList flds)
 {-# INLINE b_recFieldsD #-}
 
-b_recFieldD :: [Code] -> HType -> HConDeclField
-b_recFieldD names ty = L loc field
-  where
-    field = ConDeclField { cd_fld_names = names'
+b_recFieldD :: [Code] -> HType -> Builder HConDeclField
+b_recFieldD names ty = do
+  let f (LForm (L l form))
+        | Atom (ASymbol name) <- form
+        = return (L l (mkFieldOcc (L l (mkRdrName name))))
+        | otherwise
+        = builderError
+  names' <- mapM f names
+  let field = ConDeclField { cd_fld_names = names'
 #if MIN_VERSION_ghc(8,6,0)
-                         , cd_fld_ext = noExt
+                           , cd_fld_ext = noExt
 #endif
-                         , cd_fld_type = ty
-                         , cd_fld_doc = Nothing }
-    loc = getLoc (mkLocatedForm names)
-    names' = map f names
-    f (LForm (L l (Atom (ASymbol name)))) =
-        L l (mkFieldOcc (L l (mkRdrName name)))
+                           , cd_fld_type = ty
+                           , cd_fld_doc = Nothing }
+      loc = getLoc (mkLocatedForm names)
+  return (L loc field)
 {-# INLINE b_recFieldD #-}
 
--- 'HsDeriving' changed in git head since ghc-8.0.2 release.
 b_derivD :: (HDeriving, [HConDecl])
          -> [HType]
          -> (HDeriving, [HConDecl])
@@ -209,8 +213,8 @@ b_classD (tys,ty) decls = do
             SigD _ d -> return (ms, L ld d : ss)
             ValD _ d -> return (L ld d : ms, ss)
 #else
-            SigD d -> return (ms, L ld d : ss)
-            ValD d -> return (L ld d : ms, ss)
+            SigD   d -> return (ms, L ld d : ss)
+            ValD   d -> return (L ld d : ms, ss)
 #endif
             _      -> builderError
         -- Recursing in `HsAppTy' to support MultiParamTypeClasses.
@@ -224,12 +228,12 @@ b_classD (tys,ty) decls = do
             L _ (HsParTy _ t')   -> unAppTy t'
             _                    -> builderError
 #else
-            L l (HsTyVar _p n) -> return (l, n, [])
-            L _ (HsAppTy t1 (L lv (HsTyVar _ v))) -> do
+            L l (HsTyVar _p   n) -> return (l, n, [])
+            L _ (HsAppTy   t1 (L lv (HsTyVar _   v))) -> do
               (l, n, vs) <- unAppTy t1
               return (l, n, L lv (UserTyVar v):vs)
-            L _ (HsParTy t') -> unAppTy t'
-            _                -> builderError
+            L _ (HsParTy   t')   -> unAppTy t'
+            _                    -> builderError
 #endif
     (l, name, bndrs) <- unAppTy ty
     (meths,sigs) <- foldM categorize ([],[]) decls
@@ -253,7 +257,7 @@ b_classD (tys,ty) decls = do
                         , tcdFVs = placeHolderNames
 #endif
                         }
-    return (L l (mkTyClD cls))
+    return (L l (tyClD cls))
 {-# INLINE b_classD #-}
 
 b_instD :: Maybe (Located OverlapMode) -> ([HType], HType)
@@ -311,20 +315,24 @@ b_defaultD types = L l (defD (defaultDecl types))
     defaultDecl = DefaultDecl NOEXT
 {-# INLINE b_defaultD #-}
 
-b_fixityD :: FixityDirection -> Code -> [Code] -> HDecl
-b_fixityD dir (LForm (L l (Atom (AInteger n)))) syms =
-    L l (mkSigD_compat fsig)
-  where
-    fsig = fixSig (fixitySig names fixity)
-    names = map lname syms
-    lname (LForm (L l0 (Atom (ASymbol name)))) = L l0 (mkRdrName name)
-    fixity = Fixity dir' (fromIntegral n) dir
-    dir' = case dir of
-             InfixL -> SourceText "infixl"
-             InfixR -> SourceText "infixr"
-             InfixN -> SourceText "infix"
-    fixSig = FixSig NOEXT
-    fixitySig = FixitySig NOEXT
+b_fixityD :: FixityDirection -> Code -> [Code] -> Builder HDecl
+b_fixityD dir (LForm (L l form)) syms
+  | Atom (AInteger n) <- form = do
+    let lname (LForm (L l0 x))
+          | (Atom (ASymbol name)) <- x
+          = return (L l0 (mkRdrName name))
+          | otherwise
+          = builderError
+        fixity = Fixity dir' (fromIntegral n) dir
+        dir' = case dir of
+                 InfixL -> SourceText "infixl"
+                 InfixR -> SourceText "infixr"
+                 InfixN -> SourceText "infix"
+        fixSig = FixSig NOEXT
+        fixitySig = FixitySig NOEXT
+    names <- mapM lname syms
+    return (L l (sigD (fixSig (fixitySig names fixity))))
+  | otherwise = builderError
 {-# INLINE b_fixityD #-}
 
 b_ffiD :: Code -> Code -> HCCallConv -> (Maybe (Located Safety), Code)
@@ -363,49 +371,54 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv (mb_safety, ename) (nm, ty) =
       LForm (L ln (Atom (ASymbol name))) = nm
       tsig = mkLHsSigType ty
       LForm (L _ls (Atom (AString ename'))) = ename
-      -- source = L l (quotedSourceText ename')
-      source = L l (SourceText ("\"" ++ ename' ++ "\""))
+      source = L l (quotedSourceText ename')
       safety = fromMaybe (noLoc PlayRisky) mb_safety
       forD = ForD NOEXT
 {-# INLINE b_ffiD #-}
 
 b_callConv :: Code -> Builder (Located CCallConv)
-b_callConv (LForm (L l (Atom (ASymbol sym)))) =
-  case sym of
-    "capi"       -> return (L l CApiConv)
-    "ccall"      -> return (L l CCallConv)
-    "prim"       -> return (L l PrimCallConv)
-    "javascript" -> return (L l JavaScriptCallConv)
-    "stdcall"    -> return (L l StdCallConv)
-    _            -> builderError
+b_callConv (LForm (L l form))
+  | Atom (ASymbol sym) <- form =
+    case sym of
+      "capi"       -> return (L l CApiConv)
+      "ccall"      -> return (L l CCallConv)
+      "prim"       -> return (L l PrimCallConv)
+      "javascript" -> return (L l JavaScriptCallConv)
+      "stdcall"    -> return (L l StdCallConv)
+      _            -> builderError
+  | otherwise = builderError
 {-# INLINE b_callConv #-}
 
 b_safety :: Code -> Builder (Located Safety)
-b_safety (LForm (L l (Atom (ASymbol sym)))) =
-  case sym of
-    "interruptible" -> return (L l PlayInterruptible)
-    "safe"          -> return (L l PlaySafe)
-    "unsafe"        -> return (L l PlayRisky)
-    _               -> builderError
+b_safety (LForm (L l form))
+  | Atom (ASymbol sym) <- form =
+    case sym of
+      "interruptible" -> return (L l PlayInterruptible)
+      "safe"          -> return (L l PlaySafe)
+      "unsafe"        -> return (L l PlayRisky)
+      _               -> builderError
+  | otherwise = builderError
 {-# INLINE b_safety #-}
 
-b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> HDecl
-b_funBindD (LForm (L l (Atom (ASymbol name)))) ((grhss,decls), args) =
-  let body = mkGRHSs grhss decls l
+b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> Builder HDecl
+b_funBindD (LForm (L l form)) ((grhss,decls), args)
+  | Atom (ASymbol name) <- form = do
+    let body = mkGRHSs grhss decls l
 #if MIN_VERSION_ghc(8,6,0)
-      match = L l (Match noExt ctxt args body)
+        match = L l (Match noExt ctxt args body)
 #elif MIN_VERSION_ghc(8,4,0)
-      match = L l (Match ctxt args body)
+        match = L l (Match ctxt args body)
 #else
-      match = L l (Match ctxt args Nothing body)
+        match = L l (Match ctxt args Nothing body)
 #endif
-      ctxt = FunRhs { mc_fun = lrname
-                    , mc_fixity = Prefix
-                      -- XXX: Get strictness info from somewhere?
-                    , mc_strictness = NoSrcStrict }
-      lrname = L l (mkRdrName name)
-      bind = mkFunBind lrname [match]
-  in  L l (mkValD_compat bind)
+        ctxt = FunRhs { mc_fun = lrname
+                      , mc_fixity = Prefix
+                        -- XXX: Get strictness info from ... where?
+                      , mc_strictness = NoSrcStrict }
+        lrname = L l (mkRdrName name)
+        bind = mkFunBind lrname [match]
+    return (L l (valD bind))
+  | otherwise = builderError
 {-# INLINE b_funBindD #-}
 
 b_patBindD :: ([HGRHS],[HDecl]) -> HPat -> HDecl
@@ -419,27 +432,34 @@ b_patBindD (grhss,decls) pat@(L l _) =
                      , bind_fvs = placeHolderNames
 #endif
                      , pat_ticks = ([],[]) }
-  in  L l (mkValD_compat bind)
+  in  L l (valD bind)
 {-# INLINE b_patBindD #-}
 
-b_tsigD :: [Code] -> ([HType], HType) -> HDecl
-b_tsigD names (ctxts,typ) =
+b_tsigD :: [Code] -> ([HType], HType) -> Builder HDecl
+b_tsigD names (ctxts,typ) = do
   let typ' = mkLHsSigWcType qtyp
       qtyp | null ctxts = typ
            | otherwise =
              L l (mkHsQualTy_compat (mkLocatedList ctxts) typ)
-      mkName (LForm (L l1 (Atom (ASymbol name)))) =
-        L l1 (mkRdrName name)
+      mkName form
+        | (LForm (L l1 (Atom (ASymbol name)))) <- form
+        = return (L l1 (mkRdrName name))
+        | otherwise
+        = builderError
       l = getLoc (mkLocatedForm names)
       typeSig = TypeSig NOEXT
-  in  L l (mkSigD_compat (typeSig (map mkName names) typ'))
+  names' <- mapM mkName names
+  return (L l (sigD (typeSig names' typ')))
 {-# INLINE b_tsigD #-}
 
-b_inlineD :: InlineSpec -> Code -> HDecl
-b_inlineD ispec (LForm (L l (Atom (ASymbol name)))) =
-  L l (mkSigD_compat (inlineSig (L l (mkRdrName name)) ipragma))
+b_inlineD :: InlineSpec -> Code -> Builder HDecl
+b_inlineD ispec (LForm (L l form))
+  | Atom (ASymbol name) <- form
+  = let inlineSig = InlineSig NOEXT
+    in  return (L l (sigD (inlineSig (L l (mkRdrName name)) ipragma)))
+  | otherwise
+  = builderError
   where
-    inlineSig = InlineSig NOEXT
     ipragma =
       case ispec of
         Inline    -> alwaysInlinePragma
@@ -459,17 +479,17 @@ b_specializeD (LForm (L l _)) (nameSym, tsig) = do
       ip = defaultInlinePragma {inl_src = SourceText "{-# SPECIALIZE"}
       specSig = SpecSig NOEXT
       ssig = specSig lname [mkLHsSigType tsig] ip
-  return (L l (mkSigD_compat ssig))
+  return (L l (sigD ssig))
 {-# INLINE b_specializeD #-}
 
-mkTyClD :: TyClDecl PARSED -> HsDecl PARSED
-mkTyClD = TyClD NOEXT
-{-# INLINE mkTyClD #-}
+tyClD :: TyClDecl PARSED -> HsDecl PARSED
+tyClD = TyClD NOEXT
+{-# INLINE tyClD #-}
 
-mkValD_compat :: HsBind PARSED -> HsDecl PARSED
-mkValD_compat = ValD NOEXT
-{-# INLINE mkValD_compat #-}
+valD :: HsBind PARSED -> HsDecl PARSED
+valD = ValD NOEXT
+{-# INLINE valD #-}
 
-mkSigD_compat :: Sig PARSED -> HsDecl PARSED
-mkSigD_compat = SigD NOEXT
-{-# INLINE mkSigD_compat #-}
+sigD :: Sig PARSED -> HsDecl PARSED
+sigD = SigD NOEXT
+{-# INLINE sigD #-}

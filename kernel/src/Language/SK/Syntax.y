@@ -181,7 +181,7 @@ import Language.SK.Syntax.HType
 
 mbdoc :: { Maybe LHsDocString }
     : {- empty -} { Nothing }
-    | 'comment'   { Just (b_commentStringE $1) }
+    | 'comment'   {% Just `fmap` (b_commentStringE $1) }
 
 
 -- ---------------------------------------------------------------------
@@ -196,12 +196,12 @@ module :: { HModule }
     | mhead top_decls         {% $1 `fmap` pure [] <*> pure $2 }
 
 mhead :: { [HImportDecl] -> [HDecl] -> HModule }
-    : mbdoc          { b_implicitMainModule }
+    : mbdoc          {% b_implicitMainModule }
     | mbdoc 'module' {% parse p_mod_header $2 <*> pure $1 }
 
 mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl]
                 -> HModule }
-    : 'symbol' exports { b_module $1 $2 }
+    : 'symbol' exports {% b_module $1 $2 }
 
 exports :: { [HIE] }
     : rexports { reverse $1 }
@@ -211,21 +211,21 @@ rexports :: { [HIE] }
     | rexports export { $2 : $1 }
 
 export :: { HIE }
-    : varid    { b_ieSym $1 }
-    | 'module' { b_ieMdl $1 }
+    : varid    {% b_ieSym $1 }
+    | 'module' {% b_ieMdl $1 }
     | 'list'   {% parse p_entity $1 }
 
 entity :: { HIE }
-    : 'symbol'          { b_ieAbs $1 }
-    | 'symbol' '..'     { b_ieAll $1 }
-    | 'symbol' symbols1 { b_ieWith $1 $2 }
+    : 'symbol'          {% b_ieAbs $1 }
+    | 'symbol' '..'     {% b_ieAll $1 }
+    | 'symbol' symbols1 {% b_ieWith $1 $2 }
 
 entities :: { [HIE] }
     : rentities { reverse $1 }
 
 rentities :: { [HIE] }
     : {- empty -}        { [] }
-    | rentities varid  { b_ieSym $2 : $1 }
+    | rentities varid  {% b_ieSym $2 >>= \es -> return (es:$1) }
     | rentities 'list' {% fmap (:$1) (parse p_entity $2) }
 
 imports :: { [HImportDecl] }
@@ -240,13 +240,13 @@ import :: { HImportDecl }
 
 limport :: { HImportDecl }
     : 'qualified' 'symbol' 'as' 'symbol' impspec
-      { b_importD ($2, True, Just $4) $5 }
+      {% b_importD ($2, True, Just $4) $5 }
     | 'qualified' 'symbol' impspec
-      { b_importD ($2, True, Nothing) $3 }
+      {% b_importD ($2, True, Nothing) $3 }
     | 'symbol' 'as' 'symbol' impspec
-      { b_importD ($1, False, Just $3) $4 }
+      {% b_importD ($1, False, Just $3) $4 }
     | 'symbol' impspec
-      { b_importD ($1, False, Nothing) $2 }
+      {% b_importD ($1, False, Nothing) $2 }
 
 impspec :: { (Bool, Maybe [HIE]) }
     : 'hiding' 'list' {% do { es <- parse p_entities $2
@@ -280,7 +280,7 @@ top_decl :: { HDecl }
     | 'class' qtycl cdecls            {% b_classD $2 $3 }
     | 'instance' overlap qtycl idecls { b_instD $2 $3 $4 }
     | 'default' zero_or_more_types    { b_defaultD $2 }
-    | fixity 'integer' symbols1       { b_fixityD $1 $2 $3 }
+    | fixity 'integer' symbols1       {% b_fixityD $1 $2 $3 }
     | 'foreign' 'symbol' ccnv sname 'list'
       {% parse p_sfsig $5 >>= b_ffiD $1 $2 $3 $4 }
     | decl                         { $1 }
@@ -296,8 +296,8 @@ sfsig :: { (Code, HType) }
     : '::' 'symbol' type { ($2, $3) }
 
 simpletype :: { (FastString, [HTyVarBndr])}
-    : 'symbol' { b_simpletypeD [$1] }
-    | 'list'   { b_simpletypeD $1 }
+    : 'symbol' {% b_simpletypeD [$1] }
+    | 'list'   {% b_simpletypeD $1 }
 
 constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs { let (m,d) = $1 in (m,reverse d) }
@@ -308,7 +308,7 @@ rconstrs :: { (HDeriving, [HConDecl]) }
     | rconstrs constr        { fmap ($2:) $1 }
 
 constr :: { HConDecl }
-    : 'symbol' { b_conOnlyD $1 }
+    : 'symbol' {% b_conOnlyD $1 }
     | 'list'   {% parse p_lconstr $1 }
 
 deriving :: { [HType] }
@@ -316,7 +316,7 @@ deriving :: { [HType] }
 
 lconstr :: { HConDecl }
     : forall qtycon       { b_forallD (snd $1) $2 }
-    | '::' 'symbol' qtype { b_gadtD $2 $3 }
+    | '::' 'symbol' qtype {% b_gadtD $2 $3 }
     | lh98constr          { $1 }
 
 forall :: { (Code, [Code]) }
@@ -342,8 +342,8 @@ h98constr :: { HConDecl }
     : 'list' {% parse p_lh98constr $1 }
 
 lh98constr :: { HConDecl }
-    : 'symbol' condetails         { b_conD $1 $2 }
-    | 'symbol' '{' fielddecls '}' { b_conD $1 $3 }
+    : 'symbol' condetails         {% b_conD $1 $2 }
+    | 'symbol' '{' fielddecls '}' {% b_conD $1 $3 }
 
 condetails :: { HConDeclDetails }
     : dctypes { b_conDeclDetails $1 }
@@ -367,8 +367,8 @@ rfielddecls :: { [HConDeclField] }
     | rfielddecls fielddecl { $2:$1 }
 
 fielddecl :: { HConDeclField }
-    : 'symbol' dctype { b_recFieldD [$1] $2 }
-    | symbols  dctype { b_recFieldD $1 $2 }
+    : 'symbol' dctype {% b_recFieldD [$1] $2 }
+    | symbols  dctype {% b_recFieldD $1 $2 }
 
 qtycl :: { ([HType], HType) }
     : 'list' {% parse p_lqtycl $1 }
@@ -400,16 +400,16 @@ lsname :: { (Maybe (Located Safety), Code) }
     : 'symbol' 'string' {% b_safety $1 >>= \s -> return (Just s, $2) }
 
 decl :: { HDecl }
-    : '=' varid aguards    { b_funBindD $2 $3 }
+    : '=' varid aguards    {% b_funBindD $2 $3 }
     | '=' 'list' guards    {% b_patBindD $3 `fmap` parse p_pats1 $2 }
     | '=' 'hslist' guards  {% do { lp <- parse p_pats0 (unwrapListL $2)
                                  ; let lp' = b_hsListP lp
                                  ; return (b_patBindD $3 lp') }}
-    | '::' varid dtype     { b_tsigD [$2] $3 }
-    | '::' varids dtype    { b_tsigD $2 $3 }
-    | 'inline' varid       { b_inlineD Inline $2 }
-    | 'noinline' varid     { b_inlineD NoInline $2 }
-    | 'inlinable' varid    { b_inlineD Inlinable $2 }
+    | '::' varid dtype     {% b_tsigD [$2] $3 }
+    | '::' varids dtype    {% b_tsigD $2 $3 }
+    | 'inline' varid       {% b_inlineD Inline $2 }
+    | 'noinline' varid     {% b_inlineD NoInline $2 }
+    | 'inlinable' varid    {% b_inlineD Inlinable $2 }
     | 'specialize' 'list'  {% parse p_sfsig $2 >>= b_specializeD $1 }
 
 aguards :: { (([HGRHS],[HDecl]), [HPat]) }
@@ -417,7 +417,7 @@ aguards :: { (([HGRHS],[HDecl]), [HPat]) }
         | pat aguards { ($1:) `fmap` $2 }
 
 dtype :: { ([HType], HType) }
-    : 'symbol' { ([], b_symT $1) }
+    : 'symbol' {% b_symT $1 >>= \t -> return ([], t) }
     | 'unit'   { ([], b_unitT $1) }
     | 'hslist' {% do { t <- parse p_type [toListL $1]
                      ; return ([], b_listT t) }}
@@ -438,7 +438,7 @@ rdecls :: { [HDecl] }
 -- ---------------------------------------------------------------------
 
 type :: { HType }
-    : varid    { b_symT $1 }
+    : varid    {% b_symT $1 }
     | 'unit'   { b_unitT $1 }
     | 'hslist' {% case toListL $1 of
                     LForm (L _ (List [])) -> return (b_nilT $1)
@@ -450,7 +450,7 @@ types0 :: { HType }
     | ',' zero_or_more_types { b_tupT $1 $2 }
     | '!' type               { b_bangT $1 $2 }
     | forall qtycl           { b_forallT $1 $2 }
-    | types                  { b_appT $1 }
+    | types                  {% b_appT $1 }
 
 types :: { [HType] }
     : rtypes { reverse $1 }
@@ -464,7 +464,7 @@ zero_or_more_types :: { [HType] }
     | types       { $1 }
 
 qtype :: { ([HType], HType) }
-    : 'symbol' { ([], b_symT $1) }
+    : 'symbol' {% b_symT $1 >>= \t -> return ([], t) }
     | 'unit'   { ([], b_unitT $1) }
     | 'hslist' {% do { typ <- parse p_type [toListL $1]
                      ; return ([], b_listT typ) } }
@@ -489,17 +489,17 @@ rpats0 :: { [HPat] }
     | rpats0 pat  { $2 : $1 }
 
 pat :: { HPat }
-    : 'integer' { b_intP $1 }
-    | 'string'  { b_stringP $1 }
-    | 'char'    { b_charP $1 }
-    | 'unit'    { b_unitP $1 }
-    | varid     { b_symP $1 }
+    : 'integer' {% b_intP $1 }
+    | 'string'  {% b_stringP $1 }
+    | 'char'    {% b_charP $1 }
+    | 'unit'    {% b_unitP $1 }
+    | varid     {% b_symP $1 }
     | 'hslist'  {% b_hsListP `fmap` parse p_pats0 (unwrapListL $1) }
     | 'list'    {% parse p_pats1 $1 }
 
 pats1 :: { HPat }
     : ',' pats0             { b_tupP $1 $2 }
-    | '@' varid pat         { b_asP $2 $3 }
+    | '@' varid pat         {% b_asP $2 $3 }
     | '~' pat               { b_lazyP $2 }
     | 'symbol' '{' lblp '}' {% b_labeledP $1 $3 }
     | 'symbol' pats0        {% b_conP $1 $2 }
@@ -523,11 +523,11 @@ expr :: { HExpr }
     | 'list'   {% parse p_exprs $1 }
 
 atom :: { HExpr }
-    : varid     { b_varE $1 }
-    | 'char'    { b_charE $1 }
-    | 'string'  { b_stringE $1 }
-    | 'integer' { b_integerE $1 }
-    | 'frac'    { b_floatE $1 }
+    : varid     {% b_varE $1 }
+    | 'char'    {% b_charE $1 }
+    | 'string'  {% b_stringE $1 }
+    | 'integer' {% b_integerE $1 }
+    | 'frac'    {% b_floatE $1 }
     | 'unit'    { b_unitE $1 }
     | 'hslist'  {% b_hsListE `fmap` parse p_hlist (unwrapListL $1) }
 
@@ -550,7 +550,7 @@ exprs :: { HExpr }
     | 'case' expr alts        { b_caseE $1 $2 $3 }
     | 'do' do_stmts           { b_doE $1 $2 }
     | '::' expr qtype         { b_tsigE $1 $2 $3 }
-    | 'symbol' '{' fbinds '}' { b_recConOrUpdE $1 $3 }
+    | 'symbol' '{' fbinds '}' {% b_recConOrUpdE $1 $3 }
     | 'list' '{' fbinds '}'   {% b_recUpdE (parse p_exprs $1) $3 }
     | app                     { b_appE $1 }
 
