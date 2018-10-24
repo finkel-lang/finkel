@@ -49,7 +49,7 @@
    (GhcMonad ((GhcMonad ..) getSessionDynFlags withSession))
    (HscMain (hscTcRnLookupRdrName))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-              (ModSummary) (ModuleGraph) (SourceError)
+              (ModSummary) (ModuleGraph)
               emptyInteractiveContext handleFlagWarnings ms_mod_name
               srcErrorMessages tyThingParent_maybe))
    (HsImpExp (simpleImportDecl))
@@ -145,28 +145,27 @@
             rc-help String}))
 
 (defn (mk-ii-fs (-> FastString InteractiveImport))
-  (name)
+  [name]
   (IIDecl (simpleImportDecl (mkModuleNameFS name))))
 
 (defn (mk-ii (-> String InteractiveImport))
   (. mk-ii-fs fsLit))
 
 (defn (code->mb-string (-> Code (Maybe String)))
-  (code)
+  [code]
   (case (unCode code)
     (Atom (ASymbol sym)) (Just (unpackFS sym))
     (Atom (AString str)) (Just str)
     _                    Nothing))
 
 (defn (located-list (-> [Code] Code))
-  (xs)
+  [xs]
   (case xs
     [] nil
-    _ (let ((= l (getLoc (mkLocatedForm xs))))
-        (LForm (L l (List xs))))))
+    _  (LForm (L (getLoc (mkLocatedForm xs)) (List xs)))))
 
 (defn (show-sdoc-for-user-m (-> SDoc (Skc String)))
-  (sdoc)
+  [sdoc]
   (do (<- dflags getDynFlags)
       (<- unqual getPrintUnqual)
       (return (showSDocForUser dflags unqual sdoc))))
@@ -178,7 +177,7 @@
     (skSrcError form msg)))
 
 (defn (compile-to-obj-file (-> String (Skc Code)))
-  (str)
+  [str]
   (gbracket
    (do (<- dflags getSessionDynFlags)
        (<- context getContext)
@@ -193,7 +192,7 @@
          (return '(begin))))))
 
 (defn (link-module-obj (-> FastString (Skc Code)))
-  (name)
+  [name]
   (do (<- hsc-env getSession)
       (let ((= mname (mkModuleNameFS name))
             (= uid (thisPackage (hsc_dflags hsc-env)))))
@@ -202,7 +201,7 @@
       (return '(begin))))
 
 (defn (compile-and-import (-> FilePath (Skc Code)))
-  (path)
+  [path]
   (do (let ((= mname (asModuleName path))))
       (<- _ (compile-to-obj-file path))
       (<- mods (fmap envContextModules getSkEnv))
@@ -210,25 +209,25 @@
       (return '(begin))))
 
 (defn (env-context-on-exception (-> (Skc a) (Skc ())))
-  (action)
+  [action]
   (gcatch
    (void action)
    (\ e
-     (do (case (:: (fromException e) (Maybe SourceError))
+     (do (case (fromException e)
            (Just se) (do (<- dflags getSessionDynFlags)
                          (liftIO
                           (putStr (unlines
                                    (map (showSDoc dflags)
                                         (pprErrMsgBagWithLoc
                                          (srcErrorMessages se)))))))
-           _ (liftIO (print e)))
+           _         (liftIO (print e)))
          (<- mods (fmap envContextModules getSkEnv))
          (setContext (map mk-ii mods))))))
 
 (defn (lookup-package-config
        (-> DynFlags String (IO (Maybe PackageConfig))))
   "Lookup `PackageConfig' of given package in `DynFlags'."
-  (dflags pkgname)
+  [dflags pkgname]
   (do (<- confs (liftIO (readPackageConfigs dflags)))
       (return
         (find (. (== pkgname) packageNameString)
@@ -236,7 +235,7 @@
 
 (defn (browse-module (-> Module ModuleInfo (Skc Code)))
   "Simplified version of `GHCi.UI.browseModule'."
-  (mdl mod-info)
+  [mdl mod-info]
   (do (let ((= names (modInfoExports mod-info))
             (= sorted-names
               (++ (loc-sort local) (occ-sort external)))
@@ -257,13 +256,13 @@
 
 ;;; Mostly translated from `GHCi.UI.infoThing'.
 (defn (info-name (-> Code (Skc Code)))
-  (thing)
+  [thing]
   (do (<- sdoc (info-thing True (show thing)))
       (<- str (show-sdoc-for-user-m sdoc))
       (return `(putStrLn ,str))))
 
 (defn (info-thing (-> Bool String (Skc SDoc)))
-  (all-info str)
+  [all-info str]
   (do (<- names (parse-name str))
       (<- mb_stuffs (mapM (getInfo all-info) names))
       (let ((= filtered (filter-out-children
@@ -277,7 +276,7 @@
         (vcat (intersperse (text "") (map ppr-info filtered))))))
 
 (defn (parse-name (-> String (Skc [Name])))
-  (str)
+  [str]
   (if (elem str ["()" "[]"])
       (parseName str)
       (withSession
@@ -287,12 +286,12 @@
             (hscTcRnLookupRdrName hsc-env lrdr-name)))))))
 
 (defn (filter-out-children (-> (-> a TyThing) [a] [a]))
-  (get-thing xs)
+  [get-thing xs]
   (let ((= all-names (mkNameSet (map (. getName get-thing) xs)))
         (= has-parent x
-          (case (tyThingParent_maybe (get-thing x))
-            (Just p) (elemNameSet (getName p) all-names)
-            Nothing  False)))
+          (| ((<- (Just p) (tyThingParent_maybe (get-thing x)))
+              (elemNameSet (getName p) all-names))
+             (otherwise False))))
     (filter (. not has-parent) xs)))
 
 
@@ -300,7 +299,7 @@
 
 (defn (compile-cmd ReplAction)
   "Compile source code to object code."
-  (forms)
+  [forms]
   (let ((= err
           (skSrcError (located-list forms)
                       (++ "compile: not a FilePath: "
@@ -312,30 +311,24 @@
                            (putStrLn (++ "; compile: " src)))
                           (compile-to-obj-file src)))
                     (code->mb-string form))
-      _ err)))
+      _      err)))
 
 (defn (link-module-cmd ReplAction)
   "Link the object code of given module."
-  (forms)
-  (let ((= go name
-          (do (liftIO
-               (putStrLn (++ "; link-module: " (unpackFS name))))
-              (link-module-obj name)))
-        (= err
-          (skSrcError form (++ "link-module: not a symbol: "
-                               (show form))))
-        (= form
-          (case forms
-            [] nil
-            _ (head forms))))
-    (case (map unCode forms)
-      [(Atom (ASymbol sym))] (go sym)
-      _ err)))
+  [forms]
+  (where (| ((<- [(Atom (ASymbol sym))] (map unCode forms)) (go sym))
+            (otherwise err))
+    (= go name
+      (do (liftIO (putStrLn (++ "; link-module: " (unpackFS name))))
+          (link-module-obj name)))
+    (= err
+      (skSrcError form (++ "link-module: not a symbol: " (show form))))
+    (= form (located-list forms))))
 
 (defn (load-cmd ReplAction)
   "Load a module source code file. Handles absolute paths and relative
 paths from import directories."
-  (forms)
+  [forms]
   (let ((= find-file idirs path
           (if (isAbsolute path)
               (find-absolute idirs path)
@@ -402,60 +395,59 @@ paths from import directories."
 
 (defn (set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
-  (forms)
-  (case forms
-    (: _ _) (| ((all symbol? forms)
-                ;; Always using `setSessionDynFlags' for `set' REPL
-                ;; command to support `-package' flag.
-                (do (<- dflags0 getSessionDynFlags)
-                    (let ((= flags (map (. noLoc symbolName) forms))
-                          (= complain fs
-                            (putStrLn
-                             (++ "ignored flags: "
-                                 (intercalate ", " (map unLoc fs)))))))
-                    (<- (, dflags1 leftovers warns)
-                      (parseDynamicFlagsCmdLine dflags0 flags))
-                    (liftIO
-                     (do (handleFlagWarnings dflags1 warns)
-                         (unless (null leftovers)
-                           (complain leftovers))))
-                    (<- _ (setSessionDynFlags dflags1))
-                    (return '(begin)))))
-    _       (skSrcError nil "set-cmd: empty form")))
+  [forms]
+  (| ((<- (: _ _) forms) (all symbol? forms)
+      ;; Always using `setSessionDynFlags' for `set' REPL
+      ;; command to support `-package' flag.
+      (do (<- dflags0 getSessionDynFlags)
+          (let ((= flags (map (. noLoc symbolName) forms))
+                (= complain fs
+                  (putStrLn
+                   (++ "ignored flags: "
+                       (intercalate ", " (map unLoc fs)))))))
+          (<- (, dflags1 leftovers warns)
+            (parseDynamicFlagsCmdLine dflags0 flags))
+          (liftIO
+           (do (handleFlagWarnings dflags1 warns)
+               (unless (null leftovers)
+                 (complain leftovers))))
+          (<- _ (setSessionDynFlags dflags1))
+          (return '(begin))))
+     (otherwise
+      (skSrcError nil "set-cmd: empty-form"))))
 
 (defn (system-cmd ReplAction)
   "Invoke system command."
   [forms]
-  (let ((= forms' (map code->mb-string forms))
-        (= x (located-list forms)))
-    (case (catMaybes forms')
-      (: cmd args) (>> (liftIO (rawSystem cmd args))
-                       (return '(begin)))
-      _            (skSrcError x (++ "system: invalid form: "
-                                     (show x))))))
+  (| ((<- (: cmd args) (map show forms))
+      (do (<- _ecode (liftIO (rawSystem cmd args)))
+          (return '(begin))))
+     (otherwise
+      (let ((= x (located-list forms)))
+        (skSrcError x (++ "system: invalid form: " (show x)))))))
 
 (defn (debug-cmd ReplAction)
   "Modify debug settings in REPL."
-  (forms)
+  [forms]
   (case forms
-    [] (do (<- bool (fmap envDebug getSkEnv))
-           (return (toCode bool)))
+    []     (do (<- bool (fmap envDebug getSkEnv))
+               (return (toCode bool)))
     [form] (| ((<- (Just bool) (fromCode form))
                (do (modifySkEnv (\ e (e {envDebug bool})))
                    (return '(begin)))))
-    _ (let ((= lst (located-list forms)))
-        (skSrcError lst (++ "debug: invalid form: " (show lst))))))
+    _      (let ((= l (located-list forms)))
+             (skSrcError l (++ "debug: invalid form: " (show l))))))
 
 (defn (cd-cmd ReplAction)
   "Function to change current directory."
-  (forms)
+  [forms]
   (case forms
     [arg1] (| ((<- (Just path) (code->mb-string arg1))
                (do (liftIO (setCurrentDirectory path))
                    (return '(begin)))))
-    _ (skSrcError (head forms)
-                  (++ "cd: expecting symbol or string but got "
-                      (show forms)))))
+    _      (let ((= l (located-list forms)))
+             (skSrcError l (++ "cd: expecting symbol or string but got "
+                               (show l))))))
 
 (defn (pwd-cmd ReplAction)
   "Function to show current directory."
@@ -465,7 +457,7 @@ paths from import directories."
 
 (defn (bindings-cmd ReplAction)
   "Almost same as `GHCi.UI.showBindings'."
-  (_forms)
+  [_forms]
   (where (do (<- bs getBindings)
              (<- docs (mapM make-doc (reverse bs)))
              (<- str (show-sdoc-for-user-m (vcat docs)))
@@ -480,7 +472,7 @@ paths from import directories."
       (pprTyThing showToHeader thing))))
 
 (defn (context-cmd ReplAction)
-  (_form)
+  [_form]
   (where (do (<- context getContext)
              (<- dflags getSessionDynFlags)
              (return `(putStr ,(result dflags context))))
@@ -494,7 +486,7 @@ paths from import directories."
         (++ ";  IIModule: " (moduleNameString mname))))))
 
 (defn (dflags-cmd ReplAction)
-  (_form)
+  [_form]
   (do (<- dflags getDynFlags)
       (let ((= ss
               ["; dflags:"
@@ -512,7 +504,7 @@ paths from import directories."
       (return `(putStr ,(unlines ss)))))
 
 (defn (linker-cmd ReplAction)
-  (_form)
+  [_form]
   ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
   ;; which is not exposed from the module its defined ... not sure how
   ;; to get resulting output as `String' other than redirecting output
@@ -523,7 +515,7 @@ paths from import directories."
       (return '(begin))))
 
 (defn (macros-cmd ReplAction)
-  (_form)
+  [_form]
   (do (<- macros (fmap envMacros getSkEnv))
       (let ((= macro-strings
               (unlines
@@ -532,7 +524,7 @@ paths from import directories."
       (return `(putStr ,macro-strings))))
 
 (defn (modules-cmd ReplAction)
-  (_form)
+  [_form]
   (do (<- graph0 getModuleGraph)
       (let ((= graph1 (graph->summaries graph0))))
       (<- graph2 (filterM (. isLoaded ms_mod_name) graph1))
@@ -540,7 +532,7 @@ paths from import directories."
       (return `(putStr ,(unlines mods)))))
 
 (defn (packages-cmd ReplAction)
-  (_form)
+  [_form]
   (do (<- dflags getDynFlags)
       (let ((= pr (++ ";   "))
             (= pr-flag flag
@@ -552,7 +544,7 @@ paths from import directories."
       (return `(putStr ,(unlines pkgs)))))
 
 (defn (paths-cmd ReplAction)
-  (_form)
+  [_form]
   (do (<- dflags getDynFlags)
       (<- cwd (liftIO getCurrentDirectory))
       (let ((= ipaths (importPaths dflags))
@@ -568,15 +560,15 @@ paths from import directories."
       (return `(putStr ,result))))
 
 (defn (info-cmd ReplAction)
-  (forms)
+  [forms]
   (case forms
     [form] (| ((<- (Atom (ASymbol _)) (unCode form))
                (info-name form)))
-    _ (invalid-form-error "info" forms)))
+    _      (invalid-form-error "info" forms)))
 
 ;; From `GHCi.UI.typeOfExpr'.
 (defn (type-cmd ReplAction)
-  (forms)
+  [forms]
   (case forms
     [form] (do (<- expr (buildHsSyn parseExpr forms))
                (<- ty (evalExprType expr))
@@ -586,11 +578,11 @@ paths from import directories."
                                           (pprTypeForUser ty)))]))))
                (<- str (show-sdoc-for-user-m sdoc))
                (return `(putStrLn ,str)))
-    _ (invalid-form-error "type" forms)))
+    _      (invalid-form-error "type" forms)))
 
 ;; From `GHCi.UI.kindOfType'
 (defn (kind-cmd ReplAction)
-  (forms)
+  [forms]
   (case forms
     [form] (do (<- ty0 (buildHsSyn parseType forms))
                (<- (, _ kind) (evalTypeKind ty0))
@@ -599,11 +591,11 @@ paths from import directories."
                             (<+> dcolon (pprTypeForUser kind))))))
                (<- str (show-sdoc-for-user-m sdoc))
                (return `(putStrLn ,str)))
-    _ (invalid-form-error "kind" forms)))
+    _      (invalid-form-error "kind" forms)))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defn (browse-cmd ReplAction)
-  (forms)
+  [forms]
   (let ((= go name
           (| ((looksLikeModuleName name)
               (do (<- mdl (lookupModule (mkModuleName name) Nothing))
@@ -619,7 +611,7 @@ paths from import directories."
                       (++ "browse: invalid form: " (show forms)))))
     (case (map unCode forms)
       [(Atom (ASymbol sym))] (go (unpackFS sym))
-      _ err)))
+      _                      err)))
 
 ;;; Lookup matching linkable with given name, and set
 ;;; `thisInstalledUnitId' field in current `DynFlags' to the component
@@ -628,7 +620,7 @@ paths from import directories."
 ;;; library linkable.  This behaviour may useful when working with cabal
 ;;; package library modules from REPL.
 (defn (component-cmd ReplAction)
-  (forms)
+  [forms]
   (do (<- name (case forms
                  [form] (| ((<- (Just str) (fromCode form))
                             (return str)))
@@ -733,13 +725,13 @@ COMMANDS:
      (c "type" (Just ["EXPR"]) type-cmd
         "show type of EXPR")]))
 
-(defmacro* *_ form
-  (case form
+(defmacro* *_ forms
+  (case forms
     (: name args) (| ((<- (Just rc)
                         (do (<- name' (code->mb-string name))
                             (find (. (isPrefixOf name') rc-name)
                                   commands)))
                       (rc-action rc args))
                      (otherwise (help-cmd [])))
-    _ (let ((= lst (located-list form)))
+    _ (let ((= lst (located-list forms)))
         (skSrcError lst (++ "invalid args: " (show lst))))))
