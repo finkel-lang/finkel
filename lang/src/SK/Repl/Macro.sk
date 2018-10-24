@@ -297,6 +297,83 @@
 
 ;;; REPL commands
 
+(defn (help-cmd ReplAction)
+  (_form)
+  (return
+    `(putStrLn ,(++ "DESCRIPTION:
+
+  REPL meta macro, ARGS varies per COMMAND.
+
+COMMANDS:
+
+" (unlines
+   (map (\ rc
+          (let ((= pre
+                  (++ (rc-name rc)
+                      (maybe ""
+                             (. (++ " ") unwords)
+                             (rc-args rc)))))
+            (concat
+             ["  ," (printf "%-14s" pre) " - " (rc-help rc)])))
+        commands))))))
+
+(defn (system-cmd ReplAction)
+  "Invoke system command."
+  [forms]
+  (| ((<- (: cmd args) (map show forms))
+      (do (<- _ecode (liftIO (rawSystem cmd args)))
+          (return '(begin))))
+     (otherwise
+      (let ((= x (located-list forms)))
+        (skSrcError x (++ "system: invalid form: " (show x)))))))
+
+(defn (bindings-cmd ReplAction)
+  "Almost same as `GHCi.UI.showBindings'."
+  [_forms]
+  (where (do (<- bs getBindings)
+             (<- docs (mapM make-doc (reverse bs)))
+             (<- str (show-sdoc-for-user-m (vcat docs)))
+             (return `(putStrLn ,str)))
+    (:: make-doc (-> TyThing (Skc SDoc)))
+    (= make-doc tt
+      (case tt
+        (AnId i) (pprTypeAndContents i)
+        _        (do (<- mb-stuff (getInfo False (getName tt)))
+                     (return (maybe (text "") ppr-tt mb-stuff)))))
+    (= ppr-tt (ppr-tt-args thing)
+      (pprTyThing showToHeader thing))))
+
+;;; Mostly taken from `GHCi.UI.browseCmd'.
+(defn (browse-cmd ReplAction)
+  [forms]
+  (let ((= go name
+          (| ((looksLikeModuleName name)
+              (do (<- mdl (lookupModule (mkModuleName name) Nothing))
+                  (<- mb-mod-info (getModuleInfo mdl))
+                  (case mb-mod-info
+                    (Just mod-info) (browse-module mdl mod-info)
+                    Nothing (return
+                              `(putStrLn
+                                (++ "unknown module: " ,name))))))
+             (otherwise err)))
+        (= err
+          (skSrcError (located-list forms)
+                      (++ "browse: invalid form: " (show forms)))))
+    (case (map unCode forms)
+      [(Atom (ASymbol sym))] (go (unpackFS sym))
+      _                      err)))
+
+(defn (cd-cmd ReplAction)
+  "Function to change current directory."
+  [forms]
+  (case forms
+    [arg1] (| ((<- (Just path) (code->mb-string arg1))
+               (do (liftIO (setCurrentDirectory path))
+                   (return '(begin)))))
+    _      (let ((= l (located-list forms)))
+             (skSrcError l (++ "cd: expecting symbol or string but got "
+                               (show l))))))
+
 (defn (compile-cmd ReplAction)
   "Compile source code to object code."
   [forms]
@@ -313,6 +390,112 @@
                     (code->mb-string form))
       _      err)))
 
+;;; Lookup matching linkable with given name, and set
+;;; `thisInstalledUnitId' field in current `DynFlags' to the component
+;;; when linkable were found.  By setting component, REPL will recompile
+;;; module from SK source code, by ignoring module found in pre-compiled
+;;; library linkable.  This behaviour may useful when working with cabal
+;;; package library modules from REPL.
+(defn (component-cmd ReplAction)
+  [forms]
+  (do (<- name (case forms
+                 [form] (| ((<- (Just str) (fromCode form))
+                            (return str)))
+                 _ (let ((= lst (located-list forms)))
+                     (skSrcError lst (++ "component: invalid form: "
+                                         (show lst))))))
+      (<- dflags0 getDynFlags)
+      (let ((= set-this-unit-id cid
+              (do (let ((= flags (map noLoc ["-this-unit-id" cid]))))
+                  (<- (, dflags1 _ _)
+                    (parseDynamicFlagsCmdLine dflags0 flags))
+                  (setDynFlags dflags1)
+                  (liftIO
+                   (putStrLn
+                    (concat ["; this unit id set to `" cid "'"])))))
+            (= not-found
+              (liftIO
+               (putStrLn
+                (concat ["; package " (show name) " not found"]))))))
+      (<- mb-component-id
+        (liftIO
+         (do (<- mb-pc (maybe (return Nothing)
+                              (lookup-package-config dflags0)
+                              (code->mb-string name)))
+             (return (fmap (. C8.unpack
+                              (. toStringRep componentId))
+                           mb-pc)))))
+      (case mb-component-id
+        (Just cid) (set-this-unit-id cid)
+        Nothing    (| ((elem name ['this 'main])
+                       (set-this-unit-id (show name)))
+                      (otherwise not-found)))
+      (return '(begin))))
+
+(defn (context-cmd ReplAction)
+  [_form]
+  (where (do (<- context getContext)
+             (<- dflags getSessionDynFlags)
+             (return `(putStr ,(result dflags context))))
+    (= result dflags context
+      (unlines (: "; context" (map (context-string dflags) context))))
+    (= context-string dflags ctx
+      (case ctx
+        (IIDecl decl)
+        (++ ";  IIDecl: " (showSDoc dflags (ppr decl)))
+        (IIModule mname)
+        (++ ";  IIModule: " (moduleNameString mname))))))
+
+(defn (debug-cmd ReplAction)
+  "Modify debug settings in REPL."
+  [forms]
+  (case forms
+    []     (do (<- bool (fmap envDebug getSkEnv))
+               (return (toCode bool)))
+    [form] (| ((<- (Just bool) (fromCode form))
+               (do (modifySkEnv (\ e (e {envDebug bool})))
+                   (return '(begin)))))
+    _      (let ((= l (located-list forms)))
+             (skSrcError l (++ "debug: invalid form: " (show l))))))
+
+(defn (dflags-cmd ReplAction)
+  [_form]
+  (do (<- dflags getDynFlags)
+      (let ((= ss
+              ["; dflags:"
+               (++ ";  ghcLink: " (show (ghcLink dflags)))
+               (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
+               (++ ";  hscTarget: " (show (hscTarget dflags)))
+               (++ ";  objectDir: " (show (objectDir dflags)))
+               (++ ";  thisInstalledUnitId: "
+                   (showPpr dflags (thisInstalledUnitId dflags)))])
+            (= showGhcMode m
+              (case m
+                CompManager "CompManager"
+                OneShot     "OneShot"
+                MkDepend    "MkDepend"))))
+      (return `(putStr ,(unlines ss)))))
+
+(defn (info-cmd ReplAction)
+  [forms]
+  (case forms
+    [form] (| ((<- (Atom (ASymbol _)) (unCode form))
+               (info-name form)))
+    _      (invalid-form-error "info" forms)))
+
+;; From `GHCi.UI.kindOfType'
+(defn (kind-cmd ReplAction)
+  [forms]
+  (case forms
+    [form] (do (<- ty0 (buildHsSyn parseType forms))
+               (<- (, _ kind) (evalTypeKind ty0))
+               (let ((= sdoc
+                       (<+> (text (show form))
+                            (<+> dcolon (pprTypeForUser kind))))))
+               (<- str (show-sdoc-for-user-m sdoc))
+               (return `(putStrLn ,str)))
+    _      (invalid-form-error "kind" forms)))
+
 (defn (link-module-cmd ReplAction)
   "Link the object code of given module."
   [forms]
@@ -324,6 +507,17 @@
     (= err
       (skSrcError form (++ "link-module: not a symbol: " (show form))))
     (= form (located-list forms))))
+
+(defn (linker-cmd ReplAction)
+  [_form]
+  ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
+  ;; which is not exposed from the module its defined ... not sure how
+  ;; to get resulting output as `String' other than redirecting output
+  ;; to stdout.
+  (do (<- hsc-env getSession)
+      (liftIO (do (initDynLinker hsc-env)
+                  (showLinkerState (hsc_dflags hsc-env))))
+      (return '(begin))))
 
 (defn (load-cmd ReplAction)
   "Load a module source code file. Handles absolute paths and relative
@@ -393,127 +587,6 @@ paths from import directories."
       _      (skSrcError (located-list forms)
                          (++ "load: invalid form: " (show forms))))))
 
-(defn (set-cmd ReplAction)
-  "Set command line flags, see `GHCi.UI.newDynFlags'."
-  [forms]
-  (| ((<- (: _ _) forms) (all symbol? forms)
-      ;; Always using `setSessionDynFlags' for `set' REPL
-      ;; command to support `-package' flag.
-      (do (<- dflags0 getSessionDynFlags)
-          (let ((= flags (map (. noLoc symbolName) forms))
-                (= complain fs
-                  (putStrLn
-                   (++ "ignored flags: "
-                       (intercalate ", " (map unLoc fs)))))))
-          (<- (, dflags1 leftovers warns)
-            (parseDynamicFlagsCmdLine dflags0 flags))
-          (liftIO
-           (do (handleFlagWarnings dflags1 warns)
-               (unless (null leftovers)
-                 (complain leftovers))))
-          (<- _ (setSessionDynFlags dflags1))
-          (return '(begin))))
-     (otherwise
-      (skSrcError nil "set-cmd: empty-form"))))
-
-(defn (system-cmd ReplAction)
-  "Invoke system command."
-  [forms]
-  (| ((<- (: cmd args) (map show forms))
-      (do (<- _ecode (liftIO (rawSystem cmd args)))
-          (return '(begin))))
-     (otherwise
-      (let ((= x (located-list forms)))
-        (skSrcError x (++ "system: invalid form: " (show x)))))))
-
-(defn (debug-cmd ReplAction)
-  "Modify debug settings in REPL."
-  [forms]
-  (case forms
-    []     (do (<- bool (fmap envDebug getSkEnv))
-               (return (toCode bool)))
-    [form] (| ((<- (Just bool) (fromCode form))
-               (do (modifySkEnv (\ e (e {envDebug bool})))
-                   (return '(begin)))))
-    _      (let ((= l (located-list forms)))
-             (skSrcError l (++ "debug: invalid form: " (show l))))))
-
-(defn (cd-cmd ReplAction)
-  "Function to change current directory."
-  [forms]
-  (case forms
-    [arg1] (| ((<- (Just path) (code->mb-string arg1))
-               (do (liftIO (setCurrentDirectory path))
-                   (return '(begin)))))
-    _      (let ((= l (located-list forms)))
-             (skSrcError l (++ "cd: expecting symbol or string but got "
-                               (show l))))))
-
-(defn (pwd-cmd ReplAction)
-  "Function to show current directory."
-  [_forms]
-  (do (<- dir (liftIO getCurrentDirectory))
-      (return `(aSymbol ,dir))))
-
-(defn (bindings-cmd ReplAction)
-  "Almost same as `GHCi.UI.showBindings'."
-  [_forms]
-  (where (do (<- bs getBindings)
-             (<- docs (mapM make-doc (reverse bs)))
-             (<- str (show-sdoc-for-user-m (vcat docs)))
-             (return `(putStrLn ,str)))
-    (:: make-doc (-> TyThing (Skc SDoc)))
-    (= make-doc tt
-      (case tt
-        (AnId i) (pprTypeAndContents i)
-        _        (do (<- mb-stuff (getInfo False (getName tt)))
-                     (return (maybe (text "") ppr-tt mb-stuff)))))
-    (= ppr-tt (ppr-tt-args thing)
-      (pprTyThing showToHeader thing))))
-
-(defn (context-cmd ReplAction)
-  [_form]
-  (where (do (<- context getContext)
-             (<- dflags getSessionDynFlags)
-             (return `(putStr ,(result dflags context))))
-    (= result dflags context
-      (unlines (: "; context" (map (context-string dflags) context))))
-    (= context-string dflags ctx
-      (case ctx
-        (IIDecl decl)
-        (++ ";  IIDecl: " (showSDoc dflags (ppr decl)))
-        (IIModule mname)
-        (++ ";  IIModule: " (moduleNameString mname))))))
-
-(defn (dflags-cmd ReplAction)
-  [_form]
-  (do (<- dflags getDynFlags)
-      (let ((= ss
-              ["; dflags:"
-               (++ ";  ghcLink: " (show (ghcLink dflags)))
-               (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
-               (++ ";  hscTarget: " (show (hscTarget dflags)))
-               (++ ";  objectDir: " (show (objectDir dflags)))
-               (++ ";  thisInstalledUnitId: "
-                   (showPpr dflags (thisInstalledUnitId dflags)))])
-            (= showGhcMode m
-              (case m
-                CompManager "CompManager"
-                OneShot     "OneShot"
-                MkDepend    "MkDepend"))))
-      (return `(putStr ,(unlines ss)))))
-
-(defn (linker-cmd ReplAction)
-  [_form]
-  ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
-  ;; which is not exposed from the module its defined ... not sure how
-  ;; to get resulting output as `String' other than redirecting output
-  ;; to stdout.
-  (do (<- hsc-env getSession)
-      (liftIO (do (initDynLinker hsc-env)
-                  (showLinkerState (hsc_dflags hsc-env))))
-      (return '(begin))))
-
 (defn (macros-cmd ReplAction)
   [_form]
   (do (<- macros (fmap envMacros getSkEnv))
@@ -559,12 +632,34 @@ paths from import directories."
                      (map (++ ";    ") ipaths))])))))
       (return `(putStr ,result))))
 
-(defn (info-cmd ReplAction)
+(defn (pwd-cmd ReplAction)
+  "Function to show current directory."
+  [_forms]
+  (do (<- dir (liftIO getCurrentDirectory))
+      (return `(aSymbol ,dir))))
+
+(defn (set-cmd ReplAction)
+  "Set command line flags, see `GHCi.UI.newDynFlags'."
   [forms]
-  (case forms
-    [form] (| ((<- (Atom (ASymbol _)) (unCode form))
-               (info-name form)))
-    _      (invalid-form-error "info" forms)))
+  (| ((<- (: _ _) forms) (all symbol? forms)
+      ;; Always using `setSessionDynFlags' for `set' REPL
+      ;; command to support `-package' flag.
+      (do (<- dflags0 getSessionDynFlags)
+          (let ((= flags (map (. noLoc symbolName) forms))
+                (= complain fs
+                  (putStrLn
+                   (++ "ignored flags: "
+                       (intercalate ", " (map unLoc fs)))))))
+          (<- (, dflags1 leftovers warns)
+            (parseDynamicFlagsCmdLine dflags0 flags))
+          (liftIO
+           (do (handleFlagWarnings dflags1 warns)
+               (unless (null leftovers)
+                 (complain leftovers))))
+          (<- _ (setSessionDynFlags dflags1))
+          (return '(begin))))
+     (otherwise
+      (skSrcError nil "set-cmd: empty-form"))))
 
 ;; From `GHCi.UI.typeOfExpr'.
 (defn (type-cmd ReplAction)
@@ -580,110 +675,15 @@ paths from import directories."
                (return `(putStrLn ,str)))
     _      (invalid-form-error "type" forms)))
 
-;; From `GHCi.UI.kindOfType'
-(defn (kind-cmd ReplAction)
-  [forms]
-  (case forms
-    [form] (do (<- ty0 (buildHsSyn parseType forms))
-               (<- (, _ kind) (evalTypeKind ty0))
-               (let ((= sdoc
-                       (<+> (text (show form))
-                            (<+> dcolon (pprTypeForUser kind))))))
-               (<- str (show-sdoc-for-user-m sdoc))
-               (return `(putStrLn ,str)))
-    _      (invalid-form-error "kind" forms)))
-
-;;; Mostly taken from `GHCi.UI.browseCmd'.
-(defn (browse-cmd ReplAction)
-  [forms]
-  (let ((= go name
-          (| ((looksLikeModuleName name)
-              (do (<- mdl (lookupModule (mkModuleName name) Nothing))
-                  (<- mb-mod-info (getModuleInfo mdl))
-                  (case mb-mod-info
-                    (Just mod-info) (browse-module mdl mod-info)
-                    Nothing (return
-                              `(putStrLn
-                                (++ "unknown module: " ,name))))))
-             (otherwise err)))
-        (= err
-          (skSrcError (located-list forms)
-                      (++ "browse: invalid form: " (show forms)))))
-    (case (map unCode forms)
-      [(Atom (ASymbol sym))] (go (unpackFS sym))
-      _                      err)))
-
-;;; Lookup matching linkable with given name, and set
-;;; `thisInstalledUnitId' field in current `DynFlags' to the component
-;;; when linkable were found.  By setting component, REPL will recompile
-;;; module from SK source code, by ignoring module found in pre-compiled
-;;; library linkable.  This behaviour may useful when working with cabal
-;;; package library modules from REPL.
-(defn (component-cmd ReplAction)
-  [forms]
-  (do (<- name (case forms
-                 [form] (| ((<- (Just str) (fromCode form))
-                            (return str)))
-                 _ (let ((= lst (located-list forms)))
-                     (skSrcError lst (++ "component: invalid form: "
-                                         (show lst))))))
-      (<- dflags0 getDynFlags)
-      (let ((= set-this-unit-id cid
-              (do (let ((= flags (map noLoc ["-this-unit-id" cid]))))
-                  (<- (, dflags1 _ _)
-                    (parseDynamicFlagsCmdLine dflags0 flags))
-                  (setDynFlags dflags1)
-                  (liftIO
-                   (putStrLn
-                    (concat ["; this unit id set to `" cid "'"])))))
-            (= not-found
-              (liftIO
-               (putStrLn
-                (concat ["; package " (show name) " not found"]))))))
-      (<- mb-component-id
-        (liftIO
-         (do (<- mb-pc (maybe (return Nothing)
-                              (lookup-package-config dflags0)
-                              (code->mb-string name)))
-             (return (fmap (. C8.unpack
-                              (. toStringRep componentId))
-                           mb-pc)))))
-      (case mb-component-id
-        (Just cid) (set-this-unit-id cid)
-        Nothing    (| ((elem name ['this 'main])
-                       (set-this-unit-id (show name)))
-                      (otherwise not-found)))
-      (return '(begin))))
-
-(defn (help-cmd ReplAction)
-  (_form)
-  (return
-    `(putStrLn ,(++ "DESCRIPTION:
-
-  REPL meta macro, ARGS varies per COMMAND.
-
-COMMANDS:
-
-" (unlines
-   (map (\ rc
-          (let ((= pre
-                  (++ (rc-name rc)
-                      (maybe ""
-                             (. (++ " ") unwords)
-                             (rc-args rc)))))
-            (concat
-             ["  ," (printf "%-14s" pre) " - " (rc-help rc)])))
-        commands))))))
-
 
 ;;; REPL command macro
 
 (defn (commands [ReplCmd])
   (let ((= c ReplCmd))
-    [(c "?" Nothing help-cmd
-        "show this help")
-     (c "!" (Just ["CMD" "ARGS" "..."]) system-cmd
+    [(c "!" (Just ["CMD" "ARGS" "..."]) system-cmd
         "run system CMD with ARGS")
+     (c "?" Nothing help-cmd
+        "show this help")
      (c "bindings" Nothing bindings-cmd
         "show current bindings in REPL")
      (c "browse" (Just ["MODULE"]) browse-cmd
