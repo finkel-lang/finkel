@@ -56,6 +56,7 @@ import ErrUtils (mkErrMsg)
 import Exception (ExceptionMonad(..), ghandle)
 import GhcMonad ( Ghc(..), GhcMonad(..), getSessionDynFlags
                 , modifySession )
+import HscMain (Messager)
 import HscTypes ( HscEnv(..), InteractiveContext(..), TyThing(..)
                 , mkSrcErr )
 import Outputable ( alwaysQualify, neverQualify, showSDocForUser, text
@@ -135,8 +136,19 @@ data SkEnv = SkEnv
    , envDefaultLangExts :: (Maybe Language, FlagSet)
      -- | Flag for controling informative output.
    , envSilent :: Bool
-     -- | Flag for adding macros with @define-macro@.
+     -- | Flag for adding macros to current session with @define-macro@,
+     -- to support defining macro within REPL.
    , envAddInDefineMacro :: Bool
+     -- | Function to compile required modules, when
+     -- necessary. Arguments are force recompilation flag and module
+     -- name.
+   , envMake :: Maybe (Bool -> String -> Skc ())
+     -- | 'DynFlags' for 'envMake'.
+   , envMakeDflags :: Maybe DynFlags
+     -- | Message used in make.
+   , envMessager :: Messager
+     -- | Required modules names in current target.
+   , envRequiredModuleNames :: [String]
    }
 
 #if !MIN_VERSION_ghc(8,4,0)
@@ -215,6 +227,7 @@ debugSkc str = Skc go
       sk_env <- get
       when (envDebug sk_env)
            (liftIO (hPutStrLn stderr str))
+{-# INLINE debugSkc #-}
 
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get

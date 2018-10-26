@@ -25,18 +25,23 @@ import qualified Data.Map as Map
 -- ghc
 import BasicTypes (FractionalLit(..))
 import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
-                , HscTarget(..), gopt_unset, updOptLevel, xopt_unset )
+                , HscTarget(..), gopt, gopt_unset, updOptLevel
+                , xopt_unset )
+import ErrUtils (compilationProgressMsg)
 import Exception (gbracket)
 import FastString (FastString, appendFS, headFS, unpackFS)
+import Finder (findImportedModule)
 import GHC ( ModuleInfo, getModuleInfo, lookupModule, lookupName
            , modInfoExports, setContext )
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
-import HscMain (hscTcRnLookupRdrName)
-import HscTypes (InteractiveImport(..), HscEnv(..))
+import HscMain (Messager, hscTcRnLookupRdrName, showModuleIndex)
+import HscTypes ( InteractiveImport(..), HscEnv(..), FindResult(..)
+                , showModMsg )
 import HsImpExp (ImportDecl(..), ieName, simpleImportDecl)
 import HsSyn (HsModule(..))
 import InteractiveEval (getContext)
 import Linker (getHValue)
+import MkIface (RecompileRequired(..), recompileRequired)
 import Module (mkModuleNameFS, moduleNameString)
 import Name (nameOccName)
 import Outputable (showPpr)
@@ -69,15 +74,16 @@ import Language.SK.Syntax ( evalBuilder, parseExpr, parseModule
 quoteAtom :: SrcSpan -> Atom -> Code
 quoteAtom l form =
   case form of
-    ASymbol s -> atom [tSym l "aSymbol", tString l (unpackFS s)]
-    AChar c -> atom [tSym l "AChar", tChar l c]
-    AString s -> atom [tSym l "AString", tString l s]
-    AInteger n -> atom [tSym l "AInteger", tInteger l n]
+    ASymbol s     -> atom [tSym l "aSymbol", tString l (unpackFS s)]
+    AChar c       -> atom [tSym l "AChar", tChar l c]
+    AString s     -> atom [tSym l "AString", tString l s]
+    AInteger n    -> atom [tSym l "AInteger", tInteger l n]
     AFractional n -> atom [tSym l "aFractional", tFractional l n]
-    AUnit -> atom [tSym l "AUnit"]
-    _ -> LForm (L l (Atom form))
+    AUnit         -> atom [tSym l "AUnit"]
+    _             -> LForm (L l (Atom form))
   where
     atom vals = mkQuoted l (tList l [tSym l "Atom", tList l vals])
+{-# INLINE quoteAtom #-}
 
 quote :: Code -> Code
 quote orig@(LForm (L l form))  =
@@ -109,8 +115,8 @@ quasiquote orig@(LForm (L l form)) =
     HsList forms'
       | any isUnquoteSplice forms' -> splicedList "HsList" forms'
       | otherwise                  -> nonSplicedList "HsList" forms'
-    Atom atom                       -> quoteAtom l atom
-    TEnd                            -> orig
+    Atom atom                      -> quoteAtom l atom
+    TEnd                           -> orig
   where
    splicedList tag forms =
      mkQuoted l (tList l [ tSym l tag
@@ -136,6 +142,7 @@ isUnquoteSplice (LForm form) =
     L _ (List (LForm (L _ (Atom (ASymbol "unquote-splice"))):_))
       -> True
     _ -> False
+{-# INLINE isUnquoteSplice #-}
 
 unquoteSplice :: Homoiconic a => a -> [Code]
 unquoteSplice form =
@@ -320,16 +327,35 @@ m_require form =
     LForm (L _ (List (_:code))) ->
       case evalBuilder parseLImport code of
         Right lidecl@(L _ idecl) -> do
-          dflags <- getSessionDynFlags
+          hsc_env <- getSession
+          sk_env <- getSkEnv
+
+          let dflags = hsc_dflags hsc_env
+              recomp = gopt Opt_ForceRecomp dflags
+              mname = unLoc (ideclName idecl)
+              mname' = moduleNameString mname
           debugSkc (";;; require: " ++ showPpr dflags idecl)
+
+          -- Try finding the required module. Make the module with
+          -- the function stored in SkEnv when not found.
+          fresult <- liftIO (findImportedModule hsc_env mname Nothing)
+          case fresult of
+            Found {} -> return ()
+            _        ->
+              case envMake sk_env of
+                Just mk -> withRequiredSettings (mk recomp mname')
+                Nothing -> failS "require: no make function"
 
           -- Add the module to current compilation context.
           contexts <- getContext
           setContext (IIDecl idecl : contexts)
 
+          -- Add required module name to SkEnv.
+          let reqs = mname':envRequiredModuleNames sk_env
+              sk_env' = sk_env {envRequiredModuleNames = reqs}
+          putSkEnv sk_env'
+
           -- Look up Macros in parsed module, add to SkEnv when found.
-          let mname = unLoc (ideclName idecl)
-              mname' = moduleNameString mname
           mdl <- lookupModule mname Nothing
           mb_minfo <- getModuleInfo mdl
           case mb_minfo of
@@ -382,11 +408,18 @@ setExpanderSettings :: Skc ()
 setExpanderSettings = do
   flags0 <- getSessionDynFlags
   let flags1 = flags0 { hscTarget = HscInterpreted
-                      , ghcLink = LinkInMemory
-                      }
+                      , ghcLink = LinkInMemory }
       flags2 = gopt_unset flags1 Opt_Hpc
       flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
       flags4 = updOptLevel 0 flags3
+
+  -- When not saved, save the original DynFlags for compiling required
+  -- modules.
+  skenv <- getSkEnv
+  case envMakeDflags skenv of
+    Nothing -> putSkEnv (skenv {envMakeDflags = Just flags0})
+    Just _  -> return ()
+
   setDynFlags flags4
   contextModules <- envContextModules <$> getSkEnv
   setContext (map (mkIIDecl . fsLit) contextModules)
@@ -399,6 +432,44 @@ withExpanderSettings act =
            setDynFlags
            (const (setExpanderSettings >> act))
 
+setRequiredSettings :: Skc ()
+setRequiredSettings = do
+  skenv <- getSkEnv
+  case envMakeDflags skenv of
+    Just dflags -> setDynFlags dflags
+    Nothing     -> failS "setOrigSettings: missing DynFlags"
+  putSkEnv skenv {envMessager = requiredMessager}
+
+withRequiredSettings :: Skc a -> Skc a
+withRequiredSettings act =
+  gbracket
+    (do dflags <- getSessionDynFlags
+        skenv <- getSkEnv
+        return (dflags, skenv))
+    (\(dflags, skenv) -> setDynFlags dflags >> putSkEnv skenv)
+    (const (setRequiredSettings >> act))
+
+requiredMessager :: Messager
+requiredMessager hsc_env mod_index recomp mod_summary =
+  case recomp of
+    MustCompile -> showMsg "Compiling " (" [required]")
+    UpToDate
+      | verbosity dflags >= 2 -> showMsg "Skipping " ""
+      | otherwise             -> return ()
+    RecompBecause why ->
+      showMsg "Compiling " (" [required, " ++ why ++ "]")
+  where
+    dflags = hsc_dflags hsc_env
+    showMsg msg reason =
+      compilationProgressMsg
+        dflags
+        (showModuleIndex mod_index ++
+         msg ++
+         showModMsg dflags (hscTarget dflags)
+                    (recompileRequired recomp)
+                     mod_summary ++
+         reason)
+
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
 boundedNames form =
@@ -406,12 +477,14 @@ boundedNames form =
     List xs          -> concatMap boundedName xs
     Atom (ASymbol n) -> [n]
     _                -> []
+{-# INLINE boundedNames #-}
 
 boundedName :: Code -> [FastString]
 boundedName form =
   case unCode form of
     List ((LForm (L _ (Atom (ASymbol "=")))):n:_) -> boundedNameOne n
     _                                             -> []
+{-# INLINE boundedName #-}
 
 boundedNameOne :: Code -> [FastString]
 boundedNameOne form =
@@ -425,6 +498,7 @@ boundedNameOne form =
       case unCode x of
         Atom (ASymbol n) | isLower (headFS n) -> [n]
         _                                     -> []
+{-# INLINE boundedNameOne #-}
 
 -- | Perform 'SKc' action with temporary shadowed macro environment.
 withShadowing :: [FastString] -- ^ Names of macro to shadow.

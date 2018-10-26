@@ -533,15 +533,15 @@
          (do (it "should expand to module header"
                  (expandTo
                   (defmodule Foo
-                    (load (Foo.Macro)
-                          (Bar.Macro))
+                    (load (Data.Maybe)
+                          (Data.List))
                     (load-use (Control.Monad))
                     (use (qualified Foo.Types as Types)
                          (Foo.Buzz (buzz1 buzz2)))
                     (export (FooClass ..) f1 f2))
                   (begin
-                    (require Foo.Macro)
-                    (require Bar.Macro)
+                    (require Data.Maybe)
+                    (require Data.List)
                     (require Control.Monad)
                     (module Foo (FooClass ..) f1 f2)
                     (import qualified Foo.Types as Types)
@@ -550,10 +550,10 @@
              (it "should ignore export when not given"
                  (expandTo
                   (defmodule Foo
-                    (load (Foo.Macro))
+                    (load (Data.Maybe))
                     (use (Control.Monad)))
                   (begin
-                    (require Foo.Macro)
+                    (require Data.Maybe)
                     (module Foo)
                     (import Control.Monad))))
              (it "should export ()"

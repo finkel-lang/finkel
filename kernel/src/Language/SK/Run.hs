@@ -46,6 +46,7 @@ import GHC ( ParsedModule(..), TypecheckedModule(..)
            , typecheckModule, runGhc )
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HeaderInfo (getOptionsFromFile)
+import HscMain (batchMsg)
 import HscTypes ( HsParsedModule(..), ModSummary(..), handleSourceError
                 , srcErrorMessages )
 import HsImpExp (ImportDecl(..))
@@ -143,7 +144,11 @@ initialSkEnv = SkEnv
   , envContextModules = ["Prelude", "Language.SK"]
   , envDefaultLangExts = (Nothing, emptyFlagSet)
   , envSilent = False
-  , envAddInDefineMacro = False }
+  , envAddInDefineMacro = False
+  , envMake = Nothing
+  , envMakeDflags = Nothing
+  , envMessager = batchMsg
+  , envRequiredModuleNames = [] }
 
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =

@@ -1,9 +1,10 @@
 {-# LANGUAGE BangPatterns, CPP #-}
 -- | Make mode for skc.
 module Language.SK.Make
-  ( asModuleName
+  ( initSessionForMake
   , make
-  , initSessionForMake
+  , simpleMake
+  , asModuleName
   , TargetSource(..)
   ) where
 
@@ -31,13 +32,12 @@ import ErrUtils (withTiming)
 import Exception (ghandle, tryIO)
 import Finder ( addHomeModuleToFinder, findImportedModule
               , findObjectLinkableMaybe )
-import GHC ( getModSummary, setSessionDynFlags )
+import GHC ( setSessionDynFlags )
 import GhcMake (topSortModuleGraph)
 import GhcMonad ( GhcMonad(..), getSessionDynFlags, modifySession
                 , withTempSession )
 import Outputable ( text, showPpr )
-import HscMain (batchMsg)
-import HscTypes ( FindResult(..), GhcApiError, ModSummary(..)
+import HscTypes ( FindResult(..), ModSummary(..)
                 , HscEnv(..), InteractiveContext(..)
                 , InteractiveImport(..), ModuleGraph
                 , SourceModified(..)
@@ -49,7 +49,7 @@ import HscTypes ( FindResult(..), GhcApiError, ModSummary(..)
 import HsImpExp (ImportDecl(..), simpleImportDecl)
 import HsSyn (HsModule(..))
 import InteractiveEval (setContext)
-import Module ( ModLocation(..), ModuleName, installedUnitIdEq
+import Module ( ModLocation(..), installedUnitIdEq
               , mkModuleName, mkModuleNameFS, moduleName
               , moduleNameSlashes, moduleNameString, moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
@@ -88,12 +88,11 @@ import Language.SK.SKC
 -- The problem in dependency resolution when requiring home package
 -- module is, we need module imports list to make ModSummary, but
 -- modules imports could not be obtained unless the source code is macro
--- expanded. However, macroexpansion may use macros from required
--- modules.
+-- expanded. However, macro-expansion may use macros from other home
+-- package modules, which are not loaded to GHC session yet.
 --
--- Currently, compilation is done with firstly partitioning the input SK
--- sources to modules which containing `require' syntax of home package
--- modules, and which doesn't.
+-- Currently, compilation is done with recursively calling 'make'
+-- function in 'require' macro, during macro-expansion.
 --
 -- Once these dependency resolution works were tried with custom user
 -- hooks in cabal setup script. However, as of Cabal version 1.24.2,
@@ -165,6 +164,11 @@ initSessionForMake = do
   _ <- getSessionDynFlags >>= setSessionDynFlags
   debug <- getSkcDebug
   modifySkEnv (\e -> e {envDebug = debug})
+
+-- | Simplified make function. Intended to be used for 'envMake' field
+-- in 'SkEnv'.
+simpleMake :: Bool -> String -> Skc ()
+simpleMake recomp name = make [(name, Nothing)] False recomp Nothing
 
 
 -- ---------------------------------------------------------------------
@@ -261,11 +265,11 @@ make' not_yet_compiled readys0 pendings0 = do
       setDumpPrefix (targetSourcePath tsr)
 
       case tsr of
-        SkSource path _mn _form sp -> do
+        SkSource path _mn _form _sp -> do
           mb_result <- compileToHsModule target
           case mb_result of
             Nothing             -> failS "compileToHsModule failed"
-            Just (hmdl, dflags) -> do
+            Just (hmdl, dflags, reqs) -> do
               summary <- mkModSummary (Just path) hmdl
               let summary' = summary {ms_hspp_opts = dflags}
                   imports = map import_name (hsmodImports hmdl)
@@ -288,16 +292,16 @@ make' not_yet_compiled readys0 pendings0 = do
               if notYetReady
                  then go acc i k nycs summarised (target:pendings)
                  else do
-                   let act = mapM (getModSummary' . mkModuleName)
-                                  (requiredModuleNames sp)
-                       act' = catMaybes <$> act
+                   hsc_env <- getSession
+                   let act = requiredModSummary hsc_env
+                       act' = fmap catMaybes (mapM act reqs)
                    compileIfReady summary' imports act'
 
         HsSource path -> do
           mb_result <- compileToHsModule target
           case mb_result of
             Nothing             -> failS "compileToHsModule"
-            Just (hmdl, dflags) -> do
+            Just (hmdl, dflags, _) -> do
               summary <- mkModSummary (Just path) hmdl
               let imports = map import_name (hsmodImports hmdl)
                   summary' = summary {ms_hspp_opts = dflags}
@@ -329,6 +333,7 @@ make' not_yet_compiled readys0 pendings0 = do
                  -- the returned ModSummary to accumulator, and
                  -- continue.
                  reqs <- getReqs
+
                  -- XXX: Test whether required modules are all ready to
                  -- compile.
                  let graph_upto_this =
@@ -372,7 +377,7 @@ makeOne i total ms graph_upto_this = timeIt label go
     label = "MakeOne [" ++ mname ++ "]"
     mname = moduleNameString (ms_mod_name ms)
     go = do
-      -- Keep current DynFlag.
+      -- Keep current DynFlags.
       dflags <- getDynFlags
 
       -- Use cached dynflags from ModSummary before type check. Note
@@ -383,6 +388,7 @@ makeOne i total ms graph_upto_this = timeIt label go
       setDynFlags (ms_hspp_opts ms)
 
       up_to_date <- checkUpToDate ms graph_upto_this
+      debugSkc (";;; up_to_date is " ++ show up_to_date)
       let midx = total - i + 1
           src_modified | up_to_date = SourceUnmodified
                        | otherwise  = SourceModified
@@ -406,20 +412,23 @@ doMakeOne :: Int -- ^ Module index number.
 doMakeOne i total ms src_modified = do
   debugSkc ";;; Entering doMakeOne"
 
-  dflags_orig <- getDynFlags
-  let dflags = ms_hspp_opts ms
+  hsc_env <- getSession
+  skenv <- getSkEnv
+
+  let dflags_orig = hsc_dflags hsc_env
+      dflags = ms_hspp_opts ms
+      hsc_env' = hsc_env {hsc_dflags = dflags}
       loc = ms_location ms
       mname = ms_mod_name ms
       tryGetTimeStamp x = liftIO (tryIO (getModificationUTCTime x))
       e2mb x = case x of
                  Right a -> Just a
                  Left _  -> Nothing
+      messager = envMessager skenv
 
-  hsc_env <- getSession
-  let hsc_env' = hsc_env {hsc_dflags = dflags}
   mb_linkable <- liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
   home_mod_info <-
-    liftIO (compileOne' Nothing (Just batchMsg) hsc_env' ms
+    liftIO (compileOne' Nothing (Just messager) hsc_env' ms
                         i total Nothing mb_linkable src_modified)
   _ <- liftIO (addHomeModuleToFinder hsc_env mname loc)
 
@@ -444,6 +453,27 @@ doMakeOne i total ms src_modified = do
 -- The logic used in below function `checkUpToDate' is almost same as in
 -- 'GhcMake.checkStability', but for object codes only, and the
 -- arguments are different.
+
+-- | Search 'ModSummary' of required module.
+requiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
+requiredModSummary hsc_env mname = do
+  -- Searching in reachable source paths before imported modules because
+  -- we want to use the source modified time from home package modules,
+  -- to support recompilation of a module which requiring other home
+  -- package modules.
+  let handler :: SkException -> Skc (Maybe TargetUnit)
+      handler _ = return Nothing
+  mb_tu <- ghandle handler (Just <$> findTargetSource (mname, Nothing))
+  case mb_tu of
+    Just tu -> mkReadTimeModSummary tu
+    Nothing -> do
+      -- The module name should be found somewher other than current
+      -- target sources. If not, complain what's missing.
+      let mname' = mkModuleName mname
+      fresult <- liftIO (findImportedModule hsc_env mname' Nothing)
+      case fresult of
+        Found {} -> return Nothing
+        _        -> failS ("Cannot find module " ++ mname)
 
 -- | 'True' if the object code and interface file were up to date,
 -- otherwise 'False'.
@@ -537,13 +567,6 @@ findImported hsc_env acc pendings name
    where
      isPending = name `elem` [n | (SkSource _ n _ _, _) <- pendings]
 
--- | Variant of 'getModSummary' wrapped with 'Maybe'.
-getModSummary' :: ModuleName -> Skc (Maybe ModSummary)
-getModSummary' name = ghandle handler (Just <$> getModSummary name)
-  where
-    handler :: GhcApiError -> Skc (Maybe ModSummary)
-    handler _ghcApiError = return Nothing
-
 -- | Make list of 'ModSummary' for read time dependency analysis.
 mkReadTimeModSummaries :: [TargetUnit] -> Skc [ModSummary]
 mkReadTimeModSummaries =
@@ -564,10 +587,10 @@ mkReadTimeModSummary (target, mbphase) =
   -- ModSummary from target source.
   case target of
     HsSource file -> do
-      mb_hsmdl <- compileToHsModule (target, mbphase)
-      case mb_hsmdl of
-        Nothing         -> return Nothing
-        Just (hsmdl, _) -> fmap Just (mkModSummary (Just file) hsmdl)
+      mb_mdl <- compileToHsModule (target, mbphase)
+      case mb_mdl of
+        Nothing          -> return Nothing
+        Just (mdl, _, _) -> fmap Just (mkModSummary (Just file) mdl)
     SkSource file mn _form sp -> do
       let modName = mkModuleName mn
           imports = map (noLoc . mkModuleName) (requiredModuleNames sp)
@@ -576,7 +599,7 @@ mkReadTimeModSummary (target, mbphase) =
     OtherSource _ -> return Nothing
 
 compileToHsModule :: TargetUnit
-                  -> Skc (Maybe (HsModule PARSED, DynFlags))
+                  -> Skc (Maybe (HsModule PARSED, DynFlags, [String]))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
     SkSource _ mn form sp -> Just <$> compileSkModuleForm' sp mn form
@@ -587,27 +610,35 @@ compileToHsModule (tsrc, mbphase) =
 -- language extensions, and macros in 'SkEnv'. Returns tuple of compiled
 -- module and 'Dynflags' to update 'ModSummary'.
 compileSkModuleForm' :: SPState -> String -> [Code]
-                     -> Skc (HsModule PARSED, DynFlags)
+                     -> Skc (HsModule PARSED, DynFlags, [String])
 compileSkModuleForm' sp mn forms = do
   dflags <- getDynFlagsFromSPState sp
-  mdl <- withTempSession (\e -> e {hsc_dflags = dflags}) act
-  return (mdl, dflags)
+  (mdl, reqs) <- withTempSession (\e -> e {hsc_dflags = dflags}) act
+  debugSkc (";;; reqs=" ++ show reqs)
+  return (mdl, dflags, reverse reqs)
   where
     act = do
-      -- Reset macros in current context.
-      resetEnvMacros
+      -- Reset macros and required modules in current SkEnv.
+      resetSkEnv
 
       contextModules <- envContextModules <$> getSkEnv
       let ii = IIDecl . simpleImportDecl . mkModuleNameFS
       setContext (map (ii . fsLit) contextModules)
-      timeIt ("SkModule [" ++ mn ++ "]") (compileSkModuleForm forms)
 
-resetEnvMacros :: Skc ()
-resetEnvMacros =
-  modifySkEnv (\ske -> ske {envMacros = envDefaultMacros ske})
+      timeIt ("SkModule [" ++ mn ++ "]") work
+
+    work = do
+      mdl <- compileSkModuleForm forms
+      required <- envRequiredModuleNames <$> getSkEnv
+      return (mdl, required)
+
+resetSkEnv :: Skc ()
+resetSkEnv =
+  modifySkEnv (\ske -> ske { envMacros = envDefaultMacros ske
+                           , envRequiredModuleNames = []})
 
 compileHsFile :: FilePath -> Maybe Phase
-               -> Skc (HsModule PARSED, DynFlags)
+               -> Skc (HsModule PARSED, DynFlags, [a])
 compileHsFile source mbphase = do
   hsc_env <- getSession
   (dflags, source') <- liftIO (preprocess hsc_env (source, mbphase))
@@ -616,7 +647,7 @@ compileHsFile source mbphase = do
       sbuf = stringToStringBuffer contents
       parseState = GHCLexer.mkPState dflags sbuf location
   case GHCLexer.unP GHCParser.parseModule parseState of
-    GHCLexer.POk _ m    -> return (unLoc m, dflags)
+    GHCLexer.POk _ m    -> return (unLoc m, dflags, [])
     GHCLexer.PFailed {} -> failS ("Parser error with " ++ source)
 
 compileOtherFile :: FilePath -> Skc ()

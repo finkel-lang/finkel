@@ -24,6 +24,7 @@
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Run (initialSkEnv))
+   (Language.SK.Make (simpleMake))
    (qualified Paths_sk_kernel)
 
    ;; internal
@@ -124,7 +125,8 @@
           (mergeMacros specialForms replMacros)))
     (initialSkEnv {envContextModules modules
                    envDefaultMacros defaultMacros
-                   envAddInDefineMacro True})))
+                   envAddInDefineMacro True
+                   envMake (Just simpleMake)})))
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.
