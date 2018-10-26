@@ -152,7 +152,6 @@ type DocMap = Map.Map SrcSpan [AnnotationComment]
 data SPState = SPState
   { comments :: [Located AnnotationComment]
   , targetFile :: FastString
-  , requiredModuleNames :: [String]
   , langExts :: [Located String]
   , ghcOptions :: [Located String]
   , docMap :: DocMap
@@ -166,7 +165,6 @@ initialSPState :: FastString -> Int -> Int -> SPState
 initialSPState file linum colnum =
   SPState { comments = []
           , targetFile = file
-          , requiredModuleNames = []
           , langExts = []
           , ghcOptions = []
           , docMap = Map.empty
@@ -363,7 +361,7 @@ data Token
   | THash Char
   -- ^ Literal @#@.
   | TPcommas Int
-  -- ^ Parenthesized commas.
+  -- ^ Parenthesized commas with number of repeats.
   | TEOF
   -- ^ End of form.
   deriving (Eq, Show)

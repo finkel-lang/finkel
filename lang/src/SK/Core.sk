@@ -381,8 +381,8 @@
                             acc)))
                       ((== label 'load)
                        (return
-                         (: (, 'load (mapcar (\ es `(require ,@es))
-                                             (cdr lst)))
+                         (: (, 'require (mapcar (\ es `(require ,@es))
+                                                (cdr lst)))
                             acc)))
                       ((== label 'load-use)
                        (return (: (, 'load-use (cdr lst)) acc)))
@@ -391,27 +391,18 @@
                        (macro-error lst
                                     "defmodule: unknown section")))))))
           (<- alist (foldM merge-sections [] rest1))
-          (let ((= emit add-load-use? header0
-                  (let ((= header1
-                          ;; Workaround to trick the S-expression
-                          ;; reader.  Using `toCode' and `aSymbol' to
-                          ;; get symbol `require' instead of writing
-                          ;; with quote.
-                          (if (== header0 'load)
-                              (toCode (aSymbol "require"))
-                              header0))
-                        (= e1 (maybe nil id (lookup header0 alist)))
+          (let ((= emit add-load-use? header
+                  (let ((= e1 (maybe nil id (lookup header alist)))
                         (= e2 (maybe nil
-                                     (mapcar (\ es `(,header1 ,@es)))
+                                     (mapcar (\ es `(,header ,@es)))
                                      (lookup 'load-use alist))))
                     (if add-load-use?
                         (append e1 e2)
                         e1)))))
           (return
             `(begin
-               ,@(emit True 'load)
-               (module ,name
-                 ,@(emit False 'export))
+               ,@(emit True 'require)
+               (module ,name ,@(emit False 'export))
                ,@(emit True 'import))))
 
       _ (macro-error form "defmodule: invalid form"))

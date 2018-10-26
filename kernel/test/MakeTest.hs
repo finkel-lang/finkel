@@ -79,7 +79,8 @@ buildFile pre paths =
                    if WayProf `elem` interpWays
                       then make_profile targets False Nothing
                       else make_simple targets False Nothing)
-                    (initialSkEnv {envSilent = True})
+                    (initialSkEnv { envSilent = True
+                                  , envMake = Just simpleMake })
       ret `shouldBe` Right ()
   where
     targets = map (\path -> (path, Nothing)) paths

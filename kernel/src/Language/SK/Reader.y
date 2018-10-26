@@ -49,7 +49,6 @@ import Language.SK.Syntax
 ','       { L _ TUnquote }
 ',@'      { L _ TUnquoteSplice }
 '#'       { L _ (THash _) }
-'require' { L _ (TSymbol "require") }
 'pcommas' { L _ (TPcommas _) }
 
 'symbol'  { L _ (TSymbol _) }
@@ -76,7 +75,6 @@ sexp :: { Code }
      | '[' sexps ']'           { mkHsList $1 $2 }
      | 'pcommas'               { mkPcommas $1 }
      | '(' ')'                 { mkUnit $1 }
-     | '(' 'require' sexps ')' {% mkRequire $1 $2 $3 }
      | '(' sexps ')'           { mkList $1 $2 }
      | '#' sexp                {% rmac $1 $2 }
 
@@ -142,14 +140,6 @@ mkUnit (L l _) = atom l AUnit
 mkList :: Located Token -> [Code] -> Code
 mkList (L l _) body = li l body
 {-# INLINE mkList #-}
-
-mkRequire :: Located Token -> Located Token -> [Code] -> SP Code
-mkRequire lref req rest = do
-  case evalBuilder parseLImport rest of
-    Right idecl -> addRequiredDecl idecl
-    _ -> return ()
-  return (mkList lref (mkASymbol req : rest))
-{-# INLINE mkRequire #-}
 
 mkASymbol :: Located Token -> Code
 mkASymbol (L l (TSymbol x)) = atom l $ ASymbol x
@@ -297,14 +287,6 @@ makeOptionFlags = foldl' f []
       case code of
         LForm (L l (Atom (ASymbol sym))) -> L l (unpackFS sym) : acc
         _ -> acc
-
-addRequiredDecl :: HImportDecl -> SP ()
-addRequiredDecl idecl = do
-  st <- getSPState
-  let names = requiredModuleNames st
-      name = moduleNameString (unLoc (ideclName (unLoc idecl)))
-      st' = st { requiredModuleNames = name : names }
-  putSPState st'
 
 emptyBody :: SrcSpan -> Code
 emptyBody l = li l [sym l "begin"]

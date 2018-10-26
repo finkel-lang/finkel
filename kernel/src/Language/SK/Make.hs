@@ -29,7 +29,7 @@ import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
                 , GhcMode(..), getDynFlags, gopt, gopt_set
                 , gopt_unset, interpWays )
 import ErrUtils (withTiming)
-import Exception (ghandle, tryIO)
+import Exception (tryIO)
 import Finder ( addHomeModuleToFinder, findImportedModule
               , findObjectLinkableMaybe )
 import GHC ( setSessionDynFlags )
@@ -54,7 +54,7 @@ import Module ( ModLocation(..), installedUnitIdEq
               , moduleNameSlashes, moduleNameString, moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
 import Util (getModificationUTCTime, looksLikeModuleName)
-import SrcLoc (mkRealSrcLoc, noLoc)
+import SrcLoc (mkRealSrcLoc)
 import StringBuffer (stringToStringBuffer)
 
 import qualified Parser as GHCParser
@@ -190,9 +190,8 @@ data TargetSource
 
 instance Show TargetSource where
   show s = case s of
-    SkSource path mdl _ sp ->
-      concat ["SkSource ", show path, " ", mdl, " "
-             , show (requiredModuleNames sp) ]
+    SkSource path mdl _ _sp ->
+      concat ["SkSource ", show path, " ", mdl, " "]
     HsSource path -> "HsSource " ++ show path
     OtherSource path -> "OtherSource " ++ show path
 
@@ -213,19 +212,6 @@ isOtherSource ts =
   case ts of
     OtherSource{} -> True
     _             -> False
-
--- | Make temporally ModSummary for target sources without `require' of
--- home package modules.
-partitionRequired :: [String] -> [TargetUnit]
-                  -> ([TargetUnit], [TargetUnit])
-partitionRequired homePkgModules = foldr f ([],[])
-  where
-    f (target@(source,_)) (ready,pending) =
-      case source of
-        SkSource _ _ _ sp
-          | any (`elem` homePkgModules) (requiredModuleNames sp)
-          -> (ready,target:pending)
-        _ -> (target:ready, pending)
 
 -- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule', then compile
 -- to interface file, and object code.
@@ -293,7 +279,7 @@ make' not_yet_compiled readys0 pendings0 = do
                  then go acc i k nycs summarised (target:pendings)
                  else do
                    hsc_env <- getSession
-                   let act = requiredModSummary hsc_env
+                   let act = findRequiredModSummary hsc_env
                        act' = fmap catMaybes (mapM act reqs)
                    compileIfReady summary' imports act'
 
@@ -355,7 +341,7 @@ make' not_yet_compiled readys0 pendings0 = do
          -- dependency analysis.
          go acc i k nycs pendings []
       | otherwise = do
-         let (readies', pendings') = partitionRequired nycs pendings
+         let (readies', pendings') = (pendings, [])
          rt_mss <- mkReadTimeModSummaries readies'
          let pre_graph = mkModuleGraph' rt_mss
              graph = topSortModuleGraph True pre_graph Nothing
@@ -370,8 +356,7 @@ make' not_yet_compiled readys0 pendings0 = do
 
 -- | Check whether recompilation is required, and compile the 'HsModule'
 -- when the codes or dependency modules were updated.
-makeOne :: Int -> Int -> ModSummary
-        -> [ModSummary] -> Skc ModSummary
+makeOne :: Int -> Int -> ModSummary -> [ModSummary] -> Skc ModSummary
 makeOne i total ms graph_upto_this = timeIt label go
   where
     label = "MakeOne [" ++ mname ++ "]"
@@ -454,27 +439,6 @@ doMakeOne i total ms src_modified = do
 -- 'GhcMake.checkStability', but for object codes only, and the
 -- arguments are different.
 
--- | Search 'ModSummary' of required module.
-requiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
-requiredModSummary hsc_env mname = do
-  -- Searching in reachable source paths before imported modules because
-  -- we want to use the source modified time from home package modules,
-  -- to support recompilation of a module which requiring other home
-  -- package modules.
-  let handler :: SkException -> Skc (Maybe TargetUnit)
-      handler _ = return Nothing
-  mb_tu <- ghandle handler (Just <$> findTargetSource (mname, Nothing))
-  case mb_tu of
-    Just tu -> mkReadTimeModSummary tu
-    Nothing -> do
-      -- The module name should be found somewher other than current
-      -- target sources. If not, complain what's missing.
-      let mname' = mkModuleName mname
-      fresult <- liftIO (findImportedModule hsc_env mname' Nothing)
-      case fresult of
-        Found {} -> return Nothing
-        _        -> failS ("Cannot find module " ++ mname)
-
 -- | 'True' if the object code and interface file were up to date,
 -- otherwise 'False'.
 checkUpToDate :: ModSummary -> [ModSummary] -> Skc Bool
@@ -493,6 +457,27 @@ checkUpToDate ms dependencies
         up_to_date = obj_date >= ms_hs_date ms &&
                      all dep_ok sccs_without_self
     return up_to_date
+
+-- | Search 'ModSummary' of required module.
+findRequiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
+findRequiredModSummary hsc_env mname = do
+  -- Searching in reachable source paths before imported modules,
+  -- because we want to use the source modified time from home package
+  -- modules, to support recompilation of a module which requiring other
+  -- home package modules.
+  mb_tu <- handleSkException
+             (const (return Nothing))
+             (Just <$> findTargetSource (mname, Nothing))
+  case mb_tu of
+    Just tu -> mkReadTimeModSummary tu
+    Nothing -> do
+      -- The module name should be found somewher other than current
+      -- target sources. If not, complain what's missing.
+      let mname' = mkModuleName mname
+      fresult <- liftIO (findImportedModule hsc_env mname' Nothing)
+      case fresult of
+        Found {} -> return Nothing
+        _        -> failS ("Cannot find required module " ++ mname)
 
 -- | Find 'TargetSource' from command line argument.
 findTargetSource :: (String, a) -> Skc (TargetSource, a)
@@ -567,6 +552,43 @@ findImported hsc_env acc pendings name
    where
      isPending = name `elem` [n | (SkSource _ n _ _, _) <- pendings]
 
+-- | Find source code file path by module name.
+findFileInImportPaths :: [FilePath] -> String -> Skc FilePath
+findFileInImportPaths dirs modName = do
+  -- Current approach for source code lookup is search for file with
+  -- '*.sk' suffix first. If found return it, otherwise search file with
+  -- '*.hs' suffix.
+  --
+  -- This searching strategy can used when compiling cabal package
+  -- containing mixed codes with '*.sk' and '*.hs' suffixes.
+  --
+  let suffix = takeExtension modName
+      moduleFileName = moduleNameSlashes (mkModuleName modName)
+      moduleFileName'
+        | suffix `elem` [".sk", ".hs", ".c"] = modName
+        | otherwise = moduleFileName <.> "sk"
+      search ds =
+        case ds of
+          []    -> failS ("Cannot find source for: " ++ modName)
+          d:ds' -> do
+            -- Extension not yet sure for `aPath'.
+            let aPath = d </> moduleFileName'
+                hsPath = replaceExtension aPath ".hs"
+            exists <- liftIO (doesFileExist aPath)
+            if exists
+               then return aPath
+               else do
+                 exists' <- liftIO (doesFileExist hsPath)
+                 if exists'
+                    then return hsPath
+                    else search ds'
+      dirs' | "." `elem` dirs = dirs
+            | otherwise       = dirs ++ ["."]
+  debugSkc (";;; moduleName: " ++ show modName)
+  found <- search dirs'
+  debugSkc (";;; File found: " ++ found)
+  return found
+
 -- | Make list of 'ModSummary' for read time dependency analysis.
 mkReadTimeModSummaries :: [TargetUnit] -> Skc [ModSummary]
 mkReadTimeModSummaries =
@@ -591,10 +613,8 @@ mkReadTimeModSummary (target, mbphase) =
       case mb_mdl of
         Nothing          -> return Nothing
         Just (mdl, _, _) -> fmap Just (mkModSummary (Just file) mdl)
-    SkSource file mn _form sp -> do
-      let modName = mkModuleName mn
-          imports = map (noLoc . mkModuleName) (requiredModuleNames sp)
-      ms <- mkModSummary' (Just file) modName imports Nothing
+    SkSource file mn _form _sp -> do
+      ms <- mkModSummary' (Just file) (mkModuleName mn) [] Nothing
       return (Just ms)
     OtherSource _ -> return Nothing
 
@@ -655,44 +675,6 @@ compileOtherFile path = do
   debugSkc (";;; Compiling other code: " ++ path)
   hsc_env <- getSession
   liftIO (oneShot hsc_env StopLn [(path, Nothing)])
-
-findFileInImportPaths :: [FilePath]
-                      -> String
-                      -> Skc FilePath
-findFileInImportPaths dirs modName = do
-  -- Current approach for source code lookup is search for file with
-  -- '*.sk' suffix first. If found return it, otherwise search file with
-  -- '*.hs' suffix.
-  --
-  -- This searching strategy can used when compiling cabal package
-  -- containing mixed codes with '*.sk' and '*.hs' suffixes.
-  --
-  let suffix = takeExtension modName
-      moduleFileName = moduleNameSlashes (mkModuleName modName)
-      moduleFileName'
-        | suffix `elem` [".sk", ".hs", ".c"] = modName
-        | otherwise = moduleFileName <.> "sk"
-      search ds =
-        case ds of
-          [] -> failS ("Cannot find source for: " ++ modName)
-          d:ds' -> do
-            -- Extension not yet sure for `aPath'.
-            let aPath = d </> moduleFileName'
-                hsPath = replaceExtension aPath ".hs"
-            exists <- liftIO (doesFileExist aPath)
-            if exists
-               then return aPath
-               else do
-                 exists' <- liftIO (doesFileExist hsPath)
-                 if exists'
-                    then return hsPath
-                    else search ds'
-      dirs' | "." `elem` dirs = dirs
-            | otherwise     = dirs ++ ["."]
-  debugSkc (";;; moduleName: " ++ show modName)
-  found <- search dirs'
-  debugSkc (";;; File found: " ++ found)
-  return found
 
 -- | Link 'ModSummary's, when required.
 doLink :: [ModSummary] -> Skc ()
