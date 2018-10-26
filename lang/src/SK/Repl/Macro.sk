@@ -84,7 +84,7 @@
    (Debugger (pprTypeAndContents))
 
    ;; process
-   (System.Process (rawSystem))
+   (System.Process (system))
 
    ;; sk-kernel
    (Language.SK)
@@ -503,12 +503,8 @@ COMMANDS:
 (defn (system-cmd ReplAction)
   "Invoke system command."
   [forms]
-  (| ((<- (: cmd args) (map show forms))
-      (do (<- _ecode (liftIO (rawSystem cmd args)))
-          (return '(begin))))
-     (otherwise
-      (let ((= x (located-list forms)))
-        (skSrcError x (++ "system: invalid form: " (show x)))))))
+  (do (<- _ecode (liftIO (system (intercalate " " (map show forms)))))
+      (return '(begin))))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defn (browse-cmd ReplAction)
