@@ -63,7 +63,7 @@
    (Language.SK.Lexer (evalSP))
    (Language.SK.Reader (sexpr))
    (Language.SK.Run (runSkc skErrorHandler withSourceErrorHandling))
-   (Language.SK.SKC ((SkEnv ..) failS fromGhc modifySkEnv))
+   (Language.SK.SKC ((SkEnv ..) failS fromGhc))
    (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
 
    ;; internal
@@ -230,7 +230,6 @@
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory}))
                     (= dflags2 (addWay' WayDyn dflags1))))
-              (modifySkEnv (\ e (e {envMakeDflags (Just dflags2)})))
               (void (setSessionDynFlags dflags2))
               (<- (Session session) (fromGhc (Ghc return)))
               (liftIO (putTheHscEnv session))))
