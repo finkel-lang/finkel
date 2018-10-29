@@ -146,7 +146,7 @@ data SkEnv = SkEnv
      -- name.
    , envMake :: Maybe (Bool -> String -> Skc ())
      -- | 'DynFlags' for 'envMake'.
-   , envMakeDflags :: Maybe DynFlags
+   , envMakeDynFlags :: Maybe DynFlags
      -- | Message used in make.
    , envMessager :: Messager
      -- | Required modules names in current target.

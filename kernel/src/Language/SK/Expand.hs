@@ -416,8 +416,8 @@ setExpanderSettings = do
   -- When not saved, save the original DynFlags for compiling required
   -- modules.
   skenv <- getSkEnv
-  case envMakeDflags skenv of
-    Nothing -> putSkEnv (skenv {envMakeDflags = Just flags0})
+  case envMakeDynFlags skenv of
+    Nothing -> putSkEnv (skenv {envMakeDynFlags = Just flags0})
     Just _  -> return ()
 
   setDynFlags flags4
@@ -435,7 +435,7 @@ withExpanderSettings act =
 setRequiredSettings :: Skc ()
 setRequiredSettings = do
   skenv <- getSkEnv
-  case envMakeDflags skenv of
+  case envMakeDynFlags skenv of
     Just dflags -> setDynFlags dflags
     Nothing     -> failS "setOrigSettings: missing DynFlags"
   putSkEnv skenv {envMessager = requiredMessager}

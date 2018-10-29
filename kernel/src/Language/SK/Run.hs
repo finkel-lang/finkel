@@ -146,7 +146,7 @@ emptySkEnv = SkEnv
   , envSilent              = False
   , envAddInDefineMacro    = False
   , envMake                = Nothing
-  , envMakeDflags          = Nothing
+  , envMakeDynFlags        = Nothing
   , envMessager            = batchMsg
   , envRequiredModuleNames = [] }
 
