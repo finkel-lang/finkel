@@ -238,6 +238,12 @@
 ;;; signature.
 (define-macro defn form
   (case (unCode form)
+    ;; Declaration of string, without documentation. Need to pattern
+    ;; match this first to support defining plain string value functions
+    ;; without documentation.
+    (List [_ sig (pastring str)])
+    (return `(defn ,sig () ,str))
+
     (List [_ sig (pastring _doc) body])
     (return `(defn ,sig () ,body))
 

@@ -434,6 +434,10 @@
                  (expandTo
                   (defn foo 42)
                   (defn foo () 42)))
+             (it "should expand to string"
+                 (expandTo
+                  (defn foo "bar")
+                  (defn foo () "bar")))
              (it "should expand argument patterns"
                  (expandTo
                   (defn foo
