@@ -123,7 +123,7 @@ b_tsigE (LForm (L l _)) e (ctxt,t) =
   in  mkLHsPar (L l e')
 {-# INLINE b_tsigE #-}
 
-b_recConOrUpdE :: Code -> [(FastString,HExpr)] -> Builder HExpr
+b_recConOrUpdE :: Code -> [(Located FastString,HExpr)] -> Builder HExpr
 b_recConOrUpdE sym@(LForm (L l _)) flds
   | isUpper (headFS name)
   = return (L l (mkRdrRecordCon rName cflds))
@@ -139,7 +139,8 @@ b_recConOrUpdE sym@(LForm (L l _)) flds
     mkufld  = cfld2ufld . mkcfld
 {-# INLINE b_recConOrUpdE #-}
 
-b_recUpdE :: Builder HExpr -> [(FastString,HExpr)] -> Builder HExpr
+b_recUpdE :: Builder HExpr -> [(Located FastString,HExpr)]
+          -> Builder HExpr
 b_recUpdE expr flds = do
    expr' <- expr
    let uflds = map (cfld2ufld . mkcfld) flds

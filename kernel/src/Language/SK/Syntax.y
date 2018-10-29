@@ -569,12 +569,14 @@ rlbinds0 :: { [HDecl] }
     : 'list'          {% fmap (:[]) (parse p_decl $1) }
     | rlbinds0 'list' {% fmap (:$1) (parse p_decl $2) }
 
-fbinds :: { [(FastString, HExpr)] }
+fbinds :: { [(Located FastString, HExpr)] }
     : rfbinds { reverse $1 }
 
-rfbinds :: { [(FastString, HExpr)] }
+rfbinds :: { [(Located FastString, HExpr)] }
     : {- empty -}           { [] }
-    | rfbinds 'symbol' expr { (symbolNameFS $2, $3):$1 }
+    | rfbinds 'symbol' expr { case $2 of
+                                LForm (L l _) ->
+                                    (L l (symbolNameFS $2), $3):$1 }
 
 app :: { [HExpr] }
     : rapp { reverse $1 }

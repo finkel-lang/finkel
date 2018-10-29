@@ -88,7 +88,7 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
   where
     unambiguous = Unambiguous noExt rdr
-cfld2ufld _ = error "cfld2ufld"
+cfld2ufld _ = error "Language.SK.Syntax.SynUtils:cfld2ufld"
 #else
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
@@ -98,13 +98,13 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
 {-# INLINE cfld2ufld #-}
 
 -- | Make 'HsRecField' with given name and located data.
-mkcfld :: (FastString, Located a) -> LHsRecField PARSED (Located a)
-mkcfld (name, e@(L fl _)) =
-  L fl HsRecField { hsRecFieldLbl = mkfname fl name
+mkcfld :: (Located FastString, Located a) -> LHsRecField PARSED (Located a)
+mkcfld ((L nl name), e@(L fl _)) =
+  L fl HsRecField { hsRecFieldLbl = mkfname name
                   , hsRecFieldArg = e
                   , hsRecPun = False }
   where
-    mkfname nl n = L nl (mkFieldOcc (L nl (mkRdrName n)))
+    mkfname n = L nl (mkFieldOcc (L nl (mkRdrName n)))
 {-# INLINE mkcfld #-}
 
 quotedSourceText :: String -> SourceText
@@ -175,15 +175,14 @@ getMonoBind bind binds = (bind, binds)
 -- FunBinds rather than pattern bindings.
 has_args :: [LMatch PARSED (LHsExpr PARSED)] -> Bool
 has_args (L _ mtch:_) = not (null (m_pats mtch))
-has_args []                             =
-  error "Language.SK.Syntax.Internal:has_args"
+has_args []           = error "Language.SK.Syntax.SynUtils:has_args"
 
 codeToUserTyVar :: Code -> HTyVarBndr
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
       L l (UserTyVar NOEXT (L l (mkUnqual tvName name)))
-    _ -> error "Language.SK.Syntax.Internal:codeToUserTyVar"
+    _ -> error "Language.SK.Syntax.SynUtils:codeToUserTyVar"
 {-# INLINE codeToUserTyVar #-}
 
 -- | Auxiliary function to absorb version compatibiity of

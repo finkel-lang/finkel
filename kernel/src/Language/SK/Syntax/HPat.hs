@@ -105,9 +105,9 @@ b_labeledP (LForm (L l form)) ps
   | Atom (ASymbol name) <- form
   , let x = headFS name
   , isUpper x || x == ':' = do
-    let mkcfld' (LForm (L _ sym), p)
-          | (Atom (ASymbol n)) <- sym = return (mkcfld (n, p))
-          | otherwise                 = builderError
+    let mkcfld' (LForm (L nl sym), p)
+          | Atom (ASymbol n) <- sym = return (mkcfld (L nl n, p))
+          | otherwise               = builderError
     flds <- mapM mkcfld' ps
     let rc = HsRecFields { rec_flds = flds
                          , rec_dotdot = Nothing }
