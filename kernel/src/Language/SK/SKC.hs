@@ -36,6 +36,7 @@ module Language.SK.SKC
 -- base
 import Control.Exception (Exception(..), throwIO)
 import Control.Monad (when)
+import Control.Monad.Fail (MonadFail(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import System.Environment (lookupEnv)
 import System.IO (hPutStrLn, stderr)
@@ -177,6 +178,10 @@ instance Monad Skc where
   {-# INLINE return #-}
   Skc m >>= k = Skc (m >>= unSkc . k)
   {-# INLINE (>>=) #-}
+
+instance MonadFail Skc where
+  fail = failS
+  {-# INLINE fail #-}
 
 instance MonadIO Skc where
   liftIO = Skc . liftIO
