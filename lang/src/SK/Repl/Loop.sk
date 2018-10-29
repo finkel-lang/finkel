@@ -37,7 +37,9 @@
    (InteractiveEval (getContext parseName setContext))
    (Linker (extendLinkEnv))
    (Name ((Name) getName nameOccName occNameString))
+   (OrdList (toOL))
    (Outputable (ppr showPpr showSDoc))
+   (RdrHsSyn (cvTopDecls))
    (TyCoRep ((TyThing ..)))
    (Var ((Id) (Var) varType))
 
@@ -318,7 +320,8 @@
 
 (defn (eval-decls (-> [HDecl] (Skc Result)))
   (decls)
-  (do (<- (, tythings _ic) (evalDecls decls))
+  (do (let ((= decls' (cvTopDecls (toOL decls)))))
+      (<- (, tythings _ic) (evalDecls decls'))
       (<- hsc-env getSession)
       (let ((= dflags (hsc_dflags hsc-env))
             (= pr tt

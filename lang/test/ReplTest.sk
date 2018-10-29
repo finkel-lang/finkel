@@ -56,8 +56,7 @@
   (<- (, tmpfile hdl) (runIO make-tmpfile))
   (<- current-dir (runIO getCurrentDirectory))
   (<- etid
-    (runIO
-     (forkIO (void (runSkc (eval-loop hdl in-mv) repl-env)))))
+    (runIO (forkIO (void (runSkc (eval-loop hdl in-mv) repl-env)))))
   (let ((= eval-form ok-or-ng form expect
           (d (concat ["evaluate " (show form)])
              (it (concat ["evaluates to " (show expect)])
@@ -81,18 +80,23 @@
     (do
       ;; Statements and declarations
       (ok '(+ 10 32) "42")
-      (ok '(defn (foo (-> Int Int))
-            (n)
+      (ok '(defn (f1 (-> Int Int))
+            [n]
             (+ n 1))
-          "; foo :: Int -> Int")
-      (ok '(foo 41) "42")
+          "; f1 :: Int -> Int")
+      (ok '(f1 41) "42")
       (ok '(begin
             (:: (x y) Int)
             (= x 1)
             (= y 2))
           "; x :: Int\n; y :: Int")
-      (ok '(<- bar (return True))
-          "; bar :: Bool")
+      (ok '(<- z (return True))
+          "; z :: Bool")
+      (ok '(defn (f2 (-> (Maybe Int) Int))
+            [(Just n)] (* n 2)
+            [Nothing]  0)
+          "; f2 :: Maybe Int -> Int")
+      (ok '(f2 (Just 21)) "42")
       (ok '(data Foo (Foo Int))
           (concat ["; $tcFoo :: TyCon\n"
                    "; $tc'Foo :: TyCon\n"
@@ -106,7 +110,7 @@
        '(*_ show bindings)
        (\ ret
          (case ret
-           (Right str) (elem "foo :: Int -> Int = _" (lines str))
+           (Right str) (elem "f1 :: Int -> Int = _" (lines str))
            _ False)))
       (ok '(*_ show context)
           (delines
