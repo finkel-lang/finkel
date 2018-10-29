@@ -21,8 +21,12 @@
   ;; higher order functions
   mapcar)
 
+;; base
 (import Control.Exception ((Exception ..) throw))
+
+;; sk-kernel
 (import Language.SK)
+(import Language.SK.Form (getLoc mkLocatedForm))
 
 
 ;;; Exception

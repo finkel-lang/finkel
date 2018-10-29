@@ -22,9 +22,10 @@
    (Config (cProjectVersion))
 
    ;; sk-kernel
-   (Language.SK)
+   (Language.SK.Expand (specialForms))
    (Language.SK.Run (initialSkEnv))
    (Language.SK.Make (simpleMake))
+   (Language.SK.SKC ((SkEnv ..) (EnvMacros) makeEnvMacros mergeMacros))
    (qualified Paths_sk_kernel)
 
    ;; internal

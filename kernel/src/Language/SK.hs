@@ -1,14 +1,38 @@
--- | Module re-exporting runtime dependency for SK program.
+-- | Module re-exporting runtime dependency for SK kernel programs.
 --
--- When using non-standard Haskell values and functions, this module is
--- likely to be required.
+-- This module exports minimal set of types and functions for writing SK
+-- kernel programs, including quotes, quasi-quotes, unquotes,
+-- unquote-splicings, and macros.
 --
-
 module Language.SK
-  ( module All
+  (
+    -- * Form
+    Atom(..)
+  , Form(..)
+  , LForm(..)
+  , Homoiconic(..)
+  , Code
+  , unCode
+  , nil
+  , aFractional
+  , aSymbol
+
+  -- * Macro
+  , Macro(Macro)
+  , Skc
+  , expand
+  , expand1
+  , gensym
+  , gensym'
+  , quoted
+  , unquoteSplice
+  , skSrcError
+
+  -- * Re-export
+  , GenLocated(..)
   ) where
 
-import Language.SK.Expand as All
-import Language.SK.Form as All
-import Language.SK.Homoiconic as All
-import Language.SK.SKC as All
+import Language.SK.Expand
+import Language.SK.Form
+import Language.SK.Homoiconic
+import Language.SK.SKC

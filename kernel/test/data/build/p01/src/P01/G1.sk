@@ -12,11 +12,13 @@
               `(define-macro ,name form
                  (case (unLForm form)
                    (L l2 (List [_ ,@args])) (return ,body)
-                   _ (failS (++ (show ',name) ": error"))))))
+                   _ (skSrcError ',name ": error")))))
         (return body'))
+
       (L l1 (Atom _))
       (let ((= body'
               `(define-macro ,name ,args
                  (return ,body))))
         (return body')))
-    _ (failS (++ (showLoc form) "defmacro: error"))))
+
+    _ (skSrcError form "defmacro: error")))

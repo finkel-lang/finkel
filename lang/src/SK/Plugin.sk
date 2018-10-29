@@ -15,10 +15,9 @@
    (SK.Prelude))
   (export frontendPlugin))
 
-(macrolet* ((core-macros ()
-               (return
-                 `[,@(map (\ mac (, mac (aSymbol mac)))
-                          (exported-macros SK.Prelude))])))
+(macrolet ((core-macros ()
+             `[,@(map (\ mac (, mac (aSymbol mac)))
+                      (exported-macros SK.Prelude))]))
   (defn (frontendPlugin FrontendPlugin)
     (defaultFrontendPlugin
      {frontend (makeSkFrontend "skc" (core-macros))})))

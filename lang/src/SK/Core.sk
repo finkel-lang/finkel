@@ -23,9 +23,19 @@
   ;; Reexport
   (module SK.Core.List))
 
+;;; Requires
+
+;; base
 (require Control.Monad (foldM))
+
+;; ghc
 (require FastString (unpackFS))
+(require SrcLoc ((SrcSpan ..)))
+
+;; Internal
 (require SK.Core.List)
+
+;;; Imports
 
 ;; base
 (import Control.Monad (foldM when))
@@ -36,11 +46,14 @@
 (import GHC (getModuleInfo lookupModule lookupName modInfoExports))
 (import Module (mkModuleName))
 (import Outputable (ppr showSDoc))
+(import SrcLoc ((SrcSpan ..)))
 (import TyCoRep ((TyThing ..)))
 (import Var (varName))
 
 ;; sk-kernel
 (import Language.SK)
+(import Language.SK.Form (symbolName))
+(import Language.SK.SKC (isMacro))
 
 ;; Internal
 (import SK.Core.List)

@@ -12,7 +12,7 @@
                             (eval-when-compile
                              (define-macro ,@rest))
                             (define-macro ,@rest)))
-     _ (failS "define-macro!: error"))))
+     _ (skSrcError form "error"))))
 
 ;; Simple version of `defmacro' defined with `define-macro!'
 (define-macro! defmacro form
@@ -24,10 +24,10 @@
         `(define-macro! ,name form
            (case form
              (LForm (L l1 (List [_ ,@args]))) (return ,body)
-             _ (failS (++ (show ',name) ": error")))))
+             _ (skSrcError ',name "error"))))
       _ (return `(define-macro ,name ,args
                    (return ,body))))
-    _ (failS "defmac: error")))
+    _ (skSrcError form "error")))
 
 ;;; Using `defmacro' defined above.
 (defmacro m1 (x y)
@@ -44,11 +44,11 @@
 (let-macro ((m2a form
               (case form
                 (LForm (L _ (List [_ a b c]))) (return `(,a (+ ,b ,c)))
-                _ (failS "m2a: error")))
+                _ (skSrcError form "m2a: error")))
             (m2b form
               (case form
                 (LForm (L _ (List [_ x y]))) (return `(+ ,x ,y))
-                _ (failS "m2b: error"))))
+                _ (skSrcError form "m2b: error"))))
   (:: f1 (-> Int Int (IO ())))
   (= f1 x y
     (m2a print x (m2b x y))))
@@ -62,7 +62,7 @@
                                (return '"more or eq to one")
                                (return '"less than one"))
                   Nothing (return '"not a double"))
-                _ (failS "m1: invalid args"))))
+                _ (skSrcError form "m1: invalid args"))))
   (:: fracmac (IO ()))
   (= fracmac
     (do (putStrLn (m1 1.1))
@@ -82,8 +82,8 @@
                   (case mbints
                     (Just (, x y z))
                     (return `[,(* x 100) ,(* y 100) ,(* z 100)])
-                    _ (failS "m2: invalid args")))
-                _ (failS "m2: invalid form"))))
+                    _ (skSrcError form "m2: invalid args")))
+                _ (skSrcError form "m2: invalid form"))))
   (:: hslistmac (IO ()))
   (= hslistmac
     (print (m2 1 2 3))))

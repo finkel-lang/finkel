@@ -81,7 +81,6 @@
     (do
       ;; Statements and declarations
       (ok '(+ 10 32) "42")
-      (ok '(funcall1 'putStr "foo") "foo")
       (ok '(defn (foo (-> Int Int))
             (n)
             (+ n 1))
@@ -114,7 +113,6 @@
            ["; context"
             ";  IIDecl: import Control.Monad"
             ";  IIDecl: import SK.Repl.Macro"
-            ";  IIDecl: import SK.Repl.Env"
             ";  IIDecl: import SK.Prelude"
             ";  IIDecl: import Prelude"]))
       (ok '(*_ show dflags)

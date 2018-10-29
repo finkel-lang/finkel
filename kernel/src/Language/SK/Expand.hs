@@ -446,7 +446,9 @@ withRequiredSettings act =
     (do dflags <- getSessionDynFlags
         skenv <- getSkEnv
         return (dflags, skenv))
-    (\(dflags, skenv) -> setDynFlags dflags >> putSkEnv skenv)
+    (\(dflags, skenv) ->
+       do setDynFlags dflags
+          putSkEnv skenv)
     (const (setRequiredSettings >> act))
 
 requiredMessager :: Messager
