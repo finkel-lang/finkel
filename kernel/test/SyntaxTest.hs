@@ -30,7 +30,7 @@ readCode src = do
               (mdl, st) <- compileSkModule src
               ret <- tcHsModule (Just src) Nothing False mdl
               return (ret, mdl, st)
-  compiled <- runSkc go initialSkEnv
+  compiled <- runSkc go defaultSkEnv
   case compiled of
     Right (_tc, mdl, st) -> return (True, Just mdl, Just st)
     Left e -> putStrLn e >> return (False, Nothing, Nothing)
@@ -38,7 +38,7 @@ readCode src = do
 mkTest :: FilePath -> Spec
 mkTest path = do
   let mkRef = runIO . newIORef . error
-      skEnv = initialSkEnv {envSilent = True}
+      skEnv = defaultSkEnv {envSilent = True}
       removeWhenExist file = do
         exist <- doesFileExist file
         when exist (removeFile file)

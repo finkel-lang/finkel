@@ -22,6 +22,7 @@ module Language.SK.SKC
   , getSkcDebug
 
   -- * Macro related functions
+  , emptyEnvMacros
   , insertMacro
   , lookupMacro
   , makeEnvMacros
@@ -279,6 +280,10 @@ lookupMacro name ske = go (envTmpMacros ske)
     go (t:ts)
       | Just macro <- Map.lookup name t = Just macro
       | otherwise = go ts
+
+-- | Empty 'EnvMacros'.
+emptyEnvMacros :: EnvMacros
+emptyEnvMacros = Map.empty
 
 -- | Make 'EnvMacros' from list of pair of macro name and value.
 makeEnvMacros :: [(String, Macro)] -> EnvMacros

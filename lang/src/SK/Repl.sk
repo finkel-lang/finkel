@@ -23,8 +23,7 @@
 
    ;; sk-kernel
    (Language.SK.Expand (specialForms))
-   (Language.SK.Run (initialSkEnv))
-   (Language.SK.Make (simpleMake))
+   (Language.SK.Make (defaultSkEnv))
    (Language.SK.SKC ((SkEnv ..) (EnvMacros) makeEnvMacros mergeMacros))
    (qualified Paths_sk_kernel)
 
@@ -124,10 +123,9 @@
           ["Prelude" "SK.Prelude" "SK.Repl.Env" "SK.Repl.Macro"])
         (= defaultMacros
           (mergeMacros specialForms replMacros)))
-    (initialSkEnv {envContextModules modules
+    (defaultSkEnv {envContextModules modules
                    envDefaultMacros defaultMacros
-                   envAddInDefineMacro True
-                   envMake (Just simpleMake)})))
+                   envAddInDefineMacro True})))
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.

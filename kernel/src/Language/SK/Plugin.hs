@@ -62,12 +62,11 @@ makeSkFrontend name macros flags args = do
                                    , ";;; args:  ", show args ])
                   chooseAction name (action options) o
       debug = skDebug options
-      macros' = mergeMacros (envMacros initialSkEnv)
+      macros' = mergeMacros (envMacros defaultSkEnv)
                             (makeEnvMacros macros)
-      sk_env = initialSkEnv { envDebug = debug
+      sk_env = defaultSkEnv { envDebug = debug
                             , envDefaultMacros = macros'
-                            , envMacros = macros'
-                            , envMake = Just simpleMake }
+                            , envMacros = macros' }
   handleSkException
     (\(SkException se) -> liftIO (do putStrLn se
                                      exitFailure))

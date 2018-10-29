@@ -33,7 +33,7 @@ usage =
 
 parseHsModule :: FilePath -> IO ()
 parseHsModule path =
-  do result <- Run.runSkc go Run.initialSkEnv
+  do result <- Run.runSkc go Make.defaultSkEnv
      case result of
        Right _  -> return ()
        Left err -> putStrLn err
@@ -54,7 +54,7 @@ doMake files =
   do let act = do
            Make.initSessionForMake
            Make.make (zip files (repeat Nothing)) False False Nothing
-     ret <- Run.runSkc act Run.initialSkEnv
+     ret <- Run.runSkc act Make.defaultSkEnv
      case ret of
        Left err -> putStrLn err
        Right _  -> return ()
@@ -64,4 +64,4 @@ printNumSexprs path =
   do contents <- BL.readFile path
      case Lexer.evalSP Reader.sexprs (Just path) contents of
        Right forms -> print (sum (map length forms))
-       Left err -> putStrLn err
+       Left err    -> putStrLn err

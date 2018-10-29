@@ -4,7 +4,7 @@ module Language.SK.Run
   ( runSkc
   , runSkcWithoutHandler
   , withSourceErrorHandling
-  , initialSkEnv
+  , emptySkEnv
   , skErrorHandler
   , compileSkModule
   , compileSkModuleForm
@@ -134,20 +134,20 @@ skErrorHandler fm (FlushOut flush) work =
         (\(SkException se) -> return (Left se))
         work))
 
--- | Initial 'SkEnv' for performing computation with 'Skc'.
-initialSkEnv :: SkEnv
-initialSkEnv = SkEnv
-  { envMacros = specialForms
-  , envTmpMacros = []
-  , envDefaultMacros = specialForms
-  , envDebug = False
-  , envContextModules = ["Prelude", "Language.SK"]
-  , envDefaultLangExts = (Nothing, emptyFlagSet)
-  , envSilent = False
-  , envAddInDefineMacro = False
-  , envMake = Nothing
-  , envMakeDflags = Nothing
-  , envMessager = batchMsg
+-- | Empty 'SkEnv' for performing computation with 'Skc'.
+emptySkEnv :: SkEnv
+emptySkEnv = SkEnv
+  { envMacros              = emptyEnvMacros
+  , envTmpMacros           = []
+  , envDefaultMacros       = emptyEnvMacros
+  , envDebug               = False
+  , envContextModules      = []
+  , envDefaultLangExts     = (Nothing, emptyFlagSet)
+  , envSilent              = False
+  , envAddInDefineMacro    = False
+  , envMake                = Nothing
+  , envMakeDflags          = Nothing
+  , envMessager            = batchMsg
   , envRequiredModuleNames = [] }
 
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
@@ -225,14 +225,16 @@ asHaskellSymbols = f1
                            '-' -> '_'
                            _   -> x)
 
--- | Extract function from macro. Uses 'initialSkEnv' to unwrap the
--- macro from 'Skc'.
+-- | Extract function from macro and apply to given code. Uses
+-- 'emptySkEnv' with 'specialForms' to unwrap the macro from 'Skc'.
 macroFunction :: Macro -> Code -> IO (Either String Code)
 macroFunction mac form = do
   let fn = case mac of
              Macro f       -> f
              SpecialForm f -> f
-  runSkc (fn form) initialSkEnv
+      sk_env = emptySkEnv { envMacros = specialForms
+                          , envDefaultMacros = specialForms }
+  runSkc (fn form) sk_env
 
 -- | Action to type check module.
 --

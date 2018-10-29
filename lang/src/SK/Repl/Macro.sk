@@ -231,13 +231,15 @@
   (gcatch
    (void action)
    (\ e
-     (do (case (fromException e)
-           (Just se) (do (<- dflags getSessionDynFlags)
-                         (liftIO
-                          (putStr (unlines
-                                   (map (showSDoc dflags)
-                                        (pprErrMsgBagWithLoc
-                                         (srcErrorMessages se)))))))
+     (do (let ((= print-se se
+                 (do (<- dflags getSessionDynFlags)
+                     (liftIO
+                      (putStr (unlines
+                               (map (showSDoc dflags)
+                                    (pprErrMsgBagWithLoc
+                                     (srcErrorMessages se))))))))))
+         (case (fromException e)
+           (Just se) (print-se se)
            _         (liftIO (print e)))
          (<- mods (fmap envContextModules getSkEnv))
          (setContext (map mk-ii mods))))))

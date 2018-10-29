@@ -8,9 +8,9 @@ import Test.Hspec
 import Language.SK.Eval (evalExpr)
 import Language.SK.Lexer (evalSP)
 import Language.SK.Expand (expands, withExpanderSettings)
-import Language.SK.Make (initSessionForMake)
+import Language.SK.Make (initSessionForMake, defaultSkEnv)
 import Language.SK.Reader (sexprs)
-import Language.SK.Run (buildHsSyn, initialSkEnv, runSkc)
+import Language.SK.Run (buildHsSyn, runSkc)
 import Language.SK.SKC (failS)
 import Language.SK.Syntax (parseExpr)
 
@@ -22,7 +22,7 @@ mkTest file =
   describe file $
     it "should evaluate to True" $ do
       contents <- BL.readFile file
-      ret <- runSkc (evalContents contents) initialSkEnv
+      ret <- runSkc (evalContents contents) defaultSkEnv
       ret `shouldBe` Right True
   where
     evalContents bs = do

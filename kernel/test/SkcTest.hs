@@ -26,6 +26,7 @@ import Test.QuickCheck
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.Homoiconic
+import Language.SK.Make
 import Language.SK.Run
 import Language.SK.SKC
 import Language.SK.Syntax
@@ -48,13 +49,13 @@ exceptionTest = do
   describe "Applicative instance of Skc" $
     it "should return 42" $ do
       let act = (*) <$> pure 6 <*> pure 7
-      ret <- runSkcWithoutHandler act initialSkEnv
+      ret <- runSkcWithoutHandler act defaultSkEnv
       ret `shouldBe` Right 42
 
   describe "ExceptionMonad instance of Skc" $
     it "should return 42" $ do
       let act = gbracket (return 21) return (\x -> return (x * 2))
-      ret <- runSkcWithoutHandler act initialSkEnv
+      ret <- runSkcWithoutHandler act defaultSkEnv
       ret `shouldBe` Right (42 :: Int)
 
   describe "running Skc action containing `failS'" $
@@ -62,11 +63,11 @@ exceptionTest = do
       let p :: SkException -> Bool
           p (SkException m) = m == "foo"
           act = failS "foo"
-      runSkcWithoutHandler act initialSkEnv `shouldThrow` p
+      runSkcWithoutHandler act defaultSkEnv `shouldThrow` p
 
   describe "running Skc action containing SourceError" $
     it "should throw SourceError" $ do
-      let act = toGhc (skSrcError nil "foo") initialSkEnv
+      let act = toGhc (skSrcError nil "foo") defaultSkEnv
           p :: SourceError -> Bool
           p _ = True
       runGhc (Just libdir) act `shouldThrow` p
@@ -81,7 +82,7 @@ exceptionTest = do
       let form = "(:: foo (->)) (= foo 100)"
           sel :: SkException -> Bool
           sel (SkException msg) = subseq "syntax" msg
-          run a = runSkcWithoutHandler a initialSkEnv
+          run a = runSkcWithoutHandler a defaultSkEnv
           build = do (form', _) <- parseSexprs Nothing (BL.pack form)
                      buildHsSyn parseDecls form'
       run build `shouldThrow` sel
@@ -95,7 +96,7 @@ fromGhcTest =
     it "should return the returned value in Ghc" $ do
       let v :: Int
           v = 42
-      x <- runSkc (fromGhc (return v)) initialSkEnv
+      x <- runSkc (fromGhc (return v)) defaultSkEnv
       x `shouldBe` Right v
 
 gensymTest :: Spec

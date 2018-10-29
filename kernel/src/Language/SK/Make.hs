@@ -1,11 +1,11 @@
 {-# LANGUAGE BangPatterns, CPP #-}
 -- | Make mode for skc.
 module Language.SK.Make
-  ( initSessionForMake
+  ( TargetSource(..)
   , make
-  , simpleMake
+  , initSessionForMake
+  , defaultSkEnv
   , asModuleName
-  , TargetSource(..)
   ) where
 
 -- base
@@ -70,6 +70,7 @@ import System.FilePath ( dropExtension, pathSeparator
 
 -- internal
 import Language.SK.Builder
+import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.Lexer
 import Language.SK.Run
@@ -169,6 +170,14 @@ initSessionForMake = do
 -- in 'SkEnv'.
 simpleMake :: Bool -> String -> Skc ()
 simpleMake recomp name = make [(name, Nothing)] False recomp Nothing
+
+-- | 'SkEnv' with make function set.
+defaultSkEnv :: SkEnv
+defaultSkEnv = emptySkEnv
+   { envMacros         = specialForms
+   , envDefaultMacros  = specialForms
+   , envContextModules = ["Prelude", "Language.SK"]
+   , envMake           = Just simpleMake }
 
 
 -- ---------------------------------------------------------------------
