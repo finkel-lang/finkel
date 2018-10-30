@@ -123,17 +123,20 @@
         '(\ (, t _f _ci _fi _sd) t)
         '(\ (, t _f _ci _fi) t)))
 
-  (defmacro ppr-info-args (thing cls fam)
+  (defmacro ppr-info-args
+    [thing cls fam]
     (if (<= 804 ghc-version)
         `(, ,thing _fixity ,cls ,fam _sd)
         `(, ,thing _fixity ,cls ,fam)))
 
-  (defmacro ppr-tt-args (name)
+  (defmacro ppr-tt-args
+    [name]
     (if (<= 804 ghc-version)
         `(, ,name _fixity _cls-insts _fam-insts _sd)
         `(, ,name _fixity _cls-insts _fam-insts)))
 
-  (defmacro gen-default-dflags (flg)
+  (defmacro gen-default-dflags
+    [flg]
     (cond
       ((<= 806 ghc-version)
        `(defaultDynFlags (settings ,flg)
@@ -486,7 +489,7 @@
 ;;; REPL commands
 
 (defn (help-cmd ReplAction)
-  (_form)
+  [_form]
   (return
     `(putStrLn ,(++ "DESCRIPTION:
 
@@ -811,7 +814,8 @@ paths from import directories."
      (c "type" (Just ["EXPR"]) type-cmd
         "show type of EXPR")]))
 
-(defmacro* *_ forms
+(defmacro* *_
+  forms
   (case forms
     (: name args) (| ((<- (Just rc)
                         (do (<- name' (code->mb-string name))
@@ -824,5 +828,5 @@ paths from import directories."
 
 ;;; Like `Prelude.print', but without newline at the end.
 (defn (prit (=> (Show a) (-> a (IO ()))))
-  (x)
+  [x]
   (putStr (show x)))

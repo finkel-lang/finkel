@@ -14,219 +14,224 @@
           cxrTests
           listTests))
 
-(defdo (coreTests Spec) ()
-  (describe "Cxr" cxrTests)
-  (describe "List" listTests)
-  (describe "Macro" macroTests))
+(defn (coreTests Spec)
+  (do (describe "Cxr" cxrTests)
+      (describe "List" listTests)
+      (describe "Macro" macroTests)))
 
-(defdo (cxrTests Spec) ()
-  (let ((= d describe)
-        (= t 't)
-        (= tt '(t t))
-        (= fs '(f f f f f f))
-        (= caxr x
-          (it "should be t" (== t x)))
-        (= cdxr x
-          (it "should be (t t)" (== tt x)))))
-  (d "car"
-     (do (caxr (car (cons t tt)))
-         (it "returns t when arg was '[t t]"
-             (== (car '[t t]) t))
-         (it "returns nil when arg was nil"
-             (== (car nil) nil))
-         (it "returns nil when arg was '[]"
-             (== (car '[]) nil))
-         (it "should show error when applied to non-list"
-             (expectFailure (=== nil (car 'foo))))))
-  (d "cdr"
-     (do (cdxr (cdr (cons t tt)))
-         (it "returns '(t) when arg was '[t t]"
-             (== (cdr '[t t]) '(t)))
-         (it "returns nil when arg was nil"
-             (== (cdr nil) nil))
-         (it "returns nil when arg was '[]"
-             (== (cdr '[]) nil))
-         (it "should show error when applied to non-list"
-             (expectFailure (=== nil (cdr 'foo))))))
+(defn (cxrTests Spec)
+  (do (let ((= d describe)
+            (= t 't)
+            (= tt '(t t))
+            (= fs '(f f f f f f))
+            (= caxr x
+              (it "should be t" (== t x)))
+            (= cdxr x
+              (it "should be (t t)" (== tt x)))))
+      (d "car"
+         (do (caxr (car (cons t tt)))
+             (it "returns t when arg was '[t t]"
+                 (== (car '[t t]) t))
+             (it "returns nil when arg was nil"
+                 (== (car nil) nil))
+             (it "returns nil when arg was '[]"
+                 (== (car '[]) nil))
+             (it "should show error when applied to non-list"
+                 (expectFailure (=== nil (car 'foo))))))
+      (d "cdr"
+         (do (cdxr (cdr (cons t tt)))
+             (it "returns '(t) when arg was '[t t]"
+                 (== (cdr '[t t]) '(t)))
+             (it "returns nil when arg was nil"
+                 (== (cdr nil) nil))
+             (it "returns nil when arg was '[]"
+                 (== (cdr '[]) nil))
+             (it "should show error when applied to non-list"
+                 (expectFailure (=== nil (cdr 'foo))))))
 
-  (d "caar"
-     (caxr (caar '((t _) _ _ _))))
-  (d "cadr"
-     (caxr (cadr '(_ t _ _ _))))
-  (d "cdar"
-     (cdxr (cdar '((_ t t) _ _ _))))
-  (d "cddr"
-     (cdxr (cddr '((_ _ _) _ t t))))
+      (d "caar"
+         (caxr (caar '((t _) _ _ _))))
+      (d "cadr"
+         (caxr (cadr '(_ t _ _ _))))
+      (d "cdar"
+         (cdxr (cdar '((_ t t) _ _ _))))
+      (d "cddr"
+         (cdxr (cddr '((_ _ _) _ t t))))
 
-  (d "caaar"
-     (caxr (caaar '(((t _) _ _) _ _ _))))
-  (d "caadr"
-     (caxr (caadr '(_ (t _ _) _ _))))
-  (d "cadar"
-     (caxr (cadar '((_ t _) _ _ _))))
-  (d "caddr"
-     (caxr (caddr '(_ _ t _))))
-  (d "cdaar"
-     (cdxr (cdaar '(((_ t t) _) _))))
-  (d "cdadr"
-     (cdxr (cdadr '(_ (_ t t) _))))
-  (d "cddar"
-     (cdxr (cddar '((_ _ t t) _))))
-  (d "cdddr"
-     (cdxr (cdddr '(_ _ _ t t))))
+      (d "caaar"
+         (caxr (caaar '(((t _) _ _) _ _ _))))
+      (d "caadr"
+         (caxr (caadr '(_ (t _ _) _ _))))
+      (d "cadar"
+         (caxr (cadar '((_ t _) _ _ _))))
 
-  (d "caaaar"
-     (caxr (caaaar '((((t _) _) _) _))))
-  (d "caaadr"
-     (caxr (caaadr '(_ ((t _) _)))))
-  (d "caadar"
-     (caxr (caadar '((_ (t _)) _))))
-  (d "caaddr"
-     (caxr (caaddr '(_ _ (t _)))))
-  (d "cadaar"
-     (caxr (cadaar '(((_ t) _)))))
-  (d "cadadr"
-     (caxr (cadadr '(_ ((_ _) t)))))
-  (d "caddar"
-     (caxr (caddar '((_ _ t)))))
-  (d "cadddr"
-     (caxr (cadddr '(_ _ _ t))))
+      (d "caddr"
+         (caxr (caddr '(_ _ t _))))
+      (d "cdaar"
+         (cdxr (cdaar '(((_ t t) _) _))))
+      (d "cdadr"
+         (cdxr (cdadr '(_ (_ t t) _))))
+      (d "cddar"
+         (cdxr (cddar '((_ _ t t) _))))
+      (d "cdddr"
+         (cdxr (cdddr '(_ _ _ t t))))
 
-  (d "cdaaar"
-     (cdxr (cdaaar '((((_ t t) _) _) _))))
-  (d "cdaadr"
-     (cdxr (cdaadr '(_ ((_ t t) _)))))
-  (d "cdadar"
-     (cdxr (cdadar '((_ (_ t t)) _))))
-  (d "cdaddr"
-     (cdxr (cdaddr '(_ _ (_ t t)))))
-  (d "cddaar"
-     (cdxr (cddaar '(((_ _ t t) _) _))))
-  (d "cddadr"
-     (cdxr (cddadr '(_ (_ _ t t)))))
-  (d "cdddar"
-     (cdxr (cdddar '((_ _ _ t t) _))))
-  (d "cddddr"
-     (cdxr (cddddr '(_ _ _ _ t t)))))
+      (d "caaaar"
+         (caxr (caaaar '((((t _) _) _) _))))
+      (d "caaadr"
+         (caxr (caaadr '(_ ((t _) _)))))
+      (d "caadar"
+         (caxr (caadar '((_ (t _)) _))))
+      (d "caaddr"
+         (caxr (caaddr '(_ _ (t _)))))
+      (d "cadaar"
+         (caxr (cadaar '(((_ t) _)))))
 
-(defdo (listTests Spec) ()
-  (let ((= d describe)))
-  (d "list of x, y, and z"
-     (it "should be a list"
-         (let ((:: f (-> Int Char String Bool))
-               (= f x y z
-                 (list? (list x y z))))
-           (property f))))
+      (d "cadadr"
+         (caxr (cadadr '(_ ((_ _) t)))))
+      (d "caddar"
+         (caxr (caddar '((_ _ t)))))
+      (d "cadddr"
+         (caxr (cadddr '(_ _ _ t))))
 
-  (d "filtering pair"
-     (it "should be pair"
-         (property (\ x
-                     (or [(&& (atom? x) (not (pair? x)))
-                          (&& (== nil x) (not (pair? x)))
-                          (&& (hslist? x) (not (pair? x)))
-                          (pair? x)])))))
+      (d "cdaaar"
+         (cdxr (cdaaar '((((_ t t) _) _) _))))
+      (d "cdaadr"
+         (cdxr (cdaadr '(_ ((_ t t) _)))))
+      (d "cdadar"
+         (cdxr (cdadar '((_ (_ t t)) _))))
+      (d "cdaddr"
+         (cdxr (cdaddr '(_ _ (_ t t)))))
+      (d "cddaar"
+         (cdxr (cddaar '(((_ _ t t) _) _))))
+      (d "cddadr"
+         (cdxr (cddadr '(_ (_ _ t t)))))
+      (d "cdddar"
+         (cdxr (cdddar '((_ _ _ t t) _))))
+      (d "cddddr"
+         (cdxr (cddddr '(_ _ _ _ t t))))))
 
-  (d "filtering string"
-     (it "should be AString"
-         (property (\ x
-                     (==> (string? (toCode x))
-                          (case x
-                            (AString _) True
-                            _           False))))))
+(defn (listTests Spec)
+  (do (let ((= d describe)))
+      (d "list of x, y, and z"
+         (it "should be a list"
+             (let ((:: f (-> Int Char String Bool))
+                   (= f x y z
+                     (list? (list x y z))))
+               (property f))))
 
-  (d "filtering char"
-     (it "should be AChar"
-         (property (\ x
-                     (==> (char? (toCode x))
-                          (case x
-                            (AChar _) True
-                            _         False))))))
+      (d "filtering pair"
+         (it "should be pair"
+             (property (\ x
+                         (or [(&& (atom? x) (not (pair? x)))
+                              (&& (== nil x) (not (pair? x)))
+                              (&& (hslist? x) (not (pair? x)))
+                              (pair? x)])))))
 
-  (d "filtering integer"
-     (it "should be AInteger"
-         (property (\ x
-                     (==> (integer? (toCode x))
-                          (case x
-                            (AInteger _) True
-                            _            False))))))
+      (d "filtering string"
+         (it "should be AString"
+             (property (\ x
+                         (==> (string? (toCode x))
+                              (case x
+                                (AString _) True
+                                _           False))))))
 
-  (d "filtering fractional"
-     (it "should be AFractional"
-         (property (\ x
-                     (==> (fractional? (toCode x))
-                          (case x
-                            (AFractional _) True
-                            _               False))))))
+      (d "filtering char"
+         (it "should be AChar"
+             (property (\ x
+                         (==> (char? (toCode x))
+                              (case x
+                                (AChar _) True
+                                _         False))))))
 
-  (d "filtering ()"
-     (it "should be AUnit"
-         (property (\ x
-                     (==> (unit? (toCode x))
-                          (case x
-                            AUnit True
-                            _     False))))))
+      (d "filtering integer"
+         (it "should be AInteger"
+             (property (\ x
+                         (==> (integer? (toCode x))
+                              (case x
+                                (AInteger _) True
+                                _            False))))))
 
-  (d "length of atom"
-     (it "should be 1 or nil"
-         (let ((:: f (-> Code Property))
-               (= f x
-                 (==> (atom? x) (|| (== 1 (length x))
-                                    (null x)))))
-           (property f))))
+      (d "filtering fractional"
+         (it "should be AFractional"
+             (property (\ x
+                         (==> (fractional? (toCode x))
+                              (case x
+                                (AFractional _) True
+                                _               False))))))
 
-  (d "cons"
-     (do (let ((= x 'x)
-               (= ret1 (cons x '[b c d]))
-               (= ret2 (cons x 'b))))
-         (it "returns a List when consing to List"
-             (list? (cons 'a '(b c d))))
-         (it "returns a List when consing to HsList"
-             (list? ret1))
-         (it "has x at car of HsList-consed-list"
-             (&& (== (car ret1) x)
-                 (== (cdr ret1) '(b c d))))
-         (it "returns a List when consing to Atom"
-             (list? ret2))
-         (it "has x at car of atom-consed-list"
-             (&& (== (car ret2) x)
-                 (== (cdr ret2) '(b))))))
+      (d "filtering ()"
+         (it "should be AUnit"
+             (property (\ x
+                         (==> (unit? (toCode x))
+                              (case x
+                                AUnit True
+                                _     False))))))
 
-  (d "append"
-     (do (it "returns itself when appending nil"
-             (let ((= xs '(a b c)))
-               (&& (== xs (append nil xs))
-                   (== xs (append xs nil)))))
-         (it "shows sum of the length"
-             (let ((= xs '(a b c d e))
-                   (= ys '(f g h i j k l)))
-               (== (length (append xs ys))
-                   (+ (length xs) (length ys)))))
-         (it "throws an exception with non-list arg1"
-             (expectFailure (=== nil (append 'foo nil))))
-         (it "throws an exception with non-list arg2"
-             (expectFailure (=== nil (append nil 'foo))))))
+      (d "length of atom"
+         (it "should be 1 or nil"
+             (let ((:: f (-> Code Property))
+                   (= f x
+                     (==> (atom? x) (|| (== 1 (length x))
+                                        (null x)))))
+               (property f))))
 
-  (d "mapcar"
-     (do (it "replaces non-symbols"
-             (== '(foo bar _ buzz _ _)
-                 (mapcar (\ x (if (symbol? x) x '_))
-                         '(foo bar (a b c) buzz 3 "string"))))
-         (it "replaces non-symbols in HsList"
-             (== '(foo bar _ buzz _ _)
-                 (mapcar (\ x (if (symbol? x) x '_))
-                         '[foo bar (a b c) buzz 3 "string"])))
-         (it "throws an exception on non-list arg2"
-             (expectFailure
-              (=== nil (mapcar (\ x (cons x x)) 'foo)))))))
+      (d "cons"
+         (do (let ((= x 'x)
+                   (= ret1 (cons x '[b c d]))
+                   (= ret2 (cons x 'b))))
+             (it "returns a List when consing to List"
+                 (list? (cons 'a '(b c d))))
+             (it "returns a List when consing to HsList"
+                 (list? ret1))
+             (it "has x at car of HsList-consed-list"
+                 (&& (== (car ret1) x)
+                     (== (cdr ret1) '(b c d))))
+             (it "returns a List when consing to Atom"
+                 (list? ret2))
+             (it "has x at car of atom-consed-list"
+                 (&& (== (car ret2) x)
+                     (== (cdr ret2) '(b))))))
 
-(defmacro! m1 (x)
+      (d "append"
+         (do (it "returns itself when appending nil"
+                 (let ((= xs '(a b c)))
+                   (&& (== xs (append nil xs))
+                       (== xs (append xs nil)))))
+             (it "shows sum of the length"
+                 (let ((= xs '(a b c d e))
+                       (= ys '(f g h i j k l)))
+                   (== (length (append xs ys))
+                       (+ (length xs) (length ys)))))
+             (it "throws an exception with non-list arg1"
+                 (expectFailure (=== nil (append 'foo nil))))
+             (it "throws an exception with non-list arg2"
+                 (expectFailure (=== nil (append nil 'foo))))))
+
+      (d "mapcar"
+         (do (it "replaces non-symbols"
+                 (== '(foo bar _ buzz _ _)
+                     (mapcar (\ x (if (symbol? x) x '_))
+                             '(foo bar (a b c) buzz 3 "string"))))
+             (it "replaces non-symbols in HsList"
+                 (== '(foo bar _ buzz _ _)
+                     (mapcar (\ x (if (symbol? x) x '_))
+                             '[foo bar (a b c) buzz 3 "string"])))
+             (it "throws an exception on non-list arg2"
+                 (expectFailure
+                  (=== nil (mapcar (\ x (cons x x)) 'foo))))))))
+
+(defmacro! m1
+  [x]
   `(++ "m1 " ,x))
 
-(defmacro! expandTo (in out)
+(defmacro! expandTo
+  [in out]
   `(do (<- e (macroFunction ,(car in) ',in))
        (shouldBe e (Right ',out))))
 
-(defmacro! expandFailure (in)
+(defmacro! expandFailure
+  [in]
   `(do (<- e (macroFunction ,(car in) ',in))
        (let ((= isLeft lr
                (case lr
@@ -234,7 +239,7 @@
                  _        False))))
        (shouldBe True (isLeft e))))
 
-(defn (macroTests Spec) ()
+(defn (macroTests Spec)
   (do (let ((= d describe)))
       (d "m1"
          (it "should be \"m1 foo\""

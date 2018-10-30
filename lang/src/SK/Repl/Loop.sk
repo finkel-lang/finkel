@@ -27,8 +27,7 @@
               addWay' defaultFatalMessager defaultFlushOut))
    (Exception (ghandle))
    (GHC (setSessionDynFlags))
-   (GhcMonad ((Ghc ..) (GhcMonad ..) (Session ..) getSessionDynFlags
-              withSession))
+   (GhcMonad ((GhcMonad ..) getSessionDynFlags withSession))
    (HscMain (hscParsedStmt))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (FixityEnv) extendInteractiveContextWithIds
@@ -63,7 +62,7 @@
    (Language.SK.Lexer (evalSP))
    (Language.SK.Reader (sexpr))
    (Language.SK.Run (runSkc skErrorHandler withSourceErrorHandling))
-   (Language.SK.SKC ((SkEnv ..) failS fromGhc))
+   (Language.SK.SKC ((SkEnv ..) failS))
    (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
 
    ;; internal
@@ -78,8 +77,8 @@
 ;;; Starting the REPL
 
 ;;; Start REPL, maybe listen to given port number.
-(defdo (start-repl (-> (Maybe Int) SkEnv (IO ())))
-  (mb-listen ske)
+(defn (start-repl (-> (Maybe Int) SkEnv (IO ())))
+  [mb-listen ske]
   (bracket
    make-tmpfile
    cleanup-tmpfile
@@ -100,7 +99,7 @@
 ;;; Start listner in separate thread, and return temporary file for
 ;;; getting String output from statement.
 (defn (start-listener (-> (Maybe Int) (MVar Input) (IO ())))
-  (mb-listen in-mv)
+  [mb-listen in-mv]
   (maybe (return ())
          (\ port
            (do (putStrLn (++ "Listening on port " (show port)))
@@ -109,7 +108,7 @@
 
 ;; Clean up temporary file.
 (defn (cleanup-tmpfile (-> (, FilePath Handle) (IO ())))
-  ((, path hdl))
+  [(, path hdl)]
   (catch (do (hClose hdl)
              (removeFile path))
     (\ e (if (isDoesNotExistError e)
@@ -124,7 +123,7 @@
 ;;; Tracks the state of intermediate S-expression from input, and
 ;;; continue reading the input until successful parse result.
 (defn (read-print-loop (-> (MVar Input) ThreadId (InputT Repl ())))
-  (to-mvar eval-tid)
+  [to-mvar eval-tid]
   (let ((= print-io result-mv
           (do (<- result (liftIO (takeMVar result-mv)))
               (case result
@@ -200,7 +199,7 @@
 
 ;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))
-  (input0)
+  [input0]
   (do (<- st get-repl-state)
       (let ((= input1
               (++ (pending-input st)
@@ -218,7 +217,7 @@
 ;;; Eval loop
 
 (defn (eval-loop (-> Handle (MVar Input) (Skc ())))
-  (hdl in-mvar)
+  [hdl in-mvar]
   (let ((= initialize
           ;; Default target in interactive context is `HscAsm', updating
           ;; to `HscInterpreted'.  Also, `dynamic' option is enabled in
@@ -265,7 +264,7 @@
 ;;; Temporary set `print-name' as interactive print function and run
 ;;; `act'.
 (defn (with-print-name (-> String (Skc a) (Skc a)))
-  (print-name act)
+  [print-name act]
   (withSession
    (\ he
      (do (<- names (parseName print-name))
@@ -279,7 +278,7 @@
                           act))))))
 
 (defn (eval-form (-> Handle InSource [Code] (Skc Result)))
-  (hdl itype forms)
+  [hdl itype forms]
   (| ((null forms)
       (return (Right "")))
      ((<- (Right decls) (evalBuilder parseTopDecls forms))
@@ -292,7 +291,7 @@
         (Left err) (return (Left (++ err "\n")))))))
 
 (defn (eval-statement (-> Handle InSource HStmt (Skc Result)))
-  (hdl itype stmt0)
+  [hdl itype stmt0]
   (do (<- hsc-env getSession)
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
       (case stmt1
@@ -300,7 +299,7 @@
         Nothing (return (Left "eval-statement: no result")))))
 
 (defn (eval-imports (-> [HImportDecl] (Skc Result)))
-  (imports)
+  [imports]
   (do (<- context getContext)
       (<- dflags getSessionDynFlags)
       (let ((= mkIIDecl (L _ idecl)
@@ -313,7 +312,7 @@
       (return (Right mdls))))
 
 (defn (eval-decls (-> [HDecl] (Skc Result)))
-  (decls)
+  [decls]
   (do (let ((= decls' (cvTopDecls (toOL decls)))))
       (<- (, tythings _ic) (evalDecls decls'))
       (<- hsc-env getSession)
@@ -334,7 +333,7 @@
 
 (defn (update-hsc-env (-> Handle InSource HscEnv [Id] ForeignHValue
                           FixityEnv (Skc Result)))
-  (hdl itype hsc-env ids hvals-io fixity-env)
+  [hdl itype hsc-env ids hvals-io fixity-env]
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its implementation.
   (let ((= success fhvals ret
@@ -389,7 +388,7 @@
 ;;; Auxiliary
 
 (defn (var-name-and-type (-> DynFlags Name Var String))
-  (dflags name var)
+  [dflags name var]
   (let ((= nstr (occNameString (nameOccName name)))
         (= typ (showPpr dflags (varType var))))
     (if (== nstr "it")
@@ -399,7 +398,7 @@
                           (lines (++ nstr (++ " :: " typ))))))))
 
 (defn (names-and-types (-> DynFlags [Name] [Var] String))
-  (dflags names vars)
+  [dflags names vars]
   (where (| ((all null tvs) "")
             (otherwise (intercalate "\n" tvs)))
     (= tvs (zipWith (var-name-and-type dflags) names vars))))

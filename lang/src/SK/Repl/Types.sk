@@ -55,7 +55,7 @@
   (deriving (Functor Applicative Monad MonadIO MonadException)))
 
 (defn (run-repl (-> (Repl a) ReplState (IO a)))
-  (repl st)
+  [repl st]
   (evalStateT (unRepl repl) st))
 
 (defn (put-repl-state (-> ReplState (Repl ())))

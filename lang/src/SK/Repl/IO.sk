@@ -15,7 +15,7 @@
 
 ;;; Execute given action with redirecting stdout to given 'FilePath'.
 (defn (with-io-redirect (-> Handle (IO a) (IO (, a String))))
-  (hdl action)
+  [hdl action]
   (bracket
    (do (<- stdout2 (hDuplicate stdout))
        (hSetFileSize hdl 0)
@@ -32,7 +32,7 @@
         (return (, x (intercalate "\n" contents)))))))
 
 (defn (get-lines (-> Handle [String] (IO [String])))
-  (hdl acc)
+  [hdl acc]
   (catch (do (<- l (hGetLine hdl))
              (get-lines hdl (: l acc)))
     (\ e

@@ -156,6 +156,9 @@
         (L l1 (List args))
         (gensymfy (list-body l1 name0 args body0 '*form*))
 
+        (L l1 (HsList args))
+        (gensymfy (list-body l1 name0 args body0 '*form*))
+
         (L _ (Atom (ASymbol _)))
         (gensymfy (atom-body name0 arg0 body0 '*form*))
 
@@ -208,13 +211,16 @@
 ;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy
 ;;; ... etc. Currently does not suuport lambda-list like pattern match
 ;;; in macro argument.
-(defmacro*! defmacro (name args body)
-  (return `(defmacro* ,name ,args
+(defmacro*! defmacro
+  [name args body]
+  (return `(defmacro* ,name
+             ,args
              (return ,body))))
 
 ;;; Variant of `defmacro'. Wrapped in `eval-when' with `compile' and
 ;;; `load' phases.
-(defmacro*! defmacro! (name args body)
+(defmacro*! defmacro!
+  [name args body]
   (return `(eval-when (compile load)
              (defmacro ,name ,args
                ,body))))
@@ -230,7 +236,8 @@
 
 ;;; Pattern match for `LForm' of `Atom' with `AString'.
 (eval-when-compile
- (defmacro pastring (val)
+ (defmacro pastring
+   [val]
    `(LForm (L _ (Atom (AString ,val))))))
 
 ;;; Macro for defining function. This macro preserves the location of
@@ -274,7 +281,8 @@
 
 ;;; Macro to define a function for both of compilation time and load
 ;;; time. This macro uses `eval-when' and `defn'.
-(defmacro defn! form
+(defmacro defn!
+  form
   `(eval-when (compile load)
      (defn ,@form)))
 
@@ -292,7 +300,8 @@
 ;;; same as wrapping the body with `case' expression with dummy unit, or
 ;;; `if' with `MultiWayIf' GHC language extension.
 
-(defmacro! cond body
+(defmacro! cond
+  body
   `(case ()
      _ (| ,@body)))
 
@@ -302,7 +311,8 @@
 ;;; Expand given form if the given form is a macro form, otherwise
 ;;; return the given form as is. Note that `macroexpand-1' and
 ;;; `macroexpand' are macro, not function.
-(defmacro* macroexpand-1 (form)
+(defmacro* macroexpand-1
+  [form]
   (case (unCode form)
     (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
                      (do (<- expanded (expand1 x))
@@ -311,7 +321,8 @@
 
 ;;; Macro for expanding macro. This version of `macroexpand' recursively
 ;;; expands all sub forms.
-(defmacro* macroexpand (form)
+(defmacro* macroexpand
+  [form]
   (case (unCode form)
     (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
                      (let ((= go expr
@@ -324,7 +335,8 @@
 
 ;;; Macro to return a Haskell list of macro name Strings exported from
 ;;; given module.
-(defmacro* exported-macros (name)
+(defmacro* exported-macros
+  [name]
   (let ((= f dflags mb-thing acc
           (case mb-thing
             (Just (@ thing (AnId var)))

@@ -76,7 +76,7 @@
            "Listen to port (default: 12305)")])
 
 (defn (act (-> ReplOption (IO ())))
-  (ro)
+  [ro]
   (case (repl-mode ro)
     Help print-usage
     Version print-version
@@ -87,7 +87,7 @@
 ;;; Actions
 
 (defn (print-errors (-> [String] (IO ())))
-  (errs)
+  [errs]
   (do (mapM_ putStr errs)
       (putChar \\n)
       print-usage
@@ -106,7 +106,7 @@
   (putStrLn (++ "sk " sk-lang-version)))
 
 (defn (run (-> (Maybe Int) (IO ())))
-  (listen)
+  [listen]
   (do (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
                          ", sk-kernel " sk-kernel-version
                          ", ghc " cProjectVersion ")"]))
@@ -119,12 +119,10 @@
   (showVersion Paths_sk_kernel.version))
 
 (defn (repl-env SkEnv)
-  (let ((= modules
-          ["Prelude" "SK.Prelude" "SK.Repl.Macro"])
-        (= defaultMacros
-          (mergeMacros specialForms replMacros)))
+  (let ((= modules ["Prelude" "SK.Prelude" "SK.Repl.Macro"])
+        (= macros (mergeMacros specialForms replMacros)))
     (defaultSkEnv {envContextModules modules
-                   envDefaultMacros defaultMacros
+                   envDefaultMacros macros
                    envAddInDefineMacro True})))
 
 ;;; Default macros imported in REPL. These macros always get imported
