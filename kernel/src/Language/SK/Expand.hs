@@ -144,6 +144,7 @@ isUnquoteSplice (LForm form) =
     _ -> False
 {-# INLINE isUnquoteSplice #-}
 
+-- | Internally used by macro expander for unquote-splice.
 unquoteSplice :: Homoiconic a => a -> [Code]
 unquoteSplice form =
   case unCode (toCode form) of
@@ -383,6 +384,7 @@ m_evalWhenCompile form =
     _ -> skSrcError form ("eval-when-compile: malformed body: " ++
                           show form)
 
+-- | Special form macros.
 specialForms :: EnvMacros
 specialForms =
   makeEnvMacros

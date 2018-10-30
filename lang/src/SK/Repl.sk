@@ -98,7 +98,7 @@
    (unlines
     ["USAGE: sk [OPTIONS]"
      ""
-     "With no OPTIONS, start interactive REPL."
+     "With no OPTIONS, starts interactive REPL."
      ""
      (usageInfo "OPTIONS:" descrs)])))
 
@@ -120,7 +120,7 @@
 
 (defn (repl-env SkEnv)
   (let ((= modules
-          ["Prelude" "SK.Prelude" "SK.Repl.Env" "SK.Repl.Macro"])
+          ["Prelude" "SK.Prelude" "SK.Repl.Macro"])
         (= defaultMacros
           (mergeMacros specialForms replMacros)))
     (defaultSkEnv {envContextModules modules

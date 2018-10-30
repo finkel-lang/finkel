@@ -20,6 +20,7 @@ cabal-version:       2.0
 
 tested-with:           GHC == 8.2.2
                      , GHC == 8.4.3
+                     , GHC == 8.6.1
 
 custom-setup
   setup-depends:       base      >= 4.7 && < 5
@@ -32,8 +33,7 @@ library
                        SK.Core
                        SK.Setup
                        SK.Repl.Types
-                       SK.Repl.Env
-                       SK.Repl.IORedirect
+                       SK.Repl.IO
                        SK.Repl.Listen
                        SK.Repl.Loop
                        SK.Repl.Macro
@@ -86,13 +86,8 @@ executable skc
                      , sk-kernel
   default-language:    Haskell2010
 
--- REPL executable. Ghc option `-dynamic' is mandatory for runtime
--- HValue lookup. This is required for shareing the compiled result
--- with object code and the expressions typed in from the REPL.
---
--- Compiling with `-dynamic' option makes REPL start up time a bit
--- faster.
---
+-- REPL executable. Compiling with `-dynamic' option makes REPL start
+-- up time a bit faster.
 executable sk
   hs-source-dirs:      app
   main-is:             sk.hs

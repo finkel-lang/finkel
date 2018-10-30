@@ -2,7 +2,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Repl.IORedirect
+(defmodule SK.Repl.IO
   (use
    ;; base
    (Control.Exception)

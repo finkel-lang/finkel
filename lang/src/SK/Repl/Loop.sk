@@ -67,9 +67,8 @@
    (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
 
    ;; internal
-   (SK.Repl.Env)
+   (SK.Repl.IO)
    (SK.Repl.Listen)
-   (SK.Repl.IORedirect)
    (SK.Repl.Types))
 
   (export read-form eval-loop read-print-loop init-form start-repl
@@ -230,9 +229,7 @@
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory}))
                     (= dflags2 (addWay' WayDyn dflags1))))
-              (void (setSessionDynFlags dflags2))
-              (<- (Session session) (fromGhc (Ghc return)))
-              (liftIO (putTheHscEnv session))))
+              (void (setSessionDynFlags dflags2))))
         (= withAsyncHandler
           (ghandle
            (\ e
@@ -260,9 +257,7 @@
                  (do (<- expanded (expands [form]))
                      (with-print-name print-name
                        (eval-form hdl itype expanded)))))
-              (<- (Session session) (fromGhc (Ghc return)))
-              (liftIO (do (putTheHscEnv session)
-                          (putMVar out-mv ret)))))
+              (liftIO (putMVar out-mv ret))))
         (= loop
           (withAsyncHandler (>> eval-one loop))))
     (>> initialize loop)))
