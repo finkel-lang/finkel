@@ -1,5 +1,5 @@
 name:                sk-lang
-version:             0.9.0.0
+version:             0.10.0.0
 synopsis:            SK language core and executables.
 description:         SK language core functions and macros, with REPL
                      executable and compiler executable.
@@ -25,7 +25,7 @@ tested-with:           GHC == 8.2.2
 custom-setup
   setup-depends:       base      >= 4.7 && < 5
                      , Cabal     >= 2.0
-                     , sk-kernel >= 0.14.0
+                     , sk-kernel >= 0.19.0
 
 library
   hs-source-dirs:      src
@@ -54,7 +54,7 @@ library
                      , network
                      , process
                      , transformers
-                     , sk-kernel    >= 0.12.0
+                     , sk-kernel    >= 0.19.0
   default-language:    Haskell2010
   ghc-options:       -Wall
 
