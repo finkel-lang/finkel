@@ -193,12 +193,13 @@ instance ExceptionMonad Skc where
     Skc (StateT (\st ->
                    (toGhc m st `gcatch` \e -> toGhc (h e) st)))
   gmask f =
-    let g r m = Skc (StateT (r . toGhc m))
-    in  Skc (StateT (\st ->
-                       (gmask (\r -> toGhc (f (g r)) st))))
+    Skc (StateT (\st ->
+                   gmask (\r ->
+                            let r' m = Skc (StateT (r . toGhc m))
+                            in  toGhc (f r') st)))
 
 instance HasDynFlags Skc where
-   getDynFlags = Skc (lift getDynFlags)
+   getDynFlags = Skc (lift getSessionDynFlags)
    {-# INLINE getDynFlags #-}
 
 instance GhcMonad Skc where
@@ -244,7 +245,7 @@ putSkEnv = Skc . put
 {-# INLINE putSkEnv #-}
 
 modifySkEnv :: (SkEnv -> SkEnv) -> Skc ()
-modifySkEnv f = Skc (get >>= put . f)
+modifySkEnv f = Skc (modify f)
 {-# INLINE modifySkEnv #-}
 
 setDynFlags :: DynFlags -> Skc ()
