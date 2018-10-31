@@ -97,6 +97,8 @@ executable sk-profile
   ghc-options:         -Wall -threaded -rtsopts
   build-depends:       base
                      , bytestring
+                     , filepath
+                     , ghc
                      , sk-kernel
   default-language:    Haskell2010
 
