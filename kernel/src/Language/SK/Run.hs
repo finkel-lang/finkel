@@ -54,7 +54,7 @@ import HsSyn (HsModule(..))
 import Module (ModLocation(..), ModuleName, mkModule, mkModuleName)
 import Outputable (showSDoc)
 import Panic (GhcException(..), handleGhcException)
-import SrcLoc (Located, noLoc)
+import SrcLoc (Located)
 import Util (getModificationUTCTime)
 
 -- ghc-paths
@@ -294,7 +294,6 @@ mkModSummary' mbfile modName imports mb_pm = do
   let fn = fromMaybe "anonymous" mbfile
       unitId = thisPackage dflags0
       mmod = mkModule unitId modName
-      prelude = noLoc (mkModuleName "Prelude")
       imported = map (\x -> (Nothing, x)) imports
       tryGetTimeStamp x = liftIO (tryIO (getModificationUTCTime x))
   mloc <- liftIO (mkHomeModLocation dflags0 modName fn)
@@ -322,7 +321,7 @@ mkModSummary' mbfile modName imports mb_pm = do
                     , ms_iface_date = iface_date
                     , ms_parsed_mod = mb_pm
                     , ms_srcimps = []
-                    , ms_textual_imps = (Nothing, prelude) : imported
+                    , ms_textual_imps = imported
                     , ms_hspp_file = fn
                     , ms_hspp_opts = dflags1
                     , ms_hspp_buf = Nothing }
