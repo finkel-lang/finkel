@@ -112,25 +112,34 @@ failB err = Builder (StateT (\_ -> Left err))
 
 instance Functor Builder where
     fmap = liftM
+    {-# INLINE fmap #-}
 
 instance Applicative Builder where
-    pure = return
+    pure  = return
+    {-# INLINE pure #-}
     (<*>) = ap
+    {-# INLINE (<*>) #-}
 
 instance Monad Builder where
-  return a = Builder (return a)
+  return a = Builder (a `seq` return a)
+  {-# INLINE return #-}
   m >>= k  =
       Builder
         (StateT (\st ->
                    case runStateT (unBuilder m) st of
-                     Right (a,st') -> runStateT (unBuilder (k a)) st'
+                     Right (a,st') ->
+                       let m' = a `seq` k a
+                       in  m' `seq` runStateT (unBuilder m') st'
                      Left err -> Left err))
+  {-# INLINE (>>=) #-}
 
 getBState :: Builder BState
 getBState = Builder get
+{-# INLINE getBState #-}
 
 putBState :: BState -> Builder ()
 putBState = Builder . put
+{-# INLINE putBState #-}
 
 -- | Parse with builder using given tokens, continue on successful
 -- parse.
@@ -145,10 +154,11 @@ formLexer :: (Code -> Builder a) -> Builder a
 formLexer cont = do
     st <- getBState
     case inputs st of
-      [] -> cont (LForm (L undefined TEnd))
+      []   -> cont (LForm (L undefined TEnd))
       x:xs -> do
         putBState (st {inputs = xs, lastToken = Just x})
         cont x
+{-# INLINE formLexer #-}
 
 builderError :: Builder a
 builderError = do

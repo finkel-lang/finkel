@@ -26,11 +26,15 @@
 ;;; Requires
 
 ;; base
+(require Prelude)
 (require Control.Monad (foldM))
 
 ;; ghc
 (require FastString (unpackFS))
 (require SrcLoc ((SrcSpan ..)))
+
+;; sk-kernel
+(require Language.SK)
 
 ;; Internal
 (require SK.Core.List)

@@ -19,6 +19,7 @@ module Language.SK.SKC
   , modifySkEnv
   , emptyFlagSet
   , setDynFlags
+  , setContextModules
   , getSkcDebug
 
   -- * Macro related functions
@@ -58,9 +59,12 @@ import ErrUtils (mkErrMsg)
 import Exception (ExceptionMonad(..), ghandle)
 import GhcMonad ( Ghc(..), GhcMonad(..), getSessionDynFlags
                 , modifySession )
+import HsImpExp (simpleImportDecl)
 import HscMain (Messager)
-import HscTypes ( HscEnv(..), InteractiveContext(..), TyThing(..)
-                , mkSrcErr )
+import HscTypes ( HscEnv(..), InteractiveContext(..)
+                , InteractiveImport(..), TyThing(..), mkSrcErr )
+import InteractiveEval (setContext)
+import Module (mkModuleName)
 import Outputable ( alwaysQualify, neverQualify, showSDocForUser, text
                   , ppr )
 import UniqSupply (mkSplitUniqSupply, uniqFromSupply)
@@ -254,6 +258,12 @@ setDynFlags dflags =
             (\h -> h { hsc_dflags = dflags
                      , hsc_IC = (hsc_IC h) {ic_dflags = dflags}}))
 {-# INLINE setDynFlags #-}
+
+-- | Set context modules in current session to given modules.
+setContextModules :: [String] -> Skc ()
+setContextModules names = do
+  let ii = IIDecl . simpleImportDecl . mkModuleName
+  setContext (map ii names)
 
 -- | Get sk debug setting from environment variable /SKC_DEBUG/.
 getSkcDebug :: MonadIO m => m Bool

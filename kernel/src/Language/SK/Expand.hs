@@ -37,12 +37,12 @@ import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HscMain (Messager, hscTcRnLookupRdrName, showModuleIndex)
 import HscTypes ( InteractiveImport(..), HscEnv(..), FindResult(..)
                 , showModMsg )
-import HsImpExp (ImportDecl(..), ieName, simpleImportDecl)
+import HsImpExp (ImportDecl(..), ieName)
 import HsSyn (HsModule(..))
 import InteractiveEval (getContext)
 import Linker (getHValue)
 import MkIface (RecompileRequired(..), recompileRequired)
-import Module (mkModuleNameFS, moduleNameString)
+import Module (moduleNameString)
 import Name (nameOccName)
 import Outputable (showPpr)
 import RdrName (rdrNameOcc)
@@ -423,8 +423,6 @@ setExpanderSettings = do
     Just _  -> return ()
 
   setDynFlags flags4
-  contextModules <- envContextModules <$> getSkEnv
-  setContext (map (mkIIDecl . fsLit) contextModules)
 
 -- | Perform given action with DynFlags set for macroexpansion, used
 -- this to preserve original DynFlags.
@@ -677,7 +675,3 @@ mkQuoted l form = tList l [tSym l "quoted", form]
 emptyForm :: Code
 emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
 {-# INLINE emptyForm #-}
-
-mkIIDecl :: FastString -> InteractiveImport
-mkIIDecl = IIDecl . simpleImportDecl . mkModuleNameFS
-{-# INLINE mkIIDecl #-}

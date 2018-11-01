@@ -7,9 +7,17 @@
 ;;;; line oriented user input, e.g. network sockets.
 
 (require SK.Core)
-(require SK.Repl.Macro)
 
 (defmodule SK.Repl
+  (load
+   ;; base
+   (Prelude)
+
+   ;; sk-kernel
+   (Language.SK)
+
+   ;; internal
+   (SK.Repl.Macro))
   (use
    ;; base
    (Control.Monad (mplus))
@@ -127,10 +135,9 @@
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.
-(macrolet* ((the-macros ()
-              (return
-                `[,@(map (\ mac `(, ,mac ,(aSymbol mac)))
-                         (++ (exported-macros SK.Core)
-                             (exported-macros SK.Repl.Macro)))])))
+(macrolet ((the-macros ()
+             `[,@(map (\ mac `(, ,mac ,(aSymbol mac)))
+                      (++ (exported-macros SK.Core)
+                          (exported-macros SK.Repl.Macro)))]))
   (defn (replMacros EnvMacros)
     (makeEnvMacros (the-macros))))

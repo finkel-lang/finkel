@@ -11,7 +11,7 @@ import Language.SK.Expand (expands, withExpanderSettings)
 import Language.SK.Make (initSessionForMake, defaultSkEnv)
 import Language.SK.Reader (sexprs)
 import Language.SK.Run (buildHsSyn, runSkc)
-import Language.SK.SKC (failS)
+import Language.SK.SKC (SkEnv(..), failS, setContextModules)
 import Language.SK.Syntax (parseExpr)
 
 evalTests :: [FilePath] -> Spec
@@ -22,7 +22,9 @@ mkTest file =
   describe file $
     it "should evaluate to True" $ do
       contents <- BL.readFile file
-      ret <- runSkc (evalContents contents) defaultSkEnv
+      let modules = ["Prelude", "Language.SK"]
+      ret <- runSkc (evalContents contents)
+                    (defaultSkEnv {envContextModules = modules})
       ret `shouldBe` Right True
   where
     evalContents bs = do

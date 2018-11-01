@@ -718,7 +718,7 @@ parseType = p_type
 unwrapListL :: Code -> [Code]
 unwrapListL (LForm (L _ form)) =
     case form of
-      List xs -> xs
+      List xs   -> xs
       HsList xs -> xs
-      _ -> []
+      _         -> []
 }

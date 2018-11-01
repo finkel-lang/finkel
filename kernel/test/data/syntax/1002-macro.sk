@@ -2,6 +2,9 @@
 
 (module Main)
 
+(require Prelude)
+(require Language.SK)
+
 (import Language.SK)
 
 (eval-when-compile

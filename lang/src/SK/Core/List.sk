@@ -21,6 +21,16 @@
   ;; higher order functions
   mapcar)
 
+;;; Requires
+
+;; base
+(require Prelude)
+
+;; sk-kernel
+(require Language.SK)
+
+;;; Imports
+
 ;; base
 (import Control.Exception ((Exception ..) throw))
 

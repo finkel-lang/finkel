@@ -3,6 +3,9 @@
 (require SK.Core)
 
 (defmodule CoreTest
+  (load
+   (Prelude)
+   (Language.SK))
   (use
    (Language.SK.Run)
    (Test.Hspec)

@@ -175,10 +175,15 @@ hiddenDescrs =
 chooseAction :: String -> SkAction -> SkcOptions -> Skc ()
 chooseAction name act o =
   case act of
-    SkMake    -> make (input o) (skC o) (skForceRecomp o) (skO o)
+    SkMake    -> doMake o
     SkHsrc    -> hsrc o
     SkHelp    -> help name
     SkVersion -> printVersion
+
+doMake :: SkcOptions -> Skc ()
+doMake o = do
+  initSessionForMake
+  make (input o) (skC o) (skForceRecomp o) (skO o)
 
 hsrc :: SkcOptions -> Skc ()
 hsrc o = do

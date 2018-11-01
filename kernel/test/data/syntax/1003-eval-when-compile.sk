@@ -4,17 +4,20 @@
 
 (module Main)
 
+(require Prelude)
+(require Language.SK)
+
 ;;; Function declaration and macro definition done during compilation
 ;;; phase. Codes inside `eval-when-compile' do won't appear in resulting
 ;;; Haskell code.
 (eval-when-compile
-  ;; Function called later from macro `m1'.
-  (:: f1 (-> Int Int Int))
-  (= f1 a b (+ a b))
+ ;; Function called later from macro `m1'.
+ (:: f1 (-> Int Int Int))
+ (= f1 a b (+ a b))
 
-  ;; Macro defined in compiler's interactive context.
-  (define-macro macro-ct form
-    (return '(putStrLn "From `macro-ct'."))))
+ ;; Macro defined in compiler's interactive context.
+ (define-macro macro-ct form
+   (return '(putStrLn "From `macro-ct'."))))
 
 ;;; Macro `m1' is calling `f1' declared above.
 (let-macro ((m1 form

@@ -6,13 +6,18 @@
 ;;; the code could be invoked from REPL via evaluating the typed in
 ;;; forms.
 
-;; ghc
-(require Config (cProjectVersionInt))
-
-;; Internal
 (require SK.Core)
 
 (defmodule SK.Repl.Macro
+  (load
+   ;; base
+   (Prelude)
+
+   ;; ghc
+   (Config (cProjectVersionInt))
+
+   ;; sk-kernel
+   (Language.SK))
   (use
    ;; base
    (Control.Exception ((Exception ..)))

@@ -4,6 +4,12 @@
 (require SK.Core)
 
 (defmodule SK.Plugin
+  (load
+   ;; base
+   (Prelude)
+
+   ;; sk-kernel
+   (Language.SK))
   (use
    ;; ghc
    (GhcPlugins ((FrontendPlugin ..) defaultFrontendPlugin))

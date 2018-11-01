@@ -39,19 +39,17 @@ import GhcMonad ( GhcMonad(..), getSessionDynFlags, modifySession
 import Outputable ( text, showPpr )
 import HscTypes ( FindResult(..), ModSummary(..)
                 , HscEnv(..), InteractiveContext(..)
-                , InteractiveImport(..), ModuleGraph
-                , SourceModified(..)
+                , ModuleGraph, SourceModified(..)
                 , addToHpt, ms_mod_name
 #if MIN_VERSION_ghc(8,4,0)
                 , mkModuleGraph, extendMG
 #endif
                 )
-import HsImpExp (ImportDecl(..), simpleImportDecl)
+import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
-import InteractiveEval (setContext)
-import Module ( ModLocation(..), installedUnitIdEq
-              , mkModuleName, mkModuleNameFS, moduleName
-              , moduleNameSlashes, moduleNameString, moduleUnitId )
+import Module ( ModLocation(..), installedUnitIdEq, mkModuleName
+              , moduleName, moduleNameSlashes, moduleNameString
+              , moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
 import Util (getModificationUTCTime, looksLikeModuleName)
 import SrcLoc (mkRealSrcLoc)
@@ -163,8 +161,16 @@ initSessionForMake :: Skc ()
 initSessionForMake = do
   -- Returned list of 'InstalledUnitId's are ignored.
   _ <- getSessionDynFlags >>= setSessionDynFlags
+
+  -- Load modules names in SkEnv to current interactive context.
+  sk_env <- getSkEnv
+  let ctx_modules = envContextModules sk_env
+  unless (null ctx_modules) (setContextModules ctx_modules)
+
+  -- Debug information may specified from ENVVAR.
   debug <- getSkcDebug
-  modifySkEnv (\e -> e {envDebug = debug})
+
+  putSkEnv (sk_env {envDebug = debug})
 
 -- | Simplified make function. Intended to be used for 'envMake' field
 -- in 'SkEnv'.
@@ -176,7 +182,6 @@ defaultSkEnv :: SkEnv
 defaultSkEnv = emptySkEnv
    { envMacros         = specialForms
    , envDefaultMacros  = specialForms
-   , envContextModules = ["Prelude", "Language.SK"]
    , envMake           = Just simpleMake }
 
 
@@ -646,21 +651,18 @@ compileSkModuleForm' sp mn forms = do
   debugSkc (";;; reqs=" ++ show reqs)
   return (mdl, dflags, reverse reqs)
   where
-    act = do
-      -- Reset macros and required modules in current SkEnv.
+    act = timeIt ("SkModule [" ++ mn ++ "]") $ do
+
+      -- Reset SkEnv, no need to worry about managing interactive
+      -- context and DynFlags because this action is wrapped by
+      -- 'withTempSession' above.
       resetSkEnv
 
-      contextModules <- envContextModules <$> getSkEnv
-      let ii = IIDecl . simpleImportDecl . mkModuleNameFS
-      setContext (map (ii . fsLit) contextModules)
-
-      timeIt ("SkModule [" ++ mn ++ "]") work
-
-    work = do
       mdl <- compileSkModuleForm forms
       required <- envRequiredModuleNames <$> getSkEnv
       return (mdl, required)
 
+-- | Reset macros and required modules in current SkEnv.
 resetSkEnv :: Skc ()
 resetSkEnv =
   modifySkEnv (\ske -> ske { envMacros = envDefaultMacros ske
