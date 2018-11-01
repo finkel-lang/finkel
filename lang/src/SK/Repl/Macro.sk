@@ -204,18 +204,23 @@
 
 (defn (compile-to-obj-file (-> String (Skc Code)))
   [str]
-  (gbracket
-   (do (<- dflags getSessionDynFlags)
-       (<- context getContext)
-       (return (, dflags context)))
-   (\ (, dflags context)
-     (do (setDynFlags dflags)
-         (setContext context)))
-   (\ (, dflags _context)
-     (do (setDynFlags (dflags {hscTarget HscAsm}))
-         (let ((= force-recomp (gopt Opt_ForceRecomp dflags))))
-         (make [(, str Nothing)] False force-recomp Nothing)
-         (return '(begin))))))
+  (where (gbracket acquire cleanup work)
+    (= acquire
+      (do (<- dflags getDynFlags)
+          (<- sk-env getSkEnv)
+          (return (, dflags sk-env))))
+    (= cleanup (, dflags sk-env)
+      (do (setDynFlags dflags)
+          (putSkEnv sk-env)))
+    (= work (, dflags sk-env)
+      ;; Temporary setting `envAddInDefineMacro' to `False' to avoid
+      ;; adding macros written in the target modules to current REPL
+      ;; session.
+      (do (let ((= force-recomp (gopt Opt_ForceRecomp dflags))))
+          (setDynFlags (dflags {hscTarget HscAsm}))
+          (putSkEnv (sk-env {envAddInDefineMacro False}))
+          (make [(, str Nothing)] False force-recomp Nothing)
+          (return '(begin))))))
 
 (defn (link-module-obj (-> FastString (Skc Code)))
   [name]
@@ -229,12 +234,10 @@
 (defn (compile-and-import (-> FilePath (Skc Code)))
   [path]
   (do (<- sk-env getSkEnv)
-      (putSkEnv (sk-env {envAddInDefineMacro False}))
       (<- _ (compile-to-obj-file path))
       (let ((= mods (envContextModules sk-env))
             (= mname (asModuleName path))))
       (setContext (map mk-ii (: mname mods)))
-      (putSkEnv sk-env)
       (return '(begin))))
 
 (defn (env-context-on-exception (-> (Skc a) (Skc ())))
