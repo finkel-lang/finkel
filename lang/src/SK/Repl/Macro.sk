@@ -99,7 +99,7 @@
    (Language.SK.Make (asModuleName make))
    (Language.SK.Run (buildHsSyn))
    (Language.SK.SKC
-    ((SkEnv ..) getSkEnv macroNames modifySkEnv setDynFlags))
+    ((SkEnv ..) getSkEnv macroNames modifySkEnv putSkEnv setDynFlags))
    (Language.SK.Syntax (parseExpr parseType))
 
    ;; internal
@@ -228,10 +228,13 @@
 
 (defn (compile-and-import (-> FilePath (Skc Code)))
   [path]
-  (do (let ((= mname (asModuleName path))))
+  (do (<- sk-env getSkEnv)
+      (putSkEnv (sk-env {envAddInDefineMacro False}))
       (<- _ (compile-to-obj-file path))
-      (<- mods (fmap envContextModules getSkEnv))
+      (let ((= mods (envContextModules sk-env))
+            (= mname (asModuleName path))))
       (setContext (map mk-ii (: mname mods)))
+      (putSkEnv sk-env)
       (return '(begin))))
 
 (defn (env-context-on-exception (-> (Skc a) (Skc ())))
