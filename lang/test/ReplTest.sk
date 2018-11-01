@@ -114,7 +114,7 @@
                ["; context"
                 ";  IIDecl: import Control.Monad"
                 ";  IIDecl: import SK.Repl.Macro"
-                ";  IIDecl: import SK.Prelude"
+                ";  IIDecl: import Language.SK"
                 ";  IIDecl: import Prelude"]))
           (ok '(*_ show dflags)
               (delines

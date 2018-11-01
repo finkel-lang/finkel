@@ -60,6 +60,7 @@
    (Language.SK.Expand (expands))
    (Language.SK.Form (unLoc))
    (Language.SK.Lexer (evalSP))
+   (Language.SK.Make (initSessionForMake))
    (Language.SK.Reader (sexpr))
    (Language.SK.Run (runSkc skErrorHandler withSourceErrorHandling))
    (Language.SK.SKC ((SkEnv ..) failS))
@@ -153,7 +154,7 @@
               (maybe quit (go1 st0 result-mv) mb-input)))
         (= go1 st0 result-mv line
           (case line
-            [] (go result-mv)
+            []       (go result-mv)
             (: h tl) (| ((== line "(quit)") quit)
                         ((&& (null (pending-input st0))
                              (== \, h))
@@ -190,12 +191,7 @@
 
 ;;; Form to initialize the REPL.
 (defn (init-form Code)
-  '(begin
-    (require Prelude)
-    (require SK.Prelude)
-    (require SK.Repl.Macro)
-    (putStrLn
-     "Hit `Ctrl-d' to quit, type `,?' for more information.")))
+  '(putStrLn "Hit `Ctrl-d' to quit, type ,? for help."))
 
 ;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))
@@ -223,7 +219,8 @@
           ;; to `HscInterpreted'.  Also, `dynamic' option is enabled in
           ;; REPL, since `sk' executable is compiled with `dynamic'
           ;; option specified in cabal configuration file.
-          (do (<- hsc-env getSession)
+          (do initSessionForMake
+              (<- hsc-env getSession)
               (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory}))

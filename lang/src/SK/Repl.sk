@@ -127,9 +127,10 @@
   (showVersion Paths_sk_kernel.version))
 
 (defn (repl-env SkEnv)
-  (let ((= modules ["Prelude" "SK.Prelude" "SK.Repl.Macro"])
+  (let ((= modules ["SK.Repl.Macro" "Language.SK" "Prelude"])
         (= macros (mergeMacros specialForms replMacros)))
     (defaultSkEnv {envContextModules modules
+                   envMacros macros
                    envDefaultMacros macros
                    envAddInDefineMacro True})))
 
