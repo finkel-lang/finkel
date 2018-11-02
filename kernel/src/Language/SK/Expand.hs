@@ -237,7 +237,6 @@ addImportedMacro' thing = do
       hv <- liftIO (withForeignRef fhv localRef)
       let macro = unsafeCoerce hv
       insertMacro (fsLit (showPpr (hsc_dflags hsc_env) name)) macro
-      return ()
     _ -> error "addImportedmacro"
 
 
@@ -339,20 +338,24 @@ m_require form =
           -- Try finding the required module. Make the module with
           -- the function stored in SkEnv when not found.
           fresult <- liftIO (findImportedModule hsc_env mname Nothing)
-          case fresult of
-            Found {} -> return ()
-            _        ->
-              case envMake sk_env of
-                Just mk -> withRequiredSettings (mk recomp mname')
-                Nothing -> failS "require: no make function"
+          compiled <-
+            case fresult of
+              Found {} -> return []
+              _        ->
+                case envMake sk_env of
+                  Just mk -> withRequiredSettings (mk recomp mname')
+                  Nothing -> failS "require: no make function"
 
           -- Add the module to current compilation context.
           contexts <- getContext
           setContext (IIDecl idecl : contexts)
 
-          -- Add required module name to SkEnv.
+          -- Update required module names and compiled home modules to
+          -- SkEnv. These are used by the callee module (i.e. the module
+          -- containing this 'require' form).
           let reqs = mname':envRequiredModuleNames sk_env
-              sk_env' = sk_env {envRequiredModuleNames = reqs}
+              sk_env' = sk_env {envRequiredModuleNames = reqs
+                               ,envCompiledInRequire = compiled}
           putSkEnv sk_env'
 
           -- Look up Macros in parsed module, add to SkEnv when found.

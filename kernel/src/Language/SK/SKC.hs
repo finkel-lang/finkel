@@ -14,6 +14,7 @@ module Language.SK.SKC
   , fromGhc
   , failS
   , skSrcError
+  , emptySkEnv
   , getSkEnv
   , putSkEnv
   , modifySkEnv
@@ -60,11 +61,11 @@ import Exception (ExceptionMonad(..), ghandle)
 import GhcMonad ( Ghc(..), GhcMonad(..), getSessionDynFlags
                 , modifySession )
 import HsImpExp (simpleImportDecl)
-import HscMain (Messager)
-import HscTypes ( HscEnv(..), InteractiveContext(..)
+import HscMain (Messager, batchMsg)
+import HscTypes ( HomeModInfo, HscEnv(..), InteractiveContext(..)
                 , InteractiveImport(..), TyThing(..), mkSrcErr )
 import InteractiveEval (setContext)
-import Module (mkModuleName)
+import Module (ModuleName, mkModuleName)
 import Outputable ( alwaysQualify, neverQualify, showSDocForUser, text
                   , ppr )
 import UniqSupply (mkSplitUniqSupply, uniqFromSupply)
@@ -147,14 +148,17 @@ data SkEnv = SkEnv
    , envAddInDefineMacro :: Bool
      -- | Function to compile required modules, when
      -- necessary. Arguments are force recompilation flag and module
-     -- name.
-   , envMake :: Maybe (Bool -> String -> Skc ())
+     -- name. Returned values are list of pair of name and info of the
+     -- compiled home module.
+   , envMake :: Maybe (Bool -> String -> Skc [(ModuleName, HomeModInfo)])
      -- | 'DynFlags' for 'envMake'.
    , envMakeDynFlags :: Maybe DynFlags
      -- | Message used in make.
    , envMessager :: Messager
      -- | Required modules names in current target.
    , envRequiredModuleNames :: [String]
+     -- | Compile home modules during macro-expansion of /require/.
+   , envCompiledInRequire :: [(ModuleName, HomeModInfo)]
    }
 
 #if !MIN_VERSION_ghc(8,4,0)
@@ -239,6 +243,23 @@ debugSkc str = Skc go
       when (envDebug sk_env)
            (liftIO (hPutStrLn stderr str))
 {-# INLINE debugSkc #-}
+
+-- | Empty 'SkEnv' for performing computation with 'Skc'.
+emptySkEnv :: SkEnv
+emptySkEnv = SkEnv
+  { envMacros              = emptyEnvMacros
+  , envTmpMacros           = []
+  , envDefaultMacros       = emptyEnvMacros
+  , envDebug               = False
+  , envContextModules      = []
+  , envDefaultLangExts     = (Nothing, emptyFlagSet)
+  , envSilent              = False
+  , envAddInDefineMacro    = False
+  , envMake                = Nothing
+  , envMakeDynFlags        = Nothing
+  , envMessager            = batchMsg
+  , envRequiredModuleNames = []
+  , envCompiledInRequire   = [] }
 
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get

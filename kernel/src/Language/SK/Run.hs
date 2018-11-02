@@ -3,7 +3,6 @@ module Language.SK.Run
   ( runSkc
   , runSkcWithoutHandler
   , withSourceErrorHandling
-  , emptySkEnv
   , skErrorHandler
   , compileSkModule
   , compileSkModuleForm
@@ -45,7 +44,6 @@ import GHC ( ParsedModule(..), TypecheckedModule(..)
            , typecheckModule, runGhc )
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HeaderInfo (getOptionsFromFile)
-import HscMain (batchMsg)
 import HscTypes ( HsParsedModule(..), ModSummary(..), handleSourceError
                 , srcErrorMessages )
 import HsImpExp (ImportDecl(..))
@@ -132,22 +130,6 @@ skErrorHandler fm (FlushOut flush) work =
       (handleSkException
         (\(SkException se) -> return (Left se))
         work))
-
--- | Empty 'SkEnv' for performing computation with 'Skc'.
-emptySkEnv :: SkEnv
-emptySkEnv = SkEnv
-  { envMacros              = emptyEnvMacros
-  , envTmpMacros           = []
-  , envDefaultMacros       = emptyEnvMacros
-  , envDebug               = False
-  , envContextModules      = []
-  , envDefaultLangExts     = (Nothing, emptyFlagSet)
-  , envSilent              = False
-  , envAddInDefineMacro    = False
-  , envMake                = Nothing
-  , envMakeDynFlags        = Nothing
-  , envMessager            = batchMsg
-  , envRequiredModuleNames = [] }
 
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =

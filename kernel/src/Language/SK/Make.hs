@@ -12,7 +12,7 @@ module Language.SK.Make
 import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Char (isUpper)
-import Data.List (find)
+import Data.List (find, foldl')
 import Data.Maybe (catMaybes)
 
 -- bytestring
@@ -39,17 +39,18 @@ import GhcMonad ( GhcMonad(..), getSessionDynFlags, modifySession
 import Outputable ( text, showPpr )
 import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
-import HscTypes ( FindResult(..), ModSummary(..)
-                , HscEnv(..), InteractiveContext(..)
+import HscTypes ( FindResult(..), ModIface(..), ModSummary(..)
+                , HomeModInfo(..), HomePackageTable, HscEnv(..)
+                , InteractiveContext(..)
                 , ModuleGraph, SourceModified(..)
-                , addToHpt, ms_mod_name
+                , addToHpt, eltsHpt, lookupHpt, ms_mod_name
 #if MIN_VERSION_ghc(8,4,0)
                 , mkModuleGraph, extendMG
 #endif
                 )
-import Module ( ModLocation(..), installedUnitIdEq, mkModuleName
-              , moduleName, moduleNameSlashes, moduleNameString
-              , moduleUnitId )
+import Module ( ModLocation(..), ModuleName, installedUnitIdEq
+              , mkModuleName, moduleName, moduleNameSlashes
+              , moduleNameString, moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
 import SrcLoc (mkRealSrcLoc)
 import StringBuffer (stringToStringBuffer)
@@ -172,10 +173,14 @@ initSessionForMake = do
   let debug1 = envDebug sk_env
   putSkEnv (sk_env {envDebug = debug0 || debug1})
 
--- | Simplified make function. Intended to be used for 'envMake' field
--- in 'SkEnv'.
-simpleMake :: Bool -> String -> Skc ()
-simpleMake recomp name = make [(name, Nothing)] True recomp Nothing
+-- | Simple make function returning compiled home module
+-- information. Intended to be used for 'envMake' field in 'SkEnv'.
+simpleMake :: Bool -> String -> Skc [(ModuleName, HomeModInfo)]
+simpleMake recomp name = do
+  make [(name, Nothing)] True recomp Nothing
+  hsc_env <- getSession
+  let as_pair hm = (moduleName (mi_module (hm_iface hm)), hm)
+  return (map as_pair (eltsHpt (hsc_HPT hsc_env)))
 
 -- | 'SkEnv' with make function set.
 defaultSkEnv :: SkEnv
@@ -647,8 +652,20 @@ compileSkModuleForm' :: SPState -> String -> [Code]
                      -> Skc (HModule, DynFlags, [String])
 compileSkModuleForm' sp modname forms = do
   dflags <- getDynFlagsFromSPState sp
+  hsc_env <- getSession
+
+  -- Compile the form with file specific DynFlags and temporary session,
+  -- to preserve modules imported in current context.
   let use_sp_dflags e = e {hsc_dflags = dflags}
-  (mdl, reqs) <- withTempSession use_sp_dflags act
+  (mdl, reqs, compiled) <- withTempSession use_sp_dflags act
+
+  -- Add the compiled home modules to current sessio, if any. This fill
+  -- avoid recompilation of required modules with "-fforce-recomp"
+  -- option, which is required more than once.
+  let hpt0 = hsc_HPT hsc_env
+      hpt1 = addHomeModInfoIfMissing hpt0 compiled
+  setSession (hsc_env {hsc_HPT = hpt1})
+
   debugSkc (";;; reqs=" ++ show reqs)
   return (mdl, dflags, reverse reqs)
   where
@@ -660,8 +677,22 @@ compileSkModuleForm' sp modname forms = do
       resetSkEnv
 
       mdl <- compileSkModuleForm forms
-      required <- envRequiredModuleNames <$> getSkEnv
-      return (mdl, required)
+      sk_env <- getSkEnv
+      let required = envRequiredModuleNames sk_env
+          compiled = envCompiledInRequire sk_env
+      return (mdl, required, compiled)
+
+-- | Add pair of module name and home module to home package table only
+-- when the module is missing.
+addHomeModInfoIfMissing :: HomePackageTable
+                        -> [(ModuleName, HomeModInfo)]
+                        -> HomePackageTable
+addHomeModInfoIfMissing = foldl' f
+  where
+    f hpt (name, hmi) =
+      case lookupHpt hpt name of
+        Just _  -> hpt
+        Nothing -> addToHpt hpt name hmi
 
 -- | Reset macros and required modules in current SkEnv.
 resetSkEnv :: Skc ()
