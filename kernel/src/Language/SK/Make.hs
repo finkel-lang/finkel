@@ -166,15 +166,16 @@ initSessionForMake = do
   let ctx_modules = envContextModules sk_env
   unless (null ctx_modules) (setContextModules ctx_modules)
 
-  -- Debug information may specified from ENVVAR.
-  debug <- getSkcDebug
-
-  putSkEnv (sk_env {envDebug = debug})
+  -- Debug information could be specified from environment variable and
+  -- command line option.
+  debug0 <- getSkcDebug
+  let debug1 = envDebug sk_env
+  putSkEnv (sk_env {envDebug = debug0 || debug1})
 
 -- | Simplified make function. Intended to be used for 'envMake' field
 -- in 'SkEnv'.
 simpleMake :: Bool -> String -> Skc ()
-simpleMake recomp name = make [(name, Nothing)] False recomp Nothing
+simpleMake recomp name = make [(name, Nothing)] True recomp Nothing
 
 -- | 'SkEnv' with make function set.
 defaultSkEnv :: SkEnv
