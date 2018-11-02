@@ -118,7 +118,6 @@ make infiles no_link force_recomp mb_output = do
   let dflags1 = dflags0 { ghcMode = CompManager
                         , outputFile = mb_output }
       dflags2 | force_recomp = gopt_set dflags1 Opt_ForceRecomp
-              | no_link      = gopt_set dflags1 Opt_ForceRecomp
               | otherwise    = gopt_unset dflags1 Opt_ForceRecomp
   _ <- setSessionDynFlags dflags2
   dflags3 <- getSessionDynFlags
