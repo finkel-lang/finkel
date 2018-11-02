@@ -37,6 +37,8 @@ import GhcMake (topSortModuleGraph)
 import GhcMonad ( GhcMonad(..), getSessionDynFlags, modifySession
                 , withTempSession )
 import Outputable ( text, showPpr )
+import HsImpExp (ImportDecl(..))
+import HsSyn (HsModule(..))
 import HscTypes ( FindResult(..), ModSummary(..)
                 , HscEnv(..), InteractiveContext(..)
                 , ModuleGraph, SourceModified(..)
@@ -45,15 +47,13 @@ import HscTypes ( FindResult(..), ModSummary(..)
                 , mkModuleGraph, extendMG
 #endif
                 )
-import HsImpExp (ImportDecl(..))
-import HsSyn (HsModule(..))
 import Module ( ModLocation(..), installedUnitIdEq, mkModuleName
               , moduleName, moduleNameSlashes, moduleNameString
               , moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
-import Util (getModificationUTCTime, looksLikeModuleName)
 import SrcLoc (mkRealSrcLoc)
 import StringBuffer (stringToStringBuffer)
+import Util (getModificationUTCTime, looksLikeModuleName)
 
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
@@ -268,7 +268,7 @@ make' not_yet_compiled readys0 pendings0 = do
         SkSource path _mn _form _sp -> do
           mb_result <- compileToHsModule target
           case mb_result of
-            Nothing             -> failS "compileToHsModule failed"
+            Nothing                   -> failS "compileToHsModule"
             Just (hmdl, dflags, reqs) -> do
               summary <- mkModSummary (Just path) hmdl
               let summary' = summary {ms_hspp_opts = dflags}
@@ -633,7 +633,7 @@ mkReadTimeModSummary (target, mbphase) =
     OtherSource _ -> return Nothing
 
 compileToHsModule :: TargetUnit
-                  -> Skc (Maybe (HsModule PARSED, DynFlags, [String]))
+                  -> Skc (Maybe (HModule, DynFlags, [String]))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
     SkSource _ mn form sp -> Just <$> compileSkModuleForm' sp mn form
@@ -644,14 +644,15 @@ compileToHsModule (tsrc, mbphase) =
 -- language extensions, and macros in 'SkEnv'. Returns tuple of compiled
 -- module and 'Dynflags' to update 'ModSummary'.
 compileSkModuleForm' :: SPState -> String -> [Code]
-                     -> Skc (HsModule PARSED, DynFlags, [String])
-compileSkModuleForm' sp mn forms = do
+                     -> Skc (HModule, DynFlags, [String])
+compileSkModuleForm' sp modname forms = do
   dflags <- getDynFlagsFromSPState sp
-  (mdl, reqs) <- withTempSession (\e -> e {hsc_dflags = dflags}) act
+  let use_sp_dflags e = e {hsc_dflags = dflags}
+  (mdl, reqs) <- withTempSession use_sp_dflags act
   debugSkc (";;; reqs=" ++ show reqs)
   return (mdl, dflags, reverse reqs)
   where
-    act = timeIt ("SkModule [" ++ mn ++ "]") $ do
+    act = timeIt ("SkModule [" ++ modname ++ "]") $ do
 
       -- Reset SkEnv, no need to worry about managing interactive
       -- context and DynFlags because this action is wrapped by
@@ -669,7 +670,7 @@ resetSkEnv =
                            , envRequiredModuleNames = []})
 
 compileHsFile :: FilePath -> Maybe Phase
-               -> Skc (HsModule PARSED, DynFlags, [a])
+               -> Skc (HModule, DynFlags, [a])
 compileHsFile source mbphase = do
   hsc_env <- getSession
   (dflags, source') <- liftIO (preprocess hsc_env (source, mbphase))

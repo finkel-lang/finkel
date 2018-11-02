@@ -224,9 +224,9 @@ addImportedMacro :: TyThing -> Skc ()
 addImportedMacro thing = when (isMacro thing) (addImportedMacro' thing)
 
 addImportedMacro' :: TyThing -> Skc ()
-addImportedMacro' ty_thing = do
+addImportedMacro' thing = do
   dflags <- getSessionDynFlags
-  case ty_thing of
+  case thing of
     AnId var -> do
       debugSkc (";;; adding macro `" ++
                 showPpr dflags (varName var) ++
