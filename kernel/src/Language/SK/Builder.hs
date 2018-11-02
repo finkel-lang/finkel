@@ -43,9 +43,6 @@ module Language.SK.Builder
   , PARSED
   ) where
 
--- base
-import Control.Monad (ap, liftM)
-
 -- ghc
 import Bag (Bag)
 import ForeignCall (CCallConv(..))
@@ -105,13 +102,13 @@ failB :: String -> Builder a
 failB err = Builder (StateT (\_ -> Left err))
 
 instance Functor Builder where
-    fmap = liftM
+    fmap f (Builder m) = Builder (fmap f m)
     {-# INLINE fmap #-}
 
 instance Applicative Builder where
     pure  = return
     {-# INLINE pure #-}
-    (<*>) = ap
+    Builder m <*> Builder f = Builder (m <*> f)
     {-# INLINE (<*>) #-}
 
 instance Monad Builder where

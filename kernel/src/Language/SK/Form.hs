@@ -96,16 +96,6 @@ instance Show Atom where
       AFractional f -> showString (fl_text_compat f)
       AComment _ -> showString ""
 
-fl_text_compat :: FractionalLit -> String
-fl_text_compat fl =
-#if !MIN_VERSION_ghc(8,4,0)
-  fl_text fl
-#else
-  case fl_text fl of
-    NoSourceText -> error "fractional literal with no source"
-    SourceText s -> s
-#endif
-
 instance NFData Atom where
   rnf x =
     case x of
@@ -152,6 +142,7 @@ instance Functor Form where
       List xs -> List (map (fmap f) xs)
       HsList xs -> HsList (map (fmap f) xs)
       TEnd -> TEnd
+  {-# INLINE fmap #-}
 
 instance Foldable Form where
   foldr f z form =
@@ -166,6 +157,7 @@ instance Foldable Form where
         case xs of
           []   -> z
           y:ys -> foldr f (foldr f z (HsList ys)) (unCode y)
+  {-# INLINE foldr #-}
 
 instance Traversable Form where
   traverse f form =
@@ -174,6 +166,7 @@ instance Traversable Form where
       List xs   -> fmap List (traverse (traverse f) xs)
       HsList xs -> fmap HsList (traverse (traverse f) xs)
       TEnd      -> pure TEnd
+  {-# INLINE traverse #-}
 
 instance NFData a => NFData (Form a) where
   rnf x =
@@ -195,13 +188,16 @@ instance Show a => Show (LForm a) where
 
 instance Functor LForm where
   fmap f (LForm (L l a)) = LForm (L l (fmap f a))
+  {-# INLINE fmap #-}
 
 instance Foldable LForm where
   foldr f z (LForm (L _ form)) = foldr f z form
+  {-# INLINE foldr #-}
 
 instance Traversable LForm where
   traverse f (LForm (L l form)) =
     fmap (LForm . L l) (traverse f form)
+  {-# INLINE traverse #-}
 
 instance NFData a => NFData (LForm a) where
   rnf (LForm (L l a)) = rnf l `seq` rnf a
@@ -286,6 +282,16 @@ mkLocatedForm ms = L (combineLocs (unLForm (head ms))
 -- | Characters used in Haskell operators.
 haskellOpChars :: [Char]
 haskellOpChars = "!#$%&*+./<=>?@^|-~:"
+
+fl_text_compat :: FractionalLit -> String
+fl_text_compat fl =
+#if MIN_VERSION_ghc(8,4,0)
+  case fl_text fl of
+    NoSourceText -> error "fractional literal with no source"
+    SourceText s -> s
+#else
+  fl_text fl
+#endif
 
 #if !MIN_VERSION_ghc(8,4,0)
 -- | 'mkFractionalLit' did not exist in 8.2.x.
