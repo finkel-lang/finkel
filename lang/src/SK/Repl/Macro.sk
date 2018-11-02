@@ -40,8 +40,7 @@
 
    ;; ghc
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
-              (HscTarget ..) (Language ..) (PackageFlag ..)
-              (GeneralFlag ..)
+              (Language ..) (PackageFlag ..) (GeneralFlag ..)
               defaultDynFlags flagSpecFlag flagSpecName lang_set
               parseDynamicFlagsCmdLine thisPackage gopt fFlags
               xFlags xopt wopt wWarningFlags))
@@ -200,7 +199,7 @@
         (= msg (concat [label ": invalid form `" (show form) "'"])))
     (skSrcError form msg)))
 
-(defn (compile-to-obj-file (-> String (Skc Code)))
+(defn (compile-module (-> String (Skc Code)))
   [str]
   (where (gbracket acquire cleanup work)
     (= acquire
@@ -215,7 +214,6 @@
       ;; adding macros written in the target modules to current REPL
       ;; session.
       (do (let ((= force-recomp (gopt Opt_ForceRecomp dflags))))
-          (setDynFlags (dflags {hscTarget HscAsm}))
           (putSkEnv (sk-env {envAddInDefineMacro False}))
           (make [(, str Nothing)] False force-recomp Nothing)
           (return '(begin))))))
@@ -232,7 +230,7 @@
 (defn (compile-and-import (-> FilePath (Skc Code)))
   [path]
   (do (<- sk-env getSkEnv)
-      (<- _ (compile-to-obj-file path))
+      (<- _ (compile-module path))
       (let ((= mods (envContextModules sk-env))
             (= mname (asModuleName path))))
       (setContext (map mk-ii (: mname mods)))
@@ -552,7 +550,7 @@ COMMANDS:
                       (++ "compile: not a FilePath: " (show forms))))
         (= work src
           (do (liftIO (putStrLn (++ "; compile: " src)))
-              (compile-to-obj-file src))))
+              (compile-module src))))
     (case forms
       [form] (maybe err work (code->mb-string form))
       _      err)))
