@@ -39,7 +39,6 @@ import HscTypes ( InteractiveImport(..), HscEnv(..), FindResult(..)
 import HsImpExp (ImportDecl(..), ieName)
 import HsSyn (HsModule(..))
 import InteractiveEval (getContext)
-import Linker (getHValue)
 import MkIface (RecompileRequired(..), recompileRequired)
 import Module (moduleNameString)
 import Name (nameOccName)
@@ -50,9 +49,6 @@ import Var (varName)
 
 -- ghc-boot
 import qualified GHC.LanguageExtensions as LangExt
-
--- ghci
-import GHCi.RemoteTypes (localRef, withForeignRef)
 
 -- Internal
 import Language.SK.Builder (HImportDecl)
@@ -232,11 +228,12 @@ addImportedMacro' thing = do
                 showPpr dflags (varName var) ++
                 "' to current compiler session.")
       hsc_env <- getSession
-      let name = varName var
-      fhv <- liftIO (getHValue hsc_env name)
-      hv <- liftIO (withForeignRef fhv localRef)
-      let macro = unsafeCoerce hv
-      insertMacro (fsLit (showPpr (hsc_dflags hsc_env) name)) macro
+      let name_str = showPpr (hsc_dflags hsc_env) (varName var)
+          name_sym = toCode (aSymbol name_str)
+      hv <- case evalBuilder parseExpr [name_sym] of
+                   Right expr -> evalExpr expr
+                   Left err   -> failS err
+      insertMacro (fsLit name_str) (unsafeCoerce hv)
     _ -> error "addImportedmacro"
 
 
