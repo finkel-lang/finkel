@@ -95,6 +95,8 @@ executable sk-profile
   hs-source-dirs:      exec
   main-is:             profile.hs
   ghc-options:         -Wall -threaded -rtsopts
+  if flag(dynamic)
+    ghc-options:       -dynamic
   build-depends:       base
                      , bytestring
                      , filepath
