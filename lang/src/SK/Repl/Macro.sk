@@ -54,8 +54,7 @@
          getPrintUnqual isLoaded lookupName lookupModule modInfoExports
          setSessionDynFlags setTargets))
    (GhcMake ((LoadHowMuch ..)))
-   (GhcMonad ((GhcMonad ..) getSessionDynFlags withSession))
-   (HscMain (hscTcRnLookupRdrName))
+   (GhcMonad ((GhcMonad ..) getSessionDynFlags))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (ModSummary) (ModuleGraph)
               emptyInteractiveContext handleFlagWarnings ms_mod_name
@@ -67,8 +66,8 @@
                                 showModule))
    (Linker (initDynLinker linkModule showLinkerState unload))
    (Module (mkModuleNameFS moduleNameString))
-   (Name ((Name) getName nameIsFromExternalPackage nameModule
-          nameOccName nameSrcSpan))
+   (Name (getName nameIsFromExternalPackage nameModule nameOccName
+          nameSrcSpan))
    (NameSet (elemNameSet mkNameSet))
    (Outputable ((SDoc) $$ <+> <> empty dcolon nest ppr sep
                 showPpr showSDoc showSDocForUser text vcat))
@@ -93,9 +92,8 @@
 
    ;; sk-kernel
    (Language.SK)
-   (Language.SK.Builder (mkRdrName))
    (Language.SK.Eval (evalExprType evalTypeKind))
-   (Language.SK.Form (genSrc getLoc mkLocatedForm symbolName))
+   (Language.SK.Form (getLoc mkLocatedForm symbolName))
    (Language.SK.Make (asModuleName make))
    (Language.SK.Run (buildHsSyn))
    (Language.SK.SKC
@@ -297,7 +295,7 @@
 
 (defn (info-thing (-> Bool String (Skc SDoc)))
   [all-info str]
-  (do (<- names (parse-name str))
+  (do (<- names (parseName str))
       (<- mb_stuffs (mapM (getInfo all-info) names))
       (let ((= filtered (filter-out-children
                          (child-filter)
@@ -308,16 +306,6 @@
                       (vcat (map pprFamInst fam-insts)))))))
       (return
         (vcat (intersperse (text "") (map ppr-info filtered))))))
-
-(defn (parse-name (-> String (Skc [Name])))
-  [str]
-  (if (elem str ["()" "[]"])
-      (parseName str)
-      (withSession
-       (\ hsc-env
-         (liftIO
-          (let ((= lrdr-name (genSrc (mkRdrName (fsLit str)))))
-            (hscTcRnLookupRdrName hsc-env lrdr-name)))))))
 
 (defn (filter-out-children (-> (-> a TyThing) [a] [a]))
   [get-thing xs]
@@ -625,10 +613,13 @@ COMMANDS:
 
 (defn (info-cmd ReplAction)
   [forms]
-  (case forms
-    [form] (| ((<- (Atom (ASymbol _)) (unCode form))
-               (info-name form)))
-    _      (invalid-form-error "info" forms)))
+  (let ((= err (invalid-form-error "info" forms))
+        (= sym (. toCode aSymbol)))
+    (case (map unCode forms)
+      [(@ form (Atom (ASymbol _)))] (info-name (toCode form))
+      [(Atom AUnit)]                (info-name (sym "()"))
+      [(HsList [])]                 (info-name (sym "[]"))
+      _                             err)))
 
 ;; From `GHCi.UI.kindOfType'
 (defn (kind-cmd ReplAction)

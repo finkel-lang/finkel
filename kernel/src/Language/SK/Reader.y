@@ -1,6 +1,11 @@
 -- Happy parser for S-expression tokens.
 {
 {-# LANGUAGE OverloadedStrings #-}
+-- | S-expression reader.
+--
+-- Parser functions in this module are written with the /happy/ parser
+-- generator.
+--
 module Language.SK.Reader
   ( sexpr
   , sexprs

@@ -1,5 +1,4 @@
--- | Module exporting the @runSkc@, Haskell compiler, and some utility
--- functions.
+-- | Module exporting the @runSkc@ function, and some utilities.
 module Language.SK.Run
   ( runSkc
   , runSkcWithoutHandler

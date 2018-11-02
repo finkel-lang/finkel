@@ -2,6 +2,9 @@
 -- | Utility codes for syntax.
 module Language.SK.Syntax.SynUtils where
 
+-- base
+import Data.Char (isUpper)
+
 -- ghc
 import Bag (consBag, emptyBag, listToBag)
 import BasicTypes ( SourceText(..)
@@ -9,7 +12,7 @@ import BasicTypes ( SourceText(..)
                   , IntegralLit(..)
 #endif
                   )
-import FastString (FastString)
+import FastString (FastString, fsLit, headFS, unpackFS)
 import HsBinds ( HsBindLR(..), HsLocalBindsLR(..), HsValBindsLR(..)
                , emptyLocalBinds )
 import HsDecls (HsDecl(..))
@@ -21,12 +24,13 @@ import HsPat ( HsRecField'(..), LHsRecField
 import HsTypes ( AmbiguousFieldOcc(..), FieldOcc(..), LHsContext
                , HsTyVarBndr(..), HsType(..), mkFieldOcc )
 import HsUtils (mkFunBind, mkHsIntegral)
-import OccName (tvName)
+import OccName (NameSpace, srcDataName, tcName, tvName, varName)
 import OrdList (OrdList, fromOL, toOL)
 import RdrHsSyn (cvTopDecls)
-import RdrName (mkUnqual)
+import RdrName (RdrName, mkQual, mkUnqual, mkVarUnqual, nameRdrName)
 import SrcLoc ( GenLocated(..), Located, SrcSpan, combineLocs
               , combineSrcSpans, noLoc )
+import TysWiredIn (consDataConName)
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsExtension (noExt)
@@ -46,6 +50,54 @@ import Language.SK.Form
 --
 -- ---------------------------------------------------------------------
 
+mkRdrName :: FastString -> RdrName
+mkRdrName = mkRdrName' tcName
+
+mkVarRdrName :: FastString -> RdrName
+mkVarRdrName = mkRdrName' srcDataName
+
+mkRdrName' :: NameSpace -> FastString -> RdrName
+mkRdrName' upperCaseNameSpace name
+  -- ':' is special syntax. It is defined in module "GHC.Types" in
+  -- package "ghc-prim", but not exported.
+  | name == fsLit ":" = nameRdrName consDataConName
+
+  -- Name starting with ':' is data constructor.
+  | x == ':' = mkUnqual srcDataName name
+
+  -- Name starting with capital letters may qualified var name or data
+  -- constructor name.
+  | isUpper x =
+    case splitQualName name of
+      Nothing -> mkUnqual srcDataName name
+      Just q@(_, name')
+         | isUpper y || y == ':' -> mkQual upperCaseNameSpace q
+         | otherwise             -> mkQual varName q
+         where
+           y = headFS name'
+
+  -- Variable.
+  | otherwise = mkVarUnqual name
+  where
+    x = headFS name
+
+splitQualName :: FastString -> Maybe (FastString, FastString)
+splitQualName fstr = go (unpackFS fstr) "" []
+  where
+    go str0 tmp acc =
+      case str0 of
+        [] | null acc  -> Nothing
+           | otherwise ->
+             let mdl = reverse (tail (concat acc))
+                 var = (reverse tmp)
+             in  Just (fsLit mdl , fsLit var)
+        c:str1
+           | c == '.' ->
+             case str1 of
+               [] -> go str1 (c:tmp) acc
+               _  -> go str1 [] ((c:tmp) : acc)
+           | otherwise -> go str1 (c:tmp) acc
+
 -- | Build 'HLocalBinds' from list of 'HDecl's.
 declsToBinds :: SrcSpan -> [HDecl] -> HLocalBinds
 declsToBinds l decls = L l binds'
@@ -62,15 +114,10 @@ declsToBinds l decls = L l binds'
       case ds of
         []    -> (bs, ss)
         d:ds' -> case d of
-#if MIN_VERSION_ghc(8,6,0)
-          L ld (ValD _ b) -> go (L ld b:bs,ss) ds'
-          L ld (SigD _ s) -> go (bs,L ld s:ss) ds'
-#else
-          L ld (ValD   b) -> go (L ld b:bs,ss) ds'
-          L ld (SigD   s) -> go (bs,L ld s:ss) ds'
-#endif
+          L ld (ValD _EXT b) -> go (L ld b:bs,ss) ds'
+          L ld (SigD _EXT s) -> go (bs,L ld s:ss) ds'
           -- XXX: Ignoring.
-          _               -> go (bs,ss) ds'
+          _                  -> go (bs,ss) ds'
 
 -- Function defined in 'HsUtils', not exported.
 mkLocatedList ::  [Located a] -> Located [Located a]
@@ -124,19 +171,11 @@ cvBindsAndSigs :: OrdList HDecl -> (HBinds, [HSig])
 cvBindsAndSigs fb = go (fromOL fb)
   where
     go [] = (emptyBag, [])
-#if MIN_VERSION_ghc(8,6,0)
-    go (L l (ValD _ d) : ds)
-#else
-    go (L l (ValD d) : ds)
-#endif
+    go (L l (ValD _EXT d) : ds)
       = let (b', ds') = getMonoBind (L l d) ds
             (bs, ss) = go ds'
         in  (b' `consBag` bs, ss)
-#if MIN_VERSION_ghc(8,6,0)
-    go (L l (SigD _ s) : ds)
-#else
-    go (L l (SigD s) : ds)
-#endif
+    go (L l (SigD _EXT s) : ds)
       = let (bs, ss) = go ds
         in  (bs, L l s : ss)
 
@@ -151,16 +190,9 @@ getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),
   | has_args mtchs1 = go mtchs1 loc1 binds
   where
     go mtchs loc
-#if MIN_VERSION_ghc(8,6,0)
-       (L loc2 (ValD _ (FunBind { fun_id = L _ f2,
-                                  fun_matches
-                                    = MG { mg_alts = L _ mtchs2 }}))
-
-#else
-       (L loc2 (ValD (FunBind { fun_id = L _ f2,
-                                fun_matches
-                                  = MG { mg_alts = L _ mtchs2 }}))
-#endif
+       (L loc2 (ValD _EXT (FunBind { fun_id = L _ f2,
+                                     fun_matches
+                                       = MG { mg_alts = L _ mtchs2 }}))
                 : binds2)
       | f1 == f2 = go (mtchs2 ++ mtchs)
                       (combineSrcSpans loc loc2) binds2
@@ -205,9 +237,7 @@ mkHsIntegral_compat n =
 {-# INLINE mkHsIntegral_compat #-}
 
 mkGRHSs :: [LGRHS PARSED t] -> [HDecl] -> SrcSpan -> GRHSs PARSED t
-mkGRHSs grhss decls l = gRHSs grhss (declsToBinds l decls)
-  where
-    gRHSs = GRHSs NOEXT
+mkGRHSs grhss decls l = GRHSs NOEXT grhss (declsToBinds l decls)
 {-# INLINE mkGRHSs #-}
 
 mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED

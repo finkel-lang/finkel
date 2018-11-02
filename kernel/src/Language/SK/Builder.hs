@@ -13,9 +13,6 @@ module Language.SK.Builder
   , parse
   , putBState
   , runBuilder
-  , mkRdrName
-  , mkVarRdrName
-  , splitQualName
 
   -- * Type synonyms
   , HBind
@@ -48,13 +45,10 @@ module Language.SK.Builder
 
 -- base
 import Control.Monad (ap, liftM)
-import Data.Char (isUpper)
 
 -- ghc
 import Bag (Bag)
-import FastString (FastString, headFS, unpackFS)
 import ForeignCall (CCallConv(..))
-import OccName (NameSpace, srcDataName, tcName, varName)
 import HsBinds (HsLocalBinds, LHsBind, LSig)
 import HsDecls (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
 import HsExpr (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
@@ -62,12 +56,12 @@ import HsImpExp (LIE, LIEWrappedName, LImportDecl)
 import HsPat (LPat)
 import HsSyn (HsModule)
 import HsTypes (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
-import RdrName (RdrName, mkQual, mkUnqual, mkVarUnqual, nameRdrName)
 import SrcLoc (Located)
-import TysWiredIn (consDataConName)
 
 #if MIN_VERSION_ghc (8,4,0)
 import HsExtension (GhcPs)
+#else
+import RdrName (RdrName)
 #endif
 
 -- transformers
@@ -225,58 +219,3 @@ type HStmt = ExprLStmt PARSED
 type HTyVarBndr = LHsTyVarBndr PARSED
 
 type HType = LHsType PARSED
-
-
--- ---------------------------------------------------------------------
---
--- Auxiliary
---
--- ---------------------------------------------------------------------
-
-mkRdrName :: FastString -> RdrName
-mkRdrName = mkRdrName' tcName
-
-mkVarRdrName :: FastString -> RdrName
-mkVarRdrName = mkRdrName' srcDataName
-
-mkRdrName' :: NameSpace -> FastString -> RdrName
-mkRdrName' upperCaseNameSpace name
-  -- ':' is special syntax. It is defined in module "GHC.Types" in
-  -- package "ghc-prim", but not exported.
-  | name == ":" = nameRdrName consDataConName
-
-  -- Name starting with ':' is data constructor.
-  | x == ':' = mkUnqual srcDataName name
-
-  -- Name starting with capital letters may qualified var name or data
-  -- constructor name.
-  | isUpper x =
-    case splitQualName name of
-      Nothing -> mkUnqual srcDataName name
-      Just q@(_, name')
-         | isUpper y || y == ':' -> mkQual upperCaseNameSpace q
-         | otherwise             -> mkQual varName q
-         where
-           y = headFS name'
-
-  -- Variable.
-  | otherwise = mkVarUnqual name
-  where
-    x = headFS name
-
-splitQualName :: FastString -> Maybe (FastString, FastString)
-splitQualName fstr = go (unpackFS fstr) "" []
-  where
-    go str0 tmp acc =
-      case str0 of
-        [] | null acc  -> Nothing
-           | otherwise ->
-             let mdl = reverse (tail (concat acc))
-                 var = (reverse tmp)
-             in  Just (fsLit mdl , fsLit var)
-        c:str1
-           | c == '.' ->
-             case str1 of
-               [] -> go str1 (c:tmp) acc
-               _  -> go str1 [] ((c:tmp) : acc)
-           | otherwise -> go str1 (c:tmp) acc

@@ -5,7 +5,6 @@ module Language.SK.Expand
   ( expand
   , expand1
   , expands
-  , setExpanderSettings
   , withExpanderSettings
   , specialForms
   , unquoteSplice
@@ -518,7 +517,7 @@ withShadowing toShadow skc = do
   putSkEnv ske
   return result
 
--- | Expands form, with taking care of @begin@ special form.
+-- | Expand forms, with taking care of @begin@ special form.
 expands :: [Code] -> Skc [Code]
 -- XXX: Avoid using 'reverse'.
 expands = fmap reverse . foldM f []

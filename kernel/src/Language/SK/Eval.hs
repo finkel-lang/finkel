@@ -77,6 +77,7 @@ evalExprType expr = do
   ty <- ioMsgMaybe $ tcRnExpr hsc_env TM_Inst expr
   return $ tidyType emptyTidyEnv ty
 
+-- | Evaluate kind of given type.
 evalTypeKind :: HType -> Skc (Type, Kind)
 evalTypeKind ty = do
   -- See `InteractiveEval.typeKind' and `HscMain.hscKcType'.

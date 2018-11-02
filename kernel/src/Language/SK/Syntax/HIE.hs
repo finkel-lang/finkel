@@ -27,6 +27,7 @@ import HsExtension (noExt)
 -- Internal
 import Language.SK.Builder
 import Language.SK.Form
+import Language.SK.Syntax.SynUtils
 
 #include "Syntax.h"
 
