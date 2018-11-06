@@ -159,6 +159,7 @@ import Language.SK.Syntax.HType
                (L _ (List [LForm
                             (L _ (Atom (ASymbol "INCOHERENT")))])) }
 
+-- Plain constructors
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }
 'string'  { LForm (L _ (Atom (AString _))) }
@@ -166,9 +167,8 @@ import Language.SK.Syntax.HType
 'frac'    { LForm (L _ (Atom (AFractional _))) }
 'comment' { LForm (L _ (Atom (AComment _))) }
 'unit'    { LForm (L _ (Atom AUnit)) }
-
-'list'       { LForm (L _ (List $$)) }
-'hslist'     { LForm (L _ (HsList _)) }
+'list'    { LForm (L _ (List $$)) }
+'hslist'  { LForm (L _ (HsList _)) }
 
 
 %%
