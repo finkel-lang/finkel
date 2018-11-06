@@ -232,8 +232,10 @@
   (do (<- sk-env getSkEnv)
       (<- _ (compile-module path))
       (let ((= mods (envContextModules sk-env))
-            (= mname (asModuleName path))))
-      (setContext (map mk-ii (: mname mods)))
+            (= mname0 (asModuleName path))
+            (= mname1 (| ((null mname0) "Main")
+                         (otherwise     mname0)))))
+      (setContext (map mk-ii (: mname1 mods)))
       (return '(begin))))
 
 (defn (env-context-on-exception (-> (Skc a) (Skc ())))
