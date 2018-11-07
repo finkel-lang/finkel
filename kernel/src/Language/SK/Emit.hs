@@ -15,7 +15,6 @@ module Language.SK.Emit
   ) where
 
 -- base
-import Data.Maybe (fromMaybe)
 #if MIN_VERSION_base(4,11,0)
 import Prelude hiding ((<>))
 #endif
@@ -31,6 +30,7 @@ import FastString (unpackFS)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HsBinds (HsBindLR(..), Sig(..), pprTicks, pprVarSig)
 import HsDecls (HsDecl(..))
+import HsDoc (LHsDocString)
 import HsExpr (HsExpr(..), pprFunBind)
 import HsSyn (HsModule(..))
 import Outputable ( ($$), (<+>), (<>)
@@ -50,15 +50,20 @@ import SrcLoc ( Located, GenLocated(..), SrcLoc, SrcSpan(..)
               , sortLocated, srcSpanEndLine, srcSpanStartLine )
 
 #if MIN_VERSION_ghc(8,6,0)
+import HsDoc (HsDocString, unpackHDS)
 import HsExtension (GhcPass)
 #elif MIN_VERSION_ghc(8,4,0)
+import HsDoc (HsDocString(..))
 import HsExtension (SourceTextX)
 #else
+import HsDoc (HsDocString(..))
 import OccName (HasOccName(..))
 #endif
 
 -- Internal
 import Language.SK.Lexer
+
+#include "Syntax.h"
 
 
 -- ---------------------------------------------------------------------
@@ -139,14 +144,6 @@ spanEndLine l =
     RealSrcSpan s -> srcSpanEndLine s
     _             -> -1
 
-lookupDoc :: SrcSpan -> DocMap -> Maybe [AnnotationComment]
-lookupDoc l =
-  let line = spanStartLine l
-      f k a = if spanStartLine k == line
-                 then Just a
-                 else Nothing
-  in  Map.foldMapWithKey f
-
 -- | Lookup previous documentation comment.
 --
 -- Here @previous@ means the end line of documentation comment matches
@@ -181,21 +178,9 @@ genHsSrc st0 x = do
 unAnnotateComment :: AnnotationComment -> SDoc
 unAnnotateComment c =
   case c of
-    AnnLineComment str    -> text str
-    AnnDocCommentNext str -> text str
+    AnnLineComment str    -> text "--" <> text str
+    AnnDocCommentNext str -> text "-- |" <> text str
     _                     -> ppr c
-
-mbHeaderComment :: Outputable a => SPState -> Maybe (Located a) -> SDoc
-mbHeaderComment st mbdoc =
-  let sd = do
-        a <- mbdoc
-        xs <- lookupDoc (getLoc a) (docMap st)
-        return (vcat (map unAnnotateComment xs))
-  in fromMaybe empty sd
-
-pp_mb :: Outputable t => Maybe t -> SDoc
-pp_mb (Just x) = ppr x
-pp_mb Nothing  = empty
 
 pp_nonnull :: Outputable t => [t] -> SDoc
 pp_nonnull [] = empty
@@ -267,13 +252,13 @@ instance (OUTPUTABLE a pr, HasOccName a)
     HsModule Nothing _ imports decls _ mbDoc ->
       vcat [ linePragma' st 1
            , pp_langExts st
-           , pp_mb mbDoc
+           , pp_mbModuleHeaderDoc mbDoc
            , pp_nonnull imports
            , hsSrc_nonnull st (map (Hsrc . unLoc) decls) ]
     HsModule (Just name) exports imports decls deprec mbDoc ->
       vcat [ linePragma' st 1
            , pp_langExts st
-           , mbHeaderComment st mbDoc
+           , pp_mbModuleHeaderDoc mbDoc
            , case exports of
                Nothing ->
                  pp_header (text "where")
@@ -298,14 +283,9 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (HsExpr a)) where
 instance OUTPUTABLE a pr => HsSrc (Hsrc (HsDecl a)) where
   toHsSrc st (Hsrc decl) =
     case decl of
-#if MIN_VERSION_ghc (8,6,0)
-      ValD _ binds -> toHsSrc st (Hsrc binds)
-      SigD _ sigd  -> toHsSrc st (Hsrc sigd)
-#else
-      ValD binds -> toHsSrc st (Hsrc binds)
-      SigD sigd  -> toHsSrc st (Hsrc sigd)
-#endif
-      _          -> ppr decl
+      ValD _EXT binds -> toHsSrc st (Hsrc binds)
+      SigD _EXT sigd  -> toHsSrc st (Hsrc sigd)
+      _               -> ppr decl
 
 instance OUTPUTABLE a pr => HsSrc (Hsrc (HsBindLR a a)) where
   toHsSrc st (Hsrc binds) =
@@ -331,16 +311,12 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (HsBindLR a a)) where
 instance OUTPUTABLE a pr => HsSrc (Hsrc (Sig a)) where
   toHsSrc st (Hsrc sig) =
     case sig of
-#if MIN_VERSION_ghc(8,6,0)
-     TypeSig _ vars ty ->
-#else
-     TypeSig vars ty ->
-#endif
+     TypeSig _EXT vars ty ->
         (case vars of
            []    -> empty
            var:_ -> emitPrevDoc st var)
         $$ pprVarSig (map unLoc vars) (ppr ty)
-     _               -> ppr sig
+     _                    -> ppr sig
 
 
 -- -------------------------------------------------------------------
@@ -348,6 +324,23 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (Sig a)) where
 -- Auxiliary
 --
 -- -------------------------------------------------------------------
+
+pp_mbModuleHeaderDoc :: Maybe LHsDocString -> SDoc
+pp_mbModuleHeaderDoc = maybe empty mod_header
+  where
+    mod_header (L _ doc) =
+      case lines (unpackHDS' doc) of
+        []   -> empty
+        d:ds -> vcat ((text "-- |" <> text d):
+                      map (\ x -> text "-- " <> text x) ds)
+
+-- | GHC version compatible function for unpacking 'HsDocString'.
+unpackHDS' :: HsDocString -> String
+#if MIN_VERSION_ghc(8,6,0)
+unpackHDS' = unpackHDS
+#else
+unpackHDS' (HsDocString fs) = unpackFS fs
+#endif
 
 #if !MIN_VERSION_ghc(8,4,0)
 -- | 'whenPprDebug' does not exist in ghc 8.2. Defining one with

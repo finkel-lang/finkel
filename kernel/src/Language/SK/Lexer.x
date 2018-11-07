@@ -2,7 +2,7 @@
 {
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
--- | Module for lexing S-expressions.
+-- | Lexical analyser of S-expression tokens.
 module Language.SK.Lexer
   ( -- * Token data type
     Token(..)
@@ -36,7 +36,7 @@ import qualified GHC.Char as Char
 -- bytestring
 import Data.ByteString.Internal (w2c)
 import qualified Data.ByteString.Lazy as W8
-import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.ByteString.Lazy.Char8 as C8
 
 -- containers
 import qualified Data.Map as Map
@@ -93,11 +93,11 @@ $whitechar+  ;
 
 --- Comments
 
-\;+ $whitechar \| .* { tok_doc_comment_next }
-\; .*                { tok_line_comment }
+\;+ $whitechar+ \| .* { tok_doc_comment_next }
+\; .*                 { tok_line_comment }
 
-\#\| $whitechar* \|  { tok_block_doc_comment_next }
-\#\|                 { tok_block_comment }
+\#\| $whitechar* \|   { tok_block_doc_comment_next }
+\#\|                  { tok_block_comment }
 
 --- Hashes
 \# $hsymtail* { tok_hash }
@@ -155,7 +155,7 @@ data SPState = SPState
   , langExts :: [Located String]
   , ghcOptions :: [Located String]
   , docMap :: DocMap
-  , buf :: BL.ByteString
+  , buf :: C8.ByteString
   , currentLoc :: RealSrcLoc
   , prevChar :: Char
   } deriving (Eq)
@@ -168,7 +168,7 @@ initialSPState file linum colnum =
           , langExts = []
           , ghcOptions = []
           , docMap = Map.empty
-          , buf = BL.empty
+          , buf = C8.empty
           , currentLoc = mkRealSrcLoc file linum colnum
           , prevChar = '\n'}
 
@@ -201,7 +201,7 @@ instance Monad SP where
 data AlexInput =
   AlexInput RealSrcLoc
             {-# UNPACK #-} !Char
-            BL.ByteString
+            C8.ByteString
   deriving (Eq, Show)
 
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
@@ -254,7 +254,7 @@ alexSetInput (AlexInput l c b) =
   SP (\st -> SPOK (st {buf=b,currentLoc=l,prevChar=c}) ())
 {-# INLINE alexSetInput #-}
 
-runSP :: SP a -> Maybe FilePath -> BL.ByteString
+runSP :: SP a -> Maybe FilePath -> C8.ByteString
       -> Either String (a, SPState)
 runSP sp target input =
   let st0 = initialSPState target' 1 1
@@ -269,7 +269,7 @@ runSP sp target input =
 incrSP :: SP a          -- ^ The partial parser.
        -> (a -> b -> b) -- ^ Function to apply.
        -> b             -- ^ Initial argument to the function.
-       -> Maybe FilePath -> BL.ByteString -> Either String (b, SPState)
+       -> Maybe FilePath -> C8.ByteString -> Either String (b, SPState)
 incrSP sp f z target input = go st1 z
   where
     go st acc =
@@ -278,14 +278,14 @@ incrSP sp f z target input = go st1 z
           | blank (buf st) -> Right (acc, st)
           | otherwise       -> Left msg
         SPOK st' ret       ->
-          let st'' = st' {buf=BL.cons (prevChar st') (buf st')}
+          let st'' = st' {buf=C8.cons (prevChar st') (buf st')}
           in  go st'' $! f ret acc
-    blank bl = BL.null bl || BL.all (`elem` "\n\r\t") bl
+    blank bl = C8.null bl || C8.all (`elem` "\n\r\t") bl
     st0 = initialSPState target' 1 1
     st1 = st0 {buf = input}
     target' = maybe (fsLit "anon") fsLit target
 
-evalSP :: SP a -> Maybe FilePath -> BL.ByteString -> Either String a
+evalSP :: SP a -> Maybe FilePath -> C8.ByteString -> Either String a
 evalSP sp target input = fmap fst (runSP sp target input)
 
 errorSP :: Code -> String -> SP a
@@ -415,9 +415,9 @@ tok_quasiquote _ _ = return TQuasiquote
 
 tok_pcommas :: Action
 tok_pcommas (AlexInput _ _ s) l = do
-  let cs0 = BL.take (fromIntegral l) s
-      cs1 = BL.filter (not . isSpace) cs0
-  return $! TPcommas (fromIntegral (BL.length cs1 - 2))
+  let cs0 = C8.take (fromIntegral l) s
+      cs1 = C8.filter (not . isSpace) cs0
+  return $! TPcommas (fromIntegral (C8.length cs1 - 2))
 {-# INLINE tok_pcommas #-}
 
 tok_comma :: Action
@@ -434,17 +434,17 @@ tok_unquote_splice _ _ = return TUnquoteSplice
 
 tok_hash :: Action
 tok_hash (AlexInput _ _ s) l
-  | l == 2, let c = BL.index s 1, c `notElem` haskellOpChars
+  | l == 2, let c = C8.index s 1, c `notElem` haskellOpChars
   = return $! THash c
   | otherwise =
-   let bs = BL.toStrict $! takeUtf8 (fromIntegral l) s
+   let bs = C8.toStrict $! takeUtf8 (fromIntegral l) s
    in  return $! TSymbol $! mkFastStringByteString bs
 {-# INLINE tok_hash #-}
 
 tok_doc_comment_next :: Action
 tok_doc_comment_next (AlexInput _ _ s) l = do
   let str = unpackUtf8 $! takeUtf8 l s
-  return $! TDocCommentNext $! lc2hc str
+  return $! TDocCommentNext $! lc2hc_doc str
 {-# INLINE tok_doc_comment_next #-}
 
 tok_line_comment :: Action
@@ -455,17 +455,18 @@ tok_line_comment (AlexInput _ _ s) l = do
 
 tok_block_doc_comment_next :: Action
 tok_block_doc_comment_next =
-  tok_block_comment_with comment f
+  tok_block_comment_with TBlockDocCommentNext skip_spaces
   where
-    f inp =
+    skip_spaces inp =
       case alexGetChar' inp of
-        Just (c, inp') | isSpace c -> f inp'
-                       | otherwise -> alexGetChar' inp'
+        Just (c, inp') | isSpace c -> skip_spaces inp'
+                       | otherwise -> Just (c, inp')
         _                          -> Nothing
-    comment str = TBlockDocCommentNext ("{- | " ++ str ++ " -}")
+{-# INLINE tok_block_doc_comment_next #-}
 
 tok_block_comment :: Action
 tok_block_comment = tok_block_comment_with TBlockComment alexGetChar'
+{-# INLINE tok_block_comment #-}
 
 tok_block_comment_with :: (String -> Token)
                        -> (AlexInput -> Maybe (Char, AlexInput))
@@ -479,16 +480,12 @@ tok_block_comment_with tok ini inp0 _ = do
       -> alexSetInput inp4 >> return (tok (reverse com))
     _ -> alexError "tok_block_comment: panic"
   where
-    go inp prev acc
-      | prev == '|' =
-        case alexGetChar' inp of
-          Just (c, inp') | c == '#'  -> Just (tail acc, inp')
-                         | otherwise -> go inp' c (c:acc)
-          Nothing                    -> Nothing
-      | otherwise =
-        case alexGetChar' inp of
-          Just (c, inp') -> go inp' c (c:acc)
-          Nothing        -> Nothing
+    go inp prev acc =
+      case alexGetChar' inp of
+        Just (c, inp') | c == '#', prev == '|' -> Just (tail acc, inp')
+                       | otherwise             -> go inp' c (c:acc)
+        Nothing                                -> Nothing
+{-# INLINE tok_block_comment_with #-}
 
 tok_lambda :: Action
 tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
@@ -496,7 +493,7 @@ tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
 
 tok_symbol :: Action
 tok_symbol (AlexInput _ _ s) l = do
-  let bs = BL.toStrict $! takeUtf8 (fromIntegral l) s
+  let bs = C8.toStrict $! takeUtf8 (fromIntegral l) s
   return $ TSymbol $! mkFastStringByteString bs
 {-# INLINE tok_symbol #-}
 
@@ -564,8 +561,8 @@ escapeChar inp0
           , c2 >= '@' && c2 <= '_' =
             return (chr (ord c2 - ord '@'), inp2)
           | otherwise = Nothing
-        lkup cs = lookup (BL.pack cs)
-        bstbl = map (\(str,c) -> (BL.pack str, c))
+        lkup cs = lookup (C8.pack cs)
+        bstbl = map (\(str,c) -> (C8.pack str, c))
         tbl2 = bstbl tbl2_str
         tbl2_str =
           [ ("BS", '\BS'), ("HT", '\HT'), ("LF", '\LF'), ("VT", '\VT')
@@ -609,13 +606,13 @@ escapeChar inp0
 
 tok_integer :: Action
 tok_integer (AlexInput _ _ s) l = do
-  let str = BL.unpack $! BL.take (fromIntegral l) s
+  let str = C8.unpack $! C8.take (fromIntegral l) s
   return $ TInteger $! read $! str
 {-# INLINE tok_integer #-}
 
 tok_fractional :: Action
 tok_fractional (AlexInput _ _ s) l = do
-  let str = BL.unpack (BL.take (fromIntegral l) s)
+  let str = C8.unpack (C8.take (fromIntegral l) s)
       rat = readRational str
 #if !MIN_VERSION_ghc(8,4,0)
   return $ TFractional $! FL str rat
@@ -679,7 +676,7 @@ scanToken fn = do
 {-# INLINE scanToken #-}
 
 -- | Lex the input to list of 'Token's.
-lexTokens :: BL.ByteString -> Either String [Located Token]
+lexTokens :: C8.ByteString -> Either String [Located Token]
 lexTokens input = evalSP go Nothing input
   where
      go = do
@@ -695,14 +692,17 @@ lexTokens input = evalSP go Nothing input
 --
 -- ---------------------------------------------------------------------
 
-toString :: BL.ByteString -> String
-toString = BL.unpack
+toString :: C8.ByteString -> String
+toString = C8.unpack
 {-# INLINE toString #-}
 
 -- | Lisp comment to Haskell comment.
 lc2hc :: String -> String
-lc2hc str = '-':'-':dropWhile (== ';') str
+lc2hc = dropWhile (== ';')
 {-# INLINE lc2hc #-}
+
+lc2hc_doc :: String -> String
+lc2hc_doc = dropWhile (== '|') . dropWhile isSpace . lc2hc
 
 annotateComment :: Token -> AnnotationComment
 annotateComment tok = case tok of
@@ -713,16 +713,16 @@ annotateComment tok = case tok of
   _                      -> error ("annotateComment: " ++ show tok)
 {-# INLINE annotateComment #-}
 
-unpackUtf8 :: BL.ByteString -> String
-unpackUtf8 = utf8DecodeByteString . BL.toStrict
+unpackUtf8 :: C8.ByteString -> String
+unpackUtf8 = utf8DecodeByteString . C8.toStrict
 {-# INLINE unpackUtf8 #-}
 
-takeUtf8 :: Int -> BL.ByteString -> BL.ByteString
+takeUtf8 :: Int -> C8.ByteString -> C8.ByteString
 takeUtf8 n bs = fst (splitUtf8 n bs)
 {-# INLINE takeUtf8 #-}
 
-splitUtf8 :: Int -> BL.ByteString -> (BL.ByteString, BL.ByteString)
-splitUtf8 n0 bs0 = go n0 bs0 BL.empty
+splitUtf8 :: Int -> C8.ByteString -> (C8.ByteString, C8.ByteString)
+splitUtf8 n0 bs0 = go n0 bs0 C8.empty
   where
     go n bs acc
       | n <= 0    = (acc, bs)
@@ -730,13 +730,13 @@ splitUtf8 n0 bs0 = go n0 bs0 BL.empty
          case W8.uncons bs of
            Just (w8, bs0) ->
              let (acc', bs')
-                   | w8 < 0x80 = (BL.snoc acc (w2c w8), bs0)
+                   | w8 < 0x80 = (C8.snoc acc (w2c w8), bs0)
                    | w8 < 0xe0 = split 1
                    | w8 < 0xf0 = split 2
                    | otherwise = split 3
                  split k =
-                   let (pre, bs1) = BL.splitAt k bs0
-                   in  (BL.append (BL.snoc acc (w2c w8)) pre, bs1)
+                   let (pre, bs1) = C8.splitAt k bs0
+                   in  (C8.append (C8.snoc acc (w2c w8)) pre, bs1)
              in  go (n - 1) bs' acc'
            Nothing -> error "takeUtf8: empty input"
 {-# INLINE splitUtf8 #-}
