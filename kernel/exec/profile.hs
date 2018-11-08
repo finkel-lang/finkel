@@ -38,9 +38,10 @@ main :: IO ()
 main =
   do args <- getArgs
      case args of
-       ["parse", file] -> printNumSexprs file
+       ["parse", file] -> printForms file
        ["ppr", file]   -> pprFile file
        ["hsrc", file]  -> printHsrc file
+       ["lex", file]   -> printTokens file
        "make" : files  -> doMake files
        _               -> usage
 
@@ -51,16 +52,17 @@ usage =
        ["usage: profile MODE ARGS"
        ,""
        ,"MODE:"
-       ,"  parse - parse file and print number of forms"
+       ,"  parse - parse input file and print resulting forms"
        ,"  ppr   - pretty print haskell or sk module with `ppr'"
        ,"  hsrc  - convert SK source to Haskell source"
+       ,"  lex   - lex input file and print resulting tokens"
        ,"  make  - compile given files to object code"])
 
-printNumSexprs :: FilePath -> IO ()
-printNumSexprs path =
+printForms :: FilePath -> IO ()
+printForms path =
   do contents <- BL.readFile path
      case Lexer.evalSP Reader.sexprs (Just path) contents of
-       Right forms -> print (sum (map length forms))
+       Right forms -> mapM_ print forms
        Left err    -> putStrLn err
 
 pprFile :: FilePath -> IO ()
@@ -130,6 +132,13 @@ parseSkModuleWith act path =
               Right mdl -> act mdl sp
               Left  err -> liftIO (putStrLn ("error: " ++ err))
           Left err -> liftIO (putStrLn ("error: " ++ err))
+
+printTokens :: FilePath -> IO ()
+printTokens path = do
+  contents <- BL.readFile path
+  case Lexer.lexTokens contents of
+    Right toks -> mapM_ (print . GHC.unLoc) toks
+    Left err   -> putStrLn err
 
 doMake :: [FilePath] -> IO ()
 doMake files =
