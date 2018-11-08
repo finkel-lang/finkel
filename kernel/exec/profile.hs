@@ -17,6 +17,7 @@ import qualified System.FilePath as FilePath
 
 -- ghc
 import DynFlags (HasDynFlags(..), GeneralFlag(..), gopt_set)
+import ErrUtils (printBagOfErrors)
 import Outputable (Outputable(..), neverQualify, printForUser)
 import qualified GHC as GHC
 
@@ -100,7 +101,8 @@ pprHsModule path =
            Right lmdl ->
              liftIO
                (printForUser dflags1 stdout neverQualify (ppr lmdl))
-           Left _err  -> liftIO (putStrLn "pprHsModule: error")
+           Left err   -> liftIO (do putStrLn "pprHsModule: error"
+                                    printBagOfErrors dflags1 err)
 
 printHsrc :: FilePath -> IO ()
 printHsrc =
