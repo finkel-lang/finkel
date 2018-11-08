@@ -26,10 +26,8 @@ import RdrHsSyn ( mkRdrRecordCon, mkRdrRecordUpd )
 import SrcLoc (Located, noLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
-import HsDoc (mkHsDocString)
 import HsExtension (noExt)
 #else
-import HsDoc (HsDocString(..))
 import HsExpr (noPostTcExpr)
 import PlaceHolder (placeHolderType)
 #endif
@@ -252,14 +250,6 @@ hsLit :: HsLit -> HsExpr PARSED
 #endif
 hsLit = HsLit NOEXT
 {-# INLINE hsLit #-}
-
-hsDocString :: String -> HsDocString
-#if MIN_VERSION_ghc(8,6,0)
-hsDocString = mkHsDocString
-#else
-hsDocString = HsDocString . fsLit
-#endif
-{-# INLINE hsDocString #-}
 
 hsPar :: HExpr -> HsExpr PARSED
 hsPar = HsPar NOEXT

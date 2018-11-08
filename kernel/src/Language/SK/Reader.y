@@ -173,6 +173,7 @@ mkAComment (L l (TDocCommentNext x)) = atom l $ AComment x
 mkBlockDocCommentNext :: Located Token -> Code
 mkBlockDocCommentNext (L l (TBlockDocCommentNext x)) =
   atom l $ AComment x
+{-# INLINE mkBlockDocCommentNext #-}
 
 mkOcSymbol :: Located Token -> Code
 mkOcSymbol (L l _) = sym l "{"

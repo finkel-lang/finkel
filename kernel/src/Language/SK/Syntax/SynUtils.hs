@@ -33,8 +33,10 @@ import SrcLoc ( GenLocated(..), Located, SrcSpan, combineLocs
 import TysWiredIn (consDataConName)
 
 #if MIN_VERSION_ghc(8,6,0)
+import HsDoc (HsDocString, mkHsDocString)
 import HsExtension (noExt)
 #else
+import HsDoc (HsDocString(..))
 import PlaceHolder (PlaceHolder(..), placeHolderType)
 #endif
 
@@ -216,6 +218,15 @@ codeToUserTyVar code =
       L l (UserTyVar NOEXT (L l (mkUnqual tvName name)))
     _ -> error "Language.SK.Syntax.SynUtils:codeToUserTyVar"
 {-# INLINE codeToUserTyVar #-}
+
+-- | Auxiliary function to make 'HsDocString'.
+hsDocString :: String -> HsDocString
+#if MIN_VERSION_ghc(8,6,0)
+hsDocString = mkHsDocString
+#else
+hsDocString = HsDocString . fsLit
+#endif
+{-# INLINE hsDocString #-}
 
 -- | Auxiliary function to absorb version compatibiity of
 -- 'mkHsIntegral'.

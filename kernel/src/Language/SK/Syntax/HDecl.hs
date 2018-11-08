@@ -19,9 +19,9 @@ import FastString (FastString, unpackFS)
 import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
 import HsBinds (FixitySig(..), HsBind, HsBindLR(..), Sig(..))
 import HsDecls ( ClsInstDecl(..), ConDecl (..), DefaultDecl(..)
-               , ForeignDecl(..), ForeignExport (..), HsDataDefn(..)
-               , HsDecl(..), HsDerivingClause(..), InstDecl(..)
-               , NewOrData(..), TyClDecl(..) )
+               , DocDecl(..), ForeignDecl(..), ForeignExport (..)
+               , HsDataDefn(..), HsDecl(..), HsDerivingClause(..)
+               , InstDecl(..), NewOrData(..), TyClDecl(..) )
 import HsExpr (HsMatchContext(..), Match(..))
 import HsTypes ( ConDeclField(..), HsConDetails(..), HsType(..)
                , HsTyVarBndr(..), mkFieldOcc, mkHsQTvs )
@@ -468,6 +468,15 @@ b_specializeD (LForm (L l _)) (nameSym, tsig) = do
       ssig = specSig lname [mkLHsSigType tsig] ip
   return (L l (sigD ssig))
 {-# INLINE b_specializeD #-}
+
+b_docD :: Code -> Builder HDecl
+b_docD (LForm (L l form))
+  | Atom (AComment str) <- form = return $! L l (DocD NOEXT (doc str))
+  | otherwise                   = builderError
+  where
+    doc :: String -> DocDecl
+    doc = DocCommentNext . hsDocString
+{-# INLINE b_docD #-}
 
 tyClD :: TyClDecl PARSED -> HsDecl PARSED
 tyClD = TyClD NOEXT

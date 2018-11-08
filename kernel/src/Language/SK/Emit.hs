@@ -28,22 +28,14 @@ import GHC (OutputableBndrId, getPrintUnqual)
 import ApiAnnotation (AnnotationComment(..))
 import FastString (unpackFS)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
-import HsBinds (HsBindLR(..), Sig(..), pprTicks, pprVarSig)
-import HsDecls (HsDecl(..))
+import HsDecls (DocDecl(..), HsDecl(..), TyClDecl(..))
 import HsDoc (LHsDocString)
-import HsExpr (HsExpr(..), pprFunBind)
+import HsExpr (HsExpr(..))
 import HsSyn (HsModule(..))
-import Outputable ( ($$), (<+>), (<>)
-                  , BindingSite(..), Outputable(..), SDoc
+import Outputable ( (<+>), (<>), Outputable(..), SDoc
                   , comma, doubleQuotes, empty, fsep
-                  , int, lparen, nest, pprBndr, punctuate
-                  , showSDocForUser, text, vcat
-#if MIN_VERSION_ghc(8,4,0)
-                  , whenPprDebug
-#else
-                  , ifPprDebug
-#endif
-                  )
+                  , int, lparen, nest, punctuate
+                  , showSDocForUser, text, vcat )
 import RdrName (RdrName)
 import SrcLoc ( Located, GenLocated(..), SrcLoc, SrcSpan(..)
               , combineSrcSpans, getLoc, unLoc
@@ -132,6 +124,7 @@ buildDocMap acs = go (Map.empty, Nothing, []) (sortLocated acs)
              then go (acc, Just (getLoc com), [unLoc com]) coms
              else go (acc, Nothing, block) coms
 
+{-
 spanStartLine :: SrcSpan -> Int
 spanStartLine l =
   case l of
@@ -156,6 +149,33 @@ lookupPrevDoc offset l =
             | otherwise                      = Nothing
   in  Map.foldMapWithKey f
 
+emitPrevDoc :: SPState -> Located a -> SDoc
+emitPrevDoc = emitPrevDocWithOffset 1
+
+emitPrevDocWithOffset :: Int -> SPState -> Located a -> SDoc
+emitPrevDocWithOffset offset st ref =
+  case lookupPrevDoc offset (getLoc ref) (docMap st) of
+    Nothing -> empty
+    Just as -> vcat (map f as)
+  where
+    f annotated = case annotated of
+      AnnDocCommentNext doc -> case lines doc of
+        c:cs -> vcat ((text "-- | " <> text c):
+                      map (\ x -> text "--" <> text x) cs)
+        []   -> empty
+      AnnLineComment doc -> text "-- " <> text doc
+      _                  -> ppr annotated
+
+#if !MIN_VERSION_ghc(8,4,0)
+-- | 'whenPprDebug' does not exist in ghc 8.2. Defining one with
+-- 'ifPprDebug'. Also, number of arguments in 'ifPprDebug' changed in
+-- ghc 8.4.
+whenPprDebug :: SDoc -> SDoc
+whenPprDebug d = ifPprDebug d
+#endif
+
+-}
+
 
 -- ---------------------------------------------------------------------
 --
@@ -174,13 +194,6 @@ genHsSrc st0 x = do
   unqual <- getPrintUnqual
   let st1 = st0 {docMap = buildDocMap (comments st0)}
   return (showSDocForUser flags unqual (toHsSrc st1 x))
-
-unAnnotateComment :: AnnotationComment -> SDoc
-unAnnotateComment c =
-  case c of
-    AnnLineComment str    -> text "--" <> text str
-    AnnDocCommentNext str -> text "-- |" <> text str
-    _                     -> ppr c
 
 pp_nonnull :: Outputable t => [t] -> SDoc
 pp_nonnull [] = empty
@@ -217,15 +230,6 @@ linePragma' st linum =
       replaceExtension name =
         reverse ("sh" ++ dropWhile (/= '.') (reverse name))
 
-emitPrevDoc :: SPState -> Located a -> SDoc
-emitPrevDoc = emitPrevDocWithOffset 1
-
-emitPrevDocWithOffset :: Int -> SPState -> Located a -> SDoc
-emitPrevDocWithOffset offset st ref =
- case lookupPrevDoc offset (getLoc ref) (docMap st) of
-    Nothing -> empty
-    Just as -> vcat (map unAnnotateComment as)
-
 
 -- ---------------------------------------------------------------------
 --
@@ -241,6 +245,13 @@ instance HsSrc SrcLoc where
 
 instance (HsSrc b) => HsSrc (GenLocated a b) where
   toHsSrc st (L _ e) = toHsSrc st e
+
+instance HsSrc DocDecl where
+  toHsSrc _st d = case d of
+    DocCommentNext ds        -> commentWithHeader "-- |" ds
+    DocCommentPrev ds        -> commentWithHeader "-- ^" ds
+    DocCommentNamed name _ds -> text "-- named doc" <> text name
+    DocGroup n _ds           -> text "-- group doc" <> text (show n)
 
 #if MIN_VERSION_ghc(8,4,0)
 instance OUTPUTABLE a pr
@@ -283,40 +294,13 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (HsExpr a)) where
 instance OUTPUTABLE a pr => HsSrc (Hsrc (HsDecl a)) where
   toHsSrc st (Hsrc decl) =
     case decl of
-      ValD _EXT binds -> toHsSrc st (Hsrc binds)
-      SigD _EXT sigd  -> toHsSrc st (Hsrc sigd)
+      TyClD _EXT dcl  -> toHsSrc st (Hsrc dcl)
+      DocD _EXT doc   -> toHsSrc st doc
       _               -> ppr decl
 
-instance OUTPUTABLE a pr => HsSrc (Hsrc (HsBindLR a a)) where
-  toHsSrc st (Hsrc binds) =
-    case binds of
-      FunBind { fun_id = fun
-              , fun_co_fn = wrap
-              , fun_matches = matches
-              , fun_tick = ticks }
-        -> pprTicks empty (if null ticks
-                              then empty
-                              else text "-- ticks = " <> ppr ticks)
-           $$ whenPprDebug (pprBndr LetBind (unLoc fun))
-
-           -- Additional operation to `ppr' for `toHsSrc'. Find
-           -- corresponding haddock comment for function binding, and
-           -- print it out.
-           $$ emitPrevDoc st fun
-
-           $$ pprFunBind matches
-           $$ whenPprDebug (ppr wrap)
-      _ -> ppr binds
-
-instance OUTPUTABLE a pr => HsSrc (Hsrc (Sig a)) where
-  toHsSrc st (Hsrc sig) =
-    case sig of
-     TypeSig _EXT vars ty ->
-        (case vars of
-           []    -> empty
-           var:_ -> emitPrevDoc st var)
-        $$ pprVarSig (map unLoc vars) (ppr ty)
-     _                    -> ppr sig
+-- XXX: TODO.
+instance OUTPUTABLE a pr => HsSrc (Hsrc (TyClDecl a)) where
+  toHsSrc _st (Hsrc dcl) = ppr dcl
 
 
 -- -------------------------------------------------------------------
@@ -328,11 +312,14 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (Sig a)) where
 pp_mbModuleHeaderDoc :: Maybe LHsDocString -> SDoc
 pp_mbModuleHeaderDoc = maybe empty mod_header
   where
-    mod_header (L _ doc) =
-      case lines (unpackHDS' doc) of
-        []   -> empty
-        d:ds -> vcat ((text "-- |" <> text d):
-                      map (\ x -> text "-- " <> text x) ds)
+    mod_header (L _ doc) = commentWithHeader "-- |" doc
+
+commentWithHeader :: String -> HsDocString -> SDoc
+commentWithHeader header doc =
+  case lines (unpackHDS' doc) of
+    []   -> empty
+    d:ds -> vcat ((text header <> text d):
+                  map (\ x -> text "--" <+> text x) ds)
 
 -- | GHC version compatible function for unpacking 'HsDocString'.
 unpackHDS' :: HsDocString -> String
@@ -340,12 +327,4 @@ unpackHDS' :: HsDocString -> String
 unpackHDS' = unpackHDS
 #else
 unpackHDS' (HsDocString fs) = unpackFS fs
-#endif
-
-#if !MIN_VERSION_ghc(8,4,0)
--- | 'whenPprDebug' does not exist in ghc 8.2. Defining one with
--- 'ifPprDebug'. Also, number of arguments in 'ifPprDebug' changed in
--- ghc 8.4.
-whenPprDebug :: SDoc -> SDoc
-whenPprDebug d = ifPprDebug d
 #endif

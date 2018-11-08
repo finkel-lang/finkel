@@ -25,6 +25,7 @@ module Language.SK.Syntax
 import BasicTypes (FixityDirection(..), InlineSpec(..), OverlapMode(..))
 import FastString (FastString)
 import ForeignCall (Safety)
+import HaddockUtils (addConDoc)
 import HsDoc (LHsDocString)
 import HsExpr (GRHS(..))
 import SrcLoc (Located, noLoc)
@@ -179,10 +180,9 @@ import Language.SK.Syntax.HType
 --
 -- ---------------------------------------------------------------------
 
-mbdoc :: { Maybe LHsDocString }
-    : {- empty -} { Nothing }
-    | 'comment'   {% Just `fmap` (b_commentStringE $1) }
-
+mbdocnext :: { Maybe LHsDocString }
+    : 'comment'   {% fmap Just (b_commentStringE $1) }
+    | {- empty -} { Nothing }
 
 -- ---------------------------------------------------------------------
 --
@@ -196,8 +196,8 @@ module :: { HModule }
     | mhead top_decls         {% $1 `fmap` pure [] <*> pure $2 }
 
 mhead :: { [HImportDecl] -> [HDecl] -> HModule }
-    : mbdoc          {% b_implicitMainModule }
-    | mbdoc 'module' {% parse p_mod_header $2 <*> pure $1 }
+    : mbdocnext          {% b_implicitMainModule }
+    | mbdocnext 'module' {% parse p_mod_header $2 <*> pure $1 }
 
 mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl]
                 -> HModule }
@@ -271,19 +271,20 @@ rtop_decls :: { [HDecl] }
     | rtop_decls top_decl_with_doc { $2 : $1 }
 
 top_decl_with_doc :: { HDecl }
-    : mbdoc 'list' {% parse p_top_decl $2 }
+    : 'list'    {% parse p_top_decl $1 }
+    | 'comment' {% b_docD $1 }
 
 top_decl :: { HDecl }
-    : 'data' simpletype constrs       { b_dataD $1 $2 $3 }
-    | 'type' simpletype type          { b_typeD $1 $2 $3 }
-    | 'newtype' simpletype constrs    { b_newtypeD $1 $2 $3 }
-    | 'class' qtycl cdecls            {% b_classD $2 $3 }
-    | 'instance' overlap qtycl idecls { b_instD $2 $3 $4 }
-    | 'default' zero_or_more_types    { b_defaultD $2 }
-    | fixity 'integer' symbols1       {% b_fixityD $1 $2 $3 }
-    | 'foreign' 'symbol' ccnv sname 'list'
-      {% parse p_sfsig $5 >>= b_ffiD $1 $2 $3 $4 }
-    | decl                         { $1 }
+    : 'data' simpletype constrs            { b_dataD $1 $2 $3 }
+    | 'type' simpletype type               { b_typeD $1 $2 $3 }
+    | 'newtype' simpletype constrs         { b_newtypeD $1 $2 $3 }
+    | 'class' qtycl cdecls                 {% b_classD $2 $3 }
+    | 'instance' overlap qtycl idecls      { b_instD $2 $3 $4 }
+    | 'default' zero_or_more_types         { b_defaultD $2 }
+    | fixity 'integer' symbols1            {% b_fixityD $1 $2 $3 }
+    | 'foreign' 'symbol' ccnv sname 'list' {% parse p_sfsig $5 >>=
+                                              b_ffiD $1 $2 $3 $4 }
+    | decl                                 { $1 }
 
 overlap :: { Maybe (Located OverlapMode) }
     : 'overlappable' { b_overlapP $1 }
@@ -308,8 +309,8 @@ rconstrs :: { (HDeriving, [HConDecl]) }
     | rconstrs constr        { fmap ($2:) $1 }
 
 constr :: { HConDecl }
-    : 'symbol' {% b_conOnlyD $1 }
-    | 'list'   {% parse p_lconstr $1 }
+    : mbdocnext 'symbol' {% fmap (flip addConDoc $1) (b_conOnlyD $2) }
+    | mbdocnext 'list'   {% fmap (flip addConDoc $1) (parse p_lconstr $2) }
 
 deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }

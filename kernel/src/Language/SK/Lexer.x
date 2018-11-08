@@ -29,6 +29,7 @@ module Language.SK.Lexer
 import Control.Monad (ap, liftM, msum)
 import Data.Char ( chr, ord, isDigit, isOctDigit, isHexDigit
                  , isSpace, toUpper )
+import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
 import qualified GHC.Char as Char
@@ -86,6 +87,9 @@ $hsymtail    = [$hsymhead\'\#$digit]
 @exponent    = [eE] [\-\+]? @decimal
 @frac        = @decimal \. @decimal @exponent ? | @decimal @exponent
 
+-- Continued doc comment line, this starts with \n from previous line.
+@contdoc     = \n [\t\ ]* \;+ ~\n+
+
 
 tokens :-
 
@@ -93,8 +97,8 @@ $whitechar+  ;
 
 --- Comments
 
-\;+ $whitechar+ \| .* { tok_doc_comment_next }
-\; .*                 { tok_line_comment }
+\;+ $whitechar+ \| ~\n+ @contdoc* { tok_doc_comment_next }
+\; .*                             { tok_line_comment }
 
 \#\| $whitechar* \|   { tok_block_doc_comment_next }
 \#\|                  { tok_block_comment }
@@ -213,6 +217,7 @@ alexGetByte (AlexInput loc _ buf) =
           loc' = advanceSrcLoc loc c
       in w8 `seq` c `seq` loc' `seq` buf' `seq`
          Just (w8, AlexInput loc' c buf')
+{-# INLINE alexGetByte #-}
 
 alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
 alexGetChar' (AlexInput l0 _c0 bs0) =
@@ -276,7 +281,7 @@ incrSP sp f z target input = go st1 z
       case unSP sp st of
         SPNG _loc msg
           | blank (buf st) -> Right (acc, st)
-          | otherwise       -> Left msg
+          | otherwise      -> Left msg
         SPOK st' ret       ->
           let st'' = st' {buf=C8.cons (prevChar st') (buf st')}
           in  go st'' $! f ret acc
@@ -376,10 +381,9 @@ type Action = AlexInput -> Int -> SP Token
 -- Currently, documentation 'Token's are converted to 'AnnotatedComment'
 -- during lexical analysis. Once Token data were converted to
 -- 'AnnotationComment', it cannot distinguish between block
--- documentation comment and line documentation comment. From this,
--- character sequences for line documentation prefix (i.e. '-- |') and
--- block documentation start (i.e. '{- |') and end (i.e. '-}') are added
--- in tokenizer actions.
+-- documentation comment and line documentation comment. From this
+-- reason, the documentation comments generated with "Language.SK.Emit"
+-- are always using multi-line comment syntax.
 
 tok_oparen :: Action
 tok_oparen _ _ = return TOparen
@@ -482,7 +486,7 @@ tok_block_comment_with tok ini inp0 _ = do
   where
     go inp prev acc =
       case alexGetChar' inp of
-        Just (c, inp') | c == '#', prev == '|' -> Just (tail acc, inp')
+        Just (c, inp') | prev == '|', c == '#' -> Just (tail acc, inp')
                        | otherwise             -> go inp' c (c:acc)
         Nothing                                -> Nothing
 {-# INLINE tok_block_comment_with #-}
@@ -692,17 +696,18 @@ lexTokens input = evalSP go Nothing input
 --
 -- ---------------------------------------------------------------------
 
-toString :: C8.ByteString -> String
-toString = C8.unpack
-{-# INLINE toString #-}
-
 -- | Lisp comment to Haskell comment.
 lc2hc :: String -> String
-lc2hc = dropWhile (== ';')
+lc2hc = intercalate "\n" . map (tail' . dropWhile (== ';')) . lines
+  where
+    tail' xs = case xs of
+      []    -> []
+      _:xs' -> xs'
 {-# INLINE lc2hc #-}
 
 lc2hc_doc :: String -> String
 lc2hc_doc = dropWhile (== '|') . dropWhile isSpace . lc2hc
+{-# INLINE lc2hc_doc #-}
 
 annotateComment :: Token -> AnnotationComment
 annotateComment tok = case tok of
