@@ -183,12 +183,14 @@
                   (<- body2
                     (make-defmacro-body label code name arg body1))
                   (return (LForm (L l (List [name the-form body2])))))
+
               _ (macro-error code (++ label ": invalid form")))))
       (case (unCode whole)
         (List (: _ (: (LForm (L l0 (List forms))) rest)))
         (do (<- macros (mapM make-macro forms))
             (return `(let-macro ,(LForm (L l0 (List macros)))
                        ,@(List rest))))
+
         _ (macro-error whole (++ label ": invalid form"))))))
 
 ;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
