@@ -17,11 +17,8 @@ import qualified System.FilePath as FilePath
 
 -- ghc
 import DynFlags (HasDynFlags(..), GeneralFlag(..), gopt_set)
-import HsSyn (hsmodHaddockModHeader)
 import Outputable (Outputable(..), neverQualify, printForUser)
-import SrcLoc (unLoc)
 import qualified GHC as GHC
-
 
 -- sk-kernel
 import qualified Language.SK.Builder as Builder
@@ -102,10 +99,7 @@ pprHsModule path =
          case ret of
            Right lmdl ->
              liftIO
-               (do case hsmodHaddockModHeader (unLoc lmdl) of
-                     Just _ -> putStrLn "module has header doc."
-                     _      -> putStrLn "no header doc."
-                   printForUser dflags1 stdout neverQualify (ppr lmdl))
+               (printForUser dflags1 stdout neverQualify (ppr lmdl))
            Left _err  -> liftIO (putStrLn "pprHsModule: error")
 
 printHsrc :: FilePath -> IO ()
