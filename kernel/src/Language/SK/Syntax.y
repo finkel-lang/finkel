@@ -405,7 +405,7 @@ sname :: { (Maybe (Located Safety), Code) }
     | 'list'   {% parse p_lsname $1 }
 
 lsname :: { (Maybe (Located Safety), Code) }
-    : 'symbol' 'string' {% b_safety $1 >>= \s -> return (Just s, $2) }
+    : 'symbol' 'string' {% (\s -> (Just s, $2)) `fmap` b_safety $1 }
 
 decl :: { HDecl }
     : '=' varid aguards    {% b_funBindD $2 $3 }
@@ -425,7 +425,7 @@ aguards :: { (([HGRHS],[HDecl]), [HPat]) }
         | pat aguards { ($1:) `fmap` $2 }
 
 dtype :: { ([HType], HType) }
-    : 'symbol' {% b_symT $1 >>= \t -> return ([], t) }
+    : 'symbol' {% (\t -> ([], t)) `fmap` b_symT $1}
     | 'unit'   { ([], b_unitT $1) }
     | 'hslist' {% do { t <- parse p_type [toListL $1]
                      ; return ([], b_listT t) }}

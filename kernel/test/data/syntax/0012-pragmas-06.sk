@@ -1,16 +1,19 @@
-;;;; File containing language pragmas, part 6.
+;;;; File containing NoImplicitPrelude.
 
-#p(LANGUAGE NoMonomorphismRestriction)
+#p(LANGUAGE NoImplicitPrelude)
+#p(OPTIONS_GHC -Wall)
 
 (module Main)
 
-(class (C1 a)
-  (:: int (-> Int a))
-  (:: add (-> a a a)))
+(import Prelude hiding (^ read))
 
-;; Fail to compile with `f1', unless monomorphism restriction is absent.
-(= f1 (add (int 1) (add (int 2) (int 3))))
+(:: read (-> String Bool))
+(= read "true" True)
+(= read _ False)
+
+(:: ^ (-> [a] [a] [a]))
+(= ^ ++)
 
 (:: main (IO ()))
 (= main
-  (putStrLn "test file for no-monomorphism-restrictions."))
+  (putStrLn (^ "(read true) ==> " (show (read "true")))))

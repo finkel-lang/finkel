@@ -1,6 +1,7 @@
 ;;;; File containing language pragmas, part 5.
 
 #p(LANGUAGE MultiParamTypeClasses)
+#p(LANGUAGE NoMonomorphismRestriction)
 #p(LANGUAGE FlexibleContexts)
 #p(LANGUAGE FlexibleInstances)
 #p(LANGUAGE TypeSynonymInstances)
@@ -78,6 +79,10 @@
   (= int show)
   (= add a b (concat ["(" a " + " b ")"])))
 
+;; When monomorphism restriction is absent, fail to compile with
+;; `c3_f1',
+(= c3_f1 (add (int 1) (add (int 2) (int 3))))
+
 (:: main (IO ()))
 (= main
   (do (c1 (:: (return False) (IO Bool)) (return \x))
@@ -93,4 +98,5 @@
       (putStrLn (c2d True))
       (putStrLn (c2d n))
       (putStrLn (add (add (int 1) (int 2))
-                     (add (int 3) (int 4))))))
+                     (add (int 3) (int 4))))
+      (putStrLn c3_f1)))

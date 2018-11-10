@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeFamilies #-}
 -- | Syntax for module header, import and export entities.
 module Language.SK.Syntax.HIE where
 
@@ -152,9 +151,3 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities)
     in  return (L l decl')
   | otherwise                              = builderError
 {-# INLINE b_importD #-}
-
-b_isAs :: Code -> Builder Code
-b_isAs form@(LForm (L _ sym))
-  | Atom (ASymbol as) <- sym, as == fsLit "as" = return form
-  | otherwise                                  = builderError
-{-# INLINE b_isAs #-}

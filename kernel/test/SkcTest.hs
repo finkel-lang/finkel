@@ -3,6 +3,7 @@ module SkcTest where
 -- base
 import Control.Exception
 import Data.List (isPrefixOf, tails)
+import Data.Maybe (fromMaybe)
 
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -130,3 +131,21 @@ expandTest = do
       case ret of
         Right ret' -> length ret' `shouldSatisfy` (>= 1)
         _ -> expectationFailure "macro expansion failed"
+  describe "expanding with macroFunction" $
+    it "should return empty form" $ do
+      let env = emptySkEnv {envMacros = specialForms}
+          mb_qt = lookupMacro (fsLit "quote") env
+          qt = fromMaybe (error "macro not found") mb_qt
+          l = skSrcSpan
+          s x = LForm (L l (Atom (ASymbol (fsLit x))))
+          li xs = LForm (L l (List xs))
+          t x = LForm (L l (Atom (AString x)))
+          form0 = li [s "quote", s "a"]
+          form1 = li [s "quoted", li [s "Atom", li [s "aSymbol", t "a"]]]
+      ret <- macroFunction qt form0
+      ret `shouldBe` Right form1
+
+emptyForm :: Code
+emptyForm =
+  let bgn = LForm (L skSrcSpan (Atom (ASymbol (fsLit "begin"))))
+  in  LForm (L skSrcSpan (List [bgn]))
