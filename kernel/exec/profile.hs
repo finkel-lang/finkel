@@ -36,12 +36,13 @@ main :: IO ()
 main =
   do args <- getArgs
      case args of
-       ["parse", file] -> printForms file
-       ["ppr", file]   -> pprFile file
-       ["hsrc", file]  -> printHsrc file
-       ["lex", file]   -> printTokens file
-       "make" : files  -> doMake files
-       _               -> usage
+       ["expand", file] -> printExpandedForms file
+       ["parse", file]  -> printForms file
+       ["ppr", file]    -> pprFile file
+       ["hsrc", file]   -> printHsrc file
+       ["lex", file]    -> printTokens file
+       "make" : files   -> doMake files
+       _                -> usage
 
 usage :: IO ()
 usage =
@@ -55,6 +56,20 @@ usage =
        ,"  hsrc  - convert SK source to Haskell source"
        ,"  lex   - lex input file and print resulting tokens"
        ,"  make  - compile given files to object code"])
+
+printExpandedForms :: FilePath -> IO ()
+printExpandedForms path = do
+  ret <- Run.runSkc go Make.defaultSkEnv
+  case ret of
+    Right _  -> return ()
+    Left err -> putStrLn err
+  where
+    go = do
+      Make.initSessionForMake
+      contents <- liftIO (BL.readFile path)
+      (forms, _) <- Run.parseSexprs (Just path) contents
+      forms' <- Expand.withExpanderSettings (Expand.expands forms)
+      liftIO (mapM_ print forms')
 
 printForms :: FilePath -> IO ()
 printForms path =
@@ -79,11 +94,11 @@ pprSkModule =
           liftIO (printForUser dflags stdout neverQualify (ppr m)))
 
 pprHsModule :: FilePath -> IO ()
-pprHsModule path =
-  do result <- Run.runSkc go Make.defaultSkEnv
-     case result of
-       Right _  -> return ()
-       Left err -> putStrLn err
+pprHsModule path = do
+  result <- Run.runSkc go Make.defaultSkEnv
+  case result of
+    Right _  -> return ()
+    Left err -> putStrLn err
   where
     go =
       do Make.initSessionForMake
@@ -112,11 +127,11 @@ printHsrc =
 
 parseSkModuleWith ::
   (Builder.HModule -> Lexer.SPState -> SKC.Skc ()) -> FilePath -> IO ()
-parseSkModuleWith act path =
-  do result <- Run.runSkc go Make.defaultSkEnv
-     case result of
-       Right _  -> return ()
-       Left err -> putStrLn err
+parseSkModuleWith act path = do
+  result <- Run.runSkc go Make.defaultSkEnv
+  case result of
+    Right _  -> return ()
+    Left err -> putStrLn err
   where
     go =
      do Make.initSessionForMake
