@@ -16,7 +16,7 @@
 (:: main (IO ()))
 (= main
   (do
-    ;; Character "'foo" is same as "(quote foo)".
+    ;; "'foo" is same as "(quote foo)".
     (print 'foo)
     (print (quote foo))
 

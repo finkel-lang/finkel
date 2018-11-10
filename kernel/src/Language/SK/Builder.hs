@@ -91,9 +91,9 @@ runBuilder :: Builder a
            -> [Code]
            -> Either String (a, [Code])
 runBuilder bld toks =
-    case runStateT (unBuilder bld) (BState toks Nothing) of
-      Left e -> Left e
-      Right (a, st) -> Right (a, inputs st)
+  case runStateT (unBuilder bld) (BState toks Nothing) of
+    Right (a, st) -> Right (a, inputs st)
+    Left e        -> Left e
 
 evalBuilder :: Builder a -> [Code] -> Either String a
 evalBuilder bld toks = fmap fst (runBuilder bld toks)
@@ -102,14 +102,14 @@ failB :: String -> Builder a
 failB err = Builder (StateT (\_ -> Left err))
 
 instance Functor Builder where
-    fmap f (Builder m) = Builder (fmap f m)
-    {-# INLINE fmap #-}
+  fmap f (Builder m) = Builder (fmap f m)
+  {-# INLINE fmap #-}
 
 instance Applicative Builder where
-    pure  = return
-    {-# INLINE pure #-}
-    Builder m <*> Builder f = Builder (m <*> f)
-    {-# INLINE (<*>) #-}
+  pure  = return
+  {-# INLINE pure #-}
+  Builder m <*> Builder f = Builder (m <*> f)
+  {-# INLINE (<*>) #-}
 
 instance Monad Builder where
   return a = Builder (a `seq` return a)
@@ -138,7 +138,7 @@ parse :: Builder a -> [Code] -> Builder a
 parse bld toks =
   case runBuilder bld toks of
     Right (a, _) -> return a
-    Left err -> failB err
+    Left err     -> failB err
 
 -- | Simple lexer to parse forms.
 formLexer :: (Code -> Builder a) -> Builder a

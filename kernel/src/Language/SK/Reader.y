@@ -72,16 +72,16 @@ import Language.SK.Syntax
 -- expansion phase.
 
 sexp :: { Code }
-     : atom                    { $1 }
-     | 'quote' sexp            { mkQuote $1 $2 }
-     | '`' sexp                { mkQuasiquote $1 $2 }
-     | ',' sexp                { mkUnquote $1 $2 }
-     | ',@' sexp               { mkUnquoteSplice $1 $2 }
-     | '[' sexps ']'           { mkHsList $1 $2 }
-     | 'pcommas'               { mkPcommas $1 }
-     | '(' ')'                 { mkUnit $1 }
-     | '(' sexps ')'           { mkList $1 $2 }
-     | '#' sexp                {% rmac $1 $2 }
+    : atom                    { $1 }
+    | 'quote' sexp            { mkQuote $1 $2 }
+    | '`' sexp                { mkQuasiquote $1 $2 }
+    | ',' sexp                { mkUnquote $1 $2 }
+    | ',@' sexp               { mkUnquoteSplice $1 $2 }
+    | '[' sexps ']'           { mkHsList $1 $2 }
+    | 'pcommas'               { mkPcommas $1 }
+    | '(' ')'                 { mkUnit $1 }
+    | '(' sexps ')'           { mkList $1 $2 }
+    | '#' sexp                {% rmac $1 $2 }
 
 sexps :: { [Code] }
     : rsexps { reverse $1 }

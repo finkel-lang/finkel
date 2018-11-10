@@ -80,12 +80,12 @@ $hsymhead    = [^\\\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
 $hsymtail    = [$hsymhead\'\#$digit]
 
 @hsymbol     = $hsymhead $hsymtail*
-@signed      = $negative ?
+@signed      = $negative?
 @octal       = $octit+
 @decimal     = $digit+
 @hexadecimal = $hexit+
 @exponent    = [eE] [\-\+]? @decimal
-@frac        = @decimal \. @decimal @exponent ? | @decimal @exponent
+@frac        = @decimal \. @decimal @exponent? | @decimal @exponent
 
 -- Continued doc comment line, this starts with \n from previous line.
 @contdoc     = \n [\t\ ]* \;+ ~\n+
@@ -544,7 +544,7 @@ tok_string inp _l =
                 case alexGetChar' inp1 of
                   Just (c2, inp2) | c2 == '&' -> go inp2 $! acc
                   _                           -> Nothing
-          | otherwise  -> go inp1 $! (c1 : acc)
+          | otherwise  -> go inp1 $! (c1:acc)
 {-# INLINE tok_string #-}
 
 escapeChar :: AlexInput -> Maybe (Char, AlexInput)
