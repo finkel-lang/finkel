@@ -211,6 +211,12 @@ b_commentStringE (LForm (L l form))
   | otherwise                   = builderError
 {-# INLINE b_commentStringE #-}
 
+b_docnextE :: Code -> Builder (Located HsDocString)
+b_docnextE (LForm (L l form))
+  | Atom (AString x) <- form = return $! L l (hsDocString x)
+  | otherwise                = builderError
+{-# INLINE b_docnextE #-}
+
 b_hsListE :: Either HExpr [HExpr] -> HExpr
 b_hsListE expr =
   case expr of

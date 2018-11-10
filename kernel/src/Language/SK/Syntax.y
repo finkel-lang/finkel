@@ -1,11 +1,11 @@
--- Happy parser for S-expression forms.
 {
 {-# LANGUAGE OverloadedStrings #-}
 -- | Module for parsing form data.
 --
--- Unlike the lexer for reading source code, parser defined in this
--- module takes a list of 'Code' data as input, and converts to internal
--- abstract syntax tree data defined in GHC.
+-- This module contains Happy parser for S-expression forms. Unlike the
+-- lexer for reading source code, parser defined in this module takes a
+-- list of 'Code' data as input, and converts to internal abstract
+-- syntax tree data defined in GHC.
 --
 module Language.SK.Syntax
   ( Builder(..)
@@ -160,6 +160,10 @@ import Language.SK.Syntax.HType
                (L _ (List [LForm
                             (L _ (Atom (ASymbol "INCOHERENT")))])) }
 
+-- Documentation
+'docn' { LForm (L _ (List [LForm (L _ (Atom (ASymbol ":docn"))), $$])) }
+'docp' { LForm (L _ (List [LForm (L _ (Atom (ASymbol ":docp"))), $$])) }
+
 -- Plain constructors
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }
@@ -182,6 +186,7 @@ import Language.SK.Syntax.HType
 
 mbdocnext :: { Maybe LHsDocString }
     : 'comment'   {% fmap Just (b_commentStringE $1) }
+    | 'docn'      {% fmap Just (b_docnextE $1) }
     | {- empty -} { Nothing }
 
 -- ---------------------------------------------------------------------
@@ -273,6 +278,8 @@ rtop_decls :: { [HDecl] }
 top_decl_with_doc :: { HDecl }
     : 'list'    {% parse p_top_decl $1 }
     | 'comment' {% b_docD $1 }
+    | 'docn'    {% b_docnextD $1 }
+    | 'docp'    {% b_docprevD $1 }
 
 top_decl :: { HDecl }
     : 'data' simpletype constrs            { b_dataD $1 $2 $3 }

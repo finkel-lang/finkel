@@ -471,12 +471,28 @@ b_specializeD (LForm (L l _)) (nameSym, tsig) = do
 
 b_docD :: Code -> Builder HDecl
 b_docD (LForm (L l form))
-  | Atom (AComment str) <- form = return $! L l (DocD NOEXT (doc str))
+  | Atom (AComment str) <- form =
+    return $! L l (DocD NOEXT (docCommentNext str))
   | otherwise                   = builderError
-  where
-    doc :: String -> DocDecl
-    doc = DocCommentNext . hsDocString
 {-# INLINE b_docD #-}
+
+b_docnextD :: Code -> Builder HDecl
+b_docnextD (LForm (L l form))
+  | Atom (AString str) <- form =
+    return $! L l (DocD NOEXT (docCommentNext str))
+  | otherwise                  = builderError
+{-# INLINE b_docnextD #-}
+
+b_docprevD :: Code -> Builder HDecl
+b_docprevD (LForm (L l form))
+  | Atom (AString str) <- form =
+    return $! L l (DocD NOEXT (DocCommentPrev (hsDocString str)))
+  | otherwise                  = builderError
+{-# INLINE b_docprevD #-}
+
+docCommentNext :: String -> DocDecl
+docCommentNext = DocCommentNext . hsDocString
+{-# INLINE docCommentNext #-}
 
 tyClD :: TyClDecl PARSED -> HsDecl PARSED
 tyClD = TyClD NOEXT

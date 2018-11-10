@@ -318,7 +318,7 @@ commentWithHeader :: String -> HsDocString -> SDoc
 commentWithHeader header doc =
   case lines (unpackHDS' doc) of
     []   -> empty
-    d:ds -> vcat ((text header <> text d):
+    d:ds -> vcat ((text header <+> text d):
                   map (\ x -> text "--" <+> text x) ds)
 
 -- | GHC version compatible function for unpacking 'HsDocString'.
