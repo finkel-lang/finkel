@@ -519,16 +519,18 @@ withShadowing toShadow skc = do
 
 -- | Expand forms, with taking care of @begin@ special form.
 expands :: [Code] -> Skc [Code]
--- XXX: Avoid using 'reverse'.
-expands = fmap reverse . foldM f []
-  where
-    f acc form = do
-      expanded@(LForm (L _ form')) <- expand form
-      case form' of
-        List (LForm (L _ (Atom (ASymbol "begin"))) : rest) -> do
-          rest' <- expands rest
-          return $! (reverse rest' ++ acc)
-        _ -> return $! (expanded : acc)
+expands forms = fmap concat (mapM expand' forms)
+
+expand' :: Code -> Skc [Code]
+expand' form = do
+  form' <- expand form
+  case unCode form' of
+    List (LForm (L _ (Atom (ASymbol "begin"))):rest) ->
+      case rest of
+        [] -> return []
+        _  -> expands rest
+    _ -> return [form']
+{-# INLINE expand' #-}
 
 -- | Recursively expands the given 'Code'.
 expand :: Code -> Skc Code
@@ -536,22 +538,22 @@ expand form =
   case unLForm form of
     L l (List forms) ->
       case forms of
-        -- Expand `let' expression, `case' expression, lambda expression
-        -- and function binding with shadowing the lexically bounded
-        -- names. Expansion of other forms are done without name
-        -- shadowing.
+        -- Expand `let' expression, `do' expression, `case' expression,
+        -- lambda expression and function binding with shadowing the
+        -- lexically bounded names. Expansion of other forms are done
+        -- without name shadowing.
         kw@(LForm (L _ (Atom (ASymbol x)))):y:rest
           | x == "let"            -> expandLet l kw y rest
           | x == "do"             -> expandDo l kw (y:rest)
           | x == "case"           -> expandCase l kw y rest
           | x == "where"          -> expandWhere l kw y rest
           | x == "=" || x == "\\" -> expandFunBind l kw (y:rest)
-        _                         -> expandList l List forms
+        _                         -> expandList l forms
 
     L l (HsList forms) ->
       -- Without recursively calling 'expand' on the result, cannot
       -- expand macro-generating macros.
-      LForm . L l . HsList <$> mapM expand forms
+      LForm . L l . HsList <$> expands forms
 
     -- Non-list forms are untouched.
     _ -> return form
@@ -559,7 +561,7 @@ expand form =
     expandLet l kw binds body = do
       binds' <- expand binds
       let bounded = boundedNames binds'
-      body' <- withShadowing bounded (mapM expand body)
+      body' <- withShadowing bounded (expands body)
       return (LForm (L l (List (kw:binds':body'))))
 
     expandDo l kw body = do
@@ -570,7 +572,7 @@ expand form =
       let args = init rest
           body = last rest
           bounded = concatMap boundedNameOne args
-      args' <- mapM expand args
+      args' <- expands args
       body' <- withShadowing bounded (expand body)
       return (LForm (L l (List (kw:args'++[body']))))
 
@@ -588,35 +590,35 @@ expand form =
       return (LForm (L l (List (kw:expr':reverse rest'))))
 
     expandWhere l kw expr rest = do
-      rest' <- mapM expand rest
+      rest' <- expands rest
       let bounded = concatMap boundedName rest'
       expr' <- withShadowing bounded (expand expr)
       return (LForm (L l (List (kw:expr':rest'))))
 
-    expandList l constr forms =
+    expandList l forms =
       case forms of
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
           ske <- getSkEnv
           case lookupMacro k ske of
-           Just (Macro f)       -> f form >>= expand
-           Just (SpecialForm f) -> f form >>= expand
-           Nothing              -> do
-             rest' <- mapM expand rest
-             return (LForm (L l (constr (sym:rest'))))
+            Just (Macro f)       -> f form >>= expand
+            Just (SpecialForm f) -> f form >>= expand
+            Nothing              -> do
+              rest' <- expands rest
+              return (LForm (L l (List (sym:rest'))))
         _ -> do
-          forms' <- mapM expand forms
-          return (LForm (L l (constr forms')))
+          forms' <- expands forms
+          return (LForm (L l (List forms')))
 
 expandInDo ::
    ([FastString], [Code]) -> Code -> Skc ([FastString], [Code])
 expandInDo (bounded, xs) x = do
   let newbind =
         case x of
-          LForm (L _ (List ((LForm (L _ (Atom (ASymbol sym)))):n:_)))
+          LForm (L _ (List (LForm (L _ (Atom (ASymbol sym))):n:_)))
             | sym == "<-" -> boundedNameOne n
           _               -> []
-  x' <- withShadowing bounded (expand x)
-  return (newbind ++ bounded, (x' : xs))
+  x' <- withShadowing bounded (expand' x)
+  return (newbind ++ bounded, (x' ++ xs))
 {-# INLINE expandInDo #-}
 
 -- | Expand given form once if the form is a macro form, otherwise
