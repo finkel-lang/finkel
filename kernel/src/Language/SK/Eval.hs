@@ -103,7 +103,7 @@ evalDecls decls = do
                      , ml_hi_file = error "ewc:ml_hi_file"
                      , ml_obj_file = error "ewc:ml_obj_file"}
   ds_result <- skcDesugar' interactive_loc tc_gblenv
-  simpl_mg <- liftIO (hscSimplify_compat hsc_env ds_result tc_gblenv)
+  simpl_mg <- liftIO (hscSimplify' hsc_env ds_result tc_gblenv)
   (tidy_cg, mod_details) <- liftIO (tidyProgram hsc_env simpl_mg)
   let !CgGuts { cg_module = this_mod
               , cg_binds = core_binds
@@ -115,8 +115,8 @@ evalDecls decls = do
   debugSkc ("[Language.SK.Eval.envDecls] this_mod=" ++
             moduleNameString (moduleName this_mod))
   prepd_binds <-
-    liftIO (corePrepPgm_compat hsc_env this_mod interactive_loc
-                               core_binds data_tycons)
+    liftIO (corePrepPgm' hsc_env this_mod interactive_loc
+                         core_binds data_tycons)
   cbc <- liftIO (byteCodeGen hsc_env this_mod prepd_binds
                              data_tycons mod_breaks)
   let evalDeclsSrcLoc =
@@ -170,23 +170,23 @@ ioMsgMaybe ioA = do
 
 -- | GHC version compatibility helper for combining 'hscSimplify'
 -- and 'tcg_th_coreplugins'.
-hscSimplify_compat :: HscEnv -> ModGuts -> TcGblEnv -> IO ModGuts
-#if !MIN_VERSION_ghc(8,4,0)
-hscSimplify_compat hsc_env modguts _tc_gblenv =
-  hscSimplify hsc_env modguts
-#else
-hscSimplify_compat hsc_env modguts tc_gblenv = do
+hscSimplify' :: HscEnv -> ModGuts -> TcGblEnv -> IO ModGuts
+#if MIN_VERSION_ghc(8,4,0)
+hscSimplify' hsc_env modguts tc_gblenv = do
   plugins <- readIORef (tcg_th_coreplugins tc_gblenv)
   hscSimplify hsc_env plugins modguts
+#else
+hscSimplify' hsc_env modguts _tc_gblenv =
+  hscSimplify hsc_env modguts
 #endif
 
 -- | GHC version compatibility helper for 'corePrepPgm'.
-corePrepPgm_compat :: HscEnv -> Module -> ModLocation -> CoreProgram
-                   -> [TyCon] -> IO CoreProgram
-#if !MIN_VERSION_ghc(8,4,0)
-corePrepPgm_compat hsc_env this_mod mod_loc binds data_tycons =
-  corePrepPgm hsc_env this_mod mod_loc binds data_tycons
-#else
-corePrepPgm_compat hsc_env this_mod mod_loc binds data_tycons =
+corePrepPgm' :: HscEnv -> Module -> ModLocation -> CoreProgram
+                    -> [TyCon] -> IO CoreProgram
+#if MIN_VERSION_ghc(8,4,0)
+corePrepPgm' hsc_env this_mod mod_loc binds data_tycons =
   fmap fst (corePrepPgm hsc_env this_mod mod_loc binds data_tycons)
+#else
+corePrepPgm' hsc_env this_mod mod_loc binds data_tycons =
+  corePrepPgm hsc_env this_mod mod_loc binds data_tycons
 #endif

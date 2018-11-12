@@ -189,14 +189,14 @@ hsrc :: SkcOptions -> Skc ()
 hsrc o = do
   file <- case input o of
     [(x, _)] -> return x
-    []  -> failS "hsrc: No input file"
-    _   -> failS "hsrc: Multiple input files not supported."
+    []       -> failS "hsrc: No input file"
+    _        -> failS "hsrc: Multiple input files not supported."
   (mdl, sp) <- compileWithSymbolConversion file
   when (performTypecheck o)
        (void (tcHsModule (Just file) Nothing False mdl))
   hssrc <- genHsSrc sp (Hsrc mdl)
   liftIO (case skO o of
-             Nothing -> putStrLn hssrc
+             Nothing  -> putStrLn hssrc
              Just out -> writeFile out hssrc)
 
 help :: String -> Skc ()
