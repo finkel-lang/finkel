@@ -521,6 +521,7 @@ withShadowing toShadow skc = do
 expands :: [Code] -> Skc [Code]
 expands forms = fmap concat (mapM expand' forms)
 
+-- | Expand form to list of 'Code', supports special form /begin/.
 expand' :: Code -> Skc [Code]
 expand' form = do
   form' <- expand form
@@ -561,7 +562,7 @@ expand form =
     expandLet l kw binds body = do
       binds' <- expand binds
       let bounded = boundedNames binds'
-      body' <- withShadowing bounded (expands body)
+      body' <- withShadowing bounded (mapM expand body)
       return (LForm (L l (List (kw:binds':body'))))
 
     expandDo l kw body = do
@@ -572,7 +573,7 @@ expand form =
       let args = init rest
           body = last rest
           bounded = concatMap boundedNameOne args
-      args' <- expands args
+      args' <- mapM expand args
       body' <- withShadowing bounded (expand body)
       return (LForm (L l (List (kw:args'++[body']))))
 
@@ -590,7 +591,7 @@ expand form =
       return (LForm (L l (List (kw:expr':reverse rest'))))
 
     expandWhere l kw expr rest = do
-      rest' <- expands rest
+      rest' <- mapM expand rest
       let bounded = concatMap boundedName rest'
       expr' <- withShadowing bounded (expand expr)
       return (LForm (L l (List (kw:expr':rest'))))
@@ -603,10 +604,10 @@ expand form =
             Just (Macro f)       -> f form >>= expand
             Just (SpecialForm f) -> f form >>= expand
             Nothing              -> do
-              rest' <- expands rest
+              rest' <- mapM expand rest
               return (LForm (L l (List (sym:rest'))))
         _ -> do
-          forms' <- expands forms
+          forms' <- mapM expand forms
           return (LForm (L l (List forms')))
 
 expandInDo ::
@@ -617,8 +618,8 @@ expandInDo (bounded, xs) x = do
           LForm (L _ (List (LForm (L _ (Atom (ASymbol sym))):n:_)))
             | sym == "<-" -> boundedNameOne n
           _               -> []
-  x' <- withShadowing bounded (expand' x)
-  return (newbind ++ bounded, (x' ++ xs))
+  x' <- withShadowing bounded (expand x)
+  return (newbind ++ bounded, (x':xs))
 {-# INLINE expandInDo #-}
 
 -- | Expand given form once if the form is a macro form, otherwise
