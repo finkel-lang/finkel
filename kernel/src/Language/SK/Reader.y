@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | S-expression reader.
 --
--- Parser functions in this module are written with the /happy/ parser
+-- Parser functions in this module are written with Happy parser
 -- generator.
 --
 module Language.SK.Reader
@@ -66,10 +66,12 @@ import Language.SK.Syntax
 
 %%
 
--- Required modules are added to SPState here. The reason is to support
--- requiring modules in home package when compiling multiple modules
--- with "--make" command, to get the modules information before macro
--- expansion phase.
+-- Unit and List
+-- ~~~~~~~~~~~~~
+--
+-- Empty list will parsed as a unit (i.e. '()' in Haskell), non-empty
+-- lists are pased as 'List' value of 'Code'. Empty 'List' value of
+-- 'Code' could be referred with 'Language.SK.Form.nil'.
 
 sexp :: { Code }
     : atom                    { $1 }
@@ -79,8 +81,7 @@ sexp :: { Code }
     | ',@' sexp               { mkUnquoteSplice $1 $2 }
     | '[' sexps ']'           { mkHsList $1 $2 }
     | 'pcommas'               { mkPcommas $1 }
-    | '(' ')'                 { mkUnit $1 }
-    | '(' sexps ')'           { mkList $1 $2 }
+    | '(' sexps ')'           { mkUnitOrList $1 $2}
     | '#' sexp                {% rmac $1 $2 }
 
 sexps :: { [Code] }
@@ -138,13 +139,12 @@ mkPcommas :: Located Token -> Code
 mkPcommas (L l (TPcommas n)) = li l [sym l (fsLit (replicate n ','))]
 {-# INLINE mkPcommas #-}
 
-mkUnit :: Located Token -> Code
-mkUnit (L l _) = atom l AUnit
-{-# INLINE mkUnit #-}
-
-mkList :: Located Token -> [Code] -> Code
-mkList (L l _) body = li l body
-{-# INLINE mkList #-}
+mkUnitOrList :: Located Token -> [Code] -> Code
+mkUnitOrList (L l _) body =
+  case body of
+    [] -> atom l AUnit
+    _  -> li l body
+{-# INLINE mkUnitOrList #-}
 
 mkASymbol :: Located Token -> Code
 mkASymbol (L l (TSymbol x)) = atom l $ ASymbol x
