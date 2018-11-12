@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeFamilies #-}
 -- | Syntax for module header, import and export entities.
 module Language.SK.Syntax.HIE where
 
