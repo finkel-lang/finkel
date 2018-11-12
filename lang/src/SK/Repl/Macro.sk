@@ -68,7 +68,7 @@
    (Name (getName nameIsFromExternalPackage nameModule nameOccName
           nameSrcSpan))
    (NameSet (elemNameSet mkNameSet))
-   (Outputable ((SDoc) $$ <+> <> empty dcolon nest ppr sep
+   (Outputable ((SDoc) $$ <+> <> empty dcolon hsep nest ppr sep
                 showPpr showSDoc showSDocForUser text vcat))
    (Module ((Module ..) mkModuleName))
    (Packages ((PackageConfig) componentId packageNameString
@@ -628,8 +628,9 @@ COMMANDS:
     [form] (do (<- ty0 (buildHsSyn parseType forms))
                (<- (, _ kind) (evalTypeKind ty0))
                (let ((= sdoc
-                       (<+> (text (show form))
-                            (<+> dcolon (pprTypeForUser kind))))))
+                       (hsep [(text (show form))
+                              dcolon
+                              (pprTypeForUser kind)]))))
                (<- str (show-sdoc-for-user-m sdoc))
                (return `(putStrLn ,str)))
     _      (invalid-form-error "kind" forms)))

@@ -103,6 +103,13 @@
 
           ;; REPL macros
           (ok '(exported-macros Prelude) "[]")
+          (ok '(*_ browse Unsafe.Coerce)
+              "Unsafe.Coerce.unsafeCoerce :: a -> b")
+          (ok '(*_ info putStr)
+              "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
+          (ok '(*_ kind Maybe)
+              "Maybe :: * -> *")
+          (ok '(*_ pwd) current-dir)
           (satisfy
            '(*_ show bindings)
            (\ ret
@@ -155,11 +162,8 @@
                 ";   " current-dir "\n"
                 "; module import search paths:\n"
                 ";    ."]))
-          (ok '(*_ info putStr)
-              "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
-          (ok '(*_ browse Unsafe.Coerce)
-              "Unsafe.Coerce.unsafeCoerce :: a -> b")
-          (ok '(*_ pwd) current-dir)
+          (ok '(*_ type putStrLn)
+              "putStrLn :: String -> IO ()")
 
           ;; Errors
           (ng 'buzz
