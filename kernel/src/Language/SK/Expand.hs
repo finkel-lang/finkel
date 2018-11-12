@@ -435,7 +435,7 @@ setRequiredSettings :: Skc ()
 setRequiredSettings = do
   skenv <- getSkEnv
   case envMakeDynFlags skenv of
-    Just dflags -> setDynFlags dflags
+    Just dflags -> setDynFlags dflags {ghcLink = NoLink}
     Nothing     -> failS "setOrigSettings: missing DynFlags"
   putSkEnv skenv {envMessager = requiredMessager}
 
