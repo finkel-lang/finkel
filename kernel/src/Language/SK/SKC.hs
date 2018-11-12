@@ -4,11 +4,8 @@ module Language.SK.SKC
   ( -- * SKC monad
     Skc(..)
   , SkEnv(..)
-  , FlagSet
-  , SkException(..)
   , Macro(..)
   , EnvMacros
-  , handleSkException
   , debugSkc
   , toGhc
   , fromGhc
@@ -18,10 +15,18 @@ module Language.SK.SKC
   , getSkEnv
   , putSkEnv
   , modifySkEnv
-  , emptyFlagSet
   , setDynFlags
   , setContextModules
   , getSkcDebug
+
+  -- * Exception
+  , SkException(..)
+  , handleSkException
+
+  -- * FlagSet
+  , FlagSet
+  , emptyFlagSet
+  , flagSetToIntList
 
   -- * Macro related functions
   , emptyEnvMacros
@@ -106,6 +111,39 @@ handleSkException = ghandle
 
 -- ---------------------------------------------------------------------
 --
+-- FlagSet
+--
+-- ---------------------------------------------------------------------
+
+-- | Type synonym for ghc version compatibility. Used to hold set of
+-- language extension bits.
+type FlagSet =
+#if MIN_VERSION_ghc(8,4,0)
+  EnumSet.EnumSet LangExt.Extension
+#else
+  IntSet.IntSet
+#endif
+
+-- | Convert 'FlagSet' to list of 'Int' representation.
+flagSetToIntList :: FlagSet -> [Int]
+flagSetToIntList =
+#if MIN_VERSION_ghc (8,4,0)
+  map fromEnum . EnumSet.toList
+#else
+  IntSet.toList
+#endif
+
+-- | Auxiliary function for empty language extension flag set.
+emptyFlagSet :: FlagSet
+#if MIN_VERSION_ghc(8,4,0)
+emptyFlagSet = EnumSet.empty
+#else
+emptyFlagSet = IntSet.empty
+#endif
+
+
+-- ---------------------------------------------------------------------
+--
 -- Macro and Skc monad
 --
 -- ---------------------------------------------------------------------
@@ -160,12 +198,6 @@ data SkEnv = SkEnv
      -- | Compile home modules during macro-expansion of /require/.
    , envCompiledInRequire :: [(ModuleName, HomeModInfo)]
    }
-
-#if !MIN_VERSION_ghc(8,4,0)
-type FlagSet = IntSet.IntSet
-#else
-type FlagSet = EnumSet.EnumSet LangExt.Extension
-#endif
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
 newtype Skc a = Skc {
@@ -361,11 +393,3 @@ gensym' prefix = do
   s <- liftIO (mkSplitUniqSupply '_')
   let u = uniqFromSupply s
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))
-
--- | Auxiliary function for empty language extension flag set.
-emptyFlagSet :: FlagSet
-#if !MIN_VERSION_ghc(8,4,0)
-emptyFlagSet = IntSet.empty
-#else
-emptyFlagSet = EnumSet.empty
-#endif

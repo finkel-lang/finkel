@@ -3,7 +3,8 @@ module SkcTest where
 -- base
 import Control.Exception
 import Data.List (isPrefixOf, tails)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
+import qualified Control.Monad.Fail as MonadFail
 
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -38,14 +39,17 @@ skcTests = do
   fromGhcTest
   gensymTest
   expandTest
+  envTest
 
 exceptionTest :: Spec
 exceptionTest = do
-  describe "Eq and Show instance of SkException" $
-    it "should return True when comparing with self" $
+  describe "Eq and Show instance of SkException" $ do
+    it "should return True when comparing with itself" $
       property (\str -> let e1 = SkException str
                             e2 = SkException str
                         in  e1 == e2 && show e1 == show e2)
+    it "should return False when message is different" $
+      SkException "foo" /= SkException "bar" `shouldBe` True
 
   describe "Applicative instance of Skc" $
     it "should return 42" $ do
@@ -64,6 +68,13 @@ exceptionTest = do
       let p :: SkException -> Bool
           p (SkException m) = m == "foo"
           act = failS "foo"
+      runSkcWithoutHandler act defaultSkEnv `shouldThrow` p
+
+  describe "running Skc action containing `fail'" $
+    it "should throw SkException" $ do
+      let p :: SkException -> Bool
+          p (SkException m) = m == "foo"
+          act = MonadFail.fail "foo"
       runSkcWithoutHandler act defaultSkEnv `shouldThrow` p
 
   describe "running Skc action containing SourceError" $
@@ -144,6 +155,55 @@ expandTest = do
           form1 = li [s "quoted", li [s "Atom", li [s "aSymbol", t "a"]]]
       ret <- macroFunction qt form0
       ret `shouldBe` Right form1
+
+envTest :: Spec
+envTest = do
+  describe "deleting macro from specialForms" $
+    it "should delete macro with matching name" $ do
+      let m0 = specialForms
+          m1 = deleteMacro (fsLit "let-macro") m0
+          e1 = emptySkEnv {envMacros = m1}
+          mb_let_macro = lookupMacro (fsLit "let-macro") e1
+      isNothing mb_let_macro `shouldBe` True
+
+  describe "deleting macro from emptyMacros" $
+    it "should delete nothing" $ do
+      let m0 = emptyEnvMacros
+          m1 = deleteMacro (fsLit "let-macro") m0
+          n0 = macroNames m0
+          n1 = macroNames m1
+      n0 `shouldBe` n1
+
+  describe "merging macros with itself" $
+    it "should not change" $ do
+      let m0 = specialForms
+          m1 = mergeMacros specialForms specialForms
+          n0 = macroNames m0
+          n1 = macroNames m1
+      n0 `shouldBe` n1
+
+  describe "showing special forms" $
+    it "should be <special-forms>" $ do
+      let e1 = emptySkEnv {envMacros = specialForms}
+          mb_let_macro = lookupMacro (fsLit "let-macro") e1
+          let_macro = fromMaybe (error "not found") mb_let_macro
+      show let_macro `shouldBe` "<special-form>"
+
+  describe "empty sk env" $ do
+   it "should have empty envMacros" $
+     macroNames (envMacros emptySkEnv) `shouldBe` []
+   it "should have empty envDefaultMacros" $
+     macroNames (envDefaultMacros emptySkEnv) `shouldBe` []
+   it "should have no language extensions" $
+     let (ext, flagset) = envDefaultLangExts emptySkEnv
+         empties = isNothing ext && flagSetToIntList flagset == []
+     in  empties `shouldBe` True
+   it "should have not set envSilent" $
+     envSilent emptySkEnv `shouldBe` False
+   it "should not have set envMake" $
+     isNothing (envMake emptySkEnv) `shouldBe` True
+   it "should not have required module names" $
+     envRequiredModuleNames emptySkEnv `shouldBe` []
 
 emptyForm :: Code
 emptyForm =

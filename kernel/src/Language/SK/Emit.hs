@@ -11,7 +11,6 @@ module Language.SK.Emit
   ( HsSrc(..)
   , Hsrc(..)
   , genHsSrc
-  , buildDocMap
   ) where
 
 -- base
@@ -79,6 +78,7 @@ type OUTPUTABLE a pr = (OutputableBndrId a, HsSrc a)
 --
 -- ---------------------------------------------------------------------
 
+{-
 isDocComment :: Located AnnotationComment -> Bool
 isDocComment x =
   case unLoc x of
@@ -124,7 +124,6 @@ buildDocMap acs = go (Map.empty, Nothing, []) (sortLocated acs)
              then go (acc, Just (getLoc com), [unLoc com]) coms
              else go (acc, Nothing, block) coms
 
-{-
 spanStartLine :: SrcSpan -> Int
 spanStartLine l =
   case l of
@@ -192,8 +191,8 @@ genHsSrc :: (GhcMonad m, HsSrc a) => SPState -> a -> m String
 genHsSrc st0 x = do
   flags <- getSessionDynFlags
   unqual <- getPrintUnqual
-  let st1 = st0 {docMap = buildDocMap (comments st0)}
-  return (showSDocForUser flags unqual (toHsSrc st1 x))
+  -- let st1 = st0 {docMap = buildDocMap (comments st0)}
+  return (showSDocForUser flags unqual (toHsSrc st0 x))
 
 pp_nonnull :: Outputable t => [t] -> SDoc
 pp_nonnull [] = empty
@@ -238,9 +237,6 @@ linePragma' st linum =
 -- ---------------------------------------------------------------------
 
 instance HsSrc RdrName where
-  toHsSrc _ = ppr
-
-instance HsSrc SrcLoc where
   toHsSrc _ = ppr
 
 instance (HsSrc b) => HsSrc (GenLocated a b) where
@@ -288,19 +284,20 @@ instance (OUTPUTABLE a pr, HasOccName a)
             Just d  -> vcat [pp_modname, ppr d, rest]
         pp_modname = text "module" <+> ppr name
 
-instance OUTPUTABLE a pr => HsSrc (Hsrc (HsExpr a)) where
-  toHsSrc _ = ppr . unHsrc
-
 instance OUTPUTABLE a pr => HsSrc (Hsrc (HsDecl a)) where
-  toHsSrc st (Hsrc decl) =
-    case decl of
-      TyClD _EXT dcl  -> toHsSrc st (Hsrc dcl)
-      DocD _EXT doc   -> toHsSrc st doc
-      _               -> ppr decl
+  toHsSrc st decl =
+    case unHsrc decl of
+      TyClD _EXT dcl -> toHsSrc st (Hsrc dcl)
+      DocD _EXT doc  -> toHsSrc st doc
+      decl'          -> ppr decl'
 
--- XXX: TODO.
+-- XXX: TODO. Documentation for constructors need manual formatting.
 instance OUTPUTABLE a pr => HsSrc (Hsrc (TyClDecl a)) where
-  toHsSrc _st (Hsrc dcl) = ppr dcl
+  toHsSrc _st = ppr . unHsrc
+
+-- XXX: TODO ... ? May not necessary?
+instance OUTPUTABLE a pr => HsSrc (Hsrc (HsExpr a)) where
+  toHsSrc _st = ppr . unHsrc
 
 
 -- -------------------------------------------------------------------
