@@ -18,13 +18,8 @@ module Language.SK.Emit
 import Prelude hiding ((<>))
 #endif
 
--- containers
-import qualified Data.Map as Map
-
 -- ghc
 import GHC (OutputableBndrId, getPrintUnqual)
-
-import ApiAnnotation (AnnotationComment(..))
 import FastString (unpackFS)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HsDecls (DocDecl(..), HsDecl(..), TyClDecl(..))
@@ -36,9 +31,7 @@ import Outputable ( (<+>), (<>), Outputable(..), SDoc
                   , int, lparen, nest, punctuate
                   , showSDocForUser, text, vcat )
 import RdrName (RdrName)
-import SrcLoc ( Located, GenLocated(..), SrcLoc, SrcSpan(..)
-              , combineSrcSpans, getLoc, unLoc
-              , sortLocated, srcSpanEndLine, srcSpanStartLine )
+import SrcLoc ( GenLocated(..), unLoc )
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsDoc (HsDocString, unpackHDS)
