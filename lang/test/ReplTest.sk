@@ -120,7 +120,6 @@
               (delines
                ["; context"
                 ";  IIDecl: import Control.Monad"
-                ";  IIDecl: import SK.Repl.Macro"
                 ";  IIDecl: import Language.SK"
                 ";  IIDecl: import Prelude"]))
           (ok '(*_ show dflags)

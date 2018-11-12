@@ -244,10 +244,7 @@
         (= eval-one
           (do (<- (Input itype form out-mv)
                 (liftIO (takeMVar in-mvar)))
-              (let ((= print-name
-                      (case itype
-                        Prompt "Prelude.print"
-                        _      "SK.Repl.Macro.prit"))))
+              (let ((= print-name "Prelude.print")))
               (<- ret
                 (withSkErrorHandler
                  (do (<- expanded (expands [form]))

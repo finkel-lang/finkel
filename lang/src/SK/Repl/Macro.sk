@@ -102,7 +102,7 @@
    ;; internal
    (SK.Core))
 
-  (export *_ prit))
+  (export *_))
 
 
 ;;; GHC version compatibility compile time helper
@@ -828,8 +828,3 @@ paths from import directories."
                      (otherwise (help-cmd [])))
     _ (let ((= lst (located-list forms)))
         (skSrcError lst (++ "invalid args: " (show lst))))))
-
-;;; Like `Prelude.print', but without newline at the end.
-(defn (prit (=> (Show a) (-> a (IO ()))))
-  [x]
-  (putStr (show x)))
