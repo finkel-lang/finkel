@@ -187,41 +187,6 @@ genHsSrc st0 x = do
   -- let st1 = st0 {docMap = buildDocMap (comments st0)}
   return (showSDocForUser flags unqual (toHsSrc st0 x))
 
-pp_nonnull :: Outputable t => [t] -> SDoc
-pp_nonnull [] = empty
-pp_nonnull xs = vcat (map ppr xs)
-
-pp_langExts :: SPState -> SDoc
-pp_langExts sp = vcat (map f (langExts sp))
-  where
-    f (L _ e) = text "{-# LANGUAGE" <+> text e <+> text "#-}"
-
-hsSrc_nonnull :: HsSrc a => SPState -> [a] -> SDoc
-hsSrc_nonnull st xs =
-  case xs of
-    [] -> empty
-    _  -> vcat (map (toHsSrc st) xs)
-
--- Not yet sure whether the use of LINE pragma is showing helpful error
--- messages.
---
--- Position of S-expression code and generated haskell code does not
--- always match with LINE pragmas in top-level definitions. When
--- generated Haskell source is longer than lisp code (which is likely
--- happen with macros), the line PRAGMAs in top-level bindings only are
--- too sparse to show the precise location of errors.
-
-linePragma' :: SPState -> Int -> SDoc
-linePragma' st linum =
-  text "{-# LINE" <+>
-  int linum <+>
-  doubleQuotes (text file) <+>
-  text "#-}"
-    where
-      file = replaceExtension (unpackFS (targetFile st))
-      replaceExtension name =
-        reverse ("sh" ++ dropWhile (/= '.') (reverse name))
-
 
 -- ---------------------------------------------------------------------
 --
@@ -280,16 +245,12 @@ instance (OUTPUTABLE a pr, HasOccName a)
 instance OUTPUTABLE a pr => HsSrc (Hsrc (HsDecl a)) where
   toHsSrc st decl =
     case unHsrc decl of
-      TyClD _EXT dcl -> toHsSrc st (Hsrc dcl)
-      DocD _EXT doc  -> toHsSrc st doc
-      decl'          -> ppr decl'
+      TyClD _EXT tycld -> toHsSrc st (Hsrc tycld)
+      DocD _EXT doc    -> toHsSrc st doc
+      decl'            -> ppr decl'
 
 -- XXX: TODO. Documentation for constructors need manual formatting.
 instance OUTPUTABLE a pr => HsSrc (Hsrc (TyClDecl a)) where
-  toHsSrc _st = ppr . unHsrc
-
--- XXX: TODO ... ? May not necessary?
-instance OUTPUTABLE a pr => HsSrc (Hsrc (HsExpr a)) where
   toHsSrc _st = ppr . unHsrc
 
 
@@ -298,6 +259,41 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (HsExpr a)) where
 -- Auxiliary
 --
 -- -------------------------------------------------------------------
+
+pp_nonnull :: Outputable t => [t] -> SDoc
+pp_nonnull [] = empty
+pp_nonnull xs = vcat (map ppr xs)
+
+pp_langExts :: SPState -> SDoc
+pp_langExts sp = vcat (map f (langExts sp))
+  where
+    f (L _ e) = text "{-# LANGUAGE" <+> text e <+> text "#-}"
+
+hsSrc_nonnull :: HsSrc a => SPState -> [a] -> SDoc
+hsSrc_nonnull st xs =
+  case xs of
+    [] -> empty
+    _  -> vcat (map (toHsSrc st) xs)
+
+-- Not yet sure whether the use of LINE pragma is showing helpful error
+-- messages.
+--
+-- Position of S-expression code and generated haskell code does not
+-- always match with LINE pragmas in top-level definitions. When
+-- generated Haskell source is longer than lisp code (which is likely
+-- happen with macros), the line PRAGMAs in top-level bindings only are
+-- too sparse to show the precise location of errors.
+
+linePragma' :: SPState -> Int -> SDoc
+linePragma' st linum =
+  text "{-# LINE" <+>
+  int linum <+>
+  doubleQuotes (text file) <+>
+  text "#-}"
+    where
+      file = replaceExtension (unpackFS (targetFile st))
+      replaceExtension name =
+        reverse ("sh" ++ dropWhile (/= '.') (reverse name))
 
 pp_mbModuleHeaderDoc :: Maybe LHsDocString -> SDoc
 pp_mbModuleHeaderDoc = maybe empty mod_header

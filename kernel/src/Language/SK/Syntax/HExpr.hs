@@ -205,12 +205,6 @@ b_unitE :: Code -> HExpr
 b_unitE (LForm (L l _)) = case mkLHsTupleExpr [] of L _ t -> L l t
 {-# INLINE b_unitE #-}
 
-b_commentStringE :: Code -> Builder (Located HsDocString)
-b_commentStringE (LForm (L l form))
-  | (Atom (AComment x)) <- form = return (L l (hsDocString x))
-  | otherwise                   = builderError
-{-# INLINE b_commentStringE #-}
-
 b_docnextE :: Code -> Builder (Located HsDocString)
 b_docnextE (LForm (L l form))
   | Atom (AString x) <- form = return $! L l (hsDocString x)

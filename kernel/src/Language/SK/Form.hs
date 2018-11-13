@@ -73,7 +73,6 @@ data Atom
   | AString String
   | AInteger Integer
   | AFractional FractionalLit
-  | AComment String
   deriving (Eq, Data, Typeable, Generic)
 
 instance Show Atom where
@@ -94,7 +93,6 @@ instance Show Atom where
       AString s -> showsPrec d s
       AInteger i -> showsPrec d i
       AFractional f -> showString (fl_text_compat f)
-      AComment _ -> showString ""
 
 instance NFData Atom where
   rnf x =
@@ -105,7 +103,6 @@ instance NFData Atom where
       AString str   -> rnf str
       AInteger i    -> rnf i
       AFractional y -> seq y ()
-      AComment str  -> rnf str
 
 -- | Form type. Also used as token. Elements of recursive structures
 -- contain location information.

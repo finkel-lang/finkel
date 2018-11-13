@@ -75,7 +75,6 @@ quoteAtom l form =
     AInteger n    -> atom [tSym l "AInteger", tInteger l n]
     AFractional n -> atom [tSym l "aFractional", tFractional l n]
     AUnit         -> atom [tSym l "AUnit"]
-    _             -> LForm (L l (Atom form))
   where
     atom vals = mkQuoted l (tList l [tSym l "Atom", tList l vals])
 {-# INLINE quoteAtom #-}

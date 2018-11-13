@@ -469,13 +469,6 @@ b_specializeD (LForm (L l _)) (nameSym, tsig) = do
   return (L l (sigD ssig))
 {-# INLINE b_specializeD #-}
 
-b_docD :: Code -> Builder HDecl
-b_docD (LForm (L l form))
-  | Atom (AComment str) <- form =
-    return $! L l (DocD NOEXT (docCommentNext str))
-  | otherwise                   = builderError
-{-# INLINE b_docD #-}
-
 b_docnextD :: Code -> Builder HDecl
 b_docnextD (LForm (L l form))
   | Atom (AString str) <- form =

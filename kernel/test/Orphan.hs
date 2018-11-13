@@ -44,7 +44,6 @@ instance CoArbitrary Atom where
       AString str   -> var 3 . coarbitrary str
       AInteger i    -> var 4 . coarbitrary i
       AFractional d -> var 5 . coarbitrary (fl_value d)
-      AComment str  -> var 6 . coarbitrary str
     where
       var :: Int -> Gen a -> Gen a
       var = variant

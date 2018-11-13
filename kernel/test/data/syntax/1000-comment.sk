@@ -34,6 +34,8 @@ characters:
   (>> (putStrLn str)
       (bar 15 27)))
 
+#|onelineblockcommentwithoutspaces|#
+
 ;;; | Comment for function bar.
 ;;;
 ;;; This comment spans multiple lines. Bar bar bar bar bar bar bar bar
@@ -44,8 +46,8 @@ characters:
 ;;; bar bar bar.
 ;;;
 (= bar a b
-  (putStrLn (++ "From bar: " (show (+ a b)))))
-
+  (putStrLn #|more|#
+   (++ #|block|# "From bar: " #|comments|# (show (+ a b)))))
 
 ;;; | Comment for function buzz.
 ;;;

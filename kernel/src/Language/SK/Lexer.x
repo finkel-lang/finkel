@@ -64,7 +64,6 @@ import Control.Monad.Trans.Except (ExceptT(..), throwE)
 -- Internal
 import Language.SK.Builder
 import Language.SK.Form
-
 }
 
 $nl          = [\n\r\f]
@@ -87,9 +86,6 @@ $hsymtail    = [$hsymhead\'\#$digit]
 @exponent    = [eE] [\-\+]? @decimal
 @frac        = @decimal \. @decimal @exponent? | @decimal @exponent
 
--- Continued doc comment line, this starts with \n from previous line.
-@contdoc     = \n [\t\ ]* \;+ ~\n+
-
 
 tokens :-
 
@@ -97,11 +93,8 @@ $whitechar+  ;
 
 --- Comments
 
-\;+ $whitechar+ \| ~\n+ @contdoc* { tok_doc_comment_next }
-\; .*                             { tok_line_comment }
-
-\#\| $whitechar* \|   { tok_block_doc_comment_next }
-\#\|                  { tok_block_comment }
+\; .*    { tok_line_comment }
+\#\| .*  { tok_block_comment }
 
 --- Hashes
 \# $hsymtail* { tok_hash }
@@ -154,8 +147,7 @@ type DocMap = Map.Map SrcSpan [AnnotationComment]
 
 -- | Data type to hold states while reading source code.
 data SPState = SPState
-  { comments :: [Located AnnotationComment]
-  , targetFile :: FastString
+  { targetFile :: FastString
   , langExts :: [Located String]
   , ghcOptions :: [Located String]
   , docMap :: DocMap
@@ -167,8 +159,7 @@ data SPState = SPState
 -- | Initial empty state for 'SP'.
 initialSPState :: FastString -> Int -> Int -> SPState
 initialSPState file linum colnum =
-  SPState { comments = []
-          , targetFile = file
+  SPState { targetFile = file
           , langExts = []
           , ghcOptions = []
           , docMap = Map.empty
@@ -345,14 +336,8 @@ data Token
   -- ^ Unquote.
   | TUnquoteSplice
   -- ^ Unquote-splice.
-  | TDocCommentNext String
-  -- ^ Comment string starting with @-- |@.
-  | TLineComment String
-  -- ^ Non-documentation line comment string.
-  | TBlockComment String
-  -- ^ Non-documentation block comment string.
-  | TBlockDocCommentNext String
-  -- ^ Block documentation comment for next declaration.
+  | TComment
+  -- ^ Comment.
   | TSymbol FastString
   -- ^ Symbol data.
   | TChar Char
@@ -445,31 +430,12 @@ tok_hash (AlexInput _ _ s) l
    in  return $! TSymbol $! mkFastStringByteString bs
 {-# INLINE tok_hash #-}
 
-tok_doc_comment_next :: Action
-tok_doc_comment_next (AlexInput _ _ s) l = do
-  let str = unpackUtf8 $! takeUtf8 l s
-  return $! TDocCommentNext $! lc2hc_doc str
-{-# INLINE tok_doc_comment_next #-}
-
 tok_line_comment :: Action
-tok_line_comment (AlexInput _ _ s) l = do
-  let str = unpackUtf8 $! takeUtf8 l s
-  return $! TLineComment $! lc2hc str
+tok_line_comment _ _ = return TComment
 {-# INLINE tok_line_comment #-}
 
-tok_block_doc_comment_next :: Action
-tok_block_doc_comment_next =
-  tok_block_comment_with TBlockDocCommentNext skip_spaces
-  where
-    skip_spaces inp =
-      case alexGetChar' inp of
-        Just (c, inp') | isSpace c -> skip_spaces inp'
-                       | otherwise -> Just (c, inp')
-        _                          -> Nothing
-{-# INLINE tok_block_doc_comment_next #-}
-
 tok_block_comment :: Action
-tok_block_comment = tok_block_comment_with TBlockComment alexGetChar'
+tok_block_comment = tok_block_comment_with (const TComment) alexGetChar'
 {-# INLINE tok_block_comment #-}
 
 tok_block_comment_with :: (String -> Token)
@@ -641,20 +607,11 @@ tokenLexer :: (Located Token -> SP a) -> SP a
 tokenLexer cont = do
   st <- getSPState
   let fn = targetFile st
-  ltok@(L span tok) <- scanToken fn
-  let pushComment comment st = st {comments = comment : comments st}
-      comment = do
-        let com = L span (annotateComment tok)
-        SP (\st -> unSP (tokenLexer cont) (pushComment com st))
-      docComment = do
-        let com = L span (annotateComment tok)
-        SP (\st -> unSP (cont ltok) (pushComment com st))
+  ltok@(L _span tok) <- scanToken fn
+  let comment = SP (\st -> unSP (tokenLexer cont) st)
   case tok of
-    TLineComment _         -> comment
-    TBlockComment _        -> comment
-    TDocCommentNext _      -> docComment
-    TBlockDocCommentNext _ -> docComment
-    _                      -> cont ltok
+    TComment -> comment
+    _        -> cont ltok
 {-# INLINE tokenLexer #-}
 
 scanToken :: FastString -> SP (Located Token)
@@ -708,15 +665,6 @@ lc2hc = intercalate "\n" . map (tail' . dropWhile (== ';')) . lines
 lc2hc_doc :: String -> String
 lc2hc_doc = dropWhile (== '|') . dropWhile isSpace . lc2hc
 {-# INLINE lc2hc_doc #-}
-
-annotateComment :: Token -> AnnotationComment
-annotateComment tok = case tok of
-  TDocCommentNext s      -> AnnDocCommentNext s
-  TBlockDocCommentNext s -> AnnDocCommentNext s
-  TLineComment s         -> AnnLineComment s
-  TBlockComment s        -> AnnBlockComment s
-  _                      -> error ("annotateComment: " ++ show tok)
-{-# INLINE annotateComment #-}
 
 unpackUtf8 :: C8.ByteString -> String
 unpackUtf8 = utf8DecodeByteString . C8.toStrict

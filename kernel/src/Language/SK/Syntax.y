@@ -170,7 +170,6 @@ import Language.SK.Syntax.HType
 'string'  { LForm (L _ (Atom (AString _))) }
 'integer' { LForm (L _ (Atom (AInteger _))) }
 'frac'    { LForm (L _ (Atom (AFractional _))) }
-'comment' { LForm (L _ (Atom (AComment _))) }
 'unit'    { LForm (L _ (Atom AUnit)) }
 'list'    { LForm (L _ (List $$)) }
 'hslist'  { LForm (L _ (HsList _)) }
@@ -185,8 +184,7 @@ import Language.SK.Syntax.HType
 -- ---------------------------------------------------------------------
 
 mbdocnext :: { Maybe LHsDocString }
-    : 'comment'   {% fmap Just (b_commentStringE $1) }
-    | 'docn'      {% fmap Just (b_docnextE $1) }
+    : 'docn'      {% fmap Just (b_docnextE $1) }
     | {- empty -} { Nothing }
 
 -- ---------------------------------------------------------------------
@@ -277,7 +275,6 @@ rtop_decls :: { [HDecl] }
 
 top_decl_with_doc :: { HDecl }
     : 'list'    {% parse p_top_decl $1 }
-    | 'comment' {% b_docD $1 }
     | 'docn'    {% b_docnextD $1 }
     | 'docp'    {% b_docprevD $1 }
 

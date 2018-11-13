@@ -115,10 +115,7 @@ fracTest x =
        show (aFractional x) `shouldBe` show x
 
 showTest :: Spec
-showTest = do
-  describe "showing comment" $
-    it "should be empty string" $
-      show (AComment "foo bar buzz") `shouldBe` ""
+showTest =
   describe "showing TEnd" $
     it "should be \"TEnd\"" $
       show (TEnd :: Form Atom) `shouldBe` "TEnd"
@@ -193,13 +190,6 @@ eqPropTest = do
           g x@(LForm (L _ body)) = x == LForm (L sp body)
           sp = UnhelpfulSpan (fsLit "<eqPropTest>")
       property g
-  describe "comparing comment with comment" $ do
-    let c1 = AComment "foo"
-        c2 = AComment "bar"
-    it "should be True" $
-      c1 `shouldBe` c1
-    it "should be False" $
-      c1 `shouldNotBe` c2
   describe "comparing TEnd with TEnd" $
     it "should be True" $
       (TEnd :: Form Atom) `shouldBe` (TEnd :: Form Atom)
@@ -291,9 +281,6 @@ rnfTest = do
   describe "rnf of arbitrary form" $
     it "should return ()" $
        property (rnf :: Code -> ())
-  describe "rnf of comment" $
-    it "should return ()" $
-      rnf (AComment "foo") `shouldBe` ()
   describe "rnf of TEnd" $
     it "should return ()" $
       rnf (TEnd :: Form Atom) `shouldBe` ()
