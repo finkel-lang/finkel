@@ -9,7 +9,7 @@ module Language.SK.Make
   ) where
 
 -- base
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Char (isUpper)
 import Data.List (find, foldl')
@@ -40,8 +40,8 @@ import Outputable ( text, showPpr )
 import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
 import HscTypes ( FindResult(..), ModIface(..), ModSummary(..)
-                , HomeModInfo(..), HomePackageTable, HscEnv(..)
-                , InteractiveContext(..)
+                , HomeModInfo(..), HomePackageTable, HsParsedModule(..)
+                , HscEnv(..), InteractiveContext(..)
                 , ModuleGraph, SourceModified(..)
                 , addToHpt, eltsHpt, lookupHpt, ms_mod_name
 #if MIN_VERSION_ghc(8,4,0)
@@ -69,6 +69,7 @@ import System.FilePath ( dropExtension, pathSeparator
 
 -- internal
 import Language.SK.Builder
+import Language.SK.Emit
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.Lexer
@@ -185,9 +186,9 @@ simpleMake recomp name = do
 -- | 'SkEnv' with make function set.
 defaultSkEnv :: SkEnv
 defaultSkEnv = emptySkEnv
-   { envMacros         = specialForms
-   , envDefaultMacros  = specialForms
-   , envMake           = Just simpleMake }
+  { envMacros         = specialForms
+  , envDefaultMacros  = specialForms
+  , envMake           = Just simpleMake }
 
 
 -- ---------------------------------------------------------------------
@@ -417,27 +418,36 @@ doMakeOne i total ms src_modified = do
   debugSkc ";;; Entering doMakeOne"
 
   hsc_env <- getSession
-  skenv <- getSkEnv
+  sk_env <- getSkEnv
 
   let dflags_orig = hsc_dflags hsc_env
       dflags = ms_hspp_opts ms
       hsc_env' = hsc_env {hsc_dflags = dflags}
       loc = ms_location ms
-      mname = ms_mod_name ms
+      mod_name = ms_mod_name ms
       tryGetTimeStamp x = liftIO (tryIO (getModificationUTCTime x))
       e2mb x = case x of
                  Right a -> Just a
                  Left _  -> Nothing
-      messager = envMessager skenv
+      messager = envMessager sk_env
+      hpt0 = hsc_HPT hsc_env
 
+  -- Dump the module contents as haskell source when dump option were
+  -- set and this is the first time for compiling the target Module.
+  when (envDumpHs sk_env)
+       (case lookupHpt hpt0 mod_name of
+          Nothing -> dumpModSummary ms
+          Just _  -> return ())
+
+  -- Compile the module with linkable if exist, and add the returned
+  -- module to finder.
   mb_linkable <- liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
   home_mod_info <-
     liftIO (compileOne' Nothing (Just messager) hsc_env' ms
                         i total Nothing mb_linkable src_modified)
-  _ <- liftIO (addHomeModuleToFinder hsc_env mname loc)
-
+  _ <- liftIO (addHomeModuleToFinder hsc_env mod_name loc)
   modifySession
-    (\e -> e {hsc_HPT = addToHpt (hsc_HPT e) mname home_mod_info})
+    (\e -> e {hsc_HPT = addToHpt hpt0 mod_name home_mod_info})
 
   -- Update the time stamp of generated obj and hi files.
   mb_obj_date <- e2mb <$> tryGetTimeStamp (ml_obj_file loc)
@@ -777,6 +787,26 @@ asModuleName name
      names = dropWhile (not . isUpper . head)
                        (splitPath (dropExtension name))
      slash_to_dot c = if c == pathSeparator then '.' else c
+
+-- | Dump the module contents of given 'ModSummary'.
+dumpModSummary :: ModSummary -> Skc ()
+dumpModSummary ms = do
+  let dump pm = do
+        let mdl = hpm_module pm
+        hsrc <- genHsSrc spstate (Hsrc (unLoc mdl))
+        liftIO (putStrLn hsrc)
+      file = ms_hspp_file ms
+      spstate = initialSPState (fsLit file) 1 1
+      bars = replicate 69 '-'
+
+  liftIO (do putStrLn
+               (unlines [""
+                        ,"-- " ++ bars
+                        ,"--"
+                        ,"-- Generated from: " ++ file
+                        ,"--"
+                        ,"-- " ++ bars]))
+  maybe (return ()) dump (ms_parsed_mod ms)
 
 -- [guessOutputFile]
 --

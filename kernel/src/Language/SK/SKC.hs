@@ -184,6 +184,7 @@ data SkEnv = SkEnv
      -- | Flag for adding macros to current session with @define-macro@,
      -- to support defining macro within REPL.
    , envAddInDefineMacro :: Bool
+
      -- | Function to compile required modules, when
      -- necessary. Arguments are force recompilation flag and module
      -- name. Returned values are list of pair of name and info of the
@@ -197,6 +198,9 @@ data SkEnv = SkEnv
    , envRequiredModuleNames :: [String]
      -- | Compile home modules during macro-expansion of /require/.
    , envCompiledInRequire :: [(ModuleName, HomeModInfo)]
+
+     -- | Whether to dump Haskell source code.
+   , envDumpHs :: Bool
    }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
@@ -291,7 +295,8 @@ emptySkEnv = SkEnv
   , envMakeDynFlags        = Nothing
   , envMessager            = batchMsg
   , envRequiredModuleNames = []
-  , envCompiledInRequire   = [] }
+  , envCompiledInRequire   = []
+  , envDumpHs              = False }
 
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get

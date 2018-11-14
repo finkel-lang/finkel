@@ -108,7 +108,9 @@ data SkcOptions = SkcOptions {
     -- | Field to store explicitly specified force recompilation.
     skForceRecomp :: Bool,
     -- | Flag value for debugging.
-    skDebug :: Bool
+    skDebug :: Bool,
+    -- | Dump Haskell codes during make.
+    skDumpHs :: Bool
   } deriving (Eq, Show)
 
 initialSkcOptions :: SkcOptions
@@ -119,7 +121,8 @@ initialSkcOptions =
              , skC = False
              , action = SkMake
              , skForceRecomp = False
-             , skDebug = False }
+             , skDebug = False
+             , skDumpHs = False }
 
 parseOptions :: [String] -> SkcOptions
 parseOptions args =
@@ -147,6 +150,9 @@ visibleDescrs =
   , option ["sk-version"]
            (NoArg (\o -> o {action=SkVersion}))
            "Show sk kernel version."
+  , option ["sk-dump-hs"]
+           (NoArg (\o -> o {skDumpHs=True}))
+           "Dump Haskell source code."
   ]
 
 hiddenDescrs :: [OptDescr (SkcOptions -> SkcOptions)]
@@ -183,6 +189,7 @@ chooseAction name act o =
 doMake :: SkcOptions -> Skc ()
 doMake o = do
   initSessionForMake
+  modifySkEnv (\e -> e {envDumpHs=skDumpHs o})
   make (input o) (skC o) (skForceRecomp o) (skO o)
 
 hsrc :: SkcOptions -> Skc ()
