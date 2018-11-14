@@ -71,8 +71,8 @@ library
                      , process      >= 1.6.1
                      , time         >= 1.8.0
                      , transformers >= 0.5.2
-  build-tools:         alex
-                     , happy
+  build-tool-depends:  alex:alex    >= 3.2.4
+                     , happy:happy  >= 1.19.9
   default-language:    Haskell2010
   ghc-options:         -Wall
 
