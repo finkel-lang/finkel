@@ -134,8 +134,8 @@ skErrorHandler fm (FlushOut flush) work =
 parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
 parseSexprs mb_file contents =
   case runSP sexprs mb_file contents of
-     Right a  -> return a
-     Left err -> failS err
+    Right a  -> return a
+    Left err -> failS err
 
 buildHsSyn :: Builder a -> [Code] -> Skc a
 buildHsSyn bldr forms =

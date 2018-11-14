@@ -24,7 +24,6 @@ import FastString (unpackFS)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HsDecls (DocDecl(..), HsDecl(..), TyClDecl(..))
 import HsDoc (LHsDocString)
-import HsExpr (HsExpr(..))
 import HsSyn (HsModule(..))
 import Outputable ( (<+>), (<>), Outputable(..), SDoc
                   , comma, doubleQuotes, empty, fsep
