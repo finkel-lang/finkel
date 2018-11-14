@@ -407,8 +407,9 @@ specialForms =
 setExpanderSettings :: Skc ()
 setExpanderSettings = do
   flags0 <- getSessionDynFlags
-  let flags1 = flags0 { hscTarget = HscInterpreted
-                      , ghcLink = LinkInMemory }
+
+  -- Setup DynFlags for interactive evaluation.
+  let flags1 = flags0 { hscTarget = HscInterpreted }
       flags2 = gopt_unset flags1 Opt_Hpc
       flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
       flags4 = updOptLevel 0 flags3
