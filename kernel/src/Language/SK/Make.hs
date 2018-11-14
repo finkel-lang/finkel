@@ -432,13 +432,6 @@ doMakeOne i total ms src_modified = do
       messager = envMessager sk_env
       hpt0 = hsc_HPT hsc_env
 
-  -- Dump the module contents as haskell source when dump option were
-  -- set and this is the first time for compiling the target Module.
-  when (envDumpHs sk_env)
-       (case lookupHpt hpt0 mod_name of
-          Nothing -> dumpModSummary ms
-          Just _  -> return ())
-
   -- Compile the module with linkable if exist, and add the returned
   -- module to finder.
   mb_linkable <- liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
@@ -448,6 +441,13 @@ doMakeOne i total ms src_modified = do
   _ <- liftIO (addHomeModuleToFinder hsc_env mod_name loc)
   modifySession
     (\e -> e {hsc_HPT = addToHpt hpt0 mod_name home_mod_info})
+
+  -- Dump the module contents as haskell source when dump option were
+  -- set and this is the first time for compiling the target Module.
+  when (envDumpHs sk_env)
+       (case lookupHpt hpt0 mod_name of
+          Nothing -> dumpModSummary ms
+          Just _  -> return ())
 
   -- Update the time stamp of generated obj and hi files.
   mb_obj_date <- e2mb <$> tryGetTimeStamp (ml_obj_file loc)
@@ -582,15 +582,16 @@ findImported hsc_env acc pendings name
      isPending = name `elem` [n | (SkSource _ n _ _, _) <- pendings]
 
 -- | Find source code file path by module name.
+--
+-- Current approach for source code lookup is search for file with
+-- @*.sk@ suffix first. Return it if found, otherwise search file with
+-- @*.hs@ suffix.
+--
+-- This searching strategy can used when compiling cabal package
+-- containing mixed codes with '*.sk' and '*.hs' suffixes.
+--
 findFileInImportPaths :: [FilePath] -> String -> Skc FilePath
 findFileInImportPaths dirs modName = do
-  -- Current approach for source code lookup is search for file with
-  -- '*.sk' suffix first. If found return it, otherwise search file with
-  -- '*.hs' suffix.
-  --
-  -- This searching strategy can used when compiling cabal package
-  -- containing mixed codes with '*.sk' and '*.hs' suffixes.
-  --
   let suffix = takeExtension modName
       moduleFileName = moduleNameSlashes (mkModuleName modName)
       moduleFileName'
@@ -661,13 +662,13 @@ compileToHsModule (tsrc, mbphase) =
 compileSkModuleForm' :: SPState -> String -> [Code]
                      -> Skc (HModule, DynFlags, [String])
 compileSkModuleForm' sp modname forms = do
-  dflags <- getDynFlagsFromSPState sp
+  dflags0 <- getDynFlagsFromSPState sp
   hsc_env <- getSession
 
   -- Compile the form with file specific DynFlags and temporary session,
   -- to preserve modules imported in current context.
-  let use_sp_dflags e = e {hsc_dflags = dflags}
-  (mdl, reqs, compiled) <- withTempSession use_sp_dflags act
+  let use_my_dflags e = e {hsc_dflags = dflags0}
+  (mdl, reqs, compiled) <- withTempSession use_my_dflags act
 
   -- Add the compiled home modules to current sessio, if any. This fill
   -- avoid recompilation of required modules with "-fforce-recomp"
@@ -677,7 +678,7 @@ compileSkModuleForm' sp modname forms = do
   setSession (hsc_env {hsc_HPT = hpt1})
 
   debugSkc (";;; reqs=" ++ show reqs)
-  return (mdl, dflags, reverse reqs)
+  return (mdl, dflags0, reverse reqs)
   where
     act = timeIt ("SkModule [" ++ modname ++ "]") $ do
 
@@ -782,31 +783,36 @@ isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
 asModuleName :: String -> String
 asModuleName name
    | looksLikeModuleName name = name
-   | otherwise = map slash_to_dot (concat names)
+   | otherwise                = map sep_to_dot (concat names)
    where
      names = dropWhile (not . isUpper . head)
                        (splitPath (dropExtension name))
-     slash_to_dot c = if c == pathSeparator then '.' else c
+     sep_to_dot c
+       | c == pathSeparator = '.'
+       | otherwise          = c
 
 -- | Dump the module contents of given 'ModSummary'.
 dumpModSummary :: ModSummary -> Skc ()
-dumpModSummary ms = do
-  let dump pm = do
-        let mdl = hpm_module pm
-        hsrc <- genHsSrc spstate (Hsrc (unLoc mdl))
-        liftIO (putStrLn hsrc)
-      file = ms_hspp_file ms
-      spstate = initialSPState (fsLit file) 1 1
-      bars = replicate 69 '-'
-
-  liftIO (do putStrLn
-               (unlines [""
-                        ,"-- " ++ bars
-                        ,"--"
-                        ,"-- Generated from: " ++ file
-                        ,"--"
-                        ,"-- " ++ bars]))
-  maybe (return ()) dump (ms_parsed_mod ms)
+dumpModSummary ms = maybe (return ()) dump (ms_parsed_mod ms)
+  where
+    dump pm
+      | isSkFile orig_path  = do
+        contents <- gen pm
+        liftIO (putStrLn contents)
+      | otherwise           = return ()
+    gen pm = do
+      let mdl = hpm_module pm
+      body <- genHsSrc spstate (Hsrc (unLoc mdl))
+      return (unlines ["-- " ++ bars
+                      ,"--"
+                      ,"-- Generated from: " ++ orig_path
+                      ,"--"
+                      ,"-- " ++ bars
+                      ,""
+                      ,body])
+    orig_path = ms_hspp_file ms
+    spstate = initialSPState (fsLit orig_path) 1 1
+    bars = replicate 69 '-'
 
 -- [guessOutputFile]
 --
