@@ -69,14 +69,14 @@
 ;;; Auxiliary macro to define a macro for both compile time and load
 ;;; time. Used only in this module until `defmacro*!' is defined.
 (eval-when-compile
- (define-macro define-macro! form
-   (case (unCode form)
-     (List (: _ rest))
-     (return `(begin
-                (eval-when-compile
-                 (define-macro ,@rest))
-                (define-macro ,@rest)))
-     _ (skSrcError form "define-macro!: impossible happened"))))
+  (define-macro define-macro! form
+    (case (unCode form)
+      (List (: _ rest))
+      (return `(begin
+                 (eval-when-compile
+                   (define-macro ,@rest))
+                 (define-macro ,@rest)))
+      _ (skSrcError form "define-macro!: impossible happened"))))
 
 ;;; Macro to specify the phases of evaluation.
 (define-macro! eval-when form
@@ -90,7 +90,7 @@
           (return
             `(begin
                (eval-when-compile
-                ,@(List body))
+                 ,@(List body))
                ,@(List body))))
          ((compile? phases)
           (return `(eval-when-compile ,@(List body))))
@@ -242,9 +242,9 @@
 
 ;;; Pattern match for `LForm' of `Atom' with `AString'.
 (eval-when-compile
- (defmacro pastring
-   [val]
-   `(LForm (L _ (Atom (AString ,val))))))
+  (defmacro pastring
+    [val]
+    `(LForm (L _ (Atom (AString ,val))))))
 
 ;;; Macro for defining function. This macro preserves the location of
 ;;; function name, arguments, and body. Supports optional function type
