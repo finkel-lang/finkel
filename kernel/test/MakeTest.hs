@@ -29,6 +29,7 @@ import Language.SK.Lexer
 import Language.SK.Make
 import Language.SK.Run
 import Language.SK.SKC
+import Language.SK.TargetSource
 
 makeTests :: Spec
 makeTests = do
@@ -110,9 +111,8 @@ buildPackage name =
     it "should compile and pass the tests" $ do
       let s = stack name
       _ <- s ["setup"]
-      _ <- s ["build"]
-      let target = name ++ ":test:" ++ name ++ "-test"
-      exitCode <- s ["test", target]
+      _ <- s ["build", name]
+      exitCode <- s ["test", name]
       _ <- s ["clean", name]
       exitCode `shouldBe` ExitSuccess
 

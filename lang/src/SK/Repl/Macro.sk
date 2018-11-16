@@ -93,14 +93,15 @@
    (Language.SK)
    (Language.SK.Eval (evalExprType evalTypeKind))
    (Language.SK.Form (getLoc mkLocatedForm symbolName))
-   (Language.SK.Make (asModuleName make))
+   (Language.SK.Make (make))
    (Language.SK.Run (buildHsSyn))
    (Language.SK.SKC
     ((SkEnv ..) getSkEnv macroNames modifySkEnv putSkEnv setDynFlags))
    (Language.SK.Syntax (parseExpr parseType))
+   (Language.SK.TargetSource (asModuleName))
 
    ;; internal
-   (SK.Core))
+   (SK.Core.List))
 
   (export *_))
 

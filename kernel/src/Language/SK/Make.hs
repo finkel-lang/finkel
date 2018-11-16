@@ -1,25 +1,29 @@
 {-# LANGUAGE BangPatterns, CPP #-}
 -- | Make mode for skc.
 module Language.SK.Make
-  ( TargetSource(..)
-  , make
+  ( make
   , initSessionForMake
   , defaultSkEnv
-  , asModuleName
   ) where
 
 -- base
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Char (isUpper)
 import Data.List (find, foldl')
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isJust)
 
 -- bytestring
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BL
 
 -- container
 import Data.Graph (flattenSCCs)
+
+-- directory
+import System.Directory (createDirectoryIfMissing)
+
+-- filepath
+import System.FilePath ( dropExtension, dropFileName, splitExtension
+                       , takeExtension, (<.>), (</>))
 
 -- ghc
 import BasicTypes (SuccessFlag(..))
@@ -54,18 +58,10 @@ import Module ( ModLocation(..), ModuleName, installedUnitIdEq
 import Panic (GhcException(..), throwGhcException)
 import SrcLoc (mkRealSrcLoc)
 import StringBuffer (stringToStringBuffer)
-import Util (getModificationUTCTime, looksLikeModuleName)
+import Util (getModificationUTCTime)
 
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
-
--- directory
-import System.Directory (doesFileExist)
-
--- filepath
-import System.FilePath ( dropExtension, pathSeparator
-                       , replaceExtension , splitExtension, splitPath
-                       , takeExtension, (<.>), (</>))
 
 -- internal
 import Language.SK.Builder
@@ -75,11 +71,12 @@ import Language.SK.Form
 import Language.SK.Lexer
 import Language.SK.Run
 import Language.SK.SKC
+import Language.SK.TargetSource
 
 
 -- ---------------------------------------------------------------------
 --
--- Exported main interface
+-- Exported make interface
 --
 -- ---------------------------------------------------------------------
 
@@ -180,7 +177,7 @@ simpleMake :: Bool -> String -> Skc [(ModuleName, HomeModInfo)]
 simpleMake recomp name = do
   make [(name, Nothing)] True recomp Nothing
   hsc_env <- getSession
-  let as_pair hm = (moduleName (mi_module (hm_iface hm)), hm)
+  let as_pair hmi = (moduleName (mi_module (hm_iface hmi)), hmi)
   return (map as_pair (eltsHpt (hsc_HPT hsc_env)))
 
 -- | 'SkEnv' with make function set.
@@ -193,45 +190,14 @@ defaultSkEnv = emptySkEnv
 
 -- ---------------------------------------------------------------------
 --
--- Internal
+-- Internal of make
 --
 -- ---------------------------------------------------------------------
-
--- | Data type to represent target source.
-data TargetSource
-  = SkSource FilePath String [Code] SPState
-  -- ^ SK source. Holds file path of the source code, original string
-  -- input, parsed form data, and required module names.
-  | HsSource FilePath
-  -- ^ Haskell source with file path of the source code.
-  | OtherSource FilePath
-  -- ^ Other source with file path of other contents.
-  deriving (Eq)
-
-instance Show TargetSource where
-  show s = case s of
-    SkSource path mdl _ _sp ->
-      concat ["SkSource ", show path, " ", mdl, " "]
-    HsSource path -> "HsSource " ++ show path
-    OtherSource path -> "OtherSource " ++ show path
 
 -- | Unit for compilation target.
 --
 -- Simply a 'TargetSource' maybe paired with 'Phase'.
 type TargetUnit = (TargetSource, Maybe Phase)
-
-targetSourcePath :: TargetSource -> FilePath
-targetSourcePath mt =
-  case mt of
-    SkSource path _ _ _ -> path
-    HsSource path       -> path
-    OtherSource path    -> path
-
-isOtherSource :: TargetSource -> Bool
-isOtherSource ts =
-  case ts of
-    OtherSource{} -> True
-    _             -> False
 
 -- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule', then compile
 -- to interface file, and object code.
@@ -444,7 +410,7 @@ doMakeOne i total ms src_modified = do
 
   -- Dump the module contents as haskell source when dump option were
   -- set and this is the first time for compiling the target Module.
-  when (envDumpHs sk_env)
+  when (envDumpHs sk_env || isJust (envHsDir sk_env))
        (case lookupHpt hpt0 mod_name of
           Nothing -> dumpModSummary ms
           Just _  -> return ())
@@ -487,6 +453,28 @@ checkUpToDate ms dependencies
                      all dep_ok sccs_without_self
     return up_to_date
 
+-- | Find 'TargetSource' from command line argument.
+findTargetSource :: (String, a) -> Skc (TargetSource, a)
+findTargetSource (modName, a) = do
+  dflags <- getSessionDynFlags
+  mb_inputPath <- findFileInImportPaths (importPaths dflags) modName
+  let detectSource path
+        | isSkFile path =
+          do contents <- liftIO (BL.readFile path)
+             (forms, sp) <- parseSexprs (Just path) contents
+             let modName' = asModuleName modName
+             return (SkSource path modName' forms sp, a)
+        | isHsFile path = return (HsSource path, a)
+        | otherwise = return (OtherSource path, a)
+  case mb_inputPath of
+    Just path -> detectSource path
+    Nothing   -> failS ("Cannot find target source for " ++ modName)
+
+isSkFile :: FilePath -> Bool
+isSkFile path = takeExtension path == ".sk"
+
+isHsFile :: FilePath -> Bool
+isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
 -- | Search 'ModSummary' of required module.
 findRequiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
 findRequiredModSummary hsc_env mname = do
@@ -507,21 +495,6 @@ findRequiredModSummary hsc_env mname = do
       case fresult of
         Found {} -> return Nothing
         _        -> failS ("Cannot find required module " ++ mname)
-
--- | Find 'TargetSource' from command line argument.
-findTargetSource :: (String, a) -> Skc (TargetSource, a)
-findTargetSource (modName, a) = do
-  dflags <- getSessionDynFlags
-  inputPath <- findFileInImportPaths (importPaths dflags) modName
-  let detectSource path
-        | isSkFile path =
-          do contents <- liftIO (BL.readFile path)
-             (forms, sp) <- parseSexprs (Just path) contents
-             let modName' = asModuleName modName
-             return (SkSource path modName' forms sp, a)
-        | isHsFile path = return (HsSource path, a)
-        | otherwise = return (OtherSource path, a)
-  detectSource inputPath
 
 -- | Find imported module.
 findImported :: HscEnv -- ^ Current hsc environment.
@@ -566,6 +539,13 @@ findImported hsc_env acc pendings name
               -- already compiled linkable package. The `linkable'
               -- mentioned here are those 'libXXX.{a,dll,so}' artifact
               -- files for library package components.
+              --
+              -- This workaround needs the 'UnitId' from REPL session to
+              -- be set via "-this-unit-id" DynFlag option, to avoid
+              -- loading modules from linkable. The 'UnitId' been set
+              -- from REPL need to be exactly same as the 'UnitId' of
+              -- package, including the hash part.
+              --
               handleSkException
                 (const (return Nothing))
                 (Just <$> findTargetSource (name, Nothing))
@@ -581,44 +561,6 @@ findImported hsc_env acc pendings name
    where
      isPending = name `elem` [n | (SkSource _ n _ _, _) <- pendings]
 
--- | Find source code file path by module name.
---
--- Current approach for source code lookup is search for file with
--- @*.sk@ suffix first. Return it if found, otherwise search file with
--- @*.hs@ suffix.
---
--- This searching strategy can used when compiling cabal package
--- containing mixed codes with '*.sk' and '*.hs' suffixes.
---
-findFileInImportPaths :: [FilePath] -> String -> Skc FilePath
-findFileInImportPaths dirs modName = do
-  let suffix = takeExtension modName
-      moduleFileName = moduleNameSlashes (mkModuleName modName)
-      moduleFileName'
-        | suffix `elem` [".sk", ".hs", ".c"] = modName
-        | otherwise = moduleFileName <.> "sk"
-      search ds =
-        case ds of
-          []    -> failS ("Cannot find source for: " ++ modName)
-          d:ds' -> do
-            -- Extension not yet sure for `aPath'.
-            let aPath = d </> moduleFileName'
-                hsPath = replaceExtension aPath ".hs"
-            exists <- liftIO (doesFileExist aPath)
-            if exists
-               then return aPath
-               else do
-                 exists' <- liftIO (doesFileExist hsPath)
-                 if exists'
-                    then return hsPath
-                    else search ds'
-      dirs' | "." `elem` dirs = dirs
-            | otherwise       = dirs ++ ["."]
-  debugSkc (";;; moduleName: " ++ show modName)
-  found <- search dirs'
-  debugSkc (";;; File found: " ++ found)
-  return found
-
 -- | Make list of 'ModSummary' for read time dependency analysis.
 mkReadTimeModSummaries :: [TargetUnit] -> Skc [ModSummary]
 mkReadTimeModSummaries =
@@ -626,7 +568,7 @@ mkReadTimeModSummaries =
   fmap catMaybes .
   mapM mkReadTimeModSummary
 
--- | Make 'ModSummary' for read type dependency analysis.
+-- | Make 'ModSummary' for read time dependency analysis.
 --
 -- The 'ms_textual_imps' field of 'ModSummary' made with this function
 -- contains modules reffered by `require' keyword, not the modules
@@ -774,35 +716,29 @@ sortTargets summaries targets = foldr f [] summaries
 timeIt :: String -> Skc a -> Skc a
 timeIt label = withTiming getDynFlags (text label) (const ())
 
-isSkFile :: FilePath -> Bool
-isSkFile path = takeExtension path == ".sk"
-
-isHsFile :: FilePath -> Bool
-isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
-
-asModuleName :: String -> String
-asModuleName name
-   | looksLikeModuleName name = name
-   | otherwise                = map sep_to_dot (concat names)
-   where
-     names = dropWhile (not . isUpper . head)
-                       (splitPath (dropExtension name))
-     sep_to_dot c
-       | c == pathSeparator = '.'
-       | otherwise          = c
-
 -- | Dump the module contents of given 'ModSummary'.
 dumpModSummary :: ModSummary -> Skc ()
-dumpModSummary ms = maybe (return ()) dump (ms_parsed_mod ms)
+dumpModSummary ms = maybe (return ()) work (ms_parsed_mod ms)
   where
-    dump pm
-      | isSkFile orig_path  = do
+    work pm
+      | isSkFile orig_path = do
         contents <- gen pm
-        liftIO (putStrLn contents)
+        sk_env <- getSkEnv
+        when (envDumpHs sk_env) (liftIO (putStrLn contents))
+        case envHsDir sk_env of
+          Just dir -> doWrite dir contents
+          Nothing  -> return ()
       | otherwise           = return ()
+    doWrite dir contents = do
+       let mod_name = moduleName (ms_mod ms)
+           out_path = dir </> moduleNameSlashes mod_name <.> "hs"
+           out_dir = dropFileName out_path
+       debugSkc (";;; Writing to " ++ out_path)
+       liftIO (do createDirectoryIfMissing True out_dir
+                  writeFile out_path contents)
     gen pm = do
       let mdl = hpm_module pm
-      body <- genHsSrc spstate (Hsrc (unLoc mdl))
+      body <- genHsSrc dummy_spstate (Hsrc (unLoc mdl))
       return (unlines ["-- " ++ bars
                       ,"--"
                       ,"-- Generated from: " ++ orig_path
@@ -811,7 +747,7 @@ dumpModSummary ms = maybe (return ()) dump (ms_parsed_mod ms)
                       ,""
                       ,body])
     orig_path = ms_hspp_file ms
-    spstate = initialSPState (fsLit orig_path) 1 1
+    dummy_spstate = initialSPState (fsLit orig_path) 1 1
     bars = replicate 69 '-'
 
 -- [guessOutputFile]

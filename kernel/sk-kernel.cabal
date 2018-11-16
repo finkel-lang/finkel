@@ -47,6 +47,7 @@ library
                        Language.SK.Run
                        Language.SK.SKC
                        Language.SK.Syntax
+                       Language.SK.TargetSource
   other-modules:       Language.SK.Syntax.HDecl
                        Language.SK.Syntax.HExpr
                        Language.SK.Syntax.HIE

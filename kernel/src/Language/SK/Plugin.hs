@@ -110,7 +110,9 @@ data SkcOptions = SkcOptions {
     -- | Flag value for debugging.
     skDebug :: Bool,
     -- | Dump Haskell codes during make.
-    skDumpHs :: Bool
+    skDumpHs :: Bool,
+    -- | Directory to save Haskell codes during make.
+    skHsDir :: Maybe FilePath
   } deriving (Eq, Show)
 
 initialSkcOptions :: SkcOptions
@@ -122,7 +124,8 @@ initialSkcOptions =
              , action = SkMake
              , skForceRecomp = False
              , skDebug = False
-             , skDumpHs = False }
+             , skDumpHs = False
+             , skHsDir = Nothing }
 
 parseOptions :: [String] -> SkcOptions
 parseOptions args =
@@ -153,6 +156,9 @@ visibleDescrs =
   , option ["sk-dump-hs"]
            (NoArg (\o -> o {skDumpHs=True}))
            "Dump Haskell source code."
+  , option ["sk-hsdir"]
+           (ReqArg (\path o -> o {skHsDir=Just path}) "DIR")
+           "Directory to save generated haskell source."
   ]
 
 hiddenDescrs :: [OptDescr (SkcOptions -> SkcOptions)]
@@ -189,7 +195,8 @@ chooseAction name act o =
 doMake :: SkcOptions -> Skc ()
 doMake o = do
   initSessionForMake
-  modifySkEnv (\e -> e {envDumpHs=skDumpHs o})
+  modifySkEnv (\e -> e { envDumpHs = skDumpHs o
+                       , envHsDir = skHsDir o })
   make (input o) (skC o) (skForceRecomp o) (skO o)
 
 hsrc :: SkcOptions -> Skc ()

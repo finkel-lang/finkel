@@ -201,6 +201,8 @@ data SkEnv = SkEnv
 
      -- | Whether to dump Haskell source code.
    , envDumpHs :: Bool
+     -- | Directory to save generated Haskell source codes.
+   , envHsDir :: Maybe FilePath
    }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
@@ -296,7 +298,8 @@ emptySkEnv = SkEnv
   , envMessager            = batchMsg
   , envRequiredModuleNames = []
   , envCompiledInRequire   = []
-  , envDumpHs              = False }
+  , envDumpHs              = False
+  , envHsDir               = Nothing }
 
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get
