@@ -58,7 +58,6 @@ import Language.SK.Form
 import Language.SK.SKC
 import Language.SK.Syntax ( evalBuilder, parseExpr, parseModule
                           , parseLImport )
-import Language.SK.TargetSource
 
 
 -- ---------------------------------------------------------------------
@@ -336,23 +335,18 @@ m_require form =
           -- 'envMake' function stored in SkEnv when the file is found
           -- in import paths.
           --
-          -- Using 'findFileInImportPaths' instead of
-          -- 'findImportedModule' because 'findImportedModule' is using
-          -- 'findInstalledHomeModule', which does not know '.sk" file
-          -- extension.
-          mb_path <- findFileInImportPaths (importPaths dflags) mname'
+          -- N.B. 'findImportedModule' does not know ".sk" file
+          -- extension, so it will not return sk source files for home
+          -- package modules.
+
+          fresult <- liftIO (findImportedModule hsc_env mname Nothing)
           compiled <-
-            case mb_path of
-              Just _path ->
+            case fresult of
+              Found {} -> return []
+              _        ->
                 case envMake sk_env of
                   Just mk -> withRequiredSettings (mk recomp mname')
                   Nothing -> failS "require: no make function"
-              Nothing -> do
-                fresult <-
-                  liftIO (findImportedModule hsc_env mname Nothing)
-                case fresult of
-                  Found {} -> return []
-                  _        -> failS ("require: cannot find " ++ mname')
 
           -- Add the module to current compilation context.
           contexts <- getContext
