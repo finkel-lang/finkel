@@ -20,14 +20,12 @@ import Prelude hiding ((<>))
 
 -- ghc
 import GHC (OutputableBndrId, getPrintUnqual)
-import FastString (unpackFS)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HsDecls (DocDecl(..), HsDecl(..), TyClDecl(..))
 import HsDoc (LHsDocString)
 import HsSyn (HsModule(..))
 import Outputable ( (<+>), (<>), Outputable(..), SDoc
-                  , comma, doubleQuotes, empty, fsep
-                  , int, lparen, nest, punctuate
+                  , comma, empty, fsep, lparen, nest, punctuate
                   , showSDocForUser, text, vcat )
 import RdrName (RdrName)
 import SrcLoc ( GenLocated(..), unLoc )
@@ -38,9 +36,11 @@ import HsExtension (GhcPass)
 #elif MIN_VERSION_ghc(8,4,0)
 import HsDoc (HsDocString(..))
 import HsExtension (SourceTextX)
+import FastString (unpackFS)
 #else
 import HsDoc (HsDocString(..))
 import OccName (HasOccName(..))
+import FastString (unpackFS)
 #endif
 
 -- Internal
@@ -214,14 +214,12 @@ instance (OUTPUTABLE a pr, HasOccName a)
          => HsSrc (Hsrc (HsModule a)) where
   toHsSrc st (Hsrc a) = case a of
     HsModule Nothing _ imports decls _ mbDoc ->
-      vcat [ linePragma' st 1
-           , pp_langExts st
+      vcat [ pp_langExts st
            , pp_mbModuleHeaderDoc mbDoc
            , pp_nonnull imports
            , hsSrc_nonnull st (map (Hsrc . unLoc) decls) ]
     HsModule (Just name) exports imports decls deprec mbDoc ->
-      vcat [ linePragma' st 1
-           , pp_langExts st
+      vcat [ pp_langExts st
            , pp_mbModuleHeaderDoc mbDoc
            , case exports of
                Nothing ->
@@ -273,26 +271,6 @@ hsSrc_nonnull st xs =
   case xs of
     [] -> empty
     _  -> vcat (map (toHsSrc st) xs)
-
--- Not yet sure whether the use of LINE pragma is showing helpful error
--- messages.
---
--- Position of S-expression code and generated haskell code does not
--- always match with LINE pragmas in top-level definitions. When
--- generated Haskell source is longer than lisp code (which is likely
--- happen with macros), the line PRAGMAs in top-level bindings only are
--- too sparse to show the precise location of errors.
-
-linePragma' :: SPState -> Int -> SDoc
-linePragma' st linum =
-  text "{-# LINE" <+>
-  int linum <+>
-  doubleQuotes (text file) <+>
-  text "#-}"
-    where
-      file = replaceExtension (unpackFS (targetFile st))
-      replaceExtension name =
-        reverse ("sh" ++ dropWhile (/= '.') (reverse name))
 
 pp_mbModuleHeaderDoc :: Maybe LHsDocString -> SDoc
 pp_mbModuleHeaderDoc = maybe empty mod_header
