@@ -1,40 +1,64 @@
 -- | Module exporting utilities to work with cabal's @Setup.hs@ script.
-
+{-# LANGUAGE CPP #-}
 module Distribution.Simple.SK
   (
-  -- * Reexport from Cabal
-    UserHooks
-  , defaultMainWithHooks
-
   -- * UserHooks
-  , skkcHooks
+    skkcHooks
   , skkcDebugHooks
   , sk2hsHooks
   , stackSk2hsHooks
-  , registerSkHooks
 
   -- * Auxiliary building block functions
-  , registerSkPPHandler
+  , skcHooksWith
   , sk2hsProgram
   , stackSk2hsProgram
-  , skcHooksWith
   , skcBuildHooksWith
+
+   -- * Reexport from Cabal
+  , UserHooks
+  , defaultMainWithHooks
   ) where
 
 -- base
+import Control.Exception (bracket_)
+import Control.Monad (when)
+import Data.Foldable (toList)
 import Data.Function (on)
 import Data.List (unionBy)
+import Data.Monoid (Monoid(..))
+
+-- filepath
+import System.FilePath ((<.>), (</>))
 
 -- Cabal
+import Distribution.ModuleName (toFilePath)
 import Distribution.PackageDescription
 import Distribution.Simple
 import Distribution.Simple.Build (build)
+import Distribution.Simple.BuildPaths (autogenComponentModulesDir)
+import Distribution.Simple.Configure (configure, findDistPrefOrDefault)
 import Distribution.Simple.Haddock (haddock)
 import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.Program
 import Distribution.Simple.Program.Types
 import Distribution.Simple.PreProcess
+import Distribution.Simple.Register (internalPackageDBPath)
 import Distribution.Simple.Setup
+import Distribution.Simple.Program.GHC
+import Distribution.Utils.NubList
+
+#if MIN_VERSION_Cabal(2,4,0)
+import Distribution.Types.ExposedModule
+#else
+import Distribution.InstalledPackageInfo
+#endif
+
+-- directory
+import System.Directory (doesFileExist, removeFile)
+
+import qualified Distribution.Simple.Setup as Setup
+import qualified Distribution.Verbosity as Verbosity
+
 
 -- ---------------------------------------------------------------------
 --
@@ -56,14 +80,9 @@ skkcDebugHooks = skcHooksWith "skkc" True
 skcHooksWith :: String -> Bool -> UserHooks
 skcHooksWith exec debug = simpleUserHooks
   { hookedPreProcessors = [registerSkPPHandler]
-  , buildHook = skcBuildHooksWith exec debug
-  , haddockHook = stackSkHaddockHooks }
-
--- | Hooks to register @"*.sk"@ files.
-registerSkHooks :: UserHooks
-registerSkHooks = simpleUserHooks {
-   hookedPreProcessors = [registerSkPPHandler]
- }
+  , confHook            = skcConfHookWith exec debug
+  , haddockHook         = stackSkHaddockHooks
+  }
 
 -- | Hooks to preprocess @"*.sk"@ files with "skkc" found on system.
 sk2hsHooks :: UserHooks
@@ -94,37 +113,146 @@ registerSkPPHandler = ("sk", doNothingPP)
       , runPreProcessor = mkSimplePreProcessor (\_ _ _ -> return ())
       }
 
+skcConfHookWith :: FilePath -- ^ Path to sk compiler.
+                -> Bool     -- ^ Flag for debug.
+                -> (GenericPackageDescription, HookedBuildInfo)
+                -> ConfigFlags
+                -> IO LocalBuildInfo
+skcConfHookWith skc debug (pkg_descr, hbi) cflags = do
+  lbi <- configure (pkg_descr, hbi) cflags
+  return (overrideGhcAsSkc skc debug lbi)
+
 -- | Build hooks to replace the executable path of "ghc" with "skc"
 -- found on system.
-skcBuildHooksWith :: String -- ^ Name of sk compiler.
-                  -> Bool
-                  -> PackageDescription -> LocalBuildInfo
-                  -> UserHooks -> BuildFlags -> IO ()
+skcBuildHooksWith :: FilePath -- ^ Path to sk compiler.
+                  -> Bool     -- ^ Debug flag.
+                  -> PackageDescription
+                  -> LocalBuildInfo
+                  -> UserHooks
+                  -> BuildFlags
+                  -> IO ()
 skcBuildHooksWith skc debug pkg_descr lbi hooks flags =
   build pkg_descr lbi' flags (allSuffixHandlers hooks)
     where
-      lbi' = lbi {withPrograms = updateProgram ghc (withPrograms lbi)}
-      ghc =
-        case lookupProgram (simpleProgram "ghc") (withPrograms lbi) of
-          Just ghc_orig ->
-            ghc_orig {
-                programLocation = FoundOnSystem skc,
-                programOverrideArgs =
-                  debugs ++ programOverrideArgs ghc_orig
-            }
-          Nothing ->
-            (simpleConfiguredProgram "ghc" (FoundOnSystem skc)) {
-              programOverrideArgs = debugs
-            }
-      debugs = ["--sk-debug"|debug]
+      lbi' = overrideGhcAsSkc skc debug lbi
 
--- | Haddock hooks using @stack exec skc@ for preprocessing ".sk"
--- files.
-stackSkHaddockHooks :: PackageDescription -> LocalBuildInfo
-                    -> UserHooks -> HaddockFlags -> IO ()
-stackSkHaddockHooks p l h = haddock p l pps
+-- | Update @ghc@ program in 'LocalBuildInfo'.
+overrideGhcAsSkc :: FilePath -- ^ Path to sk compiler.
+                 -> Bool     -- ^ Debug flag.
+                 -> LocalBuildInfo
+                 -> LocalBuildInfo
+overrideGhcAsSkc skc debug lbi = lbi'
   where
-    pps = ("sk", mkSk2hsPP stackSk2hsProgram) : allSuffixHandlers h
+    lbi' = lbi {withPrograms = updateProgram ghc (withPrograms lbi)}
+    ghc =
+      case lookupProgram (simpleProgram "ghc") (withPrograms lbi) of
+        Just ghc_orig ->
+          ghc_orig {
+              programLocation = FoundOnSystem skc,
+              programOverrideArgs =
+                programOverrideArgs ghc_orig ++ skflags
+          }
+        Nothing ->
+          (simpleConfiguredProgram "ghc" (FoundOnSystem skc)) {
+            programOverrideArgs = skflags
+          }
+    skflags = debugs
+    debugs = ["--sk-debug"|debug]
+
+-- | Haddock hooks for sk. Generates and cleans up haskell source codes
+-- from sk files during documentation generation.
+stackSkHaddockHooks :: PackageDescription
+                    -> LocalBuildInfo
+                    -> UserHooks
+                    -> HaddockFlags
+                    -> IO ()
+stackSkHaddockHooks pd lbi hooks flags = do
+  (acquires, cleanups) <- fmap unzip (mapM gen_hs_sources clbis)
+  bracket_ (sequence_ acquires)
+           (sequence_ cleanups)
+           (haddock pd lbi pps flags)
+  where
+    pps = allSuffixHandlers hooks
+    clbis = toList (componentGraph lbi)
+    gen_hs_sources clbi = do
+      let name = componentLocalName clbi
+          comp = getComponent pd name
+          bi = componentBuildInfo comp
+          cflags = configFlags lbi
+          verbosity = case configVerbosity cflags of
+                        Setup.Flag v -> v
+                        NoFlag       -> Verbosity.normal
+          autogen_dir = autogenComponentModulesDir lbi clbi
+          pkg_dbs = withPackageDB lbi
+          pkgs = componentIncludes clbi
+          hs_src_dirs = hsSourceDirs bi
+          other_mods = otherModules bi
+
+      distPref <- findDistPrefOrDefault (configDistPref cflags)
+
+      let internal_pkg_db =
+            SpecificPackageDB (internalPackageDBPath lbi distPref)
+
+      (hs_mods, hs_insts, hs_files) <-
+         case comp of
+           CLib {} -> do
+             let ms = componentExposedModules clbi
+                 is = componentInstantiatedWith clbi
+                 ms' = foldr f [] ms
+                   where
+                     f em acc =
+                       case exposedReexport em of
+                         Nothing -> exposedName em : acc
+                         Just _  -> acc
+             return (ms' ++ other_mods, is, [])
+           CExe exe -> do
+             let path = modulePath exe
+             return (other_mods, [], [path])
+           _ -> return (other_mods, [], [])
+
+      let opts = mempty
+            { ghcOptMode             = flag GhcModeMake
+            , ghcOptExtra            = optExtras autogen_dir
+            , ghcOptInputFiles       = toNubListR hs_files
+            , ghcOptInputModules     = toNubListR hs_mods
+            , ghcOptSourcePathClear  = flag True
+            , ghcOptSourcePath       = toNubListR hs_src_dirs
+            , ghcOptInstantiatedWith = hs_insts
+            , ghcOptPackageDBs       = pkg_dbs ++ [internal_pkg_db]
+            , ghcOptPackages         = toNubListR pkgs
+            , ghcOptHideAllPackages  = flag True
+            , ghcOptNoLink           = flag True
+            }
+          flag = Setup.Flag
+          cmpl = compiler lbi
+          platform = hostPlatform lbi
+          gen_files = map (\m -> autogen_dir </> m)
+                          (map (\m -> toFilePath m <.> "hs") hs_mods
+                           ++ hs_files)
+          ghc = simpleProgram "ghc"
+          acquire =
+            case lookupProgram ghc (withPrograms lbi) of
+              Just prog -> runGHC verbosity prog cmpl platform opts
+              Nothing   -> return ()
+          clean path = do
+            exist <- doesFileExist path
+            when exist (removeFile path)
+          cleanup = mapM_ clean gen_files
+
+      return (acquire, cleanup)
+
+-- | Optional arguments passed to ghc, for writing Haskell source code
+-- files from sk source code files.
+#if MIN_VERSION_Cabal(2,4,0)
+optExtras :: FilePath -> [String]
+optExtras = optExtras'
+#else
+optExtras :: FilePath -> NubListR String
+optExtras = toNubListR . optExtras'
+#endif
+  where
+    optExtras' :: FilePath -> [String]
+    optExtras' odir = ["-fbyte-code", "--sk-hsdir=" ++ odir]
 
 -- | Same as the one used in "Distribution.Simple".
 allSuffixHandlers :: UserHooks -> [PPSuffixHandler]
@@ -159,4 +287,4 @@ stackSk2hsProgram :: ConfiguredProgram
 stackSk2hsProgram = stack {programDefaultArgs = args}
   where
     stack = simpleConfiguredProgram "stack" (FoundOnSystem "stack")
-    args = ["exec", "skkc", "--", "--sk-hsrc", "--sk-no-typecheck"]
+    args = ["exec", "--", "skkc", "--sk-hsrc", "--sk-no-typecheck"]
