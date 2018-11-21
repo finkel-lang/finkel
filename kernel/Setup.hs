@@ -36,7 +36,7 @@ main = defaultMainWithHooks myHooks
                           (updateProgram alex (withPrograms lbi))}
           alex = alex' { programOverrideArgs = ["--ghc"] }
           alex' = simpleConfiguredProgram "alex" (FoundOnSystem "alex")
-          happy = happy' { programOverrideArgs = ["-a", "-c", "-g"]
+          happy = happy' { programOverrideArgs = ["-a", "-g", "-c"]
                            -- Happy can take `--strict' flag, which adds
                            -- strictness to happy parser.
                            --
