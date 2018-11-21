@@ -37,13 +37,13 @@
 ;;; Strictness Flags
 (data MyData6
   (M6L Int)
-  (M6S1 (! Int))
-  (M6S2 (! (Maybe Int)))
+  (M6S1 !Int)
+  (M6S2 !(Maybe Int))
   (deriving (Eq Show)))
 
 (data MyData7
-  (M7a {m7aF1 (! Int)
-        m7aF2 (! (Maybe String))})
+  (M7a {m7aF1 !Int
+        m7aF2 !(Maybe String)})
   (deriving (Eq Show)))
 
 ;; Using non-reserved special type variable names.

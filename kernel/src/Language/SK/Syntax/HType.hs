@@ -7,7 +7,7 @@ import Data.Char (isUpper)
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
-import FastString (headFS, lengthFS)
+import FastString (headFS, lengthFS, tailFS)
 import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
                , LHsTyVarBndr, Promoted(..), SrcStrictness(..)
                , SrcUnpackedness(..), mkHsAppTys )
@@ -38,20 +38,29 @@ import Language.SK.Syntax.SynUtils
 -- ---------------------------------------------------------------------
 
 b_symT :: Code -> Builder HType
-b_symT (LForm (L l form))
+b_symT whole@(LForm (L l form))
   | Atom (ASymbol name) <- form =
-    let ty = case splitQualName name of
-               Nothing
-                 | ',' == x  -> getRdrName (tupleTyCon Boxed arity)
-                 | otherwise -> mkUnqual namespace name
-               Just qual -> mkQual namespace qual
-        namespace
-          | isUpper x || ':' == x = tcName
-          | otherwise             = tvName
+    let (ty, bang) =
+           case splitQualName name of
+             Nothing
+               | ',' == x  ->
+                 (getRdrName (tupleTyCon Boxed arity), False)
+               | '!' == x  ->
+                 (mkUnqual (namespace (headFS xs)) xs, True)
+               | otherwise ->
+                 (mkUnqual (namespace x) name, False)
+             Just qual -> (mkQual (namespace x) qual, False)
+        namespace chr
+          | isUpper chr || ':' == chr = tcName
+          | otherwise                 = tvName
         x = headFS name
+        xs = tailFS name
         arity = 1 + lengthFS name
         tyvar = hsTyVar NotPromoted (L l ty)
-    in  return (L l tyvar)
+        hty   = L l tyvar
+        hty' | bang      = b_bangT whole hty
+             | otherwise = hty
+    in  return hty'
   | otherwise = builderError
 {-# INLINE b_symT #-}
 

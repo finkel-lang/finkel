@@ -350,15 +350,7 @@ lh98constr :: { HConDecl }
     | 'symbol' '{' fielddecls '}' {% b_conD $1 $3 }
 
 condetails :: { HConDeclDetails }
-    : dctypes { b_conDeclDetails $1 }
-
-dctypes :: { [HType] }
-    : {- empty -}    { [] }
-    | dctype dctypes { $1 : $2 }
-
-dctype :: { HType }
-    : 'unpack' type { b_unpackT $1 $2 }
-    | type          { $1 }
+    : zero_or_more_types { b_conDeclDetails $1 }
 
 fielddecls :: { HConDeclDetails }
     : fielddecls1 { b_recFieldsD $1 }
@@ -371,8 +363,8 @@ rfielddecls :: { [HConDeclField] }
     | rfielddecls fielddecl { $2:$1 }
 
 fielddecl :: { HConDeclField }
-    : varid  dctype {% b_recFieldD [$1] $2 }
-    | varids dctype {% b_recFieldD $1 $2 }
+    : varid  type {% b_recFieldD [$1] $2 }
+    | varids type {% b_recFieldD $1 $2 }
 
 qtycl :: { ([HType], HType) }
     : 'list' {% parse p_lqtycl $1 }
@@ -439,17 +431,18 @@ rdecls :: { [HDecl] }
 -- ---------------------------------------------------------------------
 
 type :: { HType }
-    : varid    {% b_symT $1 }
-    | 'unit'   { b_unitT $1 }
-    | 'hslist' {% case toListL $1 of
-                    LForm (L _ (List [])) -> return (b_nilT $1)
-                    xs -> b_listT `fmap` parse p_type [xs] }
-    | 'list'   {% parse p_types0 $1 }
+    : 'unpack' type { b_unpackT $1 $2 }
+    | '!' type      { b_bangT $1 $2 }
+    | varid         {% b_symT $1 }
+    | 'unit'        { b_unitT $1 }
+    | 'hslist'      {% case toListL $1 of
+                         LForm (L _ (List [])) -> return (b_nilT $1)
+                         xs -> b_listT `fmap` parse p_type [xs] }
+    | 'list'        {% parse p_types0 $1 }
 
 types0 :: { HType }
     : '->' types             {% b_funT $2 }
     | ',' zero_or_more_types { b_tupT $1 $2 }
-    | '!' type               { b_bangT $1 $2 }
     | forall qtycl           { b_forallT $1 $2 }
     | types                  {% b_appT $1 }
 
