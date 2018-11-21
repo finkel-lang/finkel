@@ -475,6 +475,7 @@ isSkFile path = takeExtension path == ".sk"
 
 isHsFile :: FilePath -> Bool
 isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
+
 -- | Search 'ModSummary' of required module.
 findRequiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
 findRequiredModSummary hsc_env mname = do

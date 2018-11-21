@@ -1,8 +1,8 @@
 -- | Module re-exporting runtime dependency for SK kernel programs.
 --
--- This module exports minimal set of types and functions for writing SK
--- kernel programs, including quotes, quasi-quotes, unquotes,
--- unquote-splicings, and macros.
+-- This module exports types and functions for writing SK kernel
+-- programs, with quotes, quasi-quotes, unquotes, unquote-splicings, and
+-- macros.
 --
 module Language.SK
   (

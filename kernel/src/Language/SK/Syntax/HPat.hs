@@ -8,7 +8,7 @@ import Data.Char (isUpper)
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
-import FastString (headFS)
+import FastString (headFS, tailFS)
 import HsLit (HsLit(..))
 import HsPat (HsRecFields(..), Pat(..))
 import HsTypes (HsConDetails(..))
@@ -75,17 +75,23 @@ b_unitP (LForm (L l form))
 b_symP :: Code -> Builder HPat
 b_symP (LForm (L l form))
   | (Atom (ASymbol name)) <- form
+  , let hdchr = headFS name
   = case () of
       _ | name == fsLit "_"
         -> return (L l wildPat)
-        | let x = headFS name, isUpper x || x == ':'
+        | isUpper hdchr || hdchr == ':'
         -> return (L l (ConPatIn (L l (mkVarRdrName name))
                                  (PrefixCon [])))
+        | hdchr == '~'
+        -> let name' = tailFS name
+               pat = L l (varPat (L l (mkRdrName name')))
+           in  return (L l (lazyPat pat))
         | otherwise
         -> return (L l (varPat (L l (mkRdrName name))))
   | otherwise = builderError
   where
     varPat = VarPat NOEXT
+    lazyPat = LazyPat NOEXT
 {-# INLINE b_symP #-}
 
 b_hsListP :: [HPat] -> HPat
@@ -131,7 +137,7 @@ b_asP (LForm (L l form)) pat
 {-# INLINE b_asP #-}
 
 b_lazyP :: HPat -> HPat
-b_lazyP pat@ (L l _) = mkParPat_compat (L l (lazyPat pat))
+b_lazyP pat@ (L l _) = L l (lazyPat pat)
   where
     lazyPat = LazyPat NOEXT
 {-# INLINE b_lazyP #-}

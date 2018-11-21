@@ -372,19 +372,45 @@
       (print ap4)))
 
 (:: lzp1 (-> (Maybe Int) String))
-(= lzp1 (@ _mbi (~ (Just _i))) "matched")
+(= lzp1 (@ _mbi ~(Just _i)) "matched")
 
 (:: lzp2 (-> (, Int [Char] (, Char [Int])) Char))
-(= lzp2 a
-  (case a
-    (, x (~ (: y ys)) (~ (, z (: w ws))))
-    (| ((even x) y)
-       ((odd x) z))))
+(= lzp2 (, x ~(: y ys) ~(, z (: w ws)))
+  (| ((even x) y)
+     ((odd x)  z)))
+
+(:: lzp3 (-> (, a (, b c)) String))
+(= lzp3 x
+  (case x
+    ~(, _a ~(, _b _c)) "lzp3"))
+
+(:: lzp4 (-> (, a (, b c)) (IO ())))
+(= lzp4 x
+  (do (<- ~(, _a ~(, _b _c)) (return x))
+      (putStrLn "lzp4")))
+
+(:: lzp5 (-> (, a (, b c)) (IO ())))
+(= lzp5
+  (\ ~(, _a ~(, _b _c)) (putStrLn "lzp5")))
+
+(:: lzp6 (-> (, a (, b c)) (IO ())))
+(= lzp6 x
+  (let ((= ~(, _a ~(, _b _c)) x))
+    (putStrLn "lzp6")))
+
+(:: lzp7 (-> (, Int (, Char Bool)) (IO ())))
+(= lzp7 ~x
+  (print x))
 
 (= patexprs4
   (do (print (lzp1 (Just undefined)))
       (print (lzp2 (, 3 undefined (, \x [1 2 3]))))
-      (print (lzp2 (, 4 [\a \b] (, undefined []))))))
+      (print (lzp2 (, 4 [\a \b] (, undefined []))))
+      (print (lzp3 undefined))
+      (lzp4 undefined)
+      (lzp5 undefined)
+      (lzp6 undefined)
+      (lzp7 (, 42 (, \g True)))))
 
 (= lfp1 mb
   (case mb
