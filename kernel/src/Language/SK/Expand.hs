@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Module for macro expansion.
 module Language.SK.Expand
@@ -16,7 +17,7 @@ import Control.Monad (foldM, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Char (isLower)
 import Data.Maybe (catMaybes)
-import Unsafe.Coerce (unsafeCoerce)
+import GHC.Exts (unsafeCoerce#)
 
 -- containers
 import qualified Data.Map as Map
@@ -184,7 +185,7 @@ compileMacro doEval form@(LForm (L l _)) self arg body = do
     then case evalBuilder parseExpr [expr] of
                 Right hexpr -> do
                   macro <- evalExpr hexpr
-                  return (name, decls, Just (unsafeCoerce macro))
+                  return (name, decls, Just (unsafeCoerce# macro))
                 Left err -> skSrcError form err
     else return (name, decls, Nothing)
 
@@ -232,7 +233,7 @@ addImportedMacro' thing = do
       hv <- case evalBuilder parseExpr [name_sym] of
                    Right expr -> evalExpr expr
                    Left err   -> failS err
-      insertMacro (fsLit name_str) (unsafeCoerce hv)
+      insertMacro (fsLit name_str) (unsafeCoerce# hv)
     _ -> error "addImportedmacro"
 
 
