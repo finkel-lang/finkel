@@ -28,7 +28,7 @@ instance Arbitrary Atom where
     where
       headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ haskellOpChars'
       haskellOpChars' = '_' : filter (`notElem` "#-|") haskellOpChars
-      tailChars = headChars ++ "0123456789'-"
+      tailChars = headChars ++ "0123456789'_"
       symbolG = do
         x <- elements headChars
         xs <- listOf (elements tailChars)

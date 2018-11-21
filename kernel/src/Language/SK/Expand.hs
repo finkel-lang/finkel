@@ -133,7 +133,7 @@ quasiquote orig@(LForm (L l form)) =
 isUnquoteSplice :: Code -> Bool
 isUnquoteSplice (LForm form) =
   case form of
-    L _ (List (LForm (L _ (Atom (ASymbol "unquote-splice"))):_))
+    L _ (List (LForm (L _ (Atom (ASymbol "unquote_splice"))):_))
       -> True
     _ -> False
 {-# INLINE isUnquoteSplice #-}
@@ -392,9 +392,9 @@ m_evalWhenCompile form =
 specialForms :: EnvMacros
 specialForms =
   makeEnvMacros
-    [("define-macro", SpecialForm m_defineMacro)
-    ,("eval-when-compile", SpecialForm m_evalWhenCompile)
-    ,("let-macro", SpecialForm m_letMacro)
+    [("define_macro", SpecialForm m_defineMacro)
+    ,("eval_when_compile", SpecialForm m_evalWhenCompile)
+    ,("let_macro", SpecialForm m_letMacro)
     ,("quote", SpecialForm m_quote)
     ,("quasiquote", SpecialForm m_quasiquote)
     ,("require", SpecialForm m_require)]

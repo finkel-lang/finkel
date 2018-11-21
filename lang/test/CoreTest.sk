@@ -319,7 +319,7 @@
                       (List (: _ args))
                       (return
                         (quasiquote
-                         (print (unquote-splice args))))
+                         (print (unquote_splice args))))
 
                       _ (skSrcError
                          *form*

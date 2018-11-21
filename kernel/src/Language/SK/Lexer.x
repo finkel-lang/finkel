@@ -461,11 +461,22 @@ tok_lambda :: Action
 tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
 {-# INLINE tok_lambda #-}
 
+-- | Make token symbol.  When the given symbol starts with
+-- non-operatator character, replace hyphens with underscores.
 tok_symbol :: Action
 tok_symbol (AlexInput _ _ s) l = do
-  let bs = C8.toStrict $! takeUtf8 (fromIntegral l) s
-  return $ TSymbol $! mkFastStringByteString bs
+  let bs0 = takeUtf8 (fromIntegral l) s
+  bs1 <- case C8.uncons bs0 of
+           Just (c, _)
+             | c `elem` haskellOpChars -> return bs0
+             | otherwise               -> return $! replaceHyphens bs0
+           Nothing                     -> alexError "tok_symbol: panic"
+  return $! TSymbol $! mkFastStringByteString $! C8.toStrict $! bs1
 {-# INLINE tok_symbol #-}
+
+replaceHyphens :: C8.ByteString -> C8.ByteString
+replaceHyphens = C8.map (\c -> if c == '-' then '_' else c)
+{-# INLINE replaceHyphens #-}
 
 tok_char :: Action
 tok_char inp0 _ = do

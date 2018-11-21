@@ -124,7 +124,7 @@ mkUnquote (L l _) body = li l [sym l "unquote", body]
 {-# INLINE mkUnquote #-}
 
 mkUnquoteSplice :: Located Token -> Code -> Code
-mkUnquoteSplice (L l _) body = li l [sym l "unquote-splice", body]
+mkUnquoteSplice (L l _) body = li l [sym l "unquote_splice", body]
 {-# INLINE mkUnquoteSplice #-}
 
 mkHsList :: Located Token -> [Code] -> Code

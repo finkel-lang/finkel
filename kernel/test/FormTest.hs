@@ -61,8 +61,8 @@ formTests = do
   foldableTest
   traversableTest
 
-  nameTest "foo"
-  nameTest "bar-buzz-quux"
+  nameTest "foo" "foo"
+  nameTest "bar-buzz-quux" "bar_buzz_quux"
 
   eqTest "(a \"bcd\" \\e [f g] (h i))"
   eqPropTest
@@ -168,11 +168,11 @@ traversableTest = do
     it "should be Just TEnd" $
       mapM f TEnd `shouldBe` Just TEnd
 
-nameTest :: String -> Spec
-nameTest str =
-  describe ("name of symbol `" ++ str ++ "'") $
-    it ("should be `" ++ str ++ "'") $
-       symbolName (parseE str) `shouldBe` str
+nameTest :: String -> String -> Spec
+nameTest str0 str1 =
+  describe ("name of symbol `" ++ str0 ++ "'") $
+    it ("should be `" ++ str1 ++ "'") $
+       symbolName (parseE str0) `shouldBe` str1
 
 eqTest :: String -> Spec
 eqTest str =
