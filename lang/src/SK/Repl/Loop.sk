@@ -23,8 +23,8 @@
    (System.Directory (getTemporaryDirectory removeFile))
 
    ;; ghc
-   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..) (Way ..)
-              addWay' defaultFatalMessager defaultFlushOut))
+   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..)
+              defaultFatalMessager defaultFlushOut))
    (Exception (ghandle))
    (GHC (setSessionDynFlags))
    (GhcMonad ((GhcMonad ..) getSessionDynFlags withSession))
@@ -223,9 +223,8 @@
               (<- hsc-env getSession)
               (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
-                                         ghcLink LinkInMemory}))
-                    (= dflags2 (addWay' WayDyn dflags1))))
-              (void (setSessionDynFlags dflags2))))
+                                         ghcLink LinkInMemory}))))
+              (void (setSessionDynFlags dflags1))))
         (= withAsyncHandler
           (ghandle
            (\ e
