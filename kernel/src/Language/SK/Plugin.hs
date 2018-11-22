@@ -6,6 +6,7 @@ module Language.SK.Plugin
      -- * Helpers
    , makeSkFrontend
    , skPluginMain
+   , conflictingOptions
    ) where
 
 -- base

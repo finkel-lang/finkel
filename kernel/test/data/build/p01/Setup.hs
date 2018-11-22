@@ -1,2 +1,2 @@
 import Distribution.Simple.SK
-main = defaultMainWithHooks skkcHooks
+main = defaultMainWithHooks (skcHooksWith "skkc2" False)

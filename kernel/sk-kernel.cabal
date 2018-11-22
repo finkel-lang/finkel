@@ -42,6 +42,7 @@ library
                        Language.SK.Homoiconic
                        Language.SK.Lexer
                        Language.SK.Make
+                       Language.SK.Main
                        Language.SK.Plugin
                        Language.SK.Reader
                        Language.SK.Run
@@ -57,6 +58,7 @@ library
   autogen-modules:     Paths_sk_kernel
   includes:            Syntax.h
   include-dirs:        include
+  c-sources:           include/hooks.c
   build-depends:       Cabal        >= 2.0
                      , array        >= 0.5.2
                      , base         >= 4.10 && < 5
@@ -88,6 +90,15 @@ executable skkc
   ghc-options:         -Wall -threaded -rtsopts
   if flag(dynamic)
     ghc-options:       -dynamic
+  build-depends:       base >= 4.10 && < 5
+                     , sk-kernel
+  default-language:    Haskell2010
+
+-- Constantly building with "-dynamic" option.
+executable skkc2
+  hs-source-dirs:      exec
+  main-is:             skkc2.hs
+  ghc-options:         -dynamic -Wall -threaded -rtsopts
   build-depends:       base >= 4.10 && < 5
                      , sk-kernel
   default-language:    Haskell2010
