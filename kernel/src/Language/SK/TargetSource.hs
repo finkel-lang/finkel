@@ -7,8 +7,10 @@ module Language.SK.TargetSource
   , isOtherSource
 
     -- * File path related functions
-  , findFileInImportPaths
   , asModuleName
+  , findFileInImportPaths
+  , isSkFile
+  , isHsFile
   ) where
 
 -- base
@@ -31,7 +33,6 @@ import Util (looksLikeModuleName)
 -- Internal
 import Language.SK.Form
 import Language.SK.Lexer
--- import Language.SK.Run
 import Language.SK.SKC
 
 
@@ -95,9 +96,6 @@ findFileInImportPaths dirs modName = do
         | otherwise = moduleFileName <.> "sk"
       search mb_hs ds =
         case ds of
-          -- []    -> case mb_hs of
-          --   Nothing -> failS ("Cannot find source for: " ++ modName)
-          --   Just hs -> return hs
           []    -> return mb_hs
           d:ds' -> do
             -- Extension not yet sure for `aPath', so searching both of
@@ -132,3 +130,11 @@ asModuleName name
      sep_to_dot c
        | c == pathSeparator = '.'
        | otherwise          = c
+
+-- | True if given file has sk extension.
+isSkFile :: FilePath -> Bool
+isSkFile path = takeExtension path == ".sk"
+
+-- | True if given file has haskell extension.
+isHsFile :: FilePath -> Bool
+isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
