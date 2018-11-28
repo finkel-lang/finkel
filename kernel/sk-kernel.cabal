@@ -14,8 +14,9 @@ extra-source-files:  README.md
                      include/Syntax.h
                      test/data/syntax/*.sk
                      test/data/build/*.sk
-                     test/data/build/p01/*.cabal
-                     test/data/build/p01/*.yaml
+                     test/data/build/p01/LICENSE
+                     test/data/build/p01/p01.cabal
+                     test/data/build/p01/Setup.hs
                      test/data/build/p01/src/P01/*.hs
                      test/data/build/p01/src/P01/*.sk
                      test/data/build/p01/test/*.hs

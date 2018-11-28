@@ -41,6 +41,7 @@ ghc-build: nopie
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - kernel/
+- kernel/test/data/build/p01
 - lang/
 
 # Dependency packages to be pulled from upstream that are not in the resolver

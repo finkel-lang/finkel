@@ -109,15 +109,11 @@ buildPackage :: String -> Spec
 buildPackage name =
   describe ("package " ++ name) $
     it "should compile and pass the tests" $ do
-      let s = stack name
-      _ <- s ["setup"]
-      _ <- s ["build", name]
-      exitCode <- s ["test", name]
-      _ <- s ["clean", name]
+      _ <- stack ["setup"]
+      _ <- stack ["build", name]
+      exitCode <- stack ["test", name]
+      _ <- stack ["clean", name]
       exitCode `shouldBe` ExitSuccess
 
-stack :: String -> [String] -> IO ExitCode
-stack projectName args = do
-  let yaml = "test" </> "data" </> "build" </> projectName </>
-             "stack.yaml"
-  rawSystem "stack" (("--stack-yaml=" ++ yaml):"--silent":args)
+stack :: [String] -> IO ExitCode
+stack args = rawSystem "stack" ("--silent" : args)
