@@ -9,6 +9,15 @@ module Language.SK.Form
   , LForm(..)
   , Code
 
+  , qSymbol
+  , qChar
+  , qString
+  , qInteger
+  , qFractional
+  , qUnit
+  , qList
+  , qHsList
+
   , aFractional
   , aSymbol
   , nil
@@ -201,6 +210,38 @@ instance NFData a => NFData (LForm a) where
 
 -- | Type synonym for code data.
 type Code = LForm Atom
+
+-- | Make quoted symbol from 'String'.
+qSymbol :: String -> Code
+qSymbol = quoted . Atom . aSymbol
+
+-- | Make quoted char from 'Char'.
+qChar :: Char -> Code
+qChar = quoted . Atom . AChar
+
+-- | Make quoted string from 'String'.
+qString :: String -> Code
+qString = quoted . Atom . AString
+
+-- | Make quoted integer from 'Integer'.
+qInteger :: Integer -> Code
+qInteger = quoted . Atom . AInteger
+
+-- | Make quoted fractional from read value.
+qFractional :: (Real a, Show a) => a -> Code
+qFractional = quoted . Atom . aFractional
+
+-- | Make quoted unit.
+qUnit :: Code
+qUnit = quoted (Atom AUnit)
+
+-- | Make quoted list from list of 'Code'.
+qList :: [Code] -> Code
+qList = quoted . List
+
+-- | Make quoted haskell list from list of 'Code'.
+qHsList :: [Code] -> Code
+qHsList = quoted . HsList
 
 -- | Auxiliary function to construct 'ASymbol' atom.
 aSymbol :: String -> Atom

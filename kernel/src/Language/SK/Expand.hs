@@ -67,29 +67,29 @@ import Language.SK.Syntax ( evalBuilder, parseExpr, parseModule
 --
 -- ---------------------------------------------------------------------
 
-quoteAtom :: SrcSpan -> Atom -> Code
-quoteAtom l form =
-  case form of
-    ASymbol s     -> atom [tSym l "aSymbol", tString l (unpackFS s)]
-    AChar c       -> atom [tSym l "AChar", tChar l c]
-    AString s     -> atom [tSym l "AString", tString l s]
-    AInteger n    -> atom [tSym l "AInteger", tInteger l n]
-    AFractional n -> atom [tSym l "aFractional", tFractional l n]
-    AUnit         -> atom [tSym l "AUnit"]
-  where
-    atom vals = mkQuoted l (tList l [tSym l "Atom", tList l vals])
-{-# INLINE quoteAtom #-}
-
 quote :: Code -> Code
 quote orig@(LForm (L l form))  =
   case form of
     Atom atom -> quoteAtom l atom
-    List xs   -> quoteList "List" xs
-    HsList xs -> quoteList "HsList" xs
+    List xs   -> quoteList "qList" xs
+    HsList xs -> quoteList "qHsList" xs
     _         -> orig
     where
       quoteList tag xs =
-        mkQuoted l (tList l [tSym l tag, tHsList l (map quote xs)])
+        tList l [tSym l tag, tHsList l (map quote xs)]
+
+quoteAtom :: SrcSpan -> Atom -> Code
+quoteAtom l form =
+  case form of
+    ASymbol s     -> li [tSym l "qSymbol", tString l (unpackFS s)]
+    AChar c       -> li [tSym l "qChar", tChar l c]
+    AString s     -> li [tSym l "qString", tString l s]
+    AInteger n    -> li [tSym l "qInteger", tInteger l n]
+    AFractional n -> li [tSym l "qFractional", tFractional l n]
+    AUnit         -> tSym l "qUnit"
+  where
+    li = tList l
+{-# INLINE quoteAtom #-}
 
 -- Quasiquote is implemented as special form in Haskell. Though it could
 -- be implemented in SK code later. If done in SK code, lexer and reader
@@ -105,21 +105,21 @@ quasiquote orig@(LForm (L l form)) =
     List forms'
       | [q, body] <- forms'
       , q == tSym l "quasiquote"   -> quasiquote (quasiquote body)
-      | any isUnquoteSplice forms' -> splicedList "List" forms'
-      | otherwise                  -> nonSplicedList "List" forms'
+      | any isUnquoteSplice forms' -> splicedList "qList" forms'
+      | otherwise                  -> nonSplicedList "qList" forms'
     HsList forms'
-      | any isUnquoteSplice forms' -> splicedList "HsList" forms'
-      | otherwise                  -> nonSplicedList "HsList" forms'
+      | any isUnquoteSplice forms' -> splicedList "qHsList" forms'
+      | otherwise                  -> nonSplicedList "qHsList" forms'
     Atom atom                      -> quoteAtom l atom
     TEnd                           -> orig
   where
    splicedList tag forms =
-     mkQuoted l (tList l [ tSym l tag
-                         , tList l [ tSym l "concat"
-                                   , tHsList l (go [] forms)]])
+     tList l [ tSym l tag
+             , tList l [ tSym l "concat"
+                       , tHsList l (go [] forms)]]
    nonSplicedList tag forms =
-     mkQuoted l (tList l [ tSym l tag
-                         , tHsList l (map quasiquote forms)])
+     tList l [ tSym l tag
+             , tHsList l (map quasiquote forms)]
    go acc forms =
      let (pre, post) = break isUnquoteSplice forms
      in  case post of
@@ -684,10 +684,6 @@ tList l forms = LForm (L l (List forms))
 tHsList :: SrcSpan -> [Code] -> Code
 tHsList l forms = LForm (L l (HsList forms))
 {-# INLINE tHsList #-}
-
-mkQuoted :: SrcSpan -> Code -> Code
-mkQuoted l form = tList l [tSym l "quoted", form]
-{-# INLINE mkQuoted #-}
 
 emptyForm :: Code
 emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]

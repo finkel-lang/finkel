@@ -17,6 +17,15 @@ module Language.SK
   , aFractional
   , aSymbol
 
+  , qSymbol
+  , qChar
+  , qString
+  , qInteger
+  , qFractional
+  , qUnit
+  , qList
+  , qHsList
+
   -- * Macro
   , Macro(Macro)
   , Skc

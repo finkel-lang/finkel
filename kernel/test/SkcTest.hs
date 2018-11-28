@@ -152,7 +152,7 @@ expandTest = do
           li xs = LForm (L l (List xs))
           t x = LForm (L l (Atom (AString x)))
           form0 = li [s "quote", s "a"]
-          form1 = li [s "quoted", li [s "Atom", li [s "aSymbol", t "a"]]]
+          form1 = li [s "qSymbol", t "a"]
       ret <- macroFunction qt form0
       ret `shouldBe` Right form1
 
