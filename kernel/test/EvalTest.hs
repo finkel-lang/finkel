@@ -1,15 +1,21 @@
 module EvalTest (evalTests) where
 
+-- base
 import Unsafe.Coerce
+
+-- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
 
-import DynFlags (HasDynFlags(..))
+-- ghc
+import DynFlags (DynFlags(..), HasDynFlags(..))
 import GHC (getPrintUnqual)
 import Outputable (showSDocForUser)
 import PprTyThing (pprTypeForUser)
 
+-- hspec
 import Test.Hspec
 
+-- sk-kernel
 import Language.SK.Builder (Builder)
 import Language.SK.Eval (evalExpr, evalExprType, evalTypeKind)
 import Language.SK.Form (Code)
@@ -18,8 +24,12 @@ import Language.SK.Expand (expands, withExpanderSettings)
 import Language.SK.Make (initSessionForMake, defaultSkEnv)
 import Language.SK.Reader (sexprs)
 import Language.SK.Run (buildHsSyn, runSkc)
-import Language.SK.SKC (Skc, SkEnv(..), failS, setContextModules)
+import Language.SK.SKC ( Skc, SkEnv(..), failS, setContextModules
+                       , setDynFlags )
 import Language.SK.Syntax (parseExpr, parseType)
+
+-- Test internal
+import TestAux
 
 evalTests :: [FilePath] -> Spec
 evalTests exprFiles = do
@@ -77,7 +87,7 @@ typeKindTest = do
 doEval ::
   String -> Builder a -> (a -> Skc b) -> BL.ByteString -> Skc b
 doEval label parser act input = do
-  initSessionForMake
+  initSessionForTest
   case evalSP sexprs (Just label) input of
     Right form0 -> do
       form1 <- withExpanderSettings (expands form0)

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | Tests for syntax.
 --
 -- All files under "test/data" directory with '.sk' extension (i.e.:
@@ -5,16 +6,26 @@
 --
 module SyntaxTest (syntaxTests) where
 
+-- base
 import Control.Monad (when)
 import Data.IORef (newIORef, readIORef, writeIORef)
+import System.Exit (ExitCode(..))
+
+-- directory
 import System.Directory ( doesFileExist
                         , getTemporaryDirectory
                         , removeFile )
-import System.Exit (ExitCode(..))
+
+-- filepath
 import System.FilePath ((</>))
-import System.Process (readProcessWithExitCode)
+
+-- hspec
 import Test.Hspec
 
+-- process
+import System.Process (readProcessWithExitCode)
+
+-- sk-kernel
 import Language.SK.Builder (HModule)
 import Language.SK.Emit
 import Language.SK.Lexer
@@ -22,18 +33,9 @@ import Language.SK.Make
 import Language.SK.Run
 import Language.SK.SKC
 
+-- Internal
+import TestAux (ifUsingStack, initSessionForTest)
 import MakeTest (removeArtifacts)
-
-readCode :: FilePath -> IO (Bool, Maybe HModule, Maybe SPState)
-readCode src = do
-  let go = do initSessionForMake
-              (mdl, st) <- compileSkModule src
-              ret <- tcHsModule (Just src) Nothing False mdl
-              return (ret, mdl, st)
-  compiled <- runSkc go defaultSkEnv
-  case compiled of
-    Right (_tc, mdl, st) -> return (True, Just mdl, Just st)
-    Left e -> putStrLn e >> return (False, Nothing, Nothing)
 
 mkTest :: FilePath -> Spec
 mkTest path = do
@@ -51,13 +53,9 @@ mkTest path = do
       syndir = "test" </> "data" </> "syntax"
       runDotO = readProcessWithExitCode aDotOut [] ""
   beforeAll_ (removeArtifacts syndir) $ describe path $ do
-    it "should type check" $ do
-      (result, _mdl, _sp) <- readCode path
-      result `shouldBe` True
-
     it "should compile with skc" $ do
       let task = do
-            initSessionForMake
+            initSessionForTest
             make [(path, Nothing)] False True (Just aDotOut)
       ret <- runSkc task skEnv
       ret `shouldBe` Right ()
@@ -70,7 +68,7 @@ mkTest path = do
 
     it "should emit Haskell source" $ do
       let gen = do
-            initSessionForMake
+            initSessionForTest
             (mdl, sp) <- compileWithSymbolConversion path
             genHsSrc sp (Hsrc mdl)
       src <- runSkc gen skEnv
@@ -81,11 +79,11 @@ mkTest path = do
         Left err -> expectationFailure err
 
     it "should compile resulting Haskell code" $ do
-      let args = ["--silent", "exec", "ghc", "--", "-o", aDotOut, dotHs]
-      (ecode, _, stderr) <- readProcessWithExitCode "stack" args ""
-      case stderr of
-        [] -> ecode `shouldBe` ExitSuccess
-        _  -> expectationFailure stderr
+      let task = do
+            initSessionForTest
+            make [(dotHs, Nothing)] False True (Just aDotOut)
+      ret <- runSkc task skEnv
+      ret `shouldBe` Right ()
 
     it "should run executable compiled with ghc" $ do
       removeWhenExist dotTix

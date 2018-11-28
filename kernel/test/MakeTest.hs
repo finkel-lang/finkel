@@ -24,12 +24,15 @@ import SrcLoc (noLoc)
 -- hspec
 import Test.Hspec
 
--- Internal
+-- sk-kernel
 import Language.SK.Lexer
 import Language.SK.Make
 import Language.SK.Run
 import Language.SK.SKC
 import Language.SK.TargetSource
+
+-- Internal
+import TestAux
 
 makeTests :: Spec
 makeTests = do
@@ -60,12 +63,13 @@ showTargetTest = do
       sksrc `shouldNotBe` otsrc
 
 buildSk :: [FilePath] -> Spec
-buildSk = buildFile (return ())
+buildSk = buildFile initSessionForTest
 
 buildC :: [FilePath] -> Spec
-buildC =
-  buildFile (do dflags <- getSessionDynFlags
-                void (setSessionDynFlags (dflags {ghcLink=NoLink})))
+buildC = buildFile
+           (do initSessionForTest
+               dflags <- getSessionDynFlags
+               void (setSessionDynFlags (dflags {ghcLink=NoLink})))
 
 buildFile :: Skc () -> [FilePath] -> Spec
 buildFile pre paths =
@@ -74,7 +78,6 @@ buildFile pre paths =
     it "should compile successfully" $ do
       ret <- runSkc
                (do pre
-                   initSessionForMake
                    -- Use dflags setttings for profile when running test
                    -- executable with "+RTS -p" option.
                    if WayProf `elem` interpWays

@@ -1,0 +1,4 @@
+packages:
+  kernel/
+  kernel/test/data/build/p01/
+  lang/

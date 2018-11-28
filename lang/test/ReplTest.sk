@@ -7,7 +7,7 @@
    ;; base
    (Control.Concurrent)
    (Control.Monad (void))
-   (Data.List (intercalate))
+   (Data.List (intercalate isSubsequenceOf))
 
    ;; directory
    (System.Directory (getCurrentDirectory))
@@ -147,14 +147,11 @@
                (Right str) (elem ";  defmacro*!" (lines str))
                _ False)))
           (ok '(*_ show modules) "")
-          (ok '(*_ show packages)
-              "; packages")
-          (ok '(begin
-                (*_ set -package bytestring)
-                (*_ show packages))
-              (delines
-               ["; packages"
-                ";   -package bytestring"]))
+          (satisfy '(*_ show packages)
+                   (\ ret
+                     (case ret
+                       (Right str) (isSubsequenceOf "; packages" str)
+                       _ False)))
           (ok '(*_ show paths)
               (concat
                ["; current working directory:\n"

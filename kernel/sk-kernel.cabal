@@ -127,6 +127,7 @@ test-suite sk-kernel-test
                        MakeTest
                        SyntaxTest
                        Orphan
+                       TestAux
   build-depends:       QuickCheck
                      , base
                      , bytestring

@@ -21,7 +21,7 @@ module Distribution.Simple.SK
 
 -- base
 import Control.Exception (bracket_)
-import Control.Monad (when)
+import Control.Monad (mapAndUnzipM, when)
 import Data.Foldable (toList)
 import Data.Function (on)
 import Data.List (unionBy)
@@ -69,19 +69,23 @@ import qualified Distribution.Verbosity as Verbosity
 -- | A UserHooks to compile SK codes with "skkc" executable found on
 -- system.
 skkcHooks :: UserHooks
-skkcHooks = skcHooksWith "skkc" False
+skkcHooks = skcHooksWith "skkc" [] False
 
 -- | UserHooks almost same as'skcHooks', but with SK debug flag turned
 -- on.
 skkcDebugHooks :: UserHooks
-skkcDebugHooks = skcHooksWith "skkc" True
+skkcDebugHooks = skcHooksWith "skkc" [] True
 
--- | A 'UserHooks' to compile SK codes with given executable.
-skcHooksWith :: String -> Bool -> UserHooks
-skcHooksWith exec debug = simpleUserHooks
+-- | Make user hooks from compiler executable and extra arguments to the
+-- executable.
+skcHooksWith :: FilePath -- ^ Compiler executable.
+             -> [String] -- ^ Extra arguments to the executable.
+             -> Bool     -- ^ Debug flag.
+             -> UserHooks
+skcHooksWith exec args debug = simpleUserHooks
   { hookedPreProcessors = [registerSkPPHandler]
-  , confHook            = skcConfHookWith exec debug
-  , haddockHook         = stackSkHaddockHooks
+  , confHook            = skcConfHookWith exec args debug
+  , haddockHook         = skcHaddockHooks
   }
 
 -- | Hooks to preprocess @"*.sk"@ files with "skkc" found on system.
@@ -114,13 +118,14 @@ registerSkPPHandler = ("sk", doNothingPP)
       }
 
 skcConfHookWith :: FilePath -- ^ Path to sk compiler.
+                -> [String] -- ^ Extra default args to sk compiler.
                 -> Bool     -- ^ Flag for debug.
                 -> (GenericPackageDescription, HookedBuildInfo)
                 -> ConfigFlags
                 -> IO LocalBuildInfo
-skcConfHookWith skc debug (pkg_descr, hbi) cflags = do
+skcConfHookWith skc extra_args debug (pkg_descr, hbi) cflags = do
   lbi <- configure (pkg_descr, hbi) cflags
-  return (overrideGhcAsSkc skc debug lbi)
+  return (overrideGhcAsSkc skc extra_args debug lbi)
 
 -- | Build hooks to replace the executable path of "ghc" with "skc"
 -- found on system.
@@ -134,14 +139,15 @@ skcBuildHooksWith :: FilePath -- ^ Path to sk compiler.
 skcBuildHooksWith skc debug pkg_descr lbi hooks flags =
   build pkg_descr lbi' flags (allSuffixHandlers hooks)
     where
-      lbi' = overrideGhcAsSkc skc debug lbi
+      lbi' = overrideGhcAsSkc skc [] debug lbi
 
 -- | Update @ghc@ program in 'LocalBuildInfo'.
 overrideGhcAsSkc :: FilePath -- ^ Path to sk compiler.
+                 -> [String] -- ^ Extra default args.
                  -> Bool     -- ^ Debug flag.
                  -> LocalBuildInfo
                  -> LocalBuildInfo
-overrideGhcAsSkc skc debug lbi = lbi'
+overrideGhcAsSkc skc extra_args debug lbi = lbi'
   where
     lbi' = lbi {withPrograms = updateProgram ghc (withPrograms lbi)}
     ghc =
@@ -149,11 +155,14 @@ overrideGhcAsSkc skc debug lbi = lbi'
         Just ghc_orig ->
           ghc_orig {
               programLocation = FoundOnSystem skc,
+              programDefaultArgs =
+                extra_args ++ programDefaultArgs ghc_orig,
               programOverrideArgs =
                 programOverrideArgs ghc_orig ++ skflags
           }
         Nothing ->
           (simpleConfiguredProgram "ghc" (FoundOnSystem skc)) {
+            programDefaultArgs = extra_args,
             programOverrideArgs = skflags
           }
     skflags = debugs
@@ -161,13 +170,13 @@ overrideGhcAsSkc skc debug lbi = lbi'
 
 -- | Haddock hooks for sk. Generates and cleans up haskell source codes
 -- from sk files during documentation generation.
-stackSkHaddockHooks :: PackageDescription
-                    -> LocalBuildInfo
-                    -> UserHooks
-                    -> HaddockFlags
-                    -> IO ()
-stackSkHaddockHooks pd lbi hooks flags = do
-  (acquires, cleanups) <- fmap unzip (mapM gen_hs_sources clbis)
+skcHaddockHooks :: PackageDescription
+                -> LocalBuildInfo
+                -> UserHooks
+                -> HaddockFlags
+                -> IO ()
+skcHaddockHooks pd lbi hooks flags = do
+  (acquires, cleanups) <- mapAndUnzipM gen_hs_sources clbis
   bracket_ (sequence_ acquires)
            (sequence_ cleanups)
            (haddock pd lbi pps flags)
@@ -216,13 +225,14 @@ stackSkHaddockHooks pd lbi hooks flags = do
             , ghcOptInputFiles       = toNubListR hs_files
             , ghcOptInputModules     = toNubListR hs_mods
             , ghcOptSourcePathClear  = flag True
-            , ghcOptSourcePath       = toNubListR hs_src_dirs
+            , ghcOptSourcePath       = toNubListR hs_src_dirs'
             , ghcOptInstantiatedWith = hs_insts
             , ghcOptPackageDBs       = pkg_dbs ++ [internal_pkg_db]
             , ghcOptPackages         = toNubListR pkgs
             , ghcOptHideAllPackages  = flag True
             , ghcOptNoLink           = flag True
             }
+          hs_src_dirs' = hs_src_dirs ++ [autogen_dir]
           flag = Setup.Flag
           cmpl = compiler lbi
           platform = hostPlatform lbi
