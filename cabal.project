@@ -2,3 +2,6 @@ packages:
   kernel/
   kernel/test/data/build/p01/
   lang/
+
+tests: True
+benchmarks: True
