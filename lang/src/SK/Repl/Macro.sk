@@ -718,7 +718,7 @@ paths from import directories."
   "Function to show current directory."
   [_forms]
   (do (<- dir (liftIO getCurrentDirectory))
-      (return `(aSymbol ,dir))))
+      (return `,dir)))
 
 (defn (set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."

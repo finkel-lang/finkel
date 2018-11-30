@@ -109,7 +109,7 @@
               "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
           (ok '(*_ kind Maybe)
               "Maybe :: * -> *")
-          (ok '(*_ pwd) current-dir)
+          (ok '(*_ pwd) (show current-dir))
           (satisfy
            '(*_ show bindings)
            (\ ret
