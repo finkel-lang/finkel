@@ -135,8 +135,6 @@
                                 outputStrLn)
                             str))
               (liftIO (hFlush stdout))))
-        (= as-repl-macro str
-          (concat ["(*_ " str ")"]))
         (= go result-mv
           (do (<- st0 (lift get-repl-state))
               (let ((= prompt
@@ -160,18 +158,21 @@
                              (== \, h))
                          (if (elem tl (tail (inits "quit")))
                              quit
-                             (go2 result-mv (as-repl-macro tl))))
+                             (go3 result-mv (as-repl-macro tl))))
                         (otherwise
                          (go2 result-mv line)))))
         (= go2 result-mv line
           (do (<- mb-form (lift (read-form line)))
-              (let ((= input form
-                      (Input Prompt form result-mv))))
               (case mb-form
-                (Just form) (do (liftIO (putMVar to-mvar (input form)))
-                                (print-io result-mv)
-                                (go result-mv))
-                Nothing (go result-mv))))
+                (Just form) (go3 result-mv form)
+                Nothing     (go result-mv))))
+        (= go3 result-mv form
+          (do (let ((= input (Input Prompt form result-mv))))
+              (liftIO (putMVar to-mvar input))
+              (print-io result-mv)
+              (go result-mv)))
+        (= as-repl-macro str
+          `(*_ ,@(map qSymbol (words str))))
         (= quit
           (liftIO (killThread eval-tid)))
         (= loop result-mv
