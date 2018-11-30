@@ -242,14 +242,12 @@
                           (withSourceErrorHandling m)))
 
         (= eval-one
-          (do (<- (Input itype form out-mv)
-                (liftIO (takeMVar in-mvar)))
+          (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
               (let ((= print-name "Prelude.print")))
-              (<- ret
-                (withSkErrorHandler
-                 (do (<- expanded (expands [form]))
-                     (with-print-name print-name
-                       (eval-form hdl itype expanded)))))
+              (<- ret (withSkErrorHandler
+                       (do (<- expanded (expands [form]))
+                           (with-print-name print-name
+                             (eval-form hdl itype expanded)))))
               (liftIO (putMVar out-mv ret))))
         (= loop
           (withAsyncHandler (>> eval-one loop))))
