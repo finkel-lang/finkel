@@ -16,7 +16,7 @@ import Data.Version (showVersion)
 import System.Console.GetOpt ( ArgDescr(..), ArgOrder(..), OptDescr(..)
                              , getOpt, usageInfo )
 import System.IO (BufferMode(..), hSetBuffering, stdout, stderr)
-import System.Environment (getArgs)
+import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure, exitWith)
 import System.FilePath (normalise)
 import System.Process (rawSystem)
@@ -68,7 +68,7 @@ main = do
            args2 = filter (/= "--make") args1
            sk_opts = parseSkOption skopts
            sk_env0 = opt2env sk_opts
-           next | skHelp sk_opts    = printSkHelp "skkc"
+           next | skHelp sk_opts    = printSkHelp
                 | skVersion sk_opts = printSkVersion
                 | otherwise         = main' sk_env0 args1 args2
 
@@ -204,10 +204,12 @@ opt2env opt = defaultSkEnv
   , envDumpHs = skDumpHs opt
   , envHsDir = skHsDir opt }
 
-printSkHelp :: String -> IO ()
-printSkHelp name = putStrLn (unlines message)
+printSkHelp :: IO ()
+printSkHelp = do
+  name <- getProgName
+  putStrLn (unlines (message name))
   where
-    message =
+    message name =
       [ "USAGE: " ++ name ++ " [command-line-options-and-files]"
       , ""
       , usageInfo "OPTIONS:\n" skOptDescrs
