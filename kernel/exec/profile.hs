@@ -58,11 +58,7 @@ usage =
        ,"  make  - compile given files to object code"])
 
 printExpandedForms :: FilePath -> IO ()
-printExpandedForms path = do
-  ret <- Run.runSkc go Make.defaultSkEnv
-  case ret of
-    Right _  -> return ()
-    Left err -> putStrLn err
+printExpandedForms path = Run.runSkc go Make.defaultSkEnv
   where
     go = do
       Make.initSessionForMake
@@ -94,11 +90,7 @@ pprSkModule =
           liftIO (printForUser dflags stdout neverQualify (ppr m)))
 
 pprHsModule :: FilePath -> IO ()
-pprHsModule path = do
-  result <- Run.runSkc go Make.defaultSkEnv
-  case result of
-    Right _  -> return ()
-    Left err -> putStrLn err
+pprHsModule path = Run.runSkc go Make.defaultSkEnv
   where
     go =
       do Make.initSessionForMake
@@ -127,11 +119,7 @@ printHsrc =
 
 parseSkModuleWith ::
   (Builder.HModule -> Lexer.SPState -> SKC.Skc ()) -> FilePath -> IO ()
-parseSkModuleWith act path = do
-  result <- Run.runSkc go Make.defaultSkEnv
-  case result of
-    Right _  -> return ()
-    Left err -> putStrLn err
+parseSkModuleWith act path = Run.runSkc go Make.defaultSkEnv
   where
     go =
      do Make.initSessionForMake
@@ -156,7 +144,4 @@ doMake files =
   do let act = do
            Make.initSessionForMake
            Make.make (zip files (repeat Nothing)) False False Nothing
-     ret <- Run.runSkc act Make.defaultSkEnv
-     case ret of
-       Left err -> putStrLn err
-       Right _  -> return ()
+     Run.runSkc act Make.defaultSkEnv

@@ -44,7 +44,7 @@ exprTest file =
       contents <- BL.readFile file
       let modules = ["Prelude", "Language.SK"]
       ret <- evalContents contents
-      ret `shouldBe` Right True
+      ret `shouldBe` True
   where
     evalContents bs =
       runSkc (doEval "<exprTypeTest>" parseExpr act bs) evalSkEnv
@@ -57,7 +57,7 @@ exprTypeTest = do
   describe "type of True" $
     it "should be Bool" $ do
       ret <- runEvalType "True"
-      ret `shouldBe` Right "Bool"
+      ret `shouldBe` "Bool"
   where
     runEvalType str =
       runSkc (doEval "<exprTypeTest>" parseExpr act (BL.pack str))
@@ -73,7 +73,7 @@ typeKindTest = do
   describe "kind of Maybe" $
     it "should be * -> *" $ do
       ret <- runTypeKind "Maybe"
-      ret `shouldBe` Right "* -> *"
+      ret `shouldBe` "* -> *"
   where
     runTypeKind str =
       runSkc (doEval "<typeKindTest>" parseType act (BL.pack str))

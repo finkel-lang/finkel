@@ -3,14 +3,33 @@
 (require SK.Core)
 
 (defmodule CoreTest
+  (load-use
+   ;; base
+   (Control.Exception)
+
+   ;; ghc
+   (Exception)
+
+   ;; sk-kernel
+   (Language.SK.Run)
+   (Language.SK.SKC))
   (load
+   ;; base
    (Prelude)
+
+   ;; sk-kernel
    (Language.SK))
   (use
-   (Language.SK.Run)
+   ;; hspec
    (Test.Hspec)
+
+   ;; quickcheck
    (Test.QuickCheck)
+
+   ;; sk-lang
    (SK.Prelude)
+
+   ;; internal
    (Orphan))
   (export coreTests
           macroTests
@@ -230,17 +249,20 @@
 
 (defmacro! expandTo
   [in out]
-  `(do (<- e (macroFunction ,(car in) ',in))
+  `(do (<- e (handleSkException
+              (\ (SkException se)
+                (return (Left se)))
+              (fmap Right (macroFunction ,(car in) ',in))))
        (shouldBe e (Right ',out))))
 
 (defmacro! expandFailure
   [in]
-  `(do (<- e (macroFunction ,(car in) ',in))
-       (let ((= isLeft lr
+  `(do (<- e (gtry (macroFunction ,(car in) ',in)))
+       (let ((= is-left-some-exception lr
                (case lr
-                 (Left _) True
+                 (Left e) (seq (:: e SomeException) True)
                  _        False))))
-       (shouldBe True (isLeft e))))
+       (shouldBe True (is-left-some-exception e))))
 
 (defn (macroTests Spec)
   (do (let ((= d describe)))
@@ -256,8 +278,8 @@
                     (= foo 42))
                   (begin
                     (eval-when-compile
-                     (:: foo Int)
-                     (= foo 42))
+                      (:: foo Int)
+                      (= foo 42))
                     (:: foo Int)
                     (= foo 42))))
              (it "should expand to (eval-when-compile ...)"
@@ -266,8 +288,8 @@
                     (:: foo Int)
                     (= foo 42))
                   (eval-when-compile
-                   (:: foo Int)
-                   (= foo 42))))
+                    (:: foo Int)
+                    (= foo 42))))
              (it "should expand to (begin ...)"
                  (expandTo
                   (eval-when (load)
@@ -366,9 +388,9 @@
       (d "macro containing `$foo'"
          (it "should replace `$foo' with gensym"
              (do (let ((= f (macroFunction defmacro*))))
-                 (<- (Right e) (f '(defmacro* m1 (a b)
-                                    (let ((= $foo (+ ,a ,b)))
-                                      (return $foo)))))
+                 (<- e (f '(defmacro* m1 (a b)
+                            (let ((= $foo (+ ,a ,b)))
+                              (return $foo)))))
                  (shouldNotBe (elem (aSymbol "$foo") e) True))))
 
       (d "macrolet*"

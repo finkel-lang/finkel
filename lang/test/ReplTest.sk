@@ -56,7 +56,7 @@
         (runIO (forkIO (void (runSkc (eval-loop hdl in-mv) repl-env)))))
       (let ((= eval-form ok-or-ng form expect
               (d (concat ["evaluate " (show form)])
-                 (it (concat ["evaluates to " (show expect)])
+                 (it "evaluates to expected result"
                      (do (putMVar in-mv (Input Connection form out-mv))
                          (<- ret (takeMVar out-mv))
                          (shouldBe ret (ok-or-ng expect))))))
@@ -163,10 +163,10 @@
           ;; Errors
           (ng 'buzz
               (concat ["<interactive>:1:1: error: "
-                       "Variable not in scope: buzz\n"]))
+                       "Variable not in scope: buzz"]))
           (ng '(= f a (+ a 1) (+ a 2))
               (concat ["<quoted code>: syntax error on input "
                        "`(= f a (+ a 1) (+ a 2))'\n"]))
-          (ng '(head []) "Prelude.head: empty list")
+          (ng '(head []) "*** Exception: Prelude.head: empty list")
           (ng '(*_ info (foo bar))
-              "<quoted code>: error: info: invalid form `(foo bar)'\n"))))))
+              "<quoted code>: error: info: invalid form `(foo bar)'"))))))

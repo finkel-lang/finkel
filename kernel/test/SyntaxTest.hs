@@ -58,7 +58,7 @@ mkTest path = do
             initSessionForTest
             make [(path, Nothing)] False True (Just aDotOut)
       ret <- runSkc task skEnv
-      ret `shouldBe` Right ()
+      ret `shouldBe` ()
 
     it "should run executable compiled with skc" $ do
       removeWhenExist dotTix
@@ -72,20 +72,17 @@ mkTest path = do
             (mdl, sp) <- compileWithSymbolConversion path
             genHsSrc sp (Hsrc mdl)
       src <- runSkc gen skEnv
-      case src of
-        Right src' -> do
-          writeFile dotHs src'
-          src' `shouldNotBe` ""
-        Left err -> expectationFailure err
+      writeFile dotHs src
+      src `shouldNotBe` ""
 
     it "should compile resulting Haskell code" $ do
       let task = do
             initSessionForTest
             make [(dotHs, Nothing)] False True (Just aDotOut)
       ret <- runSkc task skEnv
-      ret `shouldBe` Right ()
+      ret `shouldBe` ()
 
-    it "should run executable compiled with ghc" $ do
+    it "should run executable compiled from Haskell code" $ do
       removeWhenExist dotTix
       (ecode, stdout, _stderr) <- runDotO
       writeIORef hsORef stdout

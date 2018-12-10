@@ -84,7 +84,7 @@ buildFile pre paths =
                       then make_profile targets False Nothing
                       else make_simple targets False Nothing)
                     (defaultSkEnv { envSilent = True })
-      ret `shouldBe` Right ()
+      ret `shouldBe` ()
   where
     targets = map (\path -> (path, Nothing)) paths
     odir = "test" </> "data" </> "build"

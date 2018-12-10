@@ -1,9 +1,6 @@
 -- | Module exporting the @runSkc@ function, and some utilities.
 module Language.SK.Run
   ( runSkc
-  , runSkcWithoutHandler
-  , withSourceErrorHandling
-  , skErrorHandler
   , compileSkModule
   , compileSkModuleForm
   , compileWithSymbolConversion
@@ -18,10 +15,7 @@ module Language.SK.Run
   ) where
 
 -- base
-import Control.Exception ( AsyncException(..), Exception(..)
-                         , IOException, throwIO )
 import Control.Monad.IO.Class (MonadIO(..))
-import System.Exit (ExitCode(..))
 import Data.Maybe (fromMaybe, maybeToList)
 
 -- bytestring
@@ -31,26 +25,20 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map as Map
 
 -- ghc
-import DynFlags ( DynFlags(..), FatalMessager, FlushOut(..)
-                , GhcLink(..), HscTarget(..)
-                , defaultFatalMessager, defaultFlushOut
+import DynFlags ( DynFlags(..), GhcLink(..), HscTarget(..)
                 , getDynFlags, parseDynamicFilePragma, thisPackage )
 import DriverPhases (HscSource(..))
-import ErrUtils (fatalErrorMsg'', pprErrMsgBagWithLoc)
-import Exception (ExceptionMonad(..), ghandle, tryIO)
+import Exception (tryIO)
 import FastString (headFS, unpackFS)
 import Finder (mkHomeModLocation)
 import GHC ( ParsedModule(..), TypecheckedModule(..)
            , typecheckModule, runGhc )
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HeaderInfo (getOptionsFromFile)
-import HscTypes ( HsParsedModule(..), ModSummary(..), handleSourceError
-                , srcErrorMessages )
+import HscTypes ( HsParsedModule(..), ModSummary(..) )
 import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
 import Module (ModLocation(..), ModuleName, mkModule, mkModuleName)
-import Outputable (showSDoc)
-import Panic (GhcException(..), handleGhcException)
 import SrcLoc (Located)
 import Util (getModificationUTCTime)
 
@@ -71,73 +59,22 @@ import Language.SK.Reader
 
 
 -- | Run 'Skc' with given environment and 'skcErrrorHandler'.
-runSkc :: Skc a -> SkEnv -> IO (Either String a)
-runSkc m env =
-  skErrorHandler
-    defaultFatalMessager
-    defaultFlushOut
-    (runSkcWithoutHandler m env)
+runSkc :: Skc a -> SkEnv -> IO a
+runSkc m sk_env = runGhc (Just libdir) (fmap fst (toGhc m sk_env))
 
--- | Run 'Skc' without exception handler.
-runSkcWithoutHandler :: Skc a -> SkEnv -> IO (Either String a)
-runSkcWithoutHandler m env =
-   runGhc (Just libdir)
-          (withSourceErrorHandling
-            (fmap (Right . fst) (toGhc m env)))
-
--- | Run action with source error handling.
-withSourceErrorHandling :: (ExceptionMonad m, GhcMonad m)
-                        => m (Either String a) -> m (Either String a)
-withSourceErrorHandling =
-  handleSourceError
-    (\se -> do
-      flags <- getSessionDynFlags
-      return (Left (unlines (map (showSDoc flags)
-                                 (pprErrMsgBagWithLoc
-                                   (srcErrorMessages se))))))
-
--- | Similar to 'defaultErrorHandler', but won't exit with 'ExitFailure'
--- in exception handler.
-skErrorHandler :: ExceptionMonad m
-               => FatalMessager -> FlushOut
-               -> m (Either String a) -> m (Either String a)
-skErrorHandler fm (FlushOut flush) work =
-  ghandle
-    (\e ->
-       liftIO
-         (do flush
-             case (fromException e :: Maybe IOException) of
-               Just ioe -> fatalErrorMsg'' fm (show ioe)
-               _ ->
-                 case fromException e of
-                   Just UserInterrupt ->
-                     throwIO UserInterrupt
-                   Just StackOverflow ->
-                     fatalErrorMsg'' fm "stack overflow"
-                   _ ->
-                     case (fromException e :: Maybe ExitCode) of
-                       Just ec -> throwIO ec
-                       _ -> fatalErrorMsg'' fm (show e)
-             return (Left (show e))))
-    (handleGhcException
-      (\ge ->
-         do liftIO
-              (do flush
-                  case ge of
-                    Signal _ -> fatalErrorMsg'' fm "GhcException signal"
-                    _ -> fatalErrorMsg'' fm (show ge))
-            return (Left (show ge)))
-      (handleSkException
-        (\(SkException se) -> return (Left se))
-        work))
-
-parseSexprs :: Maybe FilePath -> BL.ByteString -> Skc ([Code], SPState)
+-- | Parse sexpressions.
+parseSexprs :: Maybe FilePath -- ^ Name of input file.
+            -> BL.ByteString  -- ^ Contents to parse.
+            -> Skc ([Code], SPState)
 parseSexprs mb_file contents =
   case runSP sexprs mb_file contents of
     Right a  -> return a
     Left err -> failS err
 
-buildHsSyn :: Builder a -> [Code] -> Skc a
+-- | Run given builder.
+buildHsSyn :: Builder a -- ^ Builder to use.
+           -> [Code]    -- ^ Input codes.
+           -> Skc a
 buildHsSyn bldr forms =
   case evalBuilder bldr forms of
     Right a  -> return a
@@ -152,10 +89,29 @@ compileSkModule file = do
 
 compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
 compileWithSymbolConversion file = do
+  -- XXX: Might remove this function.
   (form, sp) <- parseFile file
   form' <- withExpanderSettings (expands form)
   mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
   return (mdl, sp)
+
+asHaskellSymbols :: Code -> Code
+asHaskellSymbols = f1
+  where
+    f1 orig@(LForm (L l form)) =
+      case form of
+        List forms         -> li (List (map f1 forms))
+        HsList forms       -> li (HsList (map f1 forms))
+        Atom (ASymbol sym) -> li (Atom (ASymbol (f2 sym)))
+        _                  -> orig
+      where
+        li = LForm . (L l)
+    f2 sym
+      | headFS sym `elem` haskellOpChars = sym
+      | otherwise = fsLit (replace (unpackFS sym))
+    replace = map (\x -> case x of
+                           '-' -> '_'
+                           _   -> x)
 
 parseFile :: FilePath -> Skc ([Code], SPState)
 parseFile file = do
@@ -164,6 +120,7 @@ parseFile file = do
   _ <- setDynFlagsFromSPState sp
   return (form, sp)
 
+-- | Compile 'HModule' from given list of codes.
 compileSkModuleForm :: [Code] -> Skc HModule
 compileSkModuleForm form = do
   expanded <- withExpanderSettings (expands form)
@@ -188,27 +145,9 @@ setDynFlagsFromSPState sp = do
   setDynFlags dflags
   return dflags
 
-asHaskellSymbols :: Code -> Code
-asHaskellSymbols = f1
-  where
-    f1 orig@(LForm (L l form)) =
-      case form of
-        List forms         -> li (List (map f1 forms))
-        HsList forms       -> li (HsList (map f1 forms))
-        Atom (ASymbol sym) -> li (Atom (ASymbol (f2 sym)))
-        _                  -> orig
-      where
-        li = LForm . (L l)
-    f2 sym
-      | headFS sym `elem` haskellOpChars = sym
-      | otherwise = fsLit (replace (unpackFS sym))
-    replace = map (\x -> case x of
-                           '-' -> '_'
-                           _   -> x)
-
 -- | Extract function from macro and apply to given code. Uses
 -- 'emptySkEnv' with 'specialForms' to unwrap the macro from 'Skc'.
-macroFunction :: Macro -> Code -> IO (Either String Code)
+macroFunction :: Macro -> Code -> IO Code
 macroFunction mac form = do
   let fn = case mac of
              Macro f       -> f

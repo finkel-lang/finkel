@@ -7,7 +7,8 @@
    ;; base
    (Control.Concurrent ((ThreadId) forkIO killThread))
    (Control.Concurrent.MVar ((MVar) newEmptyMVar putMVar takeMVar))
-   (Control.Exception ((AsyncException ..) bracket catch throwIO))
+   (Control.Exception ((AsyncException ..) bracket catch
+                       fromException throwIO))
    (Control.Monad (void when))
    (Control.Monad.IO.Class (liftIO))
    (Data.List (inits intercalate isSuffixOf nubBy))
@@ -23,21 +24,21 @@
    (System.Directory (getTemporaryDirectory removeFile))
 
    ;; ghc
-   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..)
-              defaultFatalMessager defaultFlushOut))
+   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..)))
+   (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (ghandle))
-   (GHC (setSessionDynFlags))
+   (GHC (getPrintUnqual setSessionDynFlags))
    (GhcMonad ((GhcMonad ..) getSessionDynFlags withSession))
    (HscMain (hscParsedStmt))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (FixityEnv) extendInteractiveContextWithIds
-              setInteractivePrintName))
+              setInteractivePrintName srcErrorMessages))
    (HsImpExp ((ImportDecl ..)))
    (InteractiveEval (getContext parseName setContext))
    (Linker (extendLinkEnv))
    (Name ((Name) getName nameOccName occNameString))
    (OrdList (toOL))
-   (Outputable (ppr showPpr showSDoc))
+   (Outputable (ppr mkErrStyle renderWithStyle showPpr showSDoc vcat))
    (RdrHsSyn (cvTopDecls))
    (TyCoRep ((TyThing ..)))
    (Var ((Id) (Var) varType))
@@ -62,7 +63,7 @@
    (Language.SK.Lexer (evalSP))
    (Language.SK.Make (initSessionForMake))
    (Language.SK.Reader (sexpr))
-   (Language.SK.Run (runSkc skErrorHandler withSourceErrorHandling))
+   (Language.SK.Run (runSkc))
    (Language.SK.SKC ((SkEnv ..) failS))
    (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
 
@@ -233,21 +234,33 @@
                   (case e
                     UserInterrupt (return ())
                     ThreadKilled  (return ())
-                    _             (putStrLn
-                                   (++ "eval-loop: got " (show e)))))
+                    _             (putStrLn (++ "eval-loop: got "
+                                                (show e)))))
                  loop))))
-        (= withSkErrorHandler m
-          (skErrorHandler defaultFatalMessager
-                          defaultFlushOut
-                          (withSourceErrorHandling m)))
-
+        (= src-err-handler src-err
+          (do (<- dflags getSessionDynFlags)
+              (<- unqual getPrintUnqual)
+              (let ((= sdoc (vcat (pprErrMsgBagWithLoc emsgs)))
+                    (= style (mkErrStyle dflags unqual))
+                    (= emsgs (srcErrorMessages src-err))))
+              (return (Left (renderWithStyle dflags sdoc style)))))
+        (= withErrorHandler m
+          (ghandle
+           (\ e
+             (case (fromException e)
+               (Just se) (src-err-handler se)
+               Nothing   (case (fromException e)
+                           (Just ae) (liftIO
+                                      (throwIO (:: ae AsyncException)))
+                           Nothing   (return (Left (show e))))))
+           m))
         (= eval-one
           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
               (let ((= print-name "Prelude.print")))
-              (<- ret (withSkErrorHandler
-                       (do (<- expanded (expands [form]))
-                           (with-print-name print-name
-                             (eval-form hdl itype expanded)))))
+              (<- ret (withErrorHandler
+                          (do (<- expanded (expands [form]))
+                              (with-print-name print-name
+                                (eval-form hdl itype expanded)))))
               (liftIO (putMVar out-mv ret))))
         (= loop
           (withAsyncHandler (>> eval-one loop))))
@@ -280,7 +293,7 @@
      (otherwise
       (case (evalBuilder parseImports forms)
         (Right idecl) (eval-imports idecl)
-        (Left err) (return (Left (++ err "\n")))))))
+        (Left err)    (return (Left (++ err "\n")))))))
 
 (defn (eval-statement (-> Handle InSource HStmt (Skc Result)))
   [hdl itype stmt0]
@@ -351,9 +364,9 @@
                     (Right (names-and-types dflags names ids))))))
         (= exception serialized
           (case serialized
-            (EOtherException str) (return (Left str))
-            (EExitCode ecode)     (liftIO (exitWith ecode))
-            EUserInterrupt        (return (Left "Interrupt"))))
+            (EOtherException e) (return (Left (++ "*** Exception: " e)))
+            (EExitCode ecode)   (liftIO (exitWith ecode))
+            EUserInterrupt      (return (Left "Interrupt"))))
         (= incomplete
           (return (Left "update-hsc-env failed.")))
         (= eval-hvals-io

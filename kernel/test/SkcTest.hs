@@ -54,28 +54,28 @@ exceptionTest = do
   describe "Applicative instance of Skc" $
     it "should return 42" $ do
       let act = (*) <$> pure 6 <*> pure 7
-      ret <- runSkcWithoutHandler act defaultSkEnv
-      ret `shouldBe` Right 42
+      ret <- runSkc act defaultSkEnv
+      ret `shouldBe` 42
 
   describe "ExceptionMonad instance of Skc" $
     it "should return 42" $ do
       let act = gbracket (return 21) return (\x -> return (x * 2))
-      ret <- runSkcWithoutHandler act defaultSkEnv
-      ret `shouldBe` Right (42 :: Int)
+      ret <- runSkc act defaultSkEnv
+      ret `shouldBe` (42 :: Int)
 
   describe "running Skc action containing `failS'" $
     it "should throw SkException" $ do
       let p :: SkException -> Bool
           p (SkException m) = m == "foo"
           act = failS "foo"
-      runSkcWithoutHandler act defaultSkEnv `shouldThrow` p
+      runSkc act defaultSkEnv `shouldThrow` p
 
   describe "running Skc action containing `fail'" $
     it "should throw SkException" $ do
       let p :: SkException -> Bool
           p (SkException m) = m == "foo"
           act = MonadFail.fail "foo"
-      runSkcWithoutHandler act defaultSkEnv `shouldThrow` p
+      runSkc act defaultSkEnv `shouldThrow` p
 
   describe "running Skc action containing SourceError" $
     it "should throw SourceError" $ do
@@ -94,7 +94,7 @@ exceptionTest = do
       let form = "(:: foo (->)) (= foo 100)"
           sel :: SkException -> Bool
           sel (SkException msg) = subseq "syntax" msg
-          run a = runSkcWithoutHandler a defaultSkEnv
+          run a = runSkc a defaultSkEnv
           build = do (form', _) <- parseSexprs Nothing (BL.pack form)
                      buildHsSyn parseDecls form'
       run build `shouldThrow` sel
@@ -109,7 +109,7 @@ fromGhcTest =
       let v :: Int
           v = 42
       x <- runSkc (fromGhc (return v)) defaultSkEnv
-      x `shouldBe` Right v
+      x `shouldBe` v
 
 gensymTest :: Spec
 gensymTest =
@@ -122,7 +122,7 @@ gensymTest =
           f = macroFunction (Macro gen)
       ret <- f nil
       case ret of
-        Right (LForm (L _ (HsList [g1, g2]))) -> g1 `shouldNotBe` g2
+        LForm (L _ (HsList [g1, g2])) -> g1 `shouldNotBe` g2
         _ -> expectationFailure "macro expansion failed"
 
 expandTest :: Spec
@@ -131,17 +131,13 @@ expandTest = do
   describe "expand-1 of nil" $
     it "should return nil" $ do
       ret <- expand1_fn nil
-      case ret of
-        Right ret' -> ret' `shouldBe` nil
-        _ -> expectationFailure "macro expansion failed"
+      ret `shouldBe` nil
   describe "expand-1 of (quote 42.0)" $
     it "should return non-empty form" $ do
       let form = toCode (List [ toCode $ aSymbol "quote"
                               , toCode $ aFractional 42.0])
       ret <- expand1_fn form
-      case ret of
-        Right ret' -> length ret' `shouldSatisfy` (>= 1)
-        _ -> expectationFailure "macro expansion failed"
+      length ret `shouldSatisfy` (>= 1)
   describe "expanding with macroFunction" $
     it "should return empty form" $ do
       let env = emptySkEnv {envMacros = specialForms}
@@ -154,7 +150,7 @@ expandTest = do
           form0 = li [s "quote", s "a"]
           form1 = li [s "qSymbol", t "a"]
       ret <- macroFunction qt form0
-      ret `shouldBe` Right form1
+      ret `shouldBe` form1
 
 envTest :: Spec
 envTest = do
