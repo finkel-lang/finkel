@@ -63,6 +63,9 @@ import Util (getModificationUTCTime)
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
 
+-- ghc-paths
+import GHC.Paths (libdir)
+
 -- internal
 import Language.SK.Builder
 import Language.SK.Emit
@@ -180,12 +183,13 @@ simpleMake recomp name = do
   let as_pair hmi = (moduleName (mi_module (hm_iface hmi)), hmi)
   return (map as_pair (eltsHpt (hsc_HPT hsc_env)))
 
--- | 'SkEnv' with make function set.
+-- | Default 'SkEnv'.
 defaultSkEnv :: SkEnv
 defaultSkEnv = emptySkEnv
   { envMacros         = specialForms
   , envDefaultMacros  = specialForms
-  , envMake           = Just simpleMake }
+  , envMake           = Just simpleMake
+  , envLibDir         = Just libdir }
 
 
 -- ---------------------------------------------------------------------

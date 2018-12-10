@@ -11,6 +11,7 @@
    (Exception)
 
    ;; sk-kernel
+   (Language.SK.Make)
    (Language.SK.Run)
    (Language.SK.SKC))
   (load
@@ -249,20 +250,18 @@
 
 (defmacro! expandTo
   [in out]
-  `(do (<- e (handleSkException
-              (\ (SkException se)
-                (return (Left se)))
-              (fmap Right (macroFunction ,(car in) ',in))))
-       (shouldBe e (Right ',out))))
+  `(do (<- v (gtry (runSkc (macroFunction ,(car in) ',in)
+                           defaultSkEnv)))
+       (case v
+         (Left e)  (expectationFailure
+                    (show (:: e SomeException)))
+         (Right r) (shouldBe r ',out))))
 
 (defmacro! expandFailure
   [in]
-  `(do (<- e (gtry (macroFunction ,(car in) ',in)))
-       (let ((= is-left-some-exception lr
-               (case lr
-                 (Left e) (seq (:: e SomeException) True)
-                 _        False))))
-       (shouldBe True (is-left-some-exception e))))
+  `(let ((= act
+           (runSkc (macroFunction ,(car in) ',in) defaultSkEnv)))
+     (shouldThrow act anyException)))
 
 (defn (macroTests Spec)
   (do (let ((= d describe)))
@@ -387,7 +386,9 @@
 
       (d "macro containing `$foo'"
          (it "should replace `$foo' with gensym"
-             (do (let ((= f (macroFunction defmacro*))))
+             (do (let ((= f code
+                         (runSkc (macroFunction defmacro* code)
+                                 defaultSkEnv))))
                  (<- e (f '(defmacro* m1 (a b)
                             (let ((= $foo (+ ,a ,b)))
                               (return $foo)))))

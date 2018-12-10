@@ -86,7 +86,7 @@ main' sk_env orig_args args = do
     defaultFatalMessager
     defaultFlushOut
     (runGhc
-       (Just GHC.Paths.libdir)
+       (envLibDir sk_env)
        (fmap fst (toGhc
                     (handleSkException
                        (\(SkException se) ->

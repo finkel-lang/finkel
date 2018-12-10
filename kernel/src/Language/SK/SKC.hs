@@ -203,6 +203,9 @@ data SkEnv = SkEnv
    , envDumpHs :: Bool
      -- | Directory to save generated Haskell source codes.
    , envHsDir :: Maybe FilePath
+
+     -- | Lib directory passed to 'runGhc'.
+   , envLibDir :: Maybe FilePath
    }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
@@ -299,7 +302,8 @@ emptySkEnv = SkEnv
   , envRequiredModuleNames = []
   , envCompiledInRequire   = []
   , envDumpHs              = False
-  , envHsDir               = Nothing }
+  , envHsDir               = Nothing
+  , envLibDir              = Nothing }
 
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get

@@ -120,28 +120,32 @@ gensymTest =
             g2 <- gensym
             return $ toCode [g1, g2]
           f = macroFunction (Macro gen)
-      ret <- f nil
+          env = emptySkEnv {envMacros = specialForms
+                           ,envLibDir = Just libdir}
+      ret <- runSkc (f nil) env
       case ret of
         LForm (L _ (HsList [g1, g2])) -> g1 `shouldNotBe` g2
         _ -> expectationFailure "macro expansion failed"
 
 expandTest :: Spec
 expandTest = do
-  let expand1_fn = macroFunction (Macro expand1)
+  let expand1_fn code =
+        runSkc (macroFunction (Macro expand1) code) env
+      env = emptySkEnv {envMacros = specialForms
+                       ,envLibDir = Just libdir}
   describe "expand-1 of nil" $
     it "should return nil" $ do
       ret <- expand1_fn nil
       ret `shouldBe` nil
   describe "expand-1 of (quote 42.0)" $
     it "should return non-empty form" $ do
-      let form = toCode (List [ toCode $ aSymbol "quote"
-                              , toCode $ aFractional 42.0])
+      let form = toCode (List [toCode $ aSymbol "quote"
+                              ,toCode $ aFractional 42.0])
       ret <- expand1_fn form
       length ret `shouldSatisfy` (>= 1)
   describe "expanding with macroFunction" $
     it "should return empty form" $ do
-      let env = emptySkEnv {envMacros = specialForms}
-          mb_qt = lookupMacro (fsLit "quote") env
+      let mb_qt = lookupMacro (fsLit "quote") env
           qt = fromMaybe (error "macro not found") mb_qt
           l = skSrcSpan
           s x = LForm (L l (Atom (ASymbol (fsLit x))))
@@ -149,7 +153,7 @@ expandTest = do
           t x = LForm (L l (Atom (AString x)))
           form0 = li [s "quote", s "a"]
           form1 = li [s "qSymbol", t "a"]
-      ret <- macroFunction qt form0
+      ret <- runSkc (macroFunction qt form0) env
       ret `shouldBe` form1
 
 envTest :: Spec

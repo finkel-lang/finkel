@@ -42,9 +42,6 @@ import Module (ModLocation(..), ModuleName, mkModule, mkModuleName)
 import SrcLoc (Located)
 import Util (getModificationUTCTime)
 
--- ghc-paths
-import GHC.Paths (libdir)
-
 -- time
 import Data.Time (getCurrentTime)
 
@@ -60,7 +57,9 @@ import Language.SK.Reader
 
 -- | Run 'Skc' with given environment and 'skcErrrorHandler'.
 runSkc :: Skc a -> SkEnv -> IO a
-runSkc m sk_env = runGhc (Just libdir) (fmap fst (toGhc m sk_env))
+runSkc m sk_env = do
+  let mb_libdir = envLibDir sk_env
+  runGhc mb_libdir (fmap fst (toGhc m sk_env))
 
 -- | Parse sexpressions.
 parseSexprs :: Maybe FilePath -- ^ Name of input file.
@@ -147,14 +146,12 @@ setDynFlagsFromSPState sp = do
 
 -- | Extract function from macro and apply to given code. Uses
 -- 'emptySkEnv' with 'specialForms' to unwrap the macro from 'Skc'.
-macroFunction :: Macro -> Code -> IO Code
-macroFunction mac form = do
+macroFunction :: Macro -> Code -> Skc Code
+macroFunction mac form =
   let fn = case mac of
              Macro f       -> f
              SpecialForm f -> f
-      sk_env = emptySkEnv { envMacros = specialForms
-                          , envDefaultMacros = specialForms }
-  runSkc (fn form) sk_env
+  in  fn form
 
 -- | Action to type check module.
 --
