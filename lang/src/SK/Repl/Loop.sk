@@ -11,7 +11,7 @@
                        fromException throwIO))
    (Control.Monad (void when))
    (Control.Monad.IO.Class (liftIO))
-   (Data.List (inits intercalate isSuffixOf nubBy))
+   (Data.List (inits intercalate isPrefixOf isSuffixOf nubBy))
    (System.Exit (exitWith))
    (System.IO ((Handle) hClose hFlush openTempFile stdout))
    (System.IO.Error (isDoesNotExistError))
@@ -159,9 +159,14 @@
                              (== \, h))
                          (if (elem tl (tail (inits "quit")))
                              quit
-                             (go3 result-mv (as-repl-macro tl))))
+                             (go-command result-mv tl)))
                         (otherwise
                          (go2 result-mv line)))))
+        (= go-command result-mv lin
+          (| ((isPrefixOf "set" lin)
+              (go3 result-mv (as-repl-macro lin)))
+             (otherwise
+              (go2 result-mv (concat ["(*_ " lin ")"])))))
         (= go2 result-mv line
           (do (<- mb-form (lift (read-form line)))
               (case mb-form

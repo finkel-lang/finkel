@@ -159,6 +159,8 @@
                 ";    ."]))
           (ok '(*_ type putStrLn)
               "putStrLn :: String -> IO ()")
+          (ok '(*_ type (foldr + (:: 0 Int)))
+              "(foldr + (:: 0 Int)) :: Foldable t => t Int -> Int")
 
           ;; Errors
           (ng 'buzz
