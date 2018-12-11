@@ -1,7 +1,6 @@
 -- | Module exporting the @runSkc@ function, and some utilities.
 module Language.SK.Run
   ( runSkc
-  , compileSkModule
   , compileSkModuleForm
   , compileWithSymbolConversion
   , getDynFlagsFromSPState
@@ -11,7 +10,6 @@ module Language.SK.Run
   , macroFunction
   , mkModSummary
   , mkModSummary'
-  , tcHsModule
   ) where
 
 -- base
@@ -25,14 +23,12 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map as Map
 
 -- ghc
-import DynFlags ( DynFlags(..), GhcLink(..), HscTarget(..)
-                , getDynFlags, parseDynamicFilePragma, thisPackage )
+import DynFlags ( DynFlags(..), parseDynamicFilePragma, thisPackage )
 import DriverPhases (HscSource(..))
 import Exception (tryIO)
 import FastString (fsLit, headFS, unpackFS)
 import Finder (mkHomeModLocation)
-import GHC ( ParsedModule(..), TypecheckedModule(..)
-           , typecheckModule, runGhc )
+import GHC (runGhc)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HeaderInfo (getOptionsFromFile)
 import HscTypes ( HsParsedModule(..), ModSummary(..) )
@@ -78,13 +74,6 @@ buildHsSyn bldr forms =
   case evalBuilder bldr forms of
     Right a                     -> return a
     Left (SyntaxError code msg) -> skSrcError code msg
-
--- | Compile a file containing SK module.
-compileSkModule :: FilePath -> Skc (HModule, SPState)
-compileSkModule file = do
-  (form, sp) <- parseFile file
-  mdl <- compileSkModuleForm form
-  return (mdl, sp)
 
 compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
 compileWithSymbolConversion file = do
@@ -152,37 +141,6 @@ macroFunction mac form =
              Macro f       -> f
              SpecialForm f -> f
   in  fn form
-
--- | Action to type check module.
---
--- Error location are derived from 'HsModule', locations precisely match
--- with S-expression source code, pretty much helpful.
----
-tcHsModule :: Maybe FilePath   -- ^ Source of the module.
-           -> Maybe ModSummary -- ^ Old ModSummary, if any.
-           -> Bool -- ^ True to generate files, otherwise False.
-           -> HModule -- ^ Module to typecheck.
-           -> Skc TypecheckedModule
-tcHsModule mbfile mb_ms genFile mdl = do
-  dflags0 <- getDynFlags
-  let fn = fromMaybe "anon" mbfile
-      dflags1 =
-       if genFile
-          then dflags0
-          else dflags0 { hscTarget = HscNothing
-                       , ghcLink = NoLink }
-  setDynFlags dflags1
-  ms <- maybe (mkModSummary mbfile mdl) return mb_ms
-  let ann = (Map.empty, Map.empty)
-      r_s_loc = mkSrcLoc (fsLit fn) 1 1
-      r_s_span = mkSrcSpan r_s_loc r_s_loc
-      pm = ParsedModule { pm_mod_summary = ms
-                        , pm_parsed_source = L r_s_span mdl
-                        , pm_extra_src_files = [fn]
-                        , pm_annotations = ann }
-  tc <- typecheckModule pm
-  setDynFlags dflags0
-  return tc
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.
 mkModSummary :: GhcMonad m => Maybe FilePath -> HModule -> m ModSummary

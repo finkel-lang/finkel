@@ -10,7 +10,7 @@ module Language.SK.Plugin
    ) where
 
 -- base
-import Control.Monad (void, when)
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Maybe (fromMaybe, isJust)
 import Data.List (find, isPrefixOf, isSuffixOf)
@@ -95,9 +95,6 @@ data SkAction
 
 -- | Options specified from command line arguments.
 data SkcOptions = SkcOptions {
-    -- | Whether to perform typecheck during Haskell source code
-    -- generation.
-    performTypecheck :: Bool,
     -- | SK source code files.
     input :: [(FilePath, Maybe Phase)],
     -- | Field to store "-o" option, for Dynflags.outputFile.
@@ -118,8 +115,7 @@ data SkcOptions = SkcOptions {
 
 initialSkcOptions :: SkcOptions
 initialSkcOptions =
-  SkcOptions { performTypecheck = True
-             , input = []
+  SkcOptions { input = []
              , skO = Nothing
              , skC = False
              , action = SkMake
@@ -142,9 +138,6 @@ visibleDescrs =
   [ option ["sk-hsrc"]
            (NoArg (\o -> o {action=SkHsrc}))
            "Generate Haskell source code."
-  , option ["sk-no-typecheck"]
-           (NoArg (\o -> o {performTypecheck=False}))
-           "Skip type check in Haskell code gen."
   , option ["sk-debug"]
            (NoArg (\o -> o {skDebug=True}))
            "Show debug messages."
@@ -207,8 +200,6 @@ hsrc o = do
     []       -> failS "hsrc: No input file"
     _        -> failS "hsrc: Multiple input files not supported."
   (mdl, sp) <- compileWithSymbolConversion file
-  when (performTypecheck o)
-       (void (tcHsModule (Just file) Nothing False mdl))
   hssrc <- genHsSrc sp (Hsrc mdl)
   liftIO (case skO o of
              Nothing  -> putStrLn hssrc
