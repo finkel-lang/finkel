@@ -254,7 +254,7 @@ b_instD overlap (ctxts,ty@(L l _)) decls =
   where
     decl = ClsInstDecl { cid_poly_ty = mkLHsSigType qty
                        , cid_binds = binds
-                       , cid_sigs = mkClassOpSigs []
+                       , cid_sigs = mkClassOpSigs sigs
                        , cid_tyfam_insts = []
                        , cid_datafam_insts = []
                        , cid_overlap_mode = overlap
@@ -263,7 +263,7 @@ b_instD overlap (ctxts,ty@(L l _)) decls =
 #endif
                        }
     qty = L l (mkHsQualTy_compat (mkLocatedList ctxts) ty)
-    (binds, _) = cvBindsAndSigs (toOL decls)
+    (binds, sigs) = cvBindsAndSigs (toOL decls)
     instD = InstD NOEXT
     clsInstD = ClsInstD NOEXT
 {-# INLINE b_instD #-}

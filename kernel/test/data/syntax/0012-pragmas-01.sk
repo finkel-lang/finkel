@@ -16,11 +16,18 @@
 (= iAmInlinable 44)
 #p(INLINABLE iAmInlinable)
 
+(data (I1 a) (I1 a))
+
+(instance (=> (Show a) (Show (I1 a)))
+  (= showsPrec _ (I1 a) (showString (++ "I1 " (show a))))
+  #p(INLINE showsPrec))
+
 (:: inlineprgm (IO ()))
 (= inlineprgm
   (do (print inlineMe)
       (print dontInlineMe)
-      (print iAmInlinable)))
+      (print iAmInlinable)
+      (print (show (I1 True)))))
 
 ;;; 12.2 Specialization
 
