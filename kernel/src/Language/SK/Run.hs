@@ -29,7 +29,7 @@ import DynFlags ( DynFlags(..), GhcLink(..), HscTarget(..)
                 , getDynFlags, parseDynamicFilePragma, thisPackage )
 import DriverPhases (HscSource(..))
 import Exception (tryIO)
-import FastString (headFS, unpackFS)
+import FastString (fsLit, headFS, unpackFS)
 import Finder (mkHomeModLocation)
 import GHC ( ParsedModule(..), TypecheckedModule(..)
            , typecheckModule, runGhc )
@@ -46,7 +46,7 @@ import Util (getModificationUTCTime)
 import Data.Time (getCurrentTime)
 
 -- Internal
-import Language.SK.Builder (HModule)
+import Language.SK.Builder (HModule, SyntaxError(..))
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.SKC
@@ -76,8 +76,8 @@ buildHsSyn :: Builder a -- ^ Builder to use.
            -> Skc a
 buildHsSyn bldr forms =
   case evalBuilder bldr forms of
-    Right a  -> return a
-    Left err -> failS err
+    Right a                     -> return a
+    Left (SyntaxError code msg) -> skSrcError code msg
 
 -- | Compile a file containing SK module.
 compileSkModule :: FilePath -> Skc (HModule, SPState)

@@ -25,6 +25,7 @@ import Test.Hspec
 import Test.QuickCheck
 
 -- Internal
+import Language.SK.Builder
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.Homoiconic
@@ -50,6 +51,23 @@ exceptionTest = do
                         in  e1 == e2 && show e1 == show e2)
     it "should return False when message is different" $
       SkException "foo" /= SkException "bar" `shouldBe` True
+
+  describe "Eq and Show instance of SyntaxError" $ do
+    it "should return True when cmparing with itself" $
+      property (\str -> let e1 = SyntaxError nil str
+                            e2 = SyntaxError nil str
+                        in  e1 == e2 && show e1 == show e2)
+    it "should return False when message is different" $
+      let e1 = SyntaxError nil "foo"
+          e2 = SyntaxError nil "bar"
+      in  e1 `shouldNotBe` e2
+
+  describe "Code and message in SyntaxError" $ do
+    let se = SyntaxError nil "message"
+    it "should have given code" $
+      syntaxErrCode se `shouldBe` nil
+    it "should have given message" $
+      syntaxErrMsg se `shouldBe` "message"
 
   describe "Applicative instance of Skc" $
     it "should return 42" $ do
@@ -89,11 +107,11 @@ exceptionTest = do
       let ns = macroNames specialForms
       ns `shouldBe` []
 
-  describe "builderError and failB" $
-    it "should throw SkException" $ do
+  describe "running buildHsSyn action" $
+    it "should throw SourceError" $ do
       let form = "(:: foo (->)) (= foo 100)"
-          sel :: SkException -> Bool
-          sel (SkException msg) = subseq "syntax" msg
+          sel :: SourceError -> Bool
+          sel _ = True
           run a = runSkc a defaultSkEnv
           build = do (form', _) <- parseSexprs Nothing (BL.pack form)
                      buildHsSyn parseDecls form'

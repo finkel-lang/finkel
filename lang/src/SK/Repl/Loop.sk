@@ -38,7 +38,8 @@
    (Linker (extendLinkEnv))
    (Name ((Name) getName nameOccName occNameString))
    (OrdList (toOL))
-   (Outputable (ppr mkErrStyle renderWithStyle showPpr showSDoc vcat))
+   (Outputable (ppr mkErrStyle renderWithStyle setStyleColoured
+                    showPpr showSDoc vcat))
    (RdrHsSyn (cvTopDecls))
    (TyCoRep ((TyThing ..)))
    (Var ((Id) (Var) varType))
@@ -56,7 +57,8 @@
 
    ;; sk-kernel
    (Language.SK)
-   (Language.SK.Builder ((HDecl) (HImportDecl)  (HStmt) evalBuilder))
+   (Language.SK.Builder ((HDecl) (HImportDecl)  (HStmt)
+                         syntaxErrCode syntaxErrMsg evalBuilder))
    (Language.SK.Eval (evalDecls))
    (Language.SK.Expand (expands))
    (Language.SK.Form (unLoc))
@@ -78,15 +80,15 @@
 
 ;;; Starting the REPL
 
-;;; Start REPL, maybe listen to given port number.
+;;; Start REPL, maybe listen to given port number when given.
 (defn (start-repl (-> (Maybe Int) SkEnv (IO ())))
-  [mb-listen ske]
+  [mb-port ske]
   (bracket
    make-tmpfile
    cleanup-tmpfile
    (\ (, _tmpfile hdl)
      (do (<- in-mv newEmptyMVar)
-         (start-listener mb-listen in-mv)
+         (start-listener mb-port in-mv)
          (<- eval-tid
            (forkIO (void (runSkc (eval-loop hdl in-mv) ske))))
          (let ((= rpl (read-print-loop in-mv eval-tid))
@@ -101,12 +103,12 @@
 ;;; Start listner in separate thread, and return temporary file for
 ;;; getting String output from statement.
 (defn (start-listener (-> (Maybe Int) (MVar Input) (IO ())))
-  [mb-listen in-mv]
+  [mb-port in-mv]
   (maybe (return ())
          (\ port
            (do (putStrLn (++ "Listening on port " (show port)))
                (void (forkIO (listener (fromIntegral port) in-mv)))))
-         mb-listen))
+         mb-port))
 
 ;; Clean up temporary file.
 (defn (cleanup-tmpfile (-> (, FilePath Handle) (IO ())))
@@ -131,10 +133,12 @@
               (case result
                 (Right str) (when (not (null str))
                               (outputStrLn str))
-                (Left str) ((if (isSuffixOf "\n" str)
-                                outputStr
-                                outputStrLn)
-                            str))
+                (Left str)  (when (not (null str))
+                              (let ((= pr (| ((isSuffixOf "\n" str)
+                                              outputStr)
+                                             (otherwise
+                                              outputStrLn))))
+                                (pr str))))
               (liftIO (hFlush stdout))))
         (= go result-mv
           (do (<- st0 (lift get-repl-state))
@@ -246,26 +250,28 @@
           (do (<- dflags getSessionDynFlags)
               (<- unqual getPrintUnqual)
               (let ((= sdoc (vcat (pprErrMsgBagWithLoc emsgs)))
-                    (= style (mkErrStyle dflags unqual))
+                    (= style0 (mkErrStyle dflags unqual))
+                    (= style1 (setStyleColoured True style0))
                     (= emsgs (srcErrorMessages src-err))))
-              (return (Left (renderWithStyle dflags sdoc style)))))
+              (return (Left (renderWithStyle dflags sdoc style1)))))
+        (:: throw-async-io (-> AsyncException (Skc a)))
+        (= throw-async-io (. liftIO throwIO))
         (= withErrorHandler m
           (ghandle
            (\ e
              (case (fromException e)
                (Just se) (src-err-handler se)
                Nothing   (case (fromException e)
-                           (Just ae) (liftIO
-                                      (throwIO (:: ae AsyncException)))
+                           (Just ae) (throw-async-io ae)
                            Nothing   (return (Left (show e))))))
            m))
         (= eval-one
           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
               (let ((= print-name "Prelude.print")))
               (<- ret (withErrorHandler
-                          (do (<- expanded (expands [form]))
-                              (with-print-name print-name
-                                (eval-form hdl itype expanded)))))
+                       (do (<- expanded (expands [form]))
+                           (with-print-name print-name
+                             (eval-form hdl itype expanded)))))
               (liftIO (putMVar out-mv ret))))
         (= loop
           (withAsyncHandler (>> eval-one loop))))
@@ -298,7 +304,8 @@
      (otherwise
       (case (evalBuilder parseImports forms)
         (Right idecl) (eval-imports idecl)
-        (Left err)    (return (Left (++ err "\n")))))))
+        (Left se)     (skSrcError (syntaxErrCode se)
+                                  (syntaxErrMsg se))))))
 
 (defn (eval-statement (-> Handle InSource HStmt (Skc Result)))
   [hdl itype stmt0]

@@ -5,6 +5,9 @@ module Language.SK.Builder
   ( -- * Builders type and functions
     Builder(..)
   , BState(..)
+  , SyntaxError(..)
+  , syntaxErrMsg
+  , syntaxErrCode
   , builderError
   , evalBuilder
   , failB
@@ -53,7 +56,7 @@ import HsImpExp (LIE, LIEWrappedName, LImportDecl)
 import HsPat (LPat)
 import HsSyn (HsModule)
 import HsTypes (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
-import SrcLoc (Located)
+import SrcLoc (Located, noLoc)
 
 #if MIN_VERSION_ghc (8,4,0)
 import HsExtension (GhcPs)
@@ -82,24 +85,39 @@ data BState = BState
     , lastToken :: Maybe Code
     }
 
+data SyntaxError = SyntaxError Code String
+  deriving (Eq, Show)
+
 -- | Newtype wrapper for parsing form data with Happy.
 newtype Builder a = Builder {
-    unBuilder :: StateT BState (Either String) a
+    unBuilder :: StateT BState (Either SyntaxError) a
 }
 
 runBuilder :: Builder a
            -> [Code]
-           -> Either String (a, [Code])
+           -> Either SyntaxError (a, [Code])
 runBuilder bld toks =
   case runStateT (unBuilder bld) (BState toks Nothing) of
     Right (a, st) -> Right (a, inputs st)
     Left e        -> Left e
 
-evalBuilder :: Builder a -> [Code] -> Either String a
+evalBuilder :: Builder a -> [Code] -> Either SyntaxError a
 evalBuilder bld toks = fmap fst (runBuilder bld toks)
 
 failB :: String -> Builder a
-failB err = Builder (StateT (\_ -> Left err))
+failB err = do
+  mb_tok <- fmap lastToken getBState
+  let be = SyntaxError tok err
+      tok = case mb_tok of
+              Just t  -> t
+              Nothing -> LForm (noLoc (Atom AUnit))
+  Builder (StateT (\_ -> Left be))
+
+syntaxErrMsg :: SyntaxError -> String
+syntaxErrMsg (SyntaxError _ msg) = msg
+
+syntaxErrCode :: SyntaxError -> Code
+syntaxErrCode (SyntaxError code _) = code
 
 instance Functor Builder where
   fmap f (Builder m) = Builder (fmap f m)
@@ -138,7 +156,7 @@ parse :: Builder a -> [Code] -> Builder a
 parse bld toks =
   case runBuilder bld toks of
     Right (a, _) -> return a
-    Left err     -> failB err
+    Left err     -> Builder (StateT (\_ -> Left err))
 
 -- | Simple lexer to parse forms.
 formLexer :: (Code -> Builder a) -> Builder a
@@ -155,9 +173,8 @@ builderError :: Builder a
 builderError = do
   st <- getBState
   case lastToken st of
-    Nothing -> failB "no location"
-    Just x  -> failB (showLoc x ++
-                      "syntax error on input `" ++ show x ++ "'")
+    Nothing -> failB "syntax error"
+    Just x  -> failB ("syntax error on input `" ++ show x ++ "'")
 
 -- ---------------------------------------------------------------------
 --

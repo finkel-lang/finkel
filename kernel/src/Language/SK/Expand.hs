@@ -52,7 +52,7 @@ import Var (varName)
 import qualified GHC.LanguageExtensions as LangExt
 
 -- Internal
-import Language.SK.Builder (HImportDecl)
+import Language.SK.Builder (HImportDecl, syntaxErrMsg)
 import Language.SK.Homoiconic
 import Language.SK.Eval
 import Language.SK.Form
@@ -186,7 +186,7 @@ compileMacro doEval form@(LForm (L l _)) self arg body = do
                 Right hexpr -> do
                   macro <- evalExpr hexpr
                   return (name, decls, Just (unsafeCoerce# macro))
-                Left err -> skSrcError form err
+                Left err -> skSrcError form (syntaxErrMsg err)
     else return (name, decls, Nothing)
 
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Skc [TyThing]
@@ -232,7 +232,7 @@ addImportedMacro' thing = do
           name_sym = toCode (aSymbol name_str)
       hv <- case evalBuilder parseExpr [name_sym] of
                    Right expr -> evalExpr expr
-                   Left err   -> failS err
+                   Left err   -> failS (syntaxErrMsg err)
       insertMacro (fsLit name_str) (unsafeCoerce# hv)
     _ -> error "addImportedmacro"
 
@@ -372,7 +372,7 @@ m_require form =
             Nothing ->
               skSrcError form ("require: module " ++ mname' ++
                                " not found.")
-        Left err -> skSrcError form ("require: " ++ err)
+        Left err -> skSrcError form ("require: " ++ syntaxErrMsg err)
     _ -> skSrcError form "require: malformed body"
 
 m_evalWhenCompile :: Mfunc
@@ -385,7 +385,8 @@ m_evalWhenCompile form =
           (tythings, _ic) <- evalDecls decls
           mapM_ addImportedMacro tythings
           return emptyForm
-        Left err -> skSrcError (LForm (L l (List body))) err
+        Left err -> skSrcError (LForm (L l (List body)))
+                               (syntaxErrMsg err)
     _ -> skSrcError form ("eval-when-compile: malformed body: " ++
                           show form)
 

@@ -129,7 +129,8 @@ parseSkModuleWith act path = Run.runSkc go Make.defaultSkEnv
             forms' <- Expand.withExpanderSettings (Expand.expands forms)
             case Syntax.evalBuilder Syntax.parseModule forms' of
               Right mdl -> act mdl sp
-              Left  err -> liftIO (putStrLn ("error: " ++ err))
+              Left  err -> liftIO (putStrLn ("error: " ++
+                                             Builder.syntaxErrMsg err))
           Left err -> liftIO (putStrLn ("error: " ++ err))
 
 printTokens :: FilePath -> IO ()

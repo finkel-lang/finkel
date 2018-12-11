@@ -167,8 +167,8 @@
               (concat ["<interactive>:1:1: error: "
                        "Variable not in scope: buzz"]))
           (ng '(= f a (+ a 1) (+ a 2))
-              (concat ["<quoted code>: syntax error on input "
-                       "`(= f a (+ a 1) (+ a 2))'\n"]))
+              (concat ["<quoted code>: error:\n    syntax error on input "
+                       "`(= f a (+ a 1) (+ a 2))'"]))
           (ng '(head []) "*** Exception: Prelude.head: empty list")
           (ng '(*_ info (foo bar))
               "<quoted code>: error: info: invalid form `(foo bar)'"))))))

@@ -41,9 +41,9 @@
    ;; ghc
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
               (Language ..) (PackageFlag ..) (GeneralFlag ..)
-              defaultDynFlags flagSpecFlag flagSpecName lang_set
-              parseDynamicFlagsCmdLine thisPackage gopt fFlags
-              xFlags xopt wopt wWarningFlags))
+              defaultDynFlags fFlags flagSpecFlag flagSpecName gopt
+              lang_set parseDynamicFlagsCmdLine thisPackage xFlags xopt
+              wopt wWarningFlags))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (gcatch gbracket))
    (FamInstEnv (pprFamInst))
