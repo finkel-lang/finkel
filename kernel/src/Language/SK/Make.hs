@@ -32,15 +32,15 @@ import DriverPipeline (compileOne', link, oneShot, preprocess)
 import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
                 , GhcMode(..), getDynFlags, gopt, gopt_set
                 , gopt_unset, interpWays )
-import ErrUtils (withTiming)
-import Exception (tryIO)
-import Finder ( addHomeModuleToFinder, findImportedModule
-              , findObjectLinkableMaybe )
+import ErrUtils (mkErrMsg, withTiming)
+import Exception (SomeException, gtry, tryIO)
+import Finder ( addHomeModuleToFinder, cannotFindModule
+              , findImportedModule, findObjectLinkableMaybe )
 import GHC ( setSessionDynFlags )
 import GhcMake (topSortModuleGraph)
 import GhcMonad ( GhcMonad(..), getSessionDynFlags, modifySession
                 , withTempSession )
-import Outputable ( text, showPpr )
+import Outputable ( neverQualify, text, showPpr )
 import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
 import HscTypes ( FindResult(..), ModIface(..), ModSummary(..)
@@ -48,6 +48,7 @@ import HscTypes ( FindResult(..), ModIface(..), ModSummary(..)
                 , HscEnv(..), InteractiveContext(..)
                 , ModuleGraph, SourceModified(..)
                 , addToHpt, eltsHpt, lookupHpt, ms_mod_name
+                , throwOneError
 #if MIN_VERSION_ghc(8,4,0)
                 , mkModuleGraph, extendMG
 #endif
@@ -56,7 +57,7 @@ import Module ( ModLocation(..), ModuleName, installedUnitIdEq
               , mkModuleName, moduleName, moduleNameSlashes
               , moduleNameString, moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
-import SrcLoc (mkRealSrcLoc)
+import SrcLoc (getLoc, mkRealSrcLoc, noSrcSpan)
 import StringBuffer (stringToStringBuffer)
 import Util (getModificationUTCTime)
 
@@ -223,12 +224,32 @@ make' not_yet_compiled readys0 pendings0 = do
   timeIt "make' [sk]"
          (go [] total total not_yet_compiled readys0 pendings0)
   where
-    -- No more modules to compile, return the accumulated ModSummary.
     go :: [ModSummary] -> Int -> Int -> [String] -> [TargetUnit]
        -> [TargetUnit] -> Skc [ModSummary]
+
+    -- No more modules to compile, return the accumulated ModSummary.
     go acc i _  _  _  _ | i <= 0 = return acc
     go acc _ _ []  _  _ = return acc
     go acc _ _  _ [] [] = return acc
+
+    -- Target modules are empty, ready to compile pending modules to
+    -- read time ModSummary.  Partition the modules, make read time
+    -- ModSummaries, then sort via topSortModuleGraph, and recurse.
+    go acc i k nycs [] pendings
+      | all (isOtherSource . fst) pendings =
+         -- All targets are other source, no need to worry about module
+         -- dependency analysis.
+         go acc i k nycs pendings []
+      | otherwise = do
+         -- Mixed target sources in pending modules. Make
+         -- read-time-mod-summaries from pending modules, make new
+         -- graph, sort it, then recurse.
+         let (readies', pendings') = (pendings, [])
+         rt_mss <- mkReadTimeModSummaries readies'
+         let pre_graph = mkModuleGraph' rt_mss
+             graph = topSortModuleGraph True pre_graph Nothing
+             readies'' = sortTargets (flattenSCCs graph) readies'
+         go acc i k nycs readies'' pendings'
 
     -- Compile ready-to-compile targets to ModSummary and
     -- HsModule. Input could be SK source code, Haskell source code, or
@@ -271,7 +292,7 @@ make' not_yet_compiled readys0 pendings0 = do
                    hsc_env <- getSession
                    let act = findRequiredModSummary hsc_env
                        act' = fmap catMaybes (mapM act reqs)
-                   compileIfReady summary' imports act'
+                   compileIfReady summary' (hsmodImports hmdl) act'
 
         HsSource path -> do
           mb_result <- compileToHsModule target
@@ -279,20 +300,22 @@ make' not_yet_compiled readys0 pendings0 = do
             Nothing             -> failS "compileToHsModule"
             Just (hmdl, dflags, _) -> do
               summary <- mkModSummary (Just path) hmdl
-              let imports = map import_name (hsmodImports hmdl)
-                  summary' = summary {ms_hspp_opts = dflags}
-              debugSkc (concat [";;; target=", show target
-                               ," imports=", show imports])
-              compileIfReady summary' imports (return [])
+              let summary' = summary {ms_hspp_opts = dflags}
+              compileIfReady summary' (hsmodImports hmdl) (return [])
 
         OtherSource _ -> do
           _ <- compileToHsModule target
           go acc i k nycs summarised pendings
 
         where
+          compileIfReady :: ModSummary
+                         -> [HImportDecl]
+                         -> Skc [ModSummary]
+                         -> Skc [ModSummary]
           compileIfReady summary imports getReqs = do
             hsc_env <- getSession
-            is <- mapM (findImported hsc_env acc summarised) imports
+            is <- mapM (findUnCompiledImport hsc_env acc summarised)
+                       imports
             let is' = catMaybes is
             debugSkc (";;; filtered imports = " ++ show is')
             if not (null is')
@@ -322,23 +345,6 @@ make' not_yet_compiled readys0 pendings0 = do
                  summary' <- makeOne i k summary deps
                  go (summary':acc) (i-1) k nycs' summarised pendings
 
-    -- Ready to compile pending modules to read time ModSummary.
-    -- Partition the modules, make read time ModSummaries, then sort via
-    -- topSortModuleGraph, and recurse.
-    go acc i k nycs [] pendings
-      | all (isOtherSource . fst) pendings =
-         -- All targets are other source, no need to worry about module
-         -- dependency analysis.
-         go acc i k nycs pendings []
-      | otherwise = do
-         let (readies', pendings') = (pendings, [])
-         rt_mss <- mkReadTimeModSummaries readies'
-         let pre_graph = mkModuleGraph' rt_mss
-             graph = topSortModuleGraph True pre_graph Nothing
-             readies'' = sortTargets (flattenSCCs graph) readies'
-         go acc i k nycs readies'' pendings'
-
-    import_name = moduleNameString . unLoc . ideclName . unLoc
     skmn t = case t of
                SkSource _ mn _ _ -> mn
                _                 -> "module-name-unknown"
@@ -363,7 +369,6 @@ makeOne i total ms graph_upto_this = timeIt label go
       setDynFlags (ms_hspp_opts ms)
 
       up_to_date <- checkUpToDate ms graph_upto_this
-      debugSkc (";;; up_to_date is " ++ show up_to_date)
       let midx = total - i + 1
           src_modified | up_to_date = SourceUnmodified
                        | otherwise  = SourceModified
@@ -437,6 +442,10 @@ doMakeOne i total ms src_modified = do
 -- The logic used in below function `checkUpToDate' is almost same as in
 -- 'GhcMake.checkStability', but for object codes only, and the
 -- arguments are different.
+--
+-- Other than this, most recompilation checks are done in
+-- "DriverPipeLine.compileOne'" function, which is called in
+-- "doMakeOne".
 
 -- | 'True' if the object code and interface file were up to date,
 -- otherwise 'False'.
@@ -457,22 +466,36 @@ checkUpToDate ms dependencies
                      all dep_ok sccs_without_self
     return up_to_date
 
--- | Find 'TargetSource' from command line argument.
+-- | Find 'TargetSource' from command line argument. This function
+-- throws 'SkException' when the target source was not found.
 findTargetSource :: (String, a) -> Skc (TargetSource, a)
-findTargetSource (modName, a) = do
+findTargetSource (modNameOrFilePath, a) = do
   dflags <- getSessionDynFlags
-  mb_inputPath <- findFileInImportPaths (importPaths dflags) modName
+  mb_inputPath <-
+    findFileInImportPaths (importPaths dflags) modNameOrFilePath
   let detectSource path
         | isSkFile path =
           do contents <- liftIO (BL.readFile path)
              (forms, sp) <- parseSexprs (Just path) contents
-             let modName' = asModuleName modName
-             return (SkSource path modName' forms sp, a)
+             let modName = asModuleName modNameOrFilePath
+             return (SkSource path modName forms sp, a)
         | isHsFile path = return (HsSource path, a)
         | otherwise = return (OtherSource path, a)
   case mb_inputPath of
     Just path -> detectSource path
-    Nothing   -> failS ("Cannot find target source for " ++ modName)
+    Nothing   -> do
+      let err = mkErrMsg dflags noSrcSpan neverQualify doc
+          doc = text ("can't find target source: " ++ modNameOrFilePath)
+      throwOneError err
+
+-- | Like 'findTargetSource', but the result wrapped in 'Maybe'.
+findTargetSourceMaybe :: (String, a) -> Skc (Maybe (TargetSource, a))
+findTargetSourceMaybe (modName, a) = do
+  et_ret <- gtry (findTargetSource (modName, a))
+  case et_ret of
+    Right found -> return (Just found)
+    Left _err   -> let _err' = _err :: SomeException
+                   in  return Nothing
 
 -- | Search 'ModSummary' of required module.
 findRequiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
@@ -481,13 +504,11 @@ findRequiredModSummary hsc_env mname = do
   -- because we want to use the source modified time from home package
   -- modules, to support recompilation of a module which requiring other
   -- home package modules.
-  mb_tu <- handleSkException
-             (const (return Nothing))
-             (Just <$> findTargetSource (mname, Nothing))
+  mb_tu <- findTargetSourceMaybe (mname, Nothing)
   case mb_tu of
     Just tu -> mkReadTimeModSummary tu
     Nothing -> do
-      -- The module name should be found somewher other than current
+      -- The module name should be found somewhere else than current
       -- target sources. If not, complain what's missing.
       let mname' = mkModuleName mname
       fresult <- liftIO (findImportedModule hsc_env mname' Nothing)
@@ -495,17 +516,20 @@ findRequiredModSummary hsc_env mname = do
         Found {} -> return Nothing
         _        -> failS ("Cannot find required module " ++ mname)
 
--- | Find imported module.
-findImported :: HscEnv -- ^ Current hsc environment.
-             -> [ModSummary] -- ^ List of accumulated 'ModSummary'.
-             -> [TargetUnit] -- ^ Pendingmodules.
-             -> String -- ^ Module name to find.
-             -> Skc (Maybe TargetUnit)
-findImported hsc_env acc pendings name
+-- | Find not compiled module.
+findUnCompiledImport :: HscEnv       -- ^ Current hsc environment.
+                     -> [ModSummary] -- ^ List of accumulated
+                                     -- 'ModSummary'.
+                     -> [TargetUnit] -- ^ Pending modules. If the target
+                                     -- module was listed here, returns
+                                     -- 'Nothing'.
+                     -> HImportDecl  -- ^ The target module name to
+                                     -- find.
+                     -> Skc (Maybe TargetUnit)
+findUnCompiledImport hsc_env acc pendings idecl
   | isPending = return Nothing
   | otherwise = do
-    findResult <-
-      liftIO (findImportedModule hsc_env (mkModuleName name) Nothing)
+    findResult <- liftIO (findImportedModule hsc_env mname Nothing)
     dflags <- getSessionDynFlags
     let myInstalledUnitId = thisInstalledUnitId dflags
     case findResult of
@@ -513,15 +537,15 @@ findImported hsc_env acc pendings name
       -- compiled yet. If the source code has Haskell file extension,
       -- checking whether the module is listed in accumulator containing
       -- compiled modules.
-      Found loc mdl    -> do
+      Found mloc mdl -> do
         debugSkc
-          (concat [";;; Found " ++ show loc ++ ", " ++
+          (concat [";;; Found " ++ show mloc ++ ", " ++
                     moduleNameString (moduleName mdl) ++ "\n"
                   , ";;;   moduleUnitId=" ++
                     show (moduleUnitId mdl) ++ "\n"
                   , ";;;   myInstalledUnitId=" ++
                     showPpr dflags myInstalledUnitId])
-        case ml_hs_file loc of
+        case ml_hs_file mloc of
           Just path | takeExtension path `elem` [".hs"] ->
                       if moduleName mdl `elem` map ms_mod_name acc
                          then return Nothing
@@ -545,20 +569,26 @@ findImported hsc_env acc pendings name
               -- from REPL need to be exactly same as the 'UnitId' of
               -- package, including the hash part.
               --
-              handleSkException
-                (const (return Nothing))
-                (Just <$> findTargetSource (name, Nothing))
+              findTargetSourceMaybe (name, Nothing)
             | otherwise -> return Nothing
           where
             inSameUnit =
               myInstalledUnitId `installedUnitIdEq` moduleUnitId mdl
             notInAcc =
               moduleName mdl `notElem` map ms_mod_name acc
-      NoPackage {}     -> failS ("No Package: " ++ name)
-      FoundMultiple {} -> failS ("Found multiple modules for " ++ name)
-      NotFound {}      -> Just <$> findTargetSource (name, Nothing)
+      _              -> do
+        mb_tu <- findTargetSourceMaybe (name, Nothing)
+        case mb_tu of
+          tu@(Just _) -> return tu
+          Nothing     -> do
+            let loc = getLoc idecl
+                doc = cannotFindModule dflags mname findResult
+                err = mkErrMsg dflags loc neverQualify doc
+            throwOneError err
    where
      isPending = name `elem` [n | (SkSource _ n _ _, _) <- pendings]
+     name = import_name idecl
+     mname = mkModuleName name
 
 -- | Make list of 'ModSummary' for read time dependency analysis.
 mkReadTimeModSummaries :: [TargetUnit] -> Skc [ModSummary]
@@ -703,17 +733,22 @@ sortTargets summaries targets = foldr f [] summaries
   where
     f summary acc =
       let mloc = ms_location summary
-          path = ml_hs_file mloc
+          mb_path = ml_hs_file mloc
           byPath p a = targetSourcePath (fst a) == p
-      in  case path of
+      in  case mb_path of
             Nothing -> error ("sortTargets: no target " ++ show mloc)
-            Just path' ->
-              case find (byPath path') targets of
-                Nothing -> error ("sortTargets: no target " ++ path')
-                Just target -> target:acc
+            Just path ->
+              case find (byPath path) targets of
+                Nothing -> error ("sortTargets: no target " ++ path)
+                Just tu -> tu:acc
 
+-- | Label and wrap the given action with 'withTiming'.
 timeIt :: String -> Skc a -> Skc a
 timeIt label = withTiming getDynFlags (text label) (const ())
+
+-- | Get module name from import declaration.
+import_name :: HImportDecl -> String
+import_name = moduleNameString . unLoc . ideclName . unLoc
 
 -- | Dump the module contents of given 'ModSummary'.
 dumpModSummary :: ModSummary -> Skc ()
