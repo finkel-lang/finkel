@@ -94,7 +94,7 @@ import Language.SK.TargetSource
 -- package modules, which are not loaded to GHC session yet.
 --
 -- Currently, compilation is done with recursively calling 'make'
--- function in 'require' macro, during macro-expansion.
+-- function from 'require' macro, during macro-expansion.
 --
 -- Once these dependency resolution works were tried with custom user
 -- hooks in cabal setup script. However, as of Cabal version 1.24.2,
@@ -141,21 +141,18 @@ make infiles no_link force_recomp mb_output = do
   let lexts = (language dflags3, extensionFlags dflags3)
   modifySkEnv (\e -> e {envDefaultLangExts = lexts})
 
-  -- Decide the kind of sources of the inputs.
+  -- Decide the kind of sources of the inputs, inputs arguments could be
+  -- file paths, or module names.
   sources <- mapM findTargetSource infiles
 
-  -- Assuming modules names were passed as arguments, inputs could be
-  -- file paths, or module names.
-  let to_compile = map fst infiles
-
   -- Do the compilation work.
-  mod_summaries <- make' to_compile [] sources
+  mod_summaries <- make' [] sources
 
   -- Update current module graph for linker. Linking work is delegated
   -- to deriver pipelin's `link' function.
-  let module_graph = mkModuleGraph' mod_summaries
+  let mgraph = mkModuleGraph' mod_summaries
       mgraph_flattened =
-        flattenSCCs (topSortModuleGraph True module_graph Nothing)
+        flattenSCCs (topSortModuleGraph True mgraph Nothing)
   unless no_link (doLink mgraph_flattened)
 
 -- | Calls 'GHC.setSessionDynFlags' to initialize session.
@@ -213,33 +210,34 @@ type TargetUnit = (TargetSource, Maybe Phase)
 -- '*.o'. If the HsModule contained imports of pending module, add the
 -- module to the pending modules.
 --
-make' :: [String] -> [TargetUnit] -> [TargetUnit] -> Skc [ModSummary]
-make' not_yet_compiled readys0 pendings0 = do
+make' :: [TargetUnit] -> [TargetUnit] -> Skc [ModSummary]
+make' readys0 pendings0 = do
   debugSkc
     (concat [ ";;; make'\n"
-            , ";;;   nycs: " ++ show not_yet_compiled ++ "\n"
             , ";;;   total: " ++ show total ++ "\n"
             , ";;;   readys0: " ++ show readys0 ++ "\n"
             , ";;;   pendings0: " ++ show pendings0])
-  timeIt "make' [sk]"
-         (go [] total total not_yet_compiled readys0 pendings0)
+  timeIt "make' [sk]" (go [] total total readys0 pendings0)
   where
-    go :: [ModSummary] -> Int -> Int -> [String] -> [TargetUnit]
-       -> [TargetUnit] -> Skc [ModSummary]
+    go :: [ModSummary] -- ^ Accumulator.
+       -> Int          -- ^ module n ...
+       -> Int          -- ^ ... of m.
+       -> [TargetUnit] -- ^ Ready to compile targets.
+       -> [TargetUnit] -- ^ Pending targets.
+       -> Skc [ModSummary]
 
     -- No more modules to compile, return the accumulated ModSummary.
-    go acc i _  _  _  _ | i <= 0 = return acc
-    go acc _ _ []  _  _ = return acc
-    go acc _ _  _ [] [] = return acc
+    go acc i _  _  _ | i <= 0 = return acc
+    go acc _ _ [] [] = return acc
 
     -- Target modules are empty, ready to compile pending modules to
     -- read time ModSummary.  Partition the modules, make read time
     -- ModSummaries, then sort via topSortModuleGraph, and recurse.
-    go acc i k nycs [] pendings
+    go acc i k [] pendings
       | all (isOtherSource . fst) pendings =
          -- All targets are other source, no need to worry about module
          -- dependency analysis.
-         go acc i k nycs pendings []
+         go acc i k pendings []
       | otherwise = do
          -- Mixed target sources in pending modules. Make
          -- read-time-mod-summaries from pending modules, make new
@@ -249,13 +247,13 @@ make' not_yet_compiled readys0 pendings0 = do
          let pre_graph = mkModuleGraph' rt_mss
              graph = topSortModuleGraph True pre_graph Nothing
              readies'' = sortTargets (flattenSCCs graph) readies'
-         go acc i k nycs readies'' pendings'
+         go acc i k readies'' pendings'
 
     -- Compile ready-to-compile targets to ModSummary and
     -- HsModule. Input could be SK source code, Haskell source code, or
     -- something else. If SK source code or Haskell source code, get
     -- ModSummary to resolve the dependencies.
-    go acc i k nycs (target@(tsr,_mbp):summarised) pendings = do
+    go acc i k (target@(tsr,_mbp):summarised) pendings = do
 
       -- Since skc make is not using 'DriverPipeline.runPipeline',
       -- setting 'DynFlags.dumpPrefix' manually.
@@ -269,10 +267,17 @@ make' not_yet_compiled readys0 pendings0 = do
             Just (hmdl, dflags, reqs) -> do
               summary <- mkModSummary (Just path) hmdl
               let summary' = summary {ms_hspp_opts = dflags}
-                  imports = map import_name (hsmodImports hmdl)
+                  imports = hsmodImports hmdl
+                  import_names = map import_name imports
+                  pending_names = map tsmn pendings
+                  summarised_names = map tsmn summarised
+                  notYetReady =
+                    any (\m -> m `elem` pending_names ||
+                               m `elem` summarised_names)
+                        import_names
 
               debugSkc (concat [ ";;; target=", show target, "\n"
-                               , ";;; imports=", show imports])
+                               , ";;; imports=", show import_names])
 
               -- Test whether imported modules are in pendings. If
               -- found, skip the compilation and add this module to the
@@ -282,17 +287,13 @@ make' not_yet_compiled readys0 pendings0 = do
               -- 'makeOne' contains imported modules and required
               -- modules.
               --
-              let notYetReady =
-                    any (\m -> m `elem` map (skmn . fst) pendings ||
-                               m `elem` map (skmn . fst) summarised)
-                         imports
               if notYetReady
-                 then go acc i k nycs summarised (target:pendings)
+                 then go acc i k summarised (target:pendings)
                  else do
                    hsc_env <- getSession
                    let act = findRequiredModSummary hsc_env
                        act' = fmap catMaybes (mapM act reqs)
-                   compileIfReady summary' (hsmodImports hmdl) act'
+                   compileIfReady summary' imports act'
 
         HsSource path -> do
           mb_result <- compileToHsModule target
@@ -305,7 +306,7 @@ make' not_yet_compiled readys0 pendings0 = do
 
         OtherSource _ -> do
           _ <- compileToHsModule target
-          go acc i k nycs summarised pendings
+          go acc i k summarised pendings
 
         where
           compileIfReady :: ModSummary
@@ -326,28 +327,25 @@ make' not_yet_compiled readys0 pendings0 = do
                  let summarised' = is' ++ summarised ++ [target]
                      i' = i + length is'
                      k' = k + length is'
-                 go acc i' k' nycs summarised' pendings
+                 go acc i' k' summarised' pendings
                else do
                  -- Ready to compile this target unit. Compile it, add
                  -- the returned ModSummary to accumulator, and
                  -- continue.
                  reqs <- getReqs
-
-                 -- XXX: Test whether required modules are all ready to
-                 -- compile.
                  let graph_upto_this =
                        topSortModuleGraph True mgraph (Just mn)
                      mgraph = mkModuleGraph' (summary:acc)
                      mn = ms_mod_name summary
-                     mNameString = moduleNameString mn
-                     nycs' = filter (/= mNameString) nycs
                      deps = flattenSCCs graph_upto_this ++ reqs
                  summary' <- makeOne i k summary deps
-                 go (summary':acc) (i-1) k nycs' summarised pendings
+                 go (summary':acc) (i-1) k summarised pendings
 
-    skmn t = case t of
-               SkSource _ mn _ _ -> mn
-               _                 -> "module-name-unknown"
+    tsmn (ts, _) =
+      case ts of
+        SkSource _ mn _ _ -> mn
+        HsSource path     -> asModuleName path
+        _                 -> "module-name-unknown"
     total = length readys0 + length pendings0
 
 -- | Check whether recompilation is required, and compile the 'HsModule'
@@ -485,7 +483,7 @@ findTargetSource (modNameOrFilePath, a) = do
     Just path -> detectSource path
     Nothing   -> do
       let err = mkErrMsg dflags noSrcSpan neverQualify doc
-          doc = text ("can't find target source: " ++ modNameOrFilePath)
+          doc = text ("cannot find target source: " ++ modNameOrFilePath)
       throwOneError err
 
 -- | Like 'findTargetSource', but the result wrapped in 'Maybe'.
@@ -728,7 +726,11 @@ setDumpPrefix path = do
       dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
   setDynFlags dflags1
 
-sortTargets :: [ModSummary] -> [TargetUnit] -> [TargetUnit]
+-- | Modify the order of 'TargetUnit' by referencing the order of given
+-- 'ModSummary'.
+sortTargets :: [ModSummary] -- ^ Referenced list of 'ModSummary'.
+            -> [TargetUnit] -- ^ List of 'TargetUnit' to reorder.
+            -> [TargetUnit] -- ^ Reordered result.
 sortTargets summaries targets = foldr f [] summaries
   where
     f summary acc =
@@ -736,7 +738,7 @@ sortTargets summaries targets = foldr f [] summaries
           mb_path = ml_hs_file mloc
           byPath p a = targetSourcePath (fst a) == p
       in  case mb_path of
-            Nothing -> error ("sortTargets: no target " ++ show mloc)
+            Nothing   -> error ("sortTargets: no target " ++ show mloc)
             Just path ->
               case find (byPath path) targets of
                 Nothing -> error ("sortTargets: no target " ++ path)
