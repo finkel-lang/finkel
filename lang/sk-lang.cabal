@@ -1,8 +1,8 @@
 name:                sk-lang
-version:             0.10.0.0
-synopsis:            SK language core and executables.
-description:         SK language core functions and macros, with REPL
-                     executable and compiler executable.
+version:             0.11.0.0
+synopsis:            SK language core and executable.
+description:         SK language core functions and macros, with
+                     executable for compiling and running REPL.
 homepage:            https://github.com/githubuser/sk-lang#readme
 license:             BSD3
 license-file:        LICENSE
