@@ -29,18 +29,18 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     SK.Core.List
+  exposed-modules:     Paths_sk_lang
+                       SK.Core.List
                        SK.Core
-                       SK.Setup
+                       SK.Prelude
+                       SK.Main
                        SK.Repl.Types
                        SK.Repl.IO
                        SK.Repl.Listen
                        SK.Repl.Loop
                        SK.Repl.Macro
                        SK.Repl
-                       SK.Prelude
-                       SK.Plugin
-                       Paths_sk_lang
+                       SK.Setup
   autogen-modules:     Paths_sk_lang
   reexported-modules:  Language.SK
   build-depends:       base         >= 4.7 && < 5

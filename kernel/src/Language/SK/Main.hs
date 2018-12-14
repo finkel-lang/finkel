@@ -5,7 +5,8 @@
 -- simplified works done in 'Main.hs' of ghc executable.
 --
 module Language.SK.Main
-  ( main
+  ( defaultMain
+  , defaultMainWith
   ) where
 
 -- base
@@ -43,7 +44,6 @@ import qualified GHC.Paths
 
 -- internal
 import Language.SK.Make
-import Language.SK.Plugin
 import Language.SK.SKC
 import Language.SK.TargetSource
 import qualified Paths_sk_kernel
@@ -55,8 +55,28 @@ import qualified Paths_sk_kernel
 --
 -- ---------------------------------------------------------------------
 
-main :: IO ()
-main = do
+-- [Main entry point]
+-- ~~~~~~~~~~~~~~~~~~
+--
+-- Formerly, sk compiler executable was written as ghc frontend
+-- plugin. However, passing conflicting options used in ghc's "--make"
+-- to the sk compiler executable was cumbersome, since frontend option
+-- cannot used when ghc is invoked as make mode.
+--
+-- Functions exported from this module is doing almost same work done in
+-- the "Main" module of ghc executable, but command line argument
+-- handling is more simple, since sk compiler delegate non-make mode
+-- works to ghc executable.
+
+-- | Function used by sk kernel compiler.
+defaultMain :: IO ()
+defaultMain = defaultMainWith []
+
+-- | Make a main compiler function from given list of macros.
+defaultMainWith :: [(String, Macro)]
+                -- ^ List of macros loaded to macro expander.
+                -> IO ()
+defaultMainWith macros = do
   args0 <- getArgs
   if any (`elem` rawGhcOptions) args0
      then rawGhc args0
@@ -68,9 +88,13 @@ main = do
            args2 = filter (/= "--make") args1
            sk_opts = parseSkOption skopts
            sk_env0 = opt2env sk_opts
+           macros' = mergeMacros (envMacros defaultSkEnv)
+                                 (makeEnvMacros macros)
+           sk_env1 = sk_env0 { envDefaultMacros = macros'
+                             , envMacros = macros' }
            next | skHelp sk_opts    = printSkHelp
                 | skVersion sk_opts = printSkVersion
-                | otherwise         = main' sk_env0 args1 args2
+                | otherwise         = main' sk_env1 args1 args2
 
        -- XXX: Handle '-B' option properly.
        -- XXX: Set macros for SkEnv.
@@ -231,17 +255,29 @@ printSkVersion = putStrLn v
 rawGhc :: [String] -> IO ()
 rawGhc args = rawSystem GHC.Paths.ghc args >>= exitWith
 
+-- | When any of options listed here were found, invoke raw @ghc@
+-- without using SK frontend plugin. Otherwise @ghc@ will complain with
+-- error message. These options are listed in "ghc/Main.hs" as
+-- `mode_flags'.
 rawGhcOptions :: [String]
 rawGhcOptions =
-  [ "-V"
-  , "-e"
+  [ "-?"
+  , "--help"
+  , "-V"
   , "--version"
   , "--numeric-version"
-  , "--help"
+  , "--info"
+  , "--show-options"
+  , "--supported-languages"
+  , "--supported-extensions"
+  , "--show-packages"
+  , "--show-iface"
   , "--backpack"
-  , "--frontend"
   , "--interactive"
-  ] ++ conflictingOptions
+  , "--abi-hash"
+  , "-e"
+  , "--frontend"
+  ]
 
 -- | THrow 'UsageError' when unknown flag were found.
 checkUnknownFlags :: [String] -> IO ()

@@ -1,0 +1,24 @@
+;;; Main compiler with macros from `SK.Prelude'.
+
+(require SK.Core)
+
+(defmodule SK.Main
+  (load
+   ;; base
+   (Prelude)
+
+   ;; sk-kernel
+   (Language.SK))
+  (use
+   ;; sk-kernel
+   (Language.SK.Main)
+
+   ;; Internal
+   (SK.Prelude))
+  (export skcMain))
+
+(macrolet ((core-macros ()
+             `[,@(map (\ mac (, mac (aSymbol mac)))
+                      (exported-macros SK.Prelude))]))
+  (defn (skcMain (IO ()))
+    (defaultMainWith (core-macros))))

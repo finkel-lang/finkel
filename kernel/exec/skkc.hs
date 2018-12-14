@@ -1,7 +1,5 @@
--- | Wrapper executable for skkc, SK kernel compiler frontend plugin.
+-- | Simple wrapper executable calling main compiler function.
 module Main where
-
-import Language.SK.Plugin (skPluginMain)
-
+import Language.SK.Main
 main :: IO ()
-main = skPluginMain "Language.SK.Plugin" "sk-kernel"
+main = defaultMain

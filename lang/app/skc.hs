@@ -1,6 +1,6 @@
 module Main where
 
-import Language.SK.Plugin (skPluginMain)
+import SK.Main (skcMain)
 
 main :: IO ()
-main = skPluginMain "SK.Plugin" "sk-lang"
+main = skcMain

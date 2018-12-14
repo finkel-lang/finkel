@@ -16,6 +16,6 @@ main = decideHooks >>= defaultMainWithHooks
          then return stackHook
          else return cabalHook
     stackHook =
-      skcHooksWith "skkc2" [] False
+      skcHooksWith "skkc" [] False
     cabalHook =
-      skcHooksWith "cabal" ["new-run", "-v0", "--", "skkc2"] False
+      skcHooksWith "cabal" ["new-run", "-v0", "--", "skkc"] False
