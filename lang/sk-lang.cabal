@@ -78,7 +78,7 @@ test-suite sk-lang-test
 -- SK compiler executable, includes macros defined in SK.Prelude by
 -- default.
 executable skc
-  hs-source-dirs:      app
+  hs-source-dirs:      exec
   main-is:             skc.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base >= 4.10 && < 5
@@ -89,7 +89,7 @@ executable skc
 -- REPL executable. Compiling with `-dynamic' option makes REPL start
 -- up time a bit faster.
 executable sk
-  hs-source-dirs:      app
+  hs-source-dirs:      exec
   main-is:             sk.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base >= 4.10 && < 5
