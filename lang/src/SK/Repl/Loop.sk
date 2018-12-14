@@ -202,7 +202,7 @@
 
 ;;; Form to initialize the REPL.
 (defn (init-form Code)
-  '(putStrLn "Hit `Ctrl-d' to quit, type ,? for help."))
+  '(putStrLn "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
 
 ;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))

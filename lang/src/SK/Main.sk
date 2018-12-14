@@ -10,15 +10,83 @@
    ;; sk-kernel
    (Language.SK))
   (use
+   ;; base
+   (Data.Foldable (find maximumBy))
+   (Data.Function (on))
+
+   (System.Environment (getArgs getProgName withArgs))
+
    ;; sk-kernel
-   (Language.SK.Main)
+   (Language.SK.Main (defaultMainWith))
 
    ;; Internal
-   (SK.Prelude))
-  (export skcMain))
+   (SK.Prelude)
+   (SK.Repl)
+   (SK.Version))
+  (export main))
 
-(macrolet ((core-macros ()
-             `[,@(map (\ mac (, mac (aSymbol mac)))
-                      (exported-macros SK.Prelude))]))
-  (defn (skcMain (IO ()))
-    (defaultMainWith (core-macros))))
+
+
+;;; Exported function
+
+(defn (main (IO ()))
+  "Main entry point function."
+  (do (<- args getArgs)
+      (case args
+        (: name rest) (maybe show-usage
+                             (flip cmd-act rest)
+                             (find-command name))
+        _ show-usage)))
+
+
+;;; Internal
+
+(data Command
+  (Command {cmd-name String
+            cmd-descr String
+            cmd-act (-> [String] (IO ()))}))
+
+(defn (sub-commands [Command])
+  [(Command "help" "show help information" helpMain)
+   (Command "make" "compile source codes" makeMain)
+   (Command "repl" "start interactive REPL" replMain)
+   (Command "version" "show version" versionMain)])
+
+(defn (find-command (-> String (Maybe Command)))
+  [name]
+  (find (. (== name) cmd-name) sub-commands))
+
+(defn (makeMain (-> [String] (IO ())))
+  [args]
+  (macrolet ((core-macros ()
+               `[,@(map (\ mac (, mac (qSymbol mac)))
+                        (exported-macros SK.Prelude))]))
+    (withArgs args (defaultMainWith (core-macros)))))
+
+(defn (helpMain (-> [String] (IO ())))
+  [args]
+  (case args
+    (: name _ ) (| ((<- (Just cmd) (find-command name))
+                    (cmd-act cmd ["--help"])))
+    _ show-usage))
+
+(defn (show-usage (IO ()))
+  (do (<- name getProgName)
+      (let ((= max-len
+              (length (maximumBy (on compare length)
+                                 (map cmd-name sub-commands))))
+            (= pad n str
+              (++ str (replicate (- n (length str)) \\SP)))
+            (= descr n cmd
+              (concat ["  " (pad n (cmd-name cmd))
+                       "  " (cmd-descr cmd)]))))
+      (putStrLn
+       (unlines
+        (++ [(concat ["USAGE: " name " <command> [arguments]"])
+             ""
+             (concat ["  Run \"" name " help <command>\""
+                      " for more information."])
+             ""
+             "COMMANDS:"
+             ""]
+            (map (descr max-len) sub-commands))))))

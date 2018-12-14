@@ -21,41 +21,36 @@
   (use
    ;; base
    (Control.Monad (mplus))
-   (Data.Version (showVersion))
-   (System.Environment (getArgs))
    (System.Exit (exitFailure))
-   (System.Console.GetOpt)
-
-   ;; ghc
-   (Config (cProjectVersion))
+   (System.Console.GetOpt
+    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
 
    ;; sk-kernel
    (Language.SK.Expand (specialForms))
    (Language.SK.Make (defaultSkEnv))
    (Language.SK.SKC ((SkEnv ..) (EnvMacros) makeEnvMacros mergeMacros))
-   (qualified Paths_sk_kernel)
 
    ;; internal
    (SK.Core)
    (SK.Repl.Macro)
-   (SK.Repl.Loop)
-   (qualified Paths_sk_lang))
-  (export replMain repl-env))
+   (SK.Repl.Loop))
+  (export replMain
+          repl-env))
 
 
 ;;; Main
 
-(defn (replMain (IO ()))
-  (do (<- args getArgs)
-      (case (getOpt Permute descrs args)
-        (, o _ []) (act (foldl (flip id) initial-option o))
-        (, _ _ es) (print-errors es))))
+(defn (replMain (-> [String] (IO ())))
+  [args]
+  (case (getOpt Permute descrs args)
+    (, o _ []) (act (foldl (flip id) initial-option o))
+    (, _ _ es) (print-errors es)))
 
 
 ;;; Option types
 
 (data ReplMode
-  Help Version Listen Run
+  Help Listen Run
   (deriving (Eq Show)))
 
 (data ReplOption
@@ -69,10 +64,7 @@
 (defn (descrs [OptDescr (-> ReplOption ReplOption)])
   [(Option [\h] ["help"]
            (NoArg (\ o (o {repl-mode Help})))
-           "Show this help and exit.")
-   (Option [\V] ["version"]
-           (NoArg (\ o (o {repl-mode Version})))
-           "Show version information and exit.")
+           "Show this help and exit")
    (Option [\l] ["listen"]
            (OptArg (\ mb-port o
                      (let ((= port
@@ -87,7 +79,6 @@
   [ro]
   (case (repl-mode ro)
     Help print-usage
-    Version print-version
     Listen (run (repl-listen-port ro))
     Run (run Nothing)))
 
@@ -104,27 +95,15 @@
 (defn (print-usage (IO ()))
   (putStr
    (unlines
-    ["USAGE: sk [OPTIONS]"
+    ["USAGE: sk repl [OPTIONS]"
      ""
-     "With no OPTIONS, starts interactive REPL."
+     "  Start interactive REPL."
      ""
      (usageInfo "OPTIONS:" descrs)])))
 
-(defn (print-version (IO ()))
-  (putStrLn (++ "sk " sk-lang-version)))
-
 (defn (run (-> (Maybe Int) (IO ())))
   [listen]
-  (do (putStrLn (concat ["SK REPL (sk-lang " sk-lang-version
-                         ", sk-kernel " sk-kernel-version
-                         ", ghc " cProjectVersion ")"]))
-      (start-repl listen repl-env)))
-
-(defn (sk-lang-version String)
-  (showVersion Paths_sk_lang.version))
-
-(defn (sk-kernel-version String)
-  (showVersion Paths_sk_kernel.version))
+  (start-repl listen repl-env))
 
 (defn (repl-env SkEnv)
   (let ((= modules ["Prelude"])
