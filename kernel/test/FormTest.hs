@@ -2,7 +2,7 @@
 -- | Tests for forms.
 module FormTest where
 
-import Control.DeepSeq
+-- base
 import Control.Exception
 import Data.Complex
 import Data.Data
@@ -21,21 +21,36 @@ import Data.Ratio
 import qualified Data.Semigroup as Semigroup
 import Data.Word
 import Numeric.Natural
-import Test.Hspec
-import Test.QuickCheck
 import Text.Show.Functions ()
 
+-- bytestring
+import Data.ByteString.Builder (stringUtf8, toLazyByteString)
+
+-- deepseq
+import Control.DeepSeq
+
+-- ghc
 import BasicTypes (fl_value)
 import FastString (unpackFS)
+import SrcLoc (noSrcSpan)
 
+-- transformers
+import Control.Monad.Trans.State
+
+-- hspec
+import Test.Hspec
+
+-- QuickCheck
+import Test.QuickCheck
+
+-- sk-kernel
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.Homoiconic
 import Language.SK.Lexer
 import Language.SK.Reader
 
-import Data.ByteString.Builder (stringUtf8, toLazyByteString)
-
+-- Internal
 import Orphan
 
 formTests :: Spec
@@ -50,6 +65,9 @@ formTests = do
 
   readUnicodeStringProp
   readShowFormProp
+
+  dataInstanceTests
+  qFunctionTests
 
   fracTest 1.23
   fracTest (-1.23)
@@ -107,6 +125,127 @@ readShowFormProp =
     it "should match the input" $
       property (\form ->
                   form == form && parseE (show form) `eqForm` form)
+
+dataInstanceTests :: Spec
+dataInstanceTests = do
+  let gfoldl_self atom =
+         gfoldl (\(Just f) x -> return (f x)) return atom
+      t_gfoldl_self x = gfoldl_self x `shouldBe` Just x
+      t_show_constr x y = show (toConstr x) `shouldBe` y
+  describe "Data instance for Atom" $ do
+    let aunit = AUnit
+        asym = ASymbol (fsLit "foo")
+        achar = AChar 'a'
+        astr = AString "string"
+        aint = AInteger 42
+        afrac = AFractional (mkFractionalLit (1.23 :: Double))
+    it "should return Just self with simple gfoldl" $ do
+      t_gfoldl_self aunit
+      t_gfoldl_self asym
+      t_gfoldl_self achar
+      t_gfoldl_self astr
+      t_gfoldl_self aint
+      t_gfoldl_self afrac
+    it "should show itself with toConstr" $ do
+      t_show_constr aunit "AUnit"
+      t_show_constr asym "ASymbol"
+      t_show_constr achar "AChar"
+      t_show_constr astr "AString"
+      t_show_constr aint "AInteger"
+      t_show_constr afrac "AFractional"
+    it "should return AUnit with simple gunfold" $ do
+      gunfold (\_ -> Nothing) Just (toConstr AUnit) `shouldBe` Just AUnit
+    it "should return AUnit constr" $ do
+      let dtype = dataTypeOf AUnit
+          cnstr = toConstr AUnit
+      readConstr dtype "AUnit" `shouldBe` Just cnstr
+  describe "Data instance for Form" $ do
+    let fatom = Atom AUnit
+        flist = List [qChar 'a', qChar 'b']
+        fhslist = HsList [qChar 'a', qChar 'b']
+        ftend :: Form Atom
+        ftend = TEnd
+    it "should return Just self with simple gfoldl" $ do
+      t_gfoldl_self fatom
+      t_gfoldl_self flist
+      t_gfoldl_self fhslist
+      t_gfoldl_self ftend
+    it "should show itself with toConstr" $ do
+      t_show_constr fatom "Atom"
+      t_show_constr flist "List"
+      t_show_constr fhslist "HsList"
+      t_show_constr ftend "TEnd"
+    it "should return TEnd with simple gunfold" $
+      gunfold (const Nothing) Just (toConstr ftend) `shouldBe` Just ftend
+    it "should return Atom constr" $ do
+      let dtype = dataTypeOf fatom
+          cnstr = toConstr fatom
+      readConstr dtype "Atom" `shouldBe` Just cnstr
+    it "should return same result from dataCast1 and gcast1" $ do
+      (dataCast1 [TEnd] :: Maybe [Form Atom]) `shouldBe` Just [TEnd]
+  describe "Data instance for LForm" $ do
+    let qc = qChar 'x'
+        d1, d2, d3 :: Data a => a
+        d1 = fromConstr (toConstr noSrcSpan)
+        d2 = fromConstrB (fromConstr (toConstr AUnit))
+                         (toConstr (Atom AUnit))
+        d3 = evalState m 0
+          where
+            m = fromConstrM act (toConstr (L noSrcSpan (Atom AUnit)))
+            act :: Data d => State Int d
+            act = do
+              i <- get
+              modify succ
+              case i of
+                0 -> return d1
+                1 -> return d2
+        d4 = fromConstrB d3 (toConstr qUnit)
+        gc1 :: Data a => Maybe [LForm a]
+        gc1 =
+          let a :: Data a => a
+              a = fromConstr (toConstr AUnit)
+          in  dataCast1 [LForm (L noSrcSpan (Atom a))]
+    it "should return Just self with simple gfoldl" $ do
+      t_gfoldl_self qc
+    it "should show itself with toConstr" $ do
+      t_show_constr qc "LForm"
+    it "should return LForm constr" $ do
+      let dtype = dataTypeOf qc
+          cnstr = toConstr qc
+      readConstr dtype "LForm" `shouldBe` Just cnstr
+    it "should construct qUnit from constructors" $ do
+      d4 `shouldBe` qUnit
+    it "should return qUnit from dataCast1" $
+      gc1 `shouldBe` Just [qUnit]
+
+qFunctionTests :: Spec
+qFunctionTests = do
+  describe "qSymbol function" $
+    it "should equal to quoted symbol" $
+      qSymbol "foo" `shouldBe` toCode (ASymbol (fsLit "foo"))
+  describe "qChar function" $
+    it "should equal to quoted char" $
+      qChar 'x' `shouldBe` toCode 'x'
+  describe "qString function" $
+    it "should equal to quoted string" $
+      qString "foo" `shouldBe` toCode "foo"
+  describe "qInteger function" $
+    it "should equal to quoted integer" $
+      qInteger 42 `shouldBe` toCode (42 :: Integer)
+  describe "qFractional function" $
+    it "should equal to quoted fractional" $
+      qFractional (1.23 :: Double) `shouldBe` toCode (1.23 :: Double)
+  describe "qUnit function" $
+    it "should equal to quoted unit" $
+      qUnit `shouldBe` toCode ()
+  describe "qList function" $
+    it "should equal to quoted codes" $
+      let xs = [qChar 'a', qChar 'b']
+      in qList xs `shouldBe` toCode (List xs)
+  describe "qHsList function" $
+    it "should equal to quoted haskell list" $
+      let xs = [qChar 'a', qChar 'b']
+      in  qHsList xs `shouldBe` toCode (HsList xs)
 
 fracTest :: Double -> Spec
 fracTest x =
