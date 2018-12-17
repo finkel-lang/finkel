@@ -7,6 +7,7 @@ import System.Directory
 
 import Test.Hspec
 
+import EmitTest
 import EvalTest
 import FormTest
 import SkcTest
@@ -29,6 +30,7 @@ main = do
   hspec
     (do describe "Form" formTests
         describe "Skc" skcTests
+        describe "Emit" emitTests
         describe "Eval" (evalTests evalFiles)
         describe "Make" makeTests
         describe "Syntax" (syntaxTests syntaxFiles))

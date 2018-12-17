@@ -2,6 +2,7 @@ module SkcTest where
 
 -- base
 import Control.Exception
+import Control.Monad.IO.Class
 import Data.List (isPrefixOf, tails)
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Control.Monad.Fail as MonadFail
@@ -80,6 +81,13 @@ exceptionTest = do
       let act = gbracket (return 21) return (\x -> return (x * 2))
       ret <- runSkc act defaultSkEnv
       ret `shouldBe` (42 :: Int)
+
+  describe "Handling SkException" $
+    it "should return 42" $ do
+      let act = handleSkException (\_ -> return (42 :: Int))
+                                  (liftIO (throwIO (SkException "")))
+      ret <- runSkc act defaultSkEnv
+      ret `shouldBe` 42
 
   describe "running Skc action containing `failS'" $
     it "should throw SkException" $ do

@@ -112,6 +112,7 @@ test-suite sk-kernel-test
   main-is:             Main.hs
   other-modules:       FormTest
                        SkcTest
+                       EmitTest
                        EvalTest
                        MakeTest
                        SyntaxTest
