@@ -93,7 +93,7 @@
 
   (:: cxr-name (-> String Code))
   (= cxr-name x
-    (toCode (aSymbol (concat ["c" x "r"]))))
+    (qSymbol (concat ["c" x "r"])))
 
   (:: cxr (-> String [Code]))
   (= cxr xs

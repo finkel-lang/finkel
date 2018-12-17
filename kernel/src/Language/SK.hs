@@ -14,8 +14,6 @@ module Language.SK
   , Code
   , unCode
   , nil
-  , aFractional
-  , aSymbol
 
   , qSymbol
   , qChar

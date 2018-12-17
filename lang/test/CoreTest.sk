@@ -21,6 +21,9 @@
    ;; sk-kernel
    (Language.SK))
   (use
+   ;; ghc
+   (FastString (fsLit))
+
    ;; hspec
    (Test.Hspec)
 
@@ -392,7 +395,8 @@
                  (<- e (f '(defmacro* m1 (a b)
                             (let ((= $foo (+ ,a ,b)))
                               (return $foo)))))
-                 (shouldNotBe (elem (aSymbol "$foo") e) True))))
+                 (shouldNotBe (elem (ASymbol (fsLit "$foo")) e)
+                              True))))
 
       (d "macrolet*"
          (do (it "should expand to let-macro"

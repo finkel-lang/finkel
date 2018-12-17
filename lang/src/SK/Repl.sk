@@ -116,7 +116,7 @@
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.
 (macrolet ((the-macros ()
-             `[,@(map (\ mac `(, ,mac ,(aSymbol mac)))
+             `[,@(map (\ mac `(, ,mac ,(qSymbol mac)))
                       (++ (exported-macros SK.Core)
                           (exported-macros SK.Repl.Macro)))]))
   (defn (replMacros EnvMacros)

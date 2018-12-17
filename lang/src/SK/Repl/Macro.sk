@@ -614,12 +614,11 @@ COMMANDS:
 
 (defn (info-cmd ReplAction)
   [forms]
-  (let ((= err (invalid-form-error "info" forms))
-        (= sym (. toCode aSymbol)))
+  (let ((= err (invalid-form-error "info" forms)))
     (case (map unCode forms)
       [(@ form (Atom (ASymbol _)))] (info-name (toCode form))
-      [(Atom AUnit)]                (info-name (sym "()"))
-      [(HsList [])]                 (info-name (sym "[]"))
+      [(Atom AUnit)]                (info-name (qSymbol "()"))
+      [(HsList [])]                 (info-name (qSymbol "[]"))
       _                             err)))
 
 ;; From `GHCi.UI.kindOfType'
