@@ -35,12 +35,13 @@ import Language.SK.TargetSource
 import TestAux
 
 makeTests :: Spec
-makeTests = do
+makeTests = beforeAll_ (removeArtifacts odir) $ do
   showTargetTest
   buildSk ["main1.sk"]
   buildSk ["main2.sk"]
   buildSk ["main3.sk"]
-  buildSk ["main4.sk", "M3.sk"]
+  buildSk ["main4.sk"]
+  buildSk ["main5.sk"]
   buildC ["cbits1.c"]
   buildPackage "p01"
 
@@ -73,7 +74,6 @@ buildC = buildFile
 
 buildFile :: Skc () -> [FilePath] -> Spec
 buildFile pre paths =
-  before_ (removeArtifacts odir) $
   describe ("files " ++ intercalate ", " paths) $
     it "should compile successfully" $ do
       ret <- runSkc
@@ -87,17 +87,19 @@ buildFile pre paths =
       ret `shouldBe` ()
   where
     targets = map (\path -> (path, Nothing)) paths
-    odir = "test" </> "data" </> "build"
     make' flags sources doLink out = do
       dflags0 <- getSessionDynFlags
       let dflags1 = dflags0 {importPaths = [".", odir]}
           flags' = map noLoc flags
       (dflags2,_,_) <- parseDynamicFlagsCmdLine dflags1 flags'
       _ <- setSessionDynFlags dflags2
-      make sources doLink True out
+      make sources doLink False out
     make_simple = make' []
     make_profile = make' ["-prof", "-fprof-auto", "-fprof-cafs"
                          , "-hisuf", "p_hi", "-osuf", "p_o"]
+
+odir :: FilePath
+odir = "test" </> "data" </> "build"
 
 removeArtifacts :: FilePath -> IO ()
 removeArtifacts dir = do

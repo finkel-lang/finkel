@@ -10,7 +10,7 @@ module Language.SK.Make
 import Control.Monad (unless, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.List (find, foldl')
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes, fromMaybe, isJust)
 
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -22,8 +22,8 @@ import Data.Graph (flattenSCCs)
 import System.Directory (createDirectoryIfMissing)
 
 -- filepath
-import System.FilePath ( dropExtension, dropFileName, splitExtension
-                       , takeExtension, (<.>), (</>))
+import System.FilePath ( dropExtension, splitExtension
+                       , takeBaseName, takeExtension, (<.>), (</>))
 
 -- ghc
 import BasicTypes (SuccessFlag(..))
@@ -59,7 +59,7 @@ import Module ( ModLocation(..), ModuleName, installedUnitIdEq
 import Panic (GhcException(..), throwGhcException)
 import SrcLoc (getLoc, mkRealSrcLoc, noSrcSpan)
 import StringBuffer (stringToStringBuffer)
-import Util (getModificationUTCTime)
+import Util (getModificationUTCTime, looksLikeModuleName)
 
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
@@ -260,7 +260,7 @@ make' readys0 pendings0 = do
       setDumpPrefix (targetSourcePath tsr)
 
       case tsr of
-        SkSource path _mn _form _sp -> do
+        SkSource path _mn _form sp -> do
           mb_result <- compileToHsModule target
           case mb_result of
             Nothing                   -> failS "compileToHsModule"
@@ -293,7 +293,7 @@ make' readys0 pendings0 = do
                    hsc_env <- getSession
                    let act = findRequiredModSummary hsc_env
                        act' = fmap catMaybes (mapM act reqs)
-                   compileIfReady summary' imports act'
+                   compileIfReady summary' (Just sp) imports act'
 
         HsSource path -> do
           mb_result <- compileToHsModule target
@@ -302,7 +302,8 @@ make' readys0 pendings0 = do
             Just (hmdl, dflags, _) -> do
               summary <- mkModSummary (Just path) hmdl
               let summary' = summary {ms_hspp_opts = dflags}
-              compileIfReady summary' (hsmodImports hmdl) (return [])
+                  imports = hsmodImports hmdl
+              compileIfReady summary' Nothing imports (return [])
 
         OtherSource _ -> do
           _ <- compileToHsModule target
@@ -310,13 +311,13 @@ make' readys0 pendings0 = do
 
         where
           compileIfReady :: ModSummary
+                         -> Maybe SPState
                          -> [HImportDecl]
                          -> Skc [ModSummary]
                          -> Skc [ModSummary]
-          compileIfReady summary imports getReqs = do
+          compileIfReady summary mb_sp imports getReqs = do
             hsc_env <- getSession
-            is <- mapM (findUnCompiledImport hsc_env acc summarised)
-                       imports
+            is <- mapM (findUnCompiledImport hsc_env acc) imports
             let is' = catMaybes is
             debugSkc (";;; filtered imports = " ++ show is')
             if not (null is')
@@ -338,7 +339,7 @@ make' readys0 pendings0 = do
                      mgraph = mkModuleGraph' (summary:acc)
                      mn = ms_mod_name summary
                      deps = flattenSCCs graph_upto_this ++ reqs
-                 summary' <- makeOne i k summary deps
+                 summary' <- makeOne i k mb_sp summary deps
                  go (summary':acc) (i-1) k summarised pendings
 
     tsmn (ts, _) =
@@ -350,8 +351,9 @@ make' readys0 pendings0 = do
 
 -- | Check whether recompilation is required, and compile the 'HsModule'
 -- when the codes or dependency modules were updated.
-makeOne :: Int -> Int -> ModSummary -> [ModSummary] -> Skc ModSummary
-makeOne i total ms graph_upto_this = timeIt label go
+makeOne :: Int -> Int -> Maybe SPState -> ModSummary
+        -> [ModSummary] -> Skc ModSummary
+makeOne i total mb_sp ms graph_upto_this = timeIt label go
   where
     label = "MakeOne [" ++ mname ++ "]"
     mname = moduleNameString (ms_mod_name ms)
@@ -370,7 +372,7 @@ makeOne i total ms graph_upto_this = timeIt label go
       let midx = total - i + 1
           src_modified | up_to_date = SourceUnmodified
                        | otherwise  = SourceModified
-      ms' <- doMakeOne midx total ms src_modified
+      ms' <- doMakeOne midx total mb_sp ms src_modified
 
       -- Update module graph with new ModSummary, and restore the
       -- original DynFlags.
@@ -384,10 +386,11 @@ makeOne i total ms graph_upto_this = timeIt label go
 -- | Compile single module.
 doMakeOne :: Int -- ^ Module index number.
           -> Int -- ^ Total number of modules.
+          -> Maybe SPState -- ^ State returned from parser.
           -> ModSummary -- ^ Summary of module to compile.
           -> SourceModified -- ^ Source modified?
           -> Skc ModSummary -- ^ Updated summary.
-doMakeOne i total ms src_modified = do
+doMakeOne i total mb_sp ms src_modified = do
   debugSkc ";;; Entering doMakeOne"
 
   hsc_env <- getSession
@@ -419,7 +422,7 @@ doMakeOne i total ms src_modified = do
   -- set and this is the first time for compiling the target Module.
   when (envDumpHs sk_env || isJust (envHsDir sk_env))
        (case lookupHpt hpt0 mod_name of
-          Nothing -> dumpModSummary ms
+          Nothing -> dumpModSummary mb_sp ms
           Just _  -> return ())
 
   -- Update the time stamp of generated obj and hi files.
@@ -449,20 +452,18 @@ doMakeOne i total ms src_modified = do
 -- otherwise 'False'.
 checkUpToDate :: ModSummary -> [ModSummary] -> Skc Bool
 checkUpToDate ms dependencies
-  | Nothing <- ms_obj_date ms = return False
   | Nothing <- ms_iface_date ms = return False
-  | otherwise = do
-    let Just obj_date = ms_obj_date ms
-        mn = ms_mod_name ms
-        sccs_without_self =
-          filter (\m -> mn /= ms_mod_name m) dependencies
-        dep_ok ms_dep =
-          case ms_obj_date ms_dep of
-            Just ot -> obj_date >= ot
-            Nothing -> False
-        up_to_date = obj_date >= ms_hs_date ms &&
-                     all dep_ok sccs_without_self
-    return up_to_date
+  | otherwise =
+    case ms_obj_date ms of
+      Nothing       -> return False
+      Just obj_date -> do
+        let mn = ms_mod_name ms
+            sccs_without_self = filter (\m -> mn /= ms_mod_name m)
+                                       dependencies
+            dep_ok = maybe False (obj_date >=) . ms_obj_date
+            up_to_date = obj_date >= ms_hs_date ms &&
+                         all dep_ok sccs_without_self
+        return up_to_date
 
 -- | Find 'TargetSource' from command line argument. This function
 -- throws 'SkException' when the target source was not found.
@@ -518,75 +519,69 @@ findRequiredModSummary hsc_env mname = do
 findUnCompiledImport :: HscEnv       -- ^ Current hsc environment.
                      -> [ModSummary] -- ^ List of accumulated
                                      -- 'ModSummary'.
-                     -> [TargetUnit] -- ^ Pending modules. If the target
-                                     -- module was listed here, returns
-                                     -- 'Nothing'.
                      -> HImportDecl  -- ^ The target module name to
                                      -- find.
                      -> Skc (Maybe TargetUnit)
-findUnCompiledImport hsc_env acc pendings idecl
-  | isPending = return Nothing
-  | otherwise = do
-    findResult <- liftIO (findImportedModule hsc_env mname Nothing)
-    dflags <- getSessionDynFlags
-    let myInstalledUnitId = thisInstalledUnitId dflags
-    case findResult of
-      -- Haskell module returned by `Finder.findImportedModule' may not
-      -- compiled yet. If the source code has Haskell file extension,
-      -- checking whether the module is listed in accumulator containing
-      -- compiled modules.
-      Found mloc mdl -> do
-        debugSkc
-          (concat [";;; Found " ++ show mloc ++ ", " ++
-                    moduleNameString (moduleName mdl) ++ "\n"
-                  , ";;;   moduleUnitId=" ++
-                    show (moduleUnitId mdl) ++ "\n"
-                  , ";;;   myInstalledUnitId=" ++
-                    showPpr dflags myInstalledUnitId])
-        case ml_hs_file mloc of
-          Just path | takeExtension path `elem` [".hs"] ->
-                      if moduleName mdl `elem` map ms_mod_name acc
-                         then return Nothing
-                         else Just <$> findTargetSource (name, Nothing)
-          _ | inSameUnit && notInAcc ->
-              -- Workaround for loading home package modules when
-              -- working with cabal package from REPL.
-              -- 'Finder.findImportedModule' uses hard coded source file
-              -- extensions in `Finder.findInstalledHomeModule' to find
-              -- Haskell source codes of home package module, which will
-              -- not find SK source files. When looking up modules in
-              -- home package as dependency, looking up in accumurated
-              -- ModSummary list to avoid using the modules found in
-              -- already compiled linkable package. The `linkable'
-              -- mentioned here are those 'libXXX.{a,dll,so}' artifact
-              -- files for library package components.
-              --
-              -- This workaround needs the 'UnitId' from REPL session to
-              -- be set via "-this-unit-id" DynFlag option, to avoid
-              -- loading modules from linkable. The 'UnitId' been set
-              -- from REPL need to be exactly same as the 'UnitId' of
-              -- package, including the hash part.
-              --
-              findTargetSourceMaybe (name, Nothing)
-            | otherwise -> return Nothing
-          where
-            inSameUnit =
-              myInstalledUnitId `installedUnitIdEq` moduleUnitId mdl
-            notInAcc =
-              moduleName mdl `notElem` map ms_mod_name acc
-      _              -> do
-        mb_tu <- findTargetSourceMaybe (name, Nothing)
-        case mb_tu of
-          tu@(Just _) -> return tu
-          Nothing     -> do
-            let loc = getLoc idecl
-                doc = cannotFindModule dflags mname findResult
-                err = mkErrMsg dflags loc neverQualify doc
-            throwOneError err
-   where
-     isPending = name `elem` [n | (SkSource _ n _ _, _) <- pendings]
-     name = import_name idecl
-     mname = mkModuleName name
+findUnCompiledImport hsc_env acc idecl = do
+  findResult <- liftIO (findImportedModule hsc_env mname Nothing)
+  dflags <- getSessionDynFlags
+  let myInstalledUnitId = thisInstalledUnitId dflags
+  case findResult of
+    -- Haskell module returned by `Finder.findImportedModule' may not
+    -- compiled yet. If the source code has Haskell file extension,
+    -- checking whether the module is listed in accumulator containing
+    -- compiled modules.
+    Found mloc mdl -> do
+      debugSkc
+        (concat [";;; Found " ++ show mloc ++ ", " ++
+                  moduleNameString (moduleName mdl) ++ "\n"
+                , ";;;   moduleUnitId=" ++
+                  show (moduleUnitId mdl) ++ "\n"
+                , ";;;   myInstalledUnitId=" ++
+                  showPpr dflags myInstalledUnitId])
+      case ml_hs_file mloc of
+        Just path | takeExtension path `elem` [".hs"] ->
+                    if moduleName mdl `elem` map ms_mod_name acc
+                       then return Nothing
+                       else Just <$> findTargetSource (name, Nothing)
+        _ | inSameUnit && notInAcc ->
+            -- Workaround for loading home package modules when
+            -- working with cabal package from REPL.
+            -- 'Finder.findImportedModule' uses hard coded source file
+            -- extensions in `Finder.findInstalledHomeModule' to find
+            -- Haskell source codes of home package module, which will
+            -- not find SK source files. When looking up modules in
+            -- home package as dependency, looking up in accumurated
+            -- ModSummary list to avoid using the modules found in
+            -- already compiled linkable package. The `linkable'
+            -- mentioned here are those 'libXXX.{a,dll,so}' artifact
+            -- files for library package components.
+            --
+            -- This workaround needs the 'UnitId' from REPL session to
+            -- be set via "-this-unit-id" DynFlag option, to avoid
+            -- loading modules from linkable. The 'UnitId' been set
+            -- from REPL need to be exactly same as the 'UnitId' of
+            -- package, including the hash part.
+            --
+            findTargetSourceMaybe (name, Nothing)
+          | otherwise -> return Nothing
+        where
+          inSameUnit =
+            myInstalledUnitId `installedUnitIdEq` moduleUnitId mdl
+          notInAcc =
+            moduleName mdl `notElem` map ms_mod_name acc
+    _              -> do
+      mb_tu <- findTargetSourceMaybe (name, Nothing)
+      case mb_tu of
+        tu@(Just _) -> return tu
+        Nothing     -> do
+          let loc = getLoc idecl
+              doc = cannotFindModule dflags mname findResult
+              err = mkErrMsg dflags loc neverQualify doc
+          throwOneError err
+  where
+    name = import_name idecl
+    mname = mkModuleName name
 
 -- | Make list of 'ModSummary' for read time dependency analysis.
 mkReadTimeModSummaries :: [TargetUnit] -> Skc [ModSummary]
@@ -753,8 +748,8 @@ import_name :: HImportDecl -> String
 import_name = moduleNameString . unLoc . ideclName . unLoc
 
 -- | Dump the module contents of given 'ModSummary'.
-dumpModSummary :: ModSummary -> Skc ()
-dumpModSummary ms = maybe (return ()) work (ms_parsed_mod ms)
+dumpModSummary :: Maybe SPState -> ModSummary -> Skc ()
+dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
   where
     work pm
       | isSkFile orig_path = do
@@ -766,25 +761,19 @@ dumpModSummary ms = maybe (return ()) work (ms_parsed_mod ms)
           Nothing  -> return ()
       | otherwise           = return ()
     doWrite dir contents = do
-       let mod_name = moduleName (ms_mod ms)
-           out_path = dir </> moduleNameSlashes mod_name <.> "hs"
-           out_dir = dropFileName out_path
+       let mname = moduleName (ms_mod ms)
+           bname = takeBaseName orig_path
+           file_name
+             | looksLikeModuleName bname = moduleNameSlashes mname
+             | otherwise                 = bname
+           out_path = dir </> file_name <.> "hs"
        debugSkc (";;; Writing to " ++ out_path)
-       liftIO (do createDirectoryIfMissing True out_dir
+       liftIO (do createDirectoryIfMissing True dir
                   writeFile out_path contents)
-    gen pm = do
-      let mdl = hpm_module pm
-      body <- genHsSrc dummy_spstate (Hsrc (unLoc mdl))
-      return (unlines ["-- " ++ bars
-                      ,"--"
-                      ,"-- Generated from: " ++ orig_path
-                      ,"--"
-                      ,"-- " ++ bars
-                      ,""
-                      ,body])
+    gen pm = genHsSrc sp (Hsrc (unLoc (hpm_module pm)))
     orig_path = ms_hspp_file ms
-    dummy_spstate = initialSPState (fsLit orig_path) 1 1
-    bars = replicate 69 '-'
+    sp = fromMaybe dummy_sp mb_sp
+    dummy_sp = initialSPState (fsLit orig_path) 1 1
 
 -- [guessOutputFile]
 --

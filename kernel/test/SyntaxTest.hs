@@ -12,12 +12,11 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import System.Exit (ExitCode(..))
 
 -- directory
-import System.Directory ( doesFileExist
-                        , getTemporaryDirectory
-                        , removeFile )
+import System.Directory ( createDirectoryIfMissing, doesFileExist
+                        , getTemporaryDirectory, removeFile )
 
 -- filepath
-import System.FilePath ((</>))
+import System.FilePath ((</>), (<.>), takeBaseName)
 
 -- hspec
 import Test.Hspec
@@ -40,18 +39,21 @@ import MakeTest (removeArtifacts)
 mkTest :: FilePath -> Spec
 mkTest path = do
   let mkRef = runIO . newIORef . error
-      skEnv = defaultSkEnv {envSilent = True}
       removeWhenExist file = do
         exist <- doesFileExist file
         when exist (removeFile file)
   tmpdir <- runIO getTemporaryDirectory
   skORef <- mkRef "skORef"
   hsORef <- mkRef "hsORef"
-  let aDotOut = tmpdir </> "a.out"
-      dotHs = tmpdir </> "tmp.hs"
+  let skEnv = defaultSkEnv { envSilent = True
+                           , envHsDir = Just odir }
+      odir = tmpdir </> "sk_mk_test"
+      aDotOut = odir </> "a.out"
+      dotHs = odir </> takeBaseName path <.> "hs"
       dotTix = "a.out.tix"
       syndir = "test" </> "data" </> "syntax"
       runDotO = readProcessWithExitCode aDotOut [] ""
+  runIO (createDirectoryIfMissing True odir)
   beforeAll_ (removeArtifacts syndir) $ describe path $ do
     it "should compile with skc" $ do
       let task = do
@@ -66,14 +68,9 @@ mkTest path = do
       writeIORef skORef stdout
       ecode `shouldBe` ExitSuccess
 
-    it "should emit Haskell source" $ do
-      let gen = do
-            initSessionForTest
-            (mdl, sp) <- compileWithSymbolConversion path
-            genHsSrc sp (Hsrc mdl)
-      src <- runSkc gen skEnv
-      writeFile dotHs src
-      src `shouldNotBe` ""
+    it "should dump Haskell source" $ do
+      exist <- doesFileExist dotHs
+      exist `shouldBe` True
 
     it "should compile resulting Haskell code" $ do
       let task = do

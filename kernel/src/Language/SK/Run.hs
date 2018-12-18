@@ -2,9 +2,7 @@
 module Language.SK.Run
   ( runSkc
   , compileSkModuleForm
-  , compileWithSymbolConversion
   , getDynFlagsFromSPState
-  , setDynFlagsFromSPState
   , parseSexprs
   , buildHsSyn
   , macroFunction
@@ -26,7 +24,7 @@ import qualified Data.Map as Map
 import DynFlags ( DynFlags(..), parseDynamicFilePragma, thisPackage )
 import DriverPhases (HscSource(..))
 import Exception (tryIO)
-import FastString (fsLit, headFS, unpackFS)
+import FastString (fsLit)
 import Finder (mkHomeModLocation)
 import GHC (runGhc)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
@@ -75,39 +73,6 @@ buildHsSyn bldr forms =
     Right a                     -> return a
     Left (SyntaxError code msg) -> skSrcError code msg
 
-compileWithSymbolConversion :: FilePath -> Skc (HModule, SPState)
-compileWithSymbolConversion file = do
-  -- XXX: Might remove this function.
-  (form, sp) <- parseFile file
-  form' <- withExpanderSettings (expands form)
-  mdl <- buildHsSyn parseModule (map asHaskellSymbols form')
-  return (mdl, sp)
-
-asHaskellSymbols :: Code -> Code
-asHaskellSymbols = f1
-  where
-    f1 orig@(LForm (L l form)) =
-      case form of
-        List forms         -> li (List (map f1 forms))
-        HsList forms       -> li (HsList (map f1 forms))
-        Atom (ASymbol sym) -> li (Atom (ASymbol (f2 sym)))
-        _                  -> orig
-      where
-        li = LForm . (L l)
-    f2 sym
-      | headFS sym `elem` haskellOpChars = sym
-      | otherwise = fsLit (replace (unpackFS sym))
-    replace = map (\x -> case x of
-                           '-' -> '_'
-                           _   -> x)
-
-parseFile :: FilePath -> Skc ([Code], SPState)
-parseFile file = do
-  contents <- liftIO (BL.readFile file)
-  (form, sp) <- parseSexprs (Just file) contents
-  _ <- setDynFlagsFromSPState sp
-  return (form, sp)
-
 -- | Compile 'HModule' from given list of codes.
 compileSkModuleForm :: [Code] -> Skc HModule
 compileSkModuleForm form = do
@@ -125,13 +90,6 @@ getDynFlagsFromSPState sp = do
   (dflags1,_,_) <- parseDynamicFilePragma dflags0 exts
   (dflags2,_,_) <- parseDynamicFilePragma dflags1 (ghcOptions sp)
   return dflags2
-
--- | Set language extensions in current 'Skc' from given 'SPState'.
-setDynFlagsFromSPState :: SPState -> Skc DynFlags
-setDynFlagsFromSPState sp = do
-  dflags <- getDynFlagsFromSPState sp
-  setDynFlags dflags
-  return dflags
 
 -- | Extract function from macro and apply to given code. Uses
 -- 'emptySkEnv' with 'specialForms' to unwrap the macro from 'Skc'.
