@@ -97,7 +97,6 @@ defaultMainWith macros = do
                 | otherwise         = main' sk_env1 args1 args2
 
        -- XXX: Handle '-B' option properly.
-       -- XXX: Set macros for SkEnv.
        next
 
 main' :: SkEnv -> [String] -> [String] -> IO ()
@@ -133,17 +132,11 @@ main'' orig_args args = do
       -- Partition objects and source codes in args. Delegate to raw ghc
       -- when source codes were null. Don't bother with ldInput,
       -- delegate the linking work to raw ghc.
-      (srcs, non_srcs) = partition isSourceTarget fileish
+      (srcs, _non_srcs) = partition isSourceTarget fileish
 
-      -- Do nothing or delegate to ghc. Ghc complains when input files
-      -- were empty, so handling case for null non_srcs.
-      raw_ghc_or_do_nothing
-        | null non_srcs = return ()
-        | otherwise     = liftIO (rawGhc orig_args)
-
-  if null srcs
-     then raw_ghc_or_do_nothing
-     else do
+  case srcs of
+     [] -> liftIO (rawGhc orig_args)
+     _  -> do
        _ <- setSessionDynFlags dflags2
        -- Some IO works. Check unknown flags, update uniq supply ...
        liftIO (do checkUnknownFlags fileish
