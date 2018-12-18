@@ -755,7 +755,7 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
       | isSkFile orig_path = do
         contents <- gen pm
         sk_env <- getSkEnv
-        when (envDumpHs sk_env) (liftIO (putStrLn contents))
+        when (envDumpHs sk_env) (liftIO (putStr contents))
         case envHsDir sk_env of
           Just dir -> doWrite dir contents
           Nothing  -> return ()

@@ -217,7 +217,8 @@ instance (OUTPUTABLE a pr, HasOccName a)
       vcat [ pp_langExts st
            , pp_mbModuleHeaderDoc mbDoc
            , pp_nonnull imports
-           , hsSrc_nonnull st (map (Hsrc . unLoc) decls) ]
+           , hsSrc_nonnull st (map (Hsrc . unLoc) decls)
+           , text "" ]
     HsModule (Just name) exports imports decls deprec mbDoc ->
       vcat [ pp_langExts st
            , pp_mbModuleHeaderDoc mbDoc
@@ -231,7 +232,8 @@ instance (OUTPUTABLE a pr, HasOccName a)
                                               (map ppr (unLoc es))))
                       , nest 4 (text ") where")]
            , pp_nonnull imports
-           , hsSrc_nonnull st (map (Hsrc . unLoc) decls) ]
+           , hsSrc_nonnull st (map (Hsrc . unLoc) decls)
+           , text "" ]
       where
         pp_header rest =
           case deprec of
