@@ -218,15 +218,15 @@ export :: { HIE }
     | 'list'   {% parse p_entity $1 }
 
 entity :: { HIE }
-    : varid         {% b_ieAbs $1 }
-    | varid '..'    {% b_ieAll $1 }
-    | varid varids1 {% b_ieWith $1 $2 }
+    : conid         {% b_ieAbs $1 }
+    | conid '..'    {% b_ieAll $1 }
+    | conid varids1 {% b_ieWith $1 $2 }
 
 entities :: { [HIE] }
     : rentities { reverse $1 }
 
 rentities :: { [HIE] }
-    : {- empty -}        { [] }
+    : {- empty -}      { [] }
     | rentities varid  {% b_ieSym $2 >>= \es -> return (es:$1) }
     | rentities 'list' {% fmap (:$1) (parse p_entity $2) }
 
@@ -297,11 +297,11 @@ overlap :: { Maybe (Located OverlapMode) }
     | {- empty -}    { Nothing }
 
 sfsig :: { (Code, HType) }
-    : '::' 'symbol' type { ($2, $3) }
+    : '::' varid type { ($2, $3) }
 
 simpletype :: { (FastString, [HTyVarBndr])}
-    : 'symbol' {% b_simpletypeD [$1] }
-    | 'list'   {% b_simpletypeD $1 }
+    : conid  {% b_simpletypeD [$1] }
+    | 'list' {% b_simpletypeD $1 }
 
 constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs { let (m,d) = $1 in (m,reverse d) }
@@ -312,23 +312,23 @@ rconstrs :: { (HDeriving, [HConDecl]) }
     | rconstrs constr        { fmap ($2:) $1 }
 
 constr :: { HConDecl }
-    : mbdocnext 'symbol' {% fmap (flip addConDoc $1) (b_conOnlyD $2) }
-    | mbdocnext 'list'   {% fmap (flip addConDoc $1) (parse p_lconstr $2) }
+    : mbdocnext conid  {% fmap (flip addConDoc $1) (b_conOnlyD $2) }
+    | mbdocnext 'list' {% fmap (flip addConDoc $1) (parse p_lconstr $2) }
 
 deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }
 
 lconstr :: { HConDecl }
-    : forall qtycon       { b_forallD (snd $1) $2 }
-    | '::' 'symbol' qtype {% b_gadtD $2 $3 }
-    | lh98constr          { $1 }
+    : forall qtycon    { b_forallD (snd $1) $2 }
+    | '::' conid dtype {% b_gadtD $2 $3 }
+    | lh98constr       { $1 }
 
 forall :: { (Code, [Code]) }
     : 'forall' lforall { ($1, $2) }
 
 lforall :: { [Code] }
-    : 'symbol' { [$1] }
-    | 'symbol' lforall { $1:$2 }
+    : varid         { [$1] }
+    | varid lforall { $1:$2 }
 
 qtycon :: { (HConDecl, [HType]) }
     : 'list' {% parse p_lqtycon $1 }
@@ -346,8 +346,8 @@ h98constr :: { HConDecl }
     : 'list' {% parse p_lh98constr $1 }
 
 lh98constr :: { HConDecl }
-    : 'symbol' condetails         {% b_conD $1 $2 }
-    | 'symbol' '{' fielddecls '}' {% b_conD $1 $3 }
+    : conid condetails         {% b_conD $1 $2 }
+    | conid '{' fielddecls '}' {% b_conD $1 $3 }
 
 condetails :: { HConDeclDetails }
     : zero_or_more_types { b_conDeclDetails $1 }
@@ -457,13 +457,6 @@ zero_or_more_types :: { [HType] }
     : {- empty -} { [] }
     | types       { $1 }
 
-qtype :: { ([HType], HType) }
-    : 'symbol' {% b_symT $1 >>= \t -> return ([], t) }
-    | 'unit'   { ([], b_unitT $1) }
-    | 'hslist' {% do { typ <- parse p_type [toListL $1]
-                     ; return ([], b_listT typ) } }
-    | qtycl    { $1 }
-
 
 -- ---------------------------------------------------------------------
 --
@@ -496,17 +489,17 @@ pat_ :: { HPat }
     | 'list'    {% parse p_pats1 $1 }
 
 pats1 :: { HPat }
-    : ',' pats0             { b_tupP $1 $2 }
-    | '@' varid pat         {% b_asP $2 $3 }
-    | 'symbol' '{' lblp '}' {% b_labeledP $1 $3 }
-    | 'symbol' pats0        {% b_conP $1 $2 }
+    : ',' pats0            { b_tupP $1 $2 }
+    | '@' varid pat        {% b_asP $2 $3 }
+    | conid '{' labelp '}' {% b_labeledP $1 $3 }
+    | conid pats0          {% b_conP $1 $2 }
 
-lblp :: { [(Code, HPat)] }
-    : rlblp { reverse $1 }
+labelp :: { [(Code, HPat)] }
+    : rlabelp { reverse $1 }
 
-rlblp :: { [(Code, HPat)] }
-    : {- empty -}        { [] }
-    | rlblp varid pat { ($2, $3):$1 }
+rlabelp :: { [(Code, HPat)] }
+    : {- empty -}       { [] }
+    | rlabelp varid pat { ($2, $3):$1 }
 
 
 -- ---------------------------------------------------------------------
@@ -528,27 +521,6 @@ atom :: { HExpr }
     | 'unit'    { b_unitE $1 }
     | 'hslist'  {% b_hsListE `fmap` parse p_hlist (unListL $1) }
 
-varid :: { Code }
-    : 'symbol'   { $1 }
-    | special_id { $1 }
-
-special_id :: { Code }
-    : '!'         { $1 }
-    | 'as'        { $1 }
-    | 'forall'    { $1 }
-    | 'hiding'    { $1 }
-    | 'qualified' { $1 }
-
-varids :: { [Code] }
-    : 'list' {% parse p_varids1 $1 }
-
-varids1 :: { [Code] }
-    : rvarids { reverse $1 }
-
-rvarids :: { [Code] }
-    : varid         { [$1] }
-    | rvarids varid { $2 : $1 }
-
 exprs :: { HExpr }
     : '\\' lambda             { b_lamE $2 }
     | ',' app                 { b_tupE $1 $2 }
@@ -556,7 +528,7 @@ exprs :: { HExpr }
     | 'if' expr expr expr     { b_ifE $1 $2 $3 $4 }
     | 'case' expr matches     { b_caseE $1 $2 $3 }
     | 'do' do_stmts           { b_doE $1 $2 }
-    | '::' expr qtype         { b_tsigE $1 $2 $3 }
+    | '::' expr dtype         { b_tsigE $1 $2 $3 }
     | 'symbol' '{' fbinds '}' {% b_recConOrUpdE $1 $3 }
     | 'list' '{' fbinds '}'   {% b_recUpdE (parse p_exprs $1) $3 }
     | app                     { b_appE $1 }
@@ -665,6 +637,38 @@ stmt1 :: { HStmt }
     : '<-' pat expr { b_bindS $1 $2 $3 }
     | 'let' lbinds  { b_letS $1 $2 }
     | exprs         { b_bodyS $1 }
+
+
+-- ---------------------------------------------------------------------
+--
+-- Identifier
+--
+-- ---------------------------------------------------------------------
+
+varid :: { Code }
+    : 'symbol'   { $1 }
+    | special_id { $1 }
+
+special_id :: { Code }
+    : '!'         { $1 }
+    | 'as'        { $1 }
+    | 'forall'    { $1 }
+    | 'hiding'    { $1 }
+    | 'qualified' { $1 }
+
+varids :: { [Code] }
+    : 'list' {% parse p_varids1 $1 }
+
+varids1 :: { [Code] }
+    : rvarids { reverse $1 }
+
+rvarids :: { [Code] }
+    : varid         { [$1] }
+    | rvarids varid { $2 : $1 }
+
+conid :: { Code }
+    : 'symbol' { $1 }
+
 
 {
 happyError :: Builder a
