@@ -46,7 +46,7 @@
         m7aF2 !(Maybe String)})
   (deriving (Eq Show)))
 
-;; Using non-reserved special type variable names.
+;; Using non-reserved special names in type variable.
 (data (MyData8 as ccall forall hiding qualified)
   (M8a as ccall forall hiding qualified)
   (deriving (Eq Show)))

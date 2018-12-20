@@ -111,26 +111,25 @@ b_typeD (LForm (L l _)) (name, tvs) ty = L l (tyClD synonym)
 {-# INLINE b_typeD #-}
 
 b_simpletypeD :: [Code] -> Builder (FastString, [HTyVarBndr])
-b_simpletypeD codes
-  | ((LForm (L _ (Atom (ASymbol name)))):tvs) <- codes
+b_simpletypeD codes =
   -- XXX: Kind signatures not supported.
-  = return (name, map codeToUserTyVar tvs)
-  | otherwise
-  = builderError
+  case codes of
+    tv:tvs -> do
+      name <- getConId tv
+      return (name, map codeToUserTyVar tvs)
+    _      -> builderError
 {-# INLINE b_simpletypeD #-}
 
 b_conD :: Code -> HConDeclDetails -> Builder HConDecl
-b_conD form details
- | (LForm (L l (Atom (ASymbol name)))) <- form
- = let name' = L l (mkUnqual srcDataName name)
+b_conD form@(LForm (L l _)) details = do
+  name <- getConId form
+  let name' = L l (mkUnqual srcDataName name)
 #if MIN_VERSION_ghc(8,6,0)
-       cxt = Nothing
+      cxt = Nothing
 #else
-       cxt = L l []
+      cxt = L l []
 #endif
-   in  return (L l (mkConDeclH98 name' Nothing cxt details))
- | otherwise
- = builderError
+  return (L l (mkConDeclH98 name' Nothing cxt details))
 {-# INLINE b_conD #-}
 
 b_forallD :: [Code] -> (HConDecl, [HType]) -> HConDecl
@@ -146,18 +145,17 @@ b_forallD vars ((L l cdecl), cxts) =
 {-# INLINE b_forallD #-}
 
 b_gadtD :: Code -> ([HType], HType) -> Builder HConDecl
-b_gadtD (LForm (L l1 form)) (ctxt, bodyty)
-  | Atom (ASymbol name) <- form
-  = let name' = L l1 (mkUnqual srcDataName name)
-        ty = L l1 qty
-        qty = mkHsQualTy_compat (mkLocatedList ctxt) bodyty
+b_gadtD form@(LForm (L l1 _)) (ctxt, bodyty) = do
+  name <- getConId form
+  let name' = L l1 (mkUnqual srcDataName name)
+      ty = L l1 qty
+      qty = mkHsQualTy_compat (mkLocatedList ctxt) bodyty
 #if MIN_VERSION_ghc(8,6,0)
-        decl = fst (mkGadtDecl [name'] ty)
+      decl = fst (mkGadtDecl [name'] ty)
 #else
-        decl = mkGadtDecl [name'] (mkLHsSigType ty)
+      decl = mkGadtDecl [name'] (mkLHsSigType ty)
 #endif
-    in  return (L l1 decl)
-  | otherwise = builderError
+  return (L l1 decl)
 {-# INLINE b_gadtD #-}
 
 b_conOnlyD :: Code -> Builder HConDecl
@@ -388,24 +386,23 @@ b_safety (LForm (L l form))
 {-# INLINE b_safety #-}
 
 b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> Builder HDecl
-b_funBindD (LForm (L l form)) ((grhss,decls), args)
-  | Atom (ASymbol name) <- form = do
-    let body = mkGRHSs grhss decls l
+b_funBindD form@(LForm (L l _)) ((grhss,decls), args) = do
+  name <- getVarId form
+  let body = mkGRHSs grhss decls l
 #if MIN_VERSION_ghc(8,6,0)
-        match = L l (Match noExt ctxt args body)
+      match = L l (Match noExt ctxt args body)
 #elif MIN_VERSION_ghc(8,4,0)
-        match = L l (Match ctxt args body)
+      match = L l (Match ctxt args body)
 #else
-        match = L l (Match ctxt args Nothing body)
+      match = L l (Match ctxt args Nothing body)
 #endif
-        ctxt = FunRhs { mc_fun = lrname
-                      , mc_fixity = Prefix
-                        -- XXX: Get strictness info from ... where?
-                      , mc_strictness = NoSrcStrict }
-        lrname = L l (mkRdrName name)
-        bind = mkFunBind lrname [match]
-    return (L l (valD bind))
-  | otherwise = builderError
+      ctxt = FunRhs { mc_fun = lrname
+                    , mc_fixity = Prefix
+                      -- XXX: Get strictness info from ... where?
+                    , mc_strictness = NoSrcStrict }
+      lrname = L l (mkRdrName name)
+      bind = mkFunBind lrname [match]
+  return (L l (valD bind))
 {-# INLINE b_funBindD #-}
 
 b_patBindD :: ([HGRHS],[HDecl]) -> HPat -> HDecl

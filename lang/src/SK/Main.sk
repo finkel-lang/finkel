@@ -8,7 +8,10 @@
    (Prelude)
 
    ;; sk-kernel
-   (Language.SK))
+   (Language.SK)
+
+   ;; internal
+   (SK.Prelude))
   (use
    ;; base
    (Data.Foldable (find maximumBy))

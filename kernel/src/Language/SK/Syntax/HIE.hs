@@ -71,32 +71,29 @@ b_implicitMainModule =
 {-# INLINE b_implicitMainModule #-}
 
 b_ieSym :: Code -> Builder HIE
-b_ieSym (LForm (L l form))
-  | Atom (ASymbol name) <- form = return (thing name)
-  | otherwise                   = builderError
-  where
-    thing name = L l (iEVar (L l (IEName (L l (mkRdrName name)))))
-    iEVar = IEVar NOEXT
+b_ieSym form@(LForm (L l _)) = do
+  let thing x = L l (iEVar (L l (IEName (L l (mkRdrName x)))))
+      iEVar = IEVar NOEXT
+  name <- getVarOrConId form
+  return (thing name)
 {-# INLINE b_ieSym #-}
 
 b_ieAbs :: Code -> Builder HIE
-b_ieAbs (LForm (L l form))
-  | Atom (ASymbol name) <- form = return (thing name)
-  | otherwise                   = builderError
-  where
-    thing name = L l (iEThingAbs (L l (IEName (L l (uq name)))))
-    iEThingAbs = IEThingAbs NOEXT
-    uq = mkUnqual tcName
+b_ieAbs form@(LForm (L l _)) = do
+  name <- getConId form
+  let thing = L l (iEThingAbs (L l (IEName (L l (uq name)))))
+      iEThingAbs = IEThingAbs NOEXT
+      uq = mkUnqual tcName
+  return thing
 {-# INLINE b_ieAbs #-}
 
 b_ieAll :: Code -> Builder HIE
-b_ieAll (LForm (L l form))
-  | Atom (ASymbol name) <- form = return (thing name)
-  | otherwise                   = builderError
-  where
-    thing name = L l (iEThingAll (L l (IEName (L l (uq name)))))
-    iEThingAll = IEThingAll NOEXT
-    uq = mkUnqual tcName
+b_ieAll form@(LForm (L l _)) = do
+  name <- getConId form
+  let thing = L l (iEThingAll (L l (IEName (L l (uq name)))))
+      iEThingAll = IEThingAll NOEXT
+      uq = mkUnqual tcName
+  return thing
 {-# INLINE b_ieAll #-}
 
 b_ieWith :: Code -> [Code] -> Builder HIE

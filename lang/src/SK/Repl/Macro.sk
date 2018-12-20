@@ -103,7 +103,7 @@
    ;; internal
    (SK.Core.List))
 
-  (export *_))
+  (export repl-macro))
 
 
 ;;; GHC version compatibility compile time helper
@@ -149,7 +149,7 @@
       (otherwise
        `(defaultDynFlags (settings ,flg))))))
 
-(defn (graph->summaries (-> ModuleGraph [ModSummary]))
+(defn (graph-to-summaries (-> ModuleGraph [ModSummary]))
   (macrolet ((body _
                (if (<= 804 ghc-version)
                    'HscTypes.mgModSummaries
@@ -175,7 +175,7 @@
 (defn (mk-ii (-> String InteractiveImport))
   (. mk-ii-fs fsLit))
 
-(defn (code->mb-string (-> Code (Maybe String)))
+(defn (code-to-mb-string (-> Code (Maybe String)))
   [code]
   (case (unCode code)
     (Atom (ASymbol sym)) (Just (unpackFS sym))
@@ -417,7 +417,7 @@
 
 (defn (show-modules (Skc Code))
   (do (<- graph0 getModuleGraph)
-      (let ((= graph1 (graph->summaries graph0))))
+      (let ((= graph1 (graph-to-summaries graph0))))
       (<- graph2 (filterM (. isLoaded ms_mod_name) graph1))
       (<- mods (mapM showModule graph2))
       (return `(putStr ,(unlines mods)))))
@@ -538,7 +538,7 @@ COMMANDS:
   "Function to change current directory."
   [forms]
   (case forms
-    [arg1] (| ((<- (Just path) (code->mb-string arg1))
+    [arg1] (| ((<- (Just path) (code-to-mb-string arg1))
                (do (liftIO (setCurrentDirectory path))
                    (return '(begin)))))
     _      (let ((= l (located-list forms)))
@@ -555,7 +555,7 @@ COMMANDS:
           (do (liftIO (putStrLn (++ "; compile: " src)))
               (compile-module src))))
     (case forms
-      [form] (maybe err work (code->mb-string form))
+      [form] (maybe err work (code-to-mb-string form))
       _      err)))
 
 ;;; Lookup matching linkable with given name, and set
@@ -589,7 +589,7 @@ COMMANDS:
         (liftIO
          (do (<- mb-pc (maybe (return Nothing)
                               (lookup-package-config dflags0)
-                              (code->mb-string name)))
+                              (code-to-mb-string name)))
              (return (fmap (. C8.unpack
                               (. toStringRep componentId))
                            mb-pc)))))
@@ -689,7 +689,7 @@ paths from import directories."
               (<- _ (setTargets []))
               (<- _ (GhcMake.load LoadAllTargets))
               (<- hsc-env getSession)
-              (let ((= graph1 (graph->summaries graph0))
+              (let ((= graph1 (graph-to-summaries graph0))
                     (= uncache
                       (. (uncacheModule hsc-env) ms_mod_name))))
               (liftIO (do (mapM_ uncache graph1)
@@ -709,7 +709,7 @@ paths from import directories."
                     (env-context-on-exception
                      (find-file (importPaths dflags) path))
                     (return '(begin))))
-              (code->mb-string form))
+              (code-to-mb-string form))
       _      (skSrcError (located-list forms)
                          (++ "load: invalid form: " (show forms))))))
 
@@ -722,7 +722,7 @@ paths from import directories."
 (defn (set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
   [forms]
-  (| ((<- (: _ _) forms) (all symbol? forms)
+  (| ((<- (: _ _) forms) (all is-symbol forms)
       ;; Always using `setSessionDynFlags' for `set' REPL
       ;; command to support `-package' flag.
       (do (<- dflags0 getSessionDynFlags)
@@ -747,7 +747,7 @@ paths from import directories."
   (where go
     (= go
       (case forms
-        [form] (| ((symbol? form) (work (symbolName form))))
+        [form] (| ((is-symbol form) (work (symbolName form))))
         _      show-cmd-error))
     (= work thing
       (maybe show-cmd-error id (lookup thing things)))
@@ -817,11 +817,11 @@ paths from import directories."
      (c "type" (Just ["EXPR"]) type-cmd
         "show type of EXPR")]))
 
-(defmacro* *_
+(defmacro-m repl-macro
   forms
   (case forms
     (: name args) (| ((<- (Just rc)
-                        (do (<- name' (code->mb-string name))
+                        (do (<- name' (code-to-mb-string name))
                             (find (. (isPrefixOf name') rc-name)
                                   commands)))
                       (rc-action rc args))

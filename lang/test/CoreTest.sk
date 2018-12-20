@@ -143,21 +143,21 @@
          (it "should be a list"
              (let ((:: f (-> Int Char String Bool))
                    (= f x y z
-                     (list? (list x y z))))
+                     (is-list (list x y z))))
                (property f))))
 
       (d "filtering pair"
          (it "should be pair"
              (property (\ x
-                         (or [(&& (atom? x) (not (pair? x)))
-                              (&& (== nil x) (not (pair? x)))
-                              (&& (hslist? x) (not (pair? x)))
-                              (pair? x)])))))
+                         (or [(&& (is-atom x) (not (is-pair x)))
+                              (&& (== nil x) (not (is-pair x)))
+                              (&& (is-hslist x) (not (is-pair x)))
+                              (is-pair x)])))))
 
       (d "filtering string"
          (it "should be AString"
              (property (\ x
-                         (==> (string? (toCode x))
+                         (==> (is-string (toCode x))
                               (case x
                                 (AString _) True
                                 _           False))))))
@@ -165,7 +165,7 @@
       (d "filtering char"
          (it "should be AChar"
              (property (\ x
-                         (==> (char? (toCode x))
+                         (==> (is-char (toCode x))
                               (case x
                                 (AChar _) True
                                 _         False))))))
@@ -173,7 +173,7 @@
       (d "filtering integer"
          (it "should be AInteger"
              (property (\ x
-                         (==> (integer? (toCode x))
+                         (==> (is-integer (toCode x))
                               (case x
                                 (AInteger _) True
                                 _            False))))))
@@ -181,7 +181,7 @@
       (d "filtering fractional"
          (it "should be AFractional"
              (property (\ x
-                         (==> (fractional? (toCode x))
+                         (==> (is-fractional (toCode x))
                               (case x
                                 (AFractional _) True
                                 _               False))))))
@@ -189,7 +189,7 @@
       (d "filtering ()"
          (it "should be AUnit"
              (property (\ x
-                         (==> (unit? (toCode x))
+                         (==> (is-unit (toCode x))
                               (case x
                                 AUnit True
                                 _     False))))))
@@ -198,7 +198,7 @@
          (it "should be 1 or nil"
              (let ((:: f (-> Code Property))
                    (= f x
-                     (==> (atom? x) (|| (== 1 (length x))
+                     (==> (is-atom x) (|| (== 1 (length x))
                                         (null x)))))
                (property f))))
 
@@ -207,14 +207,14 @@
                    (= ret1 (cons x '[b c d]))
                    (= ret2 (cons x 'b))))
              (it "returns a List when consing to List"
-                 (list? (cons 'a '(b c d))))
+                 (is-list (cons 'a '(b c d))))
              (it "returns a List when consing to HsList"
-                 (list? ret1))
+                 (is-list ret1))
              (it "has x at car of HsList-consed-list"
                  (&& (== (car ret1) x)
                      (== (cdr ret1) '(b c d))))
              (it "returns a List when consing to Atom"
-                 (list? ret2))
+                 (is-list ret2))
              (it "has x at car of atom-consed-list"
                  (&& (== (car ret2) x)
                      (== (cdr ret2) '(b))))))
@@ -237,21 +237,21 @@
       (d "mapcar"
          (do (it "replaces non-symbols"
                  (== '(foo bar _ buzz _ _)
-                     (mapcar (\ x (if (symbol? x) x '_))
+                     (mapcar (\ x (if (is-symbol x) x '_))
                              '(foo bar (a b c) buzz 3 "string"))))
              (it "replaces non-symbols in HsList"
                  (== '(foo bar _ buzz _ _)
-                     (mapcar (\ x (if (symbol? x) x '_))
+                     (mapcar (\ x (if (is-symbol x) x '_))
                              '[foo bar (a b c) buzz 3 "string"])))
              (it "throws an exception on non-list arg2"
                  (expectFailure
                   (=== nil (mapcar (\ x (cons x x)) 'foo))))))))
 
-(defmacro! m1
+(defmacro' m1
   [x]
   `(++ "m1 " ,x))
 
-(defmacro! expandTo
+(defmacro' expandTo
   [in out]
   `(do (<- v (gtry (runSkc (macroFunction ,(car in) ',in)
                            defaultSkEnv)))
@@ -260,7 +260,7 @@
                     (show (:: e SomeException)))
          (Right r) (shouldBe r ',out))))
 
-(defmacro! expandFailure
+(defmacro' expandFailure
   [in]
   `(let ((= act
            (runSkc (macroFunction ,(car in) ',in) defaultSkEnv)))
@@ -312,76 +312,76 @@
                     (:: foo Int)
                     (= foo 42))))))
 
-      (d "defmacro*"
+      (d "defmacro-m"
          (do (it "should expand to define-macro"
                  (expandTo
-                  (defmacro* m1 (a)
+                  (defmacro-m m1 (a)
                     (return `(putStrLn (++ "hello, " ,a))))
-                  (define-macro m1 *form*
-                    (case *form*
+                  (define-macro m1 __form__
+                    (case __form__
                       (LForm (L _loc (List [_ a])))
                       (return
                         (quasiquote
                          (putStrLn (++ "hello, " (unquote a)))))
                       _ (skSrcError
-                         *form*
+                         __form__
                          (concat [(show (quote m1))
                                   "\ninvalid args: `"
-                                  (show *form*) "'"]))))))
+                                  (show __form__) "'"]))))))
              (it "should replace nil arg with _"
                  (expandTo
-                  (defmacro* m1 ()
+                  (defmacro-m m1 ()
                     (return `(print True)))
                   (define-macro m1 _
                     (return (quasiquote (print True))))))
              (it "should expand symbol arg to rest"
                  (expandTo
-                  (defmacro* m1 args
+                  (defmacro-m m1 args
                     (return `(print ,@args)))
-                  (define-macro m1 *form*
-                    (case (unCode *form*)
+                  (define-macro m1 __form__
+                    (case (unCode __form__)
                       (List (: _ args))
                       (return
                         (quasiquote
                          (print (unquote_splice args))))
 
                       _ (skSrcError
-                         *form*
+                         __form__
                          (concat [(show (quote m1))
                                   "\ninvalid args: `"
-                                  (show *form*) "'"]))))))
+                                  (show __form__) "'"]))))))
              (it "should detect invalid arg"
                  (expandFailure
-                  (defmacro* m1 "string"
+                  (defmacro-m m1 "string"
                     (return `(putChar \x)))))
              (it "should detect invalid form"
                  (expandFailure
-                  (defmacro* m1 too many parameters
+                  (defmacro-m m1 too many parameters
                     passed)))))
 
-      (d "defmacro*!"
+      (d "defmacro-m'"
          (it "expands to (eval-when (...) (defmacro* ...))"
              (expandTo
-              (defmacro*! m1 (a)
+              (defmacro-m' m1 (a)
                 `(return (putStrLn ,a)))
               (eval-when (compile load)
-                (defmacro* m1 (a)
+                (defmacro-m m1 (a)
                   (quasiquote (return (putStrLn (unquote a)))))))))
 
       (d "defmacro"
-         (it "should expand to defmacro*"
+         (it "should expand to defmacro-m"
              (expandTo
               (defmacro m1 (a)
                 `(putStrLn (++ "hello, " ,a)))
-              (defmacro* m1 (a)
+              (defmacro-m m1 (a)
                 (return
                   (quasiquote
                    (putStrLn (++ "hello, " (unquote a)))))))))
 
-      (d "defmacro!"
+      (d "defmacro'"
          (it "expands to (eval-when (...) (defmacro ...))"
              (expandTo
-              (defmacro! m1 (a)
+              (defmacro' m1 (a)
                 `(putStrLn ,a))
               (eval-when (compile load)
                 (defmacro m1 (a)
@@ -390,36 +390,36 @@
       (d "macro containing `$foo'"
          (it "should replace `$foo' with gensym"
              (do (let ((= f code
-                         (runSkc (macroFunction defmacro* code)
+                         (runSkc (macroFunction defmacro-m code)
                                  defaultSkEnv))))
-                 (<- e (f '(defmacro* m1 (a b)
+                 (<- e (f '(defmacro-m m1 (a b)
                             (let ((= $foo (+ ,a ,b)))
                               (return $foo)))))
                  (shouldNotBe (elem (ASymbol (fsLit "$foo")) e)
                               True))))
 
-      (d "macrolet*"
+      (d "macrolet-m"
          (do (it "should expand to let-macro"
                  (expandTo
-                  (macrolet* ((m (a b)
+                  (macrolet-m ((m (a b)
                                 (return `(+ ,a ,b))))
                     (m 20 22))
-                  (let-macro ((m *form*
-                                (case *form*
+                  (let-macro ((m __form__
+                                (case __form__
                                   (LForm (L _loc (List [_ a b])))
                                   (return (quasiquote
                                            (+ (unquote a) (unquote b))))
                                   _
                                   (skSrcError
-                                   *form*
+                                   __form__
                                    (concat [(show (quote m))
                                             "\ninvalid args: `"
-                                            (show *form*)
+                                            (show __form__)
                                             "'"])))))
                     (m 20 22))))
              (it "should replace () arg with _"
                  (expandTo
-                  (macrolet* ((m1 ()
+                  (macrolet-m ((m1 ()
                                 (return `(print \x))))
                     (m1))
                   (let-macro ((m1 _
@@ -427,10 +427,10 @@
                     (m1))))
              (it "should detect invalid form"
                  (expandFailure
-                  (macrolet*)))
+                  (macrolet-m)))
              (it "should detect invalid local macro form"
                  (expandFailure
-                  (macrolet* ((m1 ()
+                  (macrolet-m ((m1 ()
                                 foo bar buzz))
                     (m1))))))
 
@@ -440,17 +440,17 @@
               (macrolet ((m (a b)
                            `(+ ,a ,b)))
                 (m 20 22))
-              (let-macro ((m *form*
-                            (case *form*
+              (let-macro ((m __form__
+                            (case __form__
                               (LForm (L _loc (List [_ a b])))
                               (return (quasiquote (+ (unquote a)
                                                      (unquote b))))
                               _
                               (skSrcError
-                               *form*
+                               __form__
                                (concat [(show (quote m))
                                         "\ninvalid args: `"
-                                        (show *form*) "'"])))))
+                                        (show __form__) "'"])))))
                 (m 20 22)))))
 
       (d "defn"
@@ -501,10 +501,10 @@
                     2  3
                     4)))))
 
-      (d "defn!"
+      (d "defn'"
          (it "should expand to (eval-when (..) (defn ...))"
              (expandTo
-              (defn! foo (a b)
+              (defn' foo (a b)
                 (+ a b))
               (eval-when (compile load)
                 (defn foo (a b)
@@ -614,13 +614,13 @@
              (it "should fail on too few parameters"
                  (expandFailure
                   (defmodule)))))
-      (d ".ap"
+      (d "aps"
          (it "should expand to (<*> ... (<$> f ..) ..)"
              (expandTo
-              (.ap f (Just a) (Just b) (Just c))
+              (aps f (Just a) (Just b) (Just c))
               (<*> (<*> (<$> f (Just a)) (Just b)) (Just c)))))
-      (d ".pf"
+      (d "pfs"
          (it "expands to (. f1 (. f2 ...))"
              (expandTo
-              (.pf f1 (f2 arg1) f3)
+              (pfs f1 (f2 arg1) f3)
               (. f1 (. (f2 arg1) f3)))))))

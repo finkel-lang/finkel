@@ -69,6 +69,7 @@ library
                      , filepath     >= 1.4.1
                      , ghc          >= 8.2.0 && < 8.8.0
                      , ghc-boot     >= 8.2.0 && < 8.8.0
+                     , ghc-boot-th  >= 8.2.0 && < 8.8.0
                      , ghc-paths
                      , ghci         >= 8.2.0 && < 8.8.0
                      , process      >= 1.6.1

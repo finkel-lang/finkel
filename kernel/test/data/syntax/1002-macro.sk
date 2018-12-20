@@ -8,7 +8,7 @@
 (import Language.SK)
 
 (eval-when-compile
- (define-macro define-macro! form
+ (define-macro define-macro' form
    (case (unCode form)
      (List (: _ rest)) (return
                          `(begin
@@ -17,14 +17,14 @@
                             (define-macro ,@rest)))
      _ (skSrcError form "error"))))
 
-;; Simple version of `defmacro' defined with `define-macro!'
-(define-macro! defmacro form
+;; Simple version of `defmacro' defined with `define-macro''
+(define-macro' defmacro form
   (case form
     (LForm (L _ (List [_self name args body])))
     (case args
       (LForm (L _ (List _)))
       (return
-        `(define-macro! ,name form
+        `(define-macro' ,name form
            (case form
              (LForm (L l1 (List [_ ,@args]))) (return ,body)
              _ (skSrcError ',name "error"))))
@@ -36,7 +36,7 @@
 (defmacro m1 (x y)
   `(putStrLn (concat [,x ", " ,y])))
 
-(define-macro! m2 form
+(define-macro' m2 form
   (where (case form
            (LForm (L _ (List [_self arg1 arg2])))
            (return (mkbody arg1 arg2)))
@@ -95,13 +95,13 @@
               (case (unCode form)
                 (List [_ body]) (return body))))
   (identity-form
-   (define-macro! m4 _
+   (define-macro' m4 _
      (return `(putStrLn "m4")))))
 
 (:: m4run (IO ()))
 (= m4run (m4))
 
-(define-macro! m5 form
+(define-macro' m5 form
   (case (unCode form)
     (List [_ arg1 body])
     (do (<- tmp gensym)

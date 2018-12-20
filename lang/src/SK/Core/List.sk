@@ -12,8 +12,8 @@
   cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
 
   ;; predicates
-  atom? pair? list? hslist?
-  symbol? string? char? integer? fractional? unit?
+  is-atom is-pair is-list is-hslist
+  is-symbol is-string is-char is-integer is-fractional is-unit
 
   ;; list constructors
   cons append
@@ -113,15 +113,15 @@
 
 ;;; Predicates
 
-(:: atom? (-> Code Bool))
-(= atom? (LForm (L _ form))
+(:: is-atom (-> Code Bool))
+(= is-atom (LForm (L _ form))
   (case form
     (Atom _)  True
     (List []) True
     _         False))
 
-(:: pair? (-> Code Bool))
-(= pair? (LForm (L _ form))
+(:: is-pair (-> Code Bool))
+(= is-pair (LForm (L _ form))
   (case form
     (List []) False
     (List _)  True
@@ -137,14 +137,14 @@
                                ,pat True
                                _    False))))
                 _ (skSrcError form "defpred"))))
-  (defpred list? (List _))
-  (defpred hslist? (HsList _))
-  (defpred symbol? (Atom (ASymbol _)))
-  (defpred string? (Atom (AString _)))
-  (defpred char? (Atom (AChar _)))
-  (defpred integer? (Atom (AInteger _)))
-  (defpred fractional? (Atom (AFractional _)))
-  (defpred unit? (Atom AUnit)))
+  (defpred is-list (List _))
+  (defpred is-hslist (HsList _))
+  (defpred is-symbol (Atom (ASymbol _)))
+  (defpred is-string (Atom (AString _)))
+  (defpred is-char (Atom (AChar _)))
+  (defpred is-integer (Atom (AInteger _)))
+  (defpred is-fractional (Atom (AFractional _)))
+  (defpred is-unit (Atom AUnit)))
 
 
 ;;; CONS
@@ -162,9 +162,9 @@
 ;;; | Append two lists.
 (:: append (-> Code Code Code))
 (= append xs ys
-  (| ((not (|| (list? xs) (hslist? xs)))
+  (| ((not (|| (is-list xs) (is-hslist xs)))
       (error-non-list "append" xs))
-     ((not (|| (list? ys) (hslist? ys)))
+     ((not (|| (is-list ys) (is-hslist ys)))
       (error-non-list "append" ys))
      (otherwise
       (let ((:: go (-> Code Code Code))

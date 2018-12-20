@@ -103,25 +103,25 @@
 
           ;; REPL macros
           (ok '(exported-macros Prelude) "[]")
-          (ok '(*_ browse Unsafe.Coerce)
+          (ok '(repl-macro browse Unsafe.Coerce)
               "Unsafe.Coerce.unsafeCoerce :: a -> b")
-          (ok '(*_ info putStr)
+          (ok '(repl-macro info putStr)
               "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
-          (ok '(*_ kind Maybe)
+          (ok '(repl-macro kind Maybe)
               "Maybe :: * -> *")
-          (ok '(*_ pwd) (show current-dir))
+          (ok '(repl-macro pwd) (show current-dir))
           (satisfy
-           '(*_ show bindings)
+           '(repl-macro show bindings)
            (\ ret
              (case ret
                (Right str) (elem "f1 :: Int -> Int = _" (lines str))
                _ False)))
-          (ok '(*_ show context)
+          (ok '(repl-macro show context)
               (delines
                ["; context"
                 ";  IIDecl: import Control.Monad"
                 ";  IIDecl: import Prelude"]))
-          (ok '(*_ show dflags)
+          (ok '(repl-macro show dflags)
               (delines
                ["; dflags:"
                 ";  ghcLink: LinkInMemory"
@@ -130,8 +130,8 @@
                 ";  objectDir: Nothing"
                 ";  thisInstalledUnitId: main"]))
           (ok '(begin
-                (*_ set -odir /tmp)
-                (*_ show dflags))
+                (repl-macro set -odir /tmp)
+                (repl-macro show dflags))
               (delines
                ["; dflags:"
                 ";  ghcLink: LinkInMemory"
@@ -140,26 +140,26 @@
                 ";  objectDir: Just \"/tmp\""
                 ";  thisInstalledUnitId: main"]))
           (satisfy
-           '(*_ show macros)
+           '(repl-macro show macros)
            (\ ret
              (case ret
-               (Right str) (elem ";  defmacro*!" (lines str))
+               (Right str) (elem ";  defmacro_m'" (lines str))
                _ False)))
-          (ok '(*_ show modules) "")
-          (satisfy '(*_ show packages)
+          (ok '(repl-macro show modules) "")
+          (satisfy '(repl-macro show packages)
                    (\ ret
                      (case ret
                        (Right str) (isSubsequenceOf "; packages" str)
                        _ False)))
-          (ok '(*_ show paths)
+          (ok '(repl-macro show paths)
               (concat
                ["; current working directory:\n"
                 ";   " current-dir "\n"
                 "; module import search paths:\n"
                 ";    ."]))
-          (ok '(*_ type putStrLn)
+          (ok '(repl-macro type putStrLn)
               "putStrLn :: String -> IO ()")
-          (ok '(*_ type (foldr + (:: 0 Int)))
+          (ok '(repl-macro type (foldr + (:: 0 Int)))
               "(foldr + (:: 0 Int)) :: Foldable t => t Int -> Int")
 
           ;; Errors
@@ -170,5 +170,5 @@
               (concat ["<quoted code>: error:\n    syntax error on input "
                        "`(= f a (+ a 1) (+ a 2))'"]))
           (ng '(head []) "*** Exception: Prelude.head: empty list")
-          (ng '(*_ info (foo bar))
+          (ng '(repl-macro info (foo bar))
               "<quoted code>: error: info: invalid form `(foo bar)'"))))))

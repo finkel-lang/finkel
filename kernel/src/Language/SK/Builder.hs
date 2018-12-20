@@ -15,6 +15,7 @@ module Language.SK.Builder
   , getBState
   , parse
   , putBState
+  , setLastToken
   , runBuilder
 
   -- * Type synonyms
@@ -142,13 +143,22 @@ instance Monad Builder where
                      Left err -> Left err))
   {-# INLINE (>>=) #-}
 
+-- | Get current 'BState'.
 getBState :: Builder BState
 getBState = Builder get
 {-# INLINE getBState #-}
 
+-- | Put current 'BState'.
 putBState :: BState -> Builder ()
 putBState = Builder . put
 {-# INLINE putBState #-}
+
+-- | Set last token to given 'Code'.
+setLastToken :: Code -> Builder ()
+setLastToken code = do
+  st <- getBState
+  putBState (st {lastToken = Just code})
+{-# INLINE setLastToken #-}
 
 -- | Parse with builder using given tokens, continue on successful
 -- parse.

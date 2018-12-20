@@ -221,15 +221,33 @@
 (= mkR1 a b
   (Con1 {field1 a field2 b}))
 
-(= fieldexprs
+(:: fe_01 (IO ()))
+(= fe_01
   (do (let ((:: (r1 r2) R1)
             (= r1 (Con1 {field2 False
                          field1 42}))
             (= r2 (r1 {field1 (* (field1 r1) 2)}))
-            (= r3 ((mkR1 21 True) {field1 12}))))
+            (= r3 ((mkR1 21 True) {field1 12}))
+            (= as (r1 {field1 (* (field1 r1) 2)}))
+            (= bs (as {field1 (* (field1 as) 2)}))))
       (print r1)
       (print r2)
-      (print r3)))
+      (print r3)
+      (print as)
+      (print bs)))
+
+(:: fe_02 (IO ()))
+(= fe_02
+  (do (let ((:: (as bs) R1)
+            (= as (Con1 {field2 True
+                         field1 3}))
+            (= bs (as {field1 (* (field1 as) 2)}))))
+      (print as)
+      (print bs)))
+
+(= fieldexprs
+  (do fe_01
+      fe_02))
 
 ;;; 3.16 Expression Type-Signatures
 

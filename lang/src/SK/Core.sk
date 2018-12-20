@@ -5,11 +5,11 @@
   eval-when
 
   ;; Macros for macros
-  defmacro defmacro! defmacro* defmacro*! macrolet macrolet*
+  defmacro defmacro' defmacro-m defmacro-m' macrolet macrolet-m
   macroexpand macroexpand-1 exported-macros
 
   ;; Function declarations
-  defn defn! defdo
+  defn defn' defdo
 
   ;; Expressions
   cond list
@@ -18,7 +18,7 @@
   defmodule
 
   ;; Convenience
-  .ap .pf
+  aps pfs
 
   ;; Reexport
   (module SK.Core.List))
@@ -67,34 +67,34 @@
 ;;; Basic
 
 ;;; Auxiliary macro to define a macro for both compile time and load
-;;; time. Used only in this module until `defmacro*!' is defined.
+;;; time. Used only in this module until `defmacro-m'' is defined.
 (eval-when-compile
-  (define-macro define-macro! form
+  (define-macro define-macro' form
     (case (unCode form)
       (List (: _ rest))
       (return `(begin
                  (eval-when-compile
                    (define-macro ,@rest))
                  (define-macro ,@rest)))
-      _ (skSrcError form "define-macro!: impossible happened"))))
+      _ (skSrcError form "define-macro': impossible happened"))))
 
 ;;; Macro to specify the phases of evaluation.
-(define-macro! eval-when form
-  (let ((:: compile? (-> [Code] Bool))
-        (= compile? (elem 'compile))
-        (:: load? (-> [Code] Bool))
-        (= load? (elem 'load)))
+(define-macro' eval-when form
+  (let ((:: at-compile (-> [Code] Bool))
+        (= at-compile (elem 'compile))
+        (:: at-load (-> [Code] Bool))
+        (= at-load (elem 'load)))
     (case (unCode form)
       (List (: _ (: (LForm (L _ (List phases))) body)))
-      (| ((&& (compile? phases) (load? phases))
+      (| ((&& (at-compile phases) (at-load phases))
           (return
             `(begin
                (eval-when-compile
                  ,@(List body))
                ,@(List body))))
-         ((compile? phases)
+         ((at-compile phases)
           (return `(eval-when-compile ,@(List body))))
-         ((load? phases)
+         ((at-load phases)
           (return `(begin ,@(List body))))
          (otherwise
           (skSrcError form (++ "eval-when: invalid phase: "
@@ -130,7 +130,7 @@
     (do (<- kvs (foldM acc-gensym-names [] form))
         (return (subst-gensyms kvs form))))
 
-  ;; Function to make body of `defmacro*' and `defmacro'.
+  ;; Function to make body of `defmacro-m' and `defmacro'.
   (:: make-defmacro-body (-> String Code Code Code Code (Skc Code)))
   (= make-defmacro-body label whole name0 arg0 body0
     (let ((:: err (-> Code Code Code))
@@ -138,7 +138,7 @@
             `(skSrcError ,form-name
                          (concat
                           [(show ',name)
-                           "\ninvalid args: `" (show *form*) "'"])))
+                           "\ninvalid args: `" (show __form__) "'"])))
 
           (:: atom-body (-> Code Code Code Code Code))
           (= atom-body name arg body form-name
@@ -158,27 +158,27 @@
                  _       ,(err form-name name)))))
       (case (unLForm arg0)
         (L l1 (List args))
-        (gensymfy (list-body l1 name0 args body0 '*form*))
+        (gensymfy (list-body l1 name0 args body0 '__form__))
 
         (L l1 (HsList args))
-        (gensymfy (list-body l1 name0 args body0 '*form*))
+        (gensymfy (list-body l1 name0 args body0 '__form__))
 
         (L _ (Atom (ASymbol _)))
-        (gensymfy (atom-body name0 arg0 body0 '*form*))
+        (gensymfy (atom-body name0 arg0 body0 '__form__))
 
         (L _ (Atom AUnit))
         (gensymfy body0)
 
         _ (skSrcError whole (++ label ": invalid args")))))
 
-  ;; Function to make body expression of `macrolet*' and `macrolet'.
+  ;; Function to make body expression of `macrolet-m' and `macrolet'.
   (:: make-macrolet-body (-> String Code (-> Code Code) (Skc Code)))
   (= make-macrolet-body label whole f
     (let ((:: make-macro (-> Code (Skc Code)))
           (= make-macro code
             (case code
               (LForm (L l (List [name arg body0])))
-              (do (let ((= the-form (if (unit? arg) '_ '*form*))
+              (do (let ((= the-form (if (is-unit arg) '_ '__form__))
                         (= body1 (f body0))))
                   (<- body2
                     (make-defmacro-body label code name arg body1))
@@ -193,47 +193,47 @@
 
         _ (macro-error whole (++ label ": invalid form"))))))
 
-;;; The `defmacro*' macro, a macro to define macro in `Skc' monad. The
+;;; The `defmacro-m' macro, a macro to define macro in `Skc' monad. The
 ;;; body expression should be a value of type `Skc a'.
-(define-macro! defmacro* form
+(define-macro' defmacro-m form
   (case (unCode form)
     (List [_ name arg body0])
-    (do (<- body1 (make-defmacro-body "defmacro*" form name arg body0))
-        (let ((= the-form (if (unit? arg) '_ '*form*))))
+    (do (<- body1 (make-defmacro-body "defmacro-m" form name arg body0))
+        (let ((= the-form (if (is-unit arg) '_ '__form__))))
         (return `(define-macro ,name ,the-form
                    ,body1)))
 
-    _ (macro-error form "defmacro*: invalid form")))
+    _ (macro-error form "defmacro-m: invalid form")))
 
-;;; Variant of `defmacro*'. Wrapped in `eval-when' with `compile' and
+;;; Variant of `defmacro-m'. Wrapped in `eval-when' with `compile' and
 ;;; `load' phases.
-(define-macro! defmacro*! form
+(define-macro' defmacro-m' form
   (case (unCode form)
     (List (: _ rest)) (return `(eval-when (compile load)
-                                 (defmacro* ,@rest)))
-    _ (macro-error form "defmacro*!: impossible happened.")))
+                                 (defmacro-m ,@rest)))
+    _ (macro-error form "defmacro-m': impossible happened.")))
 
 ;;; The `defmacro' macro, similar to the macro with same name found in
 ;;; other Lisps, such as Commmon Lisp, Clojure, LFE, Hy
 ;;; ... etc. Currently does not suuport lambda-list like pattern match
 ;;; in macro argument.
-(defmacro*! defmacro
+(defmacro-m' defmacro
   [name args body]
-  (return `(defmacro* ,name
+  (return `(defmacro-m ,name
              ,args
              (return ,body))))
 
 ;;; Variant of `defmacro'. Wrapped in `eval-when' with `compile' and
 ;;; `load' phases.
-(defmacro*! defmacro!
+(defmacro-m' defmacro'
   [name args body]
   (return `(eval-when (compile load)
              (defmacro ,name ,args
                ,body))))
 
 ;;; Variant of `let-macro', with `make-macro-body'.
-(define-macro macrolet* form
-  (make-macrolet-body "macrolet*" form id))
+(define-macro macrolet-m form
+  (make-macrolet-body "macrolet-m" form id))
 
 ;;; Variant of `let-macro', with `make-macro-body'. Body expression
 ;;; wrapped with `return'.
@@ -287,7 +287,7 @@
 
 ;;; Macro to define a function for both of compilation time and load
 ;;; time. This macro uses `eval-when' and `defn'.
-(defmacro defn!
+(defmacro defn'
   form
   `(eval-when (compile load)
      (defn ,@form)))
@@ -306,7 +306,7 @@
 ;;; same as wrapping the body with `case' expression with dummy unit, or
 ;;; `if' with `MultiWayIf' GHC language extension.
 
-(defmacro! cond
+(defmacro' cond
   body
   `(case ()
      _ (| ,@body)))
@@ -317,7 +317,7 @@
 ;;; Expand given form if the given form is a macro form, otherwise
 ;;; return the given form as is. Note that `macroexpand-1' and
 ;;; `macroexpand' are macro, not function.
-(defmacro* macroexpand-1
+(defmacro-m macroexpand-1
   [form]
   (case (unCode form)
     (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
@@ -327,7 +327,7 @@
 
 ;;; Macro for expanding macro. This version of `macroexpand' recursively
 ;;; expands all sub forms.
-(defmacro* macroexpand
+(defmacro-m macroexpand
   [form]
   (case (unCode form)
     (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
@@ -341,7 +341,7 @@
 
 ;;; Macro to return a Haskell list of macro name Strings exported from
 ;;; given module.
-(defmacro* exported-macros
+(defmacro-m exported-macros
   [name]
   (let ((= f dflags mb-thing acc
           (case mb-thing
@@ -428,12 +428,12 @@
                        (macro-error lst
                                     "defmodule: unknown section")))))))
           (<- alist (foldM merge-sections [] rest1))
-          (let ((= emit add-load-use? header
+          (let ((= emit add-load-use header
                   (let ((= e1 (maybe nil id (lookup header alist)))
                         (= e2 (maybe nil
                                      (mapcar (\ es `(,header ,@es)))
                                      (lookup 'load-use alist))))
-                    (if add-load-use?
+                    (if add-load-use
                         (append e1 e2)
                         e1)))))
           (return
@@ -452,10 +452,10 @@
 ;;; Macro to apply given function in Applicative and Functor context.
 ;;; Can handle variable number of arguments.
 ;;;
-;;; (macroexpand '(.ap f (pure a) (pure b) (pure c)))
+;;; (macroexpand '(aps f (pure a) (pure b) (pure c)))
 ;;; ==> (<*> (<*> (<$> f (pure a)) (pure b)) (pure c))
 ;;;
-(define-macro .ap form
+(define-macro aps form
   (let ((= build op args
           (case args
             (: arg []) (return `(<$> ,op ,arg))
@@ -464,20 +464,20 @@
             [] (return `(<$> ,op)))))
     (case (unCode form)
       (List (: _ (: op args))) (build op (reverse args))
-      _ (macro-error form ".ap: invalid form"))))
+      _ (macro-error form "aps: invalid form"))))
 
 ;;; Macro for point free style function composition.
 ;;;
-;;; (macroexpand '(.pf f1 (f2 arg1) f3))
+;;; (macroexpand '(pfs f1 (f2 arg1) f3))
 ;;; ==> (. f1 (. (f2 arg1) f3))
 ;;;
-(define-macro .pf form
+(define-macro pfs form
   (let ((= go exprs
           (case exprs
             [e1 e2] (return `(. ,e1 ,e2))
             (: e1 rest) (do (<- e2 (go rest))
                             (return `(. ,e1 ,e2)))
-            _ (macro-error form ".pf: no args"))))
+            _ (macro-error form "pfs: no args"))))
     (case (unCode form)
       (List (: _ rest)) (go rest)
-      _ (macro-error form ".pf: invalid form"))))
+      _ (macro-error form "pfs: invalid form"))))

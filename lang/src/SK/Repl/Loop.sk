@@ -170,7 +170,7 @@
           (| ((isPrefixOf "set" lin)
               (go3 result-mv (as-repl-macro lin)))
              (otherwise
-              (go2 result-mv (concat ["(*_ " lin ")"])))))
+              (go2 result-mv (concat ["(repl-macro " lin ")"])))))
         (= go2 result-mv line
           (do (<- mb-form (lift (read-form line)))
               (case mb-form
@@ -182,7 +182,7 @@
               (print-io result-mv)
               (go result-mv)))
         (= as-repl-macro str
-          `(*_ ,@(map qSymbol (words str))))
+          `(repl-macro ,@(map qSymbol (words str))))
         (= quit
           (liftIO (killThread eval-tid)))
         (= loop result-mv
