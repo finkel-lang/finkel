@@ -242,8 +242,9 @@ skcHaddockHooks pd lbi hooks flags = do
           ghc = simpleProgram "ghc"
           acquire =
             case lookupProgram ghc (withPrograms lbi) of
-              Just prog -> runGHC verbosity prog cmpl platform opts
-              Nothing   -> return ()
+              Just prog | not (null gen_files) ->
+                runGHC verbosity prog cmpl platform opts
+              _                                -> return ()
           clean path = do
             exist <- doesFileExist path
             when exist (removeFile path)
