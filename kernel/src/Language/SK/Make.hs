@@ -23,7 +23,8 @@ import System.Directory (createDirectoryIfMissing)
 
 -- filepath
 import System.FilePath ( dropExtension, splitExtension
-                       , takeBaseName, takeExtension, (<.>), (</>))
+                       , takeBaseName, takeDirectory, takeExtension
+                       , (<.>), (</>))
 
 -- ghc
 import BasicTypes (SuccessFlag(..))
@@ -767,8 +768,9 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
              | looksLikeModuleName bname = moduleNameSlashes mname
              | otherwise                 = bname
            out_path = dir </> file_name <.> "hs"
+           out_dir = takeDirectory out_path
        debugSkc (";;; Writing to " ++ out_path)
-       liftIO (do createDirectoryIfMissing True dir
+       liftIO (do createDirectoryIfMissing True out_dir
                   writeFile out_path contents)
     gen pm = genHsSrc sp (Hsrc (unLoc (hpm_module pm)))
     orig_path = ms_hspp_file ms
