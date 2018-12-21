@@ -3,7 +3,6 @@ module Language.SK.Run
   ( runSkc
   , compileSkModuleForm
   , getDynFlagsFromSPState
-  , parseSexprs
   , buildHsSyn
   , macroFunction
   , mkModSummary
@@ -13,9 +12,6 @@ module Language.SK.Run
 -- base
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Maybe (fromMaybe, maybeToList)
-
--- bytestring
-import qualified Data.ByteString.Lazy as BL
 
 -- containers
 import qualified Data.Map as Map
@@ -46,7 +42,6 @@ import Language.SK.Form
 import Language.SK.SKC
 import Language.SK.Syntax
 import Language.SK.Lexer
-import Language.SK.Reader
 
 
 -- | Run 'Skc' with given environment and 'skcErrrorHandler'.
@@ -54,15 +49,6 @@ runSkc :: Skc a -> SkEnv -> IO a
 runSkc m sk_env = do
   let mb_libdir = envLibDir sk_env
   runGhc mb_libdir (fmap fst (toGhc m sk_env))
-
--- | Parse sexpressions.
-parseSexprs :: Maybe FilePath -- ^ Name of input file.
-            -> BL.ByteString  -- ^ Contents to parse.
-            -> Skc ([Code], SPState)
-parseSexprs mb_file contents =
-  case runSP sexprs mb_file contents of
-    Right a  -> return a
-    Left err -> failS err
 
 -- | Run given builder.
 buildHsSyn :: Builder a -- ^ Builder to use.

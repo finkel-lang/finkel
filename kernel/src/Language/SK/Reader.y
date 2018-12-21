@@ -7,14 +7,19 @@
 -- generator.
 --
 module Language.SK.Reader
-  ( sexpr
+  ( parseSexprs
+  , sexpr
   , sexprs
   , psexpr
   ) where
 
 -- base
+import Control.Monad.Fail (MonadFail(..))
 import Data.Char (toLower)
 import Data.List (foldl')
+
+-- bytestring
+import qualified Data.ByteString.Lazy as BL
 
 -- ghc
 import FastString (FastString, unpackFS)
@@ -292,4 +297,14 @@ dispatch (L _ (TSymbol sym)) form =
 
 happyError :: SP a
 happyError = lexErrorSP
+
+-- | Parse sexpressions.
+parseSexprs :: MonadFail m
+            => Maybe FilePath -- ^ Name of input file.
+            -> BL.ByteString  -- ^ Contents to parse.
+            -> m ([Code], SPState)
+parseSexprs mb_file contents =
+  case runSP sexprs mb_file contents of
+    Right a  -> return a
+    Left err -> Control.Monad.Fail.fail err
 }

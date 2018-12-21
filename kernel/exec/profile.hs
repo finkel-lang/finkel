@@ -63,7 +63,7 @@ printExpandedForms path = Run.runSkc go Make.defaultSkEnv
     go = do
       Make.initSessionForMake
       contents <- liftIO (BL.readFile path)
-      (forms, _) <- Run.parseSexprs (Just path) contents
+      (forms, _) <- Reader.parseSexprs (Just path) contents
       forms' <- Expand.withExpanderSettings (Expand.expands forms)
       liftIO (mapM_ print forms')
 

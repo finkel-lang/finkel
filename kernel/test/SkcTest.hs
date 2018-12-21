@@ -30,7 +30,9 @@ import Language.SK.Builder
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.Homoiconic
+import Language.SK.Lexer
 import Language.SK.Make
+import Language.SK.Reader
 import Language.SK.Run
 import Language.SK.SKC
 import Language.SK.Syntax

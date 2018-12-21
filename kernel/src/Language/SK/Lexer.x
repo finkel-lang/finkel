@@ -307,7 +307,6 @@ getSPState :: SP SPState
 getSPState = SP (\st -> SPOK st st)
 {-# INLINE getSPState #-}
 
-
 -- ---------------------------------------------------------------------
 --
 -- Token data and actions

@@ -12,9 +12,6 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Data.List (find, foldl')
 import Data.Maybe (catMaybes, fromMaybe, isJust)
 
--- bytestring
-import qualified Data.ByteString.Lazy.Char8 as BL
-
 -- container
 import Data.Graph (flattenSCCs)
 
@@ -34,7 +31,7 @@ import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
                 , GhcMode(..), getDynFlags, gopt, gopt_set
                 , gopt_unset, interpWays )
 import ErrUtils (mkErrMsg, withTiming)
-import Exception (SomeException, gtry, tryIO)
+import Exception (tryIO)
 import Finder ( addHomeModuleToFinder, cannotFindModule
               , findImportedModule, findObjectLinkableMaybe )
 import GHC ( setSessionDynFlags )
@@ -58,7 +55,7 @@ import Module ( ModLocation(..), ModuleName, installedUnitIdEq
               , mkModuleName, moduleName, moduleNameSlashes
               , moduleNameString, moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
-import SrcLoc (getLoc, mkRealSrcLoc, noSrcSpan)
+import SrcLoc (getLoc, mkRealSrcLoc)
 import StringBuffer (stringToStringBuffer)
 import Util (getModificationUTCTime, looksLikeModuleName)
 
@@ -140,11 +137,13 @@ make infiles no_link force_recomp mb_output = do
   -- SkEnv, to reset the language extension later, to keep fresh set of
   -- language extensios per module.
   let lexts = (language dflags3, extensionFlags dflags3)
+      findIt (path, mb_phase) =
+        fmap (\ts -> (ts, mb_phase)) (findTargetSource path)
   modifySkEnv (\e -> e {envDefaultLangExts = lexts})
 
   -- Decide the kind of sources of the inputs, inputs arguments could be
   -- file paths, or module names.
-  sources <- mapM findTargetSource infiles
+  sources <- mapM findIt infiles
 
   -- Do the compilation work.
   mod_summaries <- make' [] sources
@@ -201,6 +200,10 @@ defaultSkEnv = emptySkEnv
 --
 -- Simply a 'TargetSource' maybe paired with 'Phase'.
 type TargetUnit = (TargetSource, Maybe Phase)
+
+-- | Make empty 'TargetUnit' from 'TargetSource'
+emptyTargetUnit :: TargetSource -> TargetUnit
+emptyTargetUnit ts = (ts, Nothing)
 
 -- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule', then compile
 -- to interface file, and object code.
@@ -380,7 +383,7 @@ makeOne i total mb_sp ms graph_upto_this = timeIt label go
       modifySession
         (\e -> e { hsc_mod_graph = extendMG' (hsc_mod_graph e) ms'
                  , hsc_dflags = dflags
-                 , hsc_IC = (hsc_IC e) {ic_dflags=dflags}})
+                 , hsc_IC = (hsc_IC e) {ic_dflags = dflags}})
 
       return ms'
 
@@ -466,37 +469,6 @@ checkUpToDate ms dependencies
                          all dep_ok sccs_without_self
         return up_to_date
 
--- | Find 'TargetSource' from command line argument. This function
--- throws 'SkException' when the target source was not found.
-findTargetSource :: (String, a) -> Skc (TargetSource, a)
-findTargetSource (modNameOrFilePath, a) = do
-  dflags <- getSessionDynFlags
-  mb_inputPath <-
-    findFileInImportPaths (importPaths dflags) modNameOrFilePath
-  let detectSource path
-        | isSkFile path =
-          do contents <- liftIO (BL.readFile path)
-             (forms, sp) <- parseSexprs (Just path) contents
-             let modName = asModuleName modNameOrFilePath
-             return (SkSource path modName forms sp, a)
-        | isHsFile path = return (HsSource path, a)
-        | otherwise = return (OtherSource path, a)
-  case mb_inputPath of
-    Just path -> detectSource path
-    Nothing   -> do
-      let err = mkErrMsg dflags noSrcSpan neverQualify doc
-          doc = text ("cannot find target source: " ++ modNameOrFilePath)
-      throwOneError err
-
--- | Like 'findTargetSource', but the result wrapped in 'Maybe'.
-findTargetSourceMaybe :: (String, a) -> Skc (Maybe (TargetSource, a))
-findTargetSourceMaybe (modName, a) = do
-  et_ret <- gtry (findTargetSource (modName, a))
-  case et_ret of
-    Right found -> return (Just found)
-    Left _err   -> let _err' = _err :: SomeException
-                   in  return Nothing
-
 -- | Search 'ModSummary' of required module.
 findRequiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
 findRequiredModSummary hsc_env mname = do
@@ -504,9 +476,9 @@ findRequiredModSummary hsc_env mname = do
   -- because we want to use the source modified time from home package
   -- modules, to support recompilation of a module which requiring other
   -- home package modules.
-  mb_tu <- findTargetSourceMaybe (mname, Nothing)
-  case mb_tu of
-    Just tu -> mkReadTimeModSummary tu
+  mb_ts <- findTargetSourceMaybe mname
+  case mb_ts of
+    Just ts -> mkReadTimeModSummary (emptyTargetUnit ts)
     Nothing -> do
       -- The module name should be found somewhere else than current
       -- target sources. If not, complain what's missing.
@@ -544,8 +516,11 @@ findUnCompiledImport hsc_env acc idecl = do
         Just path | takeExtension path `elem` [".hs"] ->
                     if moduleName mdl `elem` map ms_mod_name acc
                        then return Nothing
-                       else Just <$> findTargetSource (name, Nothing)
-        _ | inSameUnit && notInAcc ->
+                       else do
+                         -- Just <$> findTargetSource (name, Nothing)
+                         ts <- findTargetSource name
+                         return (Just (ts, Nothing))
+        _ | inSameUnit && notInAcc -> do
             -- Workaround for loading home package modules when
             -- working with cabal package from REPL.
             -- 'Finder.findImportedModule' uses hard coded source file
@@ -564,7 +539,9 @@ findUnCompiledImport hsc_env acc idecl = do
             -- from REPL need to be exactly same as the 'UnitId' of
             -- package, including the hash part.
             --
-            findTargetSourceMaybe (name, Nothing)
+            -- mb_ts <- findTargetSourceMaybe name
+            -- return (fmap emptyTargetUnit mb_ts)
+            fmap (fmap emptyTargetUnit) (findTargetSourceMaybe name)
           | otherwise -> return Nothing
         where
           inSameUnit =
@@ -572,10 +549,10 @@ findUnCompiledImport hsc_env acc idecl = do
           notInAcc =
             moduleName mdl `notElem` map ms_mod_name acc
     _              -> do
-      mb_tu <- findTargetSourceMaybe (name, Nothing)
-      case mb_tu of
-        tu@(Just _) -> return tu
-        Nothing     -> do
+      mb_ts <- findTargetSourceMaybe name
+      case mb_ts of
+        Just ts -> return (Just (emptyTargetUnit ts))
+        Nothing -> do
           let loc = getLoc idecl
               doc = cannotFindModule dflags mname findResult
               err = mkErrMsg dflags loc neverQualify doc
@@ -756,7 +733,11 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
       | isSkFile orig_path = do
         contents <- gen pm
         sk_env <- getSkEnv
-        when (envDumpHs sk_env) (liftIO (putStr contents))
+        when (envDumpHs sk_env)
+             (liftIO
+                (do putStrLn (unwords [colons, orig_path, colons])
+                    putStrLn ""
+                    putStr contents))
         case envHsDir sk_env of
           Just dir -> doWrite dir contents
           Nothing  -> return ()
@@ -776,6 +757,7 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
     orig_path = ms_hspp_file ms
     sp = fromMaybe dummy_sp mb_sp
     dummy_sp = initialSPState (fsLit orig_path) 1 1
+    colons = replicate 12 ';'
 
 -- [guessOutputFile]
 --
