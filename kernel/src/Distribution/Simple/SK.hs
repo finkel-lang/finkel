@@ -21,7 +21,7 @@ module Distribution.Simple.SK
 
 -- base
 import Control.Exception (bracket_)
-import Control.Monad (mapAndUnzipM, when)
+import Control.Monad (foldM, mapAndUnzipM, when)
 import Data.Foldable (toList)
 import Data.Function (on)
 import Data.List (unionBy)
@@ -54,7 +54,7 @@ import Distribution.InstalledPackageInfo
 #endif
 
 -- directory
-import System.Directory (doesFileExist, removeFile)
+import System.Directory (findFile, doesFileExist, removeFile)
 
 import qualified Distribution.Simple.Setup as Setup
 import qualified Distribution.Verbosity as Verbosity
@@ -236,10 +236,18 @@ skcHaddockHooks pd lbi hooks flags = do
           flag = Setup.Flag
           cmpl = compiler lbi
           platform = hostPlatform lbi
-          gen_files = map (\m -> autogen_dir </> m)
-                          (map (\m -> toFilePath m <.> "hs") hs_mods
-                           ++ hs_files)
-          ghc = simpleProgram "ghc"
+          accumurateGeneratedFile acc m = do
+            let p = toFilePath m
+            mb_found <- findFile hs_src_dirs (p <.> "sk")
+            case mb_found of
+              Just _found -> do
+                let dest = autogen_dir </> p <.> "hs"
+                return (dest:acc)
+              Nothing    -> return acc
+
+      gen_files <- foldM accumurateGeneratedFile [] hs_mods
+
+      let ghc = simpleProgram "ghc"
           acquire =
             case lookupProgram ghc (withPrograms lbi) of
               Just prog | not (null gen_files) ->
