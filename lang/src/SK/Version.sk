@@ -85,9 +85,9 @@
        (unlines
         [(concat ["USAGE: " name " version [OPTIONS]"])
          ""
-         "  Show version information."
+         "Show version information."
          ""
-         (usageInfo "OPTIONS:" version-descrs)]))))
+         (usageInfo "OPTIONS:\n" version-descrs)]))))
 
 (defn (sk-lang-version String)
   (showVersion Paths_sk_lang.version))

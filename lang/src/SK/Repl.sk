@@ -24,6 +24,7 @@
    (System.Exit (exitFailure))
    (System.Console.GetOpt
     ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
+   (System.Environment (getProgName))
 
    ;; sk-kernel
    (Language.SK.Expand (specialForms))
@@ -93,13 +94,14 @@
       exitFailure))
 
 (defn (print-usage (IO ()))
-  (putStr
-   (unlines
-    ["USAGE: sk repl [OPTIONS]"
-     ""
-     "  Start interactive REPL."
-     ""
-     (usageInfo "OPTIONS:" descrs)])))
+  (do (<- name getProgName)
+      (putStr
+       (unlines
+        [(concat ["USAGE: " name " repl [OPTIONS]"])
+         ""
+         "Start interactive REPL."
+         ""
+         (usageInfo "OPTIONS:\n" descrs)]))))
 
 (defn (run (-> (Maybe Int) (IO ())))
   [listen]

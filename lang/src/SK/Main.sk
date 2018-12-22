@@ -70,7 +70,11 @@
   [args]
   (case args
     (: name _ ) (| ((<- (Just cmd) (find-command name))
-                    (cmd-act cmd ["--help"])))
+                    (let ((= flag
+                            (case name
+                              "make" "--sk-help"
+                              _      "--help")))
+                      (cmd-act cmd [flag]))))
     _ show-usage))
 
 (defn (show-usage (IO ()))
@@ -85,9 +89,9 @@
                        "  " (cmd-descr cmd)]))))
       (putStrLn
        (unlines
-        (++ [(concat ["USAGE: " name " <command> [arguments]"])
+        (++ [(concat ["USAGE:\n\n   " name " <command> [arguments]"])
              ""
-             (concat ["  Run \"" name " help <command>\""
+             (concat ["Run \"" name " help <command>\""
                       " for more information."])
              ""
              "COMMANDS:"
