@@ -85,11 +85,12 @@ flag dynamic
   default:             False
   manual:              True
 
--- Constantly building with "-dynamic" option.
 executable skkc
   hs-source-dirs:      exec
   main-is:             skkc.hs
-  ghc-options:         -dynamic -Wall -threaded -rtsopts
+  if flag(dynamic)
+    ghc-options:       -dynamic
+  ghc-options:         -Wall -threaded -rtsopts
   build-depends:       base >= 4.10 && < 5
                      , sk-kernel
   default-language:    Haskell2010
