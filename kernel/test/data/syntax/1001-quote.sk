@@ -13,6 +13,9 @@
 (= f3 arg
   (print `(a b ,@arg d)))
 
+(= f4 arg
+  (print `(கிழக்கு බටහිර ,arg Βόρειος)))
+
 (:: main (IO ()))
 (= main
   (do
@@ -40,4 +43,5 @@
     (f2 'foo)
     (f3 '(foo bar buzz))
     (f3 '[\x \y \z])
-    (f3 ['foo 'bar 'buzz])))
+    (f3 ['foo 'bar 'buzz])
+    (f4 'みなみ)))
