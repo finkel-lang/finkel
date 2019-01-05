@@ -59,6 +59,11 @@ library
   default-language:    Haskell2010
   ghc-options:       -Wall
 
+flag dynamic
+  description:         Dynamically link executables
+  default:             True
+  manual:              False
+
 test-suite sk-lang-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
@@ -70,18 +75,20 @@ test-suite sk-lang-test
                      , hspec
                      , sk-lang
                      , sk-kernel
-  ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
+  if flag(dynamic)
+    ghc-options:       -dynamic
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       Orphan
                        CoreTest
                        ReplTest
   default-language:    Haskell2010
 
--- SK executable. Compiling with `-dynamic' option makes REPL start
--- up time a bit faster.
 executable sk
   hs-source-dirs:      exec
   main-is:             sk.hs
-  ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
+  if flag(dynamic)
+    ghc-options:       -dynamic
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base >= 4.10 && < 5
                      , sk-lang
   default-language:    Haskell2010

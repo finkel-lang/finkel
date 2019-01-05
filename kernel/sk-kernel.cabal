@@ -81,9 +81,9 @@ library
   ghc-options:         -Wall
 
 flag dynamic
-  description:         Link dynamically
-  default:             False
-  manual:              True
+  description:         Dynamically link executables
+  default:             True
+  manual:              False
 
 executable skkc
   hs-source-dirs:      exec
