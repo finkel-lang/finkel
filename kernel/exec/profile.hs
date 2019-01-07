@@ -36,6 +36,7 @@ main :: IO ()
 main =
   do args <- getArgs
      case args of
+       ["count", file]  -> countTokens file
        ["expand", file] -> printExpandedForms file
        ["parse", file]  -> printForms file
        ["ppr", file]    -> pprFile file
@@ -51,6 +52,7 @@ usage =
        ["usage: profile MODE ARGS"
        ,""
        ,"MODE:"
+       ,"  count - count number of forms"
        ,"  parse - parse input file and print resulting forms"
        ,"  ppr   - pretty print haskell or sk module with `ppr'"
        ,"  hsrc  - convert SK source to Haskell source"
@@ -139,6 +141,16 @@ printTokens path = do
   case Lexer.lexTokens contents of
     Right toks -> mapM_ (print . GHC.unLoc) toks
     Left err   -> putStrLn err
+
+countTokens :: FilePath -> IO ()
+countTokens path = do
+  contents <- BL.readFile path
+  let f x acc =
+        let n = x `seq` length x
+        in  n `seq` acc `seq` n + acc
+  case Lexer.incrSP Reader.psexpr f 0 (Just path) contents of
+    Right (n, _) -> print n
+    Left err     -> putStrLn err
 
 doMake :: [FilePath] -> IO ()
 doMake files =
