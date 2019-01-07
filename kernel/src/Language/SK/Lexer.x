@@ -2,11 +2,11 @@
 {
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# LANGUAGE UnboxedTuples #-}
 -- | Lexical analyser of S-expression tokens.
 module Language.SK.Lexer
   ( -- * Token data type
     Token(..)
-  , LToken
     -- * Lexer function
   , tokenLexer
   , lexTokens
@@ -180,7 +180,7 @@ instance Functor SP where
   {-# INLINE fmap #-}
 
 instance Applicative SP where
-  pure = return
+  pure a = SP (\st -> SPOK st a)
   {-# INLINE pure #-}
   (<*>) = ap
   {-# INLINE (<*>) #-}
@@ -194,43 +194,32 @@ instance Monad SP where
   {-# INLINE (>>=) #-}
 
 data AlexInput =
-  AlexInput RealSrcLoc
-            {-# UNPACK #-} !Char
-            C8.ByteString
+  AlexInput RealSrcLoc {-# UNPACK #-} !Char C8.ByteString
   deriving (Eq, Show)
 
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
 alexGetByte (AlexInput loc _ buf) =
   case W8.uncons buf of
-    Nothing -> Nothing
     Just (w8, buf') ->
       let c = w2c w8
           loc' = advanceSrcLoc loc c
       in w8 `seq` c `seq` loc' `seq` buf' `seq`
          Just (w8, AlexInput loc' c buf')
+    Nothing -> Nothing
 {-# INLINE alexGetByte #-}
 
-alexGetChar' :: AlexInput -> Maybe (Char, AlexInput)
-alexGetChar' (AlexInput l0 _c0 bs0) =
-  case W8.uncons bs0 of
-    Just (w1, bs1)
-      | w1 < 0x80 ->
-        let c = w2c w1
-            l1 = advanceSrcLoc l0 c
-        in Just (c, AlexInput l1 c bs1)
-      | w1 < 0xe0 -> split 1
-      | w1 < 0xf0 -> split 2
-      | otherwise -> split 3
-      where
-        split n =
-          let (rest, bs2) = W8.splitAt n bs1
-              c = utf8 w1 rest
-              l1 = advanceSrcLoc l0 c
-          in  Just (c, AlexInput l1 c bs2)
-        utf8 w ws =
-          head (utf8DecodeByteString (W8.toStrict (W8.cons w ws)))
-    Nothing -> Nothing
-{-# INLINE alexGetChar' #-}
+alexGetChar :: AlexInput -> Maybe (Char, AlexInput)
+alexGetChar (AlexInput l0 _c0 bs0)
+  | W8.null bs0 = Nothing
+  | otherwise   =
+    case utf8One bs0 fone fmore of
+      (# c, bs1 #) -> Just (c, AlexInput (advanceSrcLoc l0 c) c bs1)
+    where
+      fone = w2c
+      fmore ws = case utf8DecodeByteString (W8.toStrict ws) of
+                   c:_ -> c
+                   _   -> error "alexGetChar: utf8 decode error"
+{-# INLINE alexGetChar #-}
 
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar (AlexInput _ c _) = c
@@ -355,8 +344,6 @@ data Token
   -- ^ End of form.
   deriving (Eq, Show)
 
-type LToken = Located Token
-
 type Action = AlexInput -> Int -> SP Token
 
 -- Tokenizer actions for documentation
@@ -425,7 +412,7 @@ tok_hash (AlexInput _ _ s) l
   | l == 2, let c = C8.index s 1, c `notElem` haskellOpChars
   = return $! THash c
   | otherwise =
-   let bs = C8.toStrict $! takeUtf8 (fromIntegral l) s
+   let bs = C8.toStrict $! takeUtf8 l s
    in  return $! TSymbol $! mkFastStringByteString bs
 {-# INLINE tok_hash #-}
 
@@ -434,23 +421,23 @@ tok_line_comment _ _ = return TComment
 {-# INLINE tok_line_comment #-}
 
 tok_block_comment :: Action
-tok_block_comment = tok_block_comment_with (const TComment) alexGetChar'
+tok_block_comment = tok_block_comment_with (const TComment) alexGetChar
 {-# INLINE tok_block_comment #-}
 
 tok_block_comment_with :: (String -> Token)
                        -> (AlexInput -> Maybe (Char, AlexInput))
                        -> Action
 tok_block_comment_with tok ini inp0 _ = do
-  case alexGetChar' inp0 of
+  case alexGetChar inp0 of
     Just ('#', inp1)
-      | Just ('|', inp2) <- alexGetChar' inp1
+      | Just ('|', inp2) <- alexGetChar inp1
       , Just (c, inp3) <- ini inp2
       , Just (com, inp4) <- go inp3 c ""
       -> alexSetInput inp4 >> return (tok (reverse com))
     _ -> alexError "tok_block_comment: panic"
   where
     go inp prev acc =
-      case alexGetChar' inp of
+      case alexGetChar inp of
         Just (c, inp') | prev == '|', c == '#' -> Just (tail acc, inp')
                        | otherwise             -> go inp' c (c:acc)
         Nothing                                -> Nothing
@@ -464,7 +451,7 @@ tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
 -- non-operatator character, replace hyphens with underscores.
 tok_symbol :: Action
 tok_symbol (AlexInput _ _ s) l = do
-  let bs0 = takeUtf8 (fromIntegral l) s
+  let bs0 = takeUtf8 l s
   bs1 <- case C8.uncons bs0 of
            Just (c, _)
              | c `elem` haskellOpChars -> return bs0
@@ -479,12 +466,12 @@ replaceHyphens = C8.map (\c -> if c == '-' then '_' else c)
 
 tok_char :: Action
 tok_char inp0 _ = do
-  case alexGetChar' inp0 of
+  case alexGetChar inp0 of
     Just ('\\', inp1) -> go inp1
     _                 -> alexError "tok_char: panic"
   where
     go inp
-      | Just (c, inp') <- alexGetChar' inp =
+      | Just (c, inp') <- alexGetChar inp =
         case c of
           '\\' -> case escapeChar inp' of
             Just (c', inp'') ->
@@ -502,14 +489,14 @@ tok_string inp _l =
   -- Currently String tokenizer does not update alex input per
   -- character. This makes the code a bit more effiicient, but getting
   -- unhelpful error message on illegal escape sequence.
-  case alexGetChar' inp of
+  case alexGetChar inp of
     Just ('"', inp')
       | Just (str, inp'') <- go inp' "" ->
         alexSetInput inp'' >> return str
     _ -> alexError ("lexical error in string: " ++ show inp)
   where
     go inp0 acc =
-      case alexGetChar' inp0 of
+      case alexGetChar inp0 of
         Nothing -> Nothing
         Just (c1, inp1)
           | c1 == '"'  -> return $! (TString (reverse acc), inp1)
@@ -517,7 +504,7 @@ tok_string inp _l =
             case escapeChar inp1 of
               Just (c1, inp2) -> go inp2 $! (c1:acc)
               _               ->
-                case alexGetChar' inp1 of
+                case alexGetChar inp1 of
                   Just (c2, inp2) | c2 == '&' -> go inp2 $! acc
                   _                           -> Nothing
           | otherwise  -> go inp1 $! (c1:acc)
@@ -525,11 +512,11 @@ tok_string inp _l =
 
 escapeChar :: AlexInput -> Maybe (Char, AlexInput)
 escapeChar inp0
-  | Just (c1, inp1) <- alexGetChar' inp0 =
+  | Just (c1, inp1) <- alexGetChar inp0 =
     let ret x = return $! (x, inp1)
         numericChar test acc0 f =
           let lp inp acc =
-                case alexGetChar' inp of
+                case alexGetChar inp of
                   Just (c2, inp')
                     | test c2 -> lp inp' (c2:acc)
                     | otherwise ->
@@ -537,7 +524,7 @@ escapeChar inp0
                   Nothing -> Nothing
           in lp inp1 acc0
         controlChar
-          | Just (c2, inp2) <- alexGetChar' inp1
+          | Just (c2, inp2) <- alexGetChar inp1
           , c2 >= '@' && c2 <= '_' =
             return (chr (ord c2 - ord '@'), inp2)
           | otherwise = Nothing
@@ -573,8 +560,8 @@ escapeChar inp0
           'x' -> numericChar isHexDigit [c1] ('0':)
           'o' -> numericChar isOctDigit [c1] ('0':)
           _ | isDigit c1 -> numericChar isDigit [c1] id
-            | Just (c2, inp2) <- alexGetChar' inp1
-            , Just (c3, inp3) <- alexGetChar' inp2
+            | Just (c2, inp2) <- alexGetChar inp1
+            , Just (c3, inp3) <- alexGetChar inp2
             -> case lkup [c1,c2,c3] tbl3 of
                  Just c  -> Just (c, inp3)
                  Nothing
@@ -592,14 +579,14 @@ tok_integer (AlexInput _ _ s) l = do
 
 tok_fractional :: Action
 tok_fractional (AlexInput _ _ s) l = do
-  let str = C8.unpack (C8.take (fromIntegral l) s)
+  let str = C8.unpack $! C8.take (fromIntegral l) s
       rat = readRational str
-#if !MIN_VERSION_ghc(8,4,0)
-  return $ TFractional $! FL str rat
-#else
+#if MIN_VERSION_ghc(8,4,0)
   let stxt = SourceText str
       is_neg = if 0 < rat then True else False
   return $ TFractional $! FL stxt is_neg rat
+#else
+  return $ TFractional $! FL str rat
 #endif
 {-# INLINE tok_fractional #-}
 
@@ -615,17 +602,14 @@ tok_fractional (AlexInput _ _ s) l = do
 -- to continuation but add them to 'SPState'.
 tokenLexer :: (Located Token -> SP a) -> SP a
 tokenLexer cont = do
-  st <- getSPState
-  let fn = targetFile st
-  ltok@(L _span tok) <- scanToken fn
-  let comment = SP (\st -> unSP (tokenLexer cont) st)
+  ltok@(L _span tok) <- scanToken
   case tok of
-    TComment -> comment
+    TComment -> SP (\st -> unSP (tokenLexer cont) st)
     _        -> cont ltok
 {-# INLINE tokenLexer #-}
 
-scanToken :: FastString -> SP (Located Token)
-scanToken fn = do
+scanToken :: SP (Located Token)
+scanToken = do
   inp0@(AlexInput loc0 _ _) <- alexGetInput
   let sc = 0
   case alexScan inp0 sc of
@@ -642,7 +626,7 @@ scanToken fn = do
                  ", near " ++ show ch)
     AlexSkip inp1 _ -> do
       alexSetInput inp1
-      scanToken fn
+      scanToken
     AlexEOF -> return (L undefined TEOF)
 {-# INLINE scanToken #-}
 
@@ -663,44 +647,35 @@ lexTokens input = evalSP go Nothing input
 --
 -- ---------------------------------------------------------------------
 
--- | Lisp comment to Haskell comment.
-lc2hc :: String -> String
-lc2hc = intercalate "\n" . map (tail' . dropWhile (== ';')) . lines
-  where
-    tail' xs = case xs of
-      []    -> []
-      _:xs' -> xs'
-{-# INLINE lc2hc #-}
-
-lc2hc_doc :: String -> String
-lc2hc_doc = dropWhile (== '|') . dropWhile isSpace . lc2hc
-{-# INLINE lc2hc_doc #-}
-
-unpackUtf8 :: C8.ByteString -> String
-unpackUtf8 = utf8DecodeByteString . C8.toStrict
-{-# INLINE unpackUtf8 #-}
-
 takeUtf8 :: Int -> C8.ByteString -> C8.ByteString
-takeUtf8 n bs = fst (splitUtf8 n bs)
+takeUtf8 n bs = case splitUtf8 n bs of (# bs', _ #) -> bs'
 {-# INLINE takeUtf8 #-}
 
-splitUtf8 :: Int -> C8.ByteString -> (C8.ByteString, C8.ByteString)
-splitUtf8 n0 bs0 = go n0 bs0 C8.empty
+splitUtf8 :: Int -> C8.ByteString -> (# C8.ByteString, C8.ByteString #)
+splitUtf8 n0 bs0 = go n0 bs0 W8.empty
   where
     go n bs acc
-      | n <= 0    = (acc, bs)
+      | n <= 0    = (# acc, bs #)
       | otherwise =
-         case W8.uncons bs of
-           Just (w8, bs0) ->
-             let (acc', bs')
-                   | w8 < 0x80 = (C8.snoc acc (w2c w8), bs0)
-                   | w8 < 0xe0 = split 1
-                   | w8 < 0xf0 = split 2
-                   | otherwise = split 3
-                 split k =
-                   let (pre, bs1) = C8.splitAt k bs0
-                   in  (C8.append (C8.snoc acc (w2c w8)) pre, bs1)
-             in  go (n - 1) bs' acc'
-           Nothing -> error "takeUtf8: empty input"
+        case utf8One bs W8.singleton id of
+          (# pre, bs1 #) -> go (n-1) bs1 (W8.append acc pre)
 {-# INLINE splitUtf8 #-}
+
+utf8One :: C8.ByteString
+        -> (Word8 -> a)         -- ^ Function for single byte.
+        -> (C8.ByteString -> a) -- ^ For multi-bytes.
+        -> (# a, C8.ByteString #)
+utf8One bs0 fone fmore =
+  case W8.uncons bs0 of
+    Just (w8, bs1)
+      | w8 < 0x80 -> (# fone w8, bs1 #)
+      | w8 < 0xe0 -> split 1
+      | w8 < 0xf0 -> split 2
+      | otherwise -> split 3
+     where
+      split k =
+        case W8.splitAt k bs1 of
+          (pre, bs2) -> (# fmore (W8.cons w8 pre), bs2 #)
+    Nothing -> error "utf8One: empty input"
+{-# INLINE utf8One #-}
 }
