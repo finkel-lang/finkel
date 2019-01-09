@@ -522,16 +522,6 @@
              (it "should fail on too few parameters"
                  (expandFailure (defdo foo)))))
 
-      (d "list"
-         (do (it "should expand to foldr"
-                 (expandTo
-                  (list \x \y \z)
-                  (foldr cons nil [(toCode \x)
-                                   (toCode \y)
-                                   (toCode \z)])))
-             (it "should expand to nil"
-                 (expandTo (list) nil))))
-
       (d "cond"
          (it "should expand to case"
              (expandTo

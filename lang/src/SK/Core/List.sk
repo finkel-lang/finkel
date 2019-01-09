@@ -1,5 +1,8 @@
 ;;; Fundamental functions for list
 
+#p(LANGUAGE FlexibleInstances
+            TypeSynonymInstances)
+
 (module SK.Core.List
   ;; exception
   (SkListException ..)
@@ -16,7 +19,7 @@
   is-symbol is-string is-char is-integer is-fractional is-unit
 
   ;; list constructors
-  cons append
+  cons list append
 
   ;; higher order functions
   mapcar)
@@ -174,6 +177,25 @@
                   bs
                   (cons (car as) (go (cdr as) ys)))))
         (go xs ys)))))
+
+(class (ListableType lst)
+  (:: list_ (-> [Code] lst)))
+
+(instance (ListableType Code)
+  (= list_ qList))
+
+(instance (=> (Homoiconic elem) (ListableType ret)
+              (ListableType (-> elem ret)))
+  (= list_ acc
+    (\ x (list_ (++ acc [(toCode x)])))))
+
+;;; Make a list from given arguments.
+;;;
+;;; This function can take variable number of arguments, but requires
+;;; explicit specified type signature.
+(:: list (=> (ListableType lst) lst))
+(= list (list_ []))
+
 
 
 ;;; Higher Order Functions

@@ -13,7 +13,7 @@
   defn defn' defdo
 
   ;; Expressions
-  cond list
+  cond
 
   ;; Module headers
   defmodule
@@ -420,23 +420,6 @@
 
       _ (macro-error name "exported-macros: invalid form"))))
 
-
-;;; List
-
-;;; In SK, `list' is defined as macro, since Haskell does not support
-;;; vararg function (actually, vararg is possible in GHC, but not
-;;; doing).
-(define-macro list form
-  (let ((:: codes (-> [Code] [Code]))
-        (= codes
-          (map (\ arg (cons 'toCode (cons arg nil)))))
-        (:: body (-> [Code] Code))
-        (= body args
-          `(foldr cons nil [,@(List (codes args))])))
-    (case (unCode form)
-      (List (: _ []))   (return 'nil)
-      (List (: _ args)) (return (body args))
-      _                 (macro-error form "list: invalid form"))))
 
 
 ;;; Module header
