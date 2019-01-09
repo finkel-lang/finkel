@@ -2,7 +2,9 @@
 
 (import Language.SK)
 
-(define-macro greet form
-  (case (unCode form)
-    (List [_ body]) (return `(putStrLn ,body))
-    _ (skSrcError form "greet: malformed body")))
+(:: greet Macro)
+(= greet
+  (Macro (\ form
+           (case (unCode form)
+             (List [_ body]) (return `(putStrLn ,body))
+             _ (skSrcError form "greet: malformed body")))))

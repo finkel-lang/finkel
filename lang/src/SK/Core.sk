@@ -5,7 +5,8 @@
   eval-when
 
   ;; Macros for macros
-  defmacro defmacro' defmacro-m defmacro-m' macrolet macrolet-m
+  define-macro defmacro defmacro' defmacro-m defmacro-m'
+  let-macro macrolet macrolet-m
   macroexpand macroexpand-1 exported-macros
 
   ;; Function declarations
@@ -65,6 +66,58 @@
 
 
 ;;; Basic
+
+(with-macro ((= eval-when-compile-and-load
+               (Macro
+                (\ form
+                  (case (unCode form)
+                    (List (: _ rest)) (return `(begin
+                                                 (eval-when-compile
+                                                   ,@rest)
+                                                 ,@rest))
+                    _ (skSrcError
+                       form
+                       "eval-when-compile-and-load: panic"))))))
+  (eval-when-compile-and-load
+   (:: tmpname (-> Code Code))
+   (= tmpname x
+     (toCode (qSymbol (++ "__" (show x)))))
+   #p(INLINE tmpname)
+
+   (:: define-macro Macro)
+   (= define-macro
+     (Macro
+      (\ form
+        (case (unCode form)
+          (List [_ name arg body])
+          (let ((= __name (tmpname name)))
+            (return
+              `(begin
+                 (:: ,name Macro)
+                 (= ,name
+                   (let ((:: ,__name (-> Code (Skc Code)))
+                         (= ,__name ,arg ,body))
+                     (Macro ,__name))))))
+          _ (skSrcError form "define-macro: invalid args")))))
+
+   (:: let-macro Macro)
+   (= let-macro
+     (let ((= f form
+             (case (unCode form)
+               (List [name arg body])
+               (let ((= __name (tmpname name)))
+                 (return `(= ,name
+                            (let ((:: ,__name (-> Code (Skc Code)))
+                                  (= ,__name ,arg ,body))
+                              (Macro ,__name)))))
+               _ (skSrcError form "let-macro: malformed macro"))))
+       (Macro
+        (\ form
+          (case (unCode form)
+            (List (: _self (: (LForm (L _l (List ms))) rest)))
+            (do (<- ms' (mapM f ms))
+                (return `(with-macro (,@ms') ,@rest)))
+            _ (skSrcError form "let-macro: malformed args"))))))))
 
 ;;; Auxiliary macro to define a macro for both compile time and load
 ;;; time. Used only in this module until `defmacro-m'' is defined.
@@ -240,7 +293,7 @@
 (define-macro macrolet form
   (make-macrolet-body "macrolet" form (\ body `(return ,body))))
 
-;;; Pattern match for `LForm' of `Atom' with `AString'.
+;;; Pattern matching macro for `LForm' of `Atom' with `AString'.
 (eval-when-compile
   (defmacro pastring
     [val]

@@ -1,12 +1,15 @@
 ;;;; -*- mode: sk -*-
 
 ;;; Expression to test name shadowing with conflictinging names bounded
-;;; to macro with `let-macro' and locally declared function with `let'.
+;;; to macro with `with-macro' and locally declared function with `let'.
 
-(let-macro ((foo (LForm (L _ (List [_ body])))
-              (return `(++ "let-macro: " ,body))))
+(with-macro ((= foo
+               (Macro (\ form
+                        (case form
+                          (LForm (L _ (List [_ body])))
+                          (return `(++ "with-macro: " ,body)))))))
   (all id [(== (foo "bar")
-               "let-macro: bar")
+               "with-macro: bar")
 
            ;; Bind `foo' to locally declared function.
            (== (let ((= foo body
@@ -16,7 +19,7 @@
 
            ;; The macro `foo' is still in current scope.
            (== (foo "bar")
-               "let-macro: bar")
+               "with-macro: bar")
 
            ;; Bind `foo' with pattern matching.
            (== (let ((= (: foo _)
@@ -56,12 +59,12 @@
                (Just "do: bar"))
 
            ;; Bind `foo' in do-notation after using `foo'. The first use
-           ;; of `foo' is from `let-macro', and the second use is
+           ;; of `foo' is from `with-macro', and the second use is
            ;; locally bounded function.
            (== (do (<- x (return (foo "bar")))
                    (<- foo (return (\ x (++ "do: " x))))
                    (return (, x (foo "buzz"))))
-               (Just (, "let-macro: bar" "do: buzz")))
+               (Just (, "with-macro: bar" "do: buzz")))
 
            ;; Pattern match in `case' expression
            (== (case (Just (++ "let: "))

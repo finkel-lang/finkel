@@ -29,7 +29,7 @@ import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
                 , xopt_unset )
 import ErrUtils (compilationProgressMsg)
 import Exception (gbracket)
-import FastString (FastString, appendFS, headFS, unpackFS)
+import FastString (FastString, headFS, unpackFS)
 import Finder (findImportedModule)
 import GHC ( ModuleInfo, getModuleInfo, lookupModule, lookupName
            , modInfoExports, setContext )
@@ -57,8 +57,8 @@ import Language.SK.Homoiconic
 import Language.SK.Eval
 import Language.SK.Form
 import Language.SK.SKC
-import Language.SK.Syntax ( evalBuilder, parseExpr, parseModule
-                          , parseLImport )
+import Language.SK.Syntax ( evalBuilder, parseExpr, parseDecls
+                          , parseModule, parseLImport )
 
 
 -- ---------------------------------------------------------------------
@@ -158,36 +158,13 @@ unquoteSplice form =
 --
 -- ---------------------------------------------------------------------
 
--- Macro expansion
--- ~~~~~~~~~~~~~~~
---
--- Still considering how to support and what shall be supported with
--- user defined macros. Need to load the form transforming functions
--- defined by the user. May restrict those functions to imported module
--- in current target file. Need to take some kind of GHC environment
--- value to expand macros.
-
-compileMacro :: Bool -> Code -> Code -> Code -> Code
-             -> Skc (FastString, [Code], Maybe Macro)
-compileMacro doEval form@(LForm (L l _)) self arg body = do
-  let LForm (L _ (Atom (ASymbol name))) = self
-      name' = appendFS (fsLit "__") name
-  expanded <- expand body
-  let decls = [tList l [ tSym l "::", self, tSym l "Macro"]
-              ,tList l [ tSym l "=", self, expr]]
-      expr = tList l [ tSym l "let", tList l [tsig, fn]
-                     , tList l [tSym l "Macro", tSym l name']]
-      tsig = tList l [ tSym l "::", tSym l name'
-                     , tList l [tSym l "->", tSym l "Code"
-                               ,tList l [tSym l "Skc", tSym l "Code"]]]
-      fn = tList l [tSym l "=", tSym l name', arg, expanded]
-  if doEval
-    then case evalBuilder parseExpr [expr] of
-                Right hexpr -> do
-                  macro <- evalExpr hexpr
-                  return (name, decls, Just (unsafeCoerce# macro))
-                Left err -> skSrcError form (syntaxErrMsg err)
-    else return (name, decls, Nothing)
+coerceMacro :: Code -> Skc Macro
+coerceMacro name
+  | LForm (L _ (Atom (ASymbol _))) <- name =
+    case evalBuilder parseExpr [name] of
+      Right hexpr -> fmap unsafeCoerce# (evalExpr hexpr)
+      Left err    -> failS (syntaxErrMsg err)
+  | otherwise = failS ("coerceMacro: expecting name")
 
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Skc [TyThing]
 getTyThingsFromIDecl (L _ idecl) minfo = do
@@ -230,10 +207,8 @@ addImportedMacro' thing = do
       hsc_env <- getSession
       let name_str = showPpr (hsc_dflags hsc_env) (varName var)
           name_sym = toCode (aSymbol name_str)
-      hv <- case evalBuilder parseExpr [name_sym] of
-                   Right expr -> evalExpr expr
-                   Left err   -> failS (syntaxErrMsg err)
-      insertMacro (fsLit name_str) (unsafeCoerce# hv)
+      macro <- coerceMacro name_sym
+      insertMacro (fsLit name_str) macro
     _ -> error "addImportedmacro"
 
 
@@ -261,50 +236,43 @@ m_quasiquote form =
         in  return (LForm (L l body'))
       _ -> skSrcError form ("malformed quasiquote at " ++ showLoc form)
 
-m_defineMacro :: Mfunc
-m_defineMacro form@(LForm (L l _)) = do
-  addToContext <- envAddInDefineMacro <$> getSkEnv
-  (name, decls, mb_macro) <- add addToContext form
-  when addToContext
-       (maybe (return ()) (insertMacro name) mb_macro)
-  return (tList l (tSym l "begin":decls))
-  where
-    add doEval x =
-      case unCode x of
-        List [_,self,arg,body] -> compileMacro doEval x self arg body
-        _ -> skSrcError form ("define-macro: malformed args:\n" ++
-                              show x)
-
-m_letMacro :: Mfunc
-m_letMacro form =
+m_withMacro :: Mfunc
+m_withMacro form =
   case unLForm form of
-    L l1 (List (_:LForm (L l2 (List forms)):rest)) -> do
+    L l1 (List (_:LForm (L _ (List forms)):rest)) -> do
       sk_env0 <- getSkEnv
 
       -- Expand body of `let-macro' with temporary macros.
-      macros <- Map.fromList <$> mapM addLetMacro forms
+      macros <- Map.fromList <$> mapM evalMacroDef forms
       let tmpMacros0 = envTmpMacros sk_env0
       putSkEnv (sk_env0 {envTmpMacros = macros : tmpMacros0})
       expanded <- expands rest
 
       -- Getting 'SkEnv' again, so that persistent macros defined inside
-      -- the `let-macro' body could be used hereafter.
+      -- the `let-macro' body could be used hereafter. Restoring
+      -- tmporary macros to preserved value.
       sk_env1 <- getSkEnv
       putSkEnv (sk_env1 {envTmpMacros = tmpMacros0})
 
       case expanded of
         [x] -> return x
-        _   -> return (tList l1 (tSym l2 "begin" : expanded))
-    _ -> skSrcError form ("let-macro: malformed args:\n" ++ show form)
+        _   -> return (tList l1 (tSym l1 "begin" : expanded))
+    _ -> skSrcError form ("with-macro: malformed args:\n" ++ show form)
   where
-    addLetMacro x =
-      case unCode x of
-        List [self,arg,body] -> do
-          (name, _decl, mb_macro) <- compileMacro True x self arg body
-          case mb_macro of
-            Nothing    -> skSrcError x "let-macro: compilation error"
-            Just macro -> return (name, macro)
-        _ -> skSrcError x ("let-macro: malformed macro: " ++ show x)
+    evalMacroDef decl = do
+      expanded <- expand decl
+      case unCode expanded of
+        List (_ : fname@(LForm (L _ (Atom (ASymbol name)))) : _) ->
+          case evalBuilder parseDecls [expanded] of
+            Right hdecls -> do
+              (tythings, _ic) <- evalDecls hdecls
+              case tythings of
+                tything : _ | isMacro tything -> do
+                  macro <- coerceMacro fname
+                  return (name, macro)
+                _ -> skSrcError fname "with-macro: not a macro"
+            Left err -> failS (syntaxErrMsg err)
+        _ -> skSrcError decl "with-macro: malformed args"
 
 m_require :: Mfunc
 m_require form =
@@ -394,9 +362,8 @@ m_evalWhenCompile form =
 specialForms :: EnvMacros
 specialForms =
   makeEnvMacros
-    [("define_macro", SpecialForm m_defineMacro)
-    ,("eval_when_compile", SpecialForm m_evalWhenCompile)
-    ,("let_macro", SpecialForm m_letMacro)
+    [("eval_when_compile", SpecialForm m_evalWhenCompile)
+    ,("with_macro", SpecialForm m_withMacro)
     ,("quote", SpecialForm m_quote)
     ,("quasiquote", SpecialForm m_quasiquote)
     ,("require", SpecialForm m_require)]

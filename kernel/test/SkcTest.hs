@@ -213,7 +213,7 @@ envTest = do
   describe "showing special forms" $
     it "should be <special-forms>" $ do
       let e1 = emptySkEnv {envMacros = specialForms}
-          mb_let_macro = lookupMacro (fsLit "let_macro") e1
+          mb_let_macro = lookupMacro (fsLit "eval_when_compile") e1
           let_macro = fromMaybe (error "not found") mb_let_macro
       show let_macro `shouldBe` "<special-form>"
 

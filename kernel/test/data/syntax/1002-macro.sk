@@ -8,14 +8,49 @@
 (import Language.SK)
 
 (eval-when-compile
- (define-macro define-macro' form
-   (case (unCode form)
-     (List (: _ rest)) (return
-                         `(begin
-                            (eval-when-compile
-                             (define-macro ,@rest))
-                            (define-macro ,@rest)))
-     _ (skSrcError form "error"))))
+  (:: define-macro Macro)
+  (= define-macro
+    (Macro (\ form
+             (case (unCode form)
+               (List (: _ (: name rest)))
+               (let ((= __name
+                       (toCode (qSymbol (++ "__" (show name))))))
+                 (return
+                   `(begin
+                      (:: ,name Macro)
+                      (= ,name
+                        (let ((:: ,__name (-> Code (Skc Code)))
+                              (= ,__name ,@rest))
+                          (Macro ,__name))))))
+               _ (skSrcError form "define-macro: invalid args")))))
+
+  (:: let-macro Macro)
+  (= let-macro
+    (let ((= f form
+            (case (unCode form)
+              (List [name arg body])
+              (let ((= __name (toCode (qSymbol (++ "__" (show name))))))
+                (return `(= ,name
+                           (let ((:: ,__name (-> Code (Skc Code)))
+                                 (= ,__name ,arg ,body))
+                             (Macro ,__name)))))
+              _ (skSrcError form "let-macro: malformed macro"))))
+      (Macro (\ form
+               (case (unCode form)
+                 (List (: _self (: (LForm (L _l (List ms))) rest)))
+                 (do (<- ms' (mapM f ms))
+                     (return `(with-macro (,@ms') ,@rest)))
+                 _ (skSrcError form "let-macro: malformed args")))))))
+
+(eval-when-compile
+  (define-macro define-macro' form
+    (case (unCode form)
+      (List (: _ rest)) (return
+                          `(begin
+                             (eval-when-compile
+                               (define-macro ,@rest))
+                             (define-macro ,@rest)))
+      _ (skSrcError form "error"))))
 
 ;; Simple version of `defmacro' defined with `define-macro''
 (define-macro' defmacro form
