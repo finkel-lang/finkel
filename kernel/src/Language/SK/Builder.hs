@@ -72,9 +72,6 @@ import HsExtension (GhcPs)
 import RdrName (RdrName)
 #endif
 
--- transformers
-import Control.Monad.Trans.State (StateT(..), get, put)
-
 -- Internal
 import Language.SK.Form
 
@@ -97,32 +94,34 @@ data BState = BState
 data SyntaxError = SyntaxError Code String
   deriving (Eq, Show)
 
--- | Newtype wrapper for parsing form data with Happy.
-newtype Builder a = Builder {
-    unBuilder :: StateT BState (Either SyntaxError) a
-}
+-- | Newtype wrapper for parsing list of 'Code' with Happy.
+--
+-- Implements simple state monad with result value wrapped with
+-- 'Either', to terminate parsing computation with 'SyntaxError'.
+newtype Builder a =
+  Builder { unBuilder :: BState -> Either SyntaxError (a, BState) }
 
 instance Functor Builder where
-  fmap f (Builder m) = Builder (fmap f m)
+  fmap f (Builder m) =
+    Builder (\st0 -> do (a, st1) <- m st0
+                        return (f a, st1))
   {-# INLINE fmap #-}
 
 instance Applicative Builder where
-  pure = return
+  pure x = Builder (\st -> pure (x, st))
   {-# INLINE pure #-}
-  Builder m <*> Builder f = Builder (m <*> f)
+  Builder f <*> Builder m =
+    Builder (\st0 -> do (g, st1) <- f st0
+                        (v, st2) <- m st1
+                        return (g v, st2))
   {-# INLINE (<*>) #-}
 
 instance Monad Builder where
-  return a = Builder (a `seq` return a)
+  return x = Builder (\st0 -> return (x, st0))
   {-# INLINE return #-}
-  m >>= k  =
-      Builder
-        (StateT (\st ->
-                   case runStateT (unBuilder m) st of
-                     Right (a,st') ->
-                       let m' = a `seq` k a
-                       in  m' `seq` runStateT (unBuilder m') st'
-                     Left err -> Left err))
+  Builder m >>= k =
+    Builder (\st0 -> do (a, st1) <- m st0
+                        unBuilder (k a) st1)
   {-# INLINE (>>=) #-}
 
 -- | Run given 'Builder' with using given list of 'Code' as input.
@@ -130,9 +129,9 @@ runBuilder :: Builder a
            -> [Code]
            -> Either SyntaxError (a, [Code])
 runBuilder bld toks =
-  case runStateT (unBuilder bld) (BState toks Nothing) of
+  case unBuilder bld (BState toks Nothing) of
     Right (a, st) -> Right (a, inputs st)
-    Left e        -> Left e
+    Left err      -> Left err
 
 -- | Like 'runBuilder', but discards left over 'Code's.
 evalBuilder :: Builder a -> [Code] -> Either SyntaxError a
@@ -142,11 +141,10 @@ evalBuilder bld toks = fmap fst (runBuilder bld toks)
 failB :: String -> Builder a
 failB err = do
   mb_tok <- fmap lastToken getBState
-  let be = SyntaxError tok err
-      tok = case mb_tok of
+  let tok = case mb_tok of
               Just t  -> t
               Nothing -> LForm (noLoc (Atom AUnit))
-  Builder (StateT (\_ -> Left be))
+  Builder (const (Left (SyntaxError tok err)))
 
 -- | Extract message from 'SyntaxError'.
 syntaxErrMsg :: SyntaxError -> String
@@ -158,12 +156,12 @@ syntaxErrCode (SyntaxError code _) = code
 
 -- | Get current 'BState'.
 getBState :: Builder BState
-getBState = Builder get
+getBState = Builder (\st -> Right (st,st))
 {-# INLINE getBState #-}
 
 -- | Put current 'BState'.
 putBState :: BState -> Builder ()
-putBState = Builder . put
+putBState st = Builder (\_ -> Right ((), st))
 {-# INLINE putBState #-}
 
 -- | Set last token to given 'Code'.
@@ -179,7 +177,7 @@ parse :: Builder a -> [Code] -> Builder a
 parse bld toks =
   case runBuilder bld toks of
     Right (a, _) -> return a
-    Left err     -> Builder (StateT (\_ -> Left err))
+    Left err     -> Builder (const (Left err))
 
 -- | Simple lexer to parse forms.
 formLexer :: (Code -> Builder a) -> Builder a

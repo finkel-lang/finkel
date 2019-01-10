@@ -63,9 +63,6 @@ import Util (readRational)
 -- ghc-boot
 import qualified GHC.LanguageExtensions as LangExt
 
--- transformers
-import Control.Monad.Trans.Except (ExceptT(..), throwE)
-
 -- Internal
 import Language.SK.Builder
 import Language.SK.Form
@@ -160,7 +157,7 @@ data SPState = SPState
     -- | Current location of input stream.
   , currentLoc :: RealSrcLoc
     -- | Previous character in buffer, used by Alex.
-  , prevChar :: Char
+  , prevChar :: {-# UNPACK #-} !Char
   } deriving (Eq)
 
 -- | Initial empty state for 'SP'.
@@ -174,7 +171,7 @@ initialSPState file linum colnum =
           , prevChar = '\n'}
 
 data SPResult a
-  = SPOK SPState a
+  = SPOK {-# UNPACK #-} !SPState a
   | SPNG SrcLoc String
   deriving (Eq)
 
@@ -618,7 +615,7 @@ tok_fractional (AlexInput _ _ s) l = do
 
 -- | Lexical analyzer for S-expression. Intended to be used with a
 -- parser made from Happy. This functions will not pass comment tokens
--- to continuation but add them to 'SPState'.
+-- to continuation.
 tokenLexer :: (Located Token -> SP a) -> SP a
 tokenLexer cont = do
   ltok@(L _span tok) <- scanToken
