@@ -6,6 +6,7 @@ module Orphan where
 -- ghc
 import BasicTypes (FractionalLit(..))
 import FastString (unpackFS)
+import SrcLoc (GenLocated(..))
 
 -- QuickCheck
 import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
@@ -72,7 +73,7 @@ instance CoArbitrary a => CoArbitrary (Form a) where
       var = variant
 
 instance Arbitrary a => Arbitrary (LForm a) where
-  arbitrary = (LForm . L skSrcSpan) <$> arbitrary
+  arbitrary = (LForm . genSrc) <$> arbitrary
 
 instance CoArbitrary a => CoArbitrary (LForm a) where
   coarbitrary (LForm (L _ form)) = coarbitrary form

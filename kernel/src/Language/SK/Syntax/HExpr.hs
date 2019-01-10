@@ -11,7 +11,7 @@ import Data.List (foldl1')
 -- ghc
 import BasicTypes ( Boxity(..), FractionalLit(..), Origin(..)
                   , SourceText(..), fl_value)
-import FastString (FastString, headFS)
+import FastString (FastString, fsLit, headFS)
 import HsExpr ( ArithSeqInfo(..), GRHS(..), HsExpr(..)
               , HsMatchContext(..), HsStmtContext(..), HsTupArg(..)
               , Match(..), StmtLR(..) )
@@ -23,7 +23,7 @@ import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsDo, mkHsFractional
                , mkMatchGroup )
 import OrdList (toOL)
 import RdrHsSyn ( mkRdrRecordCon, mkRdrRecordUpd )
-import SrcLoc (Located, noLoc)
+import SrcLoc (GenLocated(..), Located, getLoc, noLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsExtension (noExt)

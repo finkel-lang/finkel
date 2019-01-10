@@ -18,7 +18,7 @@ import OccName (tcName)
 import OrdList (toOL)
 import RdrHsSyn (cvTopDecls)
 import RdrName (mkQual, mkUnqual)
-import SrcLoc (noLoc)
+import SrcLoc (GenLocated(..), noLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsExtension (noExt)

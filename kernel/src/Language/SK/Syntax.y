@@ -8,10 +8,7 @@
 -- syntax tree data defined in GHC.
 --
 module Language.SK.Syntax
-  ( Builder(..)
-  , runBuilder
-  , evalBuilder
-  , parseModule
+  ( parseModule
   , parseImports
   , parseLImport
   , parseStmt
@@ -28,7 +25,7 @@ import ForeignCall (Safety)
 import HaddockUtils (addConDoc)
 import HsDoc (LHsDocString)
 import HsExpr (GRHS(..))
-import SrcLoc (Located, noLoc)
+import SrcLoc (GenLocated(..), Located, getLoc, noLoc)
 
 -- Internal
 import Language.SK.Builder
@@ -675,27 +672,35 @@ conid :: { Code }
 happyError :: Builder a
 happyError = builderError
 
+-- | Parser for Haskell module.
 parseModule :: Builder HModule
 parseModule = parse_module
 
+-- | Parser for import declarations.
 parseImports :: Builder [HImportDecl]
 parseImports = p_imports
 
+-- | Parser for single import declaration.
 parseLImport :: Builder HImportDecl
 parseLImport = p_limport
 
+-- | Parser for statement.
 parseStmt :: Builder HStmt
 parseStmt = p_stmt
 
+-- | Parser for declarations.
 parseDecls :: Builder [HDecl]
 parseDecls = p_decls
 
+-- | Parser for top level declarations.
 parseTopDecls :: Builder [HDecl]
 parseTopDecls = p_top_decls
 
+-- | Parser for Haskell expression.
 parseExpr :: Builder HExpr
 parseExpr = p_expr
 
+-- | Parser for Haskell type.
 parseType :: Builder HType
 parseType = p_type
 

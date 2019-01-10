@@ -4,14 +4,18 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# LANGUAGE UnboxedTuples #-}
 -- | Lexical analyser of S-expression tokens.
+--
+-- This file contains Alex lexical analyser for tokeninzing
+-- S-expression.  Lexcial analyser is used by Happy parser in
+-- S-expression reader.
 module Language.SK.Lexer
   ( -- * Token data type
     Token(..)
+
     -- * Lexer function
   , tokenLexer
   , lexTokens
-    -- * Documentation map
-  , DocMap
+
     -- * S-expression parser monad
   , SP(..)
   , SPState(..)
@@ -50,9 +54,10 @@ import BasicTypes ( FractionalLit(..)
 #endif
                   )
 import Encoding (utf8DecodeByteString)
-import FastString (FastString, mkFastStringByteString, unpackFS)
-import SrcLoc ( Located, RealSrcLoc, advanceSrcLoc, mkRealSrcLoc
-              , mkRealSrcSpan, srcLocCol, srcLocLine )
+import FastString (FastString, fsLit, mkFastStringByteString, unpackFS)
+import SrcLoc ( GenLocated(..), Located, RealSrcLoc, SrcLoc(..)
+              , SrcSpan(..), advanceSrcLoc, mkRealSrcLoc, mkRealSrcSpan
+              , srcLocCol, srcLocLine )
 import Util (readRational)
 
 -- ghc-boot
@@ -142,17 +147,19 @@ $whitechar+  ;
 --
 -- ---------------------------------------------------------------------
 
--- | Documentation map.
-type DocMap = Map.Map SrcSpan [AnnotationComment]
-
 -- | Data type to hold states while reading source code.
 data SPState = SPState
-  { targetFile :: FastString
+  { -- | Target file for lexical analysis.
+    targetFile :: FastString
+    -- | @{-# LANGUAGE ... #-}@ found in target file.
   , langExts :: [Located String]
+    -- | @{-# GHC_OPTIONS ... #-}@ found in target file.
   , ghcOptions :: [Located String]
-  , docMap :: DocMap
+    -- | Buffer to hold current input.
   , buf :: C8.ByteString
+    -- | Current location of input stream.
   , currentLoc :: RealSrcLoc
+    -- | Previous character in buffer, used by Alex.
   , prevChar :: Char
   } deriving (Eq)
 
@@ -162,7 +169,6 @@ initialSPState file linum colnum =
   SPState { targetFile = file
           , langExts = []
           , ghcOptions = []
-          , docMap = Map.empty
           , buf = C8.empty
           , currentLoc = mkRealSrcLoc file linum colnum
           , prevChar = '\n'}
@@ -172,7 +178,7 @@ data SPResult a
   | SPNG SrcLoc String
   deriving (Eq)
 
--- | A data type for State monad which wraps 'Alex' with 'SPstate'.
+-- | A state monad newtype to pass around 'SPstate'.
 newtype SP a = SP { unSP :: SPState -> SPResult a }
 
 instance Functor SP where
@@ -192,6 +198,75 @@ instance Monad SP where
                    SPOK st' a -> unSP (k a) st'
                    SPNG l msg -> SPNG l msg)
   {-# INLINE (>>=) #-}
+
+-- | Perform given 'SP' computation with target file name and input
+-- contents.
+runSP :: SP a           -- ^ Computation to perform.
+      -> Maybe FilePath -- ^ File name of target. If 'Nothing', assumed
+                        -- as anonymous target.
+      -> C8.ByteString  -- ^ Input contents.
+      -> Either String (a, SPState)
+runSP sp target input =
+  let st0 = initialSPState target' 1 1
+      st1 = st0 {buf = input}
+      target' = maybe (fsLit "anon") fsLit target
+  in  case unSP sp st1 of
+        SPOK sp' a -> Right (a, sp')
+        SPNG _loc msg -> Left msg
+
+-- | Like 'runSP', but discard resulting 'SPState'.
+evalSP :: SP a -> Maybe FilePath -> C8.ByteString -> Either String a
+evalSP sp target input = fmap fst (runSP sp target input)
+
+-- | Update current 'SPState' to given value.
+putSPState :: SPState -> SP ()
+putSPState st = SP (\_ -> SPOK st ())
+{-# INLINE putSPState #-}
+
+-- | Get current 'SPState' value.
+getSPState :: SP SPState
+getSPState = SP (\st -> SPOK st st)
+{-# INLINE getSPState #-}
+
+-- | Incrementally perform computation with parsed result and given
+-- function.
+incrSP :: SP a          -- ^ The partial parser.
+       -> (a -> b -> b) -- ^ Function to apply.
+       -> b             -- ^ Initial argument to the function.
+       -> Maybe FilePath -> C8.ByteString -> Either String (b, SPState)
+incrSP sp f z target input = go st1 z
+  where
+    go st acc =
+      case unSP sp st of
+        SPNG _loc msg
+          | blank (buf st) -> Right (acc, st)
+          | otherwise      -> Left msg
+        SPOK st' ret       ->
+          let st'' = st' {buf=C8.cons (prevChar st') (buf st')}
+          in  go st'' $! f ret acc
+    blank bl = C8.null bl || C8.all (`elem` "\n\r\t") bl
+    st0 = initialSPState target' 1 1
+    st1 = st0 {buf = input}
+    target' = maybe (fsLit "anon") fsLit target
+
+-- | Show alex error with location of given 'Code' and error message.
+errorSP :: Code   -- ^ Code for showing location information.
+        -> String -- ^ Error message to show.
+        -> SP a
+errorSP code msg = alexError (showLoc code ++ msg)
+
+-- | Show error message with current input.
+lexErrorSP :: SP a
+lexErrorSP = do
+  st <- getSPState
+  AlexInput loc c _ <- alexGetInput
+  let lno = srcLocLine loc
+      cno = srcLocCol loc
+      trg = unpackFS (targetFile st)
+      msg = trg ++ ": lexer error at line " ++ show lno ++
+            ", column " ++ show cno ++
+            ", near " ++ show c
+  alexError msg
 
 data AlexInput =
   AlexInput RealSrcLoc {-# UNPACK #-} !Char C8.ByteString
@@ -239,62 +314,6 @@ alexSetInput (AlexInput l c b) =
   SP (\st -> SPOK (st {buf=b,currentLoc=l,prevChar=c}) ())
 {-# INLINE alexSetInput #-}
 
-runSP :: SP a -> Maybe FilePath -> C8.ByteString
-      -> Either String (a, SPState)
-runSP sp target input =
-  let st0 = initialSPState target' 1 1
-      st1 = st0 {buf = input}
-      target' = maybe (fsLit "anon") fsLit target
-  in  case unSP sp st1 of
-        SPOK sp' a -> Right (a, sp')
-        SPNG _loc msg -> Left msg
-
--- | Incrementally perform computation with parsed result and given
--- function.
-incrSP :: SP a          -- ^ The partial parser.
-       -> (a -> b -> b) -- ^ Function to apply.
-       -> b             -- ^ Initial argument to the function.
-       -> Maybe FilePath -> C8.ByteString -> Either String (b, SPState)
-incrSP sp f z target input = go st1 z
-  where
-    go st acc =
-      case unSP sp st of
-        SPNG _loc msg
-          | blank (buf st) -> Right (acc, st)
-          | otherwise      -> Left msg
-        SPOK st' ret       ->
-          let st'' = st' {buf=C8.cons (prevChar st') (buf st')}
-          in  go st'' $! f ret acc
-    blank bl = C8.null bl || C8.all (`elem` "\n\r\t") bl
-    st0 = initialSPState target' 1 1
-    st1 = st0 {buf = input}
-    target' = maybe (fsLit "anon") fsLit target
-
-evalSP :: SP a -> Maybe FilePath -> C8.ByteString -> Either String a
-evalSP sp target input = fmap fst (runSP sp target input)
-
-errorSP :: Code -> String -> SP a
-errorSP code msg = alexError (showLoc code ++ msg)
-
-lexErrorSP :: SP a
-lexErrorSP = do
-  st <- getSPState
-  AlexInput loc c _ <- alexGetInput
-  let lno = srcLocLine loc
-      cno = srcLocCol loc
-      trg = unpackFS (targetFile st)
-      msg = trg ++ ": lexer error at line " ++ show lno ++
-            ", column " ++ show cno ++
-            ", near " ++ show c
-  alexError msg
-
-putSPState :: SPState -> SP ()
-putSPState st = SP (\_ -> SPOK st ())
-{-# INLINE putSPState #-}
-
-getSPState :: SP SPState
-getSPState = SP (\st -> SPOK st st)
-{-# INLINE getSPState #-}
 
 -- ---------------------------------------------------------------------
 --

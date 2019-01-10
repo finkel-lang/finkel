@@ -29,7 +29,7 @@ import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
                 , xopt_unset )
 import ErrUtils (compilationProgressMsg)
 import Exception (gbracket)
-import FastString (FastString, headFS, unpackFS)
+import FastString (FastString, fsLit, headFS, unpackFS)
 import Finder (findImportedModule)
 import GHC ( ModuleInfo, getModuleInfo, lookupModule, lookupName
            , modInfoExports, setContext )
@@ -45,6 +45,7 @@ import Module (moduleNameString)
 import Name (nameOccName)
 import Outputable (showPpr)
 import RdrName (rdrNameOcc)
+import SrcLoc (GenLocated(..), SrcSpan, unLoc)
 import TyCoRep (TyThing(..))
 import Var (varName)
 
@@ -52,12 +53,12 @@ import Var (varName)
 import qualified GHC.LanguageExtensions as LangExt
 
 -- Internal
-import Language.SK.Builder (HImportDecl, syntaxErrMsg)
+import Language.SK.Builder (HImportDecl, evalBuilder, syntaxErrMsg)
 import Language.SK.Homoiconic
 import Language.SK.Eval
 import Language.SK.Form
 import Language.SK.SKC
-import Language.SK.Syntax ( evalBuilder, parseExpr, parseDecls
+import Language.SK.Syntax ( parseExpr, parseDecls
                           , parseModule, parseLImport )
 
 
@@ -139,7 +140,8 @@ isUnquoteSplice (LForm form) =
     _ -> False
 {-# INLINE isUnquoteSplice #-}
 
--- | Internally used by macro expander for unquote-splice.
+-- | Internally used by macro expander for @unquote-splice@ special
+-- form.
 unquoteSplice :: Homoiconic a => a -> [Code]
 unquoteSplice form =
   case unCode (toCode form) of
@@ -194,22 +196,21 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
   catMaybes <$> (getNames >>= mapM lookupName)
 
 addImportedMacro :: TyThing -> Skc ()
-addImportedMacro thing = when (isMacro thing) (addImportedMacro' thing)
-
-addImportedMacro' :: TyThing -> Skc ()
-addImportedMacro' thing = do
-  dflags <- getSessionDynFlags
-  case thing of
-    AnId var -> do
-      debugSkc (";;; adding macro `" ++
-                showPpr dflags (varName var) ++
-                "' to current compiler session.")
-      hsc_env <- getSession
-      let name_str = showPpr (hsc_dflags hsc_env) (varName var)
-          name_sym = toCode (aSymbol name_str)
-      macro <- coerceMacro name_sym
-      insertMacro (fsLit name_str) macro
-    _ -> error "addImportedmacro"
+addImportedMacro thing = when (isMacro thing) go
+  where
+    go = do
+      dflags <- getSessionDynFlags
+      case thing of
+        AnId var -> do
+          debugSkc (";;; adding macro `" ++
+                    showPpr dflags (varName var) ++
+                    "' to current compiler session.")
+          hsc_env <- getSession
+          let name_str = showPpr (hsc_dflags hsc_env) (varName var)
+              name_sym = toCode (aSymbol name_str)
+          macro <- coerceMacro name_sym
+          insertMacro (fsLit name_str) macro
+        _ -> error "addImportedmacro"
 
 
 -- ---------------------------------------------------------------------
@@ -358,7 +359,8 @@ m_evalWhenCompile form =
     _ -> skSrcError form ("eval-when-compile: malformed body: " ++
                           show form)
 
--- | Special form macros.
+-- | The special forms.  The macros listed in 'specialForms' are used
+-- in default 'SkEnv'.
 specialForms :: EnvMacros
 specialForms =
   makeEnvMacros
@@ -398,8 +400,9 @@ setExpanderSettings = do
 
   setDynFlags flags4
 
--- | Perform given action with DynFlags set for macroexpansion, used
--- this to preserve original DynFlags.
+-- | Perform given action with 'DynFlags' updated to perform
+-- macroexpansion with interactive evaluation, then reset to preserved
+-- original DynFlags.
 withExpanderSettings :: Skc a -> Skc a
 withExpanderSettings act =
   gbracket getSessionDynFlags
@@ -654,5 +657,6 @@ tHsList l forms = LForm (L l (HsList forms))
 {-# INLINE tHsList #-}
 
 emptyForm :: Code
-emptyForm = tList skSrcSpan [tSym skSrcSpan "begin"]
+emptyForm =
+  LForm (genSrc (List [LForm (genSrc (Atom (ASymbol "begin")))]))
 {-# INLINE emptyForm #-}

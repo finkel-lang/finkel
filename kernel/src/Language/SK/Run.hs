@@ -29,14 +29,15 @@ import HscTypes ( HsParsedModule(..), ModSummary(..) )
 import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
 import Module (ModLocation(..), ModuleName, mkModule, mkModuleName)
-import SrcLoc (Located)
+import SrcLoc (GenLocated(..), Located, mkSrcLoc, mkSrcSpan, unLoc)
 import Util (getModificationUTCTime)
 
 -- time
 import Data.Time (getCurrentTime)
 
 -- Internal
-import Language.SK.Builder (HModule, SyntaxError(..))
+import Language.SK.Builder ( Builder, HModule, SyntaxError(..)
+                           , evalBuilder )
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.SKC
@@ -44,7 +45,7 @@ import Language.SK.Syntax
 import Language.SK.Lexer
 
 
--- | Run 'Skc' with given environment and 'skcErrrorHandler'.
+-- | Run 'Skc' with given environment.
 runSkc :: Skc a -> SkEnv -> IO a
 runSkc m sk_env = do
   let mb_libdir = envLibDir sk_env

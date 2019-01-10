@@ -32,6 +32,7 @@ import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
                 , gopt_unset, interpWays )
 import ErrUtils (mkErrMsg, withTiming)
 import Exception (tryIO)
+import FastString (fsLit)
 import Finder ( addHomeModuleToFinder, cannotFindModule
               , findImportedModule, findObjectLinkableMaybe )
 import GHC ( setSessionDynFlags )
@@ -55,7 +56,7 @@ import Module ( ModLocation(..), ModuleName, installedUnitIdEq
               , mkModuleName, moduleName, moduleNameSlashes
               , moduleNameString, moduleUnitId )
 import Panic (GhcException(..), throwGhcException)
-import SrcLoc (getLoc, mkRealSrcLoc)
+import SrcLoc (getLoc, mkRealSrcLoc, unLoc)
 import StringBuffer (stringToStringBuffer)
 import Util (getModificationUTCTime, looksLikeModuleName)
 
@@ -100,8 +101,9 @@ import Language.SK.TargetSource
 -- file were not so easy. Though when cabal support multiple libraraies,
 -- situation might change.
 
--- | SK variant of @ghc --make@.
-make :: [(FilePath, Maybe Phase)] -- ^ List of input file and phase
+-- | SK variant of @"ghc --make"@.
+make :: [(FilePath, Maybe Phase)]
+        -- ^ List of pairs of input file and phase.
      -> Bool -- ^ Skip linking when 'True'.
      -> Bool -- ^ Force recompilation when 'True'.
      -> Maybe FilePath -- ^ Output file, if any.
@@ -120,7 +122,7 @@ make infiles no_link force_recomp mb_output = do
                         , outputFile = mb_output }
       dflags2 | force_recomp = gopt_set dflags1 Opt_ForceRecomp
               | otherwise    = gopt_unset dflags1 Opt_ForceRecomp
-  _ <- setSessionDynFlags dflags2
+  setDynFlags dflags2
   dflags3 <- getSessionDynFlags
 
   debugSkc
@@ -803,17 +805,17 @@ guessOutputFile !mod_graph = modifySession $ \env ->
 -- | GHC version compatibility helper function for creating
 -- 'ModuleGraph' from list of 'ModSummary's.
 mkModuleGraph' :: [ModSummary] -> ModuleGraph
-#if !MIN_VERSION_ghc(8,4,0)
-mkModuleGraph' = id
-#else
+#if MIN_VERSION_ghc(8,4,0)
 mkModuleGraph' = mkModuleGraph
+#else
+mkModuleGraph' = id
 #endif
 
 -- | GHC version compatibility helper function for extending
 -- 'ModuleGraph' with 'ModSummary'.
 extendMG' :: ModuleGraph -> ModSummary -> ModuleGraph
-#if !MIN_VERSION_ghc(8,4,0)
-extendMG' mg ms = ms : mg
-#else
+#if MIN_VERSION_ghc(8,4,0)
 extendMG' = extendMG
+#else
+extendMG' mg ms = ms : mg
 #endif

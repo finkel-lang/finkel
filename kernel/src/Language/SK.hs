@@ -31,14 +31,17 @@ module Language.SK
   , expand1
   , gensym
   , gensym'
-  , quoted
   , unquoteSplice
   , skSrcError
 
-  -- * Re-export
+  -- * Re-export from ghc
   , GenLocated(..)
   ) where
 
+-- ghc
+import SrcLoc (GenLocated(..))
+
+-- Internal
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.Homoiconic

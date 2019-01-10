@@ -60,7 +60,7 @@ import qualified Data.IntSet as IntSet
 import Bag (unitBag)
 import DynFlags ( DynFlags(..), HasDynFlags(..), Language(..)
                 , unsafeGlobalDynFlags )
-import FastString (FastString, unpackFS)
+import FastString (FastString, fsLit, unpackFS)
 import ErrUtils (mkErrMsg)
 import Exception (ExceptionMonad(..), ghandle)
 import GhcMonad ( Ghc(..), GhcMonad(..), getSessionDynFlags
@@ -73,6 +73,7 @@ import InteractiveEval (setContext)
 import Module (ModuleName, mkModuleName)
 import Outputable ( alwaysQualify, neverQualify, showSDocForUser, text
                   , ppr )
+import SrcLoc (GenLocated(..))
 import UniqSupply (mkSplitUniqSupply, uniqFromSupply)
 import Var (varType)
 
@@ -163,6 +164,7 @@ instance Show Macro where
       Macro _      -> showString "<macro>"
       SpecialForm _-> showString "<special-form>"
 
+-- | Type synonym to express mapping of macro name to 'Macro' data.
 type EnvMacros = Map.Map FastString Macro
 
 -- | Environment state in 'Skc'.
@@ -181,25 +183,22 @@ data SkEnv = SkEnv
    , envDefaultLangExts :: (Maybe Language, FlagSet)
      -- | Flag for controling informative output.
    , envSilent :: Bool
-     -- | Flag for adding macros to current session with @define-macro@,
-     -- to support defining macro within REPL.
-   , envAddInDefineMacro :: Bool
 
      -- | Function to compile required modules, when
      -- necessary. Arguments are force recompilation flag and module
      -- name. Returned values are list of pair of name and info of the
      -- compiled home module.
    , envMake :: Maybe (Bool -> String -> Skc [(ModuleName, HomeModInfo)])
-     -- | 'DynFlags' for 'envMake'.
+     -- | 'DynFlags' used by function in 'envMake' field.
    , envMakeDynFlags :: Maybe DynFlags
-     -- | Message used in make.
+     -- | Messager used in make.
    , envMessager :: Messager
      -- | Required modules names in current target.
    , envRequiredModuleNames :: [String]
      -- | Compile home modules during macro-expansion of /require/.
    , envCompiledInRequire :: [(ModuleName, HomeModInfo)]
 
-     -- | Whether to dump Haskell source code.
+     -- | Whether to dump Haskell source code or not.
    , envDumpHs :: Bool
      -- | Directory to save generated Haskell source codes.
    , envHsDir :: Maybe FilePath
@@ -257,14 +256,17 @@ instance GhcMonad Skc where
    setSession = Skc . lift . setSession
    {-# INLINE setSession #-}
 
+-- | Extract 'Ghc' from 'Skc'.
 toGhc :: Skc a -> SkEnv -> Ghc (a, SkEnv)
 toGhc m = runStateT (unSkc m)
 {-# INLINE toGhc #-}
 
+-- | Lift 'Ghc' to 'Skc'.
 fromGhc :: Ghc a -> Skc a
 fromGhc m = Skc (lift m)
 {-# INLINE fromGhc #-}
 
+-- | Throw 'SkException' with given message.
 failS :: String -> Skc a
 failS msg = liftIO (throwIO (SkException msg))
 
@@ -295,7 +297,6 @@ emptySkEnv = SkEnv
   , envContextModules      = []
   , envDefaultLangExts     = (Nothing, emptyFlagSet)
   , envSilent              = False
-  , envAddInDefineMacro    = False
   , envMake                = Nothing
   , envMakeDynFlags        = Nothing
   , envMessager            = batchMsg
@@ -305,18 +306,23 @@ emptySkEnv = SkEnv
   , envHsDir               = Nothing
   , envLibDir              = Nothing }
 
+-- | Get current 'SkEnv'.
 getSkEnv :: Skc SkEnv
 getSkEnv = Skc get
 {-# INLINE getSkEnv #-}
 
+-- | Set current 'SkEnv' to given argument.
 putSkEnv :: SkEnv -> Skc ()
 putSkEnv = Skc . put
 {-# INLINE putSkEnv #-}
 
+-- | Update 'SkEnv' by applying given function to current 'SkEnv'.
 modifySkEnv :: (SkEnv -> SkEnv) -> Skc ()
 modifySkEnv f = Skc (modify f)
 {-# INLINE modifySkEnv #-}
 
+-- | Set current 'DynFlags' to given argument. This function also
+-- modifies 'DynFlags' in interactive context.
 setDynFlags :: DynFlags -> Skc ()
 setDynFlags dflags =
   fromGhc (modifySession

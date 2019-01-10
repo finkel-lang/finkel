@@ -7,6 +7,13 @@
 {-# LANGUAGE UndecidableInstances #-}
 #endif
 -- | Emit Haskell source code from Haskell syntax data type.
+--
+-- This module contains types and functions for generating Haskell
+-- source code from AST data types defined in ghc package.
+--
+-- Most of the implementations are defined with 'ppr' function from
+-- 'Outputable' type class.
+--
 module Language.SK.Emit
   ( HsSrc(..)
   , Hsrc(..)
@@ -174,16 +181,18 @@ whenPprDebug d = ifPprDebug d
 --
 -- ---------------------------------------------------------------------
 
+-- | Type class for generating textual source code.
 class HsSrc a where
   toHsSrc :: SPState -> a -> SDoc
 
+-- | A wrapper type to specify instance of 'HsSrc'.
 newtype Hsrc a = Hsrc {unHsrc :: a}
 
+-- | Generate textual source code from given data.
 genHsSrc :: (GhcMonad m, HsSrc a) => SPState -> a -> m String
 genHsSrc st0 x = do
   flags <- getSessionDynFlags
   unqual <- getPrintUnqual
-  -- let st1 = st0 {docMap = buildDocMap (comments st0)}
   return (showSDocForUser flags unqual (toHsSrc st0 x))
 
 

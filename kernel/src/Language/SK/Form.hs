@@ -1,14 +1,16 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
--- | Form and Atom data.
+-- | S-expression form data for source code.
 module Language.SK.Form
-  ( -- * The S-expression form
-    Atom(..)
+  (
+  -- * Types
+    Code
+  , Atom(..)
   , Form(..)
   , LForm(..)
-  , Code
 
+  -- * Constructor functions
   , qSymbol
   , qChar
   , qString
@@ -17,34 +19,19 @@ module Language.SK.Form
   , qUnit
   , qList
   , qHsList
+  , nil
 
+  -- * Auxiliary functions
   , aFractional
   , aSymbol
-  , nil
+  , genSrc
+  , haskellOpChars
+  , mkLocatedForm
+  , showLoc
   , symbolName
   , symbolNameFS
   , toListL
-
-  , unLoc
   , unCode
-  , genSrc
-  , getLoc
-  , showLoc
-  , mkSkSrcSpan
-  , mkLocatedForm
-  , skSrcSpan
-  , quoted
-
-  , haskellOpChars
-
-  -- * Reexported data from GHC
-  , GenLocated(..)
-  , SrcLoc(..)
-  , SrcSpan(..)
-  , mkFractionalLit
-  , mkSrcLoc
-  , mkSrcSpan
-  , fsLit
   ) where
 
 -- base
@@ -59,10 +46,8 @@ import BasicTypes ( FractionalLit (..)
 #endif
                   )
 import FastString (FastString, fsLit, unpackFS)
-import SrcLoc ( GenLocated(..), Located, SrcLoc(..)
-              , SrcSpan(..), combineLocs, getLoc, mkSrcLoc, mkSrcSpan
-              , srcSpanFile, srcSpanStartCol, srcSpanStartLine
-              , unLoc )
+import SrcLoc ( GenLocated(..), Located, SrcSpan(..), combineLocs
+              , srcSpanFile, srcSpanStartCol, srcSpanStartLine )
 
 -- deepseq
 import Control.DeepSeq (NFData(..))
@@ -73,6 +58,19 @@ import Control.DeepSeq (NFData(..))
 -- Form data type
 --
 -- -------------------------------------------------------------------
+
+-- | Type synonym for code data.
+--
+-- The 'Code' data is the fundamental data type used in the entire
+-- compilation work.  The 'Code' is used to represed data from parsed
+-- source file, and used for input and output of macros transformer
+-- functions. List of 'Code' data are converted to Haskell AST via
+-- syntax parser.
+--
+-- Since 'Code' is returned from parsed source file, source code
+-- location information is attached to 'Code'.
+--
+type Code = LForm Atom
 
 -- | Atom in tokens.
 data Atom
@@ -208,9 +206,6 @@ instance Traversable LForm where
 instance NFData a => NFData (LForm a) where
   rnf (LForm (L l a)) = rnf l `seq` rnf a
 
--- | Type synonym for code data.
-type Code = LForm Atom
-
 -- | Make quoted symbol from 'String'.
 qSymbol :: String -> Code
 qSymbol = quoted . Atom . aSymbol
@@ -278,38 +273,45 @@ symbolNameFS :: Code -> FastString
 symbolNameFS (LForm (L _ (Atom (ASymbol name)))) = name
 symbolNameFS x = error ("symbolName: got " ++ show x)
 
+-- | Make 'List' from given code. When the given argument was already a
+-- 'List', the given 'List' is returned. If the argument was 'HsList',
+-- converted to 'List'. Otherwise, 'List' with single element.
 toListL :: Code -> Code
 toListL orig@(LForm (L l form)) =
   case form of
-    List _ -> orig
+    List _    -> orig
     HsList xs -> LForm (L l (List xs))
-    _ -> LForm (L l (List [orig]))
+    _         -> LForm (L l (List [orig]))
+{-# INLINE toListL #-}
 
+-- | Unwrap 'LForm' to 'Form'.
 unCode :: LForm a -> Form a
 unCode (LForm (L _ a)) = a
 {-# INLINE unCode #-}
 
-mkSkSrcSpan :: String -> SrcSpan
-mkSkSrcSpan = UnhelpfulSpan . fsLit
-{-# INLINE mkSkSrcSpan #-}
-
-skSrcSpan :: SrcSpan
-skSrcSpan = mkSkSrcSpan "<sk generated code>"
-{-# INLINE skSrcSpan #-}
-
+-- | Attach location to mark generated code.
 genSrc :: a -> Located a
 genSrc = L skSrcSpan
 {-# INLINE genSrc #-}
 
-quoted :: Form Atom -> Code
-quoted = LForm . L (UnhelpfulSpan (fsLit "<quoted code>"))
-{-# INLINE quoted #-}
+-- | Source code span for generated code.
+skSrcSpan :: SrcSpan
+skSrcSpan = UnhelpfulSpan (fsLit "<sk generated code>")
+{-# INLINE skSrcSpan #-}
 
+-- | Make located list from list of located elements.
+--
+-- When the argument is not null, the resulting list has a combined
+-- location of locations in the argument list elements.
 mkLocatedForm :: [LForm a] -> Located [LForm a]
 mkLocatedForm [] = genSrc []
 mkLocatedForm ms = L (combineLocs (unLForm (head ms))
                                   (unLForm (last ms)))
                      ms
+
+quoted :: Form Atom -> Code
+quoted = LForm . L (UnhelpfulSpan (fsLit "<quoted code>"))
+{-# INLINE quoted #-}
 
 -- -------------------------------------------------------------------
 --

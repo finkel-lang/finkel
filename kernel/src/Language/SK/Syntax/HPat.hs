@@ -8,11 +8,12 @@ import Data.Char (isUpper)
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
-import FastString (headFS, tailFS)
+import FastString (fsLit, headFS, tailFS)
 import HsLit (HsLit(..))
 import HsPat (HsRecFields(..), Pat(..))
 import HsTypes (HsConDetails(..))
 import HsUtils (mkHsIsString, mkNPat, nlWildPat)
+import SrcLoc (GenLocated(..), getLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsExtension (noExt)

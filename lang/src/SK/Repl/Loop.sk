@@ -41,6 +41,7 @@
    (Outputable (ppr mkErrStyle renderWithStyle setStyleColoured
                     showPpr showSDoc vcat))
    (RdrHsSyn (cvTopDecls))
+   (SrcLoc (unLoc))
    (TyCoRep ((TyThing ..)))
    (Var ((Id) (Var) varType))
 
@@ -61,7 +62,6 @@
                          syntaxErrCode syntaxErrMsg evalBuilder))
    (Language.SK.Eval (evalDecls))
    (Language.SK.Expand (expands))
-   (Language.SK.Form (unLoc))
    (Language.SK.Lexer (evalSP))
    (Language.SK.Make (initSessionForMake))
    (Language.SK.Reader (sexpr))

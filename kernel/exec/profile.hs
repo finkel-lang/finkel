@@ -129,7 +129,7 @@ parseSkModuleWith act path = Run.runSkc go Make.defaultSkEnv
         case Lexer.runSP Reader.sexprs (Just path) contents of
           Right (forms, sp) -> do
             forms' <- Expand.withExpanderSettings (Expand.expands forms)
-            case Syntax.evalBuilder Syntax.parseModule forms' of
+            case Builder.evalBuilder Syntax.parseModule forms' of
               Right mdl -> act mdl sp
               Left  err -> liftIO (putStrLn ("error: " ++
                                              Builder.syntaxErrMsg err))

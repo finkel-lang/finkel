@@ -2,7 +2,7 @@
 -- | Main function for sk compiler.
 --
 -- This module contains 'main' function, which does similar and
--- simplified works done in 'Main.hs' of ghc executable.
+-- simplified works done in @"ghc/Main.hs"@ found in ghc source.
 --
 module Language.SK.Main
   ( defaultMain
@@ -61,20 +61,25 @@ import qualified Paths_sk_kernel
 -- Formerly, sk compiler executable was written as ghc frontend
 -- plugin. However, passing conflicting options used in ghc's "--make"
 -- to the sk compiler executable was cumbersome, since frontend option
--- cannot used when ghc is invoked as make mode.
+-- cannot be used when ghc is invoked as make mode.
 --
 -- Functions exported from this module is doing almost same work done in
 -- the "Main" module of ghc executable, but command line argument
--- handling is more simple, since sk compiler delegate non-make mode
--- works to ghc executable.
+-- handling is more simple, since sk compiler delegates works done in
+-- non-make mode to ghc executable.
 
 -- | Function used by sk kernel compiler.
 defaultMain :: IO ()
 defaultMain = defaultMainWith []
 
 -- | Make a main compiler function from given list of macros.
+--
+-- This functions does simplified command line argument parsing done in
+-- default @ghc@ mode (i.e., @make@ mode).
+--
 defaultMainWith :: [(String, Macro)]
-                -- ^ List of macros loaded to macro expander.
+                -- ^ List of pairs of macro name and 'Macro' value loaded
+                -- to macro expander.
                 -> IO ()
 defaultMainWith macros = do
   args0 <- getArgs
@@ -88,8 +93,14 @@ defaultMainWith macros = do
            args2 = filter (/= "--make") args1
            sk_opts = parseSkOption skopts
            sk_env0 = opt2env sk_opts
-           macros' = mergeMacros (envMacros defaultSkEnv)
-                                 (makeEnvMacros macros)
+
+           -- Using macros from argument as first argument to
+           -- 'mergeMacros', so that the caller of this function can
+           -- have a chance to override the behaviour of specialforms in
+           -- 'defaultSkEnv'.
+           macros' = mergeMacros (makeEnvMacros macros)
+                                 (envMacros defaultSkEnv)
+
            sk_env1 = sk_env0 { envDefaultMacros = macros'
                              , envMacros = macros' }
            next | skHelp sk_opts    = printSkHelp

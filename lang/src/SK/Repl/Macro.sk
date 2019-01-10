@@ -74,7 +74,7 @@
    (Packages ((PackageConfig) componentId packageNameString
               readPackageConfigs))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
-   (SrcLoc (isGoodSrcSpan noLoc unLoc))
+   (SrcLoc (getLoc isGoodSrcSpan noLoc unLoc))
    (TyCoRep ((TyThing ..)))
    (Util (looksLikeModuleName))
 
@@ -92,11 +92,11 @@
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Eval (evalExprType evalTypeKind))
-   (Language.SK.Form (getLoc mkLocatedForm symbolName))
+   (Language.SK.Form (mkLocatedForm symbolName))
    (Language.SK.Make (make))
    (Language.SK.Run (buildHsSyn))
    (Language.SK.SKC
-    ((SkEnv ..) getSkEnv macroNames modifySkEnv putSkEnv setDynFlags))
+    ((SkEnv ..) getSkEnv macroNames modifySkEnv setDynFlags))
    (Language.SK.Syntax (parseExpr parseType))
    (Language.SK.TargetSource (asModuleName))
 
@@ -202,20 +202,9 @@
 
 (defn (compile-module (-> String (Skc Code)))
   [str]
-  (where (gbracket acquire cleanup work)
-    (= acquire
-      (do (<- dflags getDynFlags)
-          (<- sk-env getSkEnv)
-          (return (, dflags sk-env))))
-    (= cleanup (, dflags sk-env)
-      (do (setDynFlags dflags)
-          (putSkEnv sk-env)))
-    (= work (, dflags sk-env)
-      ;; Temporary setting `envAddInDefineMacro' to `False' to avoid
-      ;; adding macros written in the target modules to current REPL
-      ;; session.
+  (where (gbracket getDynFlags setDynFlags work)
+    (= work dflags
       (do (let ((= force-recomp (gopt Opt_ForceRecomp dflags))))
-          (putSkEnv (sk-env {envAddInDefineMacro False}))
           (make [(, str Nothing)] False force-recomp Nothing)
           (return '(begin))))))
 

@@ -1,4 +1,12 @@
 -- | Builder functions for Haskell syntax data type.
+--
+-- This module contains 'Builder' data type and Haskell AST type
+-- synonyms. The 'Builder' data type is used by Happy parser for
+-- building various AST types.
+--
+-- The main purpose of AST type synonyms defined in this module are
+-- for managing ghc version compatibility.
+--
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Language.SK.Builder
@@ -18,7 +26,9 @@ module Language.SK.Builder
   , setLastToken
   , runBuilder
 
-  -- * Type synonyms
+  -- * Type synonyms for ghc version compatibility
+  -- $typesynonym
+  , PARSED
   , HBind
   , HBinds
   , HCCallConv
@@ -42,9 +52,6 @@ module Language.SK.Builder
   , HStmt
   , HTyVarBndr
   , HType
-
-  -- * For ghc version compatibility
-  , PARSED
   ) where
 
 -- ghc
@@ -57,7 +64,7 @@ import HsImpExp (LIE, LIEWrappedName, LImportDecl)
 import HsPat (LPat)
 import HsSyn (HsModule)
 import HsTypes (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
-import SrcLoc (Located, noLoc)
+import SrcLoc (Located, GenLocated(..), noLoc)
 
 #if MIN_VERSION_ghc (8,4,0)
 import HsExtension (GhcPs)
@@ -86,6 +93,7 @@ data BState = BState
     , lastToken :: Maybe Code
     }
 
+-- | Wrapper data for syntax error.
 data SyntaxError = SyntaxError Code String
   deriving (Eq, Show)
 
@@ -94,38 +102,12 @@ newtype Builder a = Builder {
     unBuilder :: StateT BState (Either SyntaxError) a
 }
 
-runBuilder :: Builder a
-           -> [Code]
-           -> Either SyntaxError (a, [Code])
-runBuilder bld toks =
-  case runStateT (unBuilder bld) (BState toks Nothing) of
-    Right (a, st) -> Right (a, inputs st)
-    Left e        -> Left e
-
-evalBuilder :: Builder a -> [Code] -> Either SyntaxError a
-evalBuilder bld toks = fmap fst (runBuilder bld toks)
-
-failB :: String -> Builder a
-failB err = do
-  mb_tok <- fmap lastToken getBState
-  let be = SyntaxError tok err
-      tok = case mb_tok of
-              Just t  -> t
-              Nothing -> LForm (noLoc (Atom AUnit))
-  Builder (StateT (\_ -> Left be))
-
-syntaxErrMsg :: SyntaxError -> String
-syntaxErrMsg (SyntaxError _ msg) = msg
-
-syntaxErrCode :: SyntaxError -> Code
-syntaxErrCode (SyntaxError code _) = code
-
 instance Functor Builder where
   fmap f (Builder m) = Builder (fmap f m)
   {-# INLINE fmap #-}
 
 instance Applicative Builder where
-  pure  = return
+  pure = return
   {-# INLINE pure #-}
   Builder m <*> Builder f = Builder (m <*> f)
   {-# INLINE (<*>) #-}
@@ -142,6 +124,37 @@ instance Monad Builder where
                        in  m' `seq` runStateT (unBuilder m') st'
                      Left err -> Left err))
   {-# INLINE (>>=) #-}
+
+-- | Run given 'Builder' with using given list of 'Code' as input.
+runBuilder :: Builder a
+           -> [Code]
+           -> Either SyntaxError (a, [Code])
+runBuilder bld toks =
+  case runStateT (unBuilder bld) (BState toks Nothing) of
+    Right (a, st) -> Right (a, inputs st)
+    Left e        -> Left e
+
+-- | Like 'runBuilder', but discards left over 'Code's.
+evalBuilder :: Builder a -> [Code] -> Either SyntaxError a
+evalBuilder bld toks = fmap fst (runBuilder bld toks)
+
+-- | Fail builder computation with given message.
+failB :: String -> Builder a
+failB err = do
+  mb_tok <- fmap lastToken getBState
+  let be = SyntaxError tok err
+      tok = case mb_tok of
+              Just t  -> t
+              Nothing -> LForm (noLoc (Atom AUnit))
+  Builder (StateT (\_ -> Left be))
+
+-- | Extract message from 'SyntaxError'.
+syntaxErrMsg :: SyntaxError -> String
+syntaxErrMsg (SyntaxError _ msg) = msg
+
+-- | Extract code from 'SyntaxError'.
+syntaxErrCode :: SyntaxError -> Code
+syntaxErrCode (SyntaxError code _) = code
 
 -- | Get current 'BState'.
 getBState :: Builder BState
@@ -179,6 +192,7 @@ formLexer cont = do
         cont x
 {-# INLINE formLexer #-}
 
+-- | Show simple syntax error message with current 'Code'.
 builderError :: Builder a
 builderError = do
   st <- getBState
@@ -186,11 +200,27 @@ builderError = do
     Nothing -> failB "syntax error"
     Just x  -> failB ("syntax error on input `" ++ show x ++ "'")
 
+
 -- ---------------------------------------------------------------------
 --
 -- Type synonyms
 --
 -- ---------------------------------------------------------------------
+
+-- $typesynonym
+--
+-- Type synonym for managing version compatibility.
+--
+-- This 'PARSED' type synonym is wrapped with CPP macro detecting the
+-- ghc package version at compilation time.  At the time of initial
+-- development of sk-kernel package, ghc source codes were not under the
+-- /Trees that Grow/ modifications.  When updating from ghc 8.2.x to
+-- 8.4.x, 'PARSED' were added to handle the AST argument type
+-- modification.
+--
+-- See <https://ghc.haskell.org/trac/ghc/wiki/ImplementingTreesThatGrow>
+-- for more information of \"Trees that Grow\".
+--
 
 #if MIN_VERSION_ghc(8,4,0)
 type PARSED = GhcPs

@@ -13,6 +13,7 @@
    ;; ghc
    (BasicTypes ((FractionalLit ..)))
    (FastString (unpackFS))
+   (SrcLoc ((GenLocated ..)))
 
    ;; QuickCheck
    (Test.QuickCheck ((Arbitrary ..) (Gen)
@@ -56,4 +57,4 @@
       TEnd        [])))
 
 (instance (=> (Arbitrary a) (Arbitrary (LForm a)))
-  (= arbitrary (fmap (. LForm (L skSrcSpan)) arbitrary)))
+  (= arbitrary (fmap (. LForm genSrc) arbitrary)))

@@ -22,10 +22,10 @@ import Data.List (foldl')
 import qualified Data.ByteString.Lazy as BL
 
 -- ghc
-import FastString (FastString, unpackFS)
+import FastString (FastString, fsLit, unpackFS)
 import HsImpExp (ideclName)
 import Module (moduleNameString)
-import SrcLoc (Located(..))
+import SrcLoc (GenLocated(..), Located, SrcSpan)
 
 -- ghc-boot
 import GHC.LanguageExtensions (Extension(..))
@@ -37,10 +37,10 @@ import Language.SK.Lexer
 import Language.SK.Syntax
 }
 
-%name sexpr sexp
-%name sexprs sexps
+%name sexpr_ sexp
+%name sexprs_ sexps
 
-%partial psexpr sexp
+%partial psexpr_ sexp
 
 %tokentype { Located Token }
 %monad { SP } { >>= } { return }
@@ -307,4 +307,16 @@ parseSexprs mb_file contents =
   case runSP sexprs mb_file contents of
     Right a  -> return a
     Left err -> Control.Monad.Fail.fail err
+
+-- | Parse single S-expression.
+sexpr :: SP Code
+sexpr = sexpr_
+
+-- | Parse list of S-expressions.
+sexprs :: SP [Code]
+sexprs = sexprs_
+
+-- | Partial S-expression parser.
+psexpr :: SP Code
+psexpr = psexpr_
 }

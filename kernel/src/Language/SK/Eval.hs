@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
--- | Module for code evaluation.
+-- | Module containing functions for code evaluation.
 module Language.SK.Eval
   ( evalDecls
   , evalExpr
@@ -63,7 +63,7 @@ evalExpr expr = do
   liftIO (withForeignRef fhv localRef)
 {-# INLINE evalExpr #-}
 
--- | Evaluate type of given expression.
+-- | Evaluate the type of given expression.
 evalExprType :: HExpr -> Skc Type
 evalExprType expr = do
   -- See `InteractiveEval.exprType' and `HscMain.hscTcExpr'. As in
@@ -77,7 +77,8 @@ evalExprType expr = do
   ty <- ioMsgMaybe $ tcRnExpr hsc_env TM_Inst expr
   return $ tidyType emptyTidyEnv ty
 
--- | Evaluate kind of given type.
+-- | Evaluate the kind of given type.  Returned values is a pair of the
+-- argument type and the kind of that type.
 evalTypeKind :: HType -> Skc (Type, Kind)
 evalTypeKind ty = do
   -- See `InteractiveEval.typeKind' and `HscMain.hscKcType'.
@@ -88,7 +89,8 @@ evalTypeKind ty = do
   hsc_env <- getSession
   ioMsgMaybe $ tcRnType hsc_env True ty
 
--- | Evaluate given declarations.
+-- | Evaluate given declarations. The returned value is resulting
+-- 'TyThing's of declarations and updated interactive context.
 evalDecls :: [HDecl] -> Skc ([TyThing], InteractiveContext)
 evalDecls decls = do
   -- Mostly doing similar works done in `HscMain.hscDeclsWithLocation',

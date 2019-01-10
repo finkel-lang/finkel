@@ -1,7 +1,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Module containing 'Homoiconic' typeclass and its instances
+-- | Module containing 'Homoiconic' type class and its instances
 -- declarations.
 module Language.SK.Homoiconic
   ( Homoiconic(..)
@@ -30,6 +30,7 @@ import qualified Data.Semigroup as Semigroup
 -- ghc
 import BasicTypes (fl_value)
 import FastString (FastString)
+import SrcLoc (GenLocated(..), getLoc)
 
 -- internal
 import Language.SK.Form
@@ -41,18 +42,20 @@ import Language.SK.Form
 --
 -- -------------------------------------------------------------------
 
--- Instance data types of Formable class could be inserted to
--- S-expression with `unquote' and `unquote-splice'.
-
 -- | Class for handling Haskell value as code, and vice versa.
 --
 -- Instances should satisfy following law:
 --
 -- > fromCode (toCode x) == Just x
 --
+-- The functions 'listToCode' and 'listFromCode' are used when handling
+-- list of Haskell values specially (e.g., 'Char').  These functions
+-- have default implmenetation which simply applys 'toCode' to elements
+-- of the argument list, and 'fromCode' to elements of the 'HsList'.
+--
 class Homoiconic a where
 
-  -- | Convert Haskell value as 'Code'.
+  -- | Convert Haskell value to 'Code'.
   toCode :: a -> Code
   {-# INLINE toCode #-}
 
@@ -65,6 +68,7 @@ class Homoiconic a where
   fromCode _ = Nothing
   {-# INLINE fromCode #-}
 
+  -- | Convert list of Haskell values to 'Code'.
   listToCode :: [a] -> Code
   listToCode xs =
      let xs' = map toCode xs
@@ -72,6 +76,8 @@ class Homoiconic a where
      in  LForm (L l (HsList xs'))
   {-# INLINE listToCode #-}
 
+  -- | Convert 'Code' to 'Just' list of Haskell values, or 'Nothing' if
+  -- the code could not be converted.
   listFromCode :: Code -> Maybe [a]
   listFromCode xs =
     case unCode xs of

@@ -31,8 +31,8 @@ import Control.DeepSeq
 
 -- ghc
 import BasicTypes (fl_value)
-import FastString (unpackFS)
-import SrcLoc (noSrcSpan)
+import FastString (fsLit, unpackFS)
+import SrcLoc (GenLocated(..), SrcSpan(..), noSrcSpan)
 
 -- transformers
 import Control.Monad.Trans.State
@@ -138,7 +138,7 @@ dataInstanceTests = do
         achar = AChar 'a'
         astr = AString "string"
         aint = AInteger 42
-        afrac = AFractional (mkFractionalLit (1.23 :: Double))
+        afrac = aFractional (1.23 :: Double)
     it "should return Just self with simple gfoldl" $ do
       t_gfoldl_self aunit
       t_gfoldl_self asym
@@ -535,11 +535,11 @@ eqForm a b =
     -- Recursively compare with `eqForm' for 'List' and 'HsList'.
     (List [], List []) -> True
     (List (x:xs), List (y:ys)) ->
-      eqForm x y && eqForm (quoted (List xs)) (quoted (List ys))
+      eqForm x y && eqForm (qList xs) (qList ys)
 
     (HsList [], HsList []) -> True
     (HsList (x:xs), HsList (y:ys)) ->
-      eqForm x y && eqForm (quoted (HsList xs)) (quoted (HsList ys))
+      eqForm x y && eqForm (qHsList xs) (qHsList ys)
 
     -- Treating empty 'List' and Atom symbol 'nil' as same value.
     (Atom (ASymbol sym), List []) | sym == fsLit "nil" -> True

@@ -13,7 +13,7 @@ import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
                , SrcUnpackedness(..), mkHsAppTys )
 import OccName (tcName, tvName)
 import RdrName (getRdrName, mkQual, mkUnqual)
-import SrcLoc (GenLocated(..), Located)
+import SrcLoc (GenLocated(..), Located, getLoc)
 import TysWiredIn (listTyCon, tupleTyCon)
 
 #if MIN_VERSION_ghc(8,6,0)

@@ -17,9 +17,11 @@ import qualified Data.Set as Set
 import GHC.Paths (libdir)
 
 -- ghc
+import FastString (fsLit)
 import GHC (runGhc)
 import Exception (gbracket)
 import HscTypes (SourceError(..))
+import SrcLoc (GenLocated(..))
 
 -- hspec
 import Test.Hspec
@@ -175,10 +177,9 @@ expandTest = do
     it "should return empty form" $ do
       let mb_qt = lookupMacro (fsLit "quote") env
           qt = fromMaybe (error "macro not found") mb_qt
-          l = skSrcSpan
-          s x = LForm (L l (Atom (ASymbol (fsLit x))))
-          li xs = LForm (L l (List xs))
-          t x = LForm (L l (Atom (AString x)))
+          s x = LForm (genSrc (Atom (ASymbol (fsLit x))))
+          li xs = LForm (genSrc (List xs))
+          t x = LForm (genSrc (Atom (AString x)))
           form0 = li [s "quote", s "a"]
           form1 = li [s "qSymbol", t "a"]
       ret <- runSkc (macroFunction qt form0) env
@@ -235,5 +236,5 @@ envTest = do
 
 emptyForm :: Code
 emptyForm =
-  let bgn = LForm (L skSrcSpan (Atom (ASymbol (fsLit "begin"))))
-  in  LForm (L skSrcSpan (List [bgn]))
+  let bgn = LForm (genSrc (Atom (ASymbol (fsLit "begin"))))
+  in  LForm (genSrc (List [bgn]))

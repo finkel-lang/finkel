@@ -112,8 +112,7 @@
         (= macros (mergeMacros specialForms replMacros)))
     (defaultSkEnv {envContextModules modules
                    envMacros macros
-                   envDefaultMacros macros
-                   envAddInDefineMacro True})))
+                   envDefaultMacros macros})))
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.
