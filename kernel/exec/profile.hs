@@ -52,12 +52,13 @@ usage =
        ["usage: profile MODE ARGS"
        ,""
        ,"MODE:"
-       ,"  count - count number of forms"
-       ,"  parse - parse input file and print resulting forms"
-       ,"  ppr   - pretty print haskell or sk module with `ppr'"
-       ,"  hsrc  - convert SK source to Haskell source"
-       ,"  lex   - lex input file and print resulting tokens"
-       ,"  make  - compile given files to object code"])
+       ,"  count  - count number of forms"
+       ,"  expand - print expanded forms"
+       ,"  parse  - parse input file and print resulting forms"
+       ,"  ppr    - pretty print haskell or sk module with `ppr'"
+       ,"  hsrc   - convert SK source to Haskell source"
+       ,"  lex    - lex input file and print resulting tokens"
+       ,"  make   - compile given files to object code"])
 
 printExpandedForms :: FilePath -> IO ()
 printExpandedForms path = Run.runSkc go Make.defaultSkEnv
