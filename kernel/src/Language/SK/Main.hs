@@ -26,7 +26,7 @@ import System.Process (rawSystem)
 import DynFlags ( DynFlags(..), GeneralFlag(..), HasDynFlags(..)
                 , defaultFatalMessager, defaultFlushOut
                 , gopt, parseDynamicFlagsCmdLine)
-import GHC (defaultErrorHandler, runGhc, setSessionDynFlags)
+import GHC (defaultErrorHandler, setSessionDynFlags)
 import GhcMonad (printException)
 import HscTypes (handleFlagWarnings, handleSourceError)
 import Panic (GhcException(..), throwGhcException)
@@ -45,6 +45,7 @@ import qualified GHC.Paths
 -- internal
 import Language.SK.Make
 import Language.SK.SKC
+import Language.SK.Run
 import Language.SK.TargetSource
 import qualified Paths_sk_kernel
 
@@ -119,17 +120,12 @@ main' sk_env orig_args args = do
   defaultErrorHandler
     defaultFatalMessager
     defaultFlushOut
-    (runGhc
-       (envLibDir sk_env)
-       (fmap fst (toGhc
-                    (handleSkException
-                       (\(SkException se) ->
-                          liftIO (do putStrLn se
-                                     exitFailure))
-                       (handleSourceError
-                         printException
-                         (main'' orig_args args)))
-                    sk_env)))
+    (runSkc (handleSkException
+              (\(SkException se) -> liftIO (do putStrLn se
+                                               exitFailure))
+              (handleSourceError printException
+                                 (main'' orig_args args)))
+            sk_env)
 
 main'' :: [String] -> [String] -> Skc ()
 main'' orig_args args = do

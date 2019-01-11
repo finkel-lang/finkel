@@ -109,10 +109,10 @@ exceptionTest = do
 
   describe "running Skc action containing SourceError" $
     it "should throw SourceError" $ do
-      let act = toGhc (skSrcError nil "foo") defaultSkEnv
+      let act = skSrcError nil "foo"
           p :: SourceError -> Bool
-          p _ = True
-      runGhc (Just libdir) act `shouldThrow` p
+          p = const True
+      runSkc act defaultSkEnv `shouldThrow` p
 
   describe "applying macroNames to specialForms" $
     it "should not return name of special forms" $ do

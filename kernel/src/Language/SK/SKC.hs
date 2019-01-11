@@ -4,6 +4,7 @@ module Language.SK.SKC
   ( -- * SKC monad
     Skc(..)
   , SkEnv(..)
+  , SkEnvRef(..)
   , Macro(..)
   , EnvMacros
   , debugSkc
@@ -46,6 +47,7 @@ import Control.Exception (Exception(..), throwIO)
 import Control.Monad (when)
 import Control.Monad.Fail (MonadFail(..))
 import Control.Monad.IO.Class (MonadIO(..))
+import Data.IORef ( IORef, atomicModifyIORef', readIORef, writeIORef )
 import System.Environment (lookupEnv)
 import System.IO (hPutStrLn, stderr)
 
@@ -85,10 +87,6 @@ import qualified EnumSet
 #if MIN_VERSION_ghc(8,4,0)
 import GHC.LanguageExtensions as LangExt
 #endif
-
--- transformers
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State.Strict (StateT(..), get, modify, put)
 
 -- Internal
 import Language.SK.Form
@@ -208,24 +206,25 @@ data SkEnv = SkEnv
    }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
-newtype Skc a = Skc {
-  unSkc :: StateT SkEnv Ghc a
-}
+newtype Skc a = Skc {unSkc :: SkEnvRef -> Ghc a}
+
+-- | Reference to 'SkEnv'.
+data SkEnvRef = SkEnvRef !(IORef SkEnv)
 
 instance Functor Skc where
-  fmap f (Skc m) = Skc (fmap f m)
+  fmap f (Skc m) = Skc (fmap f . m)
   {-# INLINE fmap #-}
 
 instance Applicative Skc where
-  pure = Skc . pure
+  pure x = Skc (\_ -> pure x)
   {-# INLINE pure #-}
-  Skc m <*> Skc f = Skc (m <*> f)
+  Skc f <*> Skc m = Skc (\ref -> f ref <*> m ref)
   {-# INLINE (<*>) #-}
 
 instance Monad Skc where
-  return = Skc . return
+  return x = Skc (\_ -> return x)
   {-# INLINE return #-}
-  Skc m >>= k = Skc (m >>= unSkc . k)
+  Skc m >>= k = Skc (\ref -> m ref >>= \v -> unSkc (k v) ref)
   {-# INLINE (>>=) #-}
 
 instance MonadFail Skc where
@@ -233,38 +232,56 @@ instance MonadFail Skc where
   {-# INLINE fail #-}
 
 instance MonadIO Skc where
-  liftIO = Skc . liftIO
+  liftIO io = Skc (\_ -> liftIO io)
   {-# INLINE liftIO #-}
 
 instance ExceptionMonad Skc where
   gcatch m h =
-    Skc (StateT (\st ->
-                   (toGhc m st `gcatch` \e -> toGhc (h e) st)))
+    Skc (\ref -> unSkc m ref `gcatch` \e -> unSkc (h e) ref)
+  {-# INLINE gcatch #-}
   gmask f =
-    Skc (StateT (\st ->
-                   gmask (\r ->
-                            let r' m = Skc (StateT (r . toGhc m))
-                            in  toGhc (f r') st)))
+    Skc (\ref ->
+           gmask (\r -> let r' m = Skc (\ref' -> r (unSkc m ref'))
+                        in  unSkc (f r') ref))
+  {-# INLINE gmask #-}
 
 instance HasDynFlags Skc where
-   getDynFlags = Skc (lift getSessionDynFlags)
-   {-# INLINE getDynFlags #-}
+  getDynFlags = Skc (\_ -> getDynFlags)
+  {-# INLINE getDynFlags #-}
 
 instance GhcMonad Skc where
-   getSession = Skc (lift getSession)
-   {-# INLINE getSession #-}
-   setSession = Skc . lift . setSession
-   {-# INLINE setSession #-}
+  getSession = Skc (\_ -> getSession)
+  {-# INLINE getSession #-}
+  setSession hsc_env = Skc (\_ -> setSession hsc_env)
+  {-# INLINE setSession #-}
 
 -- | Extract 'Ghc' from 'Skc'.
-toGhc :: Skc a -> SkEnv -> Ghc (a, SkEnv)
-toGhc m = runStateT (unSkc m)
+toGhc :: Skc a -> SkEnvRef -> Ghc a
+toGhc = unSkc
 {-# INLINE toGhc #-}
 
 -- | Lift 'Ghc' to 'Skc'.
 fromGhc :: Ghc a -> Skc a
-fromGhc m = Skc (lift m)
+fromGhc m = Skc (\_ -> m)
 {-# INLINE fromGhc #-}
+
+-- | Get current 'SkEnv'.
+getSkEnv :: Skc SkEnv
+getSkEnv = Skc (\(SkEnvRef ref) -> liftIO (readIORef ref))
+{-# INLINE getSkEnv #-}
+
+-- | Set current 'SkEnv' to given argument.
+putSkEnv :: SkEnv -> Skc ()
+putSkEnv sk_env =
+  Skc (\(SkEnvRef ref) -> sk_env `seq` liftIO (writeIORef ref sk_env))
+{-# INLINE putSkEnv #-}
+
+-- | Update 'SkEnv' with applying given function to current 'SkEnv'.
+modifySkEnv :: (SkEnv -> SkEnv) -> Skc ()
+modifySkEnv f =
+  Skc (\(SkEnvRef ref) ->
+         liftIO (atomicModifyIORef' ref (\sk_env -> (f sk_env, ()))))
+{-# INLINE modifySkEnv #-}
 
 -- | Throw 'SkException' with given message.
 failS :: String -> Skc a
@@ -279,12 +296,10 @@ skSrcError (LForm (L l _)) msg = do
 
 -- | Perform given IO action iff debug flag is turned on.
 debugSkc :: String -> Skc ()
-debugSkc str = Skc go
-  where
-    go = do
-      sk_env <- get
-      when (envDebug sk_env)
-           (liftIO (hPutStrLn stderr str))
+debugSkc str = do
+  sk_env <- getSkEnv
+  when (envDebug sk_env)
+       (liftIO (hPutStrLn stderr str))
 {-# INLINE debugSkc #-}
 
 -- | Empty 'SkEnv' for performing computation with 'Skc'.
@@ -305,21 +320,6 @@ emptySkEnv = SkEnv
   , envDumpHs              = False
   , envHsDir               = Nothing
   , envLibDir              = Nothing }
-
--- | Get current 'SkEnv'.
-getSkEnv :: Skc SkEnv
-getSkEnv = Skc get
-{-# INLINE getSkEnv #-}
-
--- | Set current 'SkEnv' to given argument.
-putSkEnv :: SkEnv -> Skc ()
-putSkEnv = Skc . put
-{-# INLINE putSkEnv #-}
-
--- | Update 'SkEnv' by applying given function to current 'SkEnv'.
-modifySkEnv :: (SkEnv -> SkEnv) -> Skc ()
-modifySkEnv f = Skc (modify f)
-{-# INLINE modifySkEnv #-}
 
 -- | Set current 'DynFlags' to given argument. This function also
 -- modifies 'DynFlags' in interactive context.
@@ -347,9 +347,8 @@ getSkcDebug =
 
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Skc ()
-insertMacro k v = Skc go
-  where
-    go = modify (\e -> e {envMacros = Map.insert k v (envMacros e)})
+insertMacro k v =
+  modifySkEnv (\e -> e {envMacros = Map.insert k v (envMacros e)})
 
 -- | Lookup macro by name.
 --

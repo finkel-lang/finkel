@@ -11,6 +11,7 @@ module Language.SK.Run
 
 -- base
 import Control.Monad.IO.Class (MonadIO(..))
+import Data.IORef (newIORef)
 import Data.Maybe (fromMaybe, maybeToList)
 
 -- containers
@@ -48,8 +49,9 @@ import Language.SK.Lexer
 -- | Run 'Skc' with given environment.
 runSkc :: Skc a -> SkEnv -> IO a
 runSkc m sk_env = do
+  ref <- newIORef sk_env
   let mb_libdir = envLibDir sk_env
-  runGhc mb_libdir (fmap fst (toGhc m sk_env))
+  runGhc mb_libdir (toGhc m (SkEnvRef ref))
 
 -- | Run given builder.
 buildHsSyn :: Builder a -- ^ Builder to use.
