@@ -3,6 +3,12 @@
 #p(LANGUAGE FlexibleInstances
             TypeSynonymInstances)
 
+(:docn "List related functions.
+
+This module is compiled before defining core macros, since some of the
+functions defined in this modules are used in macro defined in
+\"SK.Core\" module.")
+
 (module SK.Core.List
   ;; exception
   (SkListException ..)
@@ -19,7 +25,7 @@
   is-symbol is-string is-char is-integer is-fractional is-unit
 
   ;; list constructors
-  cons list append
+  cons list (ListableType ..) append
 
   ;; higher order functions
   mapcar)
@@ -68,6 +74,22 @@
 
 ;;; CXR
 
+(:docn "Get first element of list 'Code'.
+
+The function 'car' returns the first element of 'List' and 'HsList'
+constructor, or 'nil' value when the 'List' or 'HsList' were empty.
+Throws 'SkListException' when the given argument was non-list value.
+
+Examples:
+
+@
+> (car '(a b c))
+a
+> (car '[a b c])
+a
+> (car 'foo)
+*** Exception: SK.Core.List.car: non-list value \\`foo\\'
+@")
 (:: car (-> Code Code))
 (= car (@ whole (LForm (L l code)))
   (case code
@@ -76,7 +98,27 @@
     (HsList (: x _)) x
     (HsList [])      (LForm (L l (List [])))
     _                (error-non-list "car" whole)))
+#p(INLINABLE car)
 
+(:docn "Get list without the first element.
+
+The function 'cdr' returns list value without the first element of
+'List' or 'HsList' argument. When the argument is a 'HsList', returned
+value is converted to a 'List'. Like 'car', throws 'SkListException'
+then the argument were non-list value.
+
+Examples:
+
+@
+> (cdr '(a b c))
+(b c)
+> (cdr '[a b c])
+(b c)
+> (cdr nil)
+nil
+> (cdr 'foo)
+*** Exception: SK.Core.List.cdr: non-list value \\`foo\\'
+@")
 (:: cdr (-> Code Code))
 (= cdr (@ whole (LForm (L l code)))
   (let ((= f xs
@@ -90,6 +132,7 @@
       (HsList (: _ xs)) (f xs)
       (HsList [])       (LForm (L l (List [])))
       _                 (error-non-list "cdr" whole))))
+#p(INLINABLE cdr)
 
 (eval-when-compile
   (:: ads [String])
@@ -156,8 +199,8 @@
 
 ;;; CONS
 
-;;; | Extend the second argument with the first argument by appending to
-;;; the tip.
+(:docn "Extend the second argument with the first argument by appending
+to the tip.")
 (:: cons (=> (Homoiconic a) (-> a Code Code)))
 (= cons x (@ whole (LForm (L _ xs)))
   (let ((= (@ x' (LForm (L l0 _))) (toCode x)))
@@ -165,8 +208,9 @@
                    (List xs')   (List (: x' xs'))
                    (HsList xs') (List (: x' xs'))
                    _            (List [x' whole]))))))
+#p(INLINABLE cons)
 
-;;; | Append two lists.
+(:docn "Append two lists.")
 (:: append (-> Code Code Code))
 (= append xs ys
   (| ((not (|| (is-list xs) (is-hslist xs)))
@@ -180,22 +224,23 @@
                   bs
                   (cons (car as) (go (cdr as) ys)))))
         (go xs ys)))))
+#p(INLINABLE append)
 
-(class (ListableType lst)
-  (:: list_ (-> [Code] lst)))
+(class (ListableType l)
+  (:: list_ (-> [Code] l)))
 
 (instance (ListableType Code)
   (= list_ (. qList reverse)))
 
-(instance (=> (Homoiconic elem) (ListableType ret)
-              (ListableType (-> elem ret)))
+(instance (=> (Homoiconic elem) (ListableType l)
+              (ListableType (-> elem l)))
   (= list_ acc
     (\ x (list_ (: (toCode x) acc)))))
 
-;;; Make a list from given arguments.
-;;;
-;;; This function can take variable number of arguments, but requires
-;;; explicit specified type signature.
+(:docn "Make a list from given arguments.
+
+This function can take variable number of arguments, but requires
+explicit specified type signature.")
 (:: list (=> (ListableType lst) lst))
 (= list (list_ []))
 
@@ -203,9 +248,9 @@
 
 ;;; Higher Order Functions
 
-;;; | Apply given function to immediate elements of `List' and
-;;; `HsList'. When the second argument was `HsList', the resulting value
-;;; converted to `List'.
+(:docn "Apply given function to immediate elements of 'List' and
+'HsList'. When the second argument was 'HsList', the resulting value
+converted to 'List'.")
 (:: mapcar (-> (-> Code Code) Code Code))
 (= mapcar f (@ form (LForm (L l lst)))
   (case lst
