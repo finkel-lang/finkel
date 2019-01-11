@@ -674,7 +674,7 @@ splitUtf8 n0 bs0 = go n0 bs0 W8.empty
       | n <= 0    = (# acc, bs #)
       | otherwise =
         case utf8One bs W8.singleton id of
-          (# pre, bs1 #) -> go (n-1) bs1 (W8.append acc pre)
+          (# pre, bs1 #) -> acc `seq` go (n-1) bs1 (W8.append acc pre)
 {-# INLINE splitUtf8 #-}
 
 utf8One :: C8.ByteString
