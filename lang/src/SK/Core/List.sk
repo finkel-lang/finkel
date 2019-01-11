@@ -185,12 +185,12 @@
   (:: list_ (-> [Code] lst)))
 
 (instance (ListableType Code)
-  (= list_ qList))
+  (= list_ (. qList reverse)))
 
 (instance (=> (Homoiconic elem) (ListableType ret)
               (ListableType (-> elem ret)))
   (= list_ acc
-    (\ x (list_ (++ acc [(toCode x)])))))
+    (\ x (list_ (: (toCode x) acc)))))
 
 ;;; Make a list from given arguments.
 ;;;
