@@ -30,8 +30,9 @@ import GHC (OutputableBndrId, getPrintUnqual)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HsDecls (DocDecl(..), HsDecl(..), TyClDecl(..))
 import HsDoc (LHsDocString)
+import HsImpExp (IE(..), LIE)
 import HsSyn (HsModule(..))
-import Outputable ( (<+>), (<>), Outputable(..), SDoc
+import Outputable ( (<+>), (<>), ($+$), Outputable(..), SDoc
                   , comma, empty, fsep, lparen, nest, punctuate
                   , showSDocForUser, text, vcat )
 import RdrName (RdrName)
@@ -208,13 +209,6 @@ instance HsSrc RdrName where
 instance (HsSrc b) => HsSrc (GenLocated a b) where
   toHsSrc st (L _ e) = toHsSrc st e
 
-instance HsSrc DocDecl where
-  toHsSrc _st d = case d of
-    DocCommentNext ds        -> commentWithHeader "-- |" ds
-    DocCommentPrev ds        -> commentWithHeader "-- ^" ds
-    DocCommentNamed name _ds -> text "-- named doc" <> text name
-    DocGroup n _ds           -> text "-- group doc" <> text (show n)
-
 #if MIN_VERSION_ghc(8,4,0)
 instance OUTPUTABLE a pr
 #else
@@ -236,9 +230,7 @@ instance (OUTPUTABLE a pr, HasOccName a)
                  pp_header (text "where")
                Just es ->
                  vcat [ pp_header lparen
-                      , nest 8
-                             (fsep (punctuate comma
-                                              (map ppr (unLoc es))))
+                      , nest 8 (pp_lies st (unLoc es))
                       , nest 4 (text ") where")]
            , pp_nonnull imports
            , hsSrc_nonnull st (map (Hsrc . unLoc) decls)
@@ -250,6 +242,20 @@ instance (OUTPUTABLE a pr, HasOccName a)
             Just d  -> vcat [pp_modname, ppr d, rest]
         pp_modname = text "module" <+> ppr name
 
+#if MIN_VERSION_ghc(8,4,0)
+instance OUTPUTABLE a pr
+#else
+instance (OUTPUTABLE a pr, HasOccName a)
+#endif
+         => HsSrc (Hsrc (IE a)) where
+  toHsSrc _st (Hsrc ie) =
+    case ie of
+      IEGroup _EXT n doc  -> commentWithHeader ("-- " ++ replicate n '*')
+                                                doc
+      IEDoc _EXT doc      -> commentWithHeader ("-- |") doc
+      IEDocNamed _EXT doc -> text ("-- $" ++ doc)
+      _                   -> ppr ie
+
 instance OUTPUTABLE a pr => HsSrc (Hsrc (HsDecl a)) where
   toHsSrc st decl =
     case unHsrc decl of
@@ -260,6 +266,19 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (HsDecl a)) where
 -- XXX: TODO. Documentation for constructors need manual formatting.
 instance OUTPUTABLE a pr => HsSrc (Hsrc (TyClDecl a)) where
   toHsSrc _st = ppr . unHsrc
+
+instance HsSrc DocDecl where
+  toHsSrc _st d = case d of
+    DocCommentNext ds       -> text "" $+$ commentWithHeader "-- |" ds
+    DocCommentPrev ds       -> commentWithHeader "-- ^" ds $+$ text ""
+    DocCommentNamed name ds -> namedDoc name ds
+    DocGroup n ds           -> let stars = replicate n '*'
+                               in  commentWithHeader ("-- " ++ stars) ds
+    where
+      namedDoc name doc =
+        let body = map (\x -> text "--" <+> text x)
+                       (lines (unpackHDS' doc))
+        in  vcat (text "" : text ("-- $" ++ name) : text "--" : body)
 
 
 -- -------------------------------------------------------------------
@@ -294,6 +313,44 @@ commentWithHeader header doc =
     []   -> empty
     d:ds -> vcat ((text header <+> text d):
                   map (\ x -> text "--" <+> text x) ds)
+
+-- | Format located export elements.
+--
+-- This function converts module export elements and comments to 'SDoc'.
+-- Export elements are punctuated with commas, and newlines are inserted
+-- between documentation comments.
+pp_lies ::
+#if MIN_VERSION_ghc (8,4,0)
+  OUTPUTABLE a pr
+#else
+  (OUTPUTABLE a pr, HasOccName a)
+#endif
+  => SPState -> [LIE a] -> SDoc
+pp_lies st = go
+  where
+    go [] = empty
+    go ds =
+      case break (isDocIE . unLoc) ds of
+        (nondocs, rest) ->
+          let sdoc = fsep (punctuate comma (map (toHsSrc st . Hsrc . unLoc)
+                                                nondocs))
+              sdoc' = case nondocs of
+                        [] -> sdoc
+                        _  -> sdoc <> comma
+          in  case rest of
+                []        -> sdoc
+                doc:rest' -> sdoc'
+                             $+$ toHsSrc st (Hsrc (unLoc doc))
+                             $+$ go rest'
+
+-- | 'True' when the argument is for documentation.
+isDocIE :: IE a -> Bool
+isDocIE ie =
+  case ie of
+    IEGroup {}    -> True
+    IEDoc {}      -> True
+    IEDocNamed {} -> True
+    _             -> False
 
 -- | GHC version compatible function for unpacking 'HsDocString'.
 unpackHDS' :: HsDocString -> String

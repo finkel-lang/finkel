@@ -480,6 +480,27 @@ b_docprevD (LForm (L l form))
   | otherwise                  = builderError
 {-# INLINE b_docprevD #-}
 
+b_docGroupD :: Int -> Code -> Builder HDecl
+b_docGroupD n form@(LForm (L l _))
+  | List [_,doc_code] <- unCode form
+  , Atom (AString doc) <- unCode doc_code
+  = return $! L l (DocD NOEXT (DocGroup (fromIntegral n)
+                                        (hsDocString doc)))
+  | otherwise = setLastToken form >> failB "Invalid group doc"
+{-# INLINE b_docGroupD #-}
+
+b_docNamed :: Code -> Builder HDecl
+b_docNamed form@(LForm (L l body))
+  | List [_,name_code,doc_code] <- body
+  , Atom (ASymbol name) <- unCode name_code
+  , Atom (AString doc) <- unCode doc_code
+  = let name' = unpackFS name
+        doc' = hsDocString doc
+    in return $! L l (DocD NOEXT (DocCommentNamed name' doc'))
+  | otherwise
+  = setLastToken form >> failB "Invalid named doc"
+{-# INLINE b_docNamed #-}
+
 docCommentNext :: String -> DocDecl
 docCommentNext = DocCommentNext . hsDocString
 {-# INLINE docCommentNext #-}

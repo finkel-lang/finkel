@@ -8,7 +8,8 @@
 -- syntax tree data defined in GHC.
 --
 module Language.SK.Syntax
-  ( parseModule
+  ( -- * Haskell AST parsers
+    parseModule
   , parseImports
   , parseLImport
   , parseStmt
@@ -16,6 +17,9 @@ module Language.SK.Syntax
   , parseTopDecls
   , parseExpr
   , parseType
+
+    -- * Forms for documentation comment
+    -- $docforms
   ) where
 
 -- ghc
@@ -157,9 +161,15 @@ import Language.SK.Syntax.SynUtils
                (L _ (List [LForm
                             (L _ (Atom (ASymbol "INCOHERENT")))])) }
 
--- Documentation
+-- Documentation forms
+
 'docn' { LForm (L _ (List [LForm (L _ (Atom (ASymbol ":docn"))), $$])) }
 'docp' { LForm (L _ (List [LForm (L _ (Atom (ASymbol ":docp"))), $$])) }
+'dock' { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dock"))) : _))) }
+'dh1'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh1"))) : _))) }
+'dh2'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh2"))) : _))) }
+'dh3'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh3"))) : _))) }
+'dh4'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh4"))) : _))) }
 
 -- Plain constructors
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
@@ -183,6 +193,7 @@ import Language.SK.Syntax.SynUtils
 mbdocnext :: { Maybe LHsDocString }
     : 'docn'      {% fmap Just (b_docnextE $1) }
     | {- empty -} { Nothing }
+
 
 -- ---------------------------------------------------------------------
 --
@@ -213,6 +224,12 @@ rexports :: { [HIE] }
 export :: { HIE }
     : idsym    {% b_ieSym $1 }
     | 'module' {% b_ieMdl $1 }
+    | 'dh1'    {% b_ieGroup 1 $1 }
+    | 'dh2'    {% b_ieGroup 2 $1 }
+    | 'dh3'    {% b_ieGroup 3 $1 }
+    | 'dh4'    {% b_ieGroup 4 $1 }
+    | 'docn'   {% b_ieDoc $1 }
+    | 'dock'   {% b_ieDocNamed $1 }
     | 'list'   {% parse p_entity $1 }
 
 entity :: { HIE }
@@ -274,6 +291,11 @@ top_decl_with_doc :: { HDecl }
     : 'list'    {% parse p_top_decl $1 }
     | 'docn'    {% b_docnextD $1 }
     | 'docp'    {% b_docprevD $1 }
+    | 'dh1'     {% b_docGroupD 1 $1 }
+    | 'dh2'     {% b_docGroupD 2 $1 }
+    | 'dh3'     {% b_docGroupD 3 $1 }
+    | 'dh4'     {% b_docGroupD 4 $1 }
+    | 'dock'    {% b_docNamed $1 }
 
 top_decl :: { HDecl }
     : 'data' simpletype constrs            { b_dataD $1 $2 $3 }
@@ -711,4 +733,30 @@ unListL (LForm (L _ form)) =
       List xs   -> xs
       HsList xs -> xs
       _         -> []
+
+-- $docforms
+--
+-- There are four kinds of forms for documentation comments.
+--
+-- [@:docn@]: The @(:docn "comment")@ form is for writing
+-- documentation with @comment@ for the next element. It can appear in
+-- export entities list, or in top level declarations. It is analogous
+-- to Haskell comments starting with @|@.
+--
+-- [@:docp@]: The @(:docp "comment")@ form is like /:docn/, but for
+-- previous form. Unlike /:docn/, it cannot appear in export entities
+-- list. It is analogous to Haskell comments starting with @^@.
+--
+-- [@:dock@]: The @(:dock name)@ and @(:dock name "comment")@ form is
+-- for referencing documentation. @(:dock name)@ is used in export
+-- entities list to refer other documentation comment, and @(:dock name
+-- "comment")@ is for top level to contain the documentation contents.
+-- It is analogous to Haskell comment starting with @$name@.
+--
+-- [@:dh1, :dh2, :dh3, and :dh4@]: The @(:dh1 "comment")@ is for level
+-- 1 documentation section header. There are four levels of section
+-- headers: @:dh1@, @:dh2@, @:dh3@, and @:dh4@. It could be used in
+-- export entities list, or in top level declaration when the module
+-- does not contain explicit export entities. It is analogous to Haskell
+-- comments starting with @*@s.
 }

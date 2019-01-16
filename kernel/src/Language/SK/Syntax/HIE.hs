@@ -7,7 +7,7 @@ module Language.SK.Syntax.HIE where
 import Data.Char (isUpper)
 
 -- ghc
-import FastString (headFS)
+import FastString (headFS, unpackFS)
 import FieldLabel (FieldLbl(..))
 import HsDoc (LHsDocString)
 import HsImpExp ( IE(..), IEWildcard(..), IEWrappedName(..)
@@ -77,6 +77,30 @@ b_ieSym form@(LForm (L l _)) = do
   name <- getVarOrConId form
   return (thing name)
 {-# INLINE b_ieSym #-}
+
+b_ieGroup :: Int -> Code -> Builder HIE
+b_ieGroup n form@(LForm (L l body))
+  | List [_, doc_code] <- body
+  , Atom (AString doc) <- unCode doc_code
+  = return $! L l (IEGroup NOEXT (fromIntegral n) (hsDocString doc))
+  | otherwise
+  = setLastToken form >> failB "Invalid group documentation"
+{-# INLINE b_ieGroup #-}
+
+b_ieDoc :: Code -> Builder HIE
+b_ieDoc (LForm (L l form))
+  | Atom (AString str) <- form =
+    return $! L l (IEDoc NOEXT (hsDocString str))
+  | otherwise = builderError
+{-# INLINE b_ieDoc #-}
+
+b_ieDocNamed :: Code -> Builder HIE
+b_ieDocNamed (LForm (L l form))
+  | List [_,name_code] <- form
+  , Atom (ASymbol name) <- unCode name_code
+  = return $! L l (IEDocNamed NOEXT (unpackFS name))
+  | otherwise = builderError
+{-# INLINE b_ieDocNamed #-}
 
 b_ieAbs :: Code -> Builder HIE
 b_ieAbs form@(LForm (L l _)) = do

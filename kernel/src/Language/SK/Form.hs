@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
--- | S-expression form data for source code.
+-- | S-expression form data.
 module Language.SK.Form
   (
   -- * Types

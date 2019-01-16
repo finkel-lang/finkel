@@ -1,0 +1,17 @@
+(:docn "Module without explicit export entities.")
+(module Main)
+
+(:dh1 "Level 1")
+(:dh2 "Level 2")
+(:dh3 "Level 3")
+
+(:docn "Docmentation for 'foo'.")
+(:: foo (-> Int Int))
+(= foo succ)
+
+(:dh1 "Level 1")
+(:dock main "Named comment.")
+
+(:docn "Documentation for 'main'.")
+(:: main (IO ()))
+(= main (print (foo 41)))

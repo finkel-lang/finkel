@@ -1,0 +1,32 @@
+(:docn "Module header documentation.
+
+This comment is written inside `:docn' form.")
+
+(module Main
+  ;; (:docg 1 "The main function")
+  (:dh1 "The main function")
+  (:docn "Main entry point function.
+This function is performed from compiled executable.")
+  main
+
+  ;; (:docg 1 "Auxiliary")
+  (:dh1 "Auxiliary")
+  (:dock aux)
+  foo bar)
+
+(:docn "Documentation of 'foo'")
+(:: foo (-> String (IO ())))
+(= foo str (putStrLn (++ "From foo: " str)))
+
+(:docn "Documentation of 'bar'")
+(:: bar (-> String (IO ())))
+(= bar (. putStrLn (++ "From bar: ")))
+
+(:: main (IO ()))
+(:docp "Documentation of 'main'.")
+(= main
+  (do (putStrLn "documentation comment tests.")
+      (foo "bar")
+      (bar "buzz")))
+
+(:dock aux "Section documentation for auxiliary functions.")
