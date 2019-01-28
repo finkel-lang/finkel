@@ -33,7 +33,7 @@
 ;;; Exported function
 
 (defn (main (IO ()))
-  "Main entry point function."
+  "Main entry point function for @sk@ executable."
   (do (<- args getArgs)
       (case args
         (: name rest) (maybe show-usage

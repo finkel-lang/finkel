@@ -22,8 +22,8 @@
    ;; base
    (Control.Monad (mplus))
    (System.Exit (exitFailure))
-   (System.Console.GetOpt
-    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
+   (System.Console.GetOpt ((ArgDescr ..) (ArgOrder ..) (OptDescr ..)
+                           getOpt usageInfo))
    (System.Environment (getProgName))
 
    ;; sk-kernel
@@ -39,13 +39,22 @@
           repl-env))
 
 
-;;; Main
+;;; Exported entities
 
 (defn (replMain (-> [String] (IO ())))
+  "Main entry point function for REPL."
   [args]
   (case (getOpt Permute descrs args)
     (, o _ []) (act (foldl (flip id) initial-option o))
     (, _ _ es) (print-errors es)))
+
+(defn (repl-env SkEnv)
+  "Environment value used by the sk REPL."
+  (let ((= modules ["Prelude"])
+        (= macros (mergeMacros specialForms replMacros)))
+    (defaultSkEnv {envContextModules modules
+                   envMacros macros
+                   envDefaultMacros macros})))
 
 
 ;;; Option types
@@ -106,13 +115,6 @@
 (defn (run (-> (Maybe Int) (IO ())))
   [listen]
   (start-repl listen repl-env))
-
-(defn (repl-env SkEnv)
-  (let ((= modules ["Prelude"])
-        (= macros (mergeMacros specialForms replMacros)))
-    (defaultSkEnv {envContextModules modules
-                   envMacros macros
-                   envDefaultMacros macros})))
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.

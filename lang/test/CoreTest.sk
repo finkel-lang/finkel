@@ -1,6 +1,7 @@
 ;;;; Module to test macros.
 
 (require SK.Core)
+(require SK.Core.List)
 
 (defmodule CoreTest
   (load-use
@@ -9,6 +10,7 @@
 
    ;; ghc
    (Exception)
+   (FastString (headFS nullFS))
 
    ;; sk-kernel
    (Language.SK.Make)
@@ -34,6 +36,7 @@
    (SK.Prelude)
 
    ;; internal
+   (SK.Core.List)
    (Orphan))
   (export coreTests
           macroTests
@@ -251,6 +254,40 @@
   [x]
   `(++ "m1 " ,x))
 
+(eval-when (compile load)
+  ;; Using a newtype to compare 'Code's containing symbols generated
+  ;; with `gensym'.
+  (newtype GensymCode
+    (GensymCode Code)
+    (deriving (Show)))
+
+  (defn (eqGensymCode (-> GensymCode GensymCode Bool))
+    [(GensymCode a) (GensymCode b)]
+    (eqGensymCode1 a b))
+
+  (defn (eqGensymCode1 (-> Code Code Bool))
+    [a b]
+    (eqGensymCode2 (unCode a) (unCode b)))
+
+  (defn (eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
+    [(Atom (ASymbol a)) (Atom (ASymbol b))]
+    (| ((nullFS a) (nullFS b))
+       ((== (headFS a) \$) True)
+       ((== (headFS b) \$) True)
+       (otherwise (== a b)))
+    [(List as) (List bs)] (eqGensymCodes as bs)
+    [(HsList as) (HsList bs)] (eqGensymCodes as bs)
+    [a b] (== a b))
+
+  (defn (eqGensymCodes (-> [Code] [Code] Bool))
+    [[] []] True
+    [[]  _] False
+    [ _ []] False
+    [(: x xs) (: y ys)] (&& (eqGensymCode1 x y) (eqGensymCodes xs ys)))
+
+  (instance (Eq GensymCode)
+    (= == eqGensymCode)))
+
 (defmacro' expandTo
   [in out]
   `(do (<- v (gtry (runSkc (macroFunction ,(car in) ',in)
@@ -258,7 +295,7 @@
        (case v
          (Left e)  (expectationFailure
                     (show (:: e SomeException)))
-         (Right r) (shouldBe r ',out))))
+         (Right r) (shouldBe (GensymCode r) (GensymCode ',out)))))
 
 (defmacro' expandFailure
   [in]
@@ -317,39 +354,56 @@
                  (expandTo
                   (defmacro-m m1 (a)
                     (return `(putStrLn (++ "hello, " ,a))))
-                  (define-macro m1 __form__
-                    (case __form__
-                      (LForm (L _loc (List [_ a])))
-                      (return
-                        (quasiquote
-                         (putStrLn (++ "hello, " (unquote a)))))
-                      _ (skSrcError
-                         __form__
-                         (concat [(show (quote m1))
-                                  "\ninvalid args: `"
-                                  (show __form__) "'"]))))))
+                  (begin
+                    (:: m1 Macro)
+                    (= m1
+                      (let ((:: $m1 (-> Code (Skc Code)))
+                            (= $m1 __form__
+                              (case __form__
+                                (LForm (L _loc (List [_ a])))
+                                (return
+                                  (quasiquote
+                                   (putStrLn (++ "hello, "
+                                                 (unquote a)))))
+                                _ (skSrcError
+                                   __form__
+                                   (concat [(show (quote m1))
+                                            "\ninvalid args: `"
+                                            (show __form__)
+                                            "'"])))))
+                        (Macro $m1))))))
              (it "should replace nil arg with _"
                  (expandTo
                   (defmacro-m m1 ()
                     (return `(print True)))
-                  (define-macro m1 _
-                    (return (quasiquote (print True))))))
+                  (begin
+                    (:: m1 Macro)
+                    (= m1
+                      (let ((:: $m1 (-> Code (Skc Code)))
+                            (= $m1 _
+                              (return (quasiquote (print True)))))
+                        (Macro $m1))))))
              (it "should expand symbol arg to rest"
                  (expandTo
                   (defmacro-m m1 args
                     (return `(print ,@args)))
-                  (define-macro m1 __form__
-                    (case (unCode __form__)
-                      (List (: _ args))
-                      (return
-                        (quasiquote
-                         (print (unquote_splice args))))
-
-                      _ (skSrcError
-                         __form__
-                         (concat [(show (quote m1))
-                                  "\ninvalid args: `"
-                                  (show __form__) "'"]))))))
+                  (begin
+                    (:: m1 Macro)
+                    (= m1
+                      (let ((:: $m1 (-> Code (Skc Code)))
+                            (= $m1 __form__
+                              (case (unCode __form__)
+                                (List (: _ args))
+                                (return
+                                  (quasiquote
+                                   (print (unquote_splice args))))
+                                _ (skSrcError
+                                   __form__
+                                   (concat [(show (quote m1))
+                                            "\ninvalid args: `"
+                                            (show __form__)
+                                            "'"])))))
+                        (Macro $m1))))))
              (it "should detect invalid arg"
                  (expandFailure
                   (defmacro-m m1 "string"
@@ -374,9 +428,10 @@
               (defmacro m1 (a)
                 `(putStrLn (++ "hello, " ,a)))
               (defmacro-m m1 (a)
-                (return
-                  (quasiquote
-                   (putStrLn (++ "hello, " (unquote a)))))))))
+                (let ((= $m1
+                        (quasiquote (putStrLn (++ "hello, "
+                                                  (unquote a))))))
+                  (return $m1))))))
 
       (d "defmacro'"
          (it "expands to (eval-when (...) (defmacro ...))"
@@ -399,31 +454,39 @@
                               True))))
 
       (d "macrolet-m"
-         (do (it "should expand to let-macro"
+         (do (it "should expand to with-macro"
                  (expandTo
                   (macrolet-m ((m (a b)
-                                (return `(+ ,a ,b))))
+                                 (return `(+ ,a ,b))))
                     (m 20 22))
-                  (let-macro ((m __form__
-                                (case __form__
-                                  (LForm (L _loc (List [_ a b])))
-                                  (return (quasiquote
-                                           (+ (unquote a) (unquote b))))
-                                  _
-                                  (skSrcError
-                                   __form__
-                                   (concat [(show (quote m))
-                                            "\ninvalid args: `"
-                                            (show __form__)
-                                            "'"])))))
+                  (with-macro
+                      ((= m
+                         (let ((:: m_s3 (-> Code (Skc Code)))
+                               (= m_s3 __form__
+                                 (case __form__
+                                   (LForm (L _loc (List [_ a b])))
+                                   (return
+                                     (quasiquote
+                                      (+ (unquote a) (unquote b))))
+                                   _ (skSrcError
+                                      __form__
+                                      (concat [(show (quote m))
+                                               "\ninvalid args: `"
+                                               (show __form__)
+                                               "'"])))))
+                           (Macro m_s3))))
                     (m 20 22))))
              (it "should replace () arg with _"
                  (expandTo
                   (macrolet-m ((m1 ()
-                                (return `(print \x))))
+                                 (return `(print \x))))
                     (m1))
-                  (let-macro ((m1 _
-                                (return (quasiquote (print \x)))))
+                  (with-macro ((= m1
+                                 (let ((:: $m1 (-> Code (Skc Code)))
+                                       (= $m1 _
+                                         (return
+                                           (quasiquote (print \x)))))
+                                   (Macro $m1))))
                     (m1))))
              (it "should detect invalid form"
                  (expandFailure
@@ -431,26 +494,30 @@
              (it "should detect invalid local macro form"
                  (expandFailure
                   (macrolet-m ((m1 ()
-                                foo bar buzz))
+                                 foo bar buzz))
                     (m1))))))
 
       (d "macrolet"
-         (it "should expand to let-macro with `return'"
+         (it "should expand to macro with `return'"
              (expandTo
               (macrolet ((m (a b)
                            `(+ ,a ,b)))
                 (m 20 22))
-              (let-macro ((m __form__
-                            (case __form__
-                              (LForm (L _loc (List [_ a b])))
-                              (return (quasiquote (+ (unquote a)
-                                                     (unquote b))))
-                              _
-                              (skSrcError
-                               __form__
-                               (concat [(show (quote m))
-                                        "\ninvalid args: `"
-                                        (show __form__) "'"])))))
+              (with-macro
+                  ((= m (let ((:: $m (-> Code (Skc Code)))
+                              (= $m __form__
+                                (case __form__
+                                  (LForm (L _loc (List [_ a b])))
+                                  (return
+                                    (quasiquote (+ (unquote a)
+                                                   (unquote b))))
+                                  _ (skSrcError
+                                     __form__
+                                     (concat [(show (quote m))
+                                              "\ninvalid args: `"
+                                              (show __form__)
+                                              "'"])))))
+                          (Macro $m))))
                 (m 20 22)))))
 
       (d "defn"
@@ -468,11 +535,11 @@
              (it "should expand to function with no arguments"
                  (expandTo
                   (defn foo 42)
-                  (defn foo () 42)))
+                  (= foo 42)))
              (it "should expand to string"
                  (expandTo
                   (defn foo "bar")
-                  (defn foo () "bar")))
+                  (= foo "bar")))
              (it "should expand argument patterns"
                  (expandTo
                   (defn foo
@@ -506,7 +573,7 @@
              (expandTo
               (defn' foo (a b)
                 (+ a b))
-              (eval-when (compile load)
+              (eval-when [compile load]
                 (defn foo (a b)
                   (+ a b))))))
 
