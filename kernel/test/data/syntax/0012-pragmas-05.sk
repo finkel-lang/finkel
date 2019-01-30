@@ -4,6 +4,7 @@
 #p(LANGUAGE NoMonomorphismRestriction)
 #p(LANGUAGE FlexibleContexts)
 #p(LANGUAGE FlexibleInstances)
+#p(LANGUAGE TypeOperators)
 #p(LANGUAGE TypeSynonymInstances)
 
 (module Main)
@@ -83,6 +84,15 @@
 ;; `c3_f1',
 (= c3_f1 (add (int 1) (add (int 2) (int 3))))
 
+;;; Type operator
+
+(data (:* a b)
+  (:* a b)
+  (deriving (Eq Show)))
+
+(:: to01 (IO ()))
+(= to01 (print (:* True \x)))
+
 (:: main (IO ()))
 (= main
   (do (c1 (:: (return False) (IO Bool)) (return \x))
@@ -99,4 +109,5 @@
       (putStrLn (c2d n))
       (putStrLn (add (add (int 1) (int 2))
                      (add (int 3) (int 4))))
-      (putStrLn c3_f1)))
+      (putStrLn c3_f1)
+      to01))

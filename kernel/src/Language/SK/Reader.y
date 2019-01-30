@@ -266,6 +266,7 @@ supportedLangExts =
       , OverloadedStrings
       , OverloadedLists
       , RankNTypes
+      , TypeOperators
       , TypeSynonymInstances ]
   where
     -- Adding `"No"' prefix, as done in `DynFlags.supportedExtensions'.

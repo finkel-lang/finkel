@@ -69,11 +69,11 @@ mkRdrName' upperCaseNameSpace name
   -- package "ghc-prim", but not exported.
   | name == fsLit ":" = nameRdrName consDataConName
 
-  -- Name starting with ':' is data constructor.
+  -- Names starting with ':' are data constructor.
   | x == ':' = mkUnqual srcDataName name
 
-  -- Name starting with capital letters may qualified var name or data
-  -- constructor name.
+  -- Names starting with capital letters might be qualified var names or
+  -- data constructor names.
   | isUpper x =
     case splitQualName name of
       Nothing -> mkUnqual srcDataName name
