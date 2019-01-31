@@ -262,11 +262,19 @@ has_args :: [LMatch PARSED (LHsExpr PARSED)] -> Bool
 has_args (L _ mtch:_) = not (null (m_pats mtch))
 has_args []           = error "Language.SK.Syntax.SynUtils:has_args"
 
+kindedTyVar :: Code -> Code -> HType -> Builder HTyVarBndr
+kindedTyVar (LForm (L l _dc)) name kind
+  | LForm (L ln (Atom (ASymbol name'))) <- name = do
+    let name'' = L ln (mkUnqual tvName name')
+    return (L l (KindedTyVar NOEXT name'' kind))
+  | otherwise = builderError
+{-# INLINE kindedTyVar #-}
+
 codeToUserTyVar :: Code -> HTyVarBndr
 codeToUserTyVar code =
   case code of
-    LForm (L l (Atom (ASymbol name))) ->
-      L l (UserTyVar NOEXT (L l (mkUnqual tvName name)))
+    LForm (L l (Atom (ASymbol name)))
+     -> L l (UserTyVar NOEXT (L l (mkUnqual tvName name)))
     _ -> error "Language.SK.Syntax.SynUtils:codeToUserTyVar"
 {-# INLINE codeToUserTyVar #-}
 

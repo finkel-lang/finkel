@@ -256,11 +256,13 @@ supportedLangExts =
       , DeriveGeneric
       , DeriveTraversable
       , ExistentialQuantification
+      , ExplicitForAll
       , FlexibleContexts
       , FlexibleInstances
       , GADTs
       , GeneralizedNewtypeDeriving
       , ImplicitPrelude
+      , KindSignatures
       , MultiParamTypeClasses
       , MonomorphismRestriction
       , OverloadedStrings

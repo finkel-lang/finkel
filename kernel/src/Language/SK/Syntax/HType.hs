@@ -7,14 +7,14 @@ import Data.Char (isUpper)
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
-import FastString (headFS, lengthFS, tailFS)
+import FastString (headFS, lengthFS, nullFS, tailFS)
 import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
                , LHsTyVarBndr, Promoted(..), SrcStrictness(..)
                , SrcUnpackedness(..), mkHsAppTys )
 import OccName (tcName, tvName)
 import RdrName (getRdrName, mkQual, mkUnqual)
 import SrcLoc (GenLocated(..), Located, getLoc)
-import TysWiredIn (listTyCon, tupleTyCon)
+import TysWiredIn (liftedTypeKindTyCon, listTyCon, tupleTyCon)
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsExtension (IdP, noExt)
@@ -47,6 +47,9 @@ b_symT whole@(LForm (L l form))
                  (getRdrName (tupleTyCon Boxed arity), False)
                | '!' == x  ->
                  (mkUnqual (namespace (headFS xs)) xs, True)
+               -- XXX: Handle "StarIsType" language extension
+               | '*' == x && nullFS xs ->
+                 (getRdrName liftedTypeKindTyCon, False)
                | otherwise ->
                  (mkUnqual (namespace x) name, False)
              Just qual -> (mkQual (namespace x) qual, False)
@@ -112,14 +115,17 @@ b_bangT (LForm (L l _)) t = L l (hsBangTy srcBang t)
     srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
 {-# INLINE b_bangT #-}
 
-b_forallT :: (Code, [Code]) -> ([HType], HType) -> HType
-b_forallT ((LForm (L l0 _)), vars) (ctxts, body) = L l0 fat
-  where
-    fat = hsParTy (L l0 forAllTy')
-    forAllTy' = forAllTy bndrs ty
-    ty = L l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
-    bndrs = map codeToUserTyVar vars
+b_forallT :: Code -> ([HTyVarBndr], ([HType], HType)) -> HType
+b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
+  let fat = hsParTy (L l0 forallty')
+      forallty' = forAllTy bndrs ty
+      ty = L l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
+  in  L l0 fat
 {-# INLINE b_forallT #-}
+
+b_kindedType :: Code -> HType -> HType -> HType
+b_kindedType (LForm (L l _)) ty kind = L l (HsKindSig NOEXT ty kind)
+{-# INLINE b_kindedType #-}
 
 b_unpackT :: Code -> HType -> HType
 b_unpackT (LForm (L l _)) t = L l (hsBangTy bang t')

@@ -1,4 +1,4 @@
-;;; Form containing language pragmas.
+;;; Forms containing language pragmas.
 
 #p(LANGUAGE DeriveDataTypeable
             DeriveFoldable

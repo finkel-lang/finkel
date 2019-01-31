@@ -110,16 +110,6 @@ b_typeD (LForm (L l _)) (name, tvs) ty = L l (tyClD synonym)
                       }
 {-# INLINE b_typeD #-}
 
-b_simpletypeD :: [Code] -> Builder (FastString, [HTyVarBndr])
-b_simpletypeD codes =
-  -- XXX: Kind signatures not supported.
-  case codes of
-    tv:tvs -> do
-      name <- getConId tv
-      return (name, map codeToUserTyVar tvs)
-    _      -> builderError
-{-# INLINE b_simpletypeD #-}
-
 b_conD :: Code -> HConDeclDetails -> Builder HConDecl
 b_conD form@(LForm (L l _)) details = do
   name <- getConId form
@@ -132,14 +122,14 @@ b_conD form@(LForm (L l _)) details = do
   return (L l (mkConDeclH98 name' Nothing cxt details))
 {-# INLINE b_conD #-}
 
-b_forallD :: [Code] -> (HConDecl, [HType]) -> HConDecl
+b_forallD :: [HTyVarBndr] -> (HConDecl, [HType]) -> HConDecl
 b_forallD vars ((L l cdecl), cxts) =
 #if MIN_VERSION_ghc(8,6,0)
   L l cdecl { con_forall = noLoc True
-            , con_ex_tvs = map codeToUserTyVar vars
+            , con_ex_tvs = vars
             , con_mb_cxt = Just (mkLocatedList cxts) }
 #else
-  L l cdecl { con_qvars = Just (mkHsQTvs (map codeToUserTyVar vars))
+  L l cdecl { con_qvars = Just (mkHsQTvs vars)
             , con_cxt = Just (mkLocatedList cxts) }
 #endif
 {-# INLINE b_forallD #-}
@@ -210,22 +200,29 @@ b_classD (tys,ty) decls = do
             SigD _EXT d -> return (ms, L ld d : ss)
             ValD _EXT d -> return (L ld d : ms, ss)
             _           -> builderError
-        userTyVar = UserTyVar NOEXT
+        userTV = UserTyVar NOEXT
+        kindedTV = KindedTyVar NOEXT
         -- Recursing in `HsAppTy' to support MultiParamTypeClasses.
         unAppTy t =
           case t of
-            L l (HsTyVar _ _EXT n) -> return (l, n, [])
-            L _ (HsAppTy _EXT t1 (L lv (HsTyVar _ _EXT v))) ->
-              do (l, n, vs) <- unAppTy t1
-                 return (l, n, L lv (userTyVar v):vs)
+            L l (HsTyVar _ _EXT n) ->
+              return (l, n, [L l (userTV n)])
+            L _ (HsAppTy _EXT t1 v) -> do
+              (l1, n1, vs1) <- unAppTy t1
+              (_, _, vs2) <- unAppTy v
+              return (l1, n1, vs2 ++ vs1)
             L _ (HsParTy _EXT t')  -> unAppTy t'
-            _                      -> builderError
+            L l1 (HsKindSig _EXT t1 k) -> do
+              (_, n, _) <- unAppTy t1
+              return (l1, n, [L l1 (kindedTV n k)])
+            _ -> builderError
     (l, name, bndrs) <- unAppTy ty
     (meths,sigs) <- foldM categorize ([],[]) decls
 
     -- Note that the `bndrs' are gathered from left to right,
-    -- re-ordering with reverse at this point.
-    let bndrs' = reverse bndrs
+    -- re-ordering with reverse and removing the duplicated head at this
+    -- point.
+    let bndrs' = tail (reverse bndrs)
         cls = ClassDecl { tcdCtxt = mkLocatedList tys
                         , tcdLName = name
                         , tcdFixity = Prefix

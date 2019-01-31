@@ -58,6 +58,7 @@ import Language.SK.Syntax.SynUtils
 %name p_decls decls
 %name p_lqtycl lqtycl
 %name p_sfsig sfsig
+%name p_lsimpletype lsimpletype
 %name p_lsname lsname
 
 %name p_type type
@@ -65,6 +66,7 @@ import Language.SK.Syntax.SynUtils
 %name p_types0 types0
 %name p_lconstr lconstr
 %name p_lqtycon lqtycon
+%name p_lkindtv lkindtv
 %name p_lh98constr lh98constr
 
 %name p_pat pat
@@ -320,8 +322,11 @@ sfsig :: { (Code, HType) }
     : '::' idsym type { ($2, $3) }
 
 simpletype :: { (FastString, [HTyVarBndr])}
-    : conid  {% b_simpletypeD [$1] }
-    | 'list' {% b_simpletypeD $1 }
+    : conid  {% getConId $1 >>= \n -> return (n, []) }
+    | 'list' {% parse p_lsimpletype $1 }
+
+lsimpletype :: { (FastString, [HTyVarBndr]) }
+    : conid tvbndrs {% getConId $1 >>= \n -> return (n, $2) }
 
 constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs { let (m,d) = $1 in (m,reverse d) }
@@ -339,16 +344,27 @@ deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }
 
 lconstr :: { HConDecl }
-    : forall qtycon    { b_forallD (snd $1) $2 }
-    | '::' conid dtype {% b_gadtD $2 $3 }
-    | lh98constr       { $1 }
+    : '::' conid dtype   {% b_gadtD $2 $3 }
+    | 'forall' forallcon { b_forallD (fst $2) (snd $2) }
+    | lh98constr         { $1 }
 
-forall :: { (Code, [Code]) }
-    : 'forall' lforall { ($1, $2) }
+forallcon :: { ([HTyVarBndr], (HConDecl, [HType])) }
+    : qtycon           { ([], $1) }
+    | tvbndr forallcon { case $2 of (vs,con) -> ($1:vs,con) }
 
-lforall :: { [Code] }
-    : idsym         { [$1] }
-    | idsym lforall { $1:$2 }
+tvbndrs :: { [HTyVarBndr] }
+    : rtvbndrs { reverse $1 }
+
+rtvbndrs :: { [HTyVarBndr] }
+    : {- empty -}     { [] }
+    | rtvbndrs tvbndr { $2:$1 }
+
+tvbndr :: { HTyVarBndr }
+    : idsym  { codeToUserTyVar $1 }
+    | 'list' {% parse p_lkindtv $1 }
+
+lkindtv :: { HTyVarBndr }
+    : '::' idsym type {% kindedTyVar $1 $2 $3 }
 
 qtycon :: { (HConDecl, [HType]) }
     : 'list' {% parse p_lqtycon $1 }
@@ -463,8 +479,13 @@ type :: { HType }
 types0 :: { HType }
     : '->' types             {% b_funT $2 }
     | ',' zero_or_more_types { b_tupT $1 $2 }
-    | forall qtycl           { b_forallT $1 $2 }
+    | 'forall' forallty      { b_forallT $1 $2 }
+    | '::' type type         { b_kindedType $1 $2 $3 }
     | types                  {% b_appT $1 }
+
+forallty :: { ([HTyVarBndr], ([HType], HType)) }
+    : qtycl { ([], $1) }
+    | tvbndr forallty { case $2 of (vs,ty) -> ($1:vs,ty) }
 
 types :: { [HType] }
     : rtypes { reverse $1 }
