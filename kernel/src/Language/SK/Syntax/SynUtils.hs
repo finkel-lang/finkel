@@ -29,7 +29,7 @@ import OrdList (OrdList, fromOL, toOL)
 import RdrHsSyn (cvTopDecls)
 import RdrName (RdrName, mkQual, mkUnqual, mkVarUnqual, nameRdrName)
 import SrcLoc ( GenLocated(..), Located, SrcSpan, combineLocs
-              , combineSrcSpans, noLoc )
+              , combineSrcSpans, noLoc, unLoc )
 import TysWiredIn (consDataConName)
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -319,9 +319,15 @@ mkHsValBinds_compat binds sigs =
 #endif
 
 mkHsQualTy_compat :: LHsContext PARSED -> HType -> HsType PARSED
-mkHsQualTy_compat ctxt body =
-  HsQualTy { hst_ctxt = ctxt
+mkHsQualTy_compat ctxt body
+  | nullLHsContext ctxt = unLoc body
+  | otherwise =
+    HsQualTy { hst_ctxt = ctxt
 #if MIN_VERSION_ghc(8,6,0)
-           , hst_xqual = noExt
+             , hst_xqual = noExt
 #endif
-           , hst_body = body }
+             , hst_body = body }
+
+nullLHsContext :: LHsContext PARSED -> Bool
+nullLHsContext (L _ cs) = null cs
+{-# INLINE nullLHsContext #-}
