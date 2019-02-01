@@ -14,14 +14,16 @@ import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
 import OccName (tcName, tvName)
 import RdrName (getRdrName, mkQual, mkUnqual)
 import SrcLoc (GenLocated(..), Located, getLoc)
-import TysWiredIn (liftedTypeKindTyCon, listTyCon, tupleTyCon)
+import TysWiredIn (listTyCon, tupleTyCon)
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsExtension (IdP, noExt)
 #elif MIN_VERSION_ghc(8,4,0)
 import HsExtension (IdP)
+import TysWiredIn (starKindTyCon)
 #else
 #define IdP {- empty -}
+import TysWiredIn (starKindTyCon)
 #endif
 
 -- Internal
@@ -30,6 +32,7 @@ import Language.SK.Form
 import Language.SK.Syntax.SynUtils
 
 #include "Syntax.h"
+
 
 -- ---------------------------------------------------------------------
 --
@@ -40,30 +43,32 @@ import Language.SK.Syntax.SynUtils
 b_symT :: Code -> Builder HType
 b_symT whole@(LForm (L l form))
   | Atom (ASymbol name) <- form =
-    let (ty, bang) =
-           case splitQualName name of
-             Nothing
-               | ',' == x  ->
-                 (getRdrName (tupleTyCon Boxed arity), False)
-               | '!' == x  ->
-                 (mkUnqual (namespace (headFS xs)) xs, True)
-               -- XXX: Handle "StarIsType" language extension
-               | '*' == x && nullFS xs ->
-                 (getRdrName liftedTypeKindTyCon, False)
-               | otherwise ->
-                 (mkUnqual (namespace x) name, False)
-             Just qual -> (mkQual (namespace x) qual, False)
+    let ty =
+          case splitQualName name of
+            Nothing
+              | ',' == x  -> tv (getRdrName (tupleTyCon Boxed arity))
+              | '!' == x  ->
+                bang (tv (mkUnqual (namespace (headFS xs)) xs))
+              -- XXX: Handle "StarIsType" language extension. Name of
+              -- the type kind could be obtained from
+              -- "TysWiredIn.liftedTypeKindTyCon".
+              | '*' == x && nullFS xs ->
+#if MIN_VERSION_ghc(8,6,0)
+                L l (HsStarTy NOEXT False)
+#else
+                tv (getRdrName starKindTyCon)
+#endif
+              | otherwise -> tv (mkUnqual (namespace x) name)
+            Just qual -> tv (mkQual (namespace x) qual)
         namespace chr
           | isUpper chr || ':' == chr = tcName
           | otherwise                 = tvName
         x = headFS name
         xs = tailFS name
         arity = 1 + lengthFS name
-        tyvar = hsTyVar NotPromoted (L l ty)
-        hty   = L l tyvar
-        hty' | bang      = b_bangT whole hty
-             | otherwise = hty
-    in  return hty'
+        tv t = L l (hsTyVar NotPromoted (L l t))
+        bang = b_bangT whole
+    in  return ty
   | otherwise = builderError
 {-# INLINE b_symT #-}
 
