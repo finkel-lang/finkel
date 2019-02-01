@@ -456,13 +456,13 @@
       (d "macrolet-m"
          (do (it "should expand to with-macro"
                  (expandTo
-                  (macrolet-m ((m (a b)
+                  (macrolet-m ((m1 (a b)
                                  (return `(+ ,a ,b))))
-                    (m 20 22))
+                    (m1 20 22))
                   (with-macro
-                      ((= m
-                         (let ((:: m_s3 (-> Code (Skc Code)))
-                               (= m_s3 __form__
+                      ((= m1
+                         (let ((:: $m1 (-> Code (Skc Code)))
+                               (= $m1 __form__
                                  (case __form__
                                    (LForm (L _loc (List [_ a b])))
                                    (return
@@ -470,12 +470,12 @@
                                       (+ (unquote a) (unquote b))))
                                    _ (skSrcError
                                       __form__
-                                      (concat [(show (quote m))
+                                      (concat [(show (quote m1))
                                                "\ninvalid args: `"
                                                (show __form__)
                                                "'"])))))
-                           (Macro m_s3))))
-                    (m 20 22))))
+                           (Macro $m1))))
+                    (m1 20 22))))
              (it "should replace () arg with _"
                  (expandTo
                   (macrolet-m ((m1 ()
