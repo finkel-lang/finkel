@@ -1,0 +1,140 @@
+;;;; File containing codes using `TypeFamiles' language extension
+
+#p(LANGUAGE TypeFamilies)
+
+(module Main)
+
+(import Data.Kind ((Type)))
+
+
+;;; Data families
+
+(data family (:: (Gmap k) (-> * *)))
+
+(data family (T1 a))
+
+(data instance (T1 Int) A1
+  (deriving (Eq Show)))
+
+(newtype instance (T1 Char) (B1 Bool))
+
+(data instance (T1 Double)
+  (C1 Double)
+  (C2 Int)
+  (deriving (Eq Show)))
+
+(class (T1C a)
+  (:: t1c (-> (T1 a) Int)))
+
+(instance (T1C Int)
+  (= t1c A1 1))
+
+(instance (T1C Char)
+  (= t1c (B1 _) 2))
+
+(instance (T1C Double)
+  (= t1c (C1 _) 3)
+  (= t1c (C2 _) 4))
+
+(:: t1c-insts (IO ()))
+(= t1c-insts
+  (do (print (t1c A1))
+      (print (t1c (B1 False)))
+      (print (t1c (C1 1)))
+      (print (t1c (C2 1)))))
+
+
+;;; Synonym families
+
+(type family (Elem c))
+
+(type instance (Elem [e]) e)
+
+(type family (:: (TF1 a b) (-> Type Type)))
+
+;; Requires `PolyKinds' language extension.
+;; (type family (:: (TF2 a) k))
+
+;; Closed type synonym family.
+(type family (TF3 a)
+  (= (TF3 Int) Double)
+  (= (TF3 Bool) Char)
+  (= (TF3 a) String))
+
+(:: ctfs1 (IO ()))
+(= ctfs1
+  (do (print (:: 3 (TF3 Int)))
+      (print (:: \x (TF3 Bool)))
+      (print (:: "foo" (TF3 Char)))))
+
+
+;;; Wildcards on the LHS of data and type family instances
+
+(data family (:: (DF1 a b) *))
+
+(data instance (DF1 Int _) Int)
+
+(type family (:: (TF4 a) *))
+
+(type instance (TF4 (, a _)) a)
+
+(type instance (TF4 (, a _ _)) a)
+
+(:: wc1 (IO ()))
+(= wc1
+  (do (print (:: 8 (TF4 (, Int Bool Char))))
+      (print (:: 9 (TF4 (, Double String))))))
+
+
+;;; Associated data and type familes
+
+(class (Collects1 ce)
+  (type (:: (Entry1 ce) *)))
+
+(instance (=> (Eq e) (Collects1 [e]))
+  (type (Entry1 [e]) e))
+
+(class (Collects2 ce)
+  (data (:: (Entry2 ce) *)))
+
+(instance (=> (Eq e) (Collects2 [e]))
+  (data (Entry2 [e]) (E2 e)))
+
+(class (IsBoolMap v)
+  (type (Key v))
+  (type instance (Key v) Int)
+  (:: lookupKey (-> (Key v) v (Maybe Bool))))
+
+(newtype IBAL
+  (IBAL {unIBAL [(, Int Bool)]}))
+
+(instance (IsBoolMap IBAL)
+  (= lookupKey k (. (lookup k) unIBAL)))
+
+(:: at1 (IO ()))
+(= at1
+  (do (let ((= im (IBAL [(, 0 False) (, 1 True) (, 2 True)]))))
+      (print (lookupKey 0 im))
+      (print (lookupKey 2 im))
+      (print (lookupKey 4 im))))
+
+
+;;; Equality constraint
+
+(:: ec1 (=> (IsBoolMap v1) (~ k1 (Key v1)) (IsBoolMap v2) (~ k2 (Key v2))
+            (-> k1 v1 k2 v2 (Maybe Bool))))
+(= ec1 k1 v1 k2 v2
+  (| ((<- (Just b1) (lookupKey k1 v1))
+      (<- (Just b2) (lookupKey k2 v2))
+      (Just (&& b1 b2)))
+     (otherwise Nothing)))
+
+
+;;; Main function
+
+(:: main (IO ()))
+(= main
+  (do t1c-insts
+      ctfs1
+      wc1
+      at1))

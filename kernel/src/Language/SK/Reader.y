@@ -268,6 +268,7 @@ supportedLangExts =
       , OverloadedStrings
       , OverloadedLists
       , RankNTypes
+      , TypeFamilies
       , TypeOperators
       , TypeSynonymInstances ]
   where

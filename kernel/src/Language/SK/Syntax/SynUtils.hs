@@ -15,7 +15,8 @@ import BasicTypes ( SourceText(..)
 import FastString (FastString, fsLit, headFS, nullFS, unpackFS)
 import HsBinds ( HsBindLR(..), HsLocalBindsLR(..), HsValBindsLR(..)
                , emptyLocalBinds )
-import HsDecls (HsDecl(..))
+import HsDecls ( HsDecl(..), InstDecl(..), LDataFamInstDecl
+               , LFamilyDecl, LTyFamInstDecl, TyClDecl(..) )
 import HsExpr ( GRHSs(..), LGRHS, LHsExpr, LMatch, Match(..)
               , MatchGroup(..) )
 import HsLit (HsOverLit(..))
@@ -213,27 +214,54 @@ quotedSourceText s = SourceText $ "\"" ++ s ++ "\""
 
 -- Following `cvBindsAndSigs`, `getMonoBind`, `has_args`, and
 -- `makeFunBind` functions are based on resembling functions defined in
--- `RdrHsSyn` module in ghc package, since these functions were not
--- exported.
+-- `RdrHsSyn` module in ghc package.
 --
 -- Unlike the original version, `cvBindsAndSigs` has pattern matches
 -- for 'ValD' and 'SigD' only, and `getMonoBind` ignores 'DocD'
 -- declarations.
 
-cvBindsAndSigs :: OrdList HDecl -> (HBinds, [HSig])
-cvBindsAndSigs fb = go (fromOL fb)
-  where
-    go [] = (emptyBag, [])
-    go (L l (ValD _EXT d) : ds)
-      = let (b', ds') = getMonoBind (L l d) ds
-            (bs, ss) = go ds'
-        in  (b' `consBag` bs, ss)
-    go (L l (SigD _EXT s) : ds)
-      = let (bs, ss) = go ds
-        in  (bs, L l s : ss)
+data CategorizedDecls = CategorizedDecls
+  { cd_binds :: HBinds
+  , cd_sigs :: [HSig]
+  , cd_fds :: [LFamilyDecl PARSED]
+  , cd_tfis :: [LTyFamInstDecl PARSED]
+  , cd_dfis :: [LDataFamInstDecl PARSED]
+  }
 
-    -- XXX: Ignoring  other constructors.
-    go (_ : ds) = go ds
+toCategorizedDecls :: ( HBinds, [HSig]
+                      , [LFamilyDecl PARSED]
+                      , [LTyFamInstDecl PARSED]
+                      , [LDataFamInstDecl PARSED] )
+                   -> CategorizedDecls
+toCategorizedDecls (binds, sigs, fds, tfis, dfis) =
+  CategorizedDecls { cd_binds = binds
+                   , cd_sigs = sigs
+                   , cd_fds = fds
+                   , cd_tfis = tfis
+                   , cd_dfis = dfis }
+
+cvBindsAndSigs :: OrdList HDecl -> Builder CategorizedDecls
+cvBindsAndSigs fb = fmap toCategorizedDecls (go (fromOL fb))
+  where
+    go [] = return (emptyBag, [], [], [], [])
+    go (L l (ValD _EXT d) : ds) = do
+      let (b', ds') = getMonoBind (L l d) ds
+      (bs, ss, fs, tfis, dfis) <- go ds'
+      return (b' `consBag` bs, ss, fs, tfis, dfis)
+    go (L l decl : ds) = do
+      (bs, ss, fs, tfis, dfis) <- go ds
+      case decl of
+        SigD _EXT s ->
+          return (bs, L l s : ss, fs, tfis, dfis)
+        TyClD _EXT (FamDecl _EXT f) ->
+          return (bs, ss, L l f:fs, tfis, dfis)
+        InstD _EXT (TyFamInstD {tfid_inst = tfi}) ->
+          return (bs, ss, fs, L l tfi:tfis, dfis)
+        InstD _EXT (DataFamInstD {dfid_inst=dfi}) ->
+          return (bs, ss, fs, tfis, L l dfi:dfis)
+
+        -- XXX: Ignoring other constructors.
+        _ -> return (bs, ss, fs, tfis, dfis)
 
 getMonoBind :: HBind -> [HDecl] -> (HBind, [HDecl])
 getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),

@@ -10,8 +10,9 @@ import BasicTypes (Boxity(..), SourceText(..))
 import FastString (headFS, lengthFS, nullFS, tailFS)
 import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
                , LHsTyVarBndr, Promoted(..), SrcStrictness(..)
-               , SrcUnpackedness(..), mkHsAppTys )
+               , SrcUnpackedness(..), mkAnonWildCardTy, mkHsAppTys )
 import OccName (tcName, tvName)
+import PrelNames (eqTyCon_RDR)
 import RdrName (getRdrName, mkQual, mkUnqual)
 import SrcLoc (GenLocated(..), Located, getLoc)
 import TysWiredIn (listTyCon, tupleTyCon)
@@ -49,6 +50,7 @@ b_symT whole@(LForm (L l form))
               | ',' == x  -> tv (getRdrName (tupleTyCon Boxed arity))
               | '!' == x  ->
                 bang (tv (mkUnqual (namespace (headFS xs)) xs))
+              | '_' == x && nullFS xs -> L l mkAnonWildCardTy
               -- XXX: Handle "StarIsType" language extension. Name of
               -- the type kind could be obtained from
               -- "TysWiredIn.liftedTypeKindTyCon".
@@ -75,6 +77,10 @@ b_symT whole@(LForm (L l form))
 b_unitT :: Code -> HType
 b_unitT (LForm (L l _)) = L l (hsTupleTy HsBoxedTuple [])
 {-# INLINE b_unitT #-}
+
+b_tildeT :: Code -> HType
+b_tildeT (LForm (L l _)) = L l (hsTyVar NotPromoted (L l eqTyCon_RDR))
+{-# INLINE b_tildeT #-}
 
 b_funT :: [HType] -> Builder HType
 b_funT ts =

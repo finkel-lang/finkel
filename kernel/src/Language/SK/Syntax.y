@@ -56,9 +56,15 @@ import Language.SK.Syntax.SynUtils
 %name p_top_decl top_decl
 %name p_decl decl
 %name p_decls decls
+%name p_lcdecl lcdecl
+%name p_lidecl lidecl
 %name p_lqtycl lqtycl
 %name p_sfsig sfsig
 %name p_lsimpletype lsimpletype
+%name p_ldatafamcon ldatafamcon
+%name p_famconhd famconhd
+%name p_lfinsthd lfinsthd
+%name p_lfameq lfameq
 %name p_lsname lsname
 
 %name p_type type
@@ -141,6 +147,7 @@ import Language.SK.Syntax.SynUtils
 'qualified' { LForm (L _ (Atom (ASymbol "qualified"))) }
 
 -- GHC Extensions
+'family' { LForm (L _ (Atom (ASymbol "family"))) }
 'forall' { LForm (L _ (Atom (ASymbol "forall"))) }
 
 -- Pragmas
@@ -301,10 +308,15 @@ top_decl_with_doc :: { HDecl }
 
 top_decl :: { HDecl }
     : 'data' simpletype constrs            { b_dataD $1 $2 $3 }
+    | 'data' 'family' datafamcon           { b_datafamD $1 $3 }
+    | 'data' 'instance' finsthd constrs    { b_datainstD $1 $3 $4 }
     | 'type' simpletype type               { b_typeD $1 $2 $3 }
+    | 'type' 'family' datafamcon fameqs    { b_tyfamD $4 $1 $3 }
+    | 'type' 'instance' finsthd type       { b_tyinstD $1 $3 $4 }
     | 'newtype' simpletype constrs         { b_newtypeD $1 $2 $3 }
+    | 'newtype' 'instance' finsthd constrs { b_newtypeinstD $1 $3 $4 }
     | 'class' qtycl cdecls                 {% b_classD $2 $3 }
-    | 'instance' overlap qtycl idecls      { b_instD $2 $3 $4 }
+    | 'instance' overlap qtycl idecls      {% b_instD $2 $3 $4 }
     | 'default' zero_or_more_types         { b_defaultD $2 }
     | fixity 'integer' idsyms1             {% b_fixityD $1 $2 $3 }
     | 'foreign' 'symbol' ccnv sname 'list' {% parse p_sfsig $5 >>=
@@ -411,10 +423,66 @@ lqtycl :: { ([HType], HType) }
     | types0            { ([], $1) }
 
 cdecls :: { [HDecl] }
-    : decls { $1 }
+    : rcdecls { reverse $1 }
+
+rcdecls :: { [HDecl] }
+    : {- empty -}   { [] }
+    | rcdecls cdecl { $2:$1 }
+
+cdecl :: { HDecl }
+    : 'list' {% parse p_lcdecl $1 }
+
+lcdecl :: { HDecl }
+    : 'type' datafamcon              { b_tyfamD [] $1 $2 }
+    | 'type' 'instance' finsthd type { b_tyinstD $1 $3 $4 }
+    | 'data' datafamcon              { b_datafamD $1 $2 }
+    | decl                           { $1 }
 
 idecls :: { [HDecl] }
-    : decls { $1 }
+    : ridecls { reverse $1 }
+
+ridecls :: { [HDecl] }
+    : {- empty -}   { [] }
+    | ridecls idecl { $2:$1 }
+
+idecl :: { HDecl }
+    : 'list' {% parse p_lidecl $1 }
+
+lidecl :: { HDecl }
+    : 'type' finsthd type    { b_tyinstD $1 $2 $3 }
+    | 'data' finsthd constrs { b_datainstD $1 $2 $3 }
+    | decl                   { $1 }
+
+datafamcon :: { (FastString, [HTyVarBndr], Maybe HType) }
+    : 'list' {% parse p_ldatafamcon $1 }
+
+ldatafamcon :: { (FastString, [HTyVarBndr], Maybe HType)  }
+    : '::' 'list' type {% do {(n,tv) <- parse p_famconhd $2
+                             ;return (n,tv,Just $3)} }
+    | famconhd         { case $1 of (n,tv) -> (n,tv,Nothing) }
+
+famconhd :: { (FastString, [HTyVarBndr]) }
+    : conid tvbndrs {% getConId $1 >>= \n -> return (n,$2) }
+
+finsthd :: { (Located FastString, [HType]) }
+    : 'list' {% parse p_lfinsthd $1 }
+
+lfinsthd :: { (Located FastString, [HType]) }
+    : conid types {% do {n <- getConId $1
+                        ;case $1 of LForm (L l _) -> return (L l n,$2)} }
+
+fameqs :: { [(Located FastString, [HType], HType)] }
+    : rfameqs { reverse $1 }
+
+rfameqs :: { [(Located FastString, [HType], HType)] }
+    : {- empty -}     { [] }
+    | rfameqs fameq { $2:$1 }
+
+fameq :: { (Located FastString, [HType], HType) }
+    : 'list' {% parse p_lfameq $1 }
+
+lfameq :: { (Located FastString, [HType], HType) }
+    : '=' finsthd type { case $2 of (c,ts) -> (c,ts,$3) }
 
 fixity :: { FixityDirection }
     : 'infixl' { InfixL }
@@ -471,6 +539,7 @@ type :: { HType }
     | '!' type      { b_bangT $1 $2 }
     | idsym         {% b_symT $1 }
     | 'unit'        { b_unitT $1 }
+    | '~'           { b_tildeT $1 }
     | 'hslist'      {% case toListL $1 of
                          LForm (L _ (List [])) -> return (b_nilT $1)
                          xs -> b_listT `fmap` parse p_type [xs] }
@@ -565,7 +634,7 @@ atom :: { HExpr }
 exprs :: { HExpr }
     : '\\' lambda           { b_lamE $2 }
     | ',' app               { b_tupE $1 $2 }
-    | 'let' lbinds expr     { b_letE $1 $2 $3 }
+    | 'let' lbinds expr     {% b_letE $1 $2 $3 }
     | 'if' expr expr expr   { b_ifE $1 $2 $3 $4 }
     | 'case' expr matches   { b_caseE $1 $2 $3 }
     | 'do' do_stmts         { b_doE $1 $2 }
@@ -676,7 +745,7 @@ stmt :: { HStmt }
 
 stmt1 :: { HStmt }
     : '<-' pat expr { b_bindS $1 $2 $3 }
-    | 'let' lbinds  { b_letS $1 $2 }
+    | 'let' lbinds  {% b_letS $1 $2 }
     | exprs         { b_bodyS $1 }
 
 
@@ -693,6 +762,7 @@ idsym :: { Code }
 special_id :: { Code }
     : '!'         { $1 }
     | 'as'        { $1 }
+    | 'family'    { $1 }
     | 'forall'    { $1 }
     | 'hiding'    { $1 }
     | 'qualified' { $1 }

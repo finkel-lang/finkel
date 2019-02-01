@@ -62,12 +62,12 @@ b_tupE (LForm (L l _)) args = L l e
     present = Present NOEXT
 {-# INLINE b_tupE #-}
 
-b_letE :: Code -> [HDecl] -> HExpr -> HExpr
-b_letE (LForm (L l _)) decls body =
-  let (mbs, sigs) = cvBindsAndSigs (toOL decls)
-      valbinds = mkHsValBinds_compat mbs sigs
+b_letE :: Code -> [HDecl] -> HExpr -> Builder HExpr
+b_letE (LForm (L l _)) decls body = do
+  cd <- cvBindsAndSigs (toOL decls)
+  let valbinds = mkHsValBinds_compat (cd_binds cd) (cd_sigs cd)
       hsLet = HsLet NOEXT
-  in  L l (hsLet (L l valbinds) body)
+  return (L l (hsLet (L l valbinds) body))
 {-# INLINE b_letE #-}
 
 b_caseE :: Code -> HExpr -> [HMatch] -> HExpr
@@ -278,12 +278,12 @@ b_bindS :: Code -> HPat -> HExpr -> HStmt
 b_bindS (LForm (L l _)) pat expr = L l (mkBindStmt pat expr)
 {-# INLINE b_bindS #-}
 
-b_letS :: Code -> [HDecl] -> HStmt
-b_letS (LForm (L l _)) decls =
-  let (mbs, sigs) = cvBindsAndSigs (toOL decls)
-      valbinds = mkHsValBinds_compat mbs sigs
+b_letS :: Code -> [HDecl] -> Builder HStmt
+b_letS (LForm (L l _)) decls = do
+  cd <- cvBindsAndSigs (toOL decls)
+  let valbinds = mkHsValBinds_compat (cd_binds cd) (cd_sigs cd)
       letStmt = LetStmt NOEXT
-  in  L l (letStmt (L l valbinds))
+  return (L l (letStmt (L l valbinds)))
 {-# INLINE b_letS #-}
 
 b_bodyS :: HExpr -> HStmt
