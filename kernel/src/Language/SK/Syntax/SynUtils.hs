@@ -345,6 +345,7 @@ mkHsValBinds_compat binds sigs =
 #else
   HsValBinds (ValBindsIn binds sigs)
 #endif
+{-# INLINE mkHsValBinds_compat #-}
 
 mkHsQualTy_compat :: LHsContext PARSED -> HType -> HsType PARSED
 mkHsQualTy_compat ctxt body
@@ -355,6 +356,7 @@ mkHsQualTy_compat ctxt body
              , hst_xqual = noExt
 #endif
              , hst_body = body }
+{-# INLINE mkHsQualTy_compat #-}
 
 nullLHsContext :: LHsContext PARSED -> Bool
 nullLHsContext (L _ cs) = null cs

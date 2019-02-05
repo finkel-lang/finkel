@@ -128,10 +128,9 @@ b_bangT (LForm (L l _)) t = L l (hsBangTy srcBang t)
 
 b_forallT :: Code -> ([HTyVarBndr], ([HType], HType)) -> HType
 b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
-  let fat = hsParTy (L l0 forallty')
-      forallty' = forAllTy bndrs ty
-      ty = L l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
-  in  L l0 fat
+  let ty0 = L l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
+      ty1 = hsParTy (L l0 (forAllTy bndrs ty0))
+  in  L l0 ty1
 {-# INLINE b_forallT #-}
 
 b_kindedType :: Code -> HType -> HType -> HType

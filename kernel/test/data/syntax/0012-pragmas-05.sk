@@ -7,13 +7,14 @@
 #p(LANGUAGE FlexibleInstances)
 #p(LANGUAGE KindSignatures)
 #p(LANGUAGE MonoLocalBinds)
+#p(LANGUAGE ScopedTypeVariables)
 #p(LANGUAGE TypeOperators)
 #p(LANGUAGE TypeSynonymInstances)
 #p(LANGUAGE UndecidableInstances)
 
 (module Main)
 
-(import GHC.Types)
+(import GHC.Types ((Type)))
 
 ;;; Multi param type classes
 
@@ -32,9 +33,9 @@
 (instance (C1 (Either String) Bool Char)
   (= c1 a b
     (where (f a b)
-      (= f (Right b) (Right c) (pr (show b) (show c)))
-      (= f (Right b) (Left s2) (pr (show b) s2))
-      (= f (Left s1) (Right c) (pr s1 (show c)))
+      (= f (Right b1) (Right b2) (pr (show b1) (show b2)))
+      (= f (Right b1) (Left s2) (pr (show b1) s2))
+      (= f (Left s1) (Right b2) (pr s1 (show b2)))
       (= f (Left s1) (Left s2) (pr s1 s2))
       (= pr x y
         (putStrLn (concat ["c1: " x ", " y]))))))
@@ -125,17 +126,67 @@
 
 (:: ks1 (IO ()))
 (= ks1
-  (do (case (KS1 [1 2 3])
+  (do (case (KS1 [(:: 1 Int) 2 3])
         (KS1 xs) (print xs))
-      (case (KS2 [4 5 6])
+      (case (KS2 [(:: 4 Int) 5 6])
         (KS2 xs) (print xs))
-      (case (KS3 [7 8 9])
+      (case (KS3 [(:: 7 Int) 8 9])
         (KS3 xs) (print xs))
       (print (:: (Just 42) (KS4 Maybe)))
       (print (f_ks1 41))
       (print (f_ks2 "f_ks2"))
       (print (f_ks3 "f_ks3"))
       (print (f_ks4 "f_ks4" undefined))))
+
+;;; Scoped type variables
+
+(data Zero)
+(data (Succ n))
+
+(type One (Succ Zero))
+(type Two (Succ One))
+(type Four (Succ (Succ Two)))
+(type Six (Succ (Succ Four)))
+(type Eight (Succ (Succ Six)))
+
+(class (Nat n)
+  (:: toInt (-> n Int)))
+
+(instance (Nat Zero)
+  (= toInt _ 0))
+
+(instance (=> (Nat n) (Nat (Succ n)))
+  (= toInt _ (+ 1 (toInt (:: undefined n)))))
+
+(:: f_stv01 (IO ()))
+(= f_stv01
+  (print (map (\ (:: x Int) (+ x 1)) [1 2 3])))
+
+(:: f_stv02 (forall a (-> [a] [a])))
+(= f_stv02 xs
+  (where ys
+    (:: ys [a])
+    (= ys (reverse xs))))
+
+(class (STVC a)
+  (:: stv_op (-> [a] a))
+  (= stv_op xs
+    (let ((:: ys [a])
+          (= ys (reverse xs)))
+      (head ys))))
+
+(instance (=> (STVC b) (STVC [b]))
+  (= stv_op xs (reverse (head (:: xs [[b]])))))
+
+(instance (STVC Bool))
+
+(:: stv01 (IO ()))
+(= stv01
+  (do (print (toInt (:: undefined Four)))
+      (print (toInt (:: undefined Eight)))
+      f_stv01
+      (print (f_stv02 "abc"))
+      (print (stv_op [True False False]))))
 
 ;;; Type operator
 

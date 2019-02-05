@@ -553,7 +553,7 @@ types0 :: { HType }
     | types                  {% b_appT $1 }
 
 forallty :: { ([HTyVarBndr], ([HType], HType)) }
-    : qtycl { ([], $1) }
+    : qtycl           { ([], $1) }
     | tvbndr forallty { case $2 of (vs,ty) -> ($1:vs,ty) }
 
 types :: { [HType] }
@@ -603,6 +603,7 @@ pats1 :: { HPat }
     | '@' idsym pat        {% b_asP $2 $3 }
     | conid '{' labelp '}' {% b_labeledP $1 $3 }
     | conid pats0          {% b_conP $1 $2 }
+    | '::' pat type        { b_sigP $1 $2 $3 }
 
 labelp :: { [(Code, HPat)] }
     : rlabelp { reverse $1 }

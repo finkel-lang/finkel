@@ -12,7 +12,7 @@ import FastString (fsLit, headFS, tailFS)
 import HsLit (HsLit(..))
 import HsPat (HsRecFields(..), Pat(..))
 import HsTypes (HsConDetails(..))
-import HsUtils (mkHsIsString, mkNPat, nlWildPat)
+import HsUtils (mkHsIsString, mkLHsSigWcType, mkNPat, nlWildPat)
 import SrcLoc (GenLocated(..), getLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -153,6 +153,15 @@ b_conP (LForm (L l form)) rest
                              (PrefixCon rest))))
   | otherwise = builderError
 {-# INLINE b_conP #-}
+
+b_sigP :: Code -> HPat -> HType -> HPat
+b_sigP (LForm (L l _)) pat ty =
+#if MIN_VERSION_ghc(8,6,0)
+  L l (SigPat (mkLHsSigWcType ty) pat)
+#else
+  L l (SigPatIn pat (mkLHsSigWcType ty))
+#endif
+{-# INLINE b_sigP #-}
 
 wildPat :: Pat PARSED
 wildPat = case nlWildPat of L _ pat -> pat

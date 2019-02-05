@@ -524,11 +524,12 @@ b_patBindD (grhss,decls) pat@(L l _) =
 {-# INLINE b_patBindD #-}
 
 b_tsigD :: [Code] -> ([HType], HType) -> Builder HDecl
-b_tsigD names (ctxts,typ) = do
+b_tsigD names (ctxts,typ0) = do
   let typ' = mkLHsSigWcType qtyp
-      qtyp | null ctxts = typ
+      qtyp | null ctxts = typ1
            | otherwise =
-             L l (mkHsQualTy_compat (mkLocatedList ctxts) typ)
+             L l (mkHsQualTy_compat (mkLocatedList ctxts) typ1)
+      typ1 = unParTy typ0
       mkName form
         | (LForm (L l1 (Atom (ASymbol name)))) <- form
         = return (L l1 (mkRdrName name))
@@ -667,3 +668,10 @@ mkTyFamInstEqn tycon pats rhs =
            , tfe_rhs = rhs }
 #endif
 {-# INLINE mkTyFamInstEqn #-}
+
+unParTy :: HType -> HType
+unParTy t0 =
+  case t0 of
+    L _ (HsParTy _EXT t1) -> t1
+    _                       -> t0
+{-# INLINE unParTy #-}

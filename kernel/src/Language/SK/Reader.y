@@ -269,6 +269,7 @@ supportedLangExts =
       , OverloadedStrings
       , OverloadedLists
       , RankNTypes
+      , ScopedTypeVariables
       , TypeFamilies
       , TypeOperators
       , TypeSynonymInstances
