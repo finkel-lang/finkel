@@ -123,7 +123,8 @@ main' sk_env orig_args args = do
     (runSkc (handleSkException
               (\(SkException se) -> liftIO (do putStrLn se
                                                exitFailure))
-              (handleSourceError printException
+              (handleSourceError (\se -> do printException se
+                                            liftIO exitFailure)
                                  (main'' orig_args args)))
             sk_env)
 
