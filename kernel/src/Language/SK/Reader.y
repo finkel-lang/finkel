@@ -264,13 +264,15 @@ supportedLangExts =
       , ImplicitPrelude
       , KindSignatures
       , MultiParamTypeClasses
+      , MonoLocalBinds
       , MonomorphismRestriction
       , OverloadedStrings
       , OverloadedLists
       , RankNTypes
       , TypeFamilies
       , TypeOperators
-      , TypeSynonymInstances ]
+      , TypeSynonymInstances
+      , UndecidableInstances ]
   where
     -- Adding `"No"' prefix, as done in `DynFlags.supportedExtensions'.
     -- Might worth looking up `DynFlags.xFlags' to get string
