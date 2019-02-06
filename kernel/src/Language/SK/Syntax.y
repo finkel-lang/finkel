@@ -546,7 +546,7 @@ type :: { HType }
     | 'list'        {% parse p_types0 $1 }
 
 types0 :: { HType }
-    : '->' types             {% b_funT $2 }
+    : '->' types             {% b_funT $1 $2 }
     | ',' zero_or_more_types { b_tupT $1 $2 }
     | 'forall' forallty      { b_forallT $1 $2 }
     | '::' type type         { b_kindedType $1 $2 $3 }

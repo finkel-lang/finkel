@@ -168,13 +168,13 @@
 
 ;;; 4.3.2 Instance Declarations
 
-(data (MyFnct a)
-  (MyFnct {unMyFnct a})
+(data (MyF a)
+  (MyF {unMyF a})
   (deriving (Eq Show)))
 
-(instance (Functor MyFnct)
-  (= fmap f (MyFnct a)
-    (MyFnct (f a))))
+(instance (Functor MyF)
+  (= fmap f (MyF a)
+    (MyF (f a))))
 
 (data (EmptyContext a) (EmptyContext Int))
 
@@ -197,13 +197,20 @@
       [] "null"
       _  "list")))
 
+(class (MyFunctor f)
+  (:: myFmap (-> (-> a b) (f a) (f b))))
+
+(instance (MyFunctor (-> a))
+  (= myFmap f g (\ x (f (g x)))))
+
 (:: s4_3_2 (IO ()))
 (= s4_3_2
-  (do (print (fmap (* 2) (MyFnct 21)))
+  (do (print (fmap (* 2) (MyF 21)))
       (print (EmptyContext 42))
       (print (MCs True \a))
       (putStrLn (c1m1 []))
-      (putStrLn (c1m1 [() () ()]))))
+      (putStrLn (c1m1 [() () ()]))
+      (myFmap putStrLn show (:: 42 Int))))
 
 ;;; 4.3.4 Ambiguous Types, and Defaults for Overloaded Numeric Options
 

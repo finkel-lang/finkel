@@ -10,11 +10,13 @@ import BasicTypes (Boxity(..), SourceText(..))
 import FastString (headFS, lengthFS, nullFS, tailFS)
 import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
                , LHsTyVarBndr, Promoted(..), SrcStrictness(..)
-               , SrcUnpackedness(..), mkAnonWildCardTy, mkHsAppTys )
+               , SrcUnpackedness(..), mkAnonWildCardTy
+               , mkHsAppTy, mkHsAppTys )
 import OccName (tcName, tvName)
 import PrelNames (eqTyCon_RDR)
 import RdrName (getRdrName, mkQual, mkUnqual)
 import SrcLoc (GenLocated(..), Located, getLoc)
+import TysPrim (funTyCon)
 import TysWiredIn (listTyCon, tupleTyCon)
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -82,14 +84,21 @@ b_tildeT :: Code -> HType
 b_tildeT (LForm (L l _)) = L l (hsTyVar NotPromoted (L l eqTyCon_RDR))
 {-# INLINE b_tildeT #-}
 
-b_funT :: [HType] -> Builder HType
-b_funT ts =
+b_funT :: Code -> [HType] -> Builder HType
+b_funT (LForm (L l _)) ts =
+  -- For single argument, making HsAppTy with '(->)' instead of HsFunTy.
   case ts of
-    []          -> builderError
-    (L l0 _):_  -> return (L l0 (hsParTy (foldr1 f ts)))
+    []           -> builderError
+#if MIN_VERSION_ghc(8,4,0)
+    [t@(L l0 _)] -> return (mkHsAppTy funty t)
+#else
+    [t@(L l0 _)] -> return (L l0 (hsParTy (mkHsAppTy funty t)))
+#endif
+    (L l0 _):_   -> return (L l0 (hsParTy (foldr1 f ts)))
   where
     f a@(L l1 _) b = L l1 (hsFunTy a b)
     hsFunTy = HsFunTy NOEXT
+    funty = L l (hsTyVar NotPromoted (L l (getRdrName funTyCon)))
 {-# INLINE b_funT #-}
 
 b_appT :: [HType] -> Builder HType
