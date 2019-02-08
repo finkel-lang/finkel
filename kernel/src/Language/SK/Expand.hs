@@ -540,7 +540,7 @@ expand form =
     expandLet l kw binds body = do
       binds' <- expand binds
       let bounded = boundedNames binds'
-      body' <- withShadowing bounded (mapM expand body)
+      body' <- withShadowing bounded (expands body)
       return (LForm (L l (List (kw:binds':body'))))
 
     expandDo l kw body = do
@@ -551,7 +551,7 @@ expand form =
       let args = init rest
           body = last rest
           bounded = concatMap boundedNameOne args
-      args' <- mapM expand args
+      args' <- expands args
       body' <- withShadowing bounded (expand body)
       return (LForm (L l (List (kw:args'++[body']))))
 
@@ -577,7 +577,7 @@ expand form =
       return (LForm (L l (List (kw:expr':reverse rest'))))
 
     expandWhere l kw expr rest = do
-      rest' <- mapM expand rest
+      rest' <- expands rest
       let bounded = concatMap boundedName rest'
       expr' <- withShadowing bounded (expand expr)
       return (LForm (L l (List (kw:expr':rest'))))
@@ -590,10 +590,10 @@ expand form =
             Just (Macro f)       -> f form >>= expand
             Just (SpecialForm f) -> f form >>= expand
             Nothing              -> do
-              rest' <- mapM expand rest
+              rest' <- expands rest
               return (LForm (L l (List (sym:rest'))))
         _ -> do
-          forms' <- mapM expand forms
+          forms' <- expands forms
           return (LForm (L l (List forms')))
 
 expandInDo ::
