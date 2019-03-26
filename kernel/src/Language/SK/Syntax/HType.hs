@@ -90,7 +90,7 @@ b_funT (LForm (L l _)) ts =
   case ts of
     []           -> builderError
 #if MIN_VERSION_ghc(8,4,0)
-    [t@(L l0 _)] -> return (mkHsAppTy funty t)
+    [t]          -> return (mkHsAppTy funty t)
 #else
     [t@(L l0 _)] -> return (L l0 (hsParTy (mkHsAppTy funty t)))
 #endif
