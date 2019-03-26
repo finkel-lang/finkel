@@ -136,7 +136,10 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
 
 (eval-when-compile
   (:docn "
-==== Syntax
+Simple macro for defining macro. This macro is used internally in
+\"SK.Core\" module to define other macros.
+
+==== __Syntax__
 
 > DEFINE-MACRO ::= 'define-macro' NAME [DOC] ARGS BODY
 > NAME         ::= varid
@@ -144,12 +147,7 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
 > ARGS         ::= varid | '[' varid* ']' | '(' varid* ')'
 > BODY         ::= form
 
-==== Description
-
-Simple macro for defining macro. This macro is used internally in
-\"SK.Core\" module to define other macros.
-
-==== Examples
+==== __Examples__
 
 Without documentation comment:
 
@@ -189,22 +187,20 @@ time. Used only in this module until 'defmacro-m'' is defined."
 
 (define-macro' eval-when
   "
-==== Syntax
-
-> EVAL-WHEN ::= 'eval-when' PHASES BODY*
-> PHASES    ::= '[' PHASE+ ']' | '(' PHASE+ ')'
-> PHASE     ::= 'compile' | 'load'
-> BODY      ::= form
-
-==== Description
-
 Macro to specify the /PHASE/s of evaluation of /BODY/ codes. Valid
 phases are __@compile@__ and __@load@__. The @compile@ phase evaluates
 the body forms at the time of compilation, so that the compilation
 context can refer to the function and macros definied in the /BODY/
 forms. The @load@ phase simply emit the body forms to compiled result.
 
-==== Example
+==== __Syntax__
+
+> EVAL-WHEN ::= 'eval-when' PHASES BODY*
+> PHASES    ::= '[' PHASE+ ']' | '(' PHASE+ ')'
+> PHASE     ::= 'compile' | 'load'
+> BODY      ::= form
+
+==== __Example__
 
 In following module, the function @f@ is defined inside 'eval_when', so
 that the function could be accessed from the function @g@ at run-time,
@@ -369,19 +365,17 @@ and temporally macro @m@ at compilation time.
 
 (define-macro' defmacro-m
   "
-==== Syntax
-
-Same as 'defmacro'.
-
-==== Description
-
 A macro similar to 'defmacro', but the body expression need to be a
 value of type 'Skc' 'Code'. This macro has full access to the 'Skc'
 environment in compilation context.
 
-==== Examples
+==== __Syntax__
 
-A macro to read a file contents at the time of compilation:
+See 'defmacro'.
+
+==== __Examples__
+
+A macro to read a file contents during compilation:
 
 @
 (defmacro-m m1 [path]
@@ -420,16 +414,14 @@ Sample expansion:
 
 (define-macro' defmacro-m'
   "
-==== Syntax
-
-Same as 'defmacro'.
-
-==== Description
-
 Variant of 'defmacro_m'. Wrapped in 'eval_when' with @compile@ and
 @load@ phases.
 
-==== Examples
+==== __Syntax__
+
+See 'defmacro'.
+
+==== __Examples__
 
 See 'defmacro' and 'defmacro_m'."
   form
@@ -439,8 +431,19 @@ See 'defmacro' and 'defmacro_m'."
     _ (macro-error form "defmacro-m': impossible happened.")))
 
 (define-macro' defmacro
-  "
-==== Syntax
+  " Macro to define a macro named /NAME/, similar to the macro with same
+name found in other Lisps, such as Common Lisp, Clojure, LFE, Hy
+... etc. The 'defmacro' can take an optional /DOC/ comment string in
+second parameter. Next parameter is either a list of /ARGS/, or a single
+varid to refer the entire parameter as a list of 'Code's. The last
+parameter is a /BODY/ expression, which need to be a value of 'Code'
+type.
+
+Note that the 'defmacro' does not add the defined macro to REPL
+session. To add macros in REPL session, use 'defmacro'' or write the
+macro definition inside 'eval_when'.
+
+==== __Syntax__
 
 > DEFMACRO ::= 'defmacro' NAME [DOC] ARGS BODY
 > NAME     ::= varid
@@ -448,21 +451,7 @@ See 'defmacro' and 'defmacro_m'."
 > ARGS     ::= '(' varid* ')' | '[' varid* ']' | varid
 > BODY     ::= form
 
-==== Description
-
-Macro to define a macro named /NAME/, similar to the macro with same
-name found in other Lisps, such as Common Lisp, Clojure, LFE, Hy
-... etc. The 'defmacro' can take an optional /DOC/ comment string in
-second parameter. Next parameter is either a list of /ARGS/, or a single
-varid to refer the entire parameter as list of 'Code's. The last
-parameter is the /BODY/ expression, which need to be a value of 'Code'
-type.
-
-Note that 'defmacro' does not add the defined macro to REPL session. To
-add macros in REPL session, use 'defmacro'' or write the macro
-definition inside 'eval_when'.
-
-==== Examples
+==== __Examples__
 
 Macro taking single parameter named /x/, returns a form with 'print'
 applied to the given parameter:
@@ -533,16 +522,14 @@ Expansions of /m3/:
 
 (defmacro-m' defmacro'
   "
-==== Syntax
-
-Same as 'defmacro'.
-
-==== Description
-
 Variant of 'defmacro', wrapped in 'eval_when' with @compile@ and
 @load@ phases.
 
-==== Examples
+==== __Syntax__
+
+See 'defmacro'.
+
+==== __Examples__
 
 See 'defmacro'.
 "
@@ -552,17 +539,15 @@ See 'defmacro'.
 
 (define-macro macrolet-m
   "
-==== Syntax
-
-See 'macrolet'.
-
-==== Description
-
 Variant of 'macrolet', the body of each macro need to be a 'Code' value
 wrapped in 'Skc'. This macro has full access to 'Skc' in compilation
 context.
 
-==== Example
+==== __Syntax__
+
+See 'macrolet'.
+
+==== __Example__
 
 Rewrite of the example shown in 'macrolet':
 
@@ -581,7 +566,11 @@ Rewrite of the example shown in 'macrolet':
 
 (define-macro macrolet
   "
-==== Syntax
+Define temporary macros named /NAME/. The defined macros could be
+referred from /BODY/. Each macro takes /ARGS/ parameter, and results in
+/EXPR/. The parameter /ARGS/ works as in 'defmacro'.
+
+==== __Syntax__
 
 > MACROLET ::= 'macrolet' '(' MACRO* ')' BODY
 > MACRO    ::= NAME ARGS EXPR
@@ -590,13 +579,7 @@ Rewrite of the example shown in 'macrolet':
 > EXPR     ::= form
 > BODY     ::= form
 
-==== Description
-
-Define temporary macros named /NAME/. The defined macros could be
-referred from /BODY/. Each macro takes /ARGS/ parameter, and results in
-/EXPR/. The parameter /ARGS/ works as in 'defmacro'.
-
-==== Examples
+==== __Examples__
 
 Temporary macros can refer other temporary macros:
 
@@ -620,7 +603,13 @@ Temporary macros can refer other temporary macros:
 
 (define-macro defn
   "
-==== Syntax
+Macro for defining function. Supports optional function type signature
+/SIG/, which could be a name symbol or a list of name symbol and type
+signature form. Parameter /ARGS/ could be enclosed in parantheses or
+brackets. When multiple pairs of /ARGS/ and /BODY/ were given, does
+expand to function definition with argument pattern matchings.
+
+==== __Syntax__
 
 > DEFN    ::= 'defn' SIG [DOC] [ARGS] BODY ARGBODY*
 > SIG     ::= varid | '(' varid typesig ')'
@@ -629,15 +618,7 @@ Temporary macros can refer other temporary macros:
 > BODY    ::= form
 > ARGBODY ::= ARGS BODY
 
-==== Description
-
-Macro for defining function. Supports optional function type signature
-/SIG/, which could be a name symbol or a list of name symbol and type
-signature form. Parameter /ARGS/ could be enclosed in parantheses or
-brackets. When multiple pairs of /ARGS/ and /BODY/ were given, does
-expand to function definition with argument pattern matchings.
-
-===== Examples
+==== __Examples__
 
 Function without arguments:
 
@@ -735,16 +716,14 @@ The last /fib2/ example is same as below:
 
 (defmacro defn'
   "
-==== Syntax
-
-Same as 'defn'.
-
-==== Description
-
 Macro to define a function for both of compilation time and load
 time. This macro uses 'eval_when' and 'defn'.
 
-==== Examples
+==== __Syntax__
+
+See 'defn'.
+
+==== __Examples__
 
 See 'defn'."
   form
@@ -753,7 +732,10 @@ See 'defn'."
 
 (define-macro defdo
   "
-==== Syntax
+Macro to define a function with 'defn', with wrapping the body
+expressions with /do/.
+
+==== __Syntax__
 
 > DEFDO ::= SIG [DOC] ARGS BODY*
 > SIG   ::= varid | '(' varid typesig ')'
@@ -761,12 +743,7 @@ See 'defn'."
 > ARGS  ::= '(' varid* ')' | '[' varid* ']'
 > BODY  ::= form
 
-==== Description
-
-Macro to define a function with 'defn', with wrapping the body
-expressions with /do/.
-
-==== Examples
+==== __Examples__
 
 Function taking single argument:
 
@@ -799,19 +776,17 @@ True
     _ (macro-error form "defdo: invalid form")))
 
 (defmacro' cond
-  "
-==== Syntax
+  "The 'cond' macro, found in many Lisp languages.
+
+The behaviour is same as wrapping the body with @case@ expression with
+dummy unit, or @if@ with @MultiWayIf@ GHC language extension.
+
+==== __Syntax__
 
 COND    ::= 'cond' CLAUSE+
 CLAUSE+ ::= '(' guard+ expr ')'
 
-==== Description
-
-The 'cond' macro, found in many Lisp languages.  The behaviour is
-same as wrapping the body with @case@ expression with dummy unit, or
-@if@ with @MultiWayIf@ GHC language extension.
-
-==== Examples
+==== __Examples__
 
 Simple function with weird tests:
 
@@ -819,7 +794,7 @@ Simple function with weird tests:
 (defn (c01 (-> Int Int Int))
   [a b]
   (cond
-    ((even b) (< a b) b)
+    ((even b) b)
     ((odd b) (> a b) b)
     (otherwise a)))
 @
@@ -827,7 +802,7 @@ Simple function with weird tests:
 Sample run:
 
 >>> (map (c01 5) [1 .. 10])
-[1,5,3,5,5,6,5,8,5,10]
+[1,2,3,4,5,6,5,8,5,10]
 "
   body
   `(case ()
@@ -837,18 +812,15 @@ Sample run:
 ;;; Macros for macros
 
 (defmacro-m macroexpand-1
-  "
-==== Syntax
+  "Expand given form if the given form is a macro, otherwise return the
+given form. Note that 'macroexpand_1' and 'macroexpand' are macros, not
+functions.
+
+==== __Syntax__
 
 > MACROEXPAND-1 ::= 'macroexpand-1' form
 
-==== Description
-
-Expand given form if the given form is a macro, otherwise return the
-given form. Note that 'macroexpand-1' and 'macroexpand' are macros, not
-functions.
-
-==== Examples
+==== __Examples__
 
 >>> (macroexpand-1 '(defmacro f1 [x] `(+ ,x 1)))
 (defmacro_m f1 [x]
@@ -863,17 +835,14 @@ functions.
     _            (return form)))
 
 (defmacro-m macroexpand
-  "
-==== Syntax
+  "Macro for expanding macro. This macro recursively expands all sub
+forms.
+
+==== __Syntax__
 
 > MACROEXPAND ::= 'macroexpand' form
 
-==== Description
-
-Macro for expanding macro. This macro recursively expands all sub
-forms.
-
-==== Examples
+==== __Examples__
 
 >>> (macroexpand '(defmacro f1 [x] `(+ ,x 1)))
 (begin
@@ -904,17 +873,16 @@ forms.
     _            (return form)))
 
 (defmacro-m exported-macros
-  "
-==== Syntax
+  "Macro to return macro names exported from given module as a list of
+'String'.
+
+==== __Syntax__
 
 > EXPORTED-MACROS ::= 'exported-macros' modid
 
-==== Description
+==== __Examples__
 
-Macro to return macro names exported from given module as a list of
-'String'.
-
-==== Examples
+Listing exported macros in \"SK.Core\" module:
 
 >>> (exported-macros SK.Core)
 [\"aps\",\"cond\",\"defdo\",\"defmacro\", ...]
@@ -948,21 +916,9 @@ Macro to return macro names exported from given module as a list of
 ;;; Module header
 
 (define-macro defmodule
-  "
-==== Syntax
-
-> DEFMODULE ::= 'defmodule' NAME IMPEXP*
-> NAME      ::= modid
-> IMPEXP    ::= '(' 'use' form+ ')'
->             | '(' 'load' form+ ')'
->             | '(' 'load-use' form+ ')'
->             | '(' 'export' form* ')'
-
-==== Description
-
-Macro to define header of module named /NAME/. The /IMPEXP/ are forms
+  "Macro to define header of module named /NAME/. The /IMPEXP/ are forms
 for imports and exports. Imports and exports forms can appear in any
-order, and starts with following symbols:
+order, and starts with one of the following symbols:
 
 [@use@]: The form elements expand to @import@ declaration.
 
@@ -973,7 +929,16 @@ order, and starts with following symbols:
 
 [@export@]: The form elements expand to export entities.
 
-==== Examples:
+==== __Syntax__
+
+> DEFMODULE ::= 'defmodule' NAME IMPEXP*
+> NAME      ::= modid
+> IMPEXP    ::= '(' 'use' form+ ')'
+>             | '(' 'load' form+ ')'
+>             | '(' 'load-use' form+ ')'
+>             | '(' 'export' form* ')'
+
+==== __Examples__
 
 Sample module header:
 
@@ -1056,17 +1021,14 @@ Expands to below:
 ;;; Convenience macros
 
 (define-macro aps
-  "
-==== Syntax
+  "Macro to apply given function in @Applicative@ and @Functor@ context.
+This macro handles variable number of arguments.
+
+==== __Syntax__
 
 > APS ::= 'aps' expr+
 
-==== Description
-
-Macro to apply given function in Applicative and Functor context.
-Can handle variable number of arguments.
-
-==== Examples
+==== __Examples__
 
 >>> (macroexpand '(aps f (pure a) (pure b) (pure c)))
 (<*> (<*> (<$> f (pure a)) (pure b)) (pure c))
@@ -1083,16 +1045,13 @@ Can handle variable number of arguments.
       _ (macro-error form "aps: invalid form"))))
 
 (define-macro pfs
-  "
-==== Syntax
+  "Macro for point free style function composition.
+
+==== __Syntax__
 
 > PFS ::= 'pfs' expr+
 
-==== Description
-
-Macro for point free style function composition.
-
-==== Examples
+==== __Examples__
 
 >>> (macroexpand '(pfs f1 (f2 arg1) f3))
 (. f1 (. (f2 arg1) f3))
