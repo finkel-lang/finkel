@@ -229,12 +229,14 @@
           ;; Default target in interactive context is `HscAsm', updating
           ;; to `HscInterpreted'.  Also, `dynamic' option is enabled in
           ;; REPL, since `sk' executable is compiled with `dynamic'
-          ;; option specified in cabal configuration file.
+          ;; option specified in cabal configuration file. And, setting
+          ;; the default verbosity level in REPL to 1.
           (do initSessionForMake
               (<- hsc-env getSession)
               (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
-                                         ghcLink LinkInMemory}))))
+                                         ghcLink LinkInMemory
+                                         verbosity 1}))))
               (void (setSessionDynFlags dflags1))))
         (= withAsyncHandler
           (ghandle
