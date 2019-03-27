@@ -69,7 +69,7 @@
 
 (defn (initial-option ReplOption)
   (ReplOption {repl-mode Run
-               repl-listen-port (Just 12305)}))
+               repl-listen-port (Just 50321)}))
 
 (defn (descrs [OptDescr (-> ReplOption ReplOption)])
   [(Option [\h] ["help"]
@@ -83,7 +83,7 @@
                        (o {repl-mode Listen
                            repl-listen-port port})))
                    "PORT")
-           "Listen to port (default: 12305)")])
+           "Listen to port (default: 50321)")])
 
 (defn (act (-> ReplOption (IO ())))
   [ro]
