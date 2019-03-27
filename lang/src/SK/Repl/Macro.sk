@@ -35,9 +35,6 @@
    ;; directory
    (System.Directory (getCurrentDirectory setCurrentDirectory))
 
-   ;; filepath
-   (System.FilePath (isAbsolute makeRelative))
-
    ;; ghc
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
               (Language ..) (PackageFlag ..) (GeneralFlag ..)
@@ -649,24 +646,8 @@ COMMANDS:
   "Load a module source code file. Handles absolute paths and relative
 paths from import directories."
   [forms]
-  (let ((= find-file idirs path
-          (if (isAbsolute path)
-              (find-absolute idirs path)
-              (compile-and-import path)))
-        (= find-absolute dirs path
-          (case dirs
-            (: dir dirs') (find-absolute' dir dirs' path)
-            []            (cant-find-err path)))
-        (= find-absolute' dir dirs path
-          (do (<- dir' (if (== dir ".")
-                           (liftIO getCurrentDirectory)
-                           (return dir)))
-              (find-file dirs (makeRelative dir' path))))
-        (= cant-find-err file
-          (skSrcError (located-list forms)
-                      (++ "load: cannot find: " file)))
-        ;; From `GhcMake.discardIC'.
-        (= discardIC hsc-env
+  (let ((= discardIC hsc-env
+          ;; From `GhcMake.discardIC'.
           (let ((= empty-ic (emptyInteractiveContext dflags))
                 (= new-ic-monad (keep-external-name ic_monad))
                 (= old-ic (hsc_IC hsc-env))
@@ -703,9 +684,7 @@ paths from import directories."
                     clear-all
                     ;; Find the source file path and compile, load, and
                     ;; link the module.
-                    (<- dflags getSessionDynFlags)
-                    (env-context-on-exception
-                     (find-file (importPaths dflags) path))
+                    (env-context-on-exception (compile-and-import path))
                     (return '(begin))))
               (code-to-mb-string form))
       _      (skSrcError (located-list forms)
