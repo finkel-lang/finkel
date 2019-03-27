@@ -26,7 +26,6 @@
   (export
    ;; repl
    (Repl ..) run-repl put-repl-state get-repl-state
-   ;; lift-repl
 
    ;; repl state
    (ReplState ..) initial-repl-state

@@ -49,20 +49,20 @@
    (FamInstEnv (pprFamInst))
    (FastString ((FastString) fsLit unpackFS))
    (Finder (flushFinderCaches uncacheModule))
-   (GHC ((ModuleInfo) getBindings getModuleGraph getModuleInfo
-         getPrintUnqual isLoaded lookupName lookupModule modInfoExports
-         setSessionDynFlags setTargets))
+   (GHC ((ModuleInfo) getBindings getModSummary getModuleGraph
+         getModuleInfo getPrintUnqual isLoaded lookupName lookupModule
+         modInfoExports setSessionDynFlags setTargets))
    (GhcMake ((LoadHowMuch ..)))
    (GhcMonad ((GhcMonad ..) getSessionDynFlags))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-              (ModSummary) (ModuleGraph)
+              (ModSummary ..) (ModuleGraph)
               emptyInteractiveContext handleFlagWarnings ms_mod_name
               srcErrorMessages tyThingParent_maybe))
    (HsImpExp (simpleImportDecl))
    (IfaceSyn (showToHeader))
    (InstEnv (pprInstance))
-   (InteractiveEval (abandonAll getContext getInfo parseName setContext
-                                showModule))
+   (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
+                                parseName setContext showModule))
    (Linker (initDynLinker linkModule showLinkerState unload))
    (Module (mkModuleNameFS moduleNameString))
    (Name (getName nameIsFromExternalPackage nameModule nameOccName
@@ -219,13 +219,22 @@
 
 (defn (compile-and-import (-> FilePath (Skc Code)))
   [path]
+  ;; As done in ghci, adding `IIModule' if the module is interpreted as
+  ;; bytecode, `IIDecl' otherwise. Safe Haskell setting in DynFlags is
+  ;; ignored at the moment.
   (do (<- sk-env getSkEnv)
       (<- _ (compile-module path))
       (let ((= mods (envContextModules sk-env))
             (= mname0 (asModuleName path))
             (= mname1 (| ((null mname0) "Main")
-                         (otherwise     mname0)))))
-      (setContext (map mk-ii (: mname1 mods)))
+                         (otherwise     mname0)))
+            (= mname2 (mkModuleNameFS (fsLit mname1)))
+            (= imps0 (map mk-ii mods))))
+      (<- mdl (getModSummary mname2))
+      (<- is-interp (moduleIsInterpreted (ms-mod mdl)))
+      (let ((= me (| (is-interp (IIModule mname2))
+                     (otherwise (mk-ii mname1))))))
+      (setContext (: me imps0))
       (return '(begin))))
 
 (defn (env-context-on-exception (-> (Skc a) (Skc ())))
