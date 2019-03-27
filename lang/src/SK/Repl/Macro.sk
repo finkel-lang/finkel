@@ -36,6 +36,7 @@
    (System.Directory (getCurrentDirectory setCurrentDirectory))
 
    ;; ghc
+   (BasicTypes ((StringLiteral ..)))
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
               (Language ..) (PackageFlag ..) (GeneralFlag ..)
               defaultDynFlags fFlags flagSpecFlag flagSpecName gopt
@@ -46,7 +47,7 @@
    (FamInstEnv (pprFamInst))
    (FastString ((FastString) fsLit unpackFS))
    (Finder (flushFinderCaches uncacheModule))
-   (GHC ((ModuleInfo) getBindings getModSummary getModuleGraph
+   (GHC ((ModuleInfo) findModule getBindings getModSummary getModuleGraph
          getModuleInfo getPrintUnqual isLoaded lookupName lookupModule
          modInfoExports setSessionDynFlags setTargets))
    (GhcMake ((LoadHowMuch ..)))
@@ -55,7 +56,7 @@
               (ModSummary ..) (ModuleGraph)
               emptyInteractiveContext handleFlagWarnings ms_mod_name
               srcErrorMessages tyThingParent_maybe))
-   (HsImpExp (simpleImportDecl))
+   (HsImpExp ((ImportDecl ..) simpleImportDecl))
    (IfaceSyn (showToHeader))
    (InstEnv (pprInstance))
    (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
@@ -63,7 +64,7 @@
    (Linker (initDynLinker linkModule showLinkerState unload))
    (Module (mkModuleNameFS moduleNameString))
    (Name (getName nameIsFromExternalPackage nameModule nameOccName
-          nameSrcSpan))
+                  nameSrcSpan))
    (NameSet (elemNameSet mkNameSet))
    (Outputable ((SDoc) $$ <+> <> empty dcolon hsep nest ppr sep
                 showPpr showSDoc showSDocForUser text vcat))
@@ -509,24 +510,38 @@ COMMANDS:
   (do (<- _ecode (liftIO (system (intercalate " " (map show forms)))))
       (return '(begin))))
 
+;;; Mostly taken from `GHCi.UI.guessCurrentModule'.
+(defn (guess-current-module (-> Code (Skc Module)))
+  [form]
+  (do (<- imports getContext)
+      (case imports
+        (: (IIModule m) _) (findModule m Nothing)
+        (: (IIDecl d) _)   (findModule (unLoc (ideclName d))
+                                       (fmap sl-fs (ideclPkgQual d)))
+        _ (skSrcError form "browse: no current module"))))
+
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defn (browse-cmd ReplAction)
   [forms]
-  (let ((= go name
-          (| ((looksLikeModuleName name)
-              (do (<- mdl (lookupModule (mkModuleName name) Nothing))
-                  (<- mb-mod-info (getModuleInfo mdl))
-                  (case mb-mod-info
-                    (Just mod-info) (browse-module mdl mod-info)
-                    Nothing (return
-                              `(putStrLn
-                                (++ "unknown module: " ,name))))))
-             (otherwise err)))
+  (let ((= go mb-name
+          (| ((<- (Just name) mb-name) (looksLikeModuleName name)
+              (>>= (lookupModule (mkModuleName name) Nothing) go'))
+             (otherwise
+              (>>= (guess-current-module (located-list forms)) go'))))
+        (= go' mdl
+          (do (<- mb-mod-info (getModuleInfo mdl))
+              (case mb-mod-info
+                (Just mod-info) (browse-module mdl mod-info)
+                Nothing (do (let ((= mname (moduleName mdl))
+                                  (= str (moduleNameString mname))
+                                  (= msg (++ "unknown module: " str))))
+                            (return `(putStrLn ,msg))))))
         (= err
           (skSrcError (located-list forms)
                       (++ "browse: invalid form: " (show forms)))))
     (case (map unCode forms)
-      [(Atom (ASymbol sym))] (go (unpackFS sym))
+      [(Atom (ASymbol sym))] (go (Just (unpackFS sym)))
+      []                     (go Nothing)
       _                      err)))
 
 (defn (cd-cmd ReplAction)
