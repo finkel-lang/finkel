@@ -28,7 +28,7 @@
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (ghandle))
    (GHC (getPrintUnqual setSessionDynFlags))
-   (GhcMonad ((GhcMonad ..) getSessionDynFlags withSession))
+   (GhcMonad ((GhcMonad ..) getSessionDynFlags modifySession))
    (HscMain (hscParsedStmt))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (FixityEnv) extendInteractiveContextWithIds
@@ -237,7 +237,8 @@
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory
                                          verbosity 1}))))
-              (void (setSessionDynFlags dflags1))))
+              (void (setSessionDynFlags dflags1))
+              (set-print-name "Prelude.print")))
         (= withAsyncHandler
           (ghandle
            (\ e
@@ -269,31 +270,25 @@
            m))
         (= eval-one
           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
-              (let ((= print-name "Prelude.print")))
               (<- ret (withErrorHandler
                        (do (<- expanded (expands [form]))
-                           (with-print-name print-name
-                             (eval-form hdl itype expanded)))))
+                           (eval-form hdl itype expanded))))
               (liftIO (putMVar out-mv ret))))
         (= loop
           (withAsyncHandler (>> eval-one loop))))
     (>> initialize loop)))
 
-;;; Temporary set `print-name' as interactive print function and run
-;;; `act'.
-(defn (with-print-name (-> String (Skc a) (Skc a)))
-  [print-name act]
-  (withSession
-   (\ he
-     (do (<- names (parseName print-name))
-         (case names
-           (: name _) (>> (setSession
-                           (he {hsc_IC
-                                (setInteractivePrintName (hsc_IC he)
-                                                         name)}))
-                          act)
-           _          (>> (failS "with-print-name: parse error")
-                          act))))))
+;;; Set the name of function used for printing values in interactive
+;;; context.
+(defn (set-print-name (-> String (Skc ())))
+  [name]
+  (do (<- vals (parseName name))
+      (case vals
+        (: fn _) (modifySession
+                  (\ he (he {hsc_IC
+                             (setInteractivePrintName (hsc_IC he)
+                                                      fn)})))
+        _ (failS "set-print-name: parse error"))))
 
 (defn (eval-form (-> Handle InSource [Code] (Skc Result)))
   [hdl itype forms]
