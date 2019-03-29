@@ -28,6 +28,7 @@
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (ghandle))
    (GHC (getPrintUnqual setSessionDynFlags))
+   (GHCi (evalStmt))
    (GhcMonad ((GhcMonad ..) getSessionDynFlags modifySession))
    (HscMain (hscParsedStmt))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
@@ -46,7 +47,6 @@
    (Var ((Id) (Var) varType))
 
    ;; ghci
-   (GHCi (evalStmt))
    (GHCi.Message ((EvalExpr ..) (EvalResult ..) (EvalStatus_ ..)
                   (SerializableException ..)))
    (GHCi.RemoteTypes ((ForeignHValue)))
@@ -133,12 +133,12 @@ reading the input until successful parse result."
               (case result
                 (Right str) (when (not (null str))
                               (outputStrLn str))
-                (Left str)  (when (not (null str))
-                              (let ((= pr (| ((isSuffixOf "\n" str)
-                                              outputStr)
-                                             (otherwise
-                                              outputStrLn))))
-                                (pr str))))
+                (Left str) (case str
+                             [] (return ())
+                             _  (| ((isSuffixOf "\n" str)
+                                    (outputStr str))
+                                   (otherwise
+                                    (outputStrLn str)))))
               (liftIO (hFlush stdout))))
         (= go result-mv
           (do (<- st0 (lift get-repl-state))
@@ -158,31 +158,32 @@ reading the input until successful parse result."
         (= go1 st0 result-mv line
           (case line
             []       (go result-mv)
-            (: h tl) (| ((== line "(quit)") quit)
-                        ((&& (null (pending-input st0))
-                             (== \, h))
+            (: h tl) (| ((== line "(quit)")
+                         quit)
+                        ((null (pending-input st0))
+                         (== \, h)
                          (if (elem tl (tail (inits "quit")))
                              quit
                              (go-command result-mv tl)))
                         (otherwise
-                         (go2 result-mv line)))))
+                         (go-line result-mv line)))))
         (= go-command result-mv lin
-          (| ((isPrefixOf "set" lin)
-              (go3 result-mv (as-repl-macro lin)))
+          ;; Using raw symbol for REPL commands other than info and
+          ;; type, to use hyphens without replacing to underscores.
+          ;; Otherwise, command name like "ghc-pkg" will get replaced to
+          ;; "ghc_pkg" by the parser.
+          (| ((type-or-info-command lin)
+              (go-line result-mv (concat ["(repl-macro " lin ")"])))
              (otherwise
-              (go2 result-mv (concat ["(repl-macro " lin ")"])))))
-        (= go2 result-mv line
+              (go-form result-mv (as-repl-macro lin)))))
+        (= go-line result-mv line
           (do (<- mb-form (lift (read-form line)))
-              (case mb-form
-                (Just form) (go3 result-mv form)
-                Nothing     (go result-mv))))
-        (= go3 result-mv form
+              (maybe (go result-mv) (go-form result-mv) mb-form)))
+        (= go-form result-mv form
           (do (let ((= input (Input Prompt form result-mv))))
               (liftIO (putMVar to-mvar input))
               (print-io result-mv)
               (go result-mv)))
-        (= as-repl-macro str
-          `(repl-macro ,@(map qSymbol (words str))))
         (= quit
           (liftIO (killThread eval-tid)))
         (= loop result-mv
@@ -195,8 +196,7 @@ reading the input until successful parse result."
     ;; Print the result from boot expression, then start the loop.
     (withInterrupt
      (do (<- result-mv (liftIO newEmptyMVar))
-         (liftIO
-          (putMVar to-mvar (Input Prompt init-form result-mv)))
+         (liftIO (putMVar to-mvar (Input Prompt init-form result-mv)))
          (print-io result-mv)
          (loop result-mv)))))
 
@@ -353,7 +353,7 @@ context."
   [hdl itype hsc-env ids hvals-io fixity-env]
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its implementation.
-  (let ((= success fhvals ret
+  (let ((= success fhvals _elapsed ret
           (do (let ((= ic (hsc_IC hsc-env))
                     (= ic2 (extendInteractiveContextWithIds ic ids))
                     (= ic3 (ic2 {ic_fix_env fixity-env}))
@@ -397,12 +397,22 @@ context."
             Prompt eval-for-prompt
             Connection eval-for-connection))
         (case status
-          (EvalComplete _ (EvalSuccess hvs)) (success hvs ret)
-          (EvalComplete _ (EvalException e)) (exception e)
+          (EvalComplete et (EvalSuccess hvs)) (success hvs et ret)
+          (EvalComplete  _ (EvalException e)) (exception e)
           _                                  incomplete))))
 
 
 ;;; Auxiliary
+
+(defn (type-or-info-command (-> String Bool))
+  [lin]
+  (case (words lin)
+    (: w _) (any (isPrefixOf w) ["load" "type" "info"])
+    _       False))
+
+(defn (as-repl-macro (-> String Code))
+  [str]
+  `(repl-macro ,@(map qSymbol (words str))))
 
 (defn (var-name-and-type (-> DynFlags Name Var String))
   [dflags name var]
