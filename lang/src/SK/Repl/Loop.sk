@@ -11,7 +11,7 @@
                        fromException throwIO))
    (Control.Monad (void when))
    (Control.Monad.IO.Class (liftIO))
-   (Data.List (inits intercalate isPrefixOf isSuffixOf nubBy))
+   (Data.List (inits intercalate isPrefixOf isSuffixOf))
    (System.Exit (exitWith))
    (System.IO ((Handle) hClose hFlush openTempFile stdout))
    (System.IO.Error (isDoesNotExistError))
@@ -314,15 +314,17 @@
 
 (defn (eval-imports (-> [HImportDecl] (Skc Result)))
   [imports]
-  (do (<- context getContext)
-      (<- dflags getSessionDynFlags)
+  (do (<- dflags getSessionDynFlags)
+      (<- ctx0 getContext)
       (let ((= mkIIDecl (L _ idecl)
               (IIDecl idecl))
             (= mdls
               (++ "; " (intercalate ", "
                                     (map (. (showSDoc dflags) ppr)
-                                         imports))))))
-      (setContext (nubBy eq-ii (++ (map mkIIDecl imports) context)))
+                                         imports))))
+            (= f mdl (add-gt-ii (mkIIDecl mdl)))
+            (= ctx1 (foldr f ctx0 imports))))
+      (setContext ctx1)
       (return (Right mdls))))
 
 (defn (eval-decls (-> [HDecl] (Skc Result)))
@@ -417,8 +419,27 @@
             (otherwise (intercalate "\n" tvs)))
     (= tvs (zipWith (var-name-and-type dflags) names vars))))
 
-(defn (eq-ii (-> InteractiveImport InteractiveImport Bool))
+(defn (add-gt-ii (-> InteractiveImport [InteractiveImport]
+                     [InteractiveImport]))
+  [mdl acc]
+  (if (any (subsume-ii mdl) acc)
+      acc
+      (: mdl acc)))
+
+(defn (subsume-ii (-> InteractiveImport InteractiveImport Bool))
+  ;; See `GHCi.UI.iiSubsumes'.
   [(IIModule x) (IIModule y)] (== x y)
-  [(IIDecl x)   (IIDecl y)  ] (== (unLoc (ideclName x))
-                                  (unLoc (ideclName y)))
-  [_            _           ] False)
+  [(IIDecl x) (IIDecl y)]
+  (where (and [(== (unLoc (ideclName x))
+                   (unLoc (ideclName y)))
+               (== (ideclAs x) (ideclAs y))
+               (|| (not (ideclQualified x))
+                   (ideclQualified y))
+               (hiding-subsumes (ideclHiding x)
+                                (ideclHiding y))])
+    (defn hiding-subsumes
+      [_ (Just (, False (L _ [])))] True
+      [(Just (, False (L _ xs))) (Just (, False (L _ ys)))]
+      (all (flip elem xs) ys)
+      [a b] (== a b)))
+  [_ _] False)
