@@ -80,8 +80,8 @@
 
 ;;; Starting the REPL
 
-;;; Start REPL, maybe listen to given port number when given.
 (defn (start-repl (-> (Maybe Int) SkEnv (IO ())))
+  "Start REPL, maybe listen to given port number when given."
   [mb-port ske]
   (bracket
    make-tmpfile
@@ -95,14 +95,14 @@
                (= reader (runInputT defaultSettings rpl))))
          (run-repl reader initial-repl-state)))))
 
-;;; Return a file path and handle for temporary use.
 (defn (make-tmpfile (IO (, FilePath Handle)))
+  "Return a file path and handle for temporary use."
   (do (<- dir getTemporaryDirectory)
       (openTempFile dir "sk-repl-.out")))
 
-;;; Start listner in separate thread, and return temporary file for
-;;; getting String output from statement.
 (defn (start-listener (-> (Maybe Int) (MVar Input) (IO ())))
+  "Start listner in separate thread, and return temporary file for
+getting String output from statement."
   [mb-port in-mv]
   (maybe (return ())
          (\ port
@@ -110,8 +110,8 @@
                (void (forkIO (listener (fromIntegral port) in-mv)))))
          mb-port))
 
-;; Clean up temporary file.
 (defn (cleanup-tmpfile (-> (, FilePath Handle) (IO ())))
+  "Clean up temporary file."
   [(, path hdl)]
   (catch (do (hClose hdl)
              (removeFile path))
@@ -122,11 +122,11 @@
 
 ;;; Read and print
 
-;;; Loop for reading input and printing the output.
-;;;
-;;; Tracks the state of intermediate S-expression from input, and
-;;; continue reading the input until successful parse result.
 (defn (read-print-loop (-> (MVar Input) ThreadId (InputT Repl ())))
+  "Loop for reading input and printing the output.
+
+Tracks the state of intermediate S-expression from input, and continue
+reading the input until successful parse result."
   [to-mvar eval-tid]
   (let ((= print-io result-mv
           (do (<- result (liftIO (takeMVar result-mv)))
@@ -200,12 +200,12 @@
          (print-io result-mv)
          (loop result-mv)))))
 
-;;; Form to initialize the REPL.
 (defn (init-form Code)
+  "Form to initialize the REPL."
   '(putStrLn "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
 
-;;; Read single S-expression form.
 (defn (read-form (-> String (Repl (Maybe Code))))
+  "Read single S-expression form."
   [input0]
   (do (<- st get-repl-state)
       (let ((= input1
@@ -224,6 +224,7 @@
 ;;; Eval loop
 
 (defn (eval-loop (-> Handle (MVar Input) (Skc ())))
+  "Loop to evaluate expressions."
   [hdl in-mvar]
   (let ((= initialize
           ;; Default target in interactive context is `HscAsm', updating
@@ -278,9 +279,9 @@
           (withAsyncHandler (>> eval-one loop))))
     (>> initialize loop)))
 
-;;; Set the name of function used for printing values in interactive
-;;; context.
 (defn (set-print-name (-> String (Skc ())))
+  "Set the name of function used for printing values in interactive
+context."
   [name]
   (do (<- vals (parseName name))
       (case vals
@@ -438,8 +439,8 @@
                (hiding-subsumes (ideclHiding x)
                                 (ideclHiding y))])
     (defn hiding-subsumes
-      [_ (Just (, False (L _ [])))] True
+      [_                         (Just (, False (L _ [])))] True
       [(Just (, False (L _ xs))) (Just (, False (L _ ys)))]
       (all (flip elem xs) ys)
-      [a b] (== a b)))
+      [                       a                          b] (== a b)))
   [_ _] False)
