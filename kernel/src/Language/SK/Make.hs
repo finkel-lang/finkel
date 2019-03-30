@@ -402,8 +402,7 @@ doMakeOne i total mb_sp ms src_modified = do
   hsc_env <- getSession
   sk_env <- getSkEnv
 
-  let dflags_orig = hsc_dflags hsc_env
-      dflags = ms_hspp_opts ms
+  let dflags = ms_hspp_opts ms
       hsc_env' = hsc_env {hsc_dflags = dflags}
       loc = ms_location ms
       mod_name = ms_mod_name ms
@@ -434,7 +433,6 @@ doMakeOne i total mb_sp ms src_modified = do
   -- Update the time stamp of generated obj and hi files.
   mb_obj_date <- e2mb <$> tryGetTimeStamp (ml_obj_file loc)
   mb_iface_date <- e2mb <$> tryGetTimeStamp (ml_hi_file loc)
-  setDynFlags dflags_orig
 
   debugSkc ";;; Finished doMakeOne"
   return ms { ms_obj_date = mb_obj_date
