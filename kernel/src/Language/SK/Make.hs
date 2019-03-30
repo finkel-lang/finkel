@@ -28,8 +28,8 @@ import BasicTypes (SuccessFlag(..))
 import DriverPhases (Phase(..))
 import DriverPipeline (compileOne', link, oneShot, preprocess)
 import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
-                , GhcMode(..), getDynFlags, gopt, gopt_set
-                , gopt_unset, interpWays )
+                , GhcMode(..), getDynFlags, gopt, gopt_set, gopt_unset
+                , interpWays )
 import ErrUtils (mkErrMsg, withTiming)
 import Exception (tryIO)
 import FastString (fsLit)
@@ -37,8 +37,7 @@ import Finder ( addHomeModuleToFinder, cannotFindModule
               , findImportedModule, findObjectLinkableMaybe )
 import GHC ( setSessionDynFlags )
 import GhcMake (topSortModuleGraph)
-import GhcMonad ( GhcMonad(..), getSessionDynFlags, modifySession
-                , withTempSession )
+import GhcMonad ( GhcMonad(..), modifySession, withTempSession )
 import Outputable ( neverQualify, text, showPpr )
 import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
@@ -117,13 +116,13 @@ make infiles no_link force_recomp mb_output = do
   -- point. Some of the dump flags will turn force recompilation flag
   -- on. Ghc does this switching off of recompilation checker in
   -- DynFlags.{setDumpFlag',forceRecompile}.
-  dflags0 <- getSessionDynFlags
+  dflags0 <- getDynFlags
   let dflags1 = dflags0 { ghcMode = CompManager
                         , outputFile = mb_output }
       dflags2 | force_recomp = gopt_set dflags1 Opt_ForceRecomp
               | otherwise    = gopt_unset dflags1 Opt_ForceRecomp
   setDynFlags dflags2
-  dflags3 <- getSessionDynFlags
+  dflags3 <- getDynFlags
 
   debugSkc
     (concat
@@ -133,7 +132,8 @@ make infiles no_link force_recomp mb_output = do
        , ";;;   hscTarget=", show (hscTarget dflags3), "\n"
        , ";;;   ways=", show (ways dflags3), "\n"
        , ";;;   forceRecomp=", show (gopt Opt_ForceRecomp dflags3), "\n"
-       , ";;;   interpWays=", show interpWays])
+       , ";;;   interpWays=", show interpWays, "\n"
+       , ";;;   importPaths=", show (importPaths dflags3)])
 
   -- Preserve the language extension values in initial dynflags to
   -- SkEnv, to reset the language extension later, to keep fresh set of
@@ -161,7 +161,7 @@ make infiles no_link force_recomp mb_output = do
 initSessionForMake :: Skc ()
 initSessionForMake = do
   -- Returned list of 'InstalledUnitId's are ignored.
-  _ <- getSessionDynFlags >>= setSessionDynFlags
+  _ <- getDynFlags >>= setSessionDynFlags
 
   -- Load modules names in SkEnv to current interactive context.
   sk_env <- getSkEnv
@@ -436,6 +436,7 @@ doMakeOne i total mb_sp ms src_modified = do
   mb_iface_date <- e2mb <$> tryGetTimeStamp (ml_hi_file loc)
   setDynFlags dflags_orig
 
+  debugSkc ";;; Finished doMakeOne"
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
 
@@ -499,7 +500,7 @@ findUnCompiledImport :: HscEnv       -- ^ Current hsc environment.
                      -> Skc (Maybe TargetUnit)
 findUnCompiledImport hsc_env acc idecl = do
   findResult <- liftIO (findImportedModule hsc_env mname Nothing)
-  dflags <- getSessionDynFlags
+  dflags <- getDynFlags
   let myInstalledUnitId = thisInstalledUnitId dflags
   case findResult of
     -- Haskell module returned by `Finder.findImportedModule' may not
@@ -626,9 +627,9 @@ compileSkModuleForm' sp modname forms = do
   where
     act = timeIt ("SkModule [" ++ modname ++ "]") $ do
 
-      -- Reset SkEnv, no need to worry about managing interactive
-      -- context and DynFlags because this action is wrapped by
-      -- 'withTempSession' above.
+      -- Reset current SkEnv. No need to worry about managing
+      -- interactive context and DynFlags, because this action is
+      -- wrapped by 'withTempSession' above.
       resetSkEnv
 
       mdl <- compileSkModuleForm forms

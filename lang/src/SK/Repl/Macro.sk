@@ -715,8 +715,8 @@ paths from import directories."
   "Set command line flags, see `GHCi.UI.newDynFlags'."
   [forms]
   (| ((<- (: _ _) forms) (all is-symbol forms)
-      ;; Always using `setSessionDynFlags' for `set' REPL
-      ;; command to support `-package' flag.
+      ;; Always using `setSessionDynFlags' for `set' REPL command to
+      ;; support `-package' flag.
       (do (<- dflags0 getSessionDynFlags)
           (let ((= flags (map (. noLoc symbolName) forms))
                 (= complain fs
@@ -730,6 +730,7 @@ paths from import directories."
                (unless (null leftovers)
                  (complain leftovers))))
           (<- _ (setSessionDynFlags dflags1))
+          (modifySkEnv (\ ske (ske {envMakeDynFlags (Just dflags1)})))
           (return '(begin))))
      (otherwise
       (skSrcError nil "set: empty-form"))))
