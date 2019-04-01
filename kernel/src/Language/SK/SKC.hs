@@ -171,7 +171,8 @@ data SkEnv = SkEnv
      envMacros :: EnvMacros
      -- | Temporary macros in current compilation context.
    , envTmpMacros :: [EnvMacros]
-     -- | Default set of macros to reset the macros.
+     -- | Default set of macros, these macros will be used when
+     -- resetting 'SkEnv'.
    , envDefaultMacros :: EnvMacros
      -- | Flag to hold debug setting.
    , envDebug :: Bool

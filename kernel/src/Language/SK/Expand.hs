@@ -25,15 +25,15 @@ import qualified Data.Map as Map
 -- ghc
 import BasicTypes (FractionalLit(..))
 import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
-                , HscTarget(..), gopt, gopt_unset, updOptLevel
-                , xopt_unset )
+                , HscTarget(..), getDynFlags, gopt, gopt_unset
+                , updOptLevel, xopt_unset )
 import ErrUtils (compilationProgressMsg)
 import Exception (gbracket)
 import FastString (FastString, fsLit, headFS, unpackFS)
 import Finder (findImportedModule)
 import GHC ( ModuleInfo, getModuleInfo, lookupModule, lookupName
            , modInfoExports, setContext )
-import GhcMonad (GhcMonad(..), getSessionDynFlags)
+import GhcMonad (GhcMonad(..))
 import HscMain (Messager, hscTcRnLookupRdrName, showModuleIndex)
 import HscTypes ( InteractiveImport(..), HscEnv(..), FindResult(..)
                 , showModMsg )
@@ -199,7 +199,7 @@ addImportedMacro :: TyThing -> Skc ()
 addImportedMacro thing = when (isMacro thing) go
   where
     go = do
-      dflags <- getSessionDynFlags
+      dflags <- getDynFlags
       case thing of
         AnId var -> do
           debugSkc (";;; adding macro `" ++
@@ -383,7 +383,7 @@ specialForms =
 -- some DynFlags fields.
 setExpanderSettings :: Skc ()
 setExpanderSettings = do
-  flags0 <- getSessionDynFlags
+  flags0 <- getDynFlags
 
   -- Setup DynFlags for interactive evaluation.
   let flags1 = flags0 { hscTarget = HscInterpreted }
@@ -391,8 +391,8 @@ setExpanderSettings = do
       flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
       flags4 = updOptLevel 0 flags3
 
-  -- When not saved, save the original DynFlags for compiling required
-  -- modules.
+  -- Save the original DynFlags for compiling required modules when not
+  -- yet saved.
   skenv <- getSkEnv
   case envMakeDynFlags skenv of
     Nothing -> putSkEnv (skenv {envMakeDynFlags = Just flags0})
@@ -405,7 +405,7 @@ setExpanderSettings = do
 -- original DynFlags.
 withExpanderSettings :: Skc a -> Skc a
 withExpanderSettings act =
-  gbracket getSessionDynFlags
+  gbracket getDynFlags
            setDynFlags
            (const (setExpanderSettings >> act))
 
@@ -420,7 +420,7 @@ setRequiredSettings = do
 withRequiredSettings :: Skc a -> Skc a
 withRequiredSettings act =
   gbracket
-    (do dflags <- getSessionDynFlags
+    (do dflags <- getDynFlags
         skenv <- getSkEnv
         return (dflags, skenv))
     (\(dflags, skenv) ->

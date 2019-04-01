@@ -730,7 +730,6 @@ paths from import directories."
                (unless (null leftovers)
                  (complain leftovers))))
           (<- _ (setSessionDynFlags dflags1))
-          (modifySkEnv (\ ske (ske {envMakeDynFlags (Just dflags1)})))
           (return '(begin))))
      (otherwise
       (skSrcError nil "set: empty-form"))))

@@ -323,7 +323,7 @@ make' readys0 pendings0 = do
                          -> Skc [ModSummary]
           compileIfReady summary mb_sp imports getReqs = do
             hsc_env <- getSession
-            is <- mapM (findUnCompiledImport hsc_env acc) imports
+            is <- mapM (findNotCompiledImport hsc_env acc) imports
             let is' = catMaybes is
             debugSkc (";;; filtered imports = " ++ show is')
             if not (null is')
@@ -490,13 +490,13 @@ findRequiredModSummary hsc_env mname = do
         _        -> failS ("Cannot find required module " ++ mname)
 
 -- | Find not compiled module.
-findUnCompiledImport :: HscEnv       -- ^ Current hsc environment.
-                     -> [ModSummary] -- ^ List of accumulated
-                                     -- 'ModSummary'.
-                     -> HImportDecl  -- ^ The target module name to
-                                     -- find.
-                     -> Skc (Maybe TargetUnit)
-findUnCompiledImport hsc_env acc idecl = do
+findNotCompiledImport :: HscEnv       -- ^ Current hsc environment.
+                      -> [ModSummary] -- ^ List of accumulated
+                                      -- 'ModSummary'.
+                      -> HImportDecl  -- ^ The target module name to
+                                      -- find.
+                      -> Skc (Maybe TargetUnit)
+findNotCompiledImport hsc_env acc idecl = do
   findResult <- liftIO (findImportedModule hsc_env mname Nothing)
   dflags <- getDynFlags
   let myInstalledUnitId = thisInstalledUnitId dflags
@@ -648,11 +648,13 @@ addHomeModInfoIfMissing = foldl' f
         Just _  -> hpt
         Nothing -> addToHpt hpt name hmi
 
--- | Reset macros and required modules in current SkEnv.
+-- | Reset macros, required modules, and 'DynFlags' for make in current
+-- SkEnv.
 resetSkEnv :: Skc ()
 resetSkEnv =
   modifySkEnv (\ske -> ske { envMacros = envDefaultMacros ske
-                           , envRequiredModuleNames = []})
+                           , envRequiredModuleNames = []
+                           , envMakeDynFlags = Nothing})
 
 compileHsFile :: FilePath -> Maybe Phase
                -> Skc (HModule, DynFlags, [a])
