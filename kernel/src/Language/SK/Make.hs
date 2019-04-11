@@ -7,7 +7,7 @@ module Language.SK.Make
   ) where
 
 -- base
-import Control.Monad (unless, when)
+import Control.Monad (mplus, unless, when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.List (find, foldl')
 import Data.Maybe (catMaybes, fromMaybe, isJust)
@@ -45,12 +45,13 @@ import HscTypes ( FindResult(..), ModIface(..), ModSummary(..)
                 , HomeModInfo(..), HomePackageTable, HsParsedModule(..)
                 , HscEnv(..), InteractiveContext(..)
                 , ModuleGraph, SourceModified(..)
-                , addToHpt, eltsHpt, lookupHpt, ms_mod_name
-                , throwOneError
+                , addToHpt, eltsHpt, isBootSummary, lookupHpt
+                , mi_boot, ms_mod_name, throwOneError
 #if MIN_VERSION_ghc(8,4,0)
-                , mkModuleGraph, extendMG
+                , mkModuleGraph
 #endif
                 )
+import MkIface (RecompileRequired(..), checkOldIface)
 import Module ( ModLocation(..), ModuleName, installedUnitIdEq
               , mkModuleName, moduleName, moduleNameSlashes
               , moduleNameString, moduleUnitId )
@@ -148,13 +149,14 @@ make infiles no_link force_recomp mb_output = do
   sources <- mapM findIt infiles
 
   -- Do the compilation work.
-  mod_summaries <- make' [] sources
+  mod_summaries <- make' sources
 
-  -- Update current module graph for linker. Linking work is delegated
-  -- to deriver pipelin's `link' function.
+  -- Update current module graph and link. Linking work is delegated to
+  -- deriver pipelin's `link' function.
   let mgraph = mkModuleGraph' mod_summaries
       mgraph_flattened =
         flattenSCCs (topSortModuleGraph True mgraph Nothing)
+  modifySession (\hsc_env -> hsc_env {hsc_mod_graph=mgraph})
   unless no_link (doLink mgraph_flattened)
 
 -- | Calls 'GHC.setSessionDynFlags' to initialize session.
@@ -177,8 +179,8 @@ initSessionForMake = do
 -- | Simple make function returning compiled home module
 -- information. Intended to be used for 'envMake' field in 'SkEnv'.
 simpleMake :: Bool -> String -> Skc [(ModuleName, HomeModInfo)]
-simpleMake recomp name = do
-  make [(name, Nothing)] True recomp Nothing
+simpleMake force_recomp name = do
+  make [(name, Nothing)] False force_recomp Nothing
   hsc_env <- getSession
   let as_pair hmi = (moduleName (mi_module (hm_iface hmi)), hmi)
   return (map as_pair (eltsHpt (hsc_HPT hsc_env)))
@@ -216,14 +218,13 @@ emptyTargetUnit ts = (ts, Nothing)
 -- '*.o'. If the HsModule contained imports of pending module, add the
 -- module to the pending modules.
 --
-make' :: [TargetUnit] -> [TargetUnit] -> Skc [ModSummary]
-make' readys0 pendings0 = do
+make' :: [TargetUnit] -> Skc [ModSummary]
+make' pendings0 = do
   debugSkc
     (concat [ ";;; make'\n"
             , ";;;   total: " ++ show total ++ "\n"
-            , ";;;   readys0: " ++ show readys0 ++ "\n"
             , ";;;   pendings0: " ++ show pendings0])
-  timeIt "make' [sk]" (go [] total total readys0 pendings0)
+  timeIt "make' [sk]" (go [] total total [] pendings0)
   where
     go :: [ModSummary] -- ^ Accumulator.
        -> Int          -- ^ module n ...
@@ -261,6 +262,8 @@ make' readys0 pendings0 = do
     -- ModSummary to resolve the dependencies.
     go acc i k (target@(tsr,_mbp):summarised) pendings = do
 
+      debugSkc (";;; make'.go: target=" ++ show target)
+
       -- Since skc make is not using 'DriverPipeline.runPipeline',
       -- setting 'DynFlags.dumpPrefix' manually.
       setDumpPrefix (targetSourcePath tsr)
@@ -282,16 +285,14 @@ make' readys0 pendings0 = do
                                m `elem` summarised_names)
                         import_names
 
-              debugSkc (concat [ ";;; target=", show target, "\n"
-                               , ";;; imports=", show import_names])
+              debugSkc (";;; make'.go: imports=" ++ show import_names)
 
               -- Test whether imported modules are in pendings. If
               -- found, skip the compilation and add this module to the
               -- list of pending modules.
               --
               -- N.B. For SK source target, dependency modules passed to
-              -- 'makeOne' contains imported modules and required
-              -- modules.
+              -- 'makeOne' are required modules.
               --
               if notYetReady
                  then go acc i k summarised (target:pendings)
@@ -340,12 +341,7 @@ make' readys0 pendings0 = do
                  -- the returned ModSummary to accumulator, and
                  -- continue.
                  reqs <- getReqs
-                 let graph_upto_this =
-                       topSortModuleGraph True mgraph (Just mn)
-                     mgraph = mkModuleGraph' (summary:acc)
-                     mn = ms_mod_name summary
-                     deps = flattenSCCs graph_upto_this ++ reqs
-                 summary' <- makeOne i k mb_sp summary deps
+                 summary' <- makeOne i k mb_sp summary reqs
                  go (summary':acc) (i-1) k summarised pendings
 
     tsmn (ts, _) =
@@ -353,16 +349,16 @@ make' readys0 pendings0 = do
         SkSource _ mn _ _ -> mn
         HsSource path     -> asModuleName path
         _                 -> "module-name-unknown"
-    total = length readys0 + length pendings0
+    total = length pendings0
 
 -- | Check whether recompilation is required, and compile the 'HsModule'
 -- when the codes or dependency modules were updated.
 makeOne :: Int -> Int -> Maybe SPState -> ModSummary
         -> [ModSummary] -> Skc ModSummary
-makeOne i total mb_sp ms graph_upto_this = timeIt label go
+makeOne i total mb_sp summary required_summaries = timeIt label go
   where
     label = "MakeOne [" ++ mname ++ "]"
-    mname = moduleNameString (ms_mod_name ms)
+    mname = moduleNameString (ms_mod_name summary)
     go = do
       -- Keep current DynFlags.
       dflags <- getDynFlags
@@ -372,22 +368,21 @@ makeOne i total mb_sp ms graph_upto_this = timeIt label go
       -- module is updated or not. This is to support loading already
       -- compiled module objects with language extensions not set in
       -- current dynflags.
-      setDynFlags (ms_hspp_opts ms)
+      setDynFlags (ms_hspp_opts summary)
 
-      up_to_date <- checkUpToDate ms graph_upto_this
+      up_to_date <- checkUpToDate summary required_summaries
+      debugSkc (";;; makeOne: up_to_date=" ++ show up_to_date)
       let midx = total - i + 1
           src_modified | up_to_date = SourceUnmodified
                        | otherwise  = SourceModified
-      ms' <- doMakeOne midx total mb_sp ms src_modified
+      summary' <- doMakeOne midx total mb_sp summary src_modified
 
-      -- Update module graph with new ModSummary, and restore the
-      -- original DynFlags.
+      -- Restore the original DynFlags.
       modifySession
-        (\e -> e { hsc_mod_graph = extendMG' (hsc_mod_graph e) ms'
-                 , hsc_dflags = dflags
+        (\e -> e { hsc_dflags = dflags
                  , hsc_IC = (hsc_IC e) {ic_dflags = dflags}})
 
-      return ms'
+      return summary'
 
 -- | Compile single module.
 doMakeOne :: Int -- ^ Module index number.
@@ -412,14 +407,29 @@ doMakeOne i total mb_sp ms src_modified = do
                  Left _  -> Nothing
       messager = envMessager sk_env
       hpt0 = hsc_HPT hsc_env
+      mb_hm_info = lookupHpt hpt0 mod_name
+      mb_old_iface =
+        -- See: GhcMake.upsweep_mod
+        case mb_hm_info of
+          Nothing                            -> Nothing
+          Just hm_info | isBootSummary ms    -> Just iface
+                       | not (mi_boot iface) -> Just iface
+                       | otherwise           -> Nothing
+                       where
+                        iface = hm_iface hm_info
 
-  -- Compile the module with linkable if exist, and add the returned
-  -- module to finder.
-  mb_linkable <- liftIO (findObjectLinkableMaybe (ms_mod ms) loc)
+  -- Lookup linkable, compile and add the returned module to finder and
+  -- home package table.
   home_mod_info <-
-    liftIO (compileOne' Nothing (Just messager) hsc_env' ms
-                        i total Nothing mb_linkable src_modified)
-  _ <- liftIO (addHomeModuleToFinder hsc_env mod_name loc)
+    liftIO
+      (do mb_linkable0 <- findObjectLinkableMaybe (ms_mod ms) loc
+          let mb_linkable1 = mb_hm_info >>= hm_linkable
+              mb_linkable2 = mb_linkable0 `mplus` mb_linkable1
+          home_mod_info <-
+             compileOne' Nothing (Just messager) hsc_env' ms i total
+                         mb_old_iface mb_linkable2 src_modified
+          _ <- addHomeModuleToFinder hsc_env mod_name loc
+          return home_mod_info)
   modifySession
     (\e -> e {hsc_HPT = addToHpt hpt0 mod_name home_mod_info})
 
@@ -456,19 +466,96 @@ doMakeOne i total mb_sp ms src_modified = do
 -- | 'True' if the object code and interface file were up to date,
 -- otherwise 'False'.
 checkUpToDate :: ModSummary -> [ModSummary] -> Skc Bool
-checkUpToDate ms dependencies
-  | Nothing <- ms_iface_date ms = return False
-  | otherwise =
-    case ms_obj_date ms of
-      Nothing       -> return False
-      Just obj_date -> do
-        let mn = ms_mod_name ms
-            sccs_without_self = filter (\m -> mn /= ms_mod_name m)
-                                       dependencies
-            dep_ok = maybe False (obj_date >=) . ms_obj_date
-            up_to_date = obj_date >= ms_hs_date ms &&
-                         all dep_ok sccs_without_self
-        return up_to_date
+checkUpToDate _summary required_summaries = do
+  -- XXX: TODO. Currently always returning 'True'.  Want to detect the
+  -- up-to-date-ness of modules containing 'require' of home package
+  -- module, and up-to-date-ness of the required modules.
+  hsc_env <- getSession
+  compiled_in_req <- fmap envCompiledInRequire getSkEnv
+  let f (mname, _hmi) = "\n;;;   " ++ moduleNameString mname
+  debugSkc (concat (";;; checkUpToDate.compiled_in_req:"
+                    : case compiled_in_req of
+                       [] -> [" none."]
+                       _  ->  map f compiled_in_req))
+  _ <- mapM (checkRequiredIface hsc_env) required_summaries
+  return True
+
+checkRequiredIface
+  :: HscEnv
+  -> ModSummary
+  -> Skc (RecompileRequired, Maybe ModIface)
+checkRequiredIface hsc_env summary = do
+  let hpt = hsc_HPT hsc_env
+      mb_old_iface =
+        case lookupHpt hpt (ms_mod_name summary) of
+          Nothing -> Nothing
+          Just hm_info | isBootSummary summary -> Just iface
+                       | not (mi_boot iface) -> Just iface
+                       | otherwise -> Nothing
+                       where
+                         iface = hm_iface hm_info
+  (recomp, mb_iface) <- liftIO (checkOldIface hsc_env summary
+                                              SourceUnmodified
+                                              mb_old_iface)
+  debugSkc
+    (concat [ ";;; checkRequiredIface\n"
+            , ";;;   ", moduleNameString (ms_mod_name summary), ": "
+            , case recomp of
+                UpToDate             -> "up to date"
+                MustCompile          -> "must compile"
+                RecompBecause reason -> reason])
+  return (recomp, mb_iface)
+
+-- Won't work when recompiling with 'require'.
+--
+-- checkUpToDate ms dependencies =
+--   case ms_obj_date ms of
+--     -- No object code found, check with bytecode.
+--     Nothing       -> do
+--       hsc_env <- getSession
+--       let hpt = hsc_HPT hsc_env
+--           dflags = hsc_dflags hsc_env
+--
+--       debugSkc
+--         (concat
+--            [";;; checkUpToDate: ms=" ++
+--             moduleNameString (ms_mod_name ms), "\n"
+--            ,";;; pprHpt\n" ++
+--             showSDocDebug dflags (pprHPT (hsc_HPT hsc_env)), "\n"
+--            ,";;; dependencies:" ++
+--             concatMap (\m -> "\n;;;   " ++
+--                              moduleNameString (ms_mod_name m) ++
+--                              ", " ++ show (ms_hs_date m))
+--                       dependencies  ])
+--
+--       case lookupHpt hpt (ms_mod_name ms) of
+--         Just hmi | Just l <- hm_linkable hmi -> do
+--           let is_bco = not (isObjectLinkable l)
+--               linkable_time = linkableTime l
+--               ms_is_new = linkable_time >= ms_hs_date ms
+--               dep_is_new m =
+--                 case lookupHpt hpt (ms_mod_name m) of
+--                   Just _mi -> linkable_time >= ms_hs_date m
+--                   Nothing  -> False
+--               dep_ok = ms_is_new && all dep_is_new dependencies
+--           debugSkc (";;; linkable_time: " ++ show linkable_time)
+--           return (is_bco && dep_ok)
+--         Just _  -> do
+--           debugSkc ";;; home package found, no linkable"
+--           return False
+--         _       -> do
+--           debugSkc ";;; no home package found"
+--           return False
+--
+--     -- Found object code.
+--     Just obj_date -> do
+--       let mn = ms_mod_name ms
+--           sccs_without_self = filter (\m -> mn /= ms_mod_name m)
+--                                      dependencies
+--           dep_ok = maybe False (obj_date >=) . ms_obj_date
+--           up_to_date = obj_date >= ms_hs_date ms &&
+--                        all dep_ok sccs_without_self
+--       return up_to_date
 
 -- | Search 'ModSummary' of required module.
 findRequiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
@@ -613,7 +700,7 @@ compileSkModuleForm' sp modname forms = do
   let use_my_dflags e = e {hsc_dflags = dflags0}
   (mdl, reqs, compiled) <- withTempSession use_my_dflags act
 
-  -- Add the compiled home modules to current sessio, if any. This fill
+  -- Add the compiled home modules to current session, if any. This fill
   -- avoid recompilation of required modules with "-fforce-recomp"
   -- option, which is required more than once.
   let hpt0 = hsc_HPT hsc_env
@@ -810,13 +897,4 @@ mkModuleGraph' :: [ModSummary] -> ModuleGraph
 mkModuleGraph' = mkModuleGraph
 #else
 mkModuleGraph' = id
-#endif
-
--- | GHC version compatibility helper function for extending
--- 'ModuleGraph' with 'ModSummary'.
-extendMG' :: ModuleGraph -> ModSummary -> ModuleGraph
-#if MIN_VERSION_ghc(8,4,0)
-extendMG' = extendMG
-#else
-extendMG' mg ms = ms : mg
 #endif

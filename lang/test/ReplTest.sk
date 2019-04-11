@@ -128,7 +128,8 @@
                 ";  ghcMode: CompManager"
                 ";  hscTarget: HscInterpreted"
                 ";  objectDir: Nothing"
-                ";  thisInstalledUnitId: main"]))
+                ";  thisInstalledUnitId: main"
+                ";  forceRecomp: False"]))
           (ok '(begin
                 (repl-macro set -odir /tmp)
                 (repl-macro show dflags))
@@ -138,7 +139,8 @@
                 ";  ghcMode: CompManager"
                 ";  hscTarget: HscInterpreted"
                 ";  objectDir: Just \"/tmp\""
-                ";  thisInstalledUnitId: main"]))
+                ";  thisInstalledUnitId: main"
+                ";  forceRecomp: False"]))
           (satisfy
            '(repl-macro show macros)
            (\ ret

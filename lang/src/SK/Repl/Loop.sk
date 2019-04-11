@@ -24,7 +24,9 @@
    (System.Directory (getTemporaryDirectory removeFile))
 
    ;; ghc
-   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..)))
+   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..)
+              gopt-set gopt-unset interpWays targetPlatform updateWays
+              wayGeneralFlags wayUnsetGeneralFlags))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (ghandle))
    (GHC (getPrintUnqual setSessionDynFlags))
@@ -227,18 +229,27 @@ reading the input until successful parse result."
   "Loop to evaluate expressions."
   [hdl in-mvar]
   (let ((= initialize
-          ;; Default target in interactive context is `HscAsm', updating
-          ;; to `HscInterpreted'.  Also, `dynamic' option is enabled in
-          ;; REPL, since `sk' executable is compiled with `dynamic'
-          ;; option specified in cabal configuration file. And, setting
-          ;; the default verbosity level in REPL to 1.
+          ;; See the `main''' function in `ghc/Main.hs'.  Setting
+          ;; default target in interactive context as `HscInterpreted',
+          ;; updating to `HscInterpreted', and setting the default
+          ;; verbosity level in REPL to 1.
           (do initSessionForMake
               (<- hsc-env getSession)
               (let ((= dflags0 (ic_dflags (hsc_IC hsc-env)))
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory
-                                         verbosity 1}))))
-              (void (setSessionDynFlags dflags1))
+                                         verbosity 1}))
+                    (= dflags2 (updateWays (dflags1 {ways interpWays})))
+                    (= platform (targetPlatform dflags2))
+                    (= dflags3
+                      (foldl gopt-set dflags2
+                             (concatMap (wayGeneralFlags platform)
+                                        interpWays)))
+                    (= dflags4
+                      (foldl gopt-unset dflags3
+                             (concatMap (wayUnsetGeneralFlags platform)
+                                        interpWays)))))
+              (void (setSessionDynFlags dflags4))
               (set-print-name "Prelude.print")))
         (= withAsyncHandler
           (ghandle

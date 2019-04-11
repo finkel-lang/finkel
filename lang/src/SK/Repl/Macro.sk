@@ -48,14 +48,14 @@
    (FastString ((FastString) fsLit unpackFS))
    (Finder (flushFinderCaches uncacheModule))
    (GHC ((ModuleInfo) findModule getBindings getModSummary getModuleGraph
-         getModuleInfo getPrintUnqual isLoaded lookupName lookupModule
-         modInfoExports setSessionDynFlags setTargets))
+         getModuleInfo getPrintUnqual getTargets isLoaded lookupName
+         lookupModule modInfoExports setSessionDynFlags setTargets))
    (GhcMake ((LoadHowMuch ..)))
    (GhcMonad ((GhcMonad ..) getSessionDynFlags))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-              (ModSummary ..) (ModuleGraph)
+              (ModSummary ..) (ModuleGraph) (Target ..) (TargetId ..)
               emptyInteractiveContext handleFlagWarnings ms_mod_name
-              srcErrorMessages tyThingParent_maybe))
+              pprHPT pprTarget srcErrorMessages tyThingParent_maybe))
    (HsImpExp ((ImportDecl ..) simpleImportDecl))
    (IfaceSyn (showToHeader))
    (InstEnv (pprInstance))
@@ -202,8 +202,8 @@
   [str]
   (where (gbracket getDynFlags setDynFlags work)
     (= work dflags
-      (do (let ((= force-recomp (gopt Opt_ForceRecomp dflags))))
-          (make [(, str Nothing)] False force-recomp Nothing)
+      (do (let ((= force-recomp (gopt Opt-ForceRecomp dflags))))
+          (make [(, str Nothing)] True force-recomp Nothing)
           (return '(begin))))))
 
 (defn (link-module-obj (-> FastString (Skc Code)))
@@ -338,10 +338,8 @@
       (unlines (: "; context" (map (context-string dflags) context))))
     (= context-string dflags ctx
       (case ctx
-        (IIDecl decl)
-        (++ ";  IIDecl: " (showSDoc dflags (ppr decl)))
-        (IIModule mname)
-        (++ ";  IIModule: " (moduleNameString mname))))))
+        (IIDecl d) (++ ";  IIDecl: " (showSDoc dflags (ppr d)))
+        (IIModule m) (++ ";  IIModule: " (moduleNameString m))))))
 
 (defn (show-dflags (Skc Code))
   (do (<- dflags getDynFlags)
@@ -352,13 +350,21 @@
                (++ ";  hscTarget: " (show (hscTarget dflags)))
                (++ ";  objectDir: " (show (objectDir dflags)))
                (++ ";  thisInstalledUnitId: "
-                   (showPpr dflags (thisInstalledUnitId dflags)))])
+                   (showPpr dflags (thisInstalledUnitId dflags)))
+               (++ ";  forceRecomp: "
+                   (show (gopt Opt-ForceRecomp dflags)))])
             (= showGhcMode m
               (case m
                 CompManager "CompManager"
                 OneShot     "OneShot"
                 MkDepend    "MkDepend"))))
       (return `(putStr ,(unlines ss)))))
+
+(defn (show-hpt (Skc Code))
+  "Show home package table."
+  (do (<- hsc-env getSession)
+      (<- str (show-sdoc-for-user-m (pprHPT (hsc-HPT hsc-env))))
+      (return `(putStrLn ,str))))
 
 ;;; Mostly taken from `GHCi.UI.showLanguages''.
 (defn (show-language (-> Bool (Skc Code)))
@@ -480,6 +486,14 @@
                      [";    none"]
                      (map (++ ";    ") ipaths))])))))
       (return `(putStr ,result))))
+
+(defn (show-targets (Skc Code))
+  (do (<- hsc-env getSession)
+      (<- strs (mapM (. show-sdoc-for-user-m pprTarget)
+                     (hsc-targets hsc-env)))
+      (let ((= ts (| ((null strs) "none")
+                     (otherwise (unwords strs))))))
+      (return `(putStrLn (++ ";; targets: " ,ts)))))
 
 
 ;;; REPL commands
@@ -684,11 +698,12 @@ paths from import directories."
               (<- _ (GhcMake.load LoadAllTargets))
               (<- hsc-env getSession)
               (let ((= graph1 (graph-to-summaries graph0))
-                    (= uncache
-                      (. (uncacheModule hsc-env) ms_mod_name))))
+                    (= uncache (. (uncacheModule hsc-env) ms_mod_name))))
               (liftIO (do (mapM_ uncache graph1)
                           (flushFinderCaches hsc-env)))
-              (setSession (discardIC hsc-env)))))
+              (setSession (discardIC hsc-env))))
+        (= make-target path
+          (Target (TargetFile path Nothing) True Nothing)))
     (case forms
       [form] (maybe
               (skSrcError form (++ "load: not a FilePath: "
@@ -699,7 +714,9 @@ paths from import directories."
                     clear-all
                     ;; Find the source file path and compile, load, and
                     ;; link the module.
-                    (env-context-on-exception (compile-and-import path))
+                    (env-context-on-exception
+                     (do (<- _ (setTargets [(make-target path)]))
+                         (compile-and-import path)))
                     (return '(begin))))
               (code-to-mb-string form))
       _      (skSrcError (located-list forms)
@@ -710,6 +727,22 @@ paths from import directories."
   [_forms]
   (do (<- dir (liftIO getCurrentDirectory))
       (return `,dir)))
+
+(defn (reload-cmd ReplAction)
+  "Function to reload previously loaded module."
+  [_forms]
+  (do (<- targets getTargets)
+      (case targets
+        (: (Target (TargetFile path _) _ _) _)
+        ;; Unloading before compilation, to re-link the compiled
+        ;; modules.
+        (do (<- ctx getContext)
+            (<- hsc-env getSession)
+            (liftIO (unload hsc-env []))
+            (<- _ (compile-module path))
+            (setContext ctx)
+            (return `(putStrLn (++ "; reloaded " ,path))))
+        _ (return '(putStrLn "; reload: invalid target")))))
 
 (defn (set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
@@ -750,6 +783,7 @@ paths from import directories."
       [(, "bindings" show-bindings)
        (, "context" show-context)
        (, "dflags" show-dflags)
+       (, "hpt" show-hpt)
        (, "language" (show-language False))
        (, "linker" show-linker)
        (, "macros" show-macros)
@@ -757,7 +791,8 @@ paths from import directories."
        (, "options" (show-options False))
        (, "options!" (show-options True))
        (, "packages" show-packages)
-       (, "paths" show-paths)])))
+       (, "paths" show-paths)
+       (, "targets" show-targets)])))
 
 ;; From `GHCi.UI.typeOfExpr'.
 (defn (type-cmd ReplAction)
@@ -802,6 +837,8 @@ paths from import directories."
         "compile and load FILE")
      (c "pwd" Nothing pwd-cmd
         "show working directory")
+     (c "reload" Nothing reload-cmd
+        "reload previous module")
      (c "set" (Just ["FLAGS" "..."]) set-cmd
         "parse and set FLAGS")
      (c "show" (Just ["ARG"]) show-cmd
