@@ -35,7 +35,7 @@ import GHC ( ModuleInfo, getModuleInfo, lookupModule, lookupName
            , modInfoExports, setContext )
 import GhcMonad (GhcMonad(..))
 import HscMain (Messager, hscTcRnLookupRdrName, showModuleIndex)
-import HscTypes ( InteractiveImport(..), HscEnv(..), FindResult(..)
+import HscTypes ( FindResult(..), HscEnv(..), InteractiveImport(..)
                 , showModMsg )
 import HsImpExp (ImportDecl(..), ieName)
 import HsSyn (HsModule(..))
@@ -299,6 +299,7 @@ m_require form =
               recomp = gopt Opt_ForceRecomp dflags
               mname = unLoc (ideclName idecl)
               mname' = moduleNameString mname
+
           debugSkc (";;; require: " ++ showPpr dflags idecl)
 
           -- Try finding the required module. Delegate the work to
@@ -413,7 +414,7 @@ setRequiredSettings :: Skc ()
 setRequiredSettings = do
   skenv <- getSkEnv
   case envMakeDynFlags skenv of
-    Just dflags -> setDynFlags dflags {ghcLink = NoLink}
+    Just dflags -> setDynFlags dflags {ghcLink = LinkInMemory}
     Nothing     -> failS "setRequiredSettings: missing DynFlags"
   putSkEnv skenv {envMessager = requiredMessager}
 
