@@ -133,8 +133,6 @@ mkModSummary' mbfile modName imports mb_pm = do
         (dflags1,_,_) <- liftIO (parseDynamicFilePragma dflags0 opts)
         return dflags1
       else return dflags0
-  -- XXX: Have not tested with complex module importing modules from
-  -- non-standard packages.
   return ModSummary { ms_mod = mmod
                     , ms_hsc_src = HsSrcFile
                     , ms_location = mloc
