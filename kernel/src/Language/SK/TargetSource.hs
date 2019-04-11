@@ -30,9 +30,9 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import System.Directory (doesFileExist)
 
 -- filepath
-import System.FilePath ( dropExtension, pathSeparator
-                       , replaceExtension , splitPath
-                       , takeExtension, (<.>), (</>))
+import System.FilePath ( dropExtension, normalise, pathSeparator
+                       , replaceExtension , splitPath, takeExtension
+                       , (<.>), (</>))
 
 -- ghc
 import DynFlags (DynFlags(..), HasDynFlags(..))
@@ -136,7 +136,7 @@ findFileInImportPaths dirs modName = do
           d:ds' -> do
             -- Extension not yet sure for `aPath', so searching both of
             -- '.sk' and '.hs' files.
-            let aPath = d </> moduleFileName'
+            let aPath = normalise (d </> moduleFileName')
                 hsPath = replaceExtension aPath ".hs"
             exists <- liftIO (doesFileExist aPath)
             if exists
