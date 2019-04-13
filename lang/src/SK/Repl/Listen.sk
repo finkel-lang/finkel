@@ -77,7 +77,7 @@
               (do (<- contents (BS.hGetSome hdl 65535))
                   (when (not (BS.null contents))
                     (do (when (BS.any (. not isSpace) contents)
-                          (case (evalSP sexpr (Just "<repl>")
+                          (case (evalSP sexpr (Just "<interactive>")
                                         (C8.fromStrict contents))
                             (Right form) (put-input form)
                             (Left err) (putStrLn err)))

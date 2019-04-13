@@ -218,7 +218,7 @@ reading the input until successful parse result."
               (do (put-repl-state (st {input-count count
                                        pending-input pending}))
                   (return ret)))))
-      (case (evalSP sexpr (Just "<repl>") (BS.concat input1))
+      (case (evalSP sexpr (Just "<interactive>") (BS.concat input1))
         (Right forms) (put-and-return [] (Just forms))
         (Left _err)   (put-and-return input1 Nothing))))
 
