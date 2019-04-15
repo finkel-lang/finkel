@@ -28,7 +28,6 @@ import qualified Language.SK.Expand as Expand
 import qualified Language.SK.Lexer as Lexer
 import qualified Language.SK.Make as Make
 import qualified Language.SK.Reader as Reader
-import qualified Language.SK.Run as Run
 import qualified Language.SK.SKC as SKC
 import qualified Language.SK.Syntax as Syntax
 
@@ -61,7 +60,7 @@ usage =
        ,"  make   - compile given files to object code"])
 
 printExpandedForms :: FilePath -> IO ()
-printExpandedForms path = Run.runSkc go Make.defaultSkEnv
+printExpandedForms path = SKC.runSkc go Make.defaultSkEnv
   where
     go = do
       Make.initSessionForMake
@@ -93,7 +92,7 @@ pprSkModule =
           liftIO (printForUser dflags stdout neverQualify (ppr m)))
 
 pprHsModule :: FilePath -> IO ()
-pprHsModule path = Run.runSkc go Make.defaultSkEnv
+pprHsModule path = SKC.runSkc go Make.defaultSkEnv
   where
     go =
       do Make.initSessionForMake
@@ -122,7 +121,7 @@ printHsrc =
 
 parseSkModuleWith ::
   (Builder.HModule -> Lexer.SPState -> SKC.Skc ()) -> FilePath -> IO ()
-parseSkModuleWith act path = Run.runSkc go Make.defaultSkEnv
+parseSkModuleWith act path = SKC.runSkc go Make.defaultSkEnv
   where
     go =
      do Make.initSessionForMake
@@ -158,4 +157,4 @@ doMake files =
   do let act = do
            Make.initSessionForMake
            Make.make (zip files (repeat Nothing)) False False Nothing
-     Run.runSkc act Make.defaultSkEnv
+     SKC.runSkc act Make.defaultSkEnv

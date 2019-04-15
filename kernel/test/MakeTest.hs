@@ -27,7 +27,6 @@ import Test.Hspec
 -- sk-kernel
 import Language.SK.Lexer
 import Language.SK.Make
-import Language.SK.Run
 import Language.SK.SKC
 import Language.SK.TargetSource
 

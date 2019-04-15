@@ -21,11 +21,10 @@ import Language.SK.Eval (evalExpr, evalExprType, evalTypeKind)
 import Language.SK.Form (Code)
 import Language.SK.Lexer (evalSP)
 import Language.SK.Expand (expands, withExpanderSettings)
-import Language.SK.Make (initSessionForMake, defaultSkEnv)
+import Language.SK.Make (buildHsSyn, initSessionForMake, defaultSkEnv)
 import Language.SK.Reader (sexprs)
-import Language.SK.Run (buildHsSyn, runSkc)
-import Language.SK.SKC ( Skc, SkEnv(..), failS, setContextModules
-                       , setDynFlags )
+import Language.SK.SKC ( Skc, SkEnv(..), failS, runSkc
+                       , setContextModules, setDynFlags )
 import Language.SK.Syntax (parseExpr, parseType)
 
 -- Test internal

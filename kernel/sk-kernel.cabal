@@ -1,3 +1,4 @@
+cabal-version:       2.0
 name:                sk-kernel
 version:             0.25.0.0
 synopsis:            SK language kernel and compiler
@@ -20,7 +21,6 @@ extra-source-files:  README.md
                      test/data/build/p01/src/P01/*.hs
                      test/data/build/p01/src/P01/*.sk
                      test/data/build/p01/test/*.hs
-cabal-version:       2.0
 
 tested-with:           GHC == 8.2.2
                      , GHC == 8.4.4
@@ -45,7 +45,6 @@ library
                        Language.SK.Make
                        Language.SK.Main
                        Language.SK.Reader
-                       Language.SK.Run
                        Language.SK.SKC
                        Language.SK.Syntax
                        Language.SK.TargetSource

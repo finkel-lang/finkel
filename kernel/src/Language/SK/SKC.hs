@@ -7,6 +7,7 @@ module Language.SK.SKC
   , SkEnvRef(..)
   , Macro(..)
   , EnvMacros
+  , runSkc
   , debugSkc
   , toGhc
   , fromGhc
@@ -38,6 +39,7 @@ module Language.SK.SKC
   , deleteMacro
   , macroNames
   , isMacro
+  , macroFunction
   , gensym
   , gensym'
   ) where
@@ -47,7 +49,8 @@ import Control.Exception (Exception(..), throwIO)
 import Control.Monad (when)
 import Control.Monad.Fail (MonadFail(..))
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.IORef ( IORef, atomicModifyIORef', readIORef, writeIORef )
+import Data.IORef ( IORef, atomicModifyIORef', newIORef, readIORef
+                  , writeIORef )
 import System.Environment (lookupEnv)
 import System.IO (hPutStrLn, stderr)
 
@@ -65,6 +68,7 @@ import DynFlags ( DynFlags(..), HasDynFlags(..), Language(..)
 import FastString (FastString, fsLit, unpackFS)
 import ErrUtils (mkErrMsg)
 import Exception (ExceptionMonad(..), ghandle)
+import GHC (runGhc)
 import GhcMonad ( Ghc(..), GhcMonad(..), getSessionDynFlags
                 , modifySession )
 import HsImpExp (simpleImportDecl)
@@ -256,6 +260,12 @@ instance GhcMonad Skc where
   setSession hsc_env = Skc (\_ -> setSession hsc_env)
   {-# INLINE setSession #-}
 
+-- | Run 'Skc' with given environment.
+runSkc :: Skc a -> SkEnv -> IO a
+runSkc m sk_env = do
+  ref <- newIORef sk_env
+  runGhc (envLibDir sk_env) (toGhc m (SkEnvRef ref))
+
 -- | Extract 'Ghc' from 'Skc'.
 toGhc :: Skc a -> SkEnvRef -> Ghc a
 toGhc = unSkc
@@ -396,6 +406,15 @@ isMacro thing =
                                 (ppr (varType var))
                 == "Language.SK.SKC.Macro"
     _        -> False
+
+-- | Extract function from macro and apply to given code. Uses
+-- 'emptySkEnv' with 'specialForms' to unwrap the macro from 'Skc'.
+macroFunction :: Macro -> Code -> Skc Code
+macroFunction mac form =
+  let fn = case mac of
+             Macro f       -> f
+             SpecialForm f -> f
+  in  fn form
 
 -- | Generate unique symbol with @gensym'@.
 gensym :: Skc Code

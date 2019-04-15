@@ -45,7 +45,6 @@ import qualified GHC.Paths
 -- internal
 import Language.SK.Make
 import Language.SK.SKC
-import Language.SK.Run
 import Language.SK.TargetSource
 import qualified Paths_sk_kernel
 

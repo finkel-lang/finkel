@@ -29,7 +29,6 @@ import Language.SK.Builder (HModule)
 import Language.SK.Emit
 import Language.SK.Lexer
 import Language.SK.Make
-import Language.SK.Run
 import Language.SK.SKC
 
 -- Internal

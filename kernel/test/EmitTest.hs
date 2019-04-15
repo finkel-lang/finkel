@@ -12,7 +12,7 @@ import Test.Hspec
 import Language.SK.Emit
 import Language.SK.Lexer
 import Language.SK.Make
-import Language.SK.Run
+import Language.SK.SKC
 
 emitTests :: Spec
 emitTests = do

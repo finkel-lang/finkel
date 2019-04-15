@@ -67,8 +67,7 @@
    (Language.SK.Lexer (evalSP))
    (Language.SK.Make (initSessionForMake))
    (Language.SK.Reader (sexpr))
-   (Language.SK.Run (runSkc))
-   (Language.SK.SKC ((SkEnv ..) failS))
+   (Language.SK.SKC ((SkEnv ..) failS runSkc))
    (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
 
    ;; internal

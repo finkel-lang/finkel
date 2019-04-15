@@ -17,7 +17,7 @@
 
    ;; sk-kernel
    (Language.SK)
-   (Language.SK.Run)
+   (Language.SK.SKC (runSkc))
 
    ;; sk-lang
    (SK.Repl (repl-env))

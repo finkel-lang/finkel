@@ -35,7 +35,6 @@ import Language.SK.Homoiconic
 import Language.SK.Lexer
 import Language.SK.Make
 import Language.SK.Reader
-import Language.SK.Run
 import Language.SK.SKC
 import Language.SK.Syntax
 
@@ -128,9 +127,6 @@ exceptionTest = do
           build = do (form', _) <- parseSexprs Nothing (BL.pack form)
                      buildHsSyn parseDecls form'
       run build `shouldThrow` sel
-
-subseq :: Eq a => [a] -> [a] -> Bool
-subseq xs ys = any (isPrefixOf xs) (tails ys)
 
 fromGhcTest :: Spec
 fromGhcTest =
