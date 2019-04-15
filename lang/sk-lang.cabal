@@ -1,5 +1,5 @@
 name:                sk-lang
-version:             0.13.0.0
+version:             0.14.0.0
 synopsis:            SK language core
 description:         SK language core functions and macros, with
                      executable for compiling and running REPL.
