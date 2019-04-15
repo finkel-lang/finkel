@@ -18,9 +18,9 @@ import Data.Maybe (fromMaybe, maybeToList)
 import qualified Data.Map as Map
 
 -- ghc
-import DynFlags ( DynFlags(..), parseDynamicFilePragma, thisPackage )
+import DynFlags ( DynFlags(..), isObjectTarget, parseDynamicFilePragma
+                , thisPackage )
 import DriverPhases (HscSource(..))
-import Exception (tryIO)
 import FastString (fsLit)
 import Finder (mkHomeModLocation)
 import GHC (runGhc)
@@ -31,7 +31,7 @@ import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
 import Module (ModLocation(..), ModuleName, mkModule, mkModuleName)
 import SrcLoc (GenLocated(..), Located, mkSrcLoc, mkSrcSpan, unLoc)
-import Util (getModificationUTCTime)
+import Util (getModificationUTCTime, modificationTimeIfExists)
 
 -- time
 import Data.Time (getCurrentTime)
@@ -41,9 +41,10 @@ import Language.SK.Builder ( Builder, HModule, SyntaxError(..)
                            , evalBuilder )
 import Language.SK.Expand
 import Language.SK.Form
+import Language.SK.Lexer
 import Language.SK.SKC
 import Language.SK.Syntax
-import Language.SK.Lexer
+import Language.SK.TargetSource
 
 
 -- | Run 'Skc' with given environment.
@@ -117,17 +118,16 @@ mkModSummary' mbfile modName imports mb_pm = do
       unitId = thisPackage dflags0
       mmod = mkModule unitId modName
       imported = map (\x -> (Nothing, x)) imports
-      tryGetTimeStamp x = liftIO (tryIO (getModificationUTCTime x))
+      tryGetObjectDate path =
+        if isObjectTarget (hscTarget dflags0)
+           then modificationTimeIfExists path
+           else return Nothing
   mloc <- liftIO (mkHomeModLocation dflags0 modName fn)
-  hs_date <-
-    liftIO (maybe getCurrentTime getModificationUTCTime mbfile)
-  e_obj_date <- tryGetTimeStamp (ml_obj_file mloc)
-  e_hi_date <- tryGetTimeStamp (ml_hi_file mloc)
-  let e2mb e = case e of Right a -> Just a; _ -> Nothing
-      obj_date = e2mb e_obj_date
-      iface_date = e2mb e_hi_date
+  hs_date <- liftIO (maybe getCurrentTime getModificationUTCTime mbfile)
+  obj_date <- liftIO (tryGetObjectDate (ml_obj_file mloc))
+  iface_date <- liftIO (modificationTimeIfExists (ml_hi_file mloc))
   dflags1 <-
-    if isHsSource fn
+    if isHsFile fn
       then do
         opts <- liftIO (getOptionsFromFile dflags0 fn)
         (dflags1,_,_) <- liftIO (parseDynamicFilePragma dflags0 opts)
@@ -145,8 +145,3 @@ mkModSummary' mbfile modName imports mb_pm = do
                     , ms_hspp_file = fn
                     , ms_hspp_opts = dflags1
                     , ms_hspp_buf = Nothing }
-
-isHsSource :: FilePath -> Bool
-isHsSource path = "hs" == suffix
-  where
-    suffix = reverse (takeWhile (/= '.') (reverse path))

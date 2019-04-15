@@ -37,11 +37,11 @@
 
    ;; ghc
    (BasicTypes ((StringLiteral ..)))
-   (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..)
+   (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..) (HscTarget ..)
               (Language ..) (PackageFlag ..) (GeneralFlag ..)
               defaultDynFlags fFlags flagSpecFlag flagSpecName gopt
-              lang_set parseDynamicFlagsCmdLine thisPackage xFlags xopt
-              wopt wWarningFlags))
+              isObjectTarget lang_set parseDynamicFlagsCmdLine thisPackage
+              xFlags xopt wopt wWarningFlags))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (gcatch gbracket))
    (FamInstEnv (pprFamInst))
@@ -231,9 +231,32 @@
       (<- mdl (getModSummary mname2))
       (<- is-interp (moduleIsInterpreted (ms-mod mdl)))
       (let ((= me (| (is-interp (IIModule mname2))
-                     (otherwise (mk-ii mname1))))))
+                     (otherwise (IIDecl (simpleImportDecl mname2)))))))
       (setContext (: me imps0))
       (return '(begin))))
+
+(defn (adjust-current-target
+       (-> FilePath [InteractiveImport] (Skc [InteractiveImport])))
+  "Adjust current IIModule target to IIDecl if current HscTarget is
+object code."
+  [path imports]
+  (do (<- dflags getDynFlags)
+      (let ((= current-module-name (mkModuleName (asModuleName path)))
+            (= iimodule-to-iidecl ii
+              (case ii
+                (IIModule mname) (| ((== mname current-module-name)
+                                     (IIDecl (simpleImportDecl mname))))
+                _                ii))
+            (= iidecl-to-iimodule ii
+              (case ii
+                (IIDecl idecl) (| ((== (unLoc (ideclName idecl))
+                                       current-module-name)
+                                   (IIModule current-module-name)))
+                _              ii))
+            (= ii-fn (if (isObjectTarget (hscTarget dflags))
+                         iimodule-to-iidecl
+                         iidecl-to-iimodule))))
+      (return (map ii-fn imports))))
 
 (defn (env-context-on-exception (-> (Skc a) (Skc ())))
   [action]
@@ -690,8 +713,8 @@ paths from import directories."
                     (= old-name (ic-name old-ic)))))
             (hsc-env {hsc_IC (empty-ic {ic_monad new-ic-monad})})))
         (= clear-all
-          ;; Cleare various states: resume, finder cache, targets,
-          ;; interactive context ... etc.
+          ;; Cleare various states: finder cache, targets, interactive
+          ;; context ... etc.
           (do (<- graph0 getModuleGraph)
               (<- _ abandonAll)
               (<- _ (setTargets []))
@@ -703,20 +726,24 @@ paths from import directories."
                           (flushFinderCaches hsc-env)))
               (setSession (discardIC hsc-env))))
         (= make-target path
-          (Target (TargetFile path Nothing) True Nothing)))
+          (do (<- hsc-target (fmap hscTarget getDynFlags))
+              (let ((= allow-obj (not (== hsc-target HscInterpreted)))
+                    (= tfile (TargetFile path Nothing))))
+              (return (Target tfile allow-obj Nothing)))))
+
     (case forms
       [form] (maybe
               (skSrcError form (++ "load: not a FilePath: "
                                    (show form)))
               (\ path
-                (do (liftIO (putStrLn (++ "; load: " path)))
-                    ;; Clear current state first.
-                    clear-all
-                    ;; Find the source file path and compile, load, and
-                    ;; link the module.
+                ;; Clear current state first. Then find the source file
+                ;; path and compile, load, and link.
+                (do clear-all
                     (env-context-on-exception
-                     (do (<- _ (setTargets [(make-target path)]))
+                     (do (<- target (make-target path))
+                         (<- _ (setTargets [target]))
                          (compile-and-import path)))
+                    (liftIO (putStrLn (++ "; loaded " path)))
                     (return '(begin))))
               (code-to-mb-string form))
       _      (skSrcError (located-list forms)
@@ -736,11 +763,12 @@ paths from import directories."
         (: (Target (TargetFile path _) _ _) _)
         ;; Unloading before compilation, to re-link the compiled
         ;; modules.
-        (do (<- ctx getContext)
+        (do (<- ctx0 getContext)
             (<- hsc-env getSession)
             (liftIO (unload hsc-env []))
             (<- _ (compile-module path))
-            (setContext ctx)
+            (<- ctx1 (adjust-current-target path ctx0))
+            (setContext ctx1)
             (return `(putStrLn (++ "; reloaded " ,path))))
         _ (return '(putStrLn "; reload: invalid target")))))
 
