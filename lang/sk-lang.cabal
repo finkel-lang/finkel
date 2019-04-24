@@ -1,3 +1,4 @@
+cabal-version:       2.0
 name:                sk-lang
 version:             0.14.0.0
 synopsis:            SK language core
@@ -16,11 +17,10 @@ extra-source-files:  README.md
                      src/SK/Core/*.sk
                      src/SK/Repl/*.sk
                      test/*.sk
-cabal-version:       2.0
 
 tested-with:           GHC == 8.2.2
                      , GHC == 8.4.3
-                     , GHC == 8.6.2
+                     , GHC == 8.6.4
 
 custom-setup
   setup-depends:       base      >= 4.7 && < 5
