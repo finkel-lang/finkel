@@ -2,7 +2,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Repl.Listen
+(defmodule SK.Tool.Repl.Listen
   (use
    ;; base
    (Control.Concurrent
@@ -30,7 +30,7 @@
    (Language.SK.Reader (sexpr))
 
    ;; internal
-   (SK.Repl.Types))
+   (SK.Tool.Repl.Types))
 
   (export listener accept-loop run-conn))
 

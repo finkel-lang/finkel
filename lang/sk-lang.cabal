@@ -2,8 +2,7 @@ cabal-version:       2.0
 name:                sk-lang
 version:             0.14.0.0
 synopsis:            SK language core
-description:         SK language core functions and macros, with
-                     executable for compiling and running REPL.
+description:         SK language core macros and functions.
 homepage:            https://github.com/githubuser/sk-lang#readme
 license:             BSD3
 license-file:        LICENSE
@@ -15,7 +14,6 @@ build-type:          Custom
 extra-source-files:  README.md
                      src/SK/*.sk
                      src/SK/Core/*.sk
-                     src/SK/Repl/*.sk
                      test/*.sk
 
 tested-with:           GHC == 8.2.2
@@ -23,9 +21,9 @@ tested-with:           GHC == 8.2.2
                      , GHC == 8.6.4
 
 custom-setup
-  setup-depends:       base      >= 4.7 && < 5
-                     , Cabal     >= 2.0
-                     , sk-kernel >= 0.22
+  setup-depends:       base     >= 4.7 && < 5
+                     , Cabal    >= 2.0
+                     , sk-setup >= 0.1
 
 library
   hs-source-dirs:      src
@@ -33,35 +31,13 @@ library
                        SK.Core.List
                        SK.Core
                        SK.Prelude
-                       SK.Repl.Types
-                       SK.Repl.IO
-                       SK.Repl.Listen
-                       SK.Repl.Loop
-                       SK.Repl.Macro
-                       SK.Repl
-                       SK.Version
-                       SK.Main
-                       SK.Setup
   autogen-modules:     Paths_sk_lang
   reexported-modules:  Language.SK
   build-depends:       base         >= 4.7 && < 5
-                     , bytestring
-                     , directory
-                     , haskeline
                      , ghc
-                     , ghc-boot
-                     , ghci
-                     , network
-                     , process
-                     , transformers
-                     , sk-kernel    >= 0.19.0
+                     , sk-kernel    >= 0.26.0
   default-language:    Haskell2010
   ghc-options:       -Wall
-
-flag dynamic
-  description:         Dynamically link executables
-  default:             True
-  manual:              False
 
 test-suite sk-lang-test
   type:                exitcode-stdio-1.0
@@ -74,22 +50,9 @@ test-suite sk-lang-test
                      , hspec
                      , sk-lang
                      , sk-kernel
-  if flag(dynamic)
-    ghc-options:       -dynamic
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       Orphan
                        CoreTest
-                       ReplTest
-  default-language:    Haskell2010
-
-executable sk
-  hs-source-dirs:      exec
-  main-is:             sk.hs
-  if flag(dynamic)
-    ghc-options:       -dynamic
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base >= 4.10 && < 5
-                     , sk-lang
   default-language:    Haskell2010
 
 source-repository head

@@ -1,7 +1,8 @@
+cabal-version:       2.0
 name:                p01
 version:             0.1.0.0
--- synopsis:
--- description:
+synopsis:            Test package
+description:         Test package
 homepage:            https://github.com/githubuser/p01#readme
 license:             BSD3
 license-file:        LICENSE
@@ -11,12 +12,11 @@ copyright:           2017 Author name here
 category:            Test
 build-type:          Custom
 extra-source-files:  src/P01/*.sk
-cabal-version:       >=1.10
 
 custom-setup
   setup-depends:       base >= 4.7 && < 5
                      , Cabal >= 1.10
-                     , sk-kernel
+                     , sk-setup
 
 library
   hs-source-dirs:      src
@@ -35,6 +35,7 @@ library
   autogen-modules:     Paths_p01
   build-depends:       base >= 4.7 && < 5
                      , sk-kernel
+  build-tool-depends:  sk-kernel:skkc
   default-language:    Haskell2010
 
 test-suite p01-test

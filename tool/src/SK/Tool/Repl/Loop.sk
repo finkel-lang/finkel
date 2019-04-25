@@ -2,7 +2,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Repl.Loop
+(defmodule SK.Tool.Repl.Loop
   (use
    ;; base
    (Control.Concurrent ((ThreadId) forkIO killThread))
@@ -71,9 +71,9 @@
    (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
 
    ;; internal
-   (SK.Repl.IO)
-   (SK.Repl.Listen)
-   (SK.Repl.Types))
+   (SK.Tool.Repl.IO)
+   (SK.Tool.Repl.Listen)
+   (SK.Tool.Repl.Types))
 
   (export read-form eval-loop read-print-loop init-form start-repl
           make-tmpfile cleanup-tmpfile))

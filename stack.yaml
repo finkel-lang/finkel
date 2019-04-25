@@ -39,8 +39,10 @@ resolver: lts-13.18
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - kernel/
-- kernel/test/data/build/p01
+- setup/
+- setup/test/data/p01
 - lang/
+- tool/
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)

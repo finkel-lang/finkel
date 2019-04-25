@@ -2,7 +2,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Main
+(defmodule SK.Tool.Main
   (load
    ;; base
    (Prelude)
@@ -10,7 +10,7 @@
    ;; sk-kernel
    (Language.SK)
 
-   ;; internal
+   ;; sk-lang
    (SK.Prelude))
   (use
    ;; base
@@ -22,10 +22,12 @@
    ;; sk-kernel
    (Language.SK.Main (defaultMainWith))
 
-   ;; Internal
+   ;; sk-lang
    (SK.Prelude)
-   (SK.Repl)
-   (SK.Version))
+
+   ;; Internal
+   (SK.Tool.Repl)
+   (SK.Tool.Version))
   (export main))
 
 

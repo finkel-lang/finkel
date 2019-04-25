@@ -20,9 +20,9 @@
    (Language.SK.SKC (runSkc))
 
    ;; sk-lang
-   (SK.Repl (repl-env))
-   (SK.Repl.Loop)
-   (SK.Repl.Types))
+   (SK.Tool.Repl (repl-env))
+   (SK.Tool.Repl.Loop)
+   (SK.Tool.Repl.Types))
 
   (export replTests))
 

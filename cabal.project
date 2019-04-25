@@ -1,7 +1,9 @@
 packages:
   kernel/
-  kernel/test/data/build/p01/
+  setup/
+  setup/test/data/p01/
   lang/
+  tool/
 
 tests: True
 benchmarks: True

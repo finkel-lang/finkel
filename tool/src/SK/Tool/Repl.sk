@@ -8,7 +8,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Repl
+(defmodule SK.Tool.Repl
   (load
    ;; base
    (Prelude)
@@ -17,7 +17,7 @@
    (Language.SK)
 
    ;; internal
-   (SK.Repl.Macro))
+   (SK.Tool.Repl.Macro))
   (use
    ;; base
    (Control.Monad (mplus))
@@ -31,10 +31,12 @@
    (Language.SK.Make (defaultSkEnv))
    (Language.SK.SKC ((SkEnv ..) (EnvMacros) makeEnvMacros mergeMacros))
 
-   ;; internal
+   ;; sk-lang
    (SK.Core)
-   (SK.Repl.Macro)
-   (SK.Repl.Loop))
+
+   ;; Internal
+   (SK.Tool.Repl.Macro)
+   (SK.Tool.Repl.Loop))
   (export replMain
           repl-env))
 
@@ -121,6 +123,6 @@
 (macrolet ((the-macros ()
              `[,@(map (\ mac `(, ,mac ,(qSymbol mac)))
                       (++ (exported-macros SK.Core)
-                          (exported-macros SK.Repl.Macro)))]))
+                          (exported-macros SK.Tool.Repl.Macro)))]))
   (defn (replMacros EnvMacros)
     (makeEnvMacros (the-macros))))

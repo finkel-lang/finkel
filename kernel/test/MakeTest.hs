@@ -11,7 +11,6 @@ import Data.List (intercalate, isPrefixOf, tails)
 import System.Directory (getDirectoryContents, removeFile)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeExtension)
-import System.Process (rawSystem)
 
 -- ghc
 import DynFlags ( DynFlags(..), GhcLink(..), Way(..), interpWays
@@ -42,7 +41,6 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildSk ["main4.sk"]
   buildSk ["main5.sk"]
   buildC ["cbits1.c"]
-  buildPackage "p01"
 
 showTargetTest :: Spec
 showTargetTest = do
@@ -108,16 +106,3 @@ removeArtifacts dir = do
     removeObjAndHi file =
       when (takeExtension file `elem` [".o", ".hi", ".p_o", ".p_hi"])
            (removeFile (dir </> file))
-
-buildPackage :: String -> Spec
-buildPackage name =
-  describe ("package " ++ name) $
-    it "should compile and pass the tests" $ do
-      _ <- stack ["setup"]
-      _ <- stack ["build", name]
-      exitCode <- stack ["test", name]
-      _ <- stack ["clean", name]
-      exitCode `shouldBe` ExitSuccess
-
-stack :: [String] -> IO ExitCode
-stack args = rawSystem "stack" ("--silent" : args)

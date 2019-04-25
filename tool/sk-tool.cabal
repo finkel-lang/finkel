@@ -1,0 +1,90 @@
+cabal-version:       2.0
+name:                sk-tool
+version:             0.14.0.0
+synopsis:            SK tool
+description:         SK tool
+homepage:            https://github.com/githubuser/sk/sk-tool#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2017, 2018 Author name here
+category:            Language
+build-type:          Custom
+extra-source-files:  README.md
+                     src/SK/Tool/*.sk
+                     src/SK/Tool/Repl/*.sk
+                     test/*.sk
+
+tested-with:           GHC == 8.2.2
+                     , GHC == 8.4.3
+                     , GHC == 8.6.4
+
+custom-setup
+  setup-depends:       base     >= 4.7 && < 5
+                     , Cabal    >= 2.0
+                     , sk-setup >= 0.1
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     SK.Tool.Repl.Types
+                       SK.Tool.Repl.IO
+                       SK.Tool.Repl.Listen
+                       SK.Tool.Repl.Loop
+                       SK.Tool.Repl.Macro
+                       SK.Tool.Repl
+                       SK.Tool.Version
+                       SK.Tool.Main
+                       SK.Setup
+  build-depends:       base         >= 4.7 && < 5
+                     , bytestring
+                     , directory
+                     , haskeline
+                     , ghc
+                     , ghc-boot
+                     , ghci
+                     , network
+                     , process
+                     , transformers
+                     , sk-kernel    >= 0.26
+                     , sk-lang      >= 0.14
+                     , sk-setup     >= 0.1
+  default-language:    Haskell2010
+  ghc-options:       -Wall
+
+flag dynamic
+  description:         Dynamically link executables
+  default:             True
+  manual:              False
+
+test-suite sk-tool-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       QuickCheck
+                     , base
+                     , directory
+                     , ghc
+                     , hspec
+                     , sk-lang
+                     , sk-kernel
+                     , sk-tool
+  if flag(dynamic)
+    ghc-options:       -dynamic
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  other-modules:       ReplTest
+  default-language:    Haskell2010
+
+executable sk
+  hs-source-dirs:      exec
+  main-is:             sk.hs
+  if flag(dynamic)
+    ghc-options:       -dynamic
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base >= 4.10 && < 5
+                     , sk-tool
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/githubuser/sk

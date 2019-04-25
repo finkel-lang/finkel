@@ -4,7 +4,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Repl.Types
+(defmodule SK.Tool.Repl.Types
   (use
    ;; base
    (Control.Concurrent ((MVar)))

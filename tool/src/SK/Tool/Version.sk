@@ -2,7 +2,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Version
+(defmodule SK.Tool.Version
   (use
    ;; base
    (Data.Version (showVersion))
@@ -16,7 +16,7 @@
    ;; sk-kernel
    (qualified Paths_sk_kernel)
 
-   ;; Internal
+   ;; sk-lang
    (qualified Paths_sk_lang))
   (export versionMain))
 

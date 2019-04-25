@@ -8,7 +8,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Repl.Macro
+(defmodule SK.Tool.Repl.Macro
   (load
    ;; base
    (Prelude)
@@ -97,7 +97,7 @@
    (Language.SK.Syntax (parseExpr parseType))
    (Language.SK.TargetSource (asModuleName))
 
-   ;; internal
+   ;; sk-lang
    (SK.Core.List))
 
   (export repl-macro))

@@ -2,7 +2,7 @@
 
 (require SK.Core)
 
-(defmodule SK.Repl.IO
+(defmodule SK.Tool.Repl.IO
   (use
    ;; base
    (Control.Exception)
