@@ -3,24 +3,19 @@ module SkcTest where
 -- base
 import Control.Exception
 import Control.Monad.IO.Class
-import Data.List (isPrefixOf, tails)
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Control.Monad.Fail as MonadFail
 
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
 
--- containers
-import qualified Data.Set as Set
-
 -- ghc-paths
 import GHC.Paths (libdir)
 
 -- ghc
 import FastString (fsLit)
-import GHC (runGhc)
 import Exception (gbracket)
-import HscTypes (SourceError(..))
+import HscTypes (SourceError)
 import SrcLoc (GenLocated(..))
 
 -- hspec
@@ -32,7 +27,6 @@ import Language.SK.Builder
 import Language.SK.Expand
 import Language.SK.Form
 import Language.SK.Homoiconic
-import Language.SK.Lexer
 import Language.SK.Make
 import Language.SK.Reader
 import Language.SK.SKC
@@ -77,7 +71,7 @@ exceptionTest = do
     it "should return 42" $ do
       let act = (*) <$> pure 6 <*> pure 7
       ret <- runSkc act defaultSkEnv
-      ret `shouldBe` 42
+      ret `shouldBe` (42 :: Int)
 
   describe "ExceptionMonad instance of Skc" $
     it "should return 42" $ do
@@ -166,7 +160,7 @@ expandTest = do
   describe "expand-1 of (quote 42.0)" $
     it "should return non-empty form" $ do
       let form = toCode (List [toCode $ aSymbol "quote"
-                              ,toCode $ aFractional 42.0])
+                              ,toCode $ aFractional (42.0 :: Double)])
       ret <- expand1_fn form
       length ret `shouldSatisfy` (>= 1)
   describe "expanding with macroFunction" $

@@ -4,12 +4,20 @@ module TestAux
   ( ifUsingStack
   , initSessionForTest
   , whenUsingStack
+  , removeArtifacts
   , resetPackageEnv
   ) where
 
 -- base
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO(..))
 import System.Environment (lookupEnv)
+
+-- directory
+import System.Directory (getDirectoryContents, removeFile)
+
+-- filepath
+import System.FilePath ((</>), takeExtension)
 
 -- ghc
 import DynFlags (DynFlags(..), HasDynFlags(..))
@@ -52,3 +60,12 @@ initSessionForTest :: Skc ()
 initSessionForTest = do
   whenUsingStack resetPackageEnv
   initSessionForMake
+
+removeArtifacts :: FilePath -> IO ()
+removeArtifacts dir = do
+  contents <- getDirectoryContents dir
+  mapM_ removeObjAndHi contents
+  where
+    removeObjAndHi file =
+      when (takeExtension file `elem` [".o", ".hi", ".p_o", ".p_hi"])
+           (removeFile (dir </> file))

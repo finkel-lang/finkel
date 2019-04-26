@@ -7,7 +7,7 @@ import Unsafe.Coerce
 import qualified Data.ByteString.Lazy.Char8 as BL
 
 -- ghc
-import DynFlags (DynFlags(..), HasDynFlags(..))
+import DynFlags (HasDynFlags(..))
 import GHC (getPrintUnqual)
 import Outputable (showSDocForUser)
 import PprTyThing (pprTypeForUser)
@@ -18,13 +18,11 @@ import Test.Hspec
 -- sk-kernel
 import Language.SK.Builder (Builder)
 import Language.SK.Eval (evalExpr, evalExprType, evalTypeKind)
-import Language.SK.Form (Code)
 import Language.SK.Lexer (evalSP)
 import Language.SK.Expand (expands, withExpanderSettings)
-import Language.SK.Make (buildHsSyn, initSessionForMake, defaultSkEnv)
+import Language.SK.Make (buildHsSyn, defaultSkEnv)
 import Language.SK.Reader (sexprs)
-import Language.SK.SKC ( Skc, SkEnv(..), failS, runSkc
-                       , setContextModules, setDynFlags )
+import Language.SK.SKC ( Skc, SkEnv(..), failS, runSkc )
 import Language.SK.Syntax (parseExpr, parseType)
 
 -- Test internal
@@ -41,7 +39,6 @@ exprTest file =
   describe file $
     it "should evaluate to True" $ do
       contents <- BL.readFile file
-      let modules = ["Prelude", "Language.SK"]
       ret <- evalContents contents
       ret `shouldBe` True
   where
@@ -52,7 +49,7 @@ exprTest file =
       return (unsafeCoerce hval)
 
 exprTypeTest :: Spec
-exprTypeTest = do
+exprTypeTest =
   describe "type of True" $
     it "should be Bool" $ do
       ret <- runEvalType "True"

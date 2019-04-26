@@ -25,15 +25,11 @@ import Test.Hspec
 import System.Process (readProcessWithExitCode)
 
 -- sk-kernel
-import Language.SK.Builder (HModule)
-import Language.SK.Emit
-import Language.SK.Lexer
 import Language.SK.Make
 import Language.SK.SKC
 
 -- Internal
-import TestAux (ifUsingStack, initSessionForTest)
-import MakeTest (removeArtifacts)
+import TestAux
 
 mkTest :: FilePath -> Spec
 mkTest path = do

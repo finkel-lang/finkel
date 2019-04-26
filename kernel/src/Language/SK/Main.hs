@@ -181,7 +181,7 @@ data SkOption = SkOption
   , skHelp :: Bool
   , skHsDir :: Maybe FilePath
   , skVersion :: Bool
-  } deriving (Eq, Show)
+  }
 
 defaultSkOption :: SkOption
 defaultSkOption = SkOption

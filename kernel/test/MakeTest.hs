@@ -1,16 +1,12 @@
 -- | Tests for 'make'.
-
 module MakeTest
   ( makeTests
-  , removeArtifacts
   ) where
 
 -- base
-import Control.Monad (void, when)
-import Data.List (intercalate, isPrefixOf, tails)
-import System.Directory (getDirectoryContents, removeFile)
-import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeExtension)
+import Control.Monad (void)
+import Data.List (isPrefixOf, tails)
+import System.FilePath ((</>))
 
 -- ghc
 import DynFlags ( DynFlags(..), GhcLink(..), Way(..), interpWays
@@ -35,12 +31,12 @@ import TestAux
 makeTests :: Spec
 makeTests = beforeAll_ (removeArtifacts odir) $ do
   showTargetTest
-  buildSk ["main1.sk"]
-  buildSk ["main2.sk"]
-  buildSk ["main3.sk"]
-  buildSk ["main4.sk"]
-  buildSk ["main5.sk"]
-  buildC ["cbits1.c"]
+  buildSk "main1.sk"
+  buildSk "main2.sk"
+  buildSk "main3.sk"
+  buildSk "main4.sk"
+  buildSk "main5.sk"
+  buildC "cbits1.c"
 
 showTargetTest :: Spec
 showTargetTest = do
@@ -60,49 +56,40 @@ showTargetTest = do
       sksrc `shouldNotBe` hssrc
       sksrc `shouldNotBe` otsrc
 
-buildSk :: [FilePath] -> Spec
+buildSk :: FilePath -> Spec
 buildSk = buildFile initSessionForTest
 
-buildC :: [FilePath] -> Spec
+buildC :: FilePath -> Spec
 buildC = buildFile
            (do initSessionForTest
                dflags <- getSessionDynFlags
                void (setSessionDynFlags (dflags {ghcLink=NoLink})))
 
-buildFile :: Skc () -> [FilePath] -> Spec
-buildFile pre paths =
-  describe ("files " ++ intercalate ", " paths) $
+buildFile :: Skc () -> FilePath -> Spec
+buildFile pre path =
+  describe ("file " <> path) $
     it "should compile successfully" $ do
       ret <- runSkc
                (do pre
                    -- Use dflags setttings for profile when running test
                    -- executable with "+RTS -p" option.
                    if WayProf `elem` interpWays
-                      then make_profile targets False Nothing
-                      else make_simple targets False Nothing)
+                      then make_profile targets Nothing
+                      else make_simple targets Nothing)
                     (defaultSkEnv { envSilent = True })
       ret `shouldBe` ()
   where
-    targets = map (\path -> (path, Nothing)) paths
-    make' flags sources doLink out = do
+    targets = [(path, Nothing)]
+    make' flags sources out = do
       dflags0 <- getSessionDynFlags
       let dflags1 = dflags0 {importPaths = [".", odir]}
           flags' = map noLoc flags
       (dflags2,_,_) <- parseDynamicFlagsCmdLine dflags1 flags'
       _ <- setSessionDynFlags dflags2
-      make sources doLink False out
+      make sources False False out
     make_simple = make' []
     make_profile = make' ["-prof", "-fprof-auto", "-fprof-cafs"
                          , "-hisuf", "p_hi", "-osuf", "p_o"]
 
 odir :: FilePath
-odir = "test" </> "data" </> "build"
-
-removeArtifacts :: FilePath -> IO ()
-removeArtifacts dir = do
-  contents <- getDirectoryContents dir
-  mapM_ removeObjAndHi contents
-  where
-    removeObjAndHi file =
-      when (takeExtension file `elem` [".o", ".hi", ".p_o", ".p_hi"])
-           (removeFile (dir </> file))
+odir = "test" </> "data" </> "make"

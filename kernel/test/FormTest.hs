@@ -51,7 +51,7 @@ import Language.SK.Lexer
 import Language.SK.Reader
 
 -- Internal
-import Orphan
+import Orphan ()
 
 formTests :: Spec
 formTests = do
@@ -199,6 +199,7 @@ dataInstanceTests = do
               case i of
                 0 -> return d1
                 1 -> return d2
+                _ -> error ("index " ++ show i ++ " for LForm")
         d4 = fromConstrB d3 (toConstr qUnit)
         gc1 :: Data a => Maybe [LForm a]
         gc1 =
@@ -357,6 +358,7 @@ homoiconicTests = do
               it "shoult match the input" $
                  case fromCode (toCode x) of
                    Just y -> y `shouldBe` x
+                   Nothing -> error ("got Nothing with " ++ show x)
   t (AInteger 42)
   t ()
   t 'x'
@@ -451,7 +453,7 @@ instance Homoiconic Foo where
   toCode foo = toCode (aSymbol (show foo))
 
 fromCodeTest :: Foo -> Spec
-fromCodeTest foo =
+fromCodeTest _foo =
   describe "default toCode implementation" $
     it "should return Nothing" $
       (fromCode nil :: Maybe Foo) `shouldBe` Nothing
@@ -550,6 +552,7 @@ eqForm a b =
 
     _ -> False
   where
+    epsilon :: Double
     epsilon = 1e-7
 
 parseE :: String -> Code
