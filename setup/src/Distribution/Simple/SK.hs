@@ -2,8 +2,12 @@
 {-# LANGUAGE CPP #-}
 module Distribution.Simple.SK
   (
+  -- * Main functions
+    skkcMain
+  , skcMainWith
+
   -- * UserHooks
-    skkcHooks
+  , skkcHooks
   , skkcDebugHooks
   , sk2hsHooks
   , stackSk2hsHooks
@@ -24,8 +28,9 @@ import Control.Exception (bracket_)
 import Control.Monad (foldM, mapAndUnzipM, when)
 import Data.Foldable (toList)
 import Data.Function (on)
-import Data.List (unionBy)
+import Data.List (isSubsequenceOf, unionBy)
 import Data.Monoid (Monoid(..))
+import System.Environment (getExecutablePath)
 
 -- filepath
 import System.FilePath ((<.>), (</>))
@@ -58,6 +63,43 @@ import System.Directory (findFile, doesFileExist, removeFile)
 
 import qualified Distribution.Simple.Setup as Setup
 import qualified Distribution.Verbosity as Verbosity
+
+
+-- --------------------------------------------------------------------
+--
+-- Main functions
+--
+-- ------------------------------------------------------------------------
+
+-- | Main function using /skkc/ executable.
+skkcMain :: IO ()
+skkcMain = skcMainWith "skkc" []
+
+-- | Main function with given executable name and arguments passed to
+-- the executable.  This function is intended to be used via @stack@ and
+-- @cabal@. It calls given executable via @cabal new-run@ when the
+-- executable built from @Setup.hs@ were not for @stack@.
+skcMainWith :: String   -- ^ Executable name.
+            -> [String] -- ^ Arguments passed to the executable.
+            -> IO ()
+skcMainWith exec args = chooseOne >>= defaultMainWithHooks
+  where
+    chooseOne = do
+      exec_path <- getExecutablePath
+      if ".stack" `isSubsequenceOf` exec_path
+         then return plainHook
+         else return cabalHook
+
+    -- Stack change the PATH environment variable, no need to wrap the
+    -- executable "stack run".
+    plainHook =
+      skcHooksWith exec args False
+
+    -- Cabal v2 style build does not change the PATH environment
+    -- varialbe as done in stack, wrapping the command with "v2-run".
+    cabalHook =
+      let cabal_args = ["v2-run", "-v0", "--", exec] ++ args
+      in  skcHooksWith "cabal" cabal_args False
 
 
 -- ---------------------------------------------------------------------
@@ -271,7 +313,7 @@ optExtras = toNubListR . optExtras'
 #endif
   where
     optExtras' :: FilePath -> [String]
-    optExtras' odir = ["-fbyte-code", "--sk-hsdir=" ++ odir]
+    optExtras' odir = ["-v0", "-fbyte-code", "--sk-hsdir=" ++ odir]
 
 -- | Same as the one used in "Distribution.Simple".
 allSuffixHandlers :: UserHooks -> [PPSuffixHandler]

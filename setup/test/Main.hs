@@ -52,7 +52,7 @@ buildPackage cwd pkgdbs name =
             ]
 
 setup :: [String] -> IO ()
-setup args = withArgs args (defaultMainWithHooks skkcHooks)
+setup = flip withArgs skkcMain
 
 getStackPackageDbs :: IO [String]
 getStackPackageDbs = do

@@ -3,10 +3,19 @@
 (require SK.Core)
 
 (defmodule SK.Setup
+  (export
+   (:docn "Main for setup script")
+   skMakeMain
+
+   (:docn "Re-exports")
+   defaultMainWithHooks
+   skcHooksWith)
   (use
    ;; sk-kernel
-   (Distribution.Simple.SK))
-  (export defaultMainWithHooks skcHooks))
+   (Distribution.Simple.SK)))
 
-(defn (skcHooks UserHooks)
-  (skcHooksWith "sk" ["make"] False))
+(defn (skMakeMain (IO ()))
+  "Main function with @sk make@.
+
+Intended to be used from cabal setup script."
+  (skcMainWith "sk" ["make"]))
