@@ -7,16 +7,7 @@ module Distribution.Simple.SK
   , skcMainWith
 
   -- * UserHooks
-  , skkcHooks
-  , skkcDebugHooks
-  , sk2hsHooks
-  , stackSk2hsHooks
-
-  -- * Auxiliary building block functions
   , skcHooksWith
-  , sk2hsProgram
-  , stackSk2hsProgram
-  , skcBuildHooksWith
 
    -- * Reexport from Cabal
   , UserHooks
@@ -39,7 +30,6 @@ import System.FilePath ((<.>), (</>))
 import Distribution.ModuleName (toFilePath)
 import Distribution.PackageDescription
 import Distribution.Simple
-import Distribution.Simple.Build (build)
 import Distribution.Simple.BuildPaths (autogenComponentModulesDir)
 import Distribution.Simple.Configure (configure, findDistPrefOrDefault)
 import Distribution.Simple.Haddock (haddock)
@@ -108,16 +98,6 @@ skcMainWith exec args = chooseOne >>= defaultMainWithHooks
 --
 -----------------------------------------------------------------------
 
--- | A UserHooks to compile SK codes with "skkc" executable found on
--- system.
-skkcHooks :: UserHooks
-skkcHooks = skcHooksWith "skkc" [] False
-
--- | UserHooks almost same as'skcHooks', but with SK debug flag turned
--- on.
-skkcDebugHooks :: UserHooks
-skkcDebugHooks = skcHooksWith "skkc" [] True
-
 -- | Make user hooks from compiler executable and extra arguments to the
 -- executable.
 skcHooksWith :: FilePath -- ^ Compiler executable.
@@ -128,18 +108,6 @@ skcHooksWith exec args debug = simpleUserHooks
   { hookedPreProcessors = [registerSkPPHandler]
   , confHook            = skcConfHookWith exec args debug
   , haddockHook         = skcHaddockHooks
-  }
-
--- | Hooks to preprocess @"*.sk"@ files with "skkc" found on system.
-sk2hsHooks :: UserHooks
-sk2hsHooks = simpleUserHooks {
-    hookedPreProcessors = [("sk", mkSk2hsPP sk2hsProgram)]
-  }
-
--- | Hooks to preprocess @"*.sk"@ files with "skkc" via "stack".
-stackSk2hsHooks :: UserHooks
-stackSk2hsHooks = simpleUserHooks {
-    hookedPreProcessors = [("sk", mkSk2hsPP stackSk2hsProgram)]
   }
 
 
@@ -168,20 +136,6 @@ skcConfHookWith :: FilePath -- ^ Path to sk compiler.
 skcConfHookWith skc extra_args debug (pkg_descr, hbi) cflags = do
   lbi <- configure (pkg_descr, hbi) cflags
   return (overrideGhcAsSkc skc extra_args debug lbi)
-
--- | Build hooks to replace the executable path of "ghc" with "skc"
--- found on system.
-skcBuildHooksWith :: FilePath -- ^ Path to sk compiler.
-                  -> Bool     -- ^ Debug flag.
-                  -> PackageDescription
-                  -> LocalBuildInfo
-                  -> UserHooks
-                  -> BuildFlags
-                  -> IO ()
-skcBuildHooksWith skc debug pkg_descr lbi hooks flags =
-  build pkg_descr lbi' flags (allSuffixHandlers hooks)
-    where
-      lbi' = overrideGhcAsSkc skc [] debug lbi
 
 -- | Update @ghc@ program in 'LocalBuildInfo'.
 overrideGhcAsSkc :: FilePath -- ^ Path to sk compiler.
@@ -320,32 +274,3 @@ allSuffixHandlers :: UserHooks -> [PPSuffixHandler]
 allSuffixHandlers hooks =
   overridesPP (hookedPreProcessors hooks) knownSuffixHandlers
     where overridesPP = unionBy ((==) `on` fst)
-
--- | Make simple preprocessor from configured program.
-mkSk2hsPP :: ConfiguredProgram -> BuildInfo -> LocalBuildInfo
-          -> ComponentLocalBuildInfo -> PreProcessor
-mkSk2hsPP program _ _ _ = PreProcessor
-  { platformIndependent = True
-  , runPreProcessor = mkSimplePreProcessor (mkSk2hs program)
-  }
-  where
-    mkSk2hs prog infile outfile verbosity =
-      runProgram verbosity prog ["-o", outfile, infile]
-
--- Preprocessor arguments
--- ~~~~~~~~~~~~~~~~~~~~~~
---
--- Passing "--sk-no-typecheck" option, since preprocessor cannot get
--- type information from other modules in target package.
-
-sk2hsProgram :: ConfiguredProgram
-sk2hsProgram = sk2hs {programDefaultArgs = args}
-  where
-    sk2hs = simpleConfiguredProgram "skkc" (FoundOnSystem "skkc")
-    args = ["--sk-hsrc", "--sk-no-typecheck"]
-
-stackSk2hsProgram :: ConfiguredProgram
-stackSk2hsProgram = stack {programDefaultArgs = args}
-  where
-    stack = simpleConfiguredProgram "stack" (FoundOnSystem "stack")
-    args = ["exec", "--", "skkc", "--sk-hsrc", "--sk-no-typecheck"]

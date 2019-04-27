@@ -38,6 +38,14 @@ library
   build-tool-depends:  sk-kernel:skkc
   default-language:    Haskell2010
 
+executable p01
+  hs-source-dirs:      exec
+  main-is:             p01.hs
+  ghc-options:         -Wall -threaded -rtsopts
+  build-depends:       base
+                     , p01
+  default-language:    Haskell2010
+
 test-suite p01-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
