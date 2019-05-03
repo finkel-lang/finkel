@@ -76,7 +76,7 @@
    (SK.Tool.Repl.Types))
 
   (export read-form eval-loop read-print-loop init-form start-repl
-          make-tmpfile cleanup-tmpfile))
+          acquire-repl cleanup-repl))
 
 
 ;;; Starting the REPL
@@ -85,21 +85,30 @@
   "Start REPL, maybe listen to given port number when given."
   [mb-port ske]
   (bracket
-   make-tmpfile
-   cleanup-tmpfile
-   (\ (, _tmpfile hdl)
-     (do (<- in-mv newEmptyMVar)
-         (start-listener mb-port in-mv)
-         (<- eval-tid
-           (forkIO (void (runSkc (eval-loop hdl in-mv) ske))))
-         (let ((= rpl (read-print-loop in-mv eval-tid))
-               (= reader (runInputT defaultSettings rpl))))
-         (run-repl reader initial-repl-state)))))
+   acquire-repl
+   cleanup-repl
+   (\ (, _tmpfile hdl in-mv)
+     (do (start-listener mb-port in-mv)
+         (<- tid (forkIO (runSkc (eval-loop hdl in-mv) ske)))
+         (let ((= rpl (read-print-loop in-mv tid))))
+         (run-repl (runInputT defaultSettings rpl)
+                   initial-repl-state)))))
 
-(defn (make-tmpfile (IO (, FilePath Handle)))
+(defn (acquire-repl (IO (, FilePath Handle (MVar Input))))
   "Return a file path and handle for temporary use."
   (do (<- dir getTemporaryDirectory)
-      (openTempFile dir "sk-repl-.out")))
+      (<- (, path hdl) (openTempFile dir "sk-repl-.out"))
+      (<- mvar newEmptyMVar)
+      (return (, path hdl mvar))))
+
+(defn (cleanup-repl (-> (, FilePath Handle a) (IO ())))
+  "Clean up temporary file."
+  [(, path hdl _)]
+  (catch (do (hClose hdl)
+             (removeFile path))
+    (\ e (if (isDoesNotExistError e)
+             (return ())
+             (throwIO e)))))
 
 (defn (start-listener (-> (Maybe Int) (MVar Input) (IO ())))
   "Start listner in separate thread, and return temporary file for
@@ -110,15 +119,6 @@ getting String output from statement."
            (do (putStrLn (++ "Listening on port " (show port)))
                (void (forkIO (listener (fromIntegral port) in-mv)))))
          mb-port))
-
-(defn (cleanup-tmpfile (-> (, FilePath Handle) (IO ())))
-  "Clean up temporary file."
-  [(, path hdl)]
-  (catch (do (hClose hdl)
-             (removeFile path))
-    (\ e (if (isDoesNotExistError e)
-             (return ())
-             (throwIO e)))))
 
 
 ;;; Read and print

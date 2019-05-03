@@ -48,18 +48,17 @@
 (defn (evalTests Spec)
   (do (let ((= d describe)
             (= delines (intercalate "\n"))))
-      (<- in-mv (runIO newEmptyMVar))
       (<- out-mv (runIO newEmptyMVar))
-      (<- (, tmpfile hdl) (runIO make-tmpfile))
+      (<- (, tmpfile hdl in-mv) (runIO acquire-repl))
       (<- current-dir (runIO getCurrentDirectory))
       (<- etid
         (runIO (forkIO (void (runSkc (eval-loop hdl in-mv) repl-env)))))
-      (let ((= eval-form ok-or-ng form expect
+      (let ((= eval-form right-or-left form expect
               (d (concat ["evaluate " (show form)])
                  (it "evaluates to expected result"
                      (do (putMVar in-mv (Input Connection form out-mv))
                          (<- ret (takeMVar out-mv))
-                         (shouldBe ret (ok-or-ng expect))))))
+                         (shouldBe ret (right-or-left expect))))))
             (= ok (eval-form Right))
             (= ng (eval-form Left))
             (= satisfy form pred
@@ -73,7 +72,7 @@
            (void (takeMVar out-mv)))
        (afterAll_
         (do (killThread etid)
-            (cleanup-tmpfile (, tmpfile hdl)))
+            (cleanup-repl (, tmpfile hdl ())))
         (do
           ;; Statements and declarations
           (ok '(+ 10 32) "42")
