@@ -1,4 +1,4 @@
--- S-expression lexer with alex
+-- -*- mode: haskell; -*-
 {
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}

@@ -1,4 +1,4 @@
--- Happy parser for S-expression tokens.
+-- -*- mode: haskell; -*-
 {
 {-# LANGUAGE OverloadedStrings #-}
 -- | S-expression reader.

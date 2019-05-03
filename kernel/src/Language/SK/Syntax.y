@@ -1,3 +1,4 @@
+-- -*- mode: haskell; -*-
 {
 {-# LANGUAGE OverloadedStrings #-}
 -- | Module for parsing form data.
