@@ -169,11 +169,11 @@ reading the input until successful parse result."
                         (otherwise
                          (go-line result-mv line)))))
         (= go-command result-mv lin
-          ;; Using raw symbol for REPL commands other than info and
-          ;; type, to use hyphens without replacing to underscores.
-          ;; Otherwise, command name like "ghc-pkg" will get replaced to
-          ;; "ghc_pkg" by the parser.
-          (| ((type-or-info-command lin)
+          ;; Using raw symbol for REPL commands other than name-mangled
+          ;; commands, to use hyphens without replacing to underscores.
+          ;; Otherwise, command arguments like "ghc-pkg" will get
+          ;; replaced to "ghc_pkg" by the parser.
+          (| ((mangled-command lin)
               (go-line result-mv (concat ["(repl-macro " lin ")"])))
              (otherwise
               (go-form result-mv (as-repl-macro lin)))))
@@ -414,10 +414,10 @@ context."
 
 ;;; Auxiliary
 
-(defn (type-or-info-command (-> String Bool))
+(defn (mangled-command (-> String Bool))
   [lin]
   (case (words lin)
-    (: w _) (any (isPrefixOf w) ["load" "type" "info"])
+    (: w _) (any (isPrefixOf w) ["info" "kind" "load" "type"])
     _       False))
 
 (defn (as-repl-macro (-> String Code))
