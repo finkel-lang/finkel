@@ -547,11 +547,11 @@ type :: { HType }
     | 'list'        {% parse p_types0 $1 }
 
 types0 :: { HType }
-    : '->' types             {% b_funT $1 $2 }
-    | ',' zero_or_more_types { b_tupT $1 $2 }
-    | 'forall' forallty      { b_forallT $1 $2 }
-    | '::' type type         { b_kindedType $1 $2 $3 }
-    | types                  {% b_appT $1 }
+    : '->' zero_or_more_types {% b_funT $1 $2 }
+    | ',' zero_or_more_types  { b_tupT $1 $2 }
+    | 'forall' forallty       { b_forallT $1 $2 }
+    | '::' type type          { b_kindedType $1 $2 $3 }
+    | types                   {% b_appT $1 }
 
 forallty :: { ([HTyVarBndr], ([HType], HType)) }
     : qtycl           { ([], $1) }

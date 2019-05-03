@@ -88,7 +88,7 @@ b_funT :: Code -> [HType] -> Builder HType
 b_funT (LForm (L l _)) ts =
   -- For single argument, making HsAppTy with '(->)' instead of HsFunTy.
   case ts of
-    []           -> builderError
+    []           -> return funty
 #if MIN_VERSION_ghc(8,4,0)
     [t]          -> return (mkHsAppTy funty t)
 #else

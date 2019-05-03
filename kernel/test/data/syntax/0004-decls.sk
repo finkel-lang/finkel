@@ -203,6 +203,13 @@
 (instance (MyFunctor (-> a))
   (= myFmap f g (\ x (f (g x)))))
 
+(class (MyProfunctor pf)
+  (:: myDimap (-> (-> a b) (-> c d) (pf b c) (pf a d))))
+
+(instance (MyProfunctor (->))
+  (= myDimap ab cd bc
+    (. cd (. bc ab))))
+
 (:: s4_3_2 (IO ()))
 (= s4_3_2
   (do (print (fmap (* 2) (MyF 21)))

@@ -114,7 +114,7 @@ exceptionTest = do
 
   describe "running buildHsSyn action" $
     it "should throw SourceError" $ do
-      let form = "(:: foo (->)) (= foo 100)"
+      let form = "(:: foo ->) (= foo 100)"
           sel :: SourceError -> Bool
           sel _ = True
           run a = runSkc a defaultSkEnv
