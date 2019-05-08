@@ -59,19 +59,6 @@ import Control.DeepSeq (NFData(..))
 --
 -- -------------------------------------------------------------------
 
--- | Type synonym for code data.
---
--- The 'Code' data is the fundamental data type used in the entire
--- compilation work.  The 'Code' is used to represed data from parsed
--- source file, and used for input and output of macros transformer
--- functions. List of 'Code' data are converted to Haskell AST via
--- syntax parser.
---
--- Since 'Code' is returned from parsed source file, source code
--- location information is attached to 'Code'.
---
-type Code = LForm Atom
-
 -- | Atom in tokens.
 data Atom
   = AUnit
@@ -79,7 +66,7 @@ data Atom
   | AChar {-# UNPACK #-} !Char
   | AString String
   | AInteger Integer
-  | AFractional FractionalLit
+  | AFractional {-# UNPACK #-} !FractionalLit
   deriving (Eq, Data, Typeable, Generic)
 
 instance Show Atom where
@@ -206,6 +193,26 @@ instance Traversable LForm where
 instance NFData a => NFData (LForm a) where
   rnf (LForm (L l a)) = rnf l `seq` rnf a
 
+-- | Type synonym for code data.
+--
+-- The 'Code' data is the fundamental data type used in the entire
+-- compilation work.  The 'Code' is used to represed data from parsed
+-- source file, and used for input and output of macros transformer
+-- functions. List of 'Code' data are converted to Haskell AST via
+-- syntax parser.
+--
+-- Since 'Code' is returned from parsed source file, source code
+-- location information is attached to 'Code'.
+--
+type Code = LForm Atom
+
+
+-- -------------------------------------------------------------------
+--
+-- Constructor functions
+--
+-- -------------------------------------------------------------------
+
 -- | Make quoted symbol from 'String'.
 qSymbol :: String -> Code
 qSymbol = quoted . Atom . aSymbol
@@ -253,6 +260,17 @@ aFractional x = AFractional $! mkFractionalLit x
 nil :: Code
 nil = LForm (genSrc (List []))
 
+quoted :: Form Atom -> Code
+quoted = LForm . L (UnhelpfulSpan (fsLit "<quoted code>"))
+{-# INLINE quoted #-}
+
+
+-- -------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- -------------------------------------------------------------------
+
 -- | String representation of located data.
 showLoc :: LForm a -> String
 showLoc (LForm (L l _)) =
@@ -291,13 +309,8 @@ unCode (LForm (L _ a)) = a
 
 -- | Attach location to mark generated code.
 genSrc :: a -> Located a
-genSrc = L skSrcSpan
+genSrc = L (UnhelpfulSpan (fsLit "<sk generated code>"))
 {-# INLINE genSrc #-}
-
--- | Source code span for generated code.
-skSrcSpan :: SrcSpan
-skSrcSpan = UnhelpfulSpan (fsLit "<sk generated code>")
-{-# INLINE skSrcSpan #-}
 
 -- | Make located list from list of located elements.
 --
@@ -308,16 +321,6 @@ mkLocatedForm [] = genSrc []
 mkLocatedForm ms = L (combineLocs (unLForm (head ms))
                                   (unLForm (last ms)))
                      ms
-
-quoted :: Form Atom -> Code
-quoted = LForm . L (UnhelpfulSpan (fsLit "<quoted code>"))
-{-# INLINE quoted #-}
-
--- -------------------------------------------------------------------
---
--- Auxiliary
---
--- -------------------------------------------------------------------
 
 -- | Characters used in Haskell operators.
 haskellOpChars :: [Char]
