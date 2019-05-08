@@ -12,6 +12,7 @@ copyright:           2019 Author name here
 category:            Language
 build-type:          Custom
 extra-source-files:  README.md
+                     sk.hsfiles
                      src/SK/Tool/*.sk
                      src/SK/Tool/Repl/*.sk
                      test/*.sk

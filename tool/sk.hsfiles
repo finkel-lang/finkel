@@ -8,7 +8,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              {{author-name}}{{^author-name}}Author name here{{/author-name}}
 maintainer:          {{author-email}}{{^author-email}}example@example.com{{/author-email}}
-copyright:           {{copyright}}{{^copyright}}{{year}}{{^year}}2018{{/year}} {{author-name}}{{^author-name}}Author name here{{/author-name}}{{/copyright}}
+copyright:           {{copyright}}{{^copyright}}{{year}}{{^year}}2019{{/year}} {{author-name}}{{^author-name}}Author name here{{/author-name}}{{/copyright}}
 category:            Data
 build-type:          Custom
 extra-source-files:  README.md
@@ -18,14 +18,13 @@ cabal-version:       >=2.0
 custom-setup
   setup-depends:       base >= 4.7 && < 5
                      , Cabal >= 2.0
-                     , sk-lang
+                     , sk-tool
 
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
   build-depends:       base >= 4.7 && < 5
-                     , sk-kernel
-                     , sk-lang
+  build-tool-depends:  sk-tool:sk
   default-language:    Haskell2010
 
 executable {{name}}
@@ -54,7 +53,7 @@ test-suite {{name}}-test
 module Main where
 import SK.Setup
 main :: IO ()
-main = defaultMainWithHooks skcHooks
+main = skMakeMain
 
 {-# START_FILE test/Spec.hs #-}
 main :: IO ()
@@ -65,7 +64,6 @@ main = putStrLn "Test suite not yet implemented"
   (export someFunc))
 
 (defn (someFunc (IO ()))
-  ()
   (putStrLn "someFunc"))
 
 {-# START_FILE app/Main.hs #-}
@@ -80,7 +78,7 @@ main = someFunc
 # {{name}}
 
 {-# START_FILE LICENSE #-}
-Copyright {{author-name}}{{^author-name}}Author name here{{/author-name}} (c) {{year}}{{^year}}2018{{/year}}
+Copyright {{author-name}}{{^author-name}}Author name here{{/author-name}} (c) {{year}}{{^year}}2019{{/year}}
 
 All rights reserved.
 
