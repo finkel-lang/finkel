@@ -1,0 +1,46 @@
+;;; Tests for main function
+
+(require SK.Core)
+
+(defmodule MainTest
+  (export
+   mainTest)
+  (use
+   ;; base
+   (System.Environment (withArgs))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; Internal
+   (qualified SK.Tool.Main as Main)))
+
+(defn (mainTest Spec)
+  (do (let ((= d describe)))
+      (d "main with no argument"
+         (it "should show usage"
+             (shouldReturn (main' []) ())))
+      (d "main with invalid command"
+         (it "should show usage"
+             (shouldReturn (main' ["no-such-command"]) ())))
+      (d "main with help command"
+         (do (it "should show usage"
+                 (shouldReturn (main' ["help"]) ()))
+             (it "should show help of repl command"
+                 (shouldReturn (main' ["help" "repl"]) ()))
+             (it "should show help of make command"
+                 (shouldReturn (main' ["help" "make"]) ()))))
+      (d "main with make command"
+         (it "should show help on --sk-help"
+             (shouldReturn (main' ["make" "--sk-help"]) ())))
+      (d "main with repl command"
+         (it "should show help on --help"
+             (shouldReturn (main' ["repl" "--help"]) ())))
+      (d "main with version command"
+         (it "should show all versions by default"
+             (shouldReturn (main' ["version"]) ())))))
+
+(defn (main' (-> [String] (IO ())))
+  "Run 'Main.main' with given arguments."
+  [args]
+  (withArgs args Main.main))

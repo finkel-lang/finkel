@@ -17,7 +17,7 @@
    (Data.Foldable (find maximumBy))
    (Data.Function (on))
 
-   (System.Environment (getArgs getProgName withArgs))
+   (System.Environment (getArgs getProgName withArgs withProgName))
 
    ;; sk-kernel
    (Language.SK.Main (defaultMainWith))
@@ -40,7 +40,7 @@
       (case args
         (: name rest) (maybe show-usage
                              (flip cmd-act rest)
-                             (find-command name))
+                             (find-sub-command name))
         _ show-usage)))
 
 
@@ -57,21 +57,22 @@
    (Command "repl" "start interactive REPL" replMain)
    (Command "version" "show version" versionMain)])
 
-(defn (find-command (-> String (Maybe Command)))
+(defn (find-sub-command (-> String (Maybe Command)))
   [name]
   (find (. (== name) cmd-name) sub-commands))
 
 (defn (makeMain (-> [String] (IO ())))
   [args]
-  (macrolet ((core-macros ()
+  (macrolet ((preloaded ()
                `[,@(map (\ mac (, mac (qSymbol mac)))
                         (exported-macros SK.Prelude))]))
-    (withArgs args (defaultMainWith (core-macros)))))
+    (withArgs args (withProgName "sk make"
+                                 (defaultMainWith (preloaded))))))
 
 (defn (helpMain (-> [String] (IO ())))
   [args]
   (case args
-    (: name _ ) (| ((<- (Just cmd) (find-command name))
+    (: name _ ) (| ((<- (Just cmd) (find-sub-command name))
                     (let ((= flag
                             (case name
                               "make" "--sk-help"
