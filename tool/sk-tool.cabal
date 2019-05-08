@@ -8,13 +8,19 @@ license:             BSD3
 license-file:        LICENSE
 author:              Author name here
 maintainer:          example@example.com
-copyright:           2017, 2018 Author name here
+copyright:           2019 Author name here
 category:            Language
 build-type:          Custom
 extra-source-files:  README.md
                      src/SK/Tool/*.sk
                      src/SK/Tool/Repl/*.sk
                      test/*.sk
+                     test/data/p02/LICENSE
+                     test/data/p02/Setup.hs
+                     test/data/p02/p02.cabal
+                     test/data/p02/exec/p02.hs
+                     test/data/p02/src/P02/A.sk
+                     test/data/p02/test/Spec.hs
 
 tested-with:           GHC == 8.2.2
                      , GHC == 8.4.3
@@ -55,7 +61,7 @@ library
 flag dynamic
   description:         Dynamically link executables
   default:             True
-  manual:              False
+  manual:              True
 
 test-suite sk-tool-test
   type:                exitcode-stdio-1.0
@@ -64,8 +70,10 @@ test-suite sk-tool-test
   build-depends:       QuickCheck
                      , base
                      , directory
+                     , filepath
                      , ghc
                      , hspec
+                     , process
                      , sk-lang
                      , sk-kernel
                      , sk-tool
@@ -73,6 +81,7 @@ test-suite sk-tool-test
     ghc-options:       -dynamic
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       ReplTest
+                       SetupTest
   default-language:    Haskell2010
 
 executable sk

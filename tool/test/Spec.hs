@@ -1,7 +1,9 @@
 module Main where
 
 import ReplTest
+import SetupTest
 import Test.Hspec
 
 main :: IO ()
-main = hspec replTests
+main = hspec (do replTests
+                 setupTests)

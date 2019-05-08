@@ -1,0 +1,71 @@
+;;; Tests for setup.
+;;;
+;;; This file contains similar tests written for the "sk-setup"
+;;; package. See the main test file "setup/test/Main.hs" for sk-setup.
+
+(require SK.Core)
+
+(defmodule SetupTest
+  (export
+   setupTests)
+  (use
+   ;; base
+   (System.Environment (unsetEnv withArgs))
+
+   ;; directory
+   (System.Directory
+    (getCurrentDirectory setCurrentDirectory))
+
+   ;; filepath
+   (System.FilePath (</>))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; process
+   (System.Process (readProcess))
+
+   ;; Internal
+   (SK.Setup (skMakeMain))))
+
+(defn (setupTests Spec)
+  (do (<- cwd (runIO getCurrentDirectory))
+      (<- pkgdbs (runIO getStackPackageDbs))
+      (runIO (unsetEnv "GHC_PACKAGE_PATH"))
+      (afterAll_ (setCurrentDirectory cwd)
+                 (buildPackage cwd pkgdbs "p02"))))
+
+(defn (buildPackage (-> FilePath [FilePath] String Spec))
+  [cwd pkgdbs name]
+  (where (describe (<> "package " name)
+                   (it "should compile and pass the tests" work))
+    (defn work
+      (mapM_ run [(setCurrentDirectory pkgdir)
+                  (setup configure-args)
+                  (setup ["build"])
+                  (setup ["test"])
+                  (setup ["haddock"])
+                  (setup ["clean"])]))
+    (defn run [act]
+      (shouldReturn act ()))
+    (defn pkgdb-flags
+      (++ ["--package-db=clear"
+           "--package-db=global"]
+          (map (\ p (<> "--package-db=" p)) pkgdbs)))
+    (defn configure-args
+      (: "configure" (++ pkgdb-flags ["--enable-tests"])))
+    (defn pkgdir
+      (</> cwd (</> "test" (</> "data" name))))))
+
+(defn (setup (-> [String] (IO ())))
+  (flip withArgs skMakeMain))
+
+(defn (getStackPackageDbs (IO [String]))
+  (do (<- snapshot-pkgdb (getStackOutput ["path" "--snapshot-pkg-db"]))
+      (<- local-pkgdb (getStackOutput ["path" "--local-pkg-db"]))
+      (return (map (takeWhile (/= \\n))
+                   [snapshot-pkgdb local-pkgdb]))))
+
+(defn (getStackOutput (-> [String] (IO String)))
+  [args]
+  (readProcess "stack" args ""))
