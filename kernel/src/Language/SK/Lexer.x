@@ -629,9 +629,12 @@ scanToken = do
   inp0@(AlexInput loc0 _ _) <- alexGetInput
   let sc = 0
   case alexScan inp0 sc of
-    AlexToken inp1@(AlexInput loc1 _ _) len act -> do
+    AlexToken inp1 len act -> do
       alexSetInput inp1
       tok <- act inp0 len
+      -- Getting current location again after invoking 'act', to update
+      -- location information of String tokens.
+      loc1 <- fmap currentLoc getSPState
       let span = RealSrcSpan $ mkRealSrcSpan loc0 loc1
       return (L span tok)
     AlexError (AlexInput loc1 ch _) -> do
@@ -647,8 +650,10 @@ scanToken = do
 {-# INLINE scanToken #-}
 
 -- | Lex the input to list of 'Token's.
-lexTokens :: C8.ByteString -> Either String [Located Token]
-lexTokens input = evalSP go Nothing input
+lexTokens :: Maybe FilePath
+          -> C8.ByteString
+          -> Either String [Located Token]
+lexTokens = evalSP go
   where
      go = do
        tok <- tokenLexer return

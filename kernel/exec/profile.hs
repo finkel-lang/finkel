@@ -138,7 +138,7 @@ parseSkModuleWith act path = SKC.runSkc go Make.defaultSkEnv
 printTokens :: FilePath -> IO ()
 printTokens path = do
   contents <- BL.readFile path
-  case Lexer.lexTokens contents of
+  case Lexer.lexTokens (Just path) contents of
     Right toks -> mapM_ (print . GHC.unLoc) toks
     Left err   -> putStrLn err
 
