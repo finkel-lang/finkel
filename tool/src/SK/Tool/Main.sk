@@ -17,7 +17,7 @@
    (SK.Prelude))
   (use
    ;; base
-   (System.Environment (getArgs withArgs withProgName))
+   (System.Environment (getArgs getProgName withArgs withProgName))
 
    ;; sk-kernel
    (Language.SK.Main (defaultMainWith))
@@ -58,5 +58,7 @@
   (macrolet ((preloaded ()
                `[,@(map (\ mac (, mac (qSymbol mac)))
                         (exported-macros SK.Prelude))]))
-    (withArgs args (withProgName "sk make"
-                                 (defaultMainWith (preloaded))))))
+    (do (<- name getProgName)
+        (let ((= name' (++ name " make"))))
+        (withArgs args (withProgName name'
+                                     (defaultMainWith (preloaded)))))))
