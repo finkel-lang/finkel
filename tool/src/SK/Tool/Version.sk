@@ -3,8 +3,12 @@
 (require SK.Core)
 
 (defmodule SK.Tool.Version
+  (export
+   versionMain
+   (VersionUI ..))
   (use
    ;; base
+   (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Version (showVersion))
    (System.Console.GetOpt
     ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
@@ -17,18 +21,26 @@
    (qualified Paths_sk_kernel)
 
    ;; sk-lang
-   (qualified Paths_sk_lang))
-  (export versionMain))
+   (qualified Paths_sk_lang)
+
+   ;; Internal
+   (SK.Tool.Help)))
+
 
 
-;;; Main entry point
+;;; Exported
 
-(defn (versionMain (-> [String] (IO ())))
+(class (=> (HelpUI m) (VersionUI m))
+  (:: printVersion (-> String (m ())))
+  (= printVersion printHelp))
+
+(instance (VersionUI IO))
+
+(defn (versionMain (=> (VersionUI m) (-> [String] (m ()))))
   [args]
   (case (getOpt Permute version-descrs args)
     (, os _ []) (show-version (foldr const AllVersions os))
-    (, _ _ es)  (do (mapM_ putStr es)
-                    (putStrLn "")
+    (, _ _ es)  (do (printVersion (concat es))
                     print-version-help)))
 
 
@@ -39,8 +51,7 @@
   GhcVersion
   KernelVersion
   LangVersion
-  VersionHelp
-  (deriving (Eq Show)))
+  VersionHelp)
 
 (defn (version-descrs [OptDescr VersionMode])
   [(Option [\a] ["all"]
@@ -59,7 +70,7 @@
            (NoArg VersionHelp)
            "show this help and exit")])
 
-(defn (show-version (-> VersionMode (IO ())))
+(defn (show-version (=> (VersionUI m) (-> VersionMode (m ()))))
   [mode]
   (case mode
     AllVersions (do print-lang-version
@@ -70,18 +81,18 @@
     LangVersion print-lang-version
     VersionHelp print-version-help))
 
-(defn (print-ghc-version (IO ()))
-  (putStrLn (++ "ghc " cProjectVersion)))
+(defn (print-ghc-version (=> (VersionUI m) (m ())))
+  (printVersion (++ "ghc " cProjectVersion)))
 
-(defn (print-kernel-version (IO ()))
-  (putStrLn (++ "sk-kernel " sk-kernel-version)))
+(defn (print-kernel-version (=> (VersionUI m) (m ())))
+  (printVersion (++ "sk-kernel " sk-kernel-version)))
 
-(defn (print-lang-version (IO ()))
-  (putStrLn (++ "sk-lang " sk-lang-version)))
+(defn (print-lang-version (=> (VersionUI m) (m ())))
+  (printVersion (++ "sk-lang " sk-lang-version)))
 
-(defn (print-version-help (IO ()))
-  (do (<- name getProgName)
-      (putStr
+(defn (print-version-help (=> (HelpUI m) (m ())))
+  (do (<- name (liftIO getProgName))
+      (printHelp
        (unlines
         [(concat ["USAGE: " name " version [OPTIONS]"])
          ""

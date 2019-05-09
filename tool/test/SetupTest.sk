@@ -52,9 +52,8 @@
     (defn run [act]
       (shouldReturn act ()))
     (defn pkgdb-flags
-      (++ ["--package-db=clear"
-           "--package-db=global"]
-          (map (\ p (<> "--package-db=" p)) pkgdbs)))
+      (++ ["--package-db=clear" "--package-db=global"]
+          (map (<> "--package-db=") pkgdbs)))
     (defn configure-args
       (: "configure" (++ pkgdb-flags ["--enable-tests"])))))
 

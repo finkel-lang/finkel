@@ -1,8 +1,11 @@
-;;; Main compiler with macros from `SK.Prelude'.
+;;; Main entry point
 
 (require SK.Core)
 
 (defmodule SK.Tool.Main
+  (export
+   main
+   commands)
   (load
    ;; base
    (Prelude)
@@ -14,10 +17,7 @@
    (SK.Prelude))
   (use
    ;; base
-   (Data.Foldable (find maximumBy))
-   (Data.Function (on))
-
-   (System.Environment (getArgs getProgName withArgs withProgName))
+   (System.Environment (getArgs withArgs withProgName))
 
    ;; sk-kernel
    (Language.SK.Main (defaultMainWith))
@@ -26,10 +26,9 @@
    (SK.Prelude)
 
    ;; Internal
+   (SK.Tool.Help)
    (SK.Tool.Repl)
-   (SK.Tool.Version))
-  (export main))
-
+   (SK.Tool.Version)))
 
 
 ;;; Exported function
@@ -38,65 +37,26 @@
   "Main entry point function for @sk@ executable."
   (do (<- args getArgs)
       (case args
-        (: name rest) (maybe show-usage
+        (: name rest) (maybe (show-usage commands)
                              (flip cmd-act rest)
-                             (find-sub-command name))
-        _ show-usage)))
+                             (find-command commands name))
+        _ (show-usage commands))))
 
-
-;;; Internal
-
-(data Command
-  (Command {cmd-name String
-            cmd-descr String
-            cmd-act (-> [String] (IO ()))}))
-
-(defn (sub-commands [Command])
-  [(Command "help" "show help information" helpMain)
+(defn (commands [Command])
+  "Available commands in sk executable."
+  [(Command "help" "show help information" (helpMain commands))
    (Command "make" "compile source codes" makeMain)
    (Command "repl" "start interactive REPL" replMain)
    (Command "version" "show version" versionMain)])
 
-(defn (find-sub-command (-> String (Maybe Command)))
-  [name]
-  (find (. (== name) cmd-name) sub-commands))
+
+;;; Internal
 
 (defn (makeMain (-> [String] (IO ())))
+  "Main function for compiler with macros from `SK.Prelude'."
   [args]
   (macrolet ((preloaded ()
                `[,@(map (\ mac (, mac (qSymbol mac)))
                         (exported-macros SK.Prelude))]))
     (withArgs args (withProgName "sk make"
                                  (defaultMainWith (preloaded))))))
-
-(defn (helpMain (-> [String] (IO ())))
-  [args]
-  (case args
-    (: name _ ) (| ((<- (Just cmd) (find-sub-command name))
-                    (let ((= flag
-                            (case name
-                              "make" "--sk-help"
-                              _      "--help")))
-                      (cmd-act cmd [flag]))))
-    _ show-usage))
-
-(defn (show-usage (IO ()))
-  (do (<- name getProgName)
-      (let ((= max-len
-              (length (maximumBy (on compare length)
-                                 (map cmd-name sub-commands))))
-            (= pad n str
-              (++ str (replicate (- n (length str)) \\SP)))
-            (= descr n cmd
-              (concat ["  " (pad n (cmd-name cmd))
-                       "  " (cmd-descr cmd)]))))
-      (putStrLn
-       (unlines
-        (++ [(concat ["USAGE:\n\n   " name " <command> [arguments]"])
-             ""
-             (concat ["Run \"" name " help <command>\""
-                      " for more information."])
-             ""
-             "COMMANDS:"
-             ""]
-            (map (descr max-len) sub-commands))))))

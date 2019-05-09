@@ -7,16 +7,21 @@
    mainTest)
   (use
    ;; base
+   (Control.Monad.IO.Class ((MonadIO ..)))
    (System.Environment (withArgs))
 
    ;; hspec
    (Test.Hspec)
 
    ;; Internal
-   (qualified SK.Tool.Main as Main)))
+   (SK.Tool.Help)
+   (SK.Tool.Main)
+   (SK.Tool.Version)))
 
 (defn (mainTest Spec)
-  (do (let ((= d describe)))
+  (do (let ((= d describe)
+            (= main' args
+              (withArgs args main))))
       (d "main with no argument"
          (it "should show usage"
              (shouldReturn (main' []) ())))
@@ -38,9 +43,74 @@
              (shouldReturn (main' ["repl" "--help"]) ())))
       (d "main with version command"
          (it "should show all versions by default"
-             (shouldReturn (main' ["version"]) ())))))
+             (shouldReturn (main' ["version"]) ())))
+      helpTests
+      versionTests))
 
-(defn (main' (-> [String] (IO ())))
-  "Run 'Main.main' with given arguments."
-  [args]
-  (withArgs args Main.main))
+(newtype (TestIO a)
+  (TestIO {unTestIO (IO (, a [String]))}))
+
+(instance (Functor TestIO)
+  (= fmap f (TestIO m)
+    (TestIO (fmap (\ (, a ws) (, (f a) ws)) m))))
+
+(instance (Applicative TestIO)
+  (= pure x (TestIO (pure (, x mempty))))
+  (= <*> (TestIO ft) (TestIO xt)
+    (let ((= h (, f w1) (, x w2)
+            (, (f x) (<> w1 w2))))
+      (TestIO (<*> (fmap h ft) xt)))))
+
+(instance (Monad TestIO)
+  (= return pure)
+  (= >>= (TestIO m) k
+    (TestIO (do (<- (, a w1) m)
+                (<- (, b w2) (unTestIO (k a)))
+                (return (, b (<> w1 w2)))))))
+
+(instance (MonadIO TestIO)
+  (= liftIO io
+    (TestIO (fmap (\ x (, x mempty)) io))))
+
+(instance (HelpUI TestIO)
+  (= printHelp str (TestIO (pure (, () [str])))))
+
+(instance (VersionUI TestIO))
+
+(defn (helpTests Spec)
+  (do (<- (, _ lns) (runIO (unTestIO (show-usage commands))))
+      (let ((= d describe)
+            (= messageShouldContain
+              (shouldContain (unlines lns)))))
+      (d "help command"
+         (it "should contain command names in usage message"
+             (do (messageShouldContain "repl")
+                 (messageShouldContain "make")
+                 (messageShouldContain "version"))))))
+
+(defn (versionTests Spec)
+  (describe
+   "version command"
+   (do (let ((= version args
+               (fmap (. unlines snd)
+                     (liftIO (unTestIO (versionMain args)))))))
+       (it "should show \"--help\" in help message"
+           (do (<- msg (version ["--help"]))
+               (shouldContain msg "--help")))
+       (it "should show \"ghc\" with \"--ghc\" option"
+           (do (<- msg (version ["--ghc"]))
+               (shouldContain msg "ghc")))
+       (it "should show \"sk-kernel\" with \"--kernel\" option"
+           (do (<- msg (version ["--kernel"]))
+               (shouldContain msg "kernel")))
+       (it "should show \"sk-lang\" with \"--lang\" option"
+           (do (<- msg (version ["--lang"]))
+               (shouldContain msg "lang")))
+       (it "should show all versions with \"--all\" option"
+           (do (<- msg (version ["--all"]))
+               (shouldContain msg "ghc")
+               (shouldContain msg "kernel")
+               (shouldContain msg "lang")))
+       (it "should complain unrecognized option"
+           (do (<- msg (version ["--no-such-option"]))
+               (shouldContain msg "--no-such-option"))))))
