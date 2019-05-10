@@ -741,8 +741,8 @@ paths from import directories."
                     (env-context-on-exception
                      (do (<- target (make-target path))
                          (<- _ (setTargets [target]))
-                         (compile-and-import path)))
-                    (liftIO (putStrLn (++ "; loaded " path)))
+                         (<- _ (compile-and-import path))
+                         (liftIO (putStrLn (++ "; loaded " path)))))
                     (return '(begin))))
               (code-to-mb-string form))
       _      (skSrcError (located-list forms)
