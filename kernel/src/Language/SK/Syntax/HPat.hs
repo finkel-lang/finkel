@@ -73,14 +73,16 @@ b_unitP (LForm (L l form))
   | otherwise          = builderError
 {-# INLINE b_unitP #-}
 
+b_wildP :: Code -> HPat
+b_wildP (LForm (L l _)) = L l wildPat
+{-# INLINE b_wildP #-}
+
 b_symP :: Code -> Builder HPat
 b_symP (LForm (L l form))
   | (Atom (ASymbol name)) <- form
   , let hdchr = headFS name
   = case () of
-      _ | name == fsLit "_"
-        -> return (L l wildPat)
-        | isUpper hdchr || hdchr == ':'
+      _ | isUpper hdchr || hdchr == ':'
         -> return (L l (ConPatIn (L l (mkVarRdrName name))
                                  (PrefixCon [])))
         | hdchr == '~'

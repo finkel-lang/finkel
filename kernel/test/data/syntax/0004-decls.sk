@@ -148,7 +148,7 @@
 (class (Tup3 k)
   (:: tup3 (-> (k a b c) String)))
 
-(instance (Tup3 ( ,, ))
+(instance (Tup3 (,,))
   (= tup3 _ "tup3 for (,,)"))
 
 (class (Tup4 k)
@@ -382,6 +382,14 @@
 (:: tpb3 Int)
 (= (: tpb3 _)
   (enumFrom 42))
+
+;;; Ignored top level bindings
+
+(= _ (:: 1 Int))
+
+(= _ (:: 2 Integer))
+
+(= _ (:: 3 Double))
 
 (:: s4_4_3 (IO ()))
 (= s4_4_3

@@ -43,6 +43,10 @@ import Language.SK.Syntax.SynUtils
 --
 -- ---------------------------------------------------------------------
 
+b_anonWildT :: Code -> HType
+b_anonWildT (LForm (L l _)) = L l mkAnonWildCardTy
+{-# INLINE b_anonWildT #-}
+
 b_symT :: Code -> Builder HType
 b_symT whole@(LForm (L l form))
   | Atom (ASymbol name) <- form =
@@ -52,7 +56,6 @@ b_symT whole@(LForm (L l form))
               | ',' == x  -> tv (getRdrName (tupleTyCon Boxed arity))
               | '!' == x  ->
                 bang (tv (mkUnqual (namespace (headFS xs)) xs))
-              | '_' == x && nullFS xs -> L l mkAnonWildCardTy
               -- XXX: Handle "StarIsType" language extension. Name of
               -- the type kind could be obtained from
               -- "TysWiredIn.liftedTypeKindTyCon".

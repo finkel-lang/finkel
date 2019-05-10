@@ -141,6 +141,7 @@ import Language.SK.Syntax.SynUtils
 '|'  { LForm (L _ (Atom (ASymbol "|"))) }
 '}'  { LForm (L _ (Atom (ASymbol "}"))) }
 '~'  { LForm (L _ (Atom (ASymbol "~"))) }
+'_'  { LForm (L _ (Atom (ASymbol "_"))) }
 
 -- Non Haskell 2010 reserved id, but treated specially
 'as'        { LForm (L _ (Atom (ASymbol "as"))) }
@@ -538,6 +539,7 @@ rdecls :: { [HDecl] }
 type :: { HType }
     : 'unpack' type { b_unpackT $1 $2 }
     | '!' type      { b_bangT $1 $2 }
+    | '_'           { b_anonWildT $1 }
     | idsym         {% b_symT $1 }
     | 'unit'        { b_unitT $1 }
     | '~'           { b_tildeT $1 }
@@ -595,6 +597,7 @@ pat_ :: { HPat }
     | 'string'  {% b_stringP $1 }
     | 'char'    {% b_charP $1 }
     | 'unit'    {% b_unitP $1 }
+    | '_'       { b_wildP $1 }
     | idsym     {% b_symP $1 }
     | 'hslist'  {% b_hsListP `fmap` parse p_pats0 (unListL $1) }
     | 'list'    {% parse p_pats1 $1 }
