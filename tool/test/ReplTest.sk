@@ -1,11 +1,16 @@
 ;;; Tests for REPL.
+
+#p(language OverloadedStrings)
+
 (require SK.Core)
 
 (defmodule ReplTest
   (export replTests)
   (use
    ;; base
-   (Control.Concurrent)
+   (Control.Concurrent
+    (forkIO newEmptyMVar killThread putMVar takeMVar threadDelay))
+   (Control.Exception (bracket))
    (Control.Monad (void))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate isSubsequenceOf))
@@ -16,12 +21,18 @@
    ;; hspec
    (Test.Hspec)
 
+   ;; network
+   (Network.Socket
+    ((AddrInfo ..) (SocketType ..)
+     connect defaultHints close getAddrInfo socket))
+   (Network.Socket.ByteString (sendAll recv))
+
    ;; sk-kernel
    (Language.SK)
    (Language.SK.SKC (runSkc))
 
    ;; Internal
-   (SK.Tool.Repl (repl-env))
+   (SK.Tool.Repl)
    (SK.Tool.Repl.Eval)
    (SK.Tool.Repl.Loop)
    (SK.Tool.Repl.IO)
@@ -32,7 +43,8 @@
 (defn (replTests Spec)
   (do (describe "Read" readTests)
       (describe "ReadPrint" readPrintTests)
-      (describe "Eval" evalTests)))
+      (describe "Eval" evalTests)
+      (describe "Listen" listenTests)))
 
 (defn (readTests Spec)
   (do (let ((= d describe)))
@@ -205,3 +217,36 @@
           (ng '(head []) "*** Exception: Prelude.head: empty list")
           (ng '(repl-macro info (foo bar))
               "<quoted code>: error: info: invalid form `(foo bar)'"))))))
+
+(defn (listenTests Spec)
+  (let ((= d describe)
+        (= act
+          (do (<- tid (forkIO (replMain ["--listen=50322"])))
+              (threadDelay 1000000)
+              (<- addr (resolve "127.0.0.1" "50322"))
+              (bracket (open-sock addr) (cleanup tid) send-forms)))
+        (= resolve host port
+          (do (let ((= hints
+                      (defaultHints {addrSocketType Stream}))))
+              (<- addrs
+                (getAddrInfo (Just hints) (Just host) (Just port)))
+              (case addrs
+                (: addr _) (return addr)
+                _ (error "Failed starting client"))))
+        (= cleanup tid sock
+          (do (killThread tid)
+              (close sock)))
+        (= open-sock addr
+          (do (<- sock (socket (addrFamily addr)
+                               (addrSocketType addr)
+                               (addrProtocol addr)))
+              (connect sock (addrAddress addr))
+              (return sock)))
+        (= send-forms sock
+          (do (<- _msg1 (recv sock 1024))
+              (sendAll sock "(* 7 (+ 4 2))")
+              (<- msg2 (recv sock 1024))
+              (return msg2))))
+    (d "listener"
+       (it "should evaluate form with listener"
+           (shouldReturn (liftIO act) "42")))))

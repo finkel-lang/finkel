@@ -79,6 +79,7 @@ test-suite sk-tool-test
                      , ghc
                      , haskeline
                      , hspec
+                     , network
                      , process
                      , sk-lang
                      , sk-kernel
