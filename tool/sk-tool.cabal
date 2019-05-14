@@ -16,6 +16,7 @@ extra-source-files:  README.md
                      src/SK/Tool/*.sk
                      src/SK/Tool/Repl/*.sk
                      test/*.sk
+                     test/data/input01.txt
                      test/data/p02/LICENSE
                      test/data/p02/Setup.hs
                      test/data/p02/p02.cabal
@@ -34,10 +35,12 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     SK.Tool.Help
+  exposed-modules:     SK.Tool.CLI
+                       SK.Tool.Help
                        SK.Tool.Repl.Types
                        SK.Tool.Repl.IO
                        SK.Tool.Repl.Listen
+                       SK.Tool.Repl.Eval
                        SK.Tool.Repl.Loop
                        SK.Tool.Repl.Macro
                        SK.Tool.Repl
@@ -74,6 +77,7 @@ test-suite sk-tool-test
                      , directory
                      , filepath
                      , ghc
+                     , haskeline
                      , hspec
                      , process
                      , sk-lang
@@ -82,9 +86,11 @@ test-suite sk-tool-test
   if flag(dynamic)
     ghc-options:       -dynamic
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  other-modules:       MainTest
+  other-modules:       CLITest
+                       MainTest
                        ReplTest
                        SetupTest
+                       TestIO
   default-language:    Haskell2010
 
 executable sk

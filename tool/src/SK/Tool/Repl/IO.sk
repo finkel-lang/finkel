@@ -1,20 +1,139 @@
-;;;; Module containing function to redirect stdout to file handle.
+;;;; IO related function for REPL
 
 (require SK.Core)
 
 (defmodule SK.Tool.Repl.IO
+  (export
+   init-form read-form read-print-loop with-io-redirect)
   (use
    ;; base
-   (Control.Exception)
-   (Data.List (intercalate))
+   (Control.Concurrent
+    ((MVar) (ThreadId) killThread newEmptyMVar putMVar
+     takeMVar throwTo))
+   (Control.Exception ((AsyncException ..) bracket catch throwIO))
+   (Control.Monad (when))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.List (inits intercalate isPrefixOf))
    (GHC.IO.Handle (hDuplicate hDuplicateTo))
    (System.IO ((Handle) (SeekMode ..) hFlush hGetLine hSeek
                hSetFileSize stdout))
-   (System.IO.Error (isEOFError)))
-  (export with-io-redirect))
+   (System.IO.Error (isEOFError))
 
-;;; Execute given action with redirecting stdout to given 'FilePath'.
+   ;; bytestring
+   (Data.ByteString.Builder (stringUtf8 toLazyByteString))
+   (qualified Data.ByteString.Lazy.Char8 as BS)
+
+   ;; sk-kernel
+   (Language.SK)
+   (Language.SK.Lexer (evalSP))
+   (Language.SK.Reader (sexpr))
+
+   ;; Internal
+   (SK.Tool.CLI)
+   (SK.Tool.Repl.Types)))
+
+
+;;; Read and print loop
+
+(defn (read-print-loop
+       (=> (MonadIO cl) (CLI cl) (HasReplState cl)
+           (-> (MVar Input) ThreadId (cl ()))))
+  "Loop for reading input and printing the output.
+
+Tracks the state of intermediate S-expression from input, and continue
+reading the input until successful parse result."
+  [to-mvar eval-tid]
+  (let ((= go result-mv
+          (do (<- st0 getReplState)
+              (let ((= prompt
+                      (if (null (pending-input st0)) "> " ""))))
+              (<- mb-input
+                ;; Handle interrupt signals thrown while waiting for
+                ;; input, to handle `Ctrl-C' key presses without valid
+                ;; evaluation form, and refresh intermediate user inputs
+                ;; in Repl state.
+                (handleInterrupt
+                 (do (<- st1 getReplState)
+                     (putReplState (st1 {pending-input []}))
+                     (return (Just [])))
+                 (getString prompt)))
+              (maybe (quit eval-tid) (go1 st0 result-mv) mb-input)))
+        (= go1 st0 result-mv line
+          (case line
+            (: h tl) (| ((== line "(quit)")
+                         (quit eval-tid))
+                        ((null (pending-input st0))
+                         (== \, h)
+                         (if (elem tl (tail (inits "quit")))
+                             (quit eval-tid)
+                             (go-command result-mv tl)))
+                        (otherwise
+                         (go-line result-mv line)))
+            [] (go result-mv)))
+        (= go-command result-mv lin
+          ;; Using raw symbol for REPL commands other than name-mangled
+          ;; commands, to use hyphens without replacing to underscores.
+          ;; Otherwise, command arguments like "ghc-pkg" will get
+          ;; replaced to "ghc_pkg" by the parser.
+          (| ((mangled-command lin)
+              (go-line result-mv (concat ["(repl-macro " lin ")"])))
+             (otherwise
+              (go-form result-mv (as-repl-macro lin)))))
+        (= go-line result-mv line
+          (do (<- mb-form (read-form line))
+              (maybe (go result-mv) (go-form result-mv) mb-form)))
+        (= go-form result-mv form
+          (do (let ((= input (Input Prompt form result-mv))))
+              (liftIO (putMVar to-mvar input))
+              (print-io result-mv)
+              (go result-mv)))
+        (= loop result-mv
+          (handleInterrupt
+           (do (liftIO (throwTo eval-tid UserInterrupt))
+               (print-io result-mv)
+               (loop result-mv))
+           (go result-mv))))
+
+    ;; Print the result from boot expression, then start the loop.
+    (withInterrupt
+     (do (<- result-mv (liftIO newEmptyMVar))
+         (liftIO (putMVar to-mvar (Input Prompt init-form result-mv)))
+         (print-io result-mv)
+         (loop result-mv)))))
+
+(defn (print-io (=> (MonadIO m) (CLI m)
+                    (-> (MVar Result) (m ()))))
+  [result-mv]
+  (do (<- result (liftIO (takeMVar result-mv)))
+      (case result
+        (Right str) (when (not (null str))
+                      (putString str))
+        (Left str) (case str
+                     [] (return ())
+                     _ (putString str)))
+      (liftIO (hFlush stdout))))
+
+(defn (read-form (=> (HasReplState repl) (Monad repl)
+                     (-> String (repl (Maybe Code)))))
+  "Read single S-expression form."
+  [input0]
+  (do (<- st getReplState)
+      (let ((= input1
+              (++ (pending-input st)
+                  [(toLazyByteString (stringUtf8 (: \\n input0)))]))
+            (= count (succ (input-count st)))
+            (= put-and-return pending ret
+              (do (putReplState (st {input-count count
+                                     pending-input pending}))
+                  (return ret)))))
+      (case (evalSP sexpr (Just "<interactive>") (BS.concat input1))
+        (Right forms) (put-and-return [] (Just forms))
+        (Left _err)   (put-and-return input1 Nothing))))
+
+;;; IO redirect
+
 (defn (with-io-redirect (-> Handle (IO a) (IO (, a String))))
+  "Execute given action with redirecting stdout to given 'Handle'."
   [hdl action]
   (bracket
    (do (<- stdout2 (hDuplicate stdout))
@@ -39,3 +158,22 @@
       (if (isEOFError e)
           (return (reverse acc))
           (throwIO e)))))
+
+;;; Auxiliary
+
+(defn (init-form Code)
+  "Form to initialize the REPL."
+  '(putStrLn "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
+
+(defn (quit (=> (MonadIO m) (-> ThreadId (m ()))))
+  (. liftIO killThread))
+
+(defn (mangled-command (-> String Bool))
+  [lin]
+  (case (words lin)
+    (: w _) (any (isPrefixOf w) ["info" "kind" "load" "type"])
+    _       False))
+
+(defn (as-repl-macro (-> String Code))
+  [str]
+  `(repl-macro ,@(map qSymbol (words str))))

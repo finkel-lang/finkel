@@ -9,6 +9,8 @@
 (require SK.Core)
 
 (defmodule SK.Tool.Repl
+  (export
+   replMain repl-env)
   (load
    ;; base
    (Prelude)
@@ -21,9 +23,10 @@
   (use
    ;; base
    (Control.Monad (mplus))
-   (System.Exit (exitFailure))
-   (System.Console.GetOpt ((ArgDescr ..) (ArgOrder ..) (OptDescr ..)
-                           getOpt usageInfo))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   ;; (System.Exit (exitFailure))
+   (System.Console.GetOpt
+    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
    (System.Environment (getProgName))
 
    ;; sk-kernel
@@ -35,15 +38,15 @@
    (SK.Core)
 
    ;; Internal
+   (SK.Tool.CLI)
    (SK.Tool.Repl.Macro)
-   (SK.Tool.Repl.Loop))
-  (export replMain
-          repl-env))
+   (SK.Tool.Repl.Loop)))
+
 
 
-;;; Exported entities
+;;; Exported
 
-(defn (replMain (-> [String] (IO ())))
+(defn (replMain (=> (CLI m) (-> [String] (m ()))))
   "Main entry point function for REPL."
   [args]
   (case (getOpt Permute descrs args)
@@ -59,11 +62,11 @@
                    envDefaultMacros macros})))
 
 
-;;; Option types
+;;; Internal
 
 (data ReplMode
-  Help Listen Run
-  (deriving (Eq Show)))
+  Help
+  Run)
 
 (data ReplOption
   (ReplOption {repl-mode ReplMode
@@ -71,7 +74,7 @@
 
 (defn (initial-option ReplOption)
   (ReplOption {repl-mode Run
-               repl-listen-port (Just 50321)}))
+               repl-listen-port Nothing}))
 
 (defn (descrs [OptDescr (-> ReplOption ReplOption)])
   [(Option [\h] ["help"]
@@ -81,42 +84,33 @@
            (OptArg (\ mb-port o
                      (let ((= port
                              (mplus (fmap read mb-port)
-                                    (repl-listen-port o))))
-                       (o {repl-mode Listen
+                                    (Just 50321))))
+                       (o {repl-mode Run
                            repl-listen-port port})))
                    "PORT")
            "Listen to port (default: 50321)")])
 
-(defn (act (-> ReplOption (IO ())))
+(defn (act (=> (CLI m) (-> ReplOption (m ()))))
   [ro]
   (case (repl-mode ro)
     Help print-usage
-    Listen (run (repl-listen-port ro))
-    Run (run Nothing)))
+    Run (liftIO (start-repl (repl-listen-port ro) repl-env))))
 
-
-;;; Actions
-
-(defn (print-errors (-> [String] (IO ())))
+(defn (print-errors (=> (CLI m) (-> [String] (m ()))))
   [errs]
-  (do (mapM_ putStr errs)
-      (putChar \\n)
+  (do (putString (concat errs))
       print-usage
-      exitFailure))
+      (exitWith (ExitFailure 1))))
 
-(defn (print-usage (IO ()))
-  (do (<- name getProgName)
-      (putStr
+(defn (print-usage (=> (CLI m) (m ())))
+  (do (<- name (liftIO getProgName))
+      (putString
        (unlines
         [(concat ["USAGE: " name " repl [OPTIONS]"])
          ""
          "Start interactive REPL."
          ""
          (usageInfo "OPTIONS:\n" descrs)]))))
-
-(defn (run (-> (Maybe Int) (IO ())))
-  [listen]
-  (start-repl listen repl-env))
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.

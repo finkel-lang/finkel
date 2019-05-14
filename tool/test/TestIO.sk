@@ -1,0 +1,100 @@
+;;;; Newtype wrapper of IO for running tests.
+
+(require SK.Core)
+
+(defmodule TestIO
+  (export
+   (TestIO ..) (TestIOState ..) runTestIO)
+  (use
+   ;; base
+   (Control.Monad.IO.Class ((MonadIO ..)))
+
+   ;; Internal
+   (SK.Tool.CLI)
+   (SK.Tool.Repl.Types)))
+
+;;; Test IO
+
+(data TestIOState
+  (TestIOState {tst-inputs [String]
+                tst-outputs [String]
+                tst-exitcode (Maybe ExitCode)
+                tst-replstate ReplState}))
+
+(instance (Semigroup TestIOState)
+  (= <> s1 s2
+    (TestIOState {tst-inputs (<> (tst-inputs s1) (tst-inputs s2))
+                  tst-outputs (<> (tst-outputs s1) (tst-outputs s2))
+                  tst-exitcode (maybe (tst-exitcode s2)
+                                      pure
+                                      (tst-exitcode s2))
+                  tst-replstate (<> (tst-replstate s1)
+                                    (tst-replstate s2))})))
+
+(instance (Monoid TestIOState)
+  (= mempty emptyTestIOState))
+
+(defn (emptyTestIOState TestIOState)
+  (TestIOState {tst-inputs []
+                tst-outputs []
+                tst-exitcode Nothing
+                tst-replstate initial-repl-state}))
+
+;;; Newtype wrapper to test IO actions, combination of TestIOState state
+;;; monad and IO.
+(newtype (TestIO a)
+  (TestIO {unTestIO (-> TestIOState (IO (, a TestIOState)))}))
+
+(defn (runTestIO (-> (TestIO a) [String] (IO (, a TestIOState))))
+  [test-io inputs]
+  (unTestIO test-io (mempty {tst-inputs inputs})))
+
+(instance (Functor TestIO)
+  (= fmap f (TestIO m)
+    (TestIO (\ st0 (fmap (\ (, a st) (, (f a) st)) (m st0))))))
+
+(instance (Applicative TestIO)
+  (= pure x
+    (TestIO (\ st (pure (, x st)))))
+  (= <*> (TestIO ft) (TestIO xt)
+    (TestIO (\ st0 (do (<- (, f st1) (ft st0))
+                       (<- (, x st2) (xt st1))
+                       (return (, (f x) st2)))))))
+
+(instance (Monad TestIO)
+  (= return pure)
+  (= >>= (TestIO m) k
+    (TestIO (\ st0 (do (<- (, a st1) (m st0))
+                       (unTestIO (k a) st1))))))
+
+(instance (MonadIO TestIO)
+  (= liftIO io
+    (TestIO (\ st (fmap (\ x (, x st)) io)))))
+
+(instance (CLI TestIO)
+  (= getString _prompt
+    (TestIO (\ tst
+              (case (tst-inputs tst)
+                (: s rest) (let ((= tst' (tst {tst-inputs rest})))
+                             (pure (, (Just s) tst')))
+                [] (pure (, Nothing tst))))))
+
+  (= putString str
+    (TestIO
+     (\ st (let ((= tst-outputs' (<> (tst-outputs st) [str])))
+             (pure (, () (st {tst-outputs tst-outputs'})))))))
+
+  ;;; XXX: Does nothing.
+  (= handleInterrupt _handler act act)
+
+  ;;; XXX: Does nothing.
+  (= withInterrupt act act)
+
+  (= exitWith ec
+    (TestIO (\ st (pure (, () (st {tst-exitcode (Just ec)})))))))
+
+(instance (HasReplState TestIO)
+  (= putReplState rst
+    (TestIO (\ st (pure (, () (st {tst-replstate rst}))))))
+  (= getReplState
+    (TestIO (\ st (pure (, (tst-replstate st) st))))))

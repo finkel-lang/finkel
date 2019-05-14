@@ -1,12 +1,13 @@
 ;;; Tests for REPL.
-
 (require SK.Core)
 
 (defmodule ReplTest
+  (export replTests)
   (use
    ;; base
    (Control.Concurrent)
    (Control.Monad (void))
+   (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate isSubsequenceOf))
 
    ;; directory
@@ -19,15 +20,18 @@
    (Language.SK)
    (Language.SK.SKC (runSkc))
 
-   ;; sk-lang
+   ;; Internal
    (SK.Tool.Repl (repl-env))
+   (SK.Tool.Repl.Eval)
    (SK.Tool.Repl.Loop)
-   (SK.Tool.Repl.Types))
+   (SK.Tool.Repl.IO)
+   (SK.Tool.Repl.Types)
+   (TestIO)))
 
-  (export replTests))
 
 (defn (replTests Spec)
   (do (describe "Read" readTests)
+      (describe "ReadPrint" readPrintTests)
       (describe "Eval" evalTests)))
 
 (defn (readTests Spec)
@@ -39,11 +43,39 @@
                  (shouldBe (Just '(foo bar buzz)) form))))
       (d "reading multi line form"
          (it "returns '(a b c)"
-             (do (<- form (run-repl (do (read-form "(a ")
-                                        (read-form "b ")
+             (do (<- form (run-repl (do (<- _ (read-form "(a "))
+                                        (<- _ (read-form "b "))
                                         (read-form "c)"))
                                     initial-repl-state))
                  (shouldBe (Just '(a b c)) form))))))
+
+(defn (readPrintTests Spec)
+  (describe
+   "read and print loop"
+   (do (rptest "multi line form" ["(print" "(+" "10" "32" "))"])
+       (rptest "quitting with \"(quit)\"" ["(quit)"])
+       (rptest "\",t\" command" [",t False"])
+       (rptest "\",!\" command" [",! echo foo bar"])
+       (rptest "\",q\" command" [",q"]))))
+
+(defn (rptest (-> String [String] Spec))
+  [label inputs]
+  (describe
+   label
+   (do (let ((= run
+               (do (<- (@ resources (, _ hdl in-mv)) acquire-repl)
+                   (<- eval-tid
+                     (forkIO (runSkc (eval-loop hdl in-mv) repl-env)))
+                   (let ((= act
+                           (runTestIO (read-print-loop in-mv eval-tid)
+                                      inputs))))
+                   (return (, resources act))))))
+       (<- (, resources act) (runIO run))
+       (after_ (cleanup-repl resources)
+               (it "should evaluate successfully"
+                   (do (<- tst (fmap snd (liftIO act)))
+                       (shouldSatisfy (pending-input (tst-replstate tst))
+                                      null)))))))
 
 (defn (evalTests Spec)
   (do (let ((= d describe)
@@ -52,7 +84,7 @@
       (<- (, tmpfile hdl in-mv) (runIO acquire-repl))
       (<- current-dir (runIO getCurrentDirectory))
       (<- etid
-        (runIO (forkIO (void (runSkc (eval-loop hdl in-mv) repl-env)))))
+        (runIO (forkIO (runSkc (eval-loop hdl in-mv) repl-env))))
       (let ((= eval-form right-or-left form expect
               (d (concat ["evaluate " (show form)])
                  (it "evaluates to expected result"
@@ -61,12 +93,12 @@
                          (shouldBe ret (right-or-left expect))))))
             (= ok (eval-form Right))
             (= ng (eval-form Left))
-            (= satisfy form pred
+            (= satisfy form test
               (d (concat ["evaluate " (show form)])
                  (it "satisfies predicate"
                      (do (putMVar in-mv (Input Connection form out-mv))
                          (<- ret (takeMVar out-mv))
-                         (shouldSatisfy ret pred)))))))
+                         (shouldSatisfy ret test)))))))
       (beforeAll_
        (do (putMVar in-mv (Input Connection init-form out-mv))
            (void (takeMVar out-mv)))

@@ -1,0 +1,81 @@
+;;; Tests for CLI type class and its instances
+
+#p(language RankNTypes)
+
+(require SK.Core)
+
+(defmodule CLITest
+  (export cliTests)
+  (use
+   ;; base
+   (Control.Exception (bracket))
+   (Control.Monad (replicateM))
+   (GHC.IO.Handle (hDuplicate hDuplicateTo))
+   (System.IO ((Handle) (IOMode ..) hClose openFile stdin))
+
+   ;; filepath
+   (System.FilePath (</>))
+
+   ;; haskeline
+   (System.Console.Haskeline (defaultSettings runInputT))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; Internal
+   (SK.Tool.CLI)))
+
+(defn (cliTests Spec)
+  (do (describe "IO instance" io-tests)
+      (describe "InputT instance" inputT-tests)))
+
+(defn (io-tests Spec)
+  (make-cli-tests id))
+
+(defn (inputT-tests Spec)
+  (make-cli-tests (runInputT defaultSettings)))
+
+(defn (make-cli-tests
+       (=> (CLI m) (-> (forall a (-> (m a) (IO a))) Spec)))
+  [toIO]
+  (do (let ((= d describe)))
+      (d "getString"
+         (it "should end with Nothing"
+             (shouldReturn (with-test-stdin "input01.txt"
+                             (toIO (replicateM 3 (getString ""))))
+                           [(Just "First line")
+                            (Just "Second line")
+                            Nothing])))
+      (d "putString"
+         (it "should run successfully"
+             (shouldReturn (toIO (putString "foo"))
+                           ())))
+      (d "handleInterrupt"
+         (it "should run the given action"
+             (shouldReturn (toIO (handleInterrupt (return ())
+                                                  (return ())))
+                           ())))
+      (d "withInterrupt"
+         (it "should run the given action"
+             (shouldReturn (toIO (withInterrupt (return ())))
+                           ())))
+      (d "exitWith"
+         (it "should throw exit failure"
+             (shouldThrow (toIO (exitWith (ExitFailure 1)))
+                          (== (ExitFailure 1)))))))
+
+(defn (with-test-stdin (-> String (IO a) (IO a)))
+  [path act]
+  (bracket
+   (do (<- stdin' (hDuplicate stdin))
+       (<- hdl (openFile (datafile path) ReadMode))
+       (hDuplicateTo hdl stdin)
+       (return (, hdl stdin')))
+   (\ (, hdl stdin')
+     (do (hClose hdl)
+         (hDuplicateTo stdin' stdin)))
+   (const act)))
+
+(defn (datafile (-> String FilePath))
+  [name]
+  (</> "test" (</> "data" name)))

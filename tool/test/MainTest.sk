@@ -4,7 +4,7 @@
 
 (defmodule MainTest
   (export
-   mainTest)
+   mainTests)
   (use
    ;; base
    (Control.Monad.IO.Class ((MonadIO ..)))
@@ -14,11 +14,16 @@
    (Test.Hspec)
 
    ;; Internal
+   (SK.Tool.CLI)
    (SK.Tool.Help)
    (SK.Tool.Main)
-   (SK.Tool.Version)))
+   (SK.Tool.Repl)
+   (SK.Tool.Version)
+   (TestIO)))
 
-(defn (mainTest Spec)
+;;; Tests
+
+(defn (mainTests Spec)
   (do (let ((= d describe)
             (= main' args
               (withArgs args main))))
@@ -45,55 +50,36 @@
          (it "should show all versions by default"
              (shouldReturn (main' ["version"]) ())))
       helpTests
+      replTests
       versionTests))
 
-(newtype (TestIO a)
-  (TestIO {unTestIO (IO (, a [String]))}))
-
-(instance (Functor TestIO)
-  (= fmap f (TestIO m)
-    (TestIO (fmap (\ (, a ws) (, (f a) ws)) m))))
-
-(instance (Applicative TestIO)
-  (= pure x (TestIO (pure (, x mempty))))
-  (= <*> (TestIO ft) (TestIO xt)
-    (let ((= h (, f w1) (, x w2)
-            (, (f x) (<> w1 w2))))
-      (TestIO (<*> (fmap h ft) xt)))))
-
-(instance (Monad TestIO)
-  (= return pure)
-  (= >>= (TestIO m) k
-    (TestIO (do (<- (, a w1) m)
-                (<- (, b w2) (unTestIO (k a)))
-                (return (, b (<> w1 w2)))))))
-
-(instance (MonadIO TestIO)
-  (= liftIO io
-    (TestIO (fmap (\ x (, x mempty)) io))))
-
-(instance (HelpUI TestIO)
-  (= printHelp str (TestIO (pure (, () [str])))))
-
-(instance (VersionUI TestIO))
-
 (defn (helpTests Spec)
-  (do (<- (, _ lns) (runIO (unTestIO (show-usage commands))))
+  (do (<- (, _ lns) (runIO (runTestIO (show-usage commands) [])))
       (let ((= d describe)
             (= messageShouldContain
-              (shouldContain (unlines lns)))))
+              (shouldContain (unlines (tst-outputs lns))))))
       (d "help command"
          (it "should contain command names in usage message"
              (do (messageShouldContain "repl")
                  (messageShouldContain "make")
                  (messageShouldContain "version"))))))
 
+(defn (replTests Spec)
+  (describe
+   "repl command"
+   (do (let ((= repl args
+               (fmap (. unlines (. tst-outputs snd))
+                     (liftIO (runTestIO (replMain args) []))))))
+       (it "should complain unrecognized option"
+           (do (<- msg (repl ["--no-such-option"]))
+               (shouldContain msg "--no-such-option"))))))
+
 (defn (versionTests Spec)
   (describe
    "version command"
    (do (let ((= version args
-               (fmap (. unlines snd)
-                     (liftIO (unTestIO (versionMain args)))))))
+               (fmap (. unlines (. tst-outputs snd))
+                     (liftIO (runTestIO (versionMain args) []))))))
        (it "should show \"--help\" in help message"
            (do (<- msg (version ["--help"]))
                (shouldContain msg "--help")))

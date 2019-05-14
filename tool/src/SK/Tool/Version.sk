@@ -4,8 +4,7 @@
 
 (defmodule SK.Tool.Version
   (export
-   versionMain
-   (VersionUI ..))
+   versionMain)
   (use
    ;; base
    (Control.Monad.IO.Class ((MonadIO ..)))
@@ -24,23 +23,17 @@
    (qualified Paths_sk_lang)
 
    ;; Internal
-   (SK.Tool.Help)))
+   (SK.Tool.CLI)))
 
 
 
 ;;; Exported
 
-(class (=> (HelpUI m) (VersionUI m))
-  (:: printVersion (-> String (m ())))
-  (= printVersion printHelp))
-
-(instance (VersionUI IO))
-
-(defn (versionMain (=> (VersionUI m) (-> [String] (m ()))))
+(defn (versionMain (=> (CLI m) (-> [String] (m ()))))
   [args]
   (case (getOpt Permute version-descrs args)
     (, os _ []) (show-version (foldr const AllVersions os))
-    (, _ _ es)  (do (printVersion (concat es))
+    (, _ _ es)  (do (putString (concat es))
                     print-version-help)))
 
 
@@ -70,7 +63,7 @@
            (NoArg VersionHelp)
            "show this help and exit")])
 
-(defn (show-version (=> (VersionUI m) (-> VersionMode (m ()))))
+(defn (show-version (=> (CLI m) (-> VersionMode (m ()))))
   [mode]
   (case mode
     AllVersions (do print-lang-version
@@ -81,18 +74,18 @@
     LangVersion print-lang-version
     VersionHelp print-version-help))
 
-(defn (print-ghc-version (=> (VersionUI m) (m ())))
-  (printVersion (++ "ghc " cProjectVersion)))
+(defn (print-ghc-version (=> (CLI m) (m ())))
+  (putString (++ "ghc " cProjectVersion)))
 
-(defn (print-kernel-version (=> (VersionUI m) (m ())))
-  (printVersion (++ "sk-kernel " sk-kernel-version)))
+(defn (print-kernel-version (=> (CLI m) (m ())))
+  (putString (++ "sk-kernel " sk-kernel-version)))
 
-(defn (print-lang-version (=> (VersionUI m) (m ())))
-  (printVersion (++ "sk-lang " sk-lang-version)))
+(defn (print-lang-version (=> (CLI m) (m ())))
+  (putString (++ "sk-lang " sk-lang-version)))
 
-(defn (print-version-help (=> (HelpUI m) (m ())))
+(defn (print-version-help (=> (CLI m) (m ())))
   (do (<- name (liftIO getProgName))
-      (printHelp
+      (putString
        (unlines
         [(concat ["USAGE: " name " version [OPTIONS]"])
          ""

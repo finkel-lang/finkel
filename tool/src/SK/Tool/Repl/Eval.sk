@@ -1,0 +1,295 @@
+;;; Eval loop in REPL.
+
+(require SK.Core)
+
+(defmodule SK.Tool.Repl.Eval
+  (export
+   eval-loop)
+  (use
+   ;; base
+   (Control.Concurrent.MVar ((MVar) putMVar takeMVar))
+   (Control.Exception ((AsyncException ..) fromException throwIO))
+   (Control.Monad (void))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.List (intercalate))
+
+   (System.Exit (exitWith))
+   (System.IO ((Handle)))
+
+   ;; ghc
+   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..)
+              gopt-set gopt-unset interpWays targetPlatform updateWays
+              wayGeneralFlags wayUnsetGeneralFlags))
+   (ErrUtils (pprErrMsgBagWithLoc))
+   (Exception (ghandle))
+   (GHC (getPrintUnqual setSessionDynFlags))
+   (GHCi (evalStmt))
+   (GhcMonad ((GhcMonad ..) getSessionDynFlags modifySession))
+   (HscMain (hscParsedStmt))
+   (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
+              (FixityEnv) extendInteractiveContextWithIds
+              setInteractivePrintName srcErrorMessages))
+   (HsImpExp ((ImportDecl ..)))
+   (InteractiveEval (getContext parseName setContext))
+   (Linker (extendLinkEnv))
+   (Name ((Name) getName nameOccName occNameString))
+   (OrdList (toOL))
+   (Outputable (ppr mkErrStyle renderWithStyle setStyleColoured
+                    showPpr showSDoc vcat))
+   (RdrHsSyn (cvTopDecls))
+   (SrcLoc (unLoc))
+   (TyCoRep ((TyThing ..)))
+   (Var ((Id) (Var) varType))
+
+   ;; ghci
+   (GHCi.Message ((EvalExpr ..) (EvalResult ..) (EvalStatus_ ..)
+                  (SerializableException ..)))
+   (GHCi.RemoteTypes ((ForeignHValue)))
+
+   ;; sk-kernel
+   (Language.SK)
+   (Language.SK.Builder ((HDecl) (HImportDecl)  (HStmt)
+                         syntaxErrCode syntaxErrMsg evalBuilder))
+   (Language.SK.Eval (evalDecls))
+   (Language.SK.Expand (expands))
+   (Language.SK.Make (initSessionForMake))
+   (Language.SK.SKC (failS))
+   (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
+
+   ;; internal
+   (SK.Tool.Repl.IO)
+   (SK.Tool.Repl.Types)))
+
+
+;;; Eval loop
+
+(defn (eval-loop (-> Handle (MVar Input) (Skc ())))
+  "Loop to evaluate expressions."
+  [hdl in-mvar]
+  (let ((= initialize
+          ;; See the `main''' function in `ghc/Main.hs'.  Setting
+          ;; default target in interactive context as `HscInterpreted',
+          ;; updating to `HscInterpreted', and setting the default
+          ;; verbosity level in REPL to 1.
+          (do initSessionForMake
+              (<- hsc-env getSession)
+              (let ((= dflags0 (ic-dflags (hsc-IC hsc-env)))
+                    (= dflags1 (dflags0 {hscTarget HscInterpreted
+                                         ghcLink LinkInMemory
+                                         verbosity 1}))
+                    (= dflags2 (updateWays (dflags1 {ways interpWays})))
+                    (= platform (targetPlatform dflags2))
+                    (= dflags3
+                      (foldl gopt-set dflags2
+                             (concatMap (wayGeneralFlags platform)
+                                        interpWays)))
+                    (= dflags4
+                      (foldl gopt-unset dflags3
+                             (concatMap (wayUnsetGeneralFlags platform)
+                                        interpWays)))))
+              (void (setSessionDynFlags dflags4))
+              (set-print-name "Prelude.print")))
+        (= withAsyncHandler
+          (ghandle
+           (\ e
+             (do (liftIO
+                  (case e
+                    UserInterrupt (return ())
+                    ThreadKilled  (return ())
+                    _             (putStrLn (++ "eval-loop: got "
+                                                (show e)))))
+                 loop))))
+        (= src-err-handler src-err
+          (do (<- dflags getSessionDynFlags)
+              (<- unqual getPrintUnqual)
+              (let ((= sdoc (vcat (pprErrMsgBagWithLoc emsgs)))
+                    (= style0 (mkErrStyle dflags unqual))
+                    (= style1 (setStyleColoured True style0))
+                    (= emsgs (srcErrorMessages src-err))))
+              (return (Left (renderWithStyle dflags sdoc style1)))))
+        (:: throw-async-io (-> AsyncException (Skc a)))
+        (= throw-async-io (. liftIO throwIO))
+        (= withErrorHandler m
+          (ghandle
+           (\ e
+             (case (fromException e)
+               (Just se) (src-err-handler se)
+               Nothing   (case (fromException e)
+                           (Just ae) (throw-async-io ae)
+                           Nothing   (return (Left (show e))))))
+           m))
+        (= eval-one
+          (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
+              (<- ret (withErrorHandler
+                       (do (<- expanded (expands [form]))
+                           (eval-form hdl itype expanded))))
+              (liftIO (putMVar out-mv ret))))
+        (= loop
+          (withAsyncHandler (>> eval-one loop))))
+    (>> initialize loop)))
+
+(defn (set-print-name (-> String (Skc ())))
+  "Set the name of function used for printing values in interactive
+context."
+  [name]
+  (do (<- vals (parseName name))
+      (case vals
+        (: fn _) (modifySession
+                  (\ he (he {hsc-IC
+                             (setInteractivePrintName (hsc-IC he)
+                                                      fn)})))
+        _ (failS "set-print-name: parse error"))))
+
+(defn (eval-form (-> Handle InSource [Code] (Skc Result)))
+  [hdl itype forms]
+  (| ((null forms)
+      (return (Right "")))
+     ((<- (Right decls) (evalBuilder parseTopDecls forms))
+      (eval-decls decls))
+     ((<- (Right stmt) (evalBuilder parseStmt forms))
+      (eval-statement hdl itype stmt))
+     (otherwise
+      (case (evalBuilder parseImports forms)
+        (Right idecl) (eval-imports idecl)
+        (Left se)     (skSrcError (syntaxErrCode se)
+                                  (syntaxErrMsg se))))))
+
+(defn (eval-statement (-> Handle InSource HStmt (Skc Result)))
+  [hdl itype stmt0]
+  (do (<- hsc-env getSession)
+      (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
+      (case stmt1
+        (Just (, is h f)) (update-hsc-env hdl itype hsc-env is h f)
+        Nothing (return (Left "eval-statement: no result")))))
+
+(defn (eval-imports (-> [HImportDecl] (Skc Result)))
+  [imports]
+  (do (<- dflags getSessionDynFlags)
+      (<- ctx0 getContext)
+      (let ((= mkIIDecl (L _ idecl)
+              (IIDecl idecl))
+            (= mdls
+              (++ "; " (intercalate ", "
+                                    (map (. (showSDoc dflags) ppr)
+                                         imports))))
+            (= f mdl (add-gt-ii (mkIIDecl mdl)))
+            (= ctx1 (foldr f ctx0 imports))))
+      (setContext ctx1)
+      (return (Right mdls))))
+
+(defn (eval-decls (-> [HDecl] (Skc Result)))
+  [decls]
+  (do (let ((= decls' (cvTopDecls (toOL decls)))))
+      (<- (, tythings _ic) (evalDecls decls'))
+      (<- hsc-env getSession)
+      (let ((= dflags (hsc-dflags hsc-env))
+            (= pr tt
+              (case tt
+                (AnId var) (var-name-and-type dflags (getName var) var)
+                _          (++ "; " (showSDoc dflags (ppr tt)))))
+            (= show-tything tt acc
+              (let ((= nstr
+                      (showSDoc dflags (ppr (getName tt)))))
+                (if (== "$trModule" nstr)
+                    acc
+                    (: (pr tt) acc))))
+            (= tystrs (foldr show-tything [] tythings))
+            (= tystr (intercalate "\n" tystrs))))
+      (return (Right tystr))))
+
+(defn (update-hsc-env (-> Handle InSource HscEnv [Id] ForeignHValue
+                          FixityEnv (Skc Result)))
+  [hdl itype hsc-env ids hvals-io fixity-env]
+  ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
+  ;; `iservCmd' in its implementation.
+  (let ((= success fhvals _elapsed ret
+          (do (let ((= ic (hsc-IC hsc-env))
+                    (= ic2 (extendInteractiveContextWithIds ic ids))
+                    (= ic3 (ic2 {ic-fix-env fixity-env}))
+                    (= names (map getName ids))
+                    (= hsc-env-2 (hsc-env {hsc-IC ic3}))))
+              (<- dflags getSessionDynFlags)
+              (liftIO (extendLinkEnv (zip names fhvals)))
+
+              ;; InteractiveEval does not export `rttiEnvironment'.
+              ;;
+              ;; (<- hsc-env-3
+              ;;     (liftIO
+              ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
+
+              (setSession hsc-env-2)
+              (case names
+                [name] (| ((== (occNameString (nameOccName name)) "it")
+                           (return (Right ret))))
+                _ (return
+                    (Right (names-and-types dflags names ids))))))
+        (= exception serialized
+          (case serialized
+            (EOtherException e) (return (Left (++ "*** Exception: " e)))
+            (EExitCode ecode)   (liftIO (exitWith ecode))
+            EUserInterrupt      (return (Left "Interrupt"))))
+        (= incomplete
+          (return (Left "update-hsc-env failed.")))
+        (= eval-hvals-io
+          (evalStmt hsc-env False (EvalThis hvals-io)))
+        (= eval-for-prompt
+          (do (<- stat (liftIO eval-hvals-io))
+              (return (, stat ""))))
+        (= eval-for-connection
+          (liftIO (with-io-redirect hdl eval-hvals-io))))
+    (do (<- (, status ret)
+          ;; Switching behaviour between prompt and network
+          ;; connection. Getting printed result as `String' for
+          ;; connection by wrapping the execution of compiled result,
+          ;; which is a value of `IO [HValue]' type.
+          (case itype
+            Prompt eval-for-prompt
+            Connection eval-for-connection))
+        (case status
+          (EvalComplete et (EvalSuccess hvs)) (success hvs et ret)
+          (EvalComplete  _ (EvalException e)) (exception e)
+          _                                  incomplete))))
+
+
+;;; Auxiliary
+
+(defn (var-name-and-type (-> DynFlags Name Var String))
+  [dflags name var]
+  (let ((= nstr (occNameString (nameOccName name)))
+        (= typ (showPpr dflags (varType var))))
+    (if (== nstr "it")
+        ""
+        (intercalate "\n"
+                     (map (++ "; ")
+                          (lines (++ nstr (++ " :: " typ))))))))
+
+(defn (names-and-types (-> DynFlags [Name] [Var] String))
+  [dflags names vars]
+  (where (| ((all null tvs) "")
+            (otherwise (intercalate "\n" tvs)))
+    (= tvs (zipWith (var-name-and-type dflags) names vars))))
+
+(defn (add-gt-ii (-> InteractiveImport [InteractiveImport]
+                     [InteractiveImport]))
+  [mdl acc]
+  (if (any (subsume-ii mdl) acc)
+      acc
+      (: mdl acc)))
+
+(defn (subsume-ii (-> InteractiveImport InteractiveImport Bool))
+  ;; See `GHCi.UI.iiSubsumes'.
+  [(IIModule x) (IIModule y)] (== x y)
+  [(IIDecl x) (IIDecl y)]
+  (where (and [(== (unLoc (ideclName x))
+                   (unLoc (ideclName y)))
+               (== (ideclAs x) (ideclAs y))
+               (|| (not (ideclQualified x))
+                   (ideclQualified y))
+               (hiding-subsumes (ideclHiding x)
+                                (ideclHiding y))])
+    (defn hiding-subsumes
+      [_                         (Just (, False (L _ [])))] True
+      [(Just (, False (L _ xs))) (Just (, False (L _ ys)))]
+      (all (flip elem xs) ys)
+      [                       a                          b] (== a b)))
+  [_ _] False)

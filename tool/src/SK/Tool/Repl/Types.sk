@@ -1,10 +1,23 @@
-#p(LANGUAGE GeneralizedNewtypeDeriving)
+#p(LANGUAGE FlexibleInstances
+            GeneralizedNewtypeDeriving)
 
 ;;;; Types for REPL.
 
 (require SK.Core)
 
 (defmodule SK.Tool.Repl.Types
+  (export
+   ;; repl
+   (Repl ..) run-repl put-repl-state get-repl-state
+
+   ;; repl state
+   (ReplState ..) (HasReplState ..) initial-repl-state
+
+   ;; input and result
+   (Input ..) (InSource ..) (Result)
+
+   ;; re-export
+   (MonadTrans ..))
   (use
    ;; base
    (Control.Concurrent ((MVar)))
@@ -21,29 +34,26 @@
    (Control.Monad.Trans.State.Strict ((StateT ..) evalStateT get put))
 
    ;; sk-kernel
-   (Language.SK ((Code))))
-
-  (export
-   ;; repl
-   (Repl ..) run-repl put-repl-state get-repl-state
-
-   ;; repl state
-   (ReplState ..) initial-repl-state
-
-   ;; input and result
-   (Input ..) (InSource ..) (Result)
-
-   ;; re-export
-   (MonadTrans ..)))
+   (Language.SK ((Code)))))
 
 
-;;; Repl, state, and result types
+;;; REPL, REPL state, input, and result types
 
 ;;; Repl state type to hold intermediate line-wise inputs.
 (data ReplState
   (ReplState {pending-input [BS.ByteString]
               input-count Int})
   (deriving (Eq Show)))
+
+(instance (Semigroup ReplState)
+  (= <> r1 r2
+    (ReplState {pending-input (<> (pending-input r1)
+                                  (pending-input r2))
+                input-count (max (input-count r1)
+                                 (input-count r2))})))
+
+(instance (Monoid ReplState)
+  (= mempty initial-repl-state))
 
 (defn (initial-repl-state ReplState)
   (ReplState {pending-input [] input-count 0}))
@@ -62,6 +72,20 @@
 
 (defn (get-repl-state (Repl ReplState))
   (Repl get))
+
+;;; Type class for getting and putting 'ReplState'.
+(class (HasReplState r)
+  (:: getReplState (r ReplState))
+  (:: putReplState (-> ReplState (r ()))))
+
+(instance (HasReplState Repl)
+  (= getReplState get-repl-state)
+  (= putReplState put-repl-state))
+
+(instance (=> (MonadTrans t) (Monad m) (HasReplState m)
+              (HasReplState (t m)))
+  (= getReplState (lift getReplState))
+  (= putReplState (. lift putReplState)))
 
 ;;; Input data type to hold form to evaluate, and MVar to receive
 ;;; result from evaluation thread.

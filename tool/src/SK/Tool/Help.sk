@@ -1,0 +1,71 @@
+;;; Help utility for sk tool.
+
+(require SK.Core)
+
+(defmodule SK.Tool.Help
+  (export
+   ;; Commands with brief description
+   (Command ..)
+   find-command
+
+   ;; Help command
+   helpMain
+   show-usage)
+  (use
+   ;; base
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.Foldable ((Foldable ..) find maximumBy))
+   (Data.Function (on))
+   (System.Environment (getProgName))
+
+   ;; Internal
+   (SK.Tool.CLI)))
+
+;;; Data type to wrap an IO action taking string arguments with name and
+;;; description.
+(data Command
+  (Command {cmd-name String
+            cmd-descr String
+            cmd-act (-> [String] (IO ()))}))
+
+(defn (find-command
+       (=> (Foldable t)
+           (-> (t Command) String (Maybe Command))))
+  "Find the command by command name."
+  [cmds name]
+  (find (. (== name) cmd-name) cmds))
+
+(defn (helpMain (=> (CLI m) (-> [Command] [String] (m ()))))
+  "Main function for help command."
+  [cmds args]
+  (case args
+    (: name _ ) (| ((<- (Just cmd) (find-command cmds name))
+                    (let ((= flag
+                            (case name
+                              "make" "--sk-help"
+                              _      "--help")))
+                      (liftIO (cmd-act cmd [flag])))))
+    _ (show-usage cmds)))
+
+(defn (show-usage (=> (CLI m) (-> [Command] (m ()))))
+  "Show usage message generated from given commands."
+  [cmds]
+  (do (<- name (liftIO getProgName))
+      (let ((= max-len
+              (length (maximumBy (on compare length)
+                                 (fmap cmd-name cmds))))
+            (= pad n str
+              (++ str (replicate (- n (length str)) \\SP)))
+            (= descr n cmd
+              (concat ["  " (pad n (cmd-name cmd))
+                       "  " (cmd-descr cmd)]))))
+      (putString
+       (unlines
+        (++ [(concat ["USAGE:\n\n   " name " <command> [arguments]"])
+             ""
+             (concat ["Run \"" name " help <command>\""
+                      " for more information."])
+             ""
+             "COMMANDS:"
+             ""]
+            (fmap (descr max-len) cmds))))))
