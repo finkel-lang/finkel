@@ -121,14 +121,12 @@ reading the input until successful parse result."
       (let ((= input1
               (++ (pending-input st)
                   [(toLazyByteString (stringUtf8 (: \\n input0)))]))
-            (= count (succ (input-count st)))
             (= put-and-return pending ret
-              (do (putReplState (st {input-count count
-                                     pending-input pending}))
+              (do (putReplState (st {pending-input pending}))
                   (return ret)))))
       (case (evalSP sexpr (Just "<interactive>") (BS.concat input1))
         (Right forms) (put-and-return [] (Just forms))
-        (Left _err)   (put-and-return input1 Nothing))))
+        (Left _err) (put-and-return input1 Nothing))))
 
 ;;; IO redirect
 

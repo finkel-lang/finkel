@@ -1,12 +1,10 @@
-;;; Read and print loops in REPL.
+;;; Starting REPL
 
 (require SK.Core)
 
 (defmodule SK.Tool.Repl.Loop
   (export
-   ;; read-form read-print-loop init-form
-   start-repl
-   acquire-repl cleanup-repl)
+   start-repl acquire-repl cleanup-repl)
   (use
    ;; base
    (Control.Concurrent ((ThreadId) forkIO))
@@ -45,8 +43,7 @@
      (do (maybe (return ()) (. void (start-listener in-mv)) mb-port)
          (<- tid (forkIO (runSkc (eval-loop hdl in-mv) ske)))
          (let ((= rpl (read-print-loop in-mv tid))))
-         (run-repl (runInputT defaultSettings rpl)
-                   initial-repl-state)))))
+         (run-repl (runInputT defaultSettings rpl) mempty)))))
 
 (defn (acquire-repl (IO (, FilePath Handle (MVar Input))))
   "Return a file path and handle for temporary use."

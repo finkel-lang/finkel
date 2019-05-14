@@ -18,6 +18,9 @@
    ;; directory
    (System.Directory (getCurrentDirectory))
 
+   ;; haskeline
+   (System.Console.Haskeline (defaultSettings runInputT))
+
    ;; hspec
    (Test.Hspec)
 
@@ -41,10 +44,57 @@
 
 
 (defn (replTests Spec)
-  (do (describe "Read" readTests)
+  (do (describe "ReplState" replStateTests)
+      (describe "Read" readTests)
       (describe "ReadPrint" readPrintTests)
       (describe "Eval" evalTests)
       (describe "Listen" listenTests)))
+
+(defn (replStateTests Spec)
+  (do (let ((= d describe)
+            (= rs1 (ReplState {pending-input ["(foo"]}))
+            (= rs2 (ReplState {pending-input [" bar)"]}))))
+      (d "Show instance"
+         (it "should show pending inputs"
+             (shouldBe "ReplState {pending_input = [\"(foo\"]}"
+                       (show rs1))))
+      (d "Eq instance"
+         (do (it "should equal to itself" (shouldBe rs1 rs1))
+             (it "should not equal with different pending input"
+                 (shouldNotBe rs1 rs2))))
+      (d "Monoid laws for ReplState"
+         (do (it "should have an identity element"
+                 (shouldBe rs1 (<> mempty rs1)))
+             (it "should satisfy associativity law"
+                 (shouldBe (<> rs1 (<> mempty rs2))
+                           (<> (<> rs1 mempty) rs2)))))
+      (d "get and put ReplState for InputT"
+         (do (let ((= act
+                     (run-repl (runInputT defaultSettings work)
+                               mempty))
+                   (= work
+                     (do (putReplState mempty)
+                         getReplState))))
+             (it "should return the given ReplState"
+                 (shouldReturn act mempty))))
+      (let ((= run-repl' (flip run-repl mempty))
+            (= repl1 (pure True))))
+      (d "Functor instance of Repl"
+         (do (it "should satisfy identity law"
+                 (shouldReturn (run-repl' (fmap id repl1)) True))
+             (it "should satisfy composition law"
+                 (shouldReturn
+                  (run-repl' (fmap show (fmap not repl1)))
+                  (show (not True))))
+             (it "should return second arg with <$"
+                 (shouldReturn
+                  (run-repl' (<$ True (pure False)))
+                  True))))
+      (d "Applicative instance of Repl"
+         (it "should satisfy applicative law"
+             (shouldReturn
+              (run-repl' (<*> (pure not) repl1))
+              False)))))
 
 (defn (readTests Spec)
   (do (let ((= d describe)))
@@ -219,10 +269,10 @@
               "<quoted code>: error: info: invalid form `(foo bar)'"))))))
 
 (defn (listenTests Spec)
-  (let ((= d describe)
-        (= act
+  (let ((= act
           (do (<- tid (forkIO (replMain ["--listen=50322"])))
-              (threadDelay 1000000)
+              ;; Pause for a bit after forking server action.
+              (threadDelay 500000)
               (<- addr (resolve "127.0.0.1" "50322"))
               (bracket (open-sock addr) (cleanup tid) send-forms)))
         (= resolve host port
@@ -232,7 +282,7 @@
                 (getAddrInfo (Just hints) (Just host) (Just port)))
               (case addrs
                 (: addr _) (return addr)
-                _ (error "Failed starting client"))))
+                _ (error "REPL client: address error"))))
         (= cleanup tid sock
           (do (killThread tid)
               (close sock)))
@@ -247,6 +297,6 @@
               (sendAll sock "(* 7 (+ 4 2))")
               (<- msg2 (recv sock 1024))
               (return msg2))))
-    (d "listener"
-       (it "should evaluate form with listener"
-           (shouldReturn (liftIO act) "42")))))
+    (describe "listener"
+              (it "should evaluate form sent from connected client"
+                  (shouldReturn (liftIO act) "42")))))

@@ -41,22 +41,19 @@
 
 ;;; Repl state type to hold intermediate line-wise inputs.
 (data ReplState
-  (ReplState {pending-input [BS.ByteString]
-              input-count Int})
+  (ReplState {pending-input [BS.ByteString]})
   (deriving (Eq Show)))
 
 (instance (Semigroup ReplState)
   (= <> r1 r2
     (ReplState {pending-input (<> (pending-input r1)
-                                  (pending-input r2))
-                input-count (max (input-count r1)
-                                 (input-count r2))})))
+                                  (pending-input r2))})))
 
 (instance (Monoid ReplState)
   (= mempty initial-repl-state))
 
 (defn (initial-repl-state ReplState)
-  (ReplState {pending-input [] input-count 0}))
+  (ReplState {pending-input []}))
 
 ;;; Monad for REPL prompt.
 (newtype (Repl a)
@@ -96,8 +93,7 @@
 ;;; REPL server.
 (data InSource
   Prompt
-  Connection
-  (deriving (Eq Show)))
+  Connection)
 
 ;;; Synonym for evaluation result.
 (type Result
