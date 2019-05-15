@@ -1,0 +1,109 @@
+;;;; Tests for REPL macros
+
+(require SK.Core)
+
+(defmodule ReplMacroTest
+  (export
+   replMacroTests)
+  (use
+   ;; base
+   (Data.List (intercalate isSubsequenceOf))
+
+   ;; filepath
+   (System.FilePath (</>))
+
+   ;; directory
+   (System.Directory (getCurrentDirectory))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; sk-kernel
+   (Language.SK)
+
+   ;; Internal
+   (TestAux)))
+
+(defn (replMacroTests Spec)
+  (describe "ReplMacro" replMacroTests'))
+
+(defn (replMacroTests' Spec)
+  (do (let ((= delines (intercalate "\n"))))
+      (<- current-dir (runIO getCurrentDirectory))
+      (<- (EvalTestFns ok ng satisfy cleanup) (runIO makeEvalTestFns))
+      (afterAll_
+       cleanup
+       (do
+         ;; REPL macros
+         (ok '(exported-macros Prelude) "[]")
+         (ok '(repl-macro browse Unsafe.Coerce)
+             "Unsafe.Coerce.unsafeCoerce :: a -> b")
+         (ok '(repl-macro info putStr)
+             "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
+         (ok '(repl-macro kind Maybe)
+             "Maybe :: * -> *")
+         (ok '(repl-macro pwd) (show current-dir))
+         (ok '(defn (f1 (-> Int Int)) [n] (+ n 1))
+             "; f1 :: Int -> Int")
+         (satisfy
+          '(repl-macro show bindings)
+          (\ ret
+            (case ret
+              (Right str) (elem "f1 :: Int -> Int = _" (lines str))
+              _ False)))
+         (ok '(repl-macro show context)
+             (delines
+              ["; context"
+               ";  IIDecl: import Prelude"]))
+         (ok '(repl-macro show dflags)
+             (delines
+              ["; dflags:"
+               ";  ghcLink: LinkInMemory"
+               ";  ghcMode: CompManager"
+               ";  hscTarget: HscInterpreted"
+               ";  objectDir: Nothing"
+               ";  thisInstalledUnitId: main"
+               ";  forceRecomp: False"]))
+         (ok '(begin
+               (repl-macro set -odir /tmp)
+               (repl-macro show dflags))
+             (delines
+              ["; dflags:"
+               ";  ghcLink: LinkInMemory"
+               ";  ghcMode: CompManager"
+               ";  hscTarget: HscInterpreted"
+               ";  objectDir: Just \"/tmp\""
+               ";  thisInstalledUnitId: main"
+               ";  forceRecomp: False"]))
+         (satisfy
+          '(repl-macro show macros)
+          (\ ret
+            (case ret
+              (Right str) (elem ";  defmacro_m'" (lines str))
+              _ False)))
+         (ok '(repl-macro show modules) "")
+         (satisfy
+          '(repl-macro show packages)
+          (\ ret
+            (case ret
+              (Right str) (isSubsequenceOf "; packages" str)
+              _ False)))
+         (ok '(repl-macro show paths)
+             (concat
+              ["; current working directory:\n"
+               ";   " current-dir "\n"
+               "; module import search paths:\n"
+               ";    ."]))
+         (ok '(repl-macro type putStrLn)
+             "putStrLn :: String -> IO ()")
+         (ok '(repl-macro type (foldr + (:: 0 Int)))
+             "(foldr + (:: 0 Int)) :: Foldable t => t Int -> Int")
+         (let ((= path-to-m01 (</> "test" (</> "data" "m01.sk")))))
+         (ok `(begin
+               (repl-macro load ,path-to-m01)
+               main)
+             "=== m01.sk ===")
+
+         ;; Errors
+         (ng '(repl-macro info (foo bar))
+             "<quoted code>: error: info: invalid form `(foo bar)'")))))

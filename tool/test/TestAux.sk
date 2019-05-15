@@ -2,15 +2,29 @@
 
 (require SK.Core)
 
-(defmodule TestIO
+(defmodule TestAux
   (export
-   (TestIO ..) (TestIOState ..) runTestIO)
+   (TestIO ..) (TestIOState ..) runTestIO
+   (EvalTestFns ..) makeEvalTestFns)
   (use
    ;; base
+   (Control.Concurrent
+    (forkIO newEmptyMVar killThread putMVar takeMVar))
    (Control.Monad.IO.Class ((MonadIO ..)))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; sk-kernel
+   (Language.SK)
+   (Language.SK.SKC (runSkc))
 
    ;; Internal
    (SK.Tool.CLI)
+   (SK.Tool.Repl)
+   (SK.Tool.Repl.Eval)
+   (SK.Tool.Repl.IO)
+   (SK.Tool.Repl.Loop)
    (SK.Tool.Repl.Types)))
 
 ;;; Test IO
@@ -98,3 +112,43 @@
     (TestIO (\ st (pure (, () (st {tst-replstate rst}))))))
   (= getReplState
     (TestIO (\ st (pure (, (tst-replstate st) st))))))
+
+
+;;; Repl test environment
+
+(data EvalTestFns
+  (EvalTestFns
+   {etf-ok (-> Code String Spec)
+    etf-ng (-> Code String Spec)
+    etf-satisfy (-> Code (-> Result Bool) Spec)
+    etf-cleanup (IO ())}))
+
+(defn (makeEvalTestFns (IO EvalTestFns))
+  (do (<- out-mv newEmptyMVar)
+      (<- (@ resources (, tmpfile hdl in-mv)) acquire-repl)
+      (<- etid (forkIO (runSkc (eval-loop hdl in-mv) repl-env)))
+      (let ((= eval-form right-or-left form expect
+              (describe
+               (concat ["evaluate " (show form)])
+               (it "evaluates to expected result"
+                   (do (putMVar in-mv (Input Connection form out-mv))
+                       (<- ret (takeMVar out-mv))
+                       (shouldBe ret (right-or-left expect))))))
+            (= ok (eval-form Right))
+            (= ng (eval-form Left))
+            (= satisfy form test
+              (describe
+               (concat ["evaluate " (show form)])
+               (it "satisfies predicate"
+                   (do (putMVar in-mv (Input Connection form out-mv))
+                       (<- ret (takeMVar out-mv))
+                       (shouldSatisfy ret test)))))
+            (= cleanup
+              (do (killThread etid)
+                  (cleanup-repl resources)))))
+      (putMVar in-mv (Input Connection init-form out-mv))
+      (<- _ (takeMVar out-mv))
+      (return (EvalTestFns {etf-ok ok
+                            etf-ng ng
+                            etf-satisfy satisfy
+                            etf-cleanup cleanup}))))

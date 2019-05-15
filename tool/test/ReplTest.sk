@@ -15,9 +15,6 @@
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate isSubsequenceOf))
 
-   ;; directory
-   (System.Directory (getCurrentDirectory))
-
    ;; haskeline
    (System.Console.Haskeline (defaultSettings runInputT))
 
@@ -27,7 +24,7 @@
    ;; network
    (Network.Socket
     ((AddrInfo ..) (SocketType ..)
-     connect defaultHints close getAddrInfo socket))
+     close connect defaultHints getAddrInfo socket))
    (Network.Socket.ByteString (sendAll recv))
 
    ;; sk-kernel
@@ -40,8 +37,7 @@
    (SK.Tool.Repl.Loop)
    (SK.Tool.Repl.IO)
    (SK.Tool.Repl.Types)
-   (TestIO)))
-
+   (TestAux)))
 
 (defn (replTests Spec)
   (do (describe "ReplState" replStateTests)
@@ -142,131 +138,46 @@
 (defn (evalTests Spec)
   (do (let ((= d describe)
             (= delines (intercalate "\n"))))
-      (<- out-mv (runIO newEmptyMVar))
-      (<- (, tmpfile hdl in-mv) (runIO acquire-repl))
-      (<- current-dir (runIO getCurrentDirectory))
-      (<- etid
-        (runIO (forkIO (runSkc (eval-loop hdl in-mv) repl-env))))
-      (let ((= eval-form right-or-left form expect
-              (d (concat ["evaluate " (show form)])
-                 (it "evaluates to expected result"
-                     (do (putMVar in-mv (Input Connection form out-mv))
-                         (<- ret (takeMVar out-mv))
-                         (shouldBe ret (right-or-left expect))))))
-            (= ok (eval-form Right))
-            (= ng (eval-form Left))
-            (= satisfy form test
-              (d (concat ["evaluate " (show form)])
-                 (it "satisfies predicate"
-                     (do (putMVar in-mv (Input Connection form out-mv))
-                         (<- ret (takeMVar out-mv))
-                         (shouldSatisfy ret test)))))))
-      (beforeAll_
-       (do (putMVar in-mv (Input Connection init-form out-mv))
-           (void (takeMVar out-mv)))
-       (afterAll_
-        (do (killThread etid)
-            (cleanup-repl (, tmpfile hdl ())))
-        (do
-          ;; Statements and declarations
-          (ok '(+ 10 32) "42")
-          (ok '(defn (f1 (-> Int Int))
-                [n]
-                (+ n 1))
-              "; f1 :: Int -> Int")
-          (ok '(f1 41) "42")
-          (ok '(begin
-                (:: (x y) Int)
-                (= x 1)
-                (= y 2))
-              "; x :: Int\n; y :: Int")
-          (ok '(<- z (return True))
-              "; z :: Bool")
-          (ok '(defn (f2 (-> (Maybe Int) Int))
-                [(Just n)] (* n 2)
-                [Nothing]  0)
-              "; f2 :: Maybe Int -> Int")
-          (ok '(f2 (Just 21)) "42")
-          (ok '(data Foo (Foo Int))
-              (concat ["; $tcFoo :: TyCon\n"
-                       "; $tc'Foo :: TyCon\n"
-                       "; Type constructor ‘Foo’"]))
-          (ok '(import Control.Monad)
-              "; import Control.Monad")
+      (<- (EvalTestFns ok ng satisfy cleanup) (runIO makeEvalTestFns))
+      (afterAll_
+       cleanup
+       (do
+         ;; Statements and declarations
+         (ok '(+ 10 32) "42")
+         (ok '(defn (f1 (-> Int Int))
+               [n]
+               (+ n 1))
+             "; f1 :: Int -> Int")
+         (ok '(f1 41) "42")
+         (ok '(begin
+               (:: (x y) Int)
+               (= x 1)
+               (= y 2))
+             "; x :: Int\n; y :: Int")
+         (ok '(<- z (return True))
+             "; z :: Bool")
+         (ok '(defn (f2 (-> (Maybe Int) Int))
+               [(Just n)] (* n 2)
+               [Nothing]  0)
+             "; f2 :: Maybe Int -> Int")
+         (ok '(f2 (Just 21)) "42")
+         (ok '(data Foo (Foo Int))
+             (concat ["; $tcFoo :: TyCon\n"
+                      "; $tc'Foo :: TyCon\n"
+                      "; Type constructor ‘Foo’"]))
+         (ok '(import Control.Monad)
+             "; import Control.Monad")
 
-          ;; REPL macros
-          (ok '(exported-macros Prelude) "[]")
-          (ok '(repl-macro browse Unsafe.Coerce)
-              "Unsafe.Coerce.unsafeCoerce :: a -> b")
-          (ok '(repl-macro info putStr)
-              "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
-          (ok '(repl-macro kind Maybe)
-              "Maybe :: * -> *")
-          (ok '(repl-macro pwd) (show current-dir))
-          (satisfy
-           '(repl-macro show bindings)
-           (\ ret
-             (case ret
-               (Right str) (elem "f1 :: Int -> Int = _" (lines str))
-               _ False)))
-          (ok '(repl-macro show context)
-              (delines
-               ["; context"
-                ";  IIDecl: import Control.Monad"
-                ";  IIDecl: import Prelude"]))
-          (ok '(repl-macro show dflags)
-              (delines
-               ["; dflags:"
-                ";  ghcLink: LinkInMemory"
-                ";  ghcMode: CompManager"
-                ";  hscTarget: HscInterpreted"
-                ";  objectDir: Nothing"
-                ";  thisInstalledUnitId: main"
-                ";  forceRecomp: False"]))
-          (ok '(begin
-                (repl-macro set -odir /tmp)
-                (repl-macro show dflags))
-              (delines
-               ["; dflags:"
-                ";  ghcLink: LinkInMemory"
-                ";  ghcMode: CompManager"
-                ";  hscTarget: HscInterpreted"
-                ";  objectDir: Just \"/tmp\""
-                ";  thisInstalledUnitId: main"
-                ";  forceRecomp: False"]))
-          (satisfy
-           '(repl-macro show macros)
-           (\ ret
-             (case ret
-               (Right str) (elem ";  defmacro_m'" (lines str))
-               _ False)))
-          (ok '(repl-macro show modules) "")
-          (satisfy '(repl-macro show packages)
-                   (\ ret
-                     (case ret
-                       (Right str) (isSubsequenceOf "; packages" str)
-                       _ False)))
-          (ok '(repl-macro show paths)
-              (concat
-               ["; current working directory:\n"
-                ";   " current-dir "\n"
-                "; module import search paths:\n"
-                ";    ."]))
-          (ok '(repl-macro type putStrLn)
-              "putStrLn :: String -> IO ()")
-          (ok '(repl-macro type (foldr + (:: 0 Int)))
-              "(foldr + (:: 0 Int)) :: Foldable t => t Int -> Int")
-
-          ;; Errors
-          (ng 'buzz
-              (concat ["<interactive>:1:1: error: "
-                       "Variable not in scope: buzz"]))
-          (ng '(= f a (+ a 1) (+ a 2))
-              (concat ["<quoted code>: error:\n    syntax error on input "
-                       "`(= f a (+ a 1) (+ a 2))'"]))
-          (ng '(head []) "*** Exception: Prelude.head: empty list")
-          (ng '(repl-macro info (foo bar))
-              "<quoted code>: error: info: invalid form `(foo bar)'"))))))
+         ;; Errors
+         (ng 'buzz
+             (concat ["<interactive>:1:1: error: "
+                      "Variable not in scope: buzz"]))
+         (ng '(= f a (+ a 1) (+ a 2))
+             (concat
+              ["<quoted code>: error:\n"
+               "    syntax error on input `(= f a (+ a 1) (+ a 2))'"]))
+         (ng '(head [])
+             "*** Exception: Prelude.head: empty list")))))
 
 (defn (listenTests Spec)
   (let ((= act

@@ -19,7 +19,7 @@
    (SK.Tool.Main)
    (SK.Tool.Repl)
    (SK.Tool.Version)
-   (TestIO)))
+   (TestAux)))
 
 ;;; Tests
 

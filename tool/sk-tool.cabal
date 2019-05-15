@@ -16,6 +16,7 @@ extra-source-files:  README.md
                      src/SK/Tool/*.sk
                      src/SK/Tool/Repl/*.sk
                      test/*.sk
+                     test/data/*.sk
                      test/data/input01.txt
                      test/data/p02/LICENSE
                      test/data/p02/Setup.hs
@@ -90,8 +91,9 @@ test-suite sk-tool-test
   other-modules:       CLITest
                        MainTest
                        ReplTest
+                       ReplMacroTest
                        SetupTest
-                       TestIO
+                       TestAux
   default-language:    Haskell2010
 
 executable sk
