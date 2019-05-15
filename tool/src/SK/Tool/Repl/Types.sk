@@ -22,12 +22,14 @@
    ;; base
    (Control.Concurrent ((MVar)))
    (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.IORef ((IORef) atomicWriteIORef newIORef readIORef))
 
    ;; bytestring
    (qualified Data.ByteString.Lazy.Char8 as BS)
 
    ;; haskeline
-   (System.Console.Haskeline ((MonadException ..)))
+   (System.Console.Haskeline.MonadException
+    ((MonadException ..) (RunIO ..)))
 
    ;; transformers
    (Control.Monad.Trans.Class ((MonadTrans ..)))
@@ -55,20 +57,53 @@
 (defn (initial-repl-state ReplState)
   (ReplState {pending-input []}))
 
-;;; Monad for REPL prompt.
+;;; Newtype wrapper for REPL prompt.
 (newtype (Repl a)
-  (Repl {unRepl (StateT ReplState IO a)})
-  (deriving (Functor Applicative Monad MonadIO MonadException)))
+  (Repl {unRepl (-> (IORef ReplState) (IO a))}))
+
+(instance (Functor Repl)
+  (= fmap f (Repl repl)
+    (Repl (. (fmap f) repl)))
+  #p(INLINE fmap))
+
+(instance (Applicative Repl)
+  (= pure x (Repl (\ _ (pure x))))
+  #p(INLINE pure)
+
+  (= <*> (Repl mf) (Repl mx)
+    (Repl (\ ref (<*> (mf ref) (mx ref)))))
+  #p(INLINE <*>))
+
+(instance (Monad Repl)
+  (= >>= (Repl repl) k
+    (Repl (\ ref (>>= (repl ref) (. (flip unRepl ref) k)))))
+  #p(INLINE >>=))
+
+(instance (MonadIO Repl)
+  (= liftIO io (Repl (\ _ io)))
+  #p(INLINE liftIO))
+
+(instance (MonadException Repl)
+  (= controlIO f
+    (Repl (\ ref
+            (controlIO
+             (\ (RunIO run)
+               (let ((= run'
+                       (RunIO (. (fmap (. Repl const))
+                                 (. run (flip unRepl ref))))))
+                 (fmap (flip unRepl ref) (f run'))))))))
+  #p(INLINE controlIO))
 
 (defn (run-repl (-> (Repl a) ReplState (IO a)))
-  [repl st]
-  (evalStateT (unRepl repl) st))
-
-(defn (put-repl-state (-> ReplState (Repl ())))
-  (. Repl put))
+  [(Repl repl) st]
+  (>>= (newIORef st) repl))
 
 (defn (get-repl-state (Repl ReplState))
-  (Repl get))
+  (Repl readIORef))
+
+(defn (put-repl-state (-> ReplState (Repl ())))
+  [st]
+  (Repl (flip atomicWriteIORef st)))
 
 ;;; Type class for getting and putting 'ReplState'.
 (class (HasReplState r)
@@ -77,12 +112,16 @@
 
 (instance (HasReplState Repl)
   (= getReplState get-repl-state)
-  (= putReplState put-repl-state))
+  #p(INLINE getReplState)
+  (= putReplState put-repl-state)
+  #p(INLINE putReplState))
 
 (instance (=> (MonadTrans t) (Monad m) (HasReplState m)
               (HasReplState (t m)))
   (= getReplState (lift getReplState))
-  (= putReplState (. lift putReplState)))
+  #p(INLINE getReplState)
+  (= putReplState (. lift putReplState))
+  #p(INLINE putReplState))
 
 ;;; Input data type to hold form to evaluate, and MVar to receive
 ;;; result from evaluation thread.

@@ -50,11 +50,10 @@ reading the input until successful parse result."
               (<- mb-input
                 ;; Handle interrupt signals thrown while waiting for
                 ;; input, to handle `Ctrl-C' key presses without valid
-                ;; evaluation form, and refresh intermediate user inputs
-                ;; in Repl state.
+                ;; evaluation form, and to refresh intermediate user
+                ;; inputs in Repl state.
                 (handleInterrupt
-                 (do (<- st1 getReplState)
-                     (putReplState (st1 {pending-input []}))
+                 (do (putReplState mempty)
                      (return (Just [])))
                  (getString prompt)))
               (maybe (quit eval-tid) (go1 st0 result-mv) mb-input)))

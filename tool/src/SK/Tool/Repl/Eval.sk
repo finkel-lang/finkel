@@ -227,7 +227,7 @@ context."
           (case serialized
             (EOtherException e) (return (Left (++ "*** Exception: " e)))
             (EExitCode ecode)   (liftIO (exitWith ecode))
-            EUserInterrupt      (return (Left "Interrupt"))))
+            EUserInterrupt      (return (Left "Interrupted."))))
         (= incomplete
           (return (Left "update-hsc-env failed.")))
         (= eval-hvals-io
