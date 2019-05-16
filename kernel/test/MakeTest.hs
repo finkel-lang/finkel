@@ -67,7 +67,7 @@ buildC = buildFile
 
 buildFile :: Skc () -> FilePath -> Spec
 buildFile pre path =
-  describe ("file " <> path) $
+  describe ("file " ++ path) $
     it "should compile successfully" $ do
       ret <- runSkc
                (do pre

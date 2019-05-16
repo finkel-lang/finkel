@@ -37,9 +37,9 @@ mainTests =
     skVersionTest
 
 compileFile :: [String] -> FilePath -> Spec
-compileFile args file = describe ("file " <> file) $
+compileFile args file = describe ("file " ++ file) $
   it "should compile successfully" $
-    runDefaultMain (args <> pure (odir </> file)) `shouldReturn` ()
+    runDefaultMain (args ++ pure (odir </> file)) `shouldReturn` ()
 
 rawGhcTest :: Spec
 rawGhcTest =

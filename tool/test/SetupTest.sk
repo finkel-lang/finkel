@@ -40,7 +40,7 @@
 
 (defn (buildPackage (-> FilePath [FilePath] String Spec))
   [cwd pkgdbs name]
-  (where (describe (<> "package " name)
+  (where (describe (++ "package " name)
                    (it "should compile and pass the tests" work))
     (defn work
       (mapM_ run [(setCurrentDirectory (pkgdir cwd name))
@@ -53,7 +53,7 @@
       (shouldReturn act ()))
     (defn pkgdb-flags
       (++ ["--package-db=clear" "--package-db=global"]
-          (map (<> "--package-db=") pkgdbs)))
+          (map (++ "--package-db=") pkgdbs)))
     (defn configure-args
       (: "configure" (++ pkgdb-flags ["--enable-tests"])))))
 

@@ -32,13 +32,13 @@ main = do
 
 buildPackage :: String -> [String] -> String -> Spec
 buildPackage cwd pkgdbs name =
-  describe ("package " <> name) $
+  describe ("package " ++ name) $
     it "should compile and pass the tests" $ do
       let pkgdir = cwd </> "test" </> "data" </> name
           pkgdb_flags =
             [ "--package-db=clear"
             , "--package-db=global"
-            ] ++ fmap ("--package-db=" <>) pkgdbs
+            ] ++ fmap ("--package-db=" ++) pkgdbs
           configure_args =
             "configure" : pkgdb_flags ++ ["--enable-tests"]
           run act = act `shouldReturn` ()
