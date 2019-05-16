@@ -5,6 +5,15 @@
 (defmodule SK.Tool.Repl.Eval
   (export
    eval-loop)
+  (load
+   ;; base
+   (Prelude)
+
+   ;; sk-lang
+   (SK.Prelude)
+
+   ;; Internal
+   (SK.Tool.Compat))
   (use
    ;; base
    (Control.Concurrent.MVar ((MVar) putMVar takeMVar))
@@ -17,7 +26,7 @@
    (System.IO ((Handle)))
 
    ;; ghc
-   (DynFlags ((DynFlags ..) (GhcLink ..) (HscTarget ..)
+   (DynFlags ((DynFlags ..) (GeneralFlag ..) (GhcLink ..) (HscTarget ..)
               gopt-set gopt-unset interpWays targetPlatform updateWays
               wayGeneralFlags wayUnsetGeneralFlags))
    (ErrUtils (pprErrMsgBagWithLoc))
@@ -60,6 +69,17 @@
    (SK.Tool.Repl.IO)
    (SK.Tool.Repl.Types)))
 
+;;; Version compatibility function
+
+(defn (optional-dynflags [GeneralFlag])
+  "Optional 'GeneralFlag' set for REPL."
+  (with-ghc-version version
+    (if (<= 804 version)
+        '[Opt_ImplicitImportQualified
+          Opt_IgnoreOptimChanges
+          Opt_IgnoreHpcChanges]
+        '[Opt_ImplicitImportQualified])))
+
 
 ;;; Eval loop
 
@@ -77,17 +97,20 @@
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory
                                          verbosity 1}))
-                    (= dflags2 (updateWays (dflags1 {ways interpWays})))
-                    (= platform (targetPlatform dflags2))
-                    (= dflags3
-                      (foldl gopt-set dflags2
+                    (= dflags2
+                      (foldl gopt-set dflags1 optional-dynflags))
+
+                    (= dflags3 (updateWays (dflags2 {ways interpWays})))
+                    (= platform (targetPlatform dflags3))
+                    (= dflags4
+                      (foldl gopt-set dflags3
                              (concatMap (wayGeneralFlags platform)
                                         interpWays)))
-                    (= dflags4
-                      (foldl gopt-unset dflags3
+                    (= dflags5
+                      (foldl gopt-unset dflags4
                              (concatMap (wayUnsetGeneralFlags platform)
                                         interpWays)))))
-              (void (setSessionDynFlags dflags4))
+              (void (setSessionDynFlags dflags5))
               (set-print-name "Prelude.print")))
         (= withAsyncHandler
           (ghandle
