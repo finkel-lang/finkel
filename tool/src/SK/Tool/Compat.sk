@@ -1,0 +1,29 @@
+;;;; Auxiliary macros for GHC version compatibility
+(require SK.Core)
+
+(defmodule SK.Tool.Compat
+  (export
+   define-ghc-version-macro
+   with-ghc-version)
+  (use
+   (Language.SK)
+   (Config (cProjectVersionInt))))
+
+(defmacro define-ghc-version-macro
+  "Macro to define macro with taking name for ghc version."
+  [name version args body]
+  `(eval-when (compile)
+     (defmacro ,name ,args
+       (let ((= ,version
+               ,(:: (read cProjectVersionInt) Int)))
+         ,body))))
+
+(defmacro with-ghc-version
+  "Macro to generate code with ghc version variable."
+  form
+  (let ((= (: version body) form))
+    `(macrolet (($tmp ()
+                  (let ((= ,version
+                          ,(:: (read cProjectVersionInt) Int)))
+                    ,@body)))
+       ($tmp))))

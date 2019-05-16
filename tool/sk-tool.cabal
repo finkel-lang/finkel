@@ -36,7 +36,8 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     SK.Tool.CLI
+  exposed-modules:     SK.Tool.Compat
+                       SK.Tool.CLI
                        SK.Tool.Help
                        SK.Tool.Repl.Types
                        SK.Tool.Repl.IO
@@ -89,6 +90,7 @@ test-suite sk-tool-test
     ghc-options:       -dynamic
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       CLITest
+                       CompatTest
                        MainTest
                        ReplTest
                        ReplMacroTest

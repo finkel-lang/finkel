@@ -13,11 +13,11 @@
    ;; base
    (Prelude)
 
-   ;; ghc
-   (Config (cProjectVersionInt))
+   ;; sk-lang
+   (SK.Prelude)
 
-   ;; sk-kernel
-   (Language.SK))
+    ;; Internal
+   (SK.Tool.Compat))
   (use
    ;; base
    (Control.Exception ((Exception ..)))
@@ -102,56 +102,51 @@
 
   (export repl-macro))
 
+;;; Extra imports
+(with-ghc-version version
+  (if (<= 804 version)
+      '(begin
+        (import Prelude hiding (<>))
+        (import qualified HscTypes as HscTypes))
+      '(begin)))
+
 
 ;;; GHC version compatibility compile time helper
 
-(eval-when (compile)
-  (defn (ghc-version Int)
-    (read cProjectVersionInt)))
+(define-ghc-version-macro ppr-info-args version
+  [thing cls fam]
+  (if (<= 804 version)
+      `(, ,thing _fixity ,cls ,fam _sd)
+      `(, ,thing _fixity ,cls ,fam)))
 
-(macrolet ((extra-imports _
-              (if (<= 804 ghc-version)
-                  '(begin
-                    (import Prelude hiding (<>))
-                    (import qualified HscTypes as HscTypes))
-                  '(begin))))
-  (extra-imports))
+(define-ghc-version-macro ppr-tt-args version
+  [name]
+  (if (<= 804 version)
+      `(, ,name _fixity _cls-insts _fam-insts _sd)
+      `(, ,name _fixity _cls-insts _fam-insts)))
 
-(eval-when (compile)
-  (defmacro child-filter _
-    (if (<= 804 ghc-version)
-        '(\ (, t _f _ci _fi _sd) t)
-        '(\ (, t _f _ci _fi) t)))
+(define-ghc-version-macro gen-default-dflags version
+  [flg]
+  (cond
+    ((<= 806 version)
+     `(defaultDynFlags (settings ,flg)
+                       (, (llvmTargets ,flg) (llvmPasses ,flg))))
+    ((<= 804 version)
+     `(defaultDynFlags (settings ,flg) (llvmTargets ,flg)))
+    (otherwise
+     `(defaultDynFlags (settings ,flg)))))
 
-  (defmacro ppr-info-args
-    [thing cls fam]
-    (if (<= 804 ghc-version)
-        `(, ,thing _fixity ,cls ,fam _sd)
-        `(, ,thing _fixity ,cls ,fam)))
-
-  (defmacro ppr-tt-args
-    [name]
-    (if (<= 804 ghc-version)
-        `(, ,name _fixity _cls-insts _fam-insts _sd)
-        `(, ,name _fixity _cls-insts _fam-insts)))
-
-  (defmacro gen-default-dflags
-    [flg]
-    (cond
-      ((<= 806 ghc-version)
-       `(defaultDynFlags (settings ,flg)
-                         (, (llvmTargets ,flg) (llvmPasses ,flg))))
-      ((<= 804 ghc-version)
-       `(defaultDynFlags (settings ,flg) (llvmTargets ,flg)))
-      (otherwise
-       `(defaultDynFlags (settings ,flg))))))
+(define-ghc-version-macro child-filter version
+  _
+  (if (<= 804 version)
+      '(\ (, t _f _ci _fi _sd) t)
+      '(\ (, t _f _ci _fi) t)))
 
 (defn (graph-to-summaries (-> ModuleGraph [ModSummary]))
-  (macrolet ((body _
-               (if (<= 804 ghc-version)
-                   'HscTypes.mgModSummaries
-                   'id)))
-    (body)))
+  (with-ghc-version version
+    (if (<= 804 version)
+        'HscTypes.mgModSummaries
+        'id)))
 
 
 ;;; Auxiliary

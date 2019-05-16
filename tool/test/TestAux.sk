@@ -1,4 +1,4 @@
-;;;; Newtype wrapper of IO for running tests.
+;;;; Auxiliary codes for tests
 
 (require SK.Core)
 
@@ -6,11 +6,16 @@
   (export
    (TestIO ..) (TestIOState ..) runTestIO
    (EvalTestFns ..) makeEvalTestFns)
+  (load
+   (Prelude)
+   (SK.Prelude)
+   (SK.Tool.Compat))
   (use
    ;; base
    (Control.Concurrent
     (forkIO newEmptyMVar killThread putMVar takeMVar))
    (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.Function (on))
 
    ;; hspec
    (Test.Hspec)
@@ -27,6 +32,13 @@
    (SK.Tool.Repl.Loop)
    (SK.Tool.Repl.Types)))
 
+;;; Extra imports
+
+(with-ghc-version version
+  (if (<= 804 version)
+      '(begin)
+      '(import Data.Monoid (<>))))
+
 ;;; Test IO
 
 (data TestIOState
@@ -35,18 +47,21 @@
                 tst-exitcode (Maybe ExitCode)
                 tst-replstate ReplState}))
 
-(instance (Semigroup TestIOState)
-  (= <> s1 s2
-    (TestIOState {tst-inputs (<> (tst-inputs s1) (tst-inputs s2))
-                  tst-outputs (<> (tst-outputs s1) (tst-outputs s2))
-                  tst-exitcode (maybe (tst-exitcode s2)
-                                      pure
-                                      (tst-exitcode s2))
-                  tst-replstate (<> (tst-replstate s1)
-                                    (tst-replstate s2))})))
-
 (instance (Monoid TestIOState)
-  (= mempty emptyTestIOState))
+  (= mempty
+    emptyTestIOState)
+  (= mappend s1 s2
+    (TestIOState
+     {tst-inputs (on mappend tst-inputs s1 s2)
+      tst-outputs (on mappend tst-outputs s1 s2)
+      tst-exitcode (maybe (tst-exitcode s1) pure (tst-exitcode s2))
+      tst-replstate (on mappend tst-replstate s1 s2)})))
+
+(with-ghc-version version
+  (if (<= 804 version)
+      '(instance (Semigroup TestIOState)
+        (= <> mappend))
+      '(begin)))
 
 (defn (emptyTestIOState TestIOState)
   (TestIOState {tst-inputs []

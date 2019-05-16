@@ -1,0 +1,56 @@
+;;;; Tests for version compatibility macro
+
+(require SK.Core)
+
+(defmodule CompatTest
+  (export
+   compatTests)
+  (load
+   ;; base
+   (Prelude)
+
+   ;; sk-lang
+   (SK.Prelude))
+  (use
+   ;; base
+   (Control.Exception ((SomeException)))
+
+   ;; ghc
+   (Exception (gtry))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; sk-kernel
+   (Language.SK.Make)
+   (Language.SK.SKC)
+
+   ;; sk-lang
+   (SK.Prelude)
+
+   ;; Internal
+   (SK.Tool.Compat)))
+
+(defn (compatTests Spec)
+  (do (let ((= d describe)))
+      (d "define-ghc-version-macro"
+         (it "should expand to eval-when"
+             (expand-macro define-ghc-version-macro
+                           '(define-ghc-version-macro foo version
+                             [a b c]
+                             (buzz a b c version))
+                           (\ form
+                             (== (car form) 'eval-when)))))
+      (d "with-ghc-version"
+         (it "should expand to macrolet"
+             (expand-macro with-ghc-version
+                           '(with-ghc-version version version)
+                           (\ form
+                             (== (car form) 'macrolet)))))))
+
+(defn expand-macro
+  [macro form test]
+  (do (<- v (gtry (runSkc (macroFunction macro form) defaultSkEnv)))
+      (case v
+        (Left e) (expectationFailure (show (:: e SomeException)))
+        (Right x) (shouldSatisfy x test))))

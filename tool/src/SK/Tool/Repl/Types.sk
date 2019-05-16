@@ -18,10 +18,20 @@
 
    ;; re-export
    (MonadTrans ..))
+  (load
+   ;; base
+   (Prelude)
+
+   ;; sk-lang
+   (SK.Prelude)
+
+   ;; Internal
+   (SK.Tool.Compat))
   (use
    ;; base
    (Control.Concurrent ((MVar)))
    (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.Function (on))
    (Data.IORef ((IORef) atomicWriteIORef newIORef readIORef))
 
    ;; bytestring
@@ -33,12 +43,10 @@
 
    ;; transformers
    (Control.Monad.Trans.Class ((MonadTrans ..)))
-   (Control.Monad.Trans.State.Strict ((StateT ..) evalStateT get put))
 
    ;; sk-kernel
    (Language.SK ((Code)))))
 
-
 ;;; REPL, REPL state, input, and result types
 
 ;;; Repl state type to hold intermediate line-wise inputs.
@@ -46,13 +54,16 @@
   (ReplState {pending-input [BS.ByteString]})
   (deriving (Eq Show)))
 
-(instance (Semigroup ReplState)
-  (= <> r1 r2
-    (ReplState {pending-input (<> (pending-input r1)
-                                  (pending-input r2))})))
-
 (instance (Monoid ReplState)
-  (= mempty initial-repl-state))
+  (= mempty initial-repl-state)
+  (= mappend r1 r2
+    (ReplState {pending-input (on mappend pending-input r1 r2)})))
+
+(with-ghc-version version
+  (if (<= 804 version)
+      '(instance (Semigroup ReplState)
+        (= <> mappend))
+      '(begin)))
 
 (defn (initial-repl-state ReplState)
   (ReplState {pending-input []}))

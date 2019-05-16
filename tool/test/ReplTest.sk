@@ -6,6 +6,15 @@
 
 (defmodule ReplTest
   (export replTests)
+  (load
+   ;; base
+   (Prelude)
+
+   ;; sk-lang
+   (SK.Prelude)
+
+   ;; Internal
+   (SK.Tool.Compat))
   (use
    ;; base
    (Control.Concurrent
@@ -39,12 +48,22 @@
    (SK.Tool.Repl.Types)
    (TestAux)))
 
+;;; Extra imports
+(with-ghc-version v
+  (if (<= 804 v)
+      '(begin)
+      '(import Data.Monoid (<>))))
+
+;;; Exported test
+
 (defn (replTests Spec)
   (do (describe "ReplState" replStateTests)
       (describe "Read" readTests)
       (describe "ReadPrint" readPrintTests)
       (describe "Eval" evalTests)
       (describe "Listen" listenTests)))
+
+;;; Internal
 
 (defn (replStateTests Spec)
   (do (let ((= d describe)
