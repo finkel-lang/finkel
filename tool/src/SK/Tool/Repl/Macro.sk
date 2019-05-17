@@ -93,7 +93,7 @@
    (Language.SK.Form (mkLocatedForm symbolName))
    (Language.SK.Make (buildHsSyn make))
    (Language.SK.SKC
-    ((SkEnv ..) getSkEnv macroNames modifySkEnv setDynFlags))
+    ((SkEnv ..) getSkEnv macroNames modifySkEnv putSkEnv setDynFlags))
    (Language.SK.Syntax (parseExpr parseType))
    (Language.SK.TargetSource (asModuleName))
 
@@ -194,9 +194,17 @@
 
 (defn (compile-module (-> String (Skc Code)))
   [str]
-  (where (gbracket getDynFlags setDynFlags work)
-    (= work dflags
-      (do (let ((= force-recomp (gopt Opt-ForceRecomp dflags))))
+  (where (gbracket acquire cleanup work)
+    (= acquire
+      (do (<- dflags getDynFlags)
+          (<- skenv getSkEnv)
+          (return (, dflags skenv))))
+    (= cleanup (, dflags skenv)
+      (do (setDynFlags dflags)
+          (putSkEnv skenv)))
+    (= work (, dflags skenv)
+      (do (putSkEnv (skenv {envQualifyQuotePrimitives False}))
+          (let ((= force-recomp (gopt Opt-ForceRecomp dflags))))
           (make [(, str Nothing)] True force-recomp Nothing)
           (return '(begin))))))
 

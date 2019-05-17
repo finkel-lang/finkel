@@ -6,6 +6,7 @@ module Language.SK.SKC
   , SkEnv(..)
   , SkEnvRef(..)
   , Macro(..)
+  , MacroFunction
   , EnvMacros
   , runSkc
   , debugSkc
@@ -154,11 +155,15 @@ emptyFlagSet = IntSet.empty
 -- | Macro transformer function.
 --
 -- A macro in SK is implemented as a function. The function takes a
--- single located code data argument, returns a located code data
--- wrapped in 'Skc'.
+-- located code data argument, and returns a located code data wrapped
+-- in 'Skc'.
+type MacroFunction = Code -> Skc Code
+
+-- | Data type to distinguish user defined macros from built-in special
+-- forms.
 data Macro
-  = Macro (Code -> Skc Code)
-  | SpecialForm (Code -> Skc Code)
+  = Macro MacroFunction
+  | SpecialForm MacroFunction
 
 instance Show Macro where
   showsPrec _ m =
@@ -208,6 +213,10 @@ data SkEnv = SkEnv
 
      -- | Lib directory passed to 'runGhc'.
    , envLibDir :: Maybe FilePath
+
+     -- | Whether to use qualified name for primitive functions used in
+     -- quoting codes.
+   , envQualifyQuotePrimitives :: Bool
    }
 
 -- | Newtype wrapper for compiling SK code to Haskell AST.
@@ -316,21 +325,22 @@ debugSkc str = do
 -- | Empty 'SkEnv' for performing computation with 'Skc'.
 emptySkEnv :: SkEnv
 emptySkEnv = SkEnv
-  { envMacros              = emptyEnvMacros
-  , envTmpMacros           = []
-  , envDefaultMacros       = emptyEnvMacros
-  , envDebug               = False
-  , envContextModules      = []
-  , envDefaultLangExts     = (Nothing, emptyFlagSet)
-  , envSilent              = False
-  , envMake                = Nothing
-  , envMakeDynFlags        = Nothing
-  , envMessager            = batchMsg
-  , envRequiredModuleNames = []
-  , envCompiledInRequire   = []
-  , envDumpHs              = False
-  , envHsDir               = Nothing
-  , envLibDir              = Nothing }
+  { envMacros                 = emptyEnvMacros
+  , envTmpMacros              = []
+  , envDefaultMacros          = emptyEnvMacros
+  , envDebug                  = False
+  , envContextModules         = []
+  , envDefaultLangExts        = (Nothing, emptyFlagSet)
+  , envSilent                 = False
+  , envMake                   = Nothing
+  , envMakeDynFlags           = Nothing
+  , envMessager               = batchMsg
+  , envRequiredModuleNames    = []
+  , envCompiledInRequire      = []
+  , envDumpHs                 = False
+  , envHsDir                  = Nothing
+  , envLibDir                 = Nothing
+  , envQualifyQuotePrimitives = False }
 
 -- | Set current 'DynFlags' to given argument. This function also
 -- modifies 'DynFlags' in interactive context.

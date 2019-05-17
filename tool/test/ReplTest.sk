@@ -184,9 +184,26 @@
              (concat ["; $tcFoo :: TyCon\n"
                       "; $tc'Foo :: TyCon\n"
                       "; Type constructor ‘Foo’"]))
+
+         ;; Import
          (ok '(import Control.Monad)
              "; import Control.Monad")
+         (ok '(import qualified Data.Functor as DF)
+             "; import qualified Data.Functor as DF")
+
+         ;; Eval wrapper
          (ok 'System.Environment.getArgs "[]")
+
+         ;; Expansion quoted codes in REPL
+         (ok '(macroexpand ''foo)
+             "(Language.SK.qSymbol \"foo\")")
+         (ok '(macroexpand '`(a ,@(b) c))
+             (concat
+              ["(Language.SK.qList (Data.Foldable.concat ["
+               "[(Language.SK.qSymbol \"a\")] "
+               "(Language.SK.unquoteSplice ((b))) "
+               "[(Language.SK.qSymbol \"c\")]"
+               "]))"]))
 
          ;; Errors
          (ng 'buzz

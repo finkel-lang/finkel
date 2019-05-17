@@ -29,7 +29,7 @@ import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
                 , updOptLevel, xopt_unset )
 import ErrUtils (compilationProgressMsg)
 import Exception (gbracket)
-import FastString (FastString, fsLit, headFS, unpackFS)
+import FastString (FastString, appendFS, fsLit, headFS, unpackFS)
 import Finder (findImportedModule)
 import GHC ( ModuleInfo, getModuleInfo, lookupModule, lookupName
            , modInfoExports, setContext )
@@ -68,26 +68,26 @@ import Language.SK.Syntax ( parseExpr, parseDecls
 --
 -- ---------------------------------------------------------------------
 
-quote :: Code -> Code
-quote orig@(LForm (L l form))  =
+quote :: Bool -> Code -> Code
+quote qual orig@(LForm (L l form)) =
   case form of
-    Atom atom -> quoteAtom l atom
-    List xs   -> quoteList "qList" xs
-    HsList xs -> quoteList "qHsList" xs
+    Atom atom -> quoteAtom qual l atom
+    List xs   -> quoteList (qListS qual)  xs
+    HsList xs -> quoteList (qHsListS qual) xs
     _         -> orig
     where
       quoteList tag xs =
-        tList l [tSym l tag, tHsList l (map quote xs)]
+        tList l [tSym l tag, tHsList l (map (quote qual) xs)]
 
-quoteAtom :: SrcSpan -> Atom -> Code
-quoteAtom l form =
+quoteAtom :: Bool -> SrcSpan -> Atom -> Code
+quoteAtom qual l form =
   case form of
-    ASymbol s     -> li [tSym l "qSymbol", tString l (unpackFS s)]
-    AChar c       -> li [tSym l "qChar", tChar l c]
-    AString s     -> li [tSym l "qString", tString l s]
-    AInteger n    -> li [tSym l "qInteger", tInteger l n]
-    AFractional n -> li [tSym l "qFractional", tFractional l n]
-    AUnit         -> tSym l "qUnit"
+    ASymbol s     -> li [tSym l (qSymbolS qual), tString l (unpackFS s)]
+    AChar c       -> li [tSym l (qCharS qual), tChar l c]
+    AString s     -> li [tSym l (qStringS qual), tString l s]
+    AInteger n    -> li [tSym l (qIntegerS qual), tInteger l n]
+    AFractional n -> li [tSym l (qFractionalS qual), tFractional l n]
+    AUnit         -> tSym l (qUnitS qual)
   where
     li = tList l
 {-# INLINE quoteAtom #-}
@@ -97,40 +97,41 @@ quoteAtom l form =
 -- still need to handle the special case for backtick, comma, and
 -- comma-at, because currently there's no way to define read macro.
 
-quasiquote :: Code -> Code
-quasiquote orig@(LForm (L l form)) =
+quasiquote :: Bool -> Code -> Code
+quasiquote qual orig@(LForm (L l form)) =
   case form of
     List [LForm (L _ (Atom (ASymbol "unquote"))), x]
       | isUnquoteSplice x -> x
-      | otherwise         -> tList l [tSym l "toCode", x]
+      | otherwise         -> tList l [tSym l (toCodeS qual), x]
     List forms'
       | [q, body] <- forms'
-      , q == tSym l "quasiquote"   -> quasiquote (quasiquote body)
-      | any isUnquoteSplice forms' -> splicedList "qList" forms'
-      | otherwise                  -> nonSplicedList "qList" forms'
+      , q == tSym l "quasiquote"   -> qq (qq body)
+      | any isUnquoteSplice forms' -> splicedList qListS forms'
+      | otherwise                  -> nonSplicedList qListS forms'
     HsList forms'
-      | any isUnquoteSplice forms' -> splicedList "qHsList" forms'
-      | otherwise                  -> nonSplicedList "qHsList" forms'
-    Atom atom                      -> quoteAtom l atom
+      | any isUnquoteSplice forms' -> splicedList qHsListS forms'
+      | otherwise                  -> nonSplicedList qHsListS forms'
+    Atom atom                      -> quoteAtom qual l atom
     TEnd                           -> orig
   where
    splicedList tag forms =
-     tList l [ tSym l tag
-             , tList l [ tSym l "concat"
+     tList l [ tSym l (tag qual)
+             , tList l [ tSym l (concatS qual)
                        , tHsList l (go [] forms)]]
    nonSplicedList tag forms =
-     tList l [ tSym l tag
-             , tHsList l (map quasiquote forms)]
+     tList l [ tSym l (tag qual)
+             , tHsList l (map qq forms)]
    go acc forms =
      let (pre, post) = break isUnquoteSplice forms
      in  case post of
            LForm (L ls (List (_:body))):post' ->
-             go (acc ++ [tHsList l (map quasiquote pre)
-                        ,tList ls [ tSym l "unquoteSplice"
+             go (acc ++ [tHsList l (map qq pre)
+                        ,tList ls [ tSym l (unquoteSpliceS qual)
                                   , tList l body]])
                      post'
            _ | null pre  -> acc
-             | otherwise -> acc ++ [tHsList l (map quasiquote pre)]
+             | otherwise -> acc ++ [tHsList l (map qq pre)]
+   qq = quasiquote qual
 
 isUnquoteSplice :: Code -> Bool
 isUnquoteSplice (LForm form) =
@@ -219,25 +220,25 @@ addImportedMacro thing = when (isMacro thing) go
 --
 -- ---------------------------------------------------------------------
 
-type Mfunc = Code -> Skc Code
-
-m_quote :: Mfunc
+m_quote :: MacroFunction
 m_quote form =
   case unLForm form of
-    L l (List [_,body]) ->
-      let LForm (L _ body') = quote body
-      in  return (LForm (L l body'))
+    L l (List [_,body]) -> do
+      qualify <- fmap envQualifyQuotePrimitives getSkEnv
+      let LForm (L _ body') = quote qualify body
+      return (LForm (L l body'))
     _ -> skSrcError form ("malformed quote at " ++ showLoc form)
 
-m_quasiquote :: Mfunc
+m_quasiquote :: MacroFunction
 m_quasiquote form =
     case unLForm form of
-      L l (List [_,body]) ->
-        let LForm (L _ body') = quasiquote body
-        in  return (LForm (L l body'))
+      L l (List [_,body]) -> do
+        qualify <- fmap envQualifyQuotePrimitives getSkEnv
+        let LForm (L _ body') = quasiquote qualify body
+        return (LForm (L l body'))
       _ -> skSrcError form ("malformed quasiquote at " ++ showLoc form)
 
-m_withMacro :: Mfunc
+m_withMacro :: MacroFunction
 m_withMacro form =
   case unLForm form of
     L l1 (List (_:LForm (L _ (List forms)):rest)) -> do
@@ -275,7 +276,7 @@ m_withMacro form =
             Left err -> failS (syntaxErrMsg err)
         _ -> skSrcError decl "with-macro: malformed args"
 
-m_require :: Mfunc
+m_require :: MacroFunction
 m_require form =
   -- The special form `require' modifies the HscEnv at the time of macro
   -- expansion, to update the context in compile time session.  The
@@ -345,7 +346,7 @@ m_require form =
         Left err -> skSrcError form ("require: " ++ syntaxErrMsg err)
     _ -> skSrcError form "require: malformed body"
 
-m_evalWhenCompile :: Mfunc
+m_evalWhenCompile :: MacroFunction
 m_evalWhenCompile form =
   case unLForm form of
     L l (List (_ : body)) -> do
@@ -661,3 +662,67 @@ emptyForm :: Code
 emptyForm =
   LForm (genSrc (List [LForm (genSrc (Atom (ASymbol "begin")))]))
 {-# INLINE emptyForm #-}
+
+-- Note: Qualified names for quoting functions
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Quoting functions can use qualified name after expansion, to support
+-- quote in REPL without importing the "Language.SK" module.  See how
+-- "Opt_ImplicitImportQualified" flag is set in initialization code of
+-- sk REPL in "sk-tool" package.
+
+type Quote = Bool -> FastString
+
+quoteWith :: FastString -> Quote
+quoteWith name qualify =
+  if qualify
+     then appendFS "Language.SK."  name
+     else name
+{-# INLINE quoteWith #-}
+
+qListS :: Quote
+qListS = quoteWith "qList"
+{-# INLINE qListS #-}
+
+qHsListS :: Quote
+qHsListS = quoteWith "qHsList"
+{-# INLINE qHsListS #-}
+
+qSymbolS :: Quote
+qSymbolS = quoteWith "qSymbol"
+{-# INLINE qSymbolS #-}
+
+qCharS :: Quote
+qCharS = quoteWith "qChar"
+{-# INLINE qCharS #-}
+
+qStringS :: Quote
+qStringS = quoteWith "qString"
+{-# INLINE qStringS #-}
+
+qIntegerS :: Quote
+qIntegerS = quoteWith "qInteger"
+{-# INLINE qIntegerS #-}
+
+qFractionalS :: Quote
+qFractionalS = quoteWith "qFractional"
+{-# INLINE qFractionalS #-}
+
+qUnitS :: Quote
+qUnitS = quoteWith "qUnit"
+{-# INLINE qUnitS #-}
+
+toCodeS :: Quote
+toCodeS = quoteWith "toCode"
+{-# INLINE toCodeS #-}
+
+unquoteSpliceS :: Quote
+unquoteSpliceS = quoteWith "unquoteSplice"
+{-# INLINE unquoteSpliceS #-}
+
+concatS :: Quote
+concatS qual =
+  if qual
+     then "Data.Foldable.concat"
+     else "concat"
+{-# INLINE concatS #-}

@@ -59,7 +59,8 @@
         (= macros (mergeMacros specialForms replMacros)))
     (defaultSkEnv {envContextModules modules
                    envMacros macros
-                   envDefaultMacros macros})))
+                   envDefaultMacros macros
+                   envQualifyQuotePrimitives True})))
 
 
 ;;; Internal
