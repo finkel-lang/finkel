@@ -28,18 +28,20 @@
    ;; ghc
    (DynFlags ((DynFlags ..) (GeneralFlag ..) (GhcLink ..) (HscTarget ..)
               gopt-set gopt-unset interpWays targetPlatform updateWays
-              wayGeneralFlags wayUnsetGeneralFlags))
+              xopt-unset wayGeneralFlags wayUnsetGeneralFlags))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (ghandle))
    (GHC (getPrintUnqual setSessionDynFlags))
    (GHCi (evalStmt))
-   (GhcMonad ((GhcMonad ..) getSessionDynFlags modifySession))
+   (GhcMonad
+    ((GhcMonad ..) getSessionDynFlags modifySession withTempSession))
    (HscMain (hscParsedStmt))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (FixityEnv) extendInteractiveContextWithIds
               setInteractivePrintName srcErrorMessages))
    (HsImpExp ((ImportDecl ..)))
-   (InteractiveEval (getContext parseName setContext))
+   (InteractiveEval
+    (compileParsedExprRemote getContext parseName setContext))
    (Linker (extendLinkEnv))
    (Name ((Name) getName nameOccName occNameString))
    (OrdList (toOL))
@@ -49,6 +51,9 @@
    (SrcLoc (unLoc))
    (TyCoRep ((TyThing ..)))
    (Var ((Id) (Var) varType))
+
+   ;; ghc-boot
+   (GHC.LanguageExtensions ((Extension ..)))
 
    ;; ghci
    (GHCi.Message ((EvalExpr ..) (EvalResult ..) (EvalStatus_ ..)
@@ -63,7 +68,7 @@
    (Language.SK.Expand (expands))
    (Language.SK.Make (initSessionForMake))
    (Language.SK.SKC (failS))
-   (Language.SK.Syntax (parseImports parseStmt parseTopDecls))
+   (Language.SK.Syntax (parseExpr parseImports parseStmt parseTopDecls))
 
    ;; internal
    (SK.Tool.Repl.IO)
@@ -111,8 +116,13 @@
                              (concatMap (wayUnsetGeneralFlags platform)
                                         interpWays)))))
               (void (setSessionDynFlags dflags5))
-              (set-print-name "Prelude.print")))
-        (= withAsyncHandler
+
+              ;; XXX: Currently the printer function and the arguments
+              ;; returned from "System.Environment.getArgs" are defined
+              ;; here and cannot be changed.
+              (set-print-name "Prelude.print")
+              (make-eval-wrapper [])))
+        (= withAsyncHandler wrapper
           (ghandle
            (\ e
              (do (liftIO
@@ -121,7 +131,7 @@
                     ThreadKilled  (return ())
                     _             (putStrLn (++ "eval-loop: got "
                                                 (show e)))))
-                 loop))))
+                 (loop wrapper)))))
         (= src-err-handler src-err
           (do (<- dflags getSessionDynFlags)
               (<- unqual getPrintUnqual)
@@ -141,15 +151,17 @@
                            (Just ae) (throw-async-io ae)
                            Nothing   (return (Left (show e))))))
            m))
-        (= eval-one
+        (= eval-one wrapper
           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
               (<- ret (withErrorHandler
                        (do (<- expanded (expands [form]))
-                           (eval-form hdl itype expanded))))
+                           (eval-form hdl wrapper itype expanded))))
               (liftIO (putMVar out-mv ret))))
-        (= loop
-          (withAsyncHandler (>> eval-one loop))))
-    (>> initialize loop)))
+        (= loop wrapper
+          (withAsyncHandler wrapper
+                            (>> (eval-one wrapper)
+                                (loop wrapper)))))
+    (>>= initialize loop)))
 
 (defn (set-print-name (-> String (Skc ())))
   "Set the name of function used for printing values in interactive
@@ -163,26 +175,28 @@ context."
                                                       fn)})))
         _ (failS "set-print-name: parse error"))))
 
-(defn (eval-form (-> Handle InSource [Code] (Skc Result)))
-  [hdl itype forms]
+(defn (eval-form (-> Handle ForeignHValue InSource [Code] (Skc Result)))
+  [hdl wrapper itype forms]
   (| ((null forms)
       (return (Right "")))
      ((<- (Right decls) (evalBuilder parseTopDecls forms))
       (eval-decls decls))
      ((<- (Right stmt) (evalBuilder parseStmt forms))
-      (eval-statement hdl itype stmt))
+      (eval-statement hdl wrapper itype stmt))
      (otherwise
       (case (evalBuilder parseImports forms)
         (Right idecl) (eval-imports idecl)
         (Left se)     (skSrcError (syntaxErrCode se)
                                   (syntaxErrMsg se))))))
 
-(defn (eval-statement (-> Handle InSource HStmt (Skc Result)))
-  [hdl itype stmt0]
+(defn (eval-statement
+       (-> Handle ForeignHValue InSource HStmt (Skc Result)))
+  [hdl wrapper itype stmt0]
   (do (<- hsc-env getSession)
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
       (case stmt1
-        (Just (, is h f)) (update-hsc-env hdl itype hsc-env is h f)
+        (Just (, is h f)) (update-hsc-env hdl wrapper itype hsc-env
+                                          is h f)
         Nothing (return (Left "eval-statement: no result")))))
 
 (defn (eval-imports (-> [HImportDecl] (Skc Result)))
@@ -220,9 +234,9 @@ context."
             (= tystr (intercalate "\n" tystrs))))
       (return (Right tystr))))
 
-(defn (update-hsc-env (-> Handle InSource HscEnv [Id] ForeignHValue
-                          FixityEnv (Skc Result)))
-  [hdl itype hsc-env ids hvals-io fixity-env]
+(defn (update-hsc-env (-> Handle ForeignHValue InSource HscEnv
+                          [Id] ForeignHValue FixityEnv (Skc Result)))
+  [hdl wrapper itype hsc-env ids hvals-io fixity-env]
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its implementation.
   (let ((= success fhvals _elapsed ret
@@ -254,10 +268,12 @@ context."
         (= incomplete
           (return (Left "update-hsc-env failed.")))
         (= eval-hvals-io
-          (evalStmt hsc-env False (EvalThis hvals-io)))
+          (evalStmt hsc-env False (EvalApp (EvalThis wrapper)
+                                           (EvalThis hvals-io))))
+
         (= eval-for-prompt
-          (do (<- stat (liftIO eval-hvals-io))
-              (return (, stat ""))))
+          (do (<- status (liftIO eval-hvals-io))
+              (return (, status ""))))
         (= eval-for-connection
           (liftIO (with-io-redirect hdl eval-hvals-io))))
     (do (<- (, status ret)
@@ -275,6 +291,19 @@ context."
 
 
 ;;; Auxiliary
+
+(defn (make-eval-wrapper (-> [String] (Skc ForeignHValue)))
+  [args]
+  (let ((= form
+          `(\ m (System.Environment.withArgs ,args m)))
+        (= no-rb-hsc hsc-env
+          (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
+                                           RebindableSyntax)})))
+    (case (evalBuilder parseExpr [form])
+      (Right expr) (withTempSession no-rb-hsc
+                                    (compileParsedExprRemote expr))
+      (Left err) (skSrcError (syntaxErrCode err)
+                             (syntaxErrMsg err)))))
 
 (defn (var-name-and-type (-> DynFlags Name Var String))
   [dflags name var]

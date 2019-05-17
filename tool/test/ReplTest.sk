@@ -186,6 +186,7 @@
                       "; Type constructor ‘Foo’"]))
          (ok '(import Control.Monad)
              "; import Control.Monad")
+         (ok 'System.Environment.getArgs "[]")
 
          ;; Errors
          (ng 'buzz
