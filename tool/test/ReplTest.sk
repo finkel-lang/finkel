@@ -205,6 +205,13 @@
                "[(Language.SK.qSymbol \"c\")]"
                "]))"]))
 
+         ;; Exported macros
+         (satisfy '(exported-macros SK.Prelude)
+                  (\ result
+                    (case result
+                      (Right str) (isSubsequenceOf "defmacro" str)
+                      _ False)))
+
          ;; Errors
          (ng 'buzz
              (concat ["<interactive>:1:1: error: "

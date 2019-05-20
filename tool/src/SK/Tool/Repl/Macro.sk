@@ -29,9 +29,6 @@
    (Data.Maybe (catMaybes))
    (Text.Printf (printf))
 
-   ;; bytestring
-   (qualified Data.ByteString.Char8 as C8)
-
    ;; directory
    (System.Directory (getCurrentDirectory setCurrentDirectory))
 
@@ -61,7 +58,7 @@
    (InstEnv (pprInstance))
    (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
                                 parseName setContext showModule))
-   (Linker (initDynLinker linkModule showLinkerState unload))
+   (Linker (initDynLinker showLinkerState unload))
    (Module (mkModuleNameFS moduleNameString))
    (Name (getName nameIsFromExternalPackage nameModule nameOccName
                   nameSrcSpan))
@@ -69,17 +66,12 @@
    (Outputable ((SDoc) $$ <+> <> empty dcolon hsep nest ppr sep
                 showPpr showSDoc showSDocForUser text vcat))
    (Module ((Module ..) mkModuleName))
-   (Packages ((PackageConfig) componentId packageNameString
-              readPackageConfigs))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
    (SrcLoc (getLoc isGoodSrcSpan noLoc unLoc))
    (TyCoRep ((TyThing ..)))
    (Util (looksLikeModuleName))
 
    (qualified GhcMake as GhcMake)
-
-   ;; ghc-boot
-   (GHC.PackageDb (toStringRep))
 
    ;; ghci
    (Debugger (pprTypeAndContents))
@@ -208,15 +200,6 @@
           (make [(, str Nothing)] True force-recomp Nothing)
           (return '(begin))))))
 
-(defn (link-module-obj (-> FastString (Skc Code)))
-  [name]
-  (do (<- hsc-env getSession)
-      (let ((= mname (mkModuleNameFS name))
-            (= uid (thisPackage (hsc_dflags hsc-env)))))
-      (liftIO (do (unload hsc-env [])
-                  (linkModule hsc-env (Module uid mname))))
-      (return '(begin))))
-
 (defn (compile-and-import (-> FilePath (Skc Code)))
   [path]
   ;; As done in ghci, adding `IIModule' if the module is interpreted as
@@ -260,6 +243,16 @@ object code."
                          iidecl-to-iimodule))))
       (return (map ii-fn imports))))
 
+;;; Mostly taken from `GHCi.UI.guessCurrentModule'.
+(defn (guess-current-module (-> Code (Skc Module)))
+  [form]
+  (do (<- imports getContext)
+      (case imports
+        (: (IIModule m) _) (findModule m Nothing)
+        (: (IIDecl d) _)   (findModule (unLoc (ideclName d))
+                                       (fmap sl-fs (ideclPkgQual d)))
+        _ (skSrcError form "browse: no current module"))))
+
 (defn (env-context-on-exception (-> (Skc a) (Skc ())))
   [action]
   (gcatch
@@ -277,15 +270,6 @@ object code."
            _         (liftIO (print e)))
          (<- mods (fmap envContextModules getSkEnv))
          (setContext (map mk-ii mods))))))
-
-(defn (lookup-package-config
-       (-> DynFlags String (IO (Maybe PackageConfig))))
-  "Lookup `PackageConfig' of given package in `DynFlags'."
-  [dflags pkgname]
-  (do (<- confs (liftIO (readPackageConfigs dflags)))
-      (return
-        (find (. (== pkgname) packageNameString)
-              (concat (map snd confs))))))
 
 (defn (browse-module (-> Module ModuleInfo (Skc Code)))
   "Simplified version of `GHCi.UI.browseModule'."
@@ -388,8 +372,11 @@ object code."
 (defn (show-hpt (Skc Code))
   "Show home package table."
   (do (<- hsc-env getSession)
-      (<- str (show-sdoc-for-user-m (pprHPT (hsc-HPT hsc-env))))
-      (return `(putStrLn ,str))))
+      (<- str0 (show-sdoc-for-user-m (pprHPT (hsc-HPT hsc-env))))
+      (let ((= str1 (if (null str0)
+                        "show: no home package table found"
+                        str0))))
+      (return `(putStrLn ,str1))))
 
 ;;; Mostly taken from `GHCi.UI.showLanguages''.
 (defn (show-language (-> Bool (Skc Code)))
@@ -421,8 +408,7 @@ object code."
                         (text "all active language options:")
                         (text "with the following modifiers:"))
                     (nest 2 (vcat (map (setting xopt) xFlags))))])))
-      (liftIO (putStrLn str))
-      (return '(begin))))
+      (return `(putStrLn ,str))))
 
 (defn (show-linker (Skc Code))
   ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
@@ -482,9 +468,10 @@ object code."
                ($$ (text "warning settings:")
                    (nest 2 (vcat (map (setting "-W" "-Wno-" wopt)
                                       wWarningFlags))))])))
-      (<- _ (show-language show-all))
-      (liftIO (mapM_ (. putStrLn (showSDoc dflags)) sdocs))
-      (return '(begin))))
+      (<- printLang (show-language show-all))
+      (let ((= printOthers
+              `(mapM_ putStrLn ,(map (showSDoc dflags) sdocs)))))
+      (return `(>> ,printLang ,printOthers))))
 
 (defn (show-packages (Skc Code))
   (do (<- dflags getDynFlags)
@@ -549,16 +536,6 @@ COMMANDS:
   (do (<- _ecode (liftIO (system (intercalate " " (map show forms)))))
       (return '(begin))))
 
-;;; Mostly taken from `GHCi.UI.guessCurrentModule'.
-(defn (guess-current-module (-> Code (Skc Module)))
-  [form]
-  (do (<- imports getContext)
-      (case imports
-        (: (IIModule m) _) (findModule m Nothing)
-        (: (IIDecl d) _)   (findModule (unLoc (ideclName d))
-                                       (fmap sl-fs (ideclPkgQual d)))
-        _ (skSrcError form "browse: no current module"))))
-
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defn (browse-cmd ReplAction)
   [forms]
@@ -594,70 +571,16 @@ COMMANDS:
              (skSrcError l (++ "cd: expecting symbol or string but got "
                                (show l))))))
 
-(defn (compile-cmd ReplAction)
-  "Compile source code to object code."
-  [forms]
-  (let ((= err
-          (skSrcError (located-list forms)
-                      (++ "compile: not a FilePath: " (show forms))))
-        (= work src
-          (do (liftIO (putStrLn (++ "; compile: " src)))
-              (compile-module src))))
-    (case forms
-      [form] (maybe err work (code-to-mb-string form))
-      _      err)))
-
-;;; Lookup matching linkable with given name, and set
-;;; `thisInstalledUnitId' field in current `DynFlags' to the component
-;;; when linkable were found.  By setting component, REPL will recompile
-;;; module from SK source code, by ignoring module found in pre-compiled
-;;; library linkable.  This behaviour may useful when working with cabal
-;;; package library modules from REPL.
-(defn (component-cmd ReplAction)
-  [forms]
-  (do (<- name (case forms
-                 [form] (| ((<- (Just str) (fromCode form))
-                            (return str)))
-                 _ (let ((= lst (located-list forms)))
-                     (skSrcError lst (++ "component: invalid form: "
-                                         (show lst))))))
-      (<- dflags0 getDynFlags)
-      (let ((= set-this-unit-id cid
-              (do (let ((= flags (map noLoc ["-this-unit-id" cid]))))
-                  (<- (, dflags1 _ _)
-                    (parseDynamicFlagsCmdLine dflags0 flags))
-                  (setDynFlags dflags1)
-                  (liftIO
-                   (putStrLn
-                    (concat ["; this unit id set to `" cid "'"])))))
-            (= not-found
-              (liftIO
-               (putStrLn
-                (concat ["; package " (show name) " not found"]))))))
-      (<- mb-component-id
-        (liftIO
-         (do (<- mb-pc (maybe (return Nothing)
-                              (lookup-package-config dflags0)
-                              (code-to-mb-string name)))
-             (return (fmap (. C8.unpack
-                              (. toStringRep componentId))
-                           mb-pc)))))
-      (case mb-component-id
-        (Just cid) (set-this-unit-id cid)
-        Nothing    (| ((elem name ['this 'main])
-                       (set-this-unit-id (show name)))
-                      (otherwise not-found)))
-      (return '(begin))))
-
 (defn (debug-cmd ReplAction)
   "Modify debug settings in REPL."
   [forms]
   (case forms
     []     (do (<- bool (fmap envDebug getSkEnv))
-               (return (toCode bool)))
+               (return `(putStrLn (++ "Debug flag is " ,(show bool)))))
     [form] (| ((<- (Just bool) (fromCode form))
                (do (modifySkEnv (\ e (e {envDebug bool})))
-                   (return '(begin)))))
+                   (let ((= msg (++ "Debug flag set to " (show bool)))))
+                   (return `(putStrLn ,msg)))))
     _      (let ((= l (located-list forms)))
              (skSrcError l (++ "debug: invalid form: " (show l))))))
 
@@ -683,18 +606,6 @@ COMMANDS:
                (<- str (show-sdoc-for-user-m sdoc))
                (return `(putStrLn ,str)))
     _      (invalid-form-error "kind" forms)))
-
-(defn (link-module-cmd ReplAction)
-  "Link the object code of given module."
-  [forms]
-  (where (| ((<- [(Atom (ASymbol sym))] (map unCode forms)) (go sym))
-            (otherwise err))
-    (= go name
-      (do (liftIO (putStrLn (++ "; link-module: " (unpackFS name))))
-          (link-module-obj name)))
-    (= err
-      (skSrcError form (++ "link-module: not a symbol: " (show form))))
-    (= form (located-list forms))))
 
 (defn (load-cmd ReplAction)
   "Load a module source code file. Handles absolute paths and relative
@@ -771,7 +682,8 @@ paths from import directories."
             (<- _ (compile-module path))
             (<- ctx1 (adjust-current-target path ctx0))
             (setContext ctx1)
-            (return `(putStrLn (++ "; reloaded " ,path))))
+            (let ((= msg (++ "; reloaded " path))))
+            (return `(putStrLn ,msg)))
         _ (return '(putStrLn "; reload: invalid target")))))
 
 (defn (set-cmd ReplAction)
@@ -851,18 +763,12 @@ paths from import directories."
         "browse contents of MODULE")
      (c "cd" (Just ["DIR"]) cd-cmd
         "change working directory to DIR")
-     (c "compile" (Just ["FILE"]) compile-cmd
-        "compile FILE to object code")
-     (c "component" (Just ["NAME"]) component-cmd
-        "set current component to NAME")
      (c "debug" (Just ["BOOL"]) debug-cmd
         "set sk debug to BOOL")
      (c "info" (Just ["NAME"]) info-cmd
         "show info of NAME")
      (c "kind" (Just ["TYPE"]) kind-cmd
         "show kind of TYPE")
-     (c "link" (Just ["MODULE"]) link-module-cmd
-        "link given MODULE")
      (c "load" (Just ["FILE"]) load-cmd
         "compile and load FILE")
      (c "pwd" Nothing pwd-cmd
