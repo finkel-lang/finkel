@@ -4,6 +4,10 @@
 (require SK.Core.List)
 
 (defmodule CoreTest
+  (export coreTests
+          macroTests
+          cxrTests
+          listTests)
   (load-use
    ;; base
    (Control.Exception)
@@ -36,11 +40,8 @@
 
    ;; internal
    (SK.Core.List)
-   (Orphan))
-  (export coreTests
-          macroTests
-          cxrTests
-          listTests))
+   (Orphan)))
+
 
 (defn (coreTests Spec)
   (do (describe "Cxr" cxrTests)
