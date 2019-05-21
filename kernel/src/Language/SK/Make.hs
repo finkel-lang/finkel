@@ -448,8 +448,8 @@ doMakeOne i total mb_sp ms src_modified = do
   --
   -- For object codes, use the one found with 'findObjectLinkableMaybe',
   -- which is written as file, or the oen found from home package
-  -- table. For byte code, reuse the one found in home package table is
-  -- the linkable was not object code.
+  -- table. For byte code, reuse the one found in home package table if
+  -- the linkable was not an object code.
   --
   mb_old_linkable <- do
     let mb_linkable = mb_hm_info >>= hm_linkable
@@ -468,7 +468,7 @@ doMakeOne i total mb_sp ms src_modified = do
 
   -- Adjust 'SourceModified'. Using the 'src_modified' as-is only when
   -- compiling object code and reusable old interface and old linkable
-  -- where found.
+  -- were found.
   let src_modified'
         | is_bco, Nothing <- mb_old_iface = SourceModified
         | is_bco, Nothing <- mb_old_linkable = SourceModified
