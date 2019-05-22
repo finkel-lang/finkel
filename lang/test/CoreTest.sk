@@ -357,8 +357,8 @@
                   (begin
                     (:: m1 Macro)
                     (= m1
-                      (let ((:: $m1 (-> Code (Skc Code)))
-                            (= $m1 __form__
+                      (let ((:: $tmp (-> Code (Skc Code)))
+                            (= $tmp __form__
                               (case __form__
                                 (LForm (L _loc (List [_ a])))
                                 (return
@@ -371,7 +371,7 @@
                                             "\ninvalid args: `"
                                             (show __form__)
                                             "'"])))))
-                        (Macro $m1))))))
+                        (Macro $tmp))))))
              (it "should replace nil arg with _"
                  (expandTo
                   (defmacro-m m1 ()
@@ -379,10 +379,10 @@
                   (begin
                     (:: m1 Macro)
                     (= m1
-                      (let ((:: $m1 (-> Code (Skc Code)))
-                            (= $m1 _
+                      (let ((:: $tmp (-> Code (Skc Code)))
+                            (= $tmp _
                               (return (quasiquote (print True)))))
-                        (Macro $m1))))))
+                        (Macro $tmp))))))
              (it "should expand symbol arg to rest"
                  (expandTo
                   (defmacro-m m1 args
@@ -390,8 +390,8 @@
                   (begin
                     (:: m1 Macro)
                     (= m1
-                      (let ((:: $m1 (-> Code (Skc Code)))
-                            (= $m1 __form__
+                      (let ((:: $tmp (-> Code (Skc Code)))
+                            (= $tmp __form__
                               (case (unCode __form__)
                                 (List (: _ args))
                                 (return
@@ -403,7 +403,18 @@
                                             "\ninvalid args: `"
                                             (show __form__)
                                             "'"])))))
-                        (Macro $m1))))))
+                        (Macro $tmp))))))
+             (it "should allow names with operator symbol"
+                 (expandTo
+                  (defmacro-m .$$$ ()
+                    (return `(print True)))
+                  (begin
+                    (:: .$$$ Macro)
+                    (= .$$$
+                      (let ((:: $tmp (-> Code (Skc Code)))
+                            (= $tmp _
+                              (return (quasiquote (print True)))))
+                        (Macro $tmp))))))
              (it "should detect invalid arg"
                  (expandFailure
                   (defmacro-m m1 "string"

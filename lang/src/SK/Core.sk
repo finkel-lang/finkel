@@ -89,7 +89,7 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
    (:docn "Code transformer function for macro declaration.")
    (:: macro-decl (-> Code Code Code (Skc Code)))
    (= macro-decl name arg body
-     (do (<- tmp (gensym' (show name)))
+     (do (<- tmp (gensym' "tmp"))
          (return `(= ,name
                     (let ((:: ,tmp (-> Code (Skc Code)))
                           (= ,tmp ,arg ,body))
@@ -507,13 +507,13 @@ Expansions of /m3/:
     ;; in body expression.
     (List [_ name doc args body])
     (| ((<- (Atom (AString _)) (unCode doc))
-        (do (<- tmp (gensym' (show name)))
+        (do (<- tmp (gensym' "tmp"))
             (return `(defmacro-m ,name ,doc ,args
                        (let ((= ,tmp ,body))
                          (return ,tmp)))))))
 
     (List [_ name args body])
-    (do (<- tmp (gensym' (show name)))
+    (do (<- tmp (gensym' "tmp"))
         (return `(defmacro-m ,name ,args
                    (let ((= ,tmp ,body))
                      (return ,tmp)))))
@@ -1065,4 +1065,4 @@ This macro handles variable number of arguments.
             _ (macro-error nil "pfs: no args"))))
     (case (unCode form)
       (List (: _ rest)) (go rest)
-      _ (macro-error form "pfs: invalid form")) ))
+      _ (macro-error form "pfs: invalid form"))))
