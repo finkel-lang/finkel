@@ -8,10 +8,10 @@ module Language.SK.Syntax.HDecl where
 import Data.Maybe (fromMaybe)
 
 -- ghc
-import BasicTypes ( Fixity(..),  FixityDirection(..), InlinePragma(..)
-                  , InlineSpec(..), LexicalFixity(..)
-                  , OverlapMode(..), SourceText(..)
-                  , alwaysInlinePragma, defaultInlinePragma )
+import BasicTypes ( Activation(..), Fixity(..),  FixityDirection(..)
+                  , InlinePragma(..), InlineSpec(..), LexicalFixity(..)
+                  , OverlapMode(..), PhaseNum, RuleMatchInfo(..)
+                  , SourceText(..) )
 import DataCon (SrcStrictness(..))
 import FastString (FastString, fsLit, unpackFS)
 import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
@@ -31,7 +31,8 @@ import HsUtils (mkClassOpSigs, mkFunBind, mkLHsSigType, mkLHsSigWcType)
 import OccName (dataName, tcName)
 import OrdList (toOL)
 import Outputable (showSDocUnsafe)
-import RdrHsSyn (mkATDefault, mkConDeclH98, mkGadtDecl, parseCImport)
+import RdrHsSyn ( mkATDefault, mkConDeclH98, mkGadtDecl, mkInlinePragma
+                , parseCImport )
 import RdrName (RdrName, mkUnqual)
 import SrcLoc (GenLocated(..), Located, getLoc, noLoc, unLoc)
 
@@ -541,35 +542,55 @@ b_tsigD names (ctxts,typ0) = do
   return (L l (sigD (typeSig names' typ')))
 {-# INLINE b_tsigD #-}
 
-b_inlineD :: InlineSpec -> Code -> Builder HDecl
-b_inlineD ispec (LForm (L l form))
+b_inlineD :: InlineSpec -> Maybe Activation -> Code -> Builder HDecl
+b_inlineD ispec mb_act (LForm (L l form))
   | Atom (ASymbol name) <- form
   = let inlineSig = InlineSig NOEXT
     in  return (L l (sigD (inlineSig (L l (mkRdrName name)) ipragma)))
   | otherwise
   = builderError
   where
-    ipragma =
-      case ispec of
-        Inline    -> alwaysInlinePragma
-        NoInline  ->
-          defaultInlinePragma { inl_inline = NoInline
-                              , inl_src = SourceText "{-# NOINLINE" }
-        Inlinable ->
-          defaultInlinePragma { inl_inline = Inlinable
-                              , inl_src = SourceText "{-# INLINABLE" }
-        _         -> defaultInlinePragma
+    ipragma = mkInlinePragma (SourceText source) (ispec, FunLike) mb_act
+    source = case ispec of
+               NoInline  -> "{-# NOINLINE"
+               Inlinable -> "{-# INLINABLE"
+               _         -> "{-# INLINE"
 {-# INLINE b_inlineD #-}
 
-b_specializeD :: Code -> (Code, HType) -> Builder HDecl
-b_specializeD (LForm (L l _)) (nameSym, tsig) = do
-  let LForm (L ln (Atom (ASymbol name))) = nameSym
-      lname = L ln (mkRdrName name)
-      ip = defaultInlinePragma {inl_src = SourceText "{-# SPECIALIZE"}
-      specSig = SpecSig NOEXT
-      ssig = specSig lname [mkLHsSigType tsig] ip
-  return (L l (sigD ssig))
+b_activation :: (SourceText -> PhaseNum -> Activation)
+             -> Code -> Builder Activation
+b_activation f code@(LForm (L _l atom))
+  | Atom (AInteger n) <- atom = return (f source (fromIntegral n))
+  -- Supporting symbols in "~N" form, where "N" is an integer.
+  | Atom (ASymbol s) <- atom
+  , '~':rest <- unpackFS s
+  , [(n,"")] <- reads rest = return (f source n)
+  | otherwise = builderError
+  where
+    source = SourceText (show code)
+{-# INLINE b_activation #-}
+
+b_specializeD :: Code -> Maybe Activation -> (Code, HType) -> Builder HDecl
+b_specializeD = specializeBuilder noUserInline "{-# SPECIALISE"
 {-# INLINE b_specializeD #-}
+
+b_specializeInlineD :: Code -> Maybe Activation -> (Code, HType)
+                    -> Builder HDecl
+b_specializeInlineD = specializeBuilder Inline "{-# SPECIALISE INLINE"
+{-# INLINE b_specializeInlineD #-}
+
+specializeBuilder :: InlineSpec
+                  -> String
+                  -> Code -> Maybe Activation -> (Code, HType)
+                  -> Builder HDecl
+specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig) = do
+  let LForm (L ln (Atom (ASymbol name))) = nsym
+      lname = L ln (mkRdrName name)
+      ipragma = mkInlinePragma source (ispec, FunLike) mb_act
+      source = SourceText txt
+      specSig = SpecSig NOEXT lname [mkLHsSigType tsig] ipragma
+  return (L l (sigD specSig))
+{-# INLINE specializeBuilder #-}
 
 b_docnextD :: Code -> Builder HDecl
 b_docnextD (LForm (L l form))
@@ -675,3 +696,10 @@ unParTy t0 =
     L _ (HsParTy _EXT t1) -> t1
     _                       -> t0
 {-# INLINE unParTy #-}
+
+noUserInline :: InlineSpec
+#if MIN_VERSION_ghc (8,4,0)
+noUserInline = NoUserInline
+#else
+noUserInline = EmptyInlineSpec
+#endif

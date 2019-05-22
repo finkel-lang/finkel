@@ -24,7 +24,8 @@ module Language.SK.Syntax
   ) where
 
 -- ghc
-import BasicTypes (FixityDirection(..), InlineSpec(..), OverlapMode(..))
+import BasicTypes ( Activation(..), FixityDirection(..)
+                  , InlineSpec(..), OverlapMode(..) )
 import FastString (FastString)
 import ForeignCall (Safety)
 import HaddockUtils (addConDoc)
@@ -67,6 +68,7 @@ import Language.SK.Syntax.SynUtils
 %name p_lfinsthd lfinsthd
 %name p_lfameq lfameq
 %name p_lsname lsname
+%name p_phase phase
 
 %name p_type type
 %name p_types types
@@ -326,11 +328,11 @@ top_decl :: { HDecl }
     | decl                                 { $1 }
 
 overlap :: { Maybe (Located OverlapMode) }
-    : 'overlappable' { b_overlapP $1 }
+    : {- empty -}    { Nothing }
+    | 'overlappable' { b_overlapP $1 }
     | 'overlapping'  { b_overlapP $1 }
     | 'overlaps'     { b_overlapP $1 }
     | 'incoherent'   { b_overlapP $1 }
-    | {- empty -}    { Nothing }
 
 sfsig :: { (Code, HType) }
     : '::' idsym type { ($2, $3) }
@@ -502,14 +504,19 @@ lsname :: { (Maybe (Located Safety), Code) }
     : 'symbol' 'string' {% (\s -> (Just s, $2)) `fmap` b_safety $1 }
 
 decl :: { HDecl }
-    : '=' idsym aguards     {% b_funBindD $2 $3 }
-    | '=' pat guards        { b_patBindD $3 $2 }
-    | '::' idsym dtype      {% b_tsigD [$2] $3 }
-    | '::' idsyms dtype     {% b_tsigD $2 $3 }
-    | 'inline' idsym        {% b_inlineD Inline $2 }
-    | 'noinline' idsym      {% b_inlineD NoInline $2 }
-    | 'inlinable' idsym     {% b_inlineD Inlinable $2 }
-    | 'specialize' 'list'   {% parse p_sfsig $2 >>= b_specializeD $1 }
+    : '=' idsym aguards      {% b_funBindD $2 $3 }
+    | '=' pat guards         { b_patBindD $3 $2 }
+    | '::' idsym dtype       {% b_tsigD [$2] $3 }
+    | '::' idsyms dtype      {% b_tsigD $2 $3 }
+    | 'inline' actv idsym    {% b_inlineD Inline $2 $3 }
+    | 'noinline' actv idsym  {% b_inlineD NoInline $2 $3 }
+    | 'inlinable' actv idsym {% b_inlineD Inlinable $2 $3 }
+    | 'specialize' actv 'list'
+      {% do { sig <- parse p_sfsig $3
+            ; b_specializeD $1 $2 sig }}
+    | 'specialize' 'inline' actv 'list'
+      {% do { sig <- parse p_sfsig $4
+            ; b_specializeInlineD $1 $3 sig }}
 
 aguards :: { (([HGRHS],[HDecl]), [HPat]) }
     : guards      { ($1, []) }
@@ -521,6 +528,15 @@ dtype :: { ([HType], HType) }
     | 'hslist' {% do { t <- parse p_type [toListL $1]
                      ; return ([], b_listT t) }}
     | qtycl    { $1 }
+
+actv :: { Maybe Activation }
+    : {- empty -} { Nothing }
+    | 'hslist'    {% fmap Just (parse p_phase (unListL $1)) }
+
+phase :: { Activation }
+    : 'integer'     {% b_activation ActiveAfter $1 }
+    | '~' 'integer' {% b_activation ActiveBefore $2 }
+    | idsym         {% b_activation ActiveBefore $1 }
 
 decls :: { [HDecl] }
    : rdecls { reverse $1 }

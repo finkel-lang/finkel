@@ -203,13 +203,9 @@ pragma orig@(LForm (L l form)) =
       -- syntax parser of data constructor field.
       | normalize sym `elem` noArgPragmas -> return orig
 
-    -- Pragma with single argument.
-    List [LForm (L _ (Atom (ASymbol sym))), _a1]
-      -- Inline pragmas are handled by syntax parser.
-      | normalize sym `elem` inlinePragmas -> return orig
-
-    -- Pragma with multiple arguments.
+    -- Pragma with arguments.
     List (LForm (L l' (Atom (ASymbol sym))):rest)
+      | normalize sym `elem` inlinePragmas -> return orig
       | normalize sym == "language" -> do
         let (exts, invalids) = groupExts rest
         case invalids of

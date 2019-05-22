@@ -207,7 +207,7 @@ builderError = do
 
 -- $typesynonym
 --
--- Type synonym for managing version compatibility.
+-- Type synonyms for managing GHC version compatibility.
 --
 -- This 'PARSED' type synonym is wrapped with CPP macro detecting the
 -- ghc package version at compilation time.  At the time of initial
@@ -216,7 +216,8 @@ builderError = do
 -- 8.4.x, 'PARSED' were added to handle the AST argument type
 -- modification.
 --
--- See <https://ghc.haskell.org/trac/ghc/wiki/ImplementingTreesThatGrow>
+-- See
+-- <https://gitlab.haskell.org/ghc/ghc/wikis/implementing-trees-that-grow>
 -- for more information of \"Trees that Grow\".
 --
 
