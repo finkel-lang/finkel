@@ -655,6 +655,7 @@ atom :: { HExpr }
 exprs :: { HExpr }
     : '\\' lambda           { b_lamE $2 }
     | ',' app               { b_tupE $1 $2 }
+    | ','                   { b_tupConE $1 }
     | 'let' lbinds expr     {% b_letE $1 $2 $3 }
     | 'if' expr expr expr   { b_ifE $1 $2 $3 $4 }
     | 'case' expr matches   { b_caseE $1 $2 $3 }

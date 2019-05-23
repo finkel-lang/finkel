@@ -9,21 +9,23 @@ import Data.Char (isUpper)
 import Data.List (foldl1')
 
 -- ghc
-import BasicTypes ( Boxity(..), FractionalLit(..), Origin(..)
+import BasicTypes ( Arity, Boxity(..), FractionalLit(..), Origin(..)
                   , SourceText(..), fl_value)
-import FastString (FastString, fsLit, headFS)
+import FastString (FastString, fsLit, headFS, lengthFS, unpackFS)
 import HsExpr ( ArithSeqInfo(..), GRHS(..), HsExpr(..)
               , HsMatchContext(..), HsStmtContext(..), HsTupArg(..)
               , Match(..), StmtLR(..) )
 import HsDoc (HsDocString)
 import HsLit (HsLit(..), HsOverLit(..))
 import HsPat (HsRecFields(..))
-import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsDo, mkHsFractional
-               , mkHsIf, mkHsLam, mkLHsPar, mkLHsSigWcType, mkLHsTupleExpr
-               , mkMatchGroup )
+import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsDo
+               , mkHsFractional, mkHsIf, mkHsLam, mkLHsPar
+               , mkLHsSigWcType, mkLHsTupleExpr, mkMatchGroup )
 import OrdList (toOL)
 import RdrHsSyn ( mkRdrRecordCon, mkRdrRecordUpd )
+import RdrName ( RdrName, getRdrName )
 import SrcLoc (GenLocated(..), Located, getLoc, noLoc)
+import TysWiredIn ( tupleDataCon )
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsExtension (noExt)
@@ -61,6 +63,12 @@ b_tupE (LForm (L l _)) args = L l e
     explicitTuple = ExplicitTuple NOEXT
     present = Present NOEXT
 {-# INLINE b_tupE #-}
+
+-- Expression for tuple constructor function (i.e. the (,)
+-- function). See also 'b_varE' for tuples with more elements.
+b_tupConE :: Code -> HExpr
+b_tupConE (LForm (L l _)) = L l (HsVar NOEXT (L l (tupConName Boxed 2)))
+{-# INLINE b_tupConE #-}
 
 b_letE :: Code -> [HDecl] -> HExpr -> Builder HExpr
 b_letE (LForm (L l _)) decls body = do
@@ -195,7 +203,12 @@ b_floatE (LForm (L l form))
 b_varE :: Code -> Builder HExpr
 b_varE (LForm (L l form))
   | Atom (ASymbol x) <- form =
-    let rname = mkVarRdrName x
+    -- Tuple constructor function with more than two elements are
+    -- written as symbol with sequence of commas, handling such case in
+    -- this function.
+    let rname | all (== ',') (unpackFS x) =
+                tupConName Boxed ((lengthFS x) + 1)
+              | otherwise = mkVarRdrName x
         hsVar = HsVar NOEXT
     in  return (L l (hsVar (L l rname)))
   | otherwise = builderError
@@ -267,6 +280,9 @@ hsFractional x = mkHsFractional x placeHolderType
 #endif
 {-# INLINE hsFractional #-}
 
+tupConName :: Boxity -> Arity -> RdrName
+tupConName boxity arity = getRdrName (tupleDataCon boxity arity)
+{-# INLINE tupConName #-}
 
 -- ---------------------------------------------------------------------
 --

@@ -2,6 +2,8 @@
 
 (module Main)
 
+(import Control.Monad (ap))
+
 ;;; Simple expressions
 
 (= simple1 a b
@@ -54,8 +56,22 @@
 (= tup1 a b c
   (, a b c))
 
+(:: tup2 (-> a b (Maybe (, a b))))
+(= tup2 a b
+  (ap (ap (return (,)) (return a)) (return b)))
+
+(:: tup3 (-> a b c d (Maybe (, a b c d))))
+(= tup3 a b c d
+  (ap (ap (ap (ap (return (,,,))
+                  (return a))
+              (return b))
+          (return c))
+      (return d)))
+
 (= tupexprs
-  (print (tup1 \x 1.23 "4567")))
+  (do (print (tup1 \x 1.23 "4567"))
+      (print (tup2 True \y))
+      (print (tup3 True \a False \b))))
 
 ;;; 3.9 Unit Expressions and Parenthesized Expressions
 

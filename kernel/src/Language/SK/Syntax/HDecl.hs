@@ -9,9 +9,8 @@ import Data.Maybe (fromMaybe)
 
 -- ghc
 import BasicTypes ( Activation(..), Fixity(..),  FixityDirection(..)
-                  , InlinePragma(..), InlineSpec(..), LexicalFixity(..)
-                  , OverlapMode(..), PhaseNum, RuleMatchInfo(..)
-                  , SourceText(..) )
+                  , InlineSpec(..), LexicalFixity(..), OverlapMode(..)
+                  , PhaseNum, RuleMatchInfo(..), SourceText(..) )
 import DataCon (SrcStrictness(..))
 import FastString (FastString, fsLit, unpackFS)
 import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
