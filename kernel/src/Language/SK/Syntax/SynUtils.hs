@@ -108,13 +108,11 @@ splitQualName fstr = go (unpackFS fstr) "" []
            | otherwise -> go str1 (c:tmp) acc
 {-# INLINE splitQualName #-}
 
-getVarId :: Code -> Builder FastString
-getVarId orig@(LForm (L _ form))
-  | Atom (ASymbol sym) <- form, isVarId sym = return sym
-  | otherwise = do
-    setLastToken orig
-    failB "invalid variable identifier"
-{-# INLINE getVarId #-}
+checkVarId :: Code -> FastString -> Builder ()
+checkVarId orig name
+  | isVarId name = return ()
+  | otherwise = setLastToken orig >> failB "invalid variable identifier"
+{-# INLINE checkVarId #-}
 
 getConId :: Code -> Builder FastString
 getConId orig@(LForm (L _ form))

@@ -8,7 +8,7 @@ import Data.Char (isUpper)
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
-import FastString (fsLit, headFS, tailFS)
+import FastString (fsLit, headFS, nullFS, tailFS)
 import HsLit (HsLit(..))
 import HsPat (HsRecFields(..), Pat(..))
 import HsTypes (HsConDetails(..))
@@ -78,23 +78,41 @@ b_wildP (LForm (L l _)) = L l wildPat
 {-# INLINE b_wildP #-}
 
 b_symP :: Code -> Builder HPat
-b_symP (LForm (L l form))
+b_symP orig@(LForm (L l form))
   | (Atom (ASymbol name)) <- form
   , let hdchr = headFS name
+  , let tlchrs = tailFS name
   = case () of
       _ | isUpper hdchr || hdchr == ':'
         -> return (L l (ConPatIn (L l (mkVarRdrName name))
                                  (PrefixCon [])))
         | hdchr == '~'
-        -> let name' = tailFS name
-               pat = L l (varPat (L l (mkRdrName name')))
-           in  return (L l (lazyPat pat))
+        -> if nullFS tlchrs
+              then failB "invalid use of `~'"
+              else if headFS tlchrs `elem` haskellOpChars
+                      -- Operator function.
+                      then do checkVarId orig name
+                              let name' = L l (mkRdrName name)
+                              return (L l (varPat name'))
+                      -- Lazy pattern.
+                      else do checkVarId orig tlchrs
+                              let name' = L l (mkRdrName tlchrs)
+                                  pat = L l (varPat name')
+                              return (L l (lazyPat pat))
+        | hdchr == '!'
+        , not (nullFS tlchrs)
+        , headFS tlchrs `notElem` haskellOpChars
+        -> do let pat = L l (varPat (L l (mkRdrName tlchrs)))
+              checkVarId orig tlchrs
+              return (L l (bangPat pat))
         | otherwise
-        -> return (L l (varPat (L l (mkRdrName name))))
+        -> do checkVarId orig name
+              return (L l (varPat (L l (mkRdrName name))))
   | otherwise = builderError
   where
     varPat = VarPat NOEXT
     lazyPat = LazyPat NOEXT
+    bangPat = BangPat NOEXT
 {-# INLINE b_symP #-}
 
 b_hsListP :: [HPat] -> HPat
@@ -140,10 +158,12 @@ b_asP (LForm (L l form)) pat
 {-# INLINE b_asP #-}
 
 b_lazyP :: HPat -> HPat
-b_lazyP pat@ (L l _) = L l (lazyPat pat)
-  where
-    lazyPat = LazyPat NOEXT
+b_lazyP pat@ (L l _) = L l (LazyPat NOEXT pat)
 {-# INLINE b_lazyP #-}
+
+b_bangP :: HPat -> HPat
+b_bangP pat@(L l _) = L l (BangPat NOEXT pat)
+{-# INLINE b_bangP #-}
 
 b_conP :: Code -> [HPat] -> Builder HPat
 b_conP (LForm (L l form)) rest

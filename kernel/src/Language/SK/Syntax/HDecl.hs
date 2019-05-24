@@ -23,6 +23,7 @@ import HsDecls ( ClsInstDecl(..), ConDecl (..), DataFamInstDecl(..)
                , InstDecl(..), NewOrData(..), TyClDecl(..)
                , TyFamInstDecl(..), TyFamInstEqn )
 import HsExpr (HsMatchContext(..), Match(..))
+import HsPat (Pat(..))
 import HsTypes ( ConDeclField(..), HsConDetails(..), HsType(..)
                , HsTyVarBndr(..)
                , mkFieldOcc, mkHsImplicitBndrs, mkHsQTvs )
@@ -489,9 +490,31 @@ b_safety (LForm (L l form))
   | otherwise = builderError
 {-# INLINE b_safety #-}
 
-b_funBindD :: Code -> (([HGRHS],[HDecl]), [HPat]) -> Builder HDecl
-b_funBindD form@(LForm (L l _)) ((grhss,decls), args) = do
-  name <- getVarId form
+b_funOrPatD :: Code -> [HPat] -> ([HGRHS], [HDecl]) -> Builder HDecl
+b_funOrPatD eq_form pats gxd@(grhss,decls) =
+  case pats of
+    [] -> setLastToken eq_form >> failB "empty binding"
+    lpat@(L l (BangPat _EXT pat)):pats' ->
+      case pats' of
+        [] -> return (b_patBindD gxd lpat)
+        _  -> let name = L l (mkRdrName "!")
+              in  b_funBindD name (pat:pats') grhss decls
+    lpat@(L _ pat):pats'
+      | isVarPat pat -> do
+        name <- varToName pat
+        b_funBindD name pats' grhss decls
+      | null pats'   -> return (b_patBindD gxd lpat)
+      | otherwise    -> setLastToken eq_form >> failB "malformed binding"
+  where
+    isVarPat (VarPat {}) = True
+    isVarPat _ = False
+    varToName (VarPat _EXT lname) = return lname
+    varToName _ = failB "invalid name"
+{-# INLINE b_funOrPatD #-}
+
+b_funBindD :: Located RdrName -> [HPat] -> [HGRHS] -> [HDecl]
+            -> Builder HDecl
+b_funBindD lname@(L l _) args grhss decls = do
   let body = mkGRHSs grhss decls l
 #if MIN_VERSION_ghc(8,6,0)
       match = L l (Match noExt ctxt args body)
@@ -500,12 +523,11 @@ b_funBindD form@(LForm (L l _)) ((grhss,decls), args) = do
 #else
       match = L l (Match ctxt args Nothing body)
 #endif
-      ctxt = FunRhs { mc_fun = lrname
+      ctxt = FunRhs { mc_fun = lname
                     , mc_fixity = Prefix
-                      -- XXX: Get strictness info from ... where?
+                      -- XXX: Get strictness from ... where?
                     , mc_strictness = NoSrcStrict }
-      lrname = L l (mkRdrName name)
-      bind = mkFunBind lrname [match]
+      bind = mkFunBind lname [match]
   return (L l (valD bind))
 {-# INLINE b_funBindD #-}
 

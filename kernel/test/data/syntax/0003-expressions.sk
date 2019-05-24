@@ -117,8 +117,9 @@
         (= forall n)
         (= hiding n)
         (= qualified n)
-        (= ! a b (+ a b)))
-    [as ccall forall hiding qualified (! 19 23)]))
+        (= ! a b (+ a b))
+        (= ~~ a b (* a b)))
+    [as ccall forall hiding qualified (! 19 23) (~~ 6 7)]))
 
 ;;; `let' with pattern match
 (= let4 n

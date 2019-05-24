@@ -353,8 +353,8 @@ rconstrs :: { (HDeriving, [HConDecl]) }
     | rconstrs constr        { fmap ($2:) $1 }
 
 constr :: { HConDecl }
-    : mbdocnext conid  {% fmap (flip addConDoc $1) (b_conOnlyD $2) }
-    | mbdocnext 'list' {% fmap (flip addConDoc $1) (parse p_lconstr $2) }
+    : mbdocnext conid  {% flip addConDoc $1 `fmap` b_conOnlyD $2 }
+    | mbdocnext 'list' {% flip addConDoc $1 `fmap` parse p_lconstr $2 }
 
 deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }
@@ -504,8 +504,7 @@ lsname :: { (Maybe (Located Safety), Code) }
     : 'symbol' 'string' {% (\s -> (Just s, $2)) `fmap` b_safety $1 }
 
 decl :: { HDecl }
-    : '=' idsym aguards      {% b_funBindD $2 $3 }
-    | '=' pat guards         { b_patBindD $3 $2 }
+    : '=' pats_and_guards    {% case $2 of (g,p) -> b_funOrPatD $1 p g }
     | '::' idsym dtype       {% b_tsigD [$2] $3 }
     | '::' idsyms dtype      {% b_tsigD $2 $3 }
     | 'inline' actv idsym    {% b_inlineD Inline $2 $3 }
@@ -518,9 +517,9 @@ decl :: { HDecl }
       {% do { sig <- parse p_sfsig $4
             ; b_specializeInlineD $1 $3 sig }}
 
-aguards :: { (([HGRHS],[HDecl]), [HPat]) }
-    : guards      { ($1, []) }
-    | pat aguards { ($1:) `fmap` $2 }
+pats_and_guards :: { (([HGRHS],[HDecl]), [HPat]) }
+    : guards              { ($1, []) }
+    | pat pats_and_guards { ($1:) `fmap` $2 }
 
 dtype :: { ([HType], HType) }
     : 'symbol' {% (\t -> ([], t)) `fmap` b_symT $1}
@@ -606,6 +605,7 @@ rpats0 :: { [HPat] }
 
 pat :: { HPat }
     : '~' pat_ { b_lazyP $2 }
+    | '!' pat_ { b_bangP $2 }
     | pat_     { $1 }
 
 pat_ :: { HPat }

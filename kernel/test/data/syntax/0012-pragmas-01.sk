@@ -1,4 +1,5 @@
-;;; -*- mode: sk -*-
+;;; Forms containing INLINE, INLINABLE ... etc.
+
 #p(LANGUAGE GADTs)
 
 (module Main)

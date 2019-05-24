@@ -10,6 +10,7 @@
 (module Main)
 
 ;;; ExistentialQuantification
+
 (data AnyShow1
   (forall a (=> (Show a) (AnyShow1 a))))
 
@@ -25,6 +26,7 @@
     (concat ["(AnyShow2 " (show a) " " (show b) ")"])))
 
 ;; RankNtypes
+
 (:: f3 (-> (forall a (-> a a)) (, Char Bool)))
 (= f3 f (, (f \a) (f True)))
 
