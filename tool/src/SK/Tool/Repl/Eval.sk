@@ -48,7 +48,7 @@
    (Outputable (ppr mkErrStyle renderWithStyle setStyleColoured
                     showPpr showSDoc vcat))
    (RdrHsSyn (cvTopDecls))
-   (SrcLoc (unLoc))
+   (SrcLoc ((Located) unLoc))
    (TyCoRep ((TyThing ..)))
    (Var ((Id) (Var) varType))
 
@@ -62,7 +62,7 @@
 
    ;; sk-kernel
    (Language.SK)
-   (Language.SK.Builder ((HDecl) (HImportDecl)  (HStmt)
+   (Language.SK.Builder ((HDecl) (HIE) (HImportDecl)  (HStmt)
                          syntaxErrCode syntaxErrMsg evalBuilder))
    (Language.SK.Eval (evalDecls))
    (Language.SK.Expand (expands))
@@ -102,19 +102,18 @@
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory
                                          verbosity 1}))
-                    (= dflags2
-                      (foldl gopt-set dflags1 optional-dynflags))
-
+                    (= dflags2 (foldl gopt-set dflags1
+                                      optional-dynflags))
                     (= dflags3 (updateWays (dflags2 {ways interpWays})))
                     (= platform (targetPlatform dflags3))
-                    (= dflags4
-                      (foldl gopt-set dflags3
-                             (concatMap (wayGeneralFlags platform)
-                                        interpWays)))
-                    (= dflags5
-                      (foldl gopt-unset dflags4
-                             (concatMap (wayUnsetGeneralFlags platform)
-                                        interpWays)))))
+                    (= dflags4 (foldl gopt-set dflags3
+                                      (concatMap
+                                       (wayGeneralFlags platform)
+                                       interpWays)))
+                    (= dflags5 (foldl gopt-unset dflags4
+                                      (concatMap
+                                       (wayUnsetGeneralFlags platform)
+                                       interpWays)))))
               (void (setSessionDynFlags dflags5))
 
               ;; XXX: Currently the printer function and the arguments
@@ -125,12 +124,10 @@
         (= withAsyncHandler wrapper
           (ghandle
            (\ e
-             (do (liftIO
-                  (case e
-                    UserInterrupt (return ())
-                    ThreadKilled  (return ())
-                    _             (putStrLn (++ "eval-loop: got "
-                                                (show e)))))
+             (do (liftIO (case e
+                           UserInterrupt (return ())
+                           ThreadKilled  (return ())
+                           _ (putStrLn (++ "eval-loop: " (show e)))))
                  (loop wrapper)))))
         (= src-err-handler src-err
           (do (<- dflags getSessionDynFlags)
@@ -147,9 +144,9 @@
            (\ e
              (case (fromException e)
                (Just se) (src-err-handler se)
-               Nothing   (case (fromException e)
-                           (Just ae) (throw-async-io ae)
-                           Nothing   (return (Left (show e))))))
+               Nothing (case (fromException e)
+                         (Just ae) (throw-async-io ae)
+                         Nothing (return (Left (show e))))))
            m))
         (= eval-one wrapper
           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
@@ -169,10 +166,10 @@ context."
   [name]
   (do (<- vals (parseName name))
       (case vals
-        (: fn _) (modifySession
-                  (\ he (he {hsc-IC
-                             (setInteractivePrintName (hsc-IC he)
-                                                      fn)})))
+        (: f _) (modifySession
+                 (\ he (he {hsc-IC
+                            (setInteractivePrintName (hsc-IC he)
+                                                     f)})))
         _ (failS "set-print-name: parse error"))))
 
 (defn (eval-form (-> Handle ForeignHValue InSource [Code] (Skc Result)))
@@ -186,8 +183,7 @@ context."
      (otherwise
       (case (evalBuilder parseImports forms)
         (Right idecl) (eval-imports idecl)
-        (Left se)     (skSrcError (syntaxErrCode se)
-                                  (syntaxErrMsg se))))))
+        (Left se) (skSrcError (syntaxErrCode se) (syntaxErrMsg se))))))
 
 (defn (eval-statement
        (-> Handle ForeignHValue InSource HStmt (Skc Result)))
@@ -209,8 +205,8 @@ context."
               (++ "; " (intercalate ", "
                                     (map (. (showSDoc dflags) ppr)
                                          imports))))
-            (= f mdl (add-gt-ii (mkIIDecl mdl)))
-            (= ctx1 (foldr f ctx0 imports))))
+            (= ctx1 (foldr (\ mdl (add-gt-ii (mkIIDecl mdl)))
+                           ctx0 imports))))
       (setContext ctx1)
       (return (Right mdls))))
 
@@ -223,10 +219,9 @@ context."
             (= pr tt
               (case tt
                 (AnId var) (var-name-and-type dflags (getName var) var)
-                _          (++ "; " (showSDoc dflags (ppr tt)))))
+                _ (++ "; " (showSDoc dflags (ppr tt)))))
             (= show-tything tt acc
-              (let ((= nstr
-                      (showSDoc dflags (ppr (getName tt)))))
+              (let ((= nstr (showSDoc dflags (ppr (getName tt)))))
                 (if (== "$trModule" nstr)
                     acc
                     (: (pr tt) acc))))
@@ -263,8 +258,8 @@ context."
         (= exception serialized
           (case serialized
             (EOtherException e) (return (Left (++ "*** Exception: " e)))
-            (EExitCode ecode)   (liftIO (exitWith ecode))
-            EUserInterrupt      (return (Left "Interrupted."))))
+            (EExitCode ecode) (liftIO (exitWith ecode))
+            EUserInterrupt (return (Left "Interrupted."))))
         (= incomplete
           (return (Left "update-hsc-env failed.")))
         (= eval-hvals-io
@@ -287,7 +282,7 @@ context."
         (case status
           (EvalComplete et (EvalSuccess hvs)) (success hvs et ret)
           (EvalComplete  _ (EvalException e)) (exception e)
-          _                                  incomplete))))
+          _ incomplete))))
 
 
 ;;; Auxiliary
@@ -317,9 +312,10 @@ context."
 
 (defn (names-and-types (-> DynFlags [Name] [Var] String))
   [dflags names vars]
-  (where (| ((all null tvs) "")
-            (otherwise (intercalate "\n" tvs)))
-    (= tvs (zipWith (var-name-and-type dflags) names vars))))
+  (let ((= tvs (zipWith (var-name-and-type dflags) names vars)))
+    (if (all null tvs)
+        ""
+        (intercalate "\n" tvs))))
 
 (defn (add-gt-ii (-> InteractiveImport [InteractiveImport]
                      [InteractiveImport]))
@@ -331,17 +327,20 @@ context."
 (defn (subsume-ii (-> InteractiveImport InteractiveImport Bool))
   ;; See `GHCi.UI.iiSubsumes'.
   [(IIModule x) (IIModule y)] (== x y)
-  [(IIDecl x) (IIDecl y)]
-  (where (and [(== (unLoc (ideclName x))
-                   (unLoc (ideclName y)))
-               (== (ideclAs x) (ideclAs y))
-               (|| (not (ideclQualified x))
-                   (ideclQualified y))
-               (hiding-subsumes (ideclHiding x)
-                                (ideclHiding y))])
-    (defn hiding-subsumes
-      [_                         (Just (, False (L _ [])))] True
-      [(Just (, False (L _ xs))) (Just (, False (L _ ys)))]
-      (all (flip elem xs) ys)
-      [                       a                          b] (== a b)))
+  [(IIDecl x) (IIDecl y)] (and [(== (unLoc (ideclName x))
+                                    (unLoc (ideclName y)))
+                                (== (ideclAs x) (ideclAs y))
+                                (|| (not (ideclQualified x))
+                                    (ideclQualified y))
+                                (hiding-subsumes (ideclHiding x)
+                                                 (ideclHiding y))])
+
   [_ _] False)
+
+(defn (hiding-subsumes (-> (Maybe (, Bool (Located [HIE])))
+                           (Maybe (, Bool (Located [HIE])))
+                           Bool))
+  [_ (Just (, False (L _ [])))] True
+  [(Just (, False (L _ xs)))
+   (Just (, False (L _ ys)))] (all (flip elem xs) ys)
+  [a b] (== a b))
