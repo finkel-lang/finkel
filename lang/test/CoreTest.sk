@@ -254,7 +254,7 @@
   [x]
   `(++ "m1 " ,x))
 
-(eval-when (compile load)
+(eval-and-compile
   ;; Using a newtype to compare 'Code's containing symbols generated
   ;; with `gensym'.
   (newtype GensymCode
@@ -429,7 +429,7 @@
              (expandTo
               (defmacro-m' m1 (a)
                 `(return (putStrLn ,a)))
-              (eval-when (compile load)
+              (eval-and-compile
                 (defmacro-m m1 (a)
                   (quasiquote (return (putStrLn (unquote a)))))))))
 
@@ -445,11 +445,11 @@
                   (return $m1))))))
 
       (d "defmacro'"
-         (it "expands to (eval-when (...) (defmacro ...))"
+         (it "expands to (eval-and-compile (...) (defmacro ...))"
              (expandTo
               (defmacro' m1 (a)
                 `(putStrLn ,a))
-              (eval-when (compile load)
+              (eval-and-compile
                 (defmacro m1 (a)
                   (quasiquote (putStrLn (unquote a))))))))
 
@@ -580,11 +580,11 @@
                     4)))))
 
       (d "defn'"
-         (it "should expand to (eval-when (..) (defn ...))"
+         (it "should expand to (eval-and-compile (..) (defn ...))"
              (expandTo
               (defn' foo (a b)
                 (+ a b))
-              (eval-when [compile load]
+              (eval-and-compile
                 (defn foo (a b)
                   (+ a b))))))
 

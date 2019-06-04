@@ -5,7 +5,7 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
 
 (module SK.Core
   (:dh1 "Phase control")
-  eval-when
+  eval-when eval-and-compile
 
   (:dh1 "Module header")
   defmodule
@@ -23,7 +23,7 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
   macroexpand macroexpand-1 exported-macros
 
   (:dh1 "Expressions")
-  cond aps pfs)
+  cond pfs aps)
 
 ;;; Requires
 
@@ -71,8 +71,8 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
 ;;; Defining a macro `eval-when-compile-and-load', to define functions
 ;;; and macros in current compilation context and compiled result. Then
 ;;; this module defines some auxiliary functions, and then a macro
-;;; `define-macro'' to define a macro in compilation context and
-;;; compiled result.
+;;; `define-macro'' to define macros in compilation context and compiled
+;;; result.
 
 (with-macro ((= eval-when-compile-and-load
                (Macro
@@ -254,7 +254,24 @@ and temporally macro @m@ at compilation time.
       _ (skSrcError form (++ "eval-when: invalid form: "
                              (show form))))))
 
-(eval-when [compile load]
+(define-macro' eval-and-compile
+  "Same as 'eval-when' macro with @compile@ and @load@ phases.
+
+==== __Syntax__
+
+> EVAL-AND-COMPILE ::= 'eval-and-compile' BODY*
+
+==== __Example__
+
+See 'eval-when'.
+"
+  form
+  (case (unCode form)
+    (List (: _ body)) (return `(eval-when [compile load]
+                                 ,@body))
+    _ (skSrcError form "eval-and-compile: panic")))
+
+(eval-and-compile
   (:: macro-error (-> Code String (Skc a)))
   (= macro-error form msg
     (skSrcError form (concat [msg ": " (show form)])))
@@ -414,8 +431,7 @@ Sample expansion:
 
 (define-macro' defmacro-m'
   "
-Variant of 'defmacro_m'. Wrapped in 'eval_when' with @compile@ and
-@load@ phases.
+Variant of 'defmacro_m', wrapped in 'eval_and_compile'.
 
 ==== __Syntax__
 
@@ -426,7 +442,7 @@ See 'defmacro'.
 See 'defmacro' and 'defmacro_m'."
   form
   (case (unCode form)
-    (List (: _ rest)) (return `(eval-when (compile load)
+    (List (: _ rest)) (return `(eval-and-compile
                                  (defmacro-m ,@rest)))
     _ (macro-error form "defmacro-m': impossible happened.")))
 
@@ -502,28 +518,27 @@ Expansions of /m3/:
 (do (print False) (print \\x) (print \"bar\"))
 "
   form
-  (case (unCode form)
-    ;; As in `dmac', binding `body' to temporay name to support `where'
-    ;; in body expression.
-    (List [_ name doc args body])
-    (| ((<- (Atom (AString _)) (unCode doc))
-        (do (<- tmp (gensym' "tmp"))
-            (return `(defmacro-m ,name ,doc ,args
-                       (let ((= ,tmp ,body))
-                         (return ,tmp)))))))
+  ;; As in `dmac', binding `body' to temporay name to support `where'
+  ;; in body expression.
+  (let ((= build name mb-doc args body
+          (do (<- tmp (gensym' "tmp"))
+              (let ((:: doc [Code])
+                    (= doc (maybe [] return mb-doc))))
+              (return `(defmacro-m ,name ,@doc ,args
+                         (let ((= ,tmp ,body))
+                           (return ,tmp)))))))
+    (case (unCode form)
+      (List [_ name (@ doc (LForm (L _ (Atom (AString _))))) args body])
+      (build name (Just doc) args body)
 
-    (List [_ name args body])
-    (do (<- tmp (gensym' "tmp"))
-        (return `(defmacro-m ,name ,args
-                   (let ((= ,tmp ,body))
-                     (return ,tmp)))))
+      (List [_ name args body])
+      (build name Nothing args body)
 
-    _ (macro-error form "defmacro: invalid form.")))
+      _ (macro-error form "defmacro: invalid form."))))
 
 (defmacro-m' defmacro'
   "
-Variant of 'defmacro', wrapped in 'eval_when' with @compile@ and
-@load@ phases.
+Variant of 'defmacro', wrapped in 'eval_and_compile'.
 
 ==== __Syntax__
 
@@ -534,7 +549,7 @@ See 'defmacro'.
 See 'defmacro'.
 "
   form
-  (return `(eval-when (compile load)
+  (return `(eval-and-compile
              (defmacro ,@form))))
 
 (define-macro macrolet-m
@@ -597,7 +612,7 @@ Temporary macros can refer other temporary macros:
 
 ;;; Pattern matching macro for `LForm' of `Atom' with `AString'.
 (eval-when-compile
-  (defmacro pastring
+  (defmacro pAstring
     [val]
     `(LForm (L _ (Atom (AString ,val))))))
 
@@ -612,7 +627,7 @@ expand to function definition with argument pattern matchings.
 ==== __Syntax__
 
 > DEFN    ::= 'defn' SIG [DOC] [ARGS] BODY ARGBODY*
-> SIG     ::= varid | '(' varid typesig ')'
+> SIG     ::= varid | '(' varid typesig ')' | '(' '::' varid typesig ')'
 > DOC     ::= '\"' comment '\"'
 > ARGS    ::= '(' varid* ')' | '[' varid* ']'
 > BODY    ::= form
@@ -626,12 +641,16 @@ Function without arguments:
 
 Function without arguments, with type signature:
 
-> (defn (v2 Int) 43)
+> (defn (:: v2 Int) 43)
+
+The '::' in the signature is optional:
+
+> (defn (v3 Int) 44)
 
 Function with arguments, type signature, and documentation comment:
 
 @
-(defn (fib1 (-> Int Int))
+(defn (:: fib1 (-> Int Int))
   \"Documentation comment\"
   [n]
   (case n
@@ -644,7 +663,7 @@ Function with pattern matched arguments, type signature, and
 documentation comment:
 
 @
-(defn (fib2 (-> Int Int))
+(defn (:: fib2 (-> Int Int))
   \"Documentation comment\"
   [0] 0
   [1] 1
@@ -673,16 +692,21 @@ The last /fib2/ example is same as below:
           (case mb-doc
             (Just doc) `((:docp ,doc))
             Nothing     nil))
+        (:: build-tysig (-> Code Code (Maybe Code) [Code] (Skc Code)))
+        (= build-tysig name ty mb-doc bodies
+          (return `(begin
+                     (:: ,name ,ty)
+                     ,@(build-doc mb-doc)
+                     ,@(build-decls name bodies))))
         (:: build (-> Code (Maybe Code) [Code] (Skc Code)))
         (= build sig mb-doc bodies
           (do (when (odd (length bodies))
                 (macro-error form "defn: odd number of forms"))
               (case (unCode sig)
-                (List [name ty]) (return
-                                   `(begin
-                                      (:: ,name ,ty)
-                                      ,@(build-doc mb-doc)
-                                      ,@(build-decls name bodies)))
+                (List [name ty]) (build-tysig name ty mb-doc bodies)
+                (List [dc name ty]) (| ((== dc '::)
+                                        (build-tysig name ty mb-doc
+                                                     bodies)))
                 (Atom _) (case (build-decls sig bodies)
                            [x] (case mb-doc
                                  (Just doc) (return `(begin
@@ -697,16 +721,16 @@ The last /fib2/ example is same as below:
       ;; Declaration of string, without documentation. Need to pattern
       ;; match this first to support defining plain string value without
       ;; documentation.
-      (List [_ sig (@ body (pastring _))])
+      (List [_ sig (@ body (pAstring _))])
       (build sig Nothing [nil body])
 
-      (List [_ sig (@ doc (pastring _)) body])
+      (List [_ sig (@ doc (pAstring _)) body])
       (build sig (Just doc) [nil body])
 
       (List [_ sig body])
       (build sig Nothing [nil body])
 
-      (List (: _ (: sig (: (@ doc (pastring _)) rest))))
+      (List (: _ (: sig (: (@ doc (pAstring _)) rest))))
       (build sig (Just doc) rest)
 
       (List (: _ (: sig bodies)))
@@ -717,7 +741,7 @@ The last /fib2/ example is same as below:
 (defmacro defn'
   "
 Macro to define a function for both of compilation time and load
-time. This macro uses 'eval_when' and 'defn'.
+time. This macro uses 'eval_and_compile' and 'defn'.
 
 ==== __Syntax__
 
@@ -727,7 +751,7 @@ See 'defn'.
 
 See 'defn'."
   form
-  `(eval-when [compile load]
+  `(eval-and-compile
      (defn ,@form)))
 
 (define-macro defdo
@@ -765,7 +789,7 @@ True
 
   form
   (case (unCode form)
-    (List (: _ (: sig (: (@ doc (pastring _)) (: args body)))))
+    (List (: _ (: sig (: (@ doc (pAstring _)) (: args body)))))
     (return `(defn ,sig ,doc ,args
                (do ,@body)))
 
@@ -783,8 +807,8 @@ dummy unit, or @if@ with @MultiWayIf@ GHC language extension.
 
 ==== __Syntax__
 
-COND    ::= 'cond' CLAUSE+
-CLAUSE+ ::= '(' guard+ expr ')'
+> COND    ::= 'cond' CLAUSE+
+> CLAUSE+ ::= '(' guard+ expr ')'
 
 ==== __Examples__
 
@@ -975,25 +999,26 @@ Expands to below:
 
       (: name rest1)
       (do (let ((= merge-sections acc lst
-                  (let ((= label (car lst)))
+                  (let ((= label (car lst))
+                        (= payload (cdr lst)))
                     (cond
                       ((== label 'export)
                        (return
                          (if (null (cdr lst))
                              (: (, 'export (cons '() nil)) acc)
-                             (: (, 'export (cdr lst)) acc))))
+                             (: (, 'export payload) acc))))
                       ((== label 'use)
                        (return
                          (: (, 'import (mapcar (\ es `(import ,@es))
-                                               (cdr lst)))
+                                               payload))
                             acc)))
                       ((== label 'load)
                        (return
                          (: (, 'require (mapcar (\ es `(require ,@es))
-                                                (cdr lst)))
+                                                payload))
                             acc)))
                       ((== label 'load-use)
-                       (return (: (, 'load-use (cdr lst)) acc)))
+                       (return (: (, 'load-use payload) acc)))
 
                       (otherwise
                        (macro-error lst
@@ -1020,6 +1045,29 @@ Expands to below:
 
 ;;; Convenience macros
 
+(define-macro pfs
+  "Macro for point free style function composition.
+
+==== __Syntax__
+
+> PFS ::= 'pfs' expr+
+
+==== __Examples__
+
+>>> (macroexpand '(pfs f1 (f2 arg1) f3))
+(. f1 (. (f2 arg1) f3))
+"
+  form
+  (let ((= go exprs
+          (case exprs
+            [e1 e2] (return `(. ,e1 ,e2))
+            (: e1 rest) (do (<- e2 (go rest))
+                            (return `(. ,e1 ,e2)))
+            _ (macro-error nil "pfs: no args"))))
+    (case (unCode form)
+      (List (: _ rest)) (go rest)
+      _ (macro-error form "pfs: invalid form"))))
+
 (define-macro aps
   "Macro to apply given function in @Applicative@ and @Functor@ context.
 This macro handles variable number of arguments.
@@ -1043,26 +1091,3 @@ This macro handles variable number of arguments.
     (case (unCode form)
       (List (: _ (: op args))) (build op (reverse args))
       _ (macro-error form "aps: invalid form"))))
-
-(define-macro pfs
-  "Macro for point free style function composition.
-
-==== __Syntax__
-
-> PFS ::= 'pfs' expr+
-
-==== __Examples__
-
->>> (macroexpand '(pfs f1 (f2 arg1) f3))
-(. f1 (. (f2 arg1) f3))
-"
-  form
-  (let ((= go exprs
-          (case exprs
-            [e1 e2] (return `(. ,e1 ,e2))
-            (: e1 rest) (do (<- e2 (go rest))
-                            (return `(. ,e1 ,e2)))
-            _ (macro-error nil "pfs: no args"))))
-    (case (unCode form)
-      (List (: _ rest)) (go rest)
-      _ (macro-error form "pfs: invalid form"))))
