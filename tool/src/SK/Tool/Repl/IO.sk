@@ -159,7 +159,7 @@ reading the input until successful parse result."
 ;;; Auxiliary
 
 (defn (init-form Code)
-  "Form to initialize the REPL."
+  "Form containing initial message for the REPL."
   '(putStrLn "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
 
 (defn (quit (=> (MonadIO m) (-> ThreadId (m ()))))
@@ -169,7 +169,7 @@ reading the input until successful parse result."
   [lin]
   (case (words lin)
     (: w _) (any (isPrefixOf w) ["info" "kind" "load" "type"])
-    _       False))
+    _ False))
 
 (defn (as-repl-macro (-> String Code))
   [str]

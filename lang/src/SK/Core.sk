@@ -255,7 +255,7 @@ and temporally macro @m@ at compilation time.
                              (show form))))))
 
 (define-macro' eval-and-compile
-  "Same as 'eval-when' macro with @compile@ and @load@ phases.
+  "Same as 'eval_when' macro with __@compile@__ and __@load@__ phases.
 
 ==== __Syntax__
 
@@ -263,7 +263,7 @@ and temporally macro @m@ at compilation time.
 
 ==== __Example__
 
-See 'eval-when'.
+See 'eval_when'.
 "
   form
   (case (unCode form)
@@ -300,7 +300,7 @@ See 'eval-when'.
                             (return (case x
                                       (Atom gsym) (: (, form gsym) acc)
                                       _           acc)))))
-      _             (return acc)))
+      _ (return acc)))
   #p(INLINABLE acc-gensym-names)
 
   (:: gensymfy (-> Code (Skc Code)))

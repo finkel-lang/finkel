@@ -164,7 +164,7 @@
   (case (unCode code)
     (Atom (ASymbol sym)) (Just (unpackFS sym))
     (Atom (AString str)) (Just str)
-    _                    Nothing))
+    _ Nothing))
 
 (defn (located-list (-> [Code] Code))
   [xs]
@@ -267,7 +267,7 @@ object code."
                                      (srcErrorMessages se))))))))))
          (case (fromException e)
            (Just se) (print-se se)
-           _         (liftIO (print e)))
+           _ (liftIO (print e)))
          (<- mods (fmap envContextModules getSkEnv))
          (setContext (map mk-ii mods))))))
 
@@ -479,7 +479,7 @@ object code."
             (= pr-flag flag
               (case flag
                 (ExposePackage n _ _) (pr n)
-                (HidePackage n)       (pr (++ "hiding " n))))
+                (HidePackage n) (pr (++ "hiding " n))))
             (= pkgs
               (: "; packages" (map pr-flag (packageFlags dflags))))))
       (return `(putStr ,(unlines pkgs)))))
@@ -557,8 +557,8 @@ COMMANDS:
                       (++ "browse: invalid form: " (show forms)))))
     (case (map unCode forms)
       [(Atom (ASymbol sym))] (go (Just (unpackFS sym)))
-      []                     (go Nothing)
-      _                      err)))
+      [] (go Nothing)
+      _ err)))
 
 (defn (cd-cmd ReplAction)
   "Function to change current directory."
@@ -567,31 +567,31 @@ COMMANDS:
     [arg1] (| ((<- (Just path) (code-to-mb-string arg1))
                (do (liftIO (setCurrentDirectory path))
                    (return '(begin)))))
-    _      (let ((= l (located-list forms)))
-             (skSrcError l (++ "cd: expecting symbol or string but got "
-                               (show l))))))
+    _ (let ((= l (located-list forms)))
+        (skSrcError l (++ "cd: expecting symbol or string but got "
+                          (show l))))))
 
 (defn (debug-cmd ReplAction)
   "Modify debug settings in REPL."
   [forms]
   (case forms
-    []     (do (<- bool (fmap envDebug getSkEnv))
-               (return `(putStrLn (++ "Debug flag is " ,(show bool)))))
+    [] (do (<- bool (fmap envDebug getSkEnv))
+           (return `(putStrLn (++ "Debug flag is " ,(show bool)))))
     [form] (| ((<- (Just bool) (fromCode form))
                (do (modifySkEnv (\ e (e {envDebug bool})))
                    (let ((= msg (++ "Debug flag set to " (show bool)))))
                    (return `(putStrLn ,msg)))))
-    _      (let ((= l (located-list forms)))
-             (skSrcError l (++ "debug: invalid form: " (show l))))))
+    _ (let ((= l (located-list forms)))
+        (skSrcError l (++ "debug: invalid form: " (show l))))))
 
 (defn (info-cmd ReplAction)
   [forms]
   (let ((= err (invalid-form-error "info" forms)))
     (case (map unCode forms)
       [(@ form (Atom (ASymbol _)))] (info-name (toCode form))
-      [(Atom AUnit)]                (info-name (qSymbol "()"))
-      [(HsList [])]                 (info-name (qSymbol "[]"))
-      _                             err)))
+      [(Atom AUnit)] (info-name (qSymbol "()"))
+      [(HsList [])] (info-name (qSymbol "[]"))
+      _ err)))
 
 ;; From `GHCi.UI.kindOfType'
 (defn (kind-cmd ReplAction)
@@ -712,16 +712,16 @@ paths from import directories."
 (defn (show-cmd ReplAction)
   [forms]
   (where go
-    (= go
+    (defn go
       (case forms
         [form] (| ((is-symbol form) (work (symbolName form))))
         _      show-cmd-error))
-    (= work thing
+    (defn work [thing]
       (maybe show-cmd-error id (lookup thing things)))
-    (= show-cmd-error
+    (defn show-cmd-error
       (skSrcError nil (++ "show: expecting one of:\n"
                           (intercalate ", " (map fst things)))))
-    (= things
+    (defn things
       [(, "bindings" show-bindings)
        (, "context" show-context)
        (, "dflags" show-dflags)
@@ -748,7 +748,7 @@ paths from import directories."
                                           (pprTypeForUser ty)))]))))
                (<- str (show-sdoc-for-user-m sdoc))
                (return `(putStrLn ,str)))
-    _      (invalid-form-error "type" forms)))
+    _ (invalid-form-error "type" forms)))
 
 
 ;;; REPL command macro
