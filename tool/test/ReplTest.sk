@@ -190,6 +190,8 @@
              "; import Control.Monad")
          (ok '(import qualified Data.Functor as DF)
              "; import qualified Data.Functor as DF")
+         (ok '(import Control.Monad (liftM ap))
+             "; import Control.Monad ( liftM, ap )")
 
          ;; Eval wrapper
          (ok 'System.Environment.getArgs "[]")

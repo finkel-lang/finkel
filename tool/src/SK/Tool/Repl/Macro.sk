@@ -82,6 +82,7 @@
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Eval (evalExprType evalTypeKind))
+   (Language.SK.Expand (expand1))
    (Language.SK.Form (mkLocatedForm symbolName))
    (Language.SK.Make (buildHsSyn make))
    (Language.SK.SKC
@@ -291,6 +292,14 @@ object code."
             (= prettyThings (map pretty things))))
       (<- str (show-sdoc-for-user-m (vcat prettyThings)))
       (return `(putStrLn ,str))))
+
+(defn (expand-with (-> String (-> Code (Skc Code)) ReplAction))
+  [label f forms]
+  (case forms
+    [] (return '(begin))
+    [expr] (>>= (f expr) (\ x (return `(print ',x))))
+    _ (let ((= l (located-list forms)))
+        (skSrcError l (++ label (++ ": invalid form " (show l)))))))
 
 ;;; Mostly translated from `GHCi.UI.infoThing'.
 (defn (info-name (-> Code (Skc Code)))
@@ -584,6 +593,14 @@ COMMANDS:
     _ (let ((= l (located-list forms)))
         (skSrcError l (++ "debug: invalid form: " (show l))))))
 
+(defn (expand-cmd ReplAction)
+  "Expand given form for one layer."
+  (expand-with "expand" expand1))
+
+(defn (expand-full-cmd ReplAction)
+  "Fully expand given form."
+  (expand-with "expand!" expand))
+
 (defn (info-cmd ReplAction)
   [forms]
   (let ((= err (invalid-form-error "info" forms)))
@@ -765,6 +782,10 @@ paths from import directories."
         "change working directory to DIR")
      (c "debug" (Just ["BOOL"]) debug-cmd
         "set sk debug to BOOL")
+     (c "expand" (Just ["FORM"]) expand-cmd
+        "show expanded result of FORM")
+     (c "expand!" (Just ["FORM"]) expand-full-cmd
+        "show fully expanded result of FORM")
      (c "info" (Just ["NAME"]) info-cmd
         "show info of NAME")
      (c "kind" (Just ["TYPE"]) kind-cmd

@@ -68,6 +68,16 @@
          (ok '(repl-macro debug True) "Debug flag set to True")
          (ok '(repl-macro debug False) "Debug flag set to False")
 
+         ;; expand
+         (ok '(repl-macro expand
+               (defn f (where g (defn g [x] (print (++ "g: " x))))))
+             "(= f (where g (defn g [x] (print (++ \"g: \" x)))))")
+
+         ;; expand!
+         (ok '(repl-macro expand!
+               (defn f (where g (defn g [x] (print (++ "g: " x))))))
+             "(= f (where g (= g x (print (++ \"g: \" x)))))")
+
          ;; info
          (ok '(repl-macro info putStr)
              "putStr :: String -> IO () \t-- Defined in ‘System.IO’")

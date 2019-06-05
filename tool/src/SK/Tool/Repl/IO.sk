@@ -168,7 +168,8 @@ reading the input until successful parse result."
 (defn (mangled-command (-> String Bool))
   [lin]
   (case (words lin)
-    (: w _) (any (isPrefixOf w) ["info" "kind" "load" "type"])
+    (: w _) (any (isPrefixOf w) ["expand" "expand!" "info" "kind" "load"
+                                 "type"])
     _ False))
 
 (defn (as-repl-macro (-> String Code))
