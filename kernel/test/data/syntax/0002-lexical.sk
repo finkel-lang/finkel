@@ -1,7 +1,8 @@
 ;;; -*- mode: sk -*-
 ;;;
 ;;; Tests for tokens and literal values. Unlike Haskell, lines starting
-;;; with `;' are comments.
+;;; with `;' are comments. This file intentionally contain spaces and
+;;; tabs.
 
 (module Main)
 
@@ -30,16 +31,16 @@
     (print \\o71254) (print \\o2057) (print \\o1673) (print \\o372172)
     (print \\x72ac) (print \\x42f) (print \\x3bb) (print \\x1f47a)
 
-    (putChar \\a)                ; alert
-    (putChar \\SP)               ; space
-    (putChar \\b)                ; backspace
-    (putChar \\HT)               ; horizontal tab
-    (putChar \\n)                ; new line
-    (putChar \\NUL)              ; \NUL
-    (putChar \\LF)               ; line feed
+    (putChar \\a)               ; alert
+    (putChar \\SP)              ; space
+    (putChar \\b)               ; backspace
+    (putChar \\HT)              ; horizontal tab
+    (putChar \\n)               ; new line
+    (putChar \\NUL)             ; \NUL
+    (putChar \\LF)              ; line feed
 
-    (putChar \\FF)               ; form feed
-    (putChar \\^L)               ; form feed with control char
+    (putChar \\FF)              ; form feed
+    (putChar \\^L)              ; form feed with control char
 
     ;; Single element String with escaped character.
     (putStrLn [\\35])
@@ -84,6 +85,10 @@
     (print x')
     (print x'')
 
+    ;; Some tabs
+		
+	  
+  	    
     ;; Function names starting with `#'.
     (let ((:: (# #. ##) (-> Int Int))
           (= # a (+ a 1))

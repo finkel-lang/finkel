@@ -69,7 +69,7 @@ import Language.SK.Form
 }
 
 $nl          = [\n\r\f]
-$whitechar   = [$nl\v\ ]
+$whitechar   = [$nl\v\t\ ]
 $white_no_nl = $whitechar # \n
 
 $negative    = \-
