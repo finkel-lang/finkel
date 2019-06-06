@@ -643,9 +643,16 @@ expr :: { HExpr }
     : atom     { $1 }
     | 'list'   {% parse p_exprs $1 }
 
+expr_no_idsym :: { HExpr }
+    : atom_no_idsym { $1 }
+    | 'list'        {% parse p_exprs $1 }
+
 atom :: { HExpr }
-    : idsym     {% b_varE $1 }
-    | 'char'    {% b_charE $1 }
+    : idsym         {% b_varE $1 }
+    | atom_no_idsym { $1 }
+
+atom_no_idsym :: { HExpr }
+    : 'char'    {% b_charE $1 }
     | 'string'  {% b_stringE $1 }
     | 'integer' {% b_integerE $1 }
     | 'frac'    {% b_floatE $1 }
@@ -663,7 +670,9 @@ exprs :: { HExpr }
     | '::' expr dtype       { b_tsigE $1 $2 $3 }
     | idsym '{' fbinds '}'  {% b_recConOrUpdE $1 $3 }
     | 'list' '{' fbinds '}' {% b_recUpdE (parse p_exprs $1) $3 }
-    | app                   { b_appE $1 }
+    | expr                  { $1 }
+    | idsym app             {% b_opOrAppE $1 $2 }
+    | expr_no_idsym app     { b_appE ($1:$2) }
 
 lambda :: { (HExpr,[HPat]) }
      : expr       { ($1,[]) }

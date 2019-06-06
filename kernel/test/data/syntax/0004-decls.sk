@@ -305,9 +305,18 @@
 (infixl 6 $^-^$)
 (infixl 7 $^*^$ $^/^$)
 
+;; Fixity resolution with expanded operator.  Without `infixr 4',
+;; expanded form "a >*< b >*< c" will not pass the type checker.
+(:: >*< (=> (Applicative f) (-> (f a) (f (-> a b)) (f b))))
+(= >*< (flip <*>))
+
+(infixr 4 >*<)
+
 (:: s4_4_2 (IO ()))
 (= s4_4_2
-  (print ($^*^$ ($^+^$ 3 4) ($^/^$ 48 8))))
+  (do (print ($^*^$ ($^+^$ 3 4) ($^/^$ 48 8)))
+      (print (>*< (Just []) (Just True) (Just :)))))
+
 
 ;;; 4.4.3 Function and Pattern Bindinds
 

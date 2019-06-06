@@ -38,6 +38,17 @@
 (= lamexprs
   lam2)
 
+;;; 3.4 Operator Applications
+
+;;; Operator are expanded when it takes more than two literal arguments.
+;;; Partial application is support for left hand side argument only.
+(= opexprs
+  (do (print (+ 1 2 3 4 5))
+      (print (* 1 2 3 4 5))
+      (let ((= f (. putStrLn show (+ 3) (* 13)))))
+      (f (:: 3 Int))
+      ($ putStrLn show not False)))
+
 ;;; 3.7 Lists
 
 (= lie0 (print (:: [] [Int])))
@@ -486,6 +497,7 @@
 (= main
   (do simples
       lamexprs
+      opexprs
       listexprs
       tupexprs
       uparenexprs

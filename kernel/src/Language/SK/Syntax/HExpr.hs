@@ -154,6 +154,27 @@ b_recUpdE expr flds = do
    return (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
 {-# INLINE b_recUpdE #-}
 
+b_opOrAppE :: Code -> [HExpr] -> Builder HExpr
+b_opOrAppE code args = do
+  fn <- b_varE code
+  let mkOp loc lhs rhs = L loc (mkOpApp fn lhs rhs)
+  case code of
+    LForm (L l (Atom (ASymbol name)))
+      | all (`elem` haskellOpChars) (unpackFS name)
+      , _:_:_ <- args
+      -> pure (mkLHsPar (foldl1' (mkOp l) args))
+    _ -> pure (b_appE (fn:args))
+{-# INLINE b_opOrAppE #-}
+
+mkOpApp :: HExpr -> HExpr -> HExpr -> HsExpr PARSED
+mkOpApp op l r =
+#if MIN_VERSION_ghc(8,6,0)
+  OpApp NOEXT l op r
+#else
+  OpApp l op placeHolderType r
+#endif
+{-# INLINE mkOpApp #-}
+
 b_appE :: [HExpr] -> HExpr
 b_appE = foldl1' f
   where
@@ -162,7 +183,7 @@ b_appE = foldl1' f
 
 b_charE :: Code -> Builder HExpr
 b_charE (LForm (L l form))
-  | (Atom (AChar x)) <- form
+  | Atom (AChar x) <- form
   = return (L l (hsLit (HsChar (SourceText (show x)) x)))
   | otherwise
   = builderError
@@ -170,7 +191,7 @@ b_charE (LForm (L l form))
 
 b_stringE :: Code -> Builder HExpr
 b_stringE (LForm (L l form))
-  | (Atom (AString x)) <- form
+  | Atom (AString x) <- form
   = return
       (L l (hsLit (HsString (SourceText (show x)) (fsLit x))))
   | otherwise
@@ -179,7 +200,7 @@ b_stringE (LForm (L l form))
 
 b_integerE :: Code -> Builder HExpr
 b_integerE (LForm (L l form))
-  | (Atom (AInteger x)) <- form
+  | Atom (AInteger x) <- form
   = if x < 0
        then return (L l (hsPar (expr x)))
        else return (expr x)
@@ -190,7 +211,7 @@ b_integerE (LForm (L l form))
 
 b_floatE :: Code -> Builder HExpr
 b_floatE (LForm (L l form))
-  | (Atom (AFractional x)) <- form
+  | Atom (AFractional x) <- form
   = if fl_value x < 0
        then return (L l (hsPar (expr x)))
        else return (expr x)
@@ -207,7 +228,7 @@ b_varE (LForm (L l form))
     -- written as symbol with sequence of commas, handling such case in
     -- this function.
     let rname | all (== ',') (unpackFS x) =
-                tupConName Boxed ((lengthFS x) + 1)
+                tupConName Boxed (lengthFS x + 1)
               | otherwise = mkVarRdrName x
         hsVar = HsVar NOEXT
     in  return (L l (hsVar (L l rname)))

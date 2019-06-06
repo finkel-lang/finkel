@@ -681,14 +681,4 @@
                     (bar buzz))))
              (it "should fail on too few parameters"
                  (expandFailure
-                  (defmodule)))))
-      (d "aps"
-         (it "should expand to (<*> ... (<$> f ..) ..)"
-             (expandTo
-              (aps f (Just a) (Just b) (Just c))
-              (<*> (<*> (<$> f (Just a)) (Just b)) (Just c)))))
-      (d "pfs"
-         (it "expands to (. f1 (. f2 ...))"
-             (expandTo
-              (pfs f1 (f2 arg1) f3)
-              (. f1 (. (f2 arg1) f3)))))))
+                  (defmodule)))))))

@@ -23,7 +23,7 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
   macroexpand macroexpand-1 exported-macros
 
   (:dh1 "Expressions")
-  cond pfs aps)
+  cond)
 
 ;;; Requires
 
@@ -100,8 +100,7 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
    (:: dmac (-> Code (Skc Code)))
    (= dmac form
      (let ((:: make-tsig (-> Code Code))
-           (= make-tsig name
-             `(:: ,name Macro)))
+           (= make-tsig name `(:: ,name Macro)))
        (case (unCode form)
          (List [_ name arg body])
          (do (<- decl (macro-decl name arg body))
@@ -238,12 +237,14 @@ and temporally macro @m@ at compilation time.
               (return
                 `(begin
                    (eval-when-compile
-                     ,@(List body))
-                   ,@(List body))))
+                     ,@body)
+                   ,@body)))
              ((at-compile phases)
-              (return `(eval-when-compile ,@(List body))))
+              (return `(eval-when-compile
+                         ,@(List body))))
              ((at-load phases)
-              (return `(begin ,@(List body))))
+              (return `(begin
+                         ,@(List body))))
              (otherwise
               (skSrcError form (++ "eval-when: invalid phase: "
                                    (show phases)))))))
@@ -1041,53 +1042,3 @@ Expands to below:
       _ (macro-error form "defmodule: invalid form"))
 
     _ (macro-error form "defmodule: invalid form")))
-
-
-;;; Convenience macros
-
-(define-macro pfs
-  "Macro for point free style function composition.
-
-==== __Syntax__
-
-> PFS ::= 'pfs' expr+
-
-==== __Examples__
-
->>> (macroexpand '(pfs f1 (f2 arg1) f3))
-(. f1 (. (f2 arg1) f3))
-"
-  form
-  (let ((= go exprs
-          (case exprs
-            [e1 e2] (return `(. ,e1 ,e2))
-            (: e1 rest) (do (<- e2 (go rest))
-                            (return `(. ,e1 ,e2)))
-            _ (macro-error nil "pfs: no args"))))
-    (case (unCode form)
-      (List (: _ rest)) (go rest)
-      _ (macro-error form "pfs: invalid form"))))
-
-(define-macro aps
-  "Macro to apply given function in @Applicative@ and @Functor@ context.
-This macro handles variable number of arguments.
-
-==== __Syntax__
-
-> APS ::= 'aps' expr+
-
-==== __Examples__
-
->>> (macroexpand '(aps f (pure a) (pure b) (pure c)))
-(<*> (<*> (<$> f (pure a)) (pure b)) (pure c))
-"
-  form
-  (let ((= build op args
-          (case args
-            (: arg []) (return `(<$> ,op ,arg))
-            (: arg as) (do (<- ret (build op as))
-                           (return `(<*> ,ret ,arg)))
-            [] (return `(<$> ,op)))))
-    (case (unCode form)
-      (List (: _ (: op args))) (build op (reverse args))
-      _ (macro-error form "aps: invalid form"))))
