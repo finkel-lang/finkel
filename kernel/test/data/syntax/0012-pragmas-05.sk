@@ -194,8 +194,18 @@
   (:* a b)
   (deriving (Eq Show)))
 
+(data (:++ a b c)
+  (:++ a b c)
+  (deriving (Eq Show)))
+
 (:: to01 (IO ()))
-(= to01 (print (:* True \x)))
+(= to01
+  (do (print (:* True \x))
+      ;; `:++' constructor takes three arguments, so surrounding with
+      ;; parenthesis to avoid operator expansion. If no parenthesis,
+      ;; below line would be expanded to: True :++ 'x' :++ "foo"
+      (print ((:++) True \x "foo"))))
+
 
 ;;; Undecidable instances and mono local binds
 
