@@ -49,10 +49,11 @@
    (TestAux)))
 
 ;;; Extra imports
-(with-ghc-version v
-  (if (<= 804 v)
-      '(begin)
-      '(import Data.Monoid (<>))))
+(with-ghc-version-cond v
+  ((<= 804 v)
+   (begin))
+  (otherwise
+   (import Data.Monoid (<>))))
 
 ;;; Exported test
 

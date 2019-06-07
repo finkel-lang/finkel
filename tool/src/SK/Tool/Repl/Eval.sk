@@ -78,12 +78,13 @@
 
 (defn (optional-dynflags [GeneralFlag])
   "Optional 'GeneralFlag' set for REPL."
-  (with-ghc-version version
-    (if (<= 804 version)
-        '[Opt_ImplicitImportQualified
-          Opt_IgnoreOptimChanges
-          Opt_IgnoreHpcChanges]
-        '[Opt_ImplicitImportQualified])))
+  (with-ghc-version-cond v
+    ((<= 804 v)
+     [Opt_ImplicitImportQualified
+      Opt_IgnoreOptimChanges
+      Opt_IgnoreHpcChanges])
+    (otherwise
+     [Opt_ImplicitImportQualified])))
 
 
 ;;; Eval loop

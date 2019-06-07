@@ -34,17 +34,19 @@
 (defn (compatTests Spec)
   (do (let ((= d describe)))
       (d "define-ghc-version-macro"
-         (it "should expand to eval-when"
+         (it "should expand to eval-when-compile"
              (expand-macro define-ghc-version-macro
                            '(define-ghc-version-macro foo version
                              [a b c]
                              (buzz a b c version))
                            (\ form
-                             (== (car form) 'eval-when)))))
-      (d "with-ghc-version"
+                             (== (car form) 'eval-when-compile)))))
+      (d "with-ghc-version-cond"
          (it "should expand to macrolet"
-             (expand-macro with-ghc-version
-                           '(with-ghc-version version version)
+             (expand-macro with-ghc-version-cond
+                           '(with-ghc-version-cond v
+                             ((<= 800 v) foo)
+                             (otherwise bar))
                            (\ form
                              (== (car form) 'macrolet)))))))
 

@@ -392,17 +392,18 @@
                     (= m1
                       (let ((:: $tmp (-> Code (Skc Code)))
                             (= $tmp __form__
-                              (case (unCode __form__)
-                                (List (: _ args))
-                                (return
-                                  (quasiquote
-                                   (print (unquote_splice args))))
+                              (case __form__
+                                (LForm (L $loc (List (: _ __arg__))))
+                                (let ((= args
+                                        (LForm (L $loc (List __arg__)))))
+                                  (return
+                                    (quasiquote
+                                     (print (unquote_splice args)))))
                                 _ (skSrcError
                                    __form__
                                    (concat [(show (quote m1))
                                             "\ninvalid args: `"
-                                            (show __form__)
-                                            "'"])))))
+                                            (show __form__) "'"])))))
                         (Macro $tmp))))))
              (it "should allow names with operator symbol"
                  (expandTo

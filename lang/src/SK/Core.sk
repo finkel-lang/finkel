@@ -325,9 +325,11 @@ See 'eval_when'.
 
           (:: atom-body (-> Code Code Code Code Code))
           (= atom-body name arg body form-name
-            `(case (unCode ,form-name)
-               (List (: _ ,arg)) ,body
-               _                 ,(err form-name name)))
+            `(case ,form-name
+               (LForm (L $loc (List (: _ __arg__))))
+               (let ((= ,arg (LForm (L $loc (List __arg__)))))
+                 ,body)
+               _ ,(err form-name name)))
 
           (:: list-body (-> SrcSpan Code [Code] Code Code Code))
           (= list-body l1 name args body form-name

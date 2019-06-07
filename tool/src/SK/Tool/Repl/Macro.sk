@@ -96,12 +96,13 @@
   (export repl-macro))
 
 ;;; Extra imports
-(with-ghc-version version
-  (if (<= 804 version)
-      '(begin
-        (import Prelude hiding (<>))
-        (import qualified HscTypes as HscTypes))
-      '(begin)))
+(with-ghc-version-cond ver
+  ((<= 804 ver)
+   (begin
+     (import Prelude hiding (<>))
+     (import qualified HscTypes as HscTypes)))
+  (otherwise
+   (begin)))
 
 
 ;;; GHC version compatibility compile time helper
@@ -136,10 +137,11 @@
       '(\ (, t _f _ci _fi) t)))
 
 (defn (graph-to-summaries (-> ModuleGraph [ModSummary]))
-  (with-ghc-version version
-    (if (<= 804 version)
-        'HscTypes.mgModSummaries
-        'id)))
+  (with-ghc-version-cond ver
+    ((<= 804 ver)
+     HscTypes.mgModSummaries)
+    (otherwise
+     id)))
 
 
 ;;; Auxiliary
@@ -803,14 +805,12 @@ paths from import directories."
      (c "type" (Just ["EXPR"]) type-cmd
         "show type of EXPR")]))
 
-(defmacro-m repl-macro
-  forms
-  (case forms
-    (: name args) (| ((<- (Just rc)
-                        (do (<- name' (code-to-mb-string name))
-                            (find (. (isPrefixOf name') rc-name)
-                                  commands)))
-                      (rc-action rc args))
-                     (otherwise (help-cmd [])))
-    _ (let ((= lst (located-list forms)))
-        (skSrcError lst (++ "invalid args: " (show lst))))))
+(defmacro-m repl-macro form
+  (case (unCode form)
+    (List (: name args)) (| ((<- (Just name') (code-to-mb-string name))
+                             (<- (Just rc)
+                               (find (. (isPrefixOf name') rc-name)
+                                     commands))
+                             (rc-action rc args))
+                            (otherwise (help-cmd [])))
+    _ (skSrcError form (++ "invalid args: " (show form)))))

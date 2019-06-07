@@ -59,11 +59,12 @@
   (= mappend r1 r2
     (ReplState {pending-input (on mappend pending-input r1 r2)})))
 
-(with-ghc-version version
-  (if (<= 804 version)
-      '(instance (Semigroup ReplState)
-        (= <> mappend))
-      '(begin)))
+(with-ghc-version-cond ver
+  ((<= 804 ver)
+   (instance (Semigroup ReplState)
+     (= <> mappend)))
+  (otherwise
+   (begin)))
 
 (defn (initial-repl-state ReplState)
   (ReplState {pending-input []}))
