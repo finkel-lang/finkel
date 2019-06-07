@@ -312,11 +312,16 @@
 
 (infixr 4 >*<)
 
+;; Unicode operators
+(= •••• a b (* a (+ b 2)))
+(= ‣ a b (* b (+ a 2)))
+
 (:: s4_4_2 (IO ()))
 (= s4_4_2
   (do (print ($^*^$ ($^+^$ 3 4) ($^/^$ 48 8)))
-      (print (>*< (Just []) (Just True) (Just :)))))
-
+      (print (>*< (Just []) (Just True) (Just :)))
+      (print (•••• 1 2 3 4 5))
+      (print (‣ 1 2 3 4 5))))
 
 ;;; 4.4.3 Function and Pattern Bindinds
 

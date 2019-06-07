@@ -18,7 +18,7 @@ import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
 import Language.SK.Form
 
 instance Arbitrary Atom where
-   -- XXX: Unicode symbols are not generated yet.
+   -- XXX: Unicode symbols are not generated.
   arbitrary =
     oneof [ return AUnit
           , aSymbol <$> symbolG
@@ -27,8 +27,7 @@ instance Arbitrary Atom where
           , AInteger <$> arbitrary
           , aFractional <$> (arbitrary :: Gen Double) ]
     where
-      headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ haskellOpChars'
-      haskellOpChars' = '_' : filter (`notElem` "#-|") haskellOpChars
+      headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "_!$%&*+./<=>?@^~:"
       tailChars = headChars ++ "0123456789'_"
       symbolG = do
         x <- elements headChars

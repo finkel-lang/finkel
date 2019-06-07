@@ -201,8 +201,7 @@
          (it "should be 1 or nil"
              (let ((:: f (-> Code Property))
                    (= f x
-                     (==> (is-atom x) (|| (== 1 (length x))
-                                        (null x)))))
+                     (==> (is-atom x) (|| (== 1 (length x)) (null x)))))
                (property f))))
 
       (d "cons"
@@ -257,9 +256,11 @@
 (eval-and-compile
   ;; Using a newtype to compare 'Code's containing symbols generated
   ;; with `gensym'.
-  (newtype GensymCode
-    (GensymCode Code)
+  (newtype GensymCode (GensymCode Code)
     (deriving (Show)))
+
+  (instance (Eq GensymCode)
+    (= == eqGensymCode))
 
   (defn (eqGensymCode (-> GensymCode GensymCode Bool))
     [(GensymCode a) (GensymCode b)]
@@ -283,18 +284,14 @@
     [[] []] True
     [[]  _] False
     [ _ []] False
-    [(: x xs) (: y ys)] (&& (eqGensymCode1 x y) (eqGensymCodes xs ys)))
-
-  (instance (Eq GensymCode)
-    (= == eqGensymCode)))
+    [(: x xs) (: y ys)] (&& (eqGensymCode1 x y) (eqGensymCodes xs ys))))
 
 (defmacro' expandTo
   [in out]
   `(do (<- v (gtry (runSkc (macroFunction ,(car in) ',in)
                            defaultSkEnv)))
        (case v
-         (Left e)  (expectationFailure
-                    (show (:: e SomeException)))
+         (Left e)  (expectationFailure (show (:: e SomeException)))
          (Right r) (shouldBe (GensymCode r) (GensymCode ',out)))))
 
 (defmacro' expandFailure

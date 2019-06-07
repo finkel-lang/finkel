@@ -12,7 +12,7 @@ import BasicTypes ( SourceText(..)
                   , IntegralLit(..)
 #endif
                   )
-import FastString (FastString, fsLit, headFS, nullFS, unpackFS)
+import FastString (FastString, fsLit, headFS, unpackFS)
 import HsBinds ( HsBindLR(..), HsLocalBindsLR(..), HsValBindsLR(..)
                , emptyLocalBinds )
 import HsDecls ( HsDecl(..), InstDecl(..), LDataFamInstDecl
@@ -25,6 +25,7 @@ import HsPat ( HsRecField'(..), LHsRecField
 import HsTypes ( AmbiguousFieldOcc(..), FieldOcc(..), LHsContext
                , HsTyVarBndr(..), HsType(..), mkFieldOcc )
 import HsUtils (mkFunBind, mkHsIntegral)
+import Lexeme (isLexCon, isLexVar)
 import OccName (NameSpace, srcDataName, tcName, tvName, varName)
 import OrdList (OrdList, fromOL, toOL)
 import RdrHsSyn (cvTopDecls)
@@ -40,9 +41,6 @@ import HsExtension (noExt)
 import HsDoc (HsDocString(..))
 import PlaceHolder (PlaceHolder(..), placeHolderType)
 #endif
-
--- ghc-boot-th
-import GHC.Lexeme (isVarSymChar, startsVarId, startsVarSym)
 
 -- Internal
 import Language.SK.Builder
@@ -110,13 +108,13 @@ splitQualName fstr = go (unpackFS fstr) "" []
 
 checkVarId :: Code -> FastString -> Builder ()
 checkVarId orig name
-  | isVarId name = return ()
+  | isLexVar name = return ()
   | otherwise = setLastToken orig >> failB "invalid variable identifier"
 {-# INLINE checkVarId #-}
 
 getConId :: Code -> Builder FastString
 getConId orig@(LForm (L _ form))
-  | Atom (ASymbol sym) <- form, isConId sym = return sym
+  | Atom (ASymbol sym) <- form, isLexCon sym = return sym
   | otherwise = do
     setLastToken orig
     failB "invalid constructor identifier"
@@ -124,31 +122,11 @@ getConId orig@(LForm (L _ form))
 
 getVarOrConId :: Code -> Builder FastString
 getVarOrConId orig@(LForm (L _ form))
-  | Atom (ASymbol sym) <- form, isConId sym || isVarId sym = return sym
+  | Atom (ASymbol sym) <- form, isLexCon sym || isLexVar sym = return sym
   | otherwise = do
     setLastToken orig
     failB "invalid identifier"
 {-# INLINE getVarOrConId #-}
-
--- | 'True' when the given 'FastString' is a variable identifier.
-isVarId :: FastString -> Bool
-isVarId fs =
-  case (if nullFS fs then [] else unpackFS fs) of
-    []     -> False
-    (c:cs) | startsVarSym c -> all isVarSymChar cs
-           | startsVarId c  -> all (not . isVarSymChar) cs
-           | otherwise      -> False
-{-# INLINE isVarId #-}
-
--- | 'True' when the given 'FastString' is a constructor identifier.
-isConId :: FastString -> Bool
-isConId fs =
-  case (if nullFS fs then [] else unpackFS fs) of
-    []     -> False
-    (c:cs) | isUpper c -> all (not . isVarSymChar) cs
-           | c == ':'  -> all isVarSymChar cs
-           | otherwise -> False
-{-# INLINE isConId #-}
 
 -- | Build 'HLocalBinds' from list of 'HDecl's.
 declsToBinds :: SrcSpan -> [HDecl] -> HLocalBinds

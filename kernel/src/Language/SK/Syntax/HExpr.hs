@@ -21,6 +21,7 @@ import HsPat (HsRecFields(..))
 import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsDo
                , mkHsFractional, mkHsIf, mkHsLam, mkLHsPar
                , mkLHsSigWcType, mkLHsTupleExpr, mkMatchGroup )
+import Lexeme (isLexSym)
 import OrdList (toOL)
 import RdrHsSyn ( mkRdrRecordCon, mkRdrRecordUpd )
 import RdrName ( RdrName, getRdrName )
@@ -160,7 +161,7 @@ b_opOrAppE code args = do
   let mkOp loc lhs rhs = L loc (mkOpApp fn lhs rhs)
   case code of
     LForm (L l (Atom (ASymbol name)))
-      | all (`elem` haskellOpChars) (unpackFS name)
+      | isLexSym name
       , _:_:_ <- args
       -> pure (mkLHsPar (foldl1' (mkOp l) args))
     _ -> pure (b_appE (fn:args))

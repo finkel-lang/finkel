@@ -32,9 +32,7 @@
                    (fmap AInteger arbitrary)
                    (fmap aFractional (:: arbitrary (Gen Double)))])
       (= headChars
-        (concat [[\A .. \Z] [\a .. \z] haskellOpChars']))
-      (= haskellOpChars'
-        (: \_ (filter (flip notElem "#-|") haskellOpChars)))
+        (++ [\A .. \Z] [\a .. \z] "_!$%*+./<=>?@^~:"))
       (= tailChars
         (++ headChars "0123456789'-"))
       (= symbolG

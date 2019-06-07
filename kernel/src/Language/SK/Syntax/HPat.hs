@@ -13,6 +13,7 @@ import HsLit (HsLit(..))
 import HsPat (HsRecFields(..), Pat(..))
 import HsTypes (HsConDetails(..))
 import HsUtils (mkHsIsString, mkLHsSigWcType, mkNPat, nlWildPat)
+import Lexeme (isLexCon, isLexSym)
 import SrcLoc (GenLocated(..), getLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -83,13 +84,15 @@ b_symP orig@(LForm (L l form))
   , let hdchr = headFS name
   , let tlchrs = tailFS name
   = case () of
-      _ | isUpper hdchr || hdchr == ':'
+      _ | isLexCon name
+        -- Constructor.
         -> return (L l (ConPatIn (L l (mkVarRdrName name))
                                  (PrefixCon [])))
         | hdchr == '~'
+        -- Lazy pattern or operator function.
         -> if nullFS tlchrs
               then failB "invalid use of `~'"
-              else if headFS tlchrs `elem` haskellOpChars
+              else if isLexSym tlchrs
                       -- Operator function.
                       then do checkVarId orig name
                               let name' = L l (mkRdrName name)
@@ -101,11 +104,13 @@ b_symP orig@(LForm (L l form))
                               return (L l (lazyPat pat))
         | hdchr == '!'
         , not (nullFS tlchrs)
-        , headFS tlchrs `notElem` haskellOpChars
+        , not (isLexSym tlchrs)
+        -- Bang pattern.
         -> do let pat = L l (varPat (L l (mkRdrName tlchrs)))
               checkVarId orig tlchrs
               return (L l (bangPat pat))
         | otherwise
+        -- Varid.
         -> do checkVarId orig name
               return (L l (varPat (L l (mkRdrName name))))
   | otherwise = builderError

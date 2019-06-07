@@ -55,6 +55,7 @@ import BasicTypes ( FractionalLit(..)
                   )
 import Encoding (utf8DecodeByteString)
 import FastString (FastString, fsLit, mkFastStringByteString, unpackFS)
+import Lexeme (startsConSym, startsVarSym)
 import SrcLoc ( GenLocated(..), Located, RealSrcLoc, SrcLoc(..)
               , SrcSpan(..), advanceSrcLoc, mkRealSrcLoc, mkRealSrcSpan
               , srcLocCol, srcLocLine )
@@ -425,7 +426,9 @@ tok_unquote_splice _ _ = return TUnquoteSplice
 
 tok_hash :: Action
 tok_hash (AlexInput _ _ s) l
-  | l == 2, let c = C8.index s 1, c `notElem` haskellOpChars
+  | l == 2, let c = C8.index s 1
+  , not (startsVarSym c)
+  , not (startsConSym c)
   = return $! THash c
   | otherwise =
    let bs = C8.toStrict $! takeUtf8 l s
@@ -470,9 +473,10 @@ tok_symbol (AlexInput _ _ s) l = do
   let bs0 = takeUtf8 l s
   bs1 <- case C8.uncons bs0 of
            Just (c, _)
-             | c `elem` haskellOpChars -> return bs0
-             | otherwise               -> return $! replaceHyphens bs0
-           Nothing                     -> alexError "tok_symbol: panic"
+             | (startsVarSym c || startsConSym c)
+             -> return bs0
+             | otherwise -> return $! replaceHyphens bs0
+           Nothing       -> alexError "tok_symbol: panic"
   return $! TSymbol $! mkFastStringByteString $! C8.toStrict $! bs1
 {-# INLINE tok_symbol #-}
 
