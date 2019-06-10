@@ -552,23 +552,28 @@ rdecls :: { [HDecl] }
 -- ---------------------------------------------------------------------
 
 type :: { HType }
-    : 'unpack' type { b_unpackT $1 $2 }
-    | '!' type      { b_bangT $1 $2 }
-    | '_'           { b_anonWildT $1 }
-    | idsym         {% b_symT $1 }
-    | 'unit'        { b_unitT $1 }
-    | '~'           { b_tildeT $1 }
-    | 'hslist'      {% case toListL $1 of
-                         LForm (L _ (List [])) -> return (b_nilT $1)
-                         xs -> b_listT `fmap` parse p_type [xs] }
-    | 'list'        {% parse p_types0 $1 }
+    : 'symbol'       {% b_symT $1 }
+    | type_no_symbol { $1 }
+
+type_no_symbol :: { HType }
+    : special_id_no_bang {% b_symT $1 }
+    | 'unpack' type      { b_unpackT $1 $2 }
+    | '!' type           { b_bangT $1 $2 }
+    | '_'                { b_anonWildT $1 }
+    | 'unit'             { b_unitT $1 }
+    | '~'                { b_tildeT $1 }
+    | 'hslist'           {% case toListL $1 of
+                              LForm (L _ (List [])) -> return (b_nilT $1)
+                              xs -> b_listT `fmap` parse p_type [xs] }
+    | 'list'             {% parse p_types0 $1 }
 
 types0 :: { HType }
-    : '->' zero_or_more_types {% b_funT $1 $2 }
-    | ',' zero_or_more_types  { b_tupT $1 $2 }
-    | 'forall' forallty       { b_forallT $1 $2 }
-    | '::' type type          { b_kindedType $1 $2 $3 }
-    | types                   {% b_appT $1 }
+    : '->' zero_or_more_types           {% b_funT $1 $2 }
+    | ',' zero_or_more_types            { b_tupT $1 $2 }
+    | 'forall' forallty                 { b_forallT $1 $2 }
+    | '::' type type                    { b_kindedType $1 $2 $3 }
+    | 'symbol' zero_or_more_types       {% b_opOrAppT $1 $2 }
+    | type_no_symbol zero_or_more_types {% b_appT ($1:$2) }
 
 forallty :: { ([HTyVarBndr], ([HType], HType)) }
     : qtycl           { ([], $1) }
@@ -609,14 +614,15 @@ pat :: { HPat }
     | pat_     { $1 }
 
 pat_ :: { HPat }
-    : 'integer' {% b_intP $1 }
-    | 'string'  {% b_stringP $1 }
-    | 'char'    {% b_charP $1 }
-    | 'unit'    {% b_unitP $1 }
-    | '_'       { b_wildP $1 }
-    | idsym     {% b_symP $1 }
-    | 'hslist'  {% b_hsListP `fmap` parse p_pats0 (unListL $1) }
-    | 'list'    {% parse p_pats1 $1 }
+    : 'integer'          {% b_intP $1 }
+    | 'string'           {% b_stringP $1 }
+    | 'char'             {% b_charP $1 }
+    | 'unit'             {% b_unitP $1 }
+    | '_'                { b_wildP $1 }
+    | special_id_no_bang {% b_symP $1 }
+    | 'symbol'           {% b_symP $1 }
+    | 'hslist'           {% b_hsListP `fmap` parse p_pats0 (unListL $1) }
+    | 'list'             {% parse p_pats1 $1 }
 
 pats1 :: { HPat }
     : ',' pats0            { b_tupP $1 $2 }
@@ -792,8 +798,11 @@ idsym :: { Code }
     | special_id { $1 }
 
 special_id :: { Code }
-    : '!'         { $1 }
-    | 'as'        { $1 }
+    : '!'                { $1 }
+    | special_id_no_bang { $1 }
+
+special_id_no_bang :: { Code }
+    : 'as'        { $1 }
     | 'family'    { $1 }
     | 'forall'    { $1 }
     | 'hiding'    { $1 }

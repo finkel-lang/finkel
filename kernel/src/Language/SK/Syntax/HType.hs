@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeFamilies #-}
 -- | Syntax for type.
 module Language.SK.Syntax.HType where
 
@@ -11,7 +12,8 @@ import FastString (headFS, lengthFS, nullFS, tailFS)
 import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
                , LHsTyVarBndr, Promoted(..), SrcStrictness(..)
                , SrcUnpackedness(..), mkAnonWildCardTy
-               , mkHsAppTy, mkHsAppTys )
+               , mkHsAppTy, mkHsAppTys, mkHsOpTy )
+import Lexeme (isLexConSym)
 import OccName (tcName, tvName)
 import PrelNames (eqTyCon_RDR)
 import RdrName (getRdrName, mkQual, mkUnqual)
@@ -103,6 +105,19 @@ b_funT (LForm (L l _)) ts =
     hsFunTy = HsFunTy NOEXT
     funty = L l (hsTyVar NotPromoted (L l (getRdrName funTyCon)))
 {-# INLINE b_funT #-}
+
+b_opOrAppT :: Code -> [HType] -> Builder HType
+b_opOrAppT form@(LForm (L l ty)) typs
+  | null typs = b_symT form
+  | Atom (ASymbol name) <- ty
+  , isLexConSym name =
+    let lrname = L l (mkUnqual tcName name)
+        f lhs rhs = L l (mkHsOpTy lhs lrname rhs)
+    in  return (L l (hsParTy (foldr1 f typs)))
+  | otherwise =
+    do op <- b_symT form
+       b_appT (op:typs)
+{-# INLINE b_opOrAppT #-}
 
 b_appT :: [HType] -> Builder HType
 b_appT []           = builderError

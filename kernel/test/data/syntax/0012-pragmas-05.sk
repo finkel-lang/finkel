@@ -188,44 +188,54 @@
       (print (f_stv02 "abc"))
       (print (stv_op [True False False]))))
 
-;;; Type operator
+;;; Type operators, with and without operator expansions
 
 (data (:.+ a b) (:.+ a b)
   (deriving (Eq Show)))
 
 (infixl 6 :.+)
 
+(:: to01a (-> (:.+ (:.+ Int Int) Int) (IO ())))
+(= to01a (:.+ a b c) (print (+ a b c)))
+
+(:: to01b (-> (:.+ Int Int Int) (IO ())))
+(= to01b (:.+ a b c) (print (+ a b c)))
+
+(:: to01c (-> (:.+ Int (:.+ Int Int)) (IO ())))
+(= to01c (:.+ a (:.+ b c)) (print (+ a b c)))
+
 (data (:+. a b) (:+. a b)
   (deriving (Eq Show)))
 
 (infixr 6 :+.)
 
+(:: to02a (-> (:+. Int (:+. Int Int)) (IO ())))
+(= to02a (:+. a b c) (print (+ a b c)))
+
+(:: to02b (-> (:+. Int Int Int) (IO ())))
+(= to02b (:+. a b c) (print (+ a b c)))
+
+(:: to02c (-> (:+. (:+. Int Int) Int) (IO ())))
+(= to02c (:+. (:+. a b) c) (print (+ a b c)))
+
 (data (:++ a b c) (:++ a b c)
   (deriving (Eq Show)))
 
-(:: to01 (IO ()))
-(= to01
-  (do (print (:.+ True \x))
-      ;; `:++' constructor takes three arguments, so surrounding with
-      ;; parenthesis to avoid operator expansion. If no parenthesis,
-      ;; below line would be expanded to: True :++ 'x' :++ "foo"
-      (print ((:++) True \x "foo"))))
-
-(:: to02a (-> (:.+ (:.+ Int Int) Int) (IO ())))
-(= to02a (:.+ a b c) (print (+ a b c)))
-
-(:: to03a (-> (:+. Int (:+. Int Int)) (IO ())))
-(= to03a (:+. a b c) (print (+ a b c)))
-
-(:: to04 (-> ((:++) Int Int Int) (IO ())))
-(= to04 ((:++) a b c) (print (+ a b c)))
+;; `:++' constructor takes three arguments, so surrounding with
+;; parenthesis to avoid operator expansion. If no parenthesis,
+;; below line would be expanded to: True :++ 'x' :++ "foo"
+(:: to03 (-> ((:++) Int Int Int) (IO ())))
+(= to03 ((:++) a b c) (print (+ a b c)))
 
 (:: toexs (IO ()))
 (= toexs
-  (do to01
-      (to02a (:.+ 1 2 3))
-      (to03a (:+. 1 2 3))
-      (to04 ((:++) 1 2 3))))
+  (do (to01a (:.+ 1 2 3))
+      (to01b (:.+ 1 2 3))
+      (to01c (:.+ 1 (:.+ 2 3)))
+      (to02a (:+. 1 2 3))
+      (to02b (:+. 1 2 3))
+      (to02c (:+. (:+. 1 2) 3))
+      (to03 ((:++) 1 2 3))))
 
 ;;; Undecidable instances and mono local binds
 

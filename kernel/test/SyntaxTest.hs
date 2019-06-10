@@ -71,8 +71,16 @@ mkTest path = do
       let task = do
             initSessionForTest
             make [(dotHs, Nothing)] False True (Just aDotOut)
-      ret <- runSkc task skEnv
-      ret `shouldBe` ()
+#if MIN_VERSION_ghc (8,4,0)
+          skipThisTest _ = (False, "")
+#else
+          skipThisTest p =
+            ( "0012-pragmas-05" == takeBaseName p
+            , "Generated Haskell code has unwanted parenthesis" )
+#endif
+      case skipThisTest path of
+        (True, reason) -> pendingWith reason
+        _ -> runSkc task skEnv >>= \ret -> ret `shouldBe` ()
 
     it "should run executable compiled from Haskell code" $ do
       removeWhenExist dotTix
