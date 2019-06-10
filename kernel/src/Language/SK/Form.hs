@@ -25,7 +25,6 @@ module Language.SK.Form
   , aFractional
   , aSymbol
   , genSrc
-  , haskellOpChars
   , mkLocatedForm
   , showLoc
   , symbolName
@@ -321,10 +320,6 @@ mkLocatedForm [] = genSrc []
 mkLocatedForm ms = L (combineLocs (unLForm (head ms))
                                   (unLForm (last ms)))
                      ms
-
--- | Characters used in Haskell operators.
-haskellOpChars :: [Char]
-haskellOpChars = "!#$%&*+./<=>?@^|-~:"
 
 fl_text_compat :: FractionalLit -> String
 fl_text_compat fl =

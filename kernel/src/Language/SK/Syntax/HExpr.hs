@@ -5,13 +5,12 @@
 module Language.SK.Syntax.HExpr where
 
 -- base
-import Data.Char (isUpper)
 import Data.List (foldl1')
 
 -- ghc
 import BasicTypes ( Arity, Boxity(..), FractionalLit(..), Origin(..)
                   , SourceText(..), fl_value)
-import FastString (FastString, fsLit, headFS, lengthFS, unpackFS)
+import FastString (FastString, fsLit, lengthFS, unpackFS)
 import HsExpr ( ArithSeqInfo(..), GRHS(..), HsExpr(..)
               , HsMatchContext(..), HsStmtContext(..), HsTupArg(..)
               , Match(..), StmtLR(..) )
@@ -21,7 +20,7 @@ import HsPat (HsRecFields(..))
 import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsDo
                , mkHsFractional, mkHsIf, mkHsLam, mkLHsPar
                , mkLHsSigWcType, mkLHsTupleExpr, mkMatchGroup )
-import Lexeme (isLexSym)
+import Lexeme (isLexCon, isLexSym)
 import OrdList (toOL)
 import RdrHsSyn ( mkRdrRecordCon, mkRdrRecordUpd )
 import RdrName ( RdrName, getRdrName )
@@ -131,15 +130,14 @@ b_tsigE (LForm (L l _)) e (ctxt,t) =
 {-# INLINE b_tsigE #-}
 
 b_recConOrUpdE :: Code -> [(Located FastString,HExpr)] -> Builder HExpr
-b_recConOrUpdE sym@(LForm (L l _)) flds
-  | isUpper (headFS name)
-  = return (L l (mkRdrRecordCon rName cflds))
+b_recConOrUpdE whole@(LForm (L l form)) flds
+  | Atom (ASymbol name) <- form
+  , isLexCon name
+  = return (L l (mkRdrRecordCon (L l (mkVarRdrName name)) cflds))
   | otherwise
-  = do v <- b_varE sym
+  = do v <- b_varE whole
        return (L l (mkRdrRecordUpd v uflds))
   where
-    name = symbolNameFS sym
-    rName = L l (mkVarRdrName name)
     cflds = HsRecFields { rec_flds = map mkcfld flds
                         , rec_dotdot = Nothing }
     uflds = map mkufld flds

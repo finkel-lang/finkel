@@ -3,16 +3,14 @@
 -- | Syntax for module header, import and export entities.
 module Language.SK.Syntax.HIE where
 
--- base
-import Data.Char (isUpper)
-
 -- ghc
-import FastString (headFS, unpackFS)
+import FastString (unpackFS)
 import FieldLabel (FieldLbl(..))
 import HsDoc (LHsDocString)
 import HsImpExp ( IE(..), IEWildcard(..), IEWrappedName(..)
                 , ImportDecl(..), simpleImportDecl )
 import HsSyn (HsModule(..))
+import Lexeme (isLexCon)
 import Module (mkModuleNameFS)
 import OccName (tcName)
 import OrdList (toOL)
@@ -133,11 +131,9 @@ b_ieWith (LForm (L l form)) names
     wc = NoIEWildcard
     (ns, fs) = foldr f ([],[]) names
     f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0)
-      | isUpper c || c == ':' =
+      | isLexCon n0 =
         (L l0 (IEName (L l (mkUnqual tcName n0))) : ns0, fs0)
-      | otherwise             = (ns0, L l0 (fl n0) : fs0)
-      where
-        c = headFS n0
+      | otherwise   = (ns0, L l0 (fl n0) : fs0)
     f _ acc = acc
     -- Does not support DuplicateRecordFields.
     fl x = FieldLabel { flLabel = x

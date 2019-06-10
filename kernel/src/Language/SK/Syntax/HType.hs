@@ -3,9 +3,6 @@
 -- | Syntax for type.
 module Language.SK.Syntax.HType where
 
--- base
-import Data.Char (isUpper)
-
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
 import FastString (headFS, lengthFS, nullFS, tailFS)
@@ -13,7 +10,7 @@ import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
                , LHsTyVarBndr, Promoted(..), SrcStrictness(..)
                , SrcUnpackedness(..), mkAnonWildCardTy
                , mkHsAppTy, mkHsAppTys, mkHsOpTy )
-import Lexeme (isLexConSym)
+import Lexeme (isLexCon, isLexConSym)
 import OccName (tcName, tvName)
 import PrelNames (eqTyCon_RDR)
 import RdrName (getRdrName, mkQual, mkUnqual)
@@ -57,7 +54,7 @@ b_symT whole@(LForm (L l form))
             Nothing
               | ',' == x  -> tv (getRdrName (tupleTyCon Boxed arity))
               | '!' == x  ->
-                bang (tv (mkUnqual (namespace (headFS xs)) xs))
+                bang (tv (mkUnqual (namespace xs) xs))
               -- XXX: Handle "StarIsType" language extension. Name of
               -- the type kind could be obtained from
               -- "TysWiredIn.liftedTypeKindTyCon".
@@ -67,11 +64,11 @@ b_symT whole@(LForm (L l form))
 #else
                 tv (getRdrName starKindTyCon)
 #endif
-              | otherwise -> tv (mkUnqual (namespace x) name)
-            Just qual -> tv (mkQual (namespace x) qual)
-        namespace chr
-          | isUpper chr || ':' == chr = tcName
-          | otherwise                 = tvName
+              | otherwise -> tv (mkUnqual (namespace name) name)
+            Just qual -> tv (mkQual (namespace name) qual)
+        namespace ns
+          | isLexCon ns = tcName
+          | otherwise   = tvName
         x = headFS name
         xs = tailFS name
         arity = 1 + lengthFS name

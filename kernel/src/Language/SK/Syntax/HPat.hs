@@ -4,7 +4,6 @@
 module Language.SK.Syntax.HPat where
 
 -- base
-import Data.Char (isUpper)
 import Data.List (foldl1')
 
 -- ghc
@@ -136,8 +135,7 @@ b_hsListP pats = L l (listPat pats)
 b_labeledP :: Code -> [(Code, HPat)] -> Builder HPat
 b_labeledP (LForm (L l form)) ps
   | Atom (ASymbol name) <- form
-  , let x = headFS name
-  , isUpper x || x == ':' = do
+  , isLexCon name = do
     let mkcfld' (LForm (L nl sym), p)
           | Atom (ASymbol n) <- sym = return (mkcfld (L nl n, p))
           | otherwise               = builderError

@@ -77,10 +77,8 @@ mkRdrName' upperCaseNameSpace name
     case splitQualName name of
       Nothing -> mkUnqual srcDataName name
       Just q@(_, name')
-         | isUpper y || y == ':' -> mkQual upperCaseNameSpace q
-         | otherwise             -> mkQual varName q
-         where
-           y = headFS name'
+         | isLexCon name' -> mkQual upperCaseNameSpace q
+         | otherwise      -> mkQual varName q
 
   -- Variable.
   | otherwise = mkVarUnqual name
