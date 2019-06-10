@@ -5,6 +5,7 @@ module Language.SK.Syntax.HPat where
 
 -- base
 import Data.Char (isUpper)
+import Data.List (foldl1')
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
@@ -13,7 +14,7 @@ import HsLit (HsLit(..))
 import HsPat (HsRecFields(..), Pat(..))
 import HsTypes (HsConDetails(..))
 import HsUtils (mkHsIsString, mkLHsSigWcType, mkNPat, nlWildPat)
-import Lexeme (isLexCon, isLexSym)
+import Lexeme (isLexCon, isLexConId, isLexConSym, isLexSym)
 import SrcLoc (GenLocated(..), getLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -155,7 +156,7 @@ b_tupP (LForm (L l _)) ps = L l (mkTuplePat_compat ps)
 b_asP :: Code -> HPat -> Builder HPat
 b_asP (LForm (L l form)) pat
   | (Atom (ASymbol name)) <- form
-  = return (L l (asPat (L l (mkRdrName name)) (mkParPat_compat pat)))
+  = return (L l (asPat (L l (mkRdrName name)) (mkParPat' pat)))
   | otherwise
   = builderError
   where
@@ -170,15 +171,21 @@ b_bangP :: HPat -> HPat
 b_bangP pat@(L l _) = L l (BangPat NOEXT pat)
 {-# INLINE b_bangP #-}
 
-b_conP :: Code -> [HPat] -> Builder HPat
-b_conP (LForm (L l form)) rest
-  | Atom (ASymbol name) <- form
-  , let x = headFS name
-  , isUpper x || x == ':'
-  = return (mkParPat_compat
-              (L l (ConPatIn (L l (mkVarRdrName name))
-                             (PrefixCon rest))))
-  | otherwise = builderError
+b_conP :: [Code] -> Bool -> [HPat] -> Builder HPat
+b_conP forms is_paren rest =
+  case forms of
+    [LForm (L l (Atom (ASymbol name)))]
+      | is_paren, isLexConSym name -> prefixPat
+      | isLexConId name -> prefixPat
+      | isLexConSym name -> infixPat
+      where
+       lrname = L l (mkVarRdrName name)
+       prefixPat =
+         return (mkParPat' (L l (ConPatIn lrname (PrefixCon rest))))
+       infixPat =
+         let f lhp rhp = L l (ConPatIn lrname (InfixCon lhp rhp))
+         in  return (mkParPat' (foldl1' f rest))
+    _ -> builderError
 {-# INLINE b_conP #-}
 
 b_sigP :: Code -> HPat -> HType -> HPat
@@ -205,8 +212,8 @@ mkTuplePat_compat ps = tuplePat ps Boxed
 #endif
 {-# INLINE mkTuplePat_compat #-}
 
-mkParPat_compat :: HPat -> HPat
-mkParPat_compat (p @ (L l _)) = L l (parPat p)
+mkParPat' :: HPat -> HPat
+mkParPat' (p @ (L l _)) = L l (parPat p)
   where
     parPat = ParPat NOEXT
-{-# INLINE mkParPat_compat #-}
+{-# INLINE mkParPat' #-}

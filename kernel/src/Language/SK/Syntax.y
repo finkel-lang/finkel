@@ -622,7 +622,8 @@ pats1 :: { HPat }
     : ',' pats0            { b_tupP $1 $2 }
     | '@' idsym pat        {% b_asP $2 $3 }
     | conid '{' labelp '}' {% b_labeledP $1 $3 }
-    | conid pats0          {% b_conP $1 $2 }
+    | conid pats0          {% b_conP [$1] False $2 }
+    | 'list' pats0         {% b_conP $1 True $2 }
     | '::' pat type        { b_sigP $1 $2 $3 }
 
 labelp :: { [(Code, HPat)] }

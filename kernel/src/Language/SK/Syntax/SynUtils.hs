@@ -25,7 +25,7 @@ import HsPat ( HsRecField'(..), LHsRecField
 import HsTypes ( AmbiguousFieldOcc(..), FieldOcc(..), LHsContext
                , HsTyVarBndr(..), HsType(..), mkFieldOcc )
 import HsUtils (mkFunBind, mkHsIntegral)
-import Lexeme (isLexCon, isLexVar)
+import Lexeme (isLexCon, isLexConSym, isLexVar)
 import OccName (NameSpace, srcDataName, tcName, tvName, varName)
 import OrdList (OrdList, fromOL, toOL)
 import RdrHsSyn (cvTopDecls)
@@ -88,8 +88,13 @@ mkRdrName' upperCaseNameSpace name
     x = headFS name
 {-# INLINE mkRdrName' #-}
 
+-- See also "compiler/parser/Lexer.x.source" in ghc source code. It has
+-- private function named "splitQualName".
 splitQualName :: FastString -> Maybe (FastString, FastString)
-splitQualName fstr = go (unpackFS fstr) "" []
+splitQualName fstr
+  -- e.g. ":.+.", ":+:". Symbol may contain ".".
+  | isLexConSym fstr = Nothing
+  | otherwise = go (unpackFS fstr) "" []
   where
     go str0 tmp acc =
       case str0 of

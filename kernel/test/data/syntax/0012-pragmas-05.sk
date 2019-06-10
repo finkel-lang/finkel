@@ -190,22 +190,42 @@
 
 ;;; Type operator
 
-(data (:* a b)
-  (:* a b)
+(data (:.+ a b) (:.+ a b)
   (deriving (Eq Show)))
 
-(data (:++ a b c)
-  (:++ a b c)
+(infixl 6 :.+)
+
+(data (:+. a b) (:+. a b)
+  (deriving (Eq Show)))
+
+(infixr 6 :+.)
+
+(data (:++ a b c) (:++ a b c)
   (deriving (Eq Show)))
 
 (:: to01 (IO ()))
 (= to01
-  (do (print (:* True \x))
+  (do (print (:.+ True \x))
       ;; `:++' constructor takes three arguments, so surrounding with
       ;; parenthesis to avoid operator expansion. If no parenthesis,
       ;; below line would be expanded to: True :++ 'x' :++ "foo"
       (print ((:++) True \x "foo"))))
 
+(:: to02a (-> (:.+ (:.+ Int Int) Int) (IO ())))
+(= to02a (:.+ a b c) (print (+ a b c)))
+
+(:: to03a (-> (:+. Int (:+. Int Int)) (IO ())))
+(= to03a (:+. a b c) (print (+ a b c)))
+
+(:: to04 (-> ((:++) Int Int Int) (IO ())))
+(= to04 ((:++) a b c) (print (+ a b c)))
+
+(:: toexs (IO ()))
+(= toexs
+  (do to01
+      (to02a (:.+ 1 2 3))
+      (to03a (:+. 1 2 3))
+      (to04 ((:++) 1 2 3))))
 
 ;;; Undecidable instances and mono local binds
 
@@ -241,5 +261,5 @@
       (putStrLn (add (add (int 1) (int 2))
                      (add (int 3) (int 4))))
       (putStrLn c3_f1)
-      to01
+      toexs
       ui01))
