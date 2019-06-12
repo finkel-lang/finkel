@@ -297,7 +297,9 @@
 (defmacro' expandFailure
   [in]
   `(let ((= act
-           (runSkc (macroFunction ,(car in) ',in) defaultSkEnv)))
+           (do (<- ret (runSkc (macroFunction ,(car in) ',in)
+                               defaultSkEnv))
+               (evaluate ret))))
      (shouldThrow act anyException)))
 
 (defn (macroTests Spec)
@@ -364,10 +366,10 @@
                                                  (unquote a)))))
                                 _ (skSrcError
                                    __form__
-                                   (concat [(show (quote m1))
-                                            "\ninvalid args: `"
-                                            (show __form__)
-                                            "'"])))))
+                                   (concat ["in macro `"
+                                            (show (quote m1)) "'"
+                                            "\ninvalid form: `"
+                                            (show __form__) "'"])))))
                         (Macro $tmp))))))
              (it "should replace nil arg with _"
                  (expandTo
@@ -377,8 +379,17 @@
                     (:: m1 Macro)
                     (= m1
                       (let ((:: $tmp (-> Code (Skc Code)))
-                            (= $tmp _
-                              (return (quasiquote (print True)))))
+                            (= $tmp __form__
+                              (case __form__
+                                (LForm (L _loc (List [_])))
+                                (return
+                                  (quasiquote (print True)))
+                                _ (skSrcError
+                                   __form__
+                                   (concat ["in macro `"
+                                            (show (quote m1)) "'"
+                                            "\ninvalid form: `"
+                                            (show __form__) "'"])))))
                         (Macro $tmp))))))
              (it "should expand symbol arg to rest"
                  (expandTo
@@ -398,8 +409,9 @@
                                      (print (unquote_splice args)))))
                                 _ (skSrcError
                                    __form__
-                                   (concat [(show (quote m1))
-                                            "\ninvalid args: `"
+                                   (concat ["in macro `"
+                                            (show (quote m1)) "'"
+                                            "\ninvalid form: `"
                                             (show __form__) "'"])))))
                         (Macro $tmp))))))
              (it "should allow names with operator symbol"
@@ -410,8 +422,16 @@
                     (:: .$$$ Macro)
                     (= .$$$
                       (let ((:: $tmp (-> Code (Skc Code)))
-                            (= $tmp _
-                              (return (quasiquote (print True)))))
+                            (= $tmp __form__
+                              (case __form__
+                                (LForm (L _loc (List [_])))
+                                (return (quasiquote (print True)))
+                                _ (skSrcError
+                                   __form__
+                                   (concat ["in macro `"
+                                            (show (quote .$$$)) "'"
+                                            "\ninvalid form: `"
+                                            (show __form__) "'"])))))
                         (Macro $tmp))))))
              (it "should detect invalid arg"
                  (expandFailure
@@ -479,8 +499,9 @@
                                       (+ (unquote a) (unquote b))))
                                    _ (skSrcError
                                       __form__
-                                      (concat [(show (quote m1))
-                                               "\ninvalid args: `"
+                                      (concat ["in macro `"
+                                               (show (quote m1)) "'"
+                                               "\ninvalid form: `"
                                                (show __form__)
                                                "'"])))))
                            (Macro $m1))))
@@ -492,9 +513,18 @@
                     (m1))
                   (with-macro ((= m1
                                  (let ((:: $m1 (-> Code (Skc Code)))
-                                       (= $m1 _
-                                         (return
-                                           (quasiquote (print \x)))))
+                                       (= $m1 __form__
+                                         (case __form__
+                                           (LForm (L _loc (List [_])))
+                                           (return
+                                             (quasiquote (print \x)))
+                                           _ (skSrcError
+                                              __form__
+                                              (concat
+                                               ["in macro `"
+                                                (show (quote m1)) "'"
+                                                "\ninvalid form: `"
+                                                (show __form__) "'"])))))
                                    (Macro $m1))))
                     (m1))))
              (it "should detect invalid form"
@@ -522,8 +552,9 @@
                                                    (unquote b))))
                                   _ (skSrcError
                                      __form__
-                                     (concat [(show (quote m))
-                                              "\ninvalid args: `"
+                                     (concat ["in macro `"
+                                              (show (quote m)) "'"
+                                              "\ninvalid form: `"
                                               (show __form__)
                                               "'"])))))
                           (Macro $m))))

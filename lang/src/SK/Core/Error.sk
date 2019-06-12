@@ -1,0 +1,20 @@
+;;;; Module containing functions for sk related errors.
+
+(:docn "Unsafe functions for showing errors in sk macro functions.")
+
+(module SK.Core.Error
+  unsafeSkSrcError)
+
+;; base
+(import System.IO.Unsafe (unsafePerformIO))
+
+;; sk-kernel
+(import Language.SK)
+(import Language.SK.Make (defaultSkEnv))
+(import Language.SK.SKC (runSkc))
+
+(:docn "Throw exception with 'skSrcError', with given code and
+message. This function uses 'unsafePerformIO'.")
+(:: unsafeSkSrcError (-> Code String a))
+(= unsafeSkSrcError code msg
+  (unsafePerformIO (runSkc (skSrcError code msg) defaultSkEnv)))

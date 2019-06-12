@@ -28,6 +28,7 @@ custom-setup
 library
   hs-source-dirs:      src
   exposed-modules:     Paths_sk_lang
+                       SK.Core.Error
                        SK.Core.List
                        SK.Core
                        SK.Prelude
