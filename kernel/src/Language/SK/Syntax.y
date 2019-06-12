@@ -423,7 +423,7 @@ qtycl :: { ([HType], HType) }
 
 lqtycl :: { ([HType], HType) }
     : '=>' 'unit' type  { ([], $3) }
-    | '=>' 'list' types {% b_qtyclC . (:$3) =<< parse p_types0 $2 }
+    | '=>' 'list' types {% parse p_types0 $2 >>= b_qtyclC . (:$3) }
     | types0            { ([], $1) }
 
 cdecls :: { [HDecl] }
@@ -461,8 +461,8 @@ datafamcon :: { (FastString, [HTyVarBndr], Maybe HType) }
     : 'list' {% parse p_ldatafamcon $1 }
 
 ldatafamcon :: { (FastString, [HTyVarBndr], Maybe HType)  }
-    : '::' 'list' type {% do {(n,tv) <- parse p_famconhd $2
-                             ;return (n,tv,Just $3)} }
+    : '::' 'list' type {% do { (n,tv) <- parse p_famconhd $2
+                             ; return (n,tv,Just $3)} }
     | famconhd         { case $1 of (n,tv) -> (n,tv,Nothing) }
 
 famconhd :: { (FastString, [HTyVarBndr]) }
@@ -693,7 +693,7 @@ lbinds0 :: { [HDecl] }
     : rlbinds0 { reverse $1 }
 
 rlbinds0 :: { [HDecl] }
-    : 'list'          {% fmap (:[]) (parse p_decl $1) }
+    : {- empty -}     { [] }
     | rlbinds0 'list' {% fmap (:$1) (parse p_decl $2) }
 
 fbinds :: { [(Located FastString, HExpr)] }
