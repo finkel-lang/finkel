@@ -348,6 +348,16 @@
                     (:: foo Int)
                     (= foo 42))))))
 
+      (d "eval-and-compile"
+         (it "should expand to (eval-when ...)"
+             (expandTo
+              (eval-and-compile
+                (:: foo Int)
+                (= foo 42))
+              (eval-when [compile load]
+                (:: foo Int)
+                (= foo 42)))))
+
       (d "defmacro-m"
          (do (it "should expand to define-macro"
                  (expandTo
@@ -560,6 +570,12 @@
                           (Macro $m))))
                 (m 20 22)))))
 
+      (d "macro-error"
+         (it "should expand to (unsafeSkSrcError ...)"
+             (expandTo
+              (macro-error "message")
+              (unsafeSkSrcError __form__ "message"))))
+
       (d "defn"
          (do (it "should expand to function declaration"
                  (expandTo
@@ -580,6 +596,22 @@
                  (expandTo
                   (defn foo "bar")
                   (= foo "bar")))
+             (it "should expand to pattern match for `Just'"
+                 (expandTo
+                  (defn (Just foo) (pure True))
+                  (= (Just foo) (pure True))))
+             (it "should expand to pattern match for list"
+                 (expandTo
+                  (defn [a b c] ["foo" "bar" "buzz"])
+                  (= [a b c] ["foo" "bar" "buzz"])))
+             (it "should expand to pattern match for list with rest"
+                 (expandTo
+                  (defn (: a b c _) [1 2 ..])
+                  (= (: a b c _) [1 2 ..])))
+             (it "should expand to pattern match for tuple"
+                 (expandTo
+                  (defn (, a b c) (, True \x "string"))
+                  (= (, a b c) (, True \x "string"))))
              (it "should expand argument patterns"
                  (expandTo
                   (defn foo

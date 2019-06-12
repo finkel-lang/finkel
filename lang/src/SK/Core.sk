@@ -52,9 +52,10 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
 
 ;; ghc
 (import DynFlags ((HasDynFlags ..)))
-(import FastString (unpackFS))
+(import FastString ((FastString) fsLit unpackFS))
 (import GHC (getModuleInfo lookupModule lookupName modInfoExports))
 (import Module (mkModuleName))
+(import Lexeme (isLexCon))
 (import Outputable (ppr showSDoc))
 (import SrcLoc ((SrcSpan ..)))
 (import TyCoRep ((TyThing ..)))
@@ -717,6 +718,13 @@ The last /fib2/ example is same as below:
           (case mb-doc
             (Just doc) `((:docp ,doc))
             Nothing     nil))
+        (:: is-tuple (-> FastString Bool))
+        (= is-tuple (== (fsLit ",")))
+        (:: is-con (-> Code Bool))
+        (= is-con name
+          (| ((<- (Atom (ASymbol n)) (unCode name))
+              (|| (isLexCon n) (is-tuple n)))
+             (otherwise False)))
         (:: build-tysig (-> Code Code (Maybe Code) [Code] (Skc Code)))
         (= build-tysig name ty mb-doc bodies
           (return `(begin
@@ -724,23 +732,30 @@ The last /fib2/ example is same as below:
                      ,@(build-doc mb-doc)
                      ,@(build-decls name bodies))))
         (:: build (-> Code (Maybe Code) [Code] (Skc Code)))
+        (= build-nosig name mb-doc bodies
+          (where go
+            (= go
+              (| ((<- Nothing mb-doc)
+                  (<- [x] xs)
+                  (return x))
+                 (otherwise
+                  (return `(begin ,@xs ,@(build-doc mb-doc))))))
+            (= xs (build-decls name bodies))))
         (= build sig mb-doc bodies
           (do (when (odd (length bodies))
                 (skSrcError form "defn: odd number of forms"))
               (case (unCode sig)
-                (List [name ty]) (build-tysig name ty mb-doc bodies)
+                (List [name ty]) (| ((is-con name)
+                                     (build-nosig sig mb-doc bodies))
+                                    (otherwise
+                                     (build-tysig name ty mb-doc bodies)))
                 (List [dc name ty]) (| ((== dc '::)
                                         (build-tysig name ty mb-doc
                                                      bodies)))
-                (Atom _) (case (build-decls sig bodies)
-                           [x] (case mb-doc
-                                 (Just doc) (return `(begin
-                                                       ,x
-                                                       (:docp ,doc)))
-                                 Nothing (return x))
-                           xs (return `(begin
-                                         ,@xs
-                                         ,@(build-doc mb-doc))))
+                (List (: name _)) (| ((is-con name)
+                                      (build-nosig sig mb-doc bodies)))
+                (Atom _) (build-nosig sig mb-doc bodies)
+                (HsList _) (build-nosig sig mb-doc bodies)
                 _ (skSrcError sig "defn: invalid signature")))))
     (case (unCode form)
       ;; Declaration of string, without documentation. Need to pattern
