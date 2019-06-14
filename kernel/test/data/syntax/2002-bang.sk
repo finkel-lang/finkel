@@ -1,0 +1,45 @@
+;;;; Bang patterns
+
+#p(LANGUAGE BangPatterns)
+
+(:: bp01 (-> Int Int Int))
+(= bp01 !a !b (+ a b))
+
+(:: bp02 (-> (, Int Int) (IO ())))
+(= bp02 (, !a b)
+  (print (if (even a) b a)))
+
+(:: bp03 (-> Int (IO ())))
+(= bp03 n
+  (let ((= !x (* n 2))
+        (= f i (, () (replicate i ())))
+        (= (, !y _) (f n)))
+    (>> (print x) (print y))))
+
+(:: bp04 (-> Int (IO ())))
+(= bp04 n
+  (let ((:: f (-> a [a]))
+        (= f x [x x x]))
+    (case (f n)
+      !ys (print (length ys)))))
+
+(:: bp05 (-> Int (IO ())))
+(= bp05 n
+  (let ((= ![x y] (replicate 2 n))
+        (= !(, a b) (, n n)))
+    (do (print (+ x y))
+        (print (+ a b)))))
+
+(:: non-bp01 (-> Int (IO ())))
+(= non-bp01 n
+  (let ((= ! a b (+ a b)))
+    (print (! n (+ n 2)))))
+
+(:: main (IO ()))
+(= main
+  (do (print (bp01 10 32))
+      (bp02 (, 21 42))
+      (bp03 21)
+      (bp04 21)
+      (bp05 21)
+      (non-bp01 20)))

@@ -1,0 +1,28 @@
+;;;; Existential Quantification language extension
+
+#p(LANGUAGE ExistentialQuantification)
+
+(module Main)
+
+(data AnyShow1
+  (forall a (=> (Show a) (AnyShow1 a))))
+
+(instance (Show AnyShow1)
+  (= show (AnyShow1 a)
+    (concat ["(AnyShow " (show a) ")"])))
+
+(data AnyShow2
+  (forall a b (=> (Show a) (Show b) (AnyShow2 {as2a a as2b b}))))
+
+(instance (Show AnyShow2)
+  (= show (AnyShow2 {as2a a as2b b})
+    (concat ["(AnyShow2 " (show a) " " (show b) ")"])))
+
+(:: main (IO ()))
+(= main
+  (do (print [(AnyShow1 (:: 42 Int))
+              (AnyShow1 False)
+              (AnyShow1 \x)])
+      (print [(AnyShow2 (:: 42 Int) (:: 43 Integer))
+              (AnyShow2 False (Just \x))
+              (AnyShow2 \x "bar")])))

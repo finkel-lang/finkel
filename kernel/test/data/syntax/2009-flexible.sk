@@ -1,0 +1,108 @@
+;;;; Flexible  instance related language extension and overlap pragmas
+
+#p(LANGUAGE FlexibleContexts
+            FlexibleInstances
+            MultiParamTypeClasses
+            NoMonomorphismRestriction
+            TypeSynonymInstances)
+
+(module Main)
+
+;;; Multi param type classes
+
+(class (C1 m a b)
+  (:: c1 (-> (m a) (m b) (IO ()))))
+
+(instance (C1 IO Bool Char)
+  (= c1 a b
+    (do (<- a' a)
+        (<- b' b)
+        (putStrLn (concat ["c1: " (show a') ", " (show b')])))))
+
+;;; Flexible instances
+
+;; Use of `Either String' requires `FlexibleInstances'.
+(instance (C1 (Either String) Bool Char)
+  (= c1 a b
+    (where (f a b)
+      (= f (Right b1) (Right b2) (pr (show b1) (show b2)))
+      (= f (Right b1) (Left s2) (pr (show b1) s2))
+      (= f (Left s1) (Right b2) (pr s1 (show b2)))
+      (= f (Left s1) (Left s2) (pr s1 s2))
+      (= pr x y
+        (putStrLn (concat ["c1: " x ", " y]))))))
+
+;;; Flexible contexts
+
+(class (C2 a b)
+  (:: c2 (-> a b)))
+
+(instance (C2 Bool String)
+  (= c2 bool (++ "bool: " (show bool))))
+
+(:: c2str (=> (C2 a String) (-> a String)))
+(= c2str c2)
+
+;;; GHC Extension: overlap mode
+
+(instance #p(OVERLAPS) (=> (Show a) (C2 a String))
+  (= c2 show))
+
+(class (C2b a b)
+  (:: c2b (-> a b)))
+
+(instance (C2b Bool String)
+  (= c2b bool (++ "[c2b] bool:" (show bool))))
+
+(instance #p(OVERLAPPABLE) (=> (Show a) (C2b a String))
+  (= c2b (. (++ "[c2b] ") show)))
+
+(class (C2c a b)
+  (:: c2c (-> a b)))
+
+(instance #p(OVERLAPPING) (C2c Bool String)
+  (= c2c bool (++ "[c2c] bool:" (show bool))))
+
+(instance (=> (Show a) (C2c a String))
+  (= c2c (. (++ "[c2c] ") show)))
+
+(class (C2d a b)
+  (:: c2d (-> a b)))
+
+(instance (C2d Bool String)
+  (= c2d bool (++ "[c2d] bool:" (show bool))))
+
+(instance #p(INCOHERENT) (=> (Show a) (C2d a String))
+          (= c2d (. (++ "[c2d] ") show)))
+
+;;;; NoMonomorphismRestriction and TypeSynonymInstances
+
+(class (C3 a)
+  (:: int (-> Int a))
+  (:: add (-> a a a)))
+
+(instance (C3 String)
+  (= int show)
+  (= add a b (concat ["(" a " + " b ")"])))
+
+(= c3-f1 (add (int 1) (add (int 2) (int 3))))
+
+;;; Main
+
+(:: main (IO ()))
+(= main
+  (do (c1 (:: (return False) (IO Bool)) (return \x))
+      (c1 (:: (return True) (Either String Bool)) (return \y))
+      (let ((:: n Int)
+            (= n 42)))
+      (putStrLn (c2str True))
+      (putStrLn (c2str n))
+      (putStrLn (c2b True))
+      (putStrLn (c2b n))
+      (putStrLn (c2c True))
+      (putStrLn (c2c n))
+      (putStrLn (c2d True))
+      (putStrLn (c2d n))
+      (putStrLn c3-f1)
+      (putStrLn (add (add (int 1) (int 2))
+                     (add (int 3) (int 4))))))

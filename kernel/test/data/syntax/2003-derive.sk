@@ -1,0 +1,59 @@
+;;;; DeriveXXX language extensions
+
+#p(LANGUAGE DeriveDataTypeable
+            DeriveFoldable
+            DeriveGeneric
+            DeriveTraversable
+            GeneralizedNewtypeDeriving)
+
+(module Main)
+
+(import Data.Data)
+(import GHC.Generics)
+
+;;; DeriveDataTypeable
+
+(data (D1 a)
+  (D1 a a)
+  (deriving (Eq Show Data Typeable)))
+
+;;; DeriveFunctor
+
+(data (D2 a)
+  (D2 a)
+  (deriving (Eq Show Functor)))
+
+;;; DeriveGeneric
+
+(data (D3 a)
+  (D3 a)
+  (deriving (Eq Show Generic)))
+
+;;; DeriveFoldable, DeriveTraversable
+
+(data (Lst a)
+  Nil
+  (Cons a (Lst a))
+  (deriving (Eq Show Functor Foldable Traversable)))
+
+;;; GeneralizedNewtypeDeriving
+
+(newtype (N a)
+  (N a)
+  (deriving (Eq Show Num)))
+
+(:: main (IO ()))
+(= main
+  (do (print (typeOf (D1 True False)))
+      (print (dataTypeOf (D1 \a \b)))
+      (print (fmap succ (D2 (:: 41 Int))))
+      (print (from (D3 False)))
+      (let ((:: l1 (Lst Int))
+            (= l1 (Cons 1 (Cons 2 (Cons 3 Nil))))))
+      (print (foldr + 0 l1))
+      (sequence_ (fmap print l1))
+      (let ((:: l1 (Lst Int))
+            (= l1 (Cons 1 (Cons 2 (Cons 3 Nil))))))
+      (print (foldr + 0 l1))
+      (sequence_ (fmap print l1))
+      (print (+ (N (:: 20 Int)) (N 22)))))

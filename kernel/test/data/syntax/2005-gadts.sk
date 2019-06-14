@@ -1,0 +1,49 @@
+;;; GADTs
+
+#p(LANGUAGE GADTs)
+
+(module Main)
+
+(data (Expr a)
+  (:: I (-> Int (Expr Int)))
+  (:: B (-> Bool (Expr Bool)))
+  (:: Add (-> (Expr Int) (Expr Int) (Expr Int)))
+  (:: Mul (-> (Expr Int) (Expr Int) (Expr Int)))
+  (:: Eq (=> (Eq a) (-> (Expr a) (Expr a) (Expr Bool)))))
+
+(:: eval (-> (Expr a) a))
+(= eval e
+  (case e
+    (I n) n
+    (B b) b
+    (Add x y) (+ (eval x) (eval y))
+    (Mul x y) (* (eval x) (eval y))
+    (Eq x y) (== (eval x) (eval y))))
+
+(:: gadt1 (IO ()))
+(= gadt1
+  (print (eval (Eq (Mul (Add (I 10) (I 11)) (I 2))
+                   (I 42)))))
+
+;; GADTs with UNPACK pragmas.
+
+(data (G2 a)
+  (:: G2a (-> #p(UNPACK) !(Maybe a) (G2 a)))
+  (:: G2b (-> #p(UNPACK) !Int (G2 Int)))
+  (:: G2c (-> #p(UNPACK) !a #p(UNPACK) !Int (G2 a))))
+
+(instance (=> (Show a) (Show (G2 a)))
+  (= show (G2a a) (concat ["G2a (" (show a) ")"]))
+  (= show (G2b a) (concat ["G2b (" (show a) ")"]))
+  (= show (G2c a b) (concat ["G2c (" (show a) " " (show b) ")"])))
+
+(:: gadt2 (-> Int (IO ())))
+(= gadt2 n
+  (do (print (G2a (Just \x)))
+      (print (G2b n))
+      (print (G2c n 43))))
+
+(:: main (IO ()))
+(= main
+  (do gadt1
+      (gadt2 42)))

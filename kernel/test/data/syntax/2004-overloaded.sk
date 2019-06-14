@@ -1,0 +1,26 @@
+;;;; OverloadedXXX language extensions
+
+#p(LANGUAGE OverloadedLists
+            OverloadedStrings)
+
+(module Main)
+
+(import Data.ByteString ((ByteString)))
+(import Data.Set ((Set)))
+
+;;; OverloadedString
+
+(:: f1 ByteString)
+(= f1 "foo")
+
+;;; OverloadedLists
+
+(:: f2 (Set Char))
+(= f2 [\a \e \i \o \u])
+
+;;; Main
+
+(:: main (IO ()))
+(= main
+  (do (print f1)
+      (print f2)))

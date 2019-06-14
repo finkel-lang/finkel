@@ -1,4 +1,4 @@
-;;;; File containing `OPTIONS_GHC' pragma.
+;;;; OPTIONS_GHC pragma.
 
 #p(OPTIONS_GHC -fcontext-stack=100)
 

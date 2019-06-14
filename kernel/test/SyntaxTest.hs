@@ -75,7 +75,7 @@ mkTest path = do
           skipThisTest _ = (False, "")
 #else
           skipThisTest p =
-            ( "0012-pragmas-05" == takeBaseName p
+            ( "2012-typeop" == takeBaseName p
             , "Generated Haskell code has unwanted parenthesis" )
 #endif
       case skipThisTest path of
