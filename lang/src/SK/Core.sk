@@ -386,6 +386,63 @@ See 'eval_when'.
         _ (skSrcError whole (++ label ": invalid form")))))
   #p(INLINABLE make-macrolet-body))
 
+(define-macro macrolet-m
+  "
+Variant of 'macrolet', the body of each macro need to be a 'Code' value
+wrapped in 'Skc'. This macro has full access to 'Skc' in compilation
+context.
+
+==== __Syntax__
+
+See 'macrolet'.
+
+==== __Example__
+
+Rewrite of the example shown in 'macrolet':
+
+@
+(macrolet-m ((m1 [x]
+               (return `(+ ,x 1)))
+             (m2 [a b]
+               (return `[(m1 ,a) (m1 ,b)])))
+  (m2 19 20))
+;;; ==> [20,21]
+@
+
+"
+  form
+  (make-macrolet-body "macrolet-m" form id))
+
+(define-macro macrolet
+  "Define temporary macros named /NAME/. The defined macros could be
+referred from /BODY/. Each macro takes /ARGS/ parameter, and results in
+/EXPR/. The parameter /ARGS/ works as in 'defmacro'.
+
+==== __Syntax__
+
+> MACROLET ::= 'macrolet' '(' MACRO* ')' BODY
+> MACRO    ::= NAME ARGS EXPR
+> NAME     ::= varid
+> ARGS     ::= '(' varid* ')' | '[' varid* ']' | varid
+> EXPR     ::= form
+> BODY     ::= form
+
+==== __Examples__
+
+Temporary macros can refer other temporary macros:
+
+@
+(macrolet ((m1 [x]
+             `(+ ,x 1))
+           (m2 [a b]
+             `[(m1 ,a) (m1 ,b)]))
+  (m2 19 20))
+;;; ==> [20,21]
+@
+"
+  form
+  (make-macrolet-body "macrolet" form (\ body `(return ,body))))
+
 (define-macro' defmacro-m
   "A macro similar to 'defmacro', but the body expression need to be a
 value of type 'Skc' 'Code'. This macro has full access to the 'Skc'
@@ -552,63 +609,6 @@ See 'defmacro'.
   (return `(eval-and-compile
              (defmacro ,@form))))
 
-(define-macro macrolet-m
-  "
-Variant of 'macrolet', the body of each macro need to be a 'Code' value
-wrapped in 'Skc'. This macro has full access to 'Skc' in compilation
-context.
-
-==== __Syntax__
-
-See 'macrolet'.
-
-==== __Example__
-
-Rewrite of the example shown in 'macrolet':
-
-@
-(macrolet-m ((m1 [x]
-               (return `(+ ,x 1)))
-             (m2 [a b]
-               (return `[(m1 ,a) (m1 ,b)])))
-  (m2 19 20))
-;;; ==> [20,21]
-@
-
-"
-  form
-  (make-macrolet-body "macrolet-m" form id))
-
-(define-macro macrolet
-  "Define temporary macros named /NAME/. The defined macros could be
-referred from /BODY/. Each macro takes /ARGS/ parameter, and results in
-/EXPR/. The parameter /ARGS/ works as in 'defmacro'.
-
-==== __Syntax__
-
-> MACROLET ::= 'macrolet' '(' MACRO* ')' BODY
-> MACRO    ::= NAME ARGS EXPR
-> NAME     ::= varid
-> ARGS     ::= '(' varid* ')' | '[' varid* ']' | varid
-> EXPR     ::= form
-> BODY     ::= form
-
-==== __Examples__
-
-Temporary macros can refer other temporary macros:
-
-@
-(macrolet ((m1 [x]
-             `(+ ,x 1))
-           (m2 [a b]
-             `[(m1 ,a) (m1 ,b)]))
-  (m2 19 20))
-;;; ==> [20,21]
-@
-"
-  form
-  (make-macrolet-body "macrolet" form (\ body `(return ,body))))
-
 (defmacro' macro-error
   "Macro for showing error in macro function. Shows an error message
 with the location of entire macro form.
@@ -642,7 +642,7 @@ Sample runs:
     [val]
     `(LForm (L _ (Atom (AString ,val))))))
 
-(define-macro defn
+(defmacro-m defn
   "Macro for defining function. Supports optional function type
 signature /SIG/, which could be a name symbol or a list of name symbol
 and type signature form. Parameter /ARGS/ could be enclosed in
@@ -731,7 +731,7 @@ The last /fib2/ example is same as below:
                      (:: ,name ,ty)
                      ,@(build-doc mb-doc)
                      ,@(build-decls name bodies))))
-        (:: build (-> Code (Maybe Code) [Code] (Skc Code)))
+        (:: build-nosig (-> Code (Maybe Code) [Code] (Skc Code)))
         (= build-nosig name mb-doc bodies
           (where go
             (= go
@@ -741,6 +741,7 @@ The last /fib2/ example is same as below:
                  (otherwise
                   (return `(begin ,@xs ,@(build-doc mb-doc))))))
             (= xs (build-decls name bodies))))
+        (:: build (-> Code (Maybe Code) [Code] (Skc Code)))
         (= build sig mb-doc bodies
           (do (when (odd (length bodies))
                 (skSrcError form "defn: odd number of forms"))
@@ -761,19 +762,19 @@ The last /fib2/ example is same as below:
       ;; Declaration of string, without documentation. Need to pattern
       ;; match this first to support defining plain string value without
       ;; documentation.
-      (List [_ sig (@ body (pAstring _))])
+      (List [sig (@ body (pAstring _))])
       (build sig Nothing [nil body])
 
-      (List [_ sig (@ doc (pAstring _)) body])
+      (List [sig (@ doc (pAstring _)) body])
       (build sig (Just doc) [nil body])
 
-      (List [_ sig body])
+      (List [sig body])
       (build sig Nothing [nil body])
 
-      (List (: _ (: sig (: (@ doc (pAstring _)) rest))))
+      (List (: sig (: (@ doc (pAstring _)) rest)))
       (build sig (Just doc) rest)
 
-      (List (: _ sig rest))
+      (List (: sig rest))
       (build sig Nothing rest)
 
       _ (skSrcError form "defn: invalid form"))))
@@ -980,7 +981,7 @@ Listing exported macros in \"SK.Core\" module:
 
 ;;; Module header
 
-(define-macro defmodule
+(defmacro-m defmodule
   "Macro to define header of module named /NAME/. The /IMPEXP/ are forms
 for imports and exports. Imports and exports forms can appear in any
 order, and starts with one of the following symbols:
@@ -1033,7 +1034,7 @@ Expands to below:
 "
   form
   (case (unCode form)
-    (List (: _ rest0))
+    (List rest0)
     (case rest0
       [name]
       (return `(module ,name))
