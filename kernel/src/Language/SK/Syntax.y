@@ -207,6 +207,10 @@ mbdocnext :: { Maybe LHsDocString }
     : 'docn'      {% fmap Just (b_docnextE $1) }
     | {- empty -} { Nothing }
 
+mbdocprev :: { Maybe LHsDocString }
+    : 'docp'      {% fmap Just (b_docnextE $1) }
+    | {- empty -} { Nothing}
+
 
 -- ---------------------------------------------------------------------
 --
@@ -552,6 +556,9 @@ rdecls :: { [HDecl] }
 -- ---------------------------------------------------------------------
 
 type :: { HType }
+    : type_without_doc mbdocprev { maybe $1 (b_docT $1) $2 }
+
+type_without_doc :: { HType }
     : 'symbol'       {% b_symT $1 }
     | type_no_symbol { $1 }
 

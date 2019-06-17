@@ -1,32 +1,87 @@
-(:docn "Module header documentation.
+#p(LANGUAGE RankNTypes)
+(:docn "
+Module      : Main
+Description : Module for documentation comment
+Copyright   : (c) someone, someyear
+License     : GPL-3
+Maintainer  : foo@bar.com
+Stability   : experimental
+Portability : POSIX
+
+Module header documentation.
 
 This comment is written inside `:docn' form.")
 
 (module Main
-  ;; (:docg 1 "The main function")
   (:dh1 "The main function")
   (:docn "Main entry point function.
 This function is performed from compiled executable.")
   main
 
-  ;; (:docg 1 "Auxiliary")
   (:dh1 "Auxiliary")
   (:dock aux)
-  foo bar)
+  f1 f2 f3 f4 f5 f6)
 
-(:docn "Documentation of 'foo'")
-(:: foo (-> String (IO ())))
-(= foo str (putStrLn (++ "From foo: " str)))
+(:docn "Documentation of 'f1'")
+(:: f1 (-> String (IO ())))
+(= f1 str (putStrLn (++ "From f1: " str)))
 
-(:docn "Documentation of 'bar'")
-(:: bar (-> String (IO ())))
-(= bar (. putStrLn (++ "From bar: ")))
+(:docn "Documentation of 'f2'")
+(:: f2 (-> String (IO ())))
+(= f2 (. putStrLn (++ "From f2: ")))
+
+(:docn "Documentation of 'f3'")
+(:: f3 (-> Int (:docp "Single line comments")
+           String
+           (:docp "Multiple line comments for the second argument.
+
+Message body to display in this function.
+This documentation comment has empty line.")
+           (IO ())
+           (:docp "Action to print given message for given times")))
+(= f3 n msg
+  (sequence_ (replicate n (putStrLn msg))) )
+
+(:: f4 (forall a (-> a (:docp "Documentation for first argument.")
+                     a (:docp "Documentation for result."))))
+(:docp "Documentation for 'f4'.
+
+This function contains unnecessary explicit @forall@ keyword.")
+(= f4 x x)
+
+(:: f5
+  (-> (forall a (-> a a))
+      (:docp "Documentation for first arg.")
+      (, Char Bool)
+      (:docp "Documentation for result.")))
+(:docp "Documentation for 'f5'.
+
+This function contains rank-n type function argument.")
+
+(= f5 f (, (f \a) (f True)))
+
+(:: f6
+  (=> (Show a) (Show b)
+      (-> a (:docp "Documentation for first arg.")
+          b (:docp "Documentation for second arg.")
+          String (:docp "Documentation for result."))))
+(:docp "Documentation for 'f6'.
+
+Example for writing documentation for argument, with the function
+containing type class constraints. This documentation comment includes
+@since@ metadata.
+
+@since 1.2.3")
+
+(= f6 a b
+  (++ "f6: a=" (show a) ", b=" (show b)))
 
 (:: main (IO ()))
 (:docp "Documentation of 'main'.")
 (= main
   (do (putStrLn "documentation comment tests.")
-      (foo "bar")
-      (bar "buzz")))
+      (f1 "foo")
+      (f2 "bar")
+      (f3 3 "buzz")))
 
 (:dock aux "Section documentation for auxiliary functions.")
