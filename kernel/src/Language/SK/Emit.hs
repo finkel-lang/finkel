@@ -358,11 +358,16 @@ pprHsContextAlways cxt = parens (interpp'SP cxt) <+> darrow
 -----------------------------------------------------------------------
 
 instance OUTPUTABLE a pr => HsSrc (TyClDecl a) where
-  toHsSrc _st tcd =
+  toHsSrc st tcd =
     case tcd of
       DataDecl { tcdLName = ltycon, tcdTyVars = tyvars
                , tcdFixity = fixity, tcdDataDefn = defn } ->
         pp_data_defn (pp_vanilla_decl_head ltycon tyvars fixity) defn
+      SynDecl { tcdLName = ltycon, tcdTyVars = tyvars
+              , tcdFixity = fixity, tcdRhs = rhs } ->
+        hang (text "type" <+>
+              pp_vanilla_decl_head ltycon tyvars fixity [] <+> equals)
+           4 (toHsSrc st rhs)
       _ -> ppr tcd
 
 -- From 'HsDecls.pp_data_defn'.

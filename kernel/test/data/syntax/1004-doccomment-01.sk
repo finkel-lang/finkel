@@ -21,6 +21,7 @@ This function is performed from compiled executable.")
   (:dh1 "Data and types")
   (:dock auxdt)
   (D1 ..) (D2 ..) (D3 ..)
+  (T1)
 
   (:dh1 "Functions")
   (:dock auxfn)
@@ -138,6 +139,10 @@ mollit anim id est laborum.")
   (deriving (Eq Show)))
 (:docp "Documentation for top level 'D3' data type declaration.")
 
+(type (T1 a)
+  (Maybe (, a a))
+  (:docp "T1 is a synonym of optional pair of __@a@__ values."))
+(:docp "Documentation for top level 'T1' type synonym.")
 
 ;;; Main function
 
