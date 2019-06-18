@@ -444,7 +444,8 @@ rcdecls :: { [HDecl] }
     | rcdecls cdecl { $2:$1 }
 
 cdecl :: { HDecl }
-    : 'list' {% parse p_lcdecl $1 }
+    : 'docp' {% b_docprevD $1 }
+    | 'list' {% parse p_lcdecl $1 }
 
 lcdecl :: { HDecl }
     : 'type' datafamcon              { b_tyfamD [] $1 $2 }

@@ -16,7 +16,7 @@ import FastString (FastString, fsLit, headFS, unpackFS)
 import HsBinds ( HsBindLR(..), HsLocalBindsLR(..), HsValBindsLR(..)
                , emptyLocalBinds )
 import HsDecls ( HsDecl(..), InstDecl(..), LDataFamInstDecl
-               , LFamilyDecl, LTyFamInstDecl, TyClDecl(..) )
+               , LDocDecl, LFamilyDecl, LTyFamInstDecl, TyClDecl(..) )
 import HsExpr ( GRHSs(..), LGRHS, LHsExpr, LMatch, Match(..)
               , MatchGroup(..) )
 import HsLit (HsOverLit(..))
@@ -205,42 +205,48 @@ data CategorizedDecls = CategorizedDecls
   , cd_fds :: [LFamilyDecl PARSED]
   , cd_tfis :: [LTyFamInstDecl PARSED]
   , cd_dfis :: [LDataFamInstDecl PARSED]
+  , cd_docs :: [LDocDecl]
   }
 
-toCategorizedDecls :: ( HBinds, [HSig]
+toCategorizedDecls :: ( HBinds
+                      , [HSig]
                       , [LFamilyDecl PARSED]
                       , [LTyFamInstDecl PARSED]
-                      , [LDataFamInstDecl PARSED] )
+                      , [LDataFamInstDecl PARSED]
+                      , [LDocDecl] )
                    -> CategorizedDecls
-toCategorizedDecls (binds, sigs, fds, tfis, dfis) =
+toCategorizedDecls (binds, sigs, fds, tfis, dfis, docs) =
   CategorizedDecls { cd_binds = binds
                    , cd_sigs = sigs
                    , cd_fds = fds
                    , cd_tfis = tfis
-                   , cd_dfis = dfis }
+                   , cd_dfis = dfis
+                   , cd_docs = docs }
 
 cvBindsAndSigs :: OrdList HDecl -> Builder CategorizedDecls
 cvBindsAndSigs fb = fmap toCategorizedDecls (go (fromOL fb))
   where
-    go [] = return (emptyBag, [], [], [], [])
+    go [] = return (emptyBag, [], [], [], [], [])
     go (L l (ValD _EXT d) : ds) = do
       let (b', ds') = getMonoBind (L l d) ds
-      (bs, ss, fs, tfis, dfis) <- go ds'
-      return (b' `consBag` bs, ss, fs, tfis, dfis)
+      (bs, ss, fs, tfis, dfis, docs) <- go ds'
+      return (b' `consBag` bs, ss, fs, tfis, dfis, docs)
     go (L l decl : ds) = do
-      (bs, ss, fs, tfis, dfis) <- go ds
+      (bs, ss, fs, tfis, dfis, docs) <- go ds
       case decl of
         SigD _EXT s ->
-          return (bs, L l s : ss, fs, tfis, dfis)
+          return (bs, L l s:ss, fs, tfis, dfis, docs)
         TyClD _EXT (FamDecl _EXT f) ->
-          return (bs, ss, L l f:fs, tfis, dfis)
+          return (bs, ss, L l f:fs, tfis, dfis, docs)
         InstD _EXT (TyFamInstD {tfid_inst = tfi}) ->
-          return (bs, ss, fs, L l tfi:tfis, dfis)
+          return (bs, ss, fs, L l tfi:tfis, dfis, docs)
         InstD _EXT (DataFamInstD {dfid_inst=dfi}) ->
-          return (bs, ss, fs, tfis, L l dfi:dfis)
+          return (bs, ss, fs, tfis, L l dfi:dfis, docs)
+        DocD _EXT doc ->
+          return (bs, ss, fs, tfis, dfis, L l doc:docs)
 
         -- XXX: Ignoring other constructors.
-        _ -> return (bs, ss, fs, tfis, dfis)
+        _ -> return (bs, ss, fs, tfis, dfis, docs)
 
 getMonoBind :: HBind -> [HDecl] -> (HBind, [HDecl])
 getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),
