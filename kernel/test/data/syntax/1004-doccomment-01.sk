@@ -18,9 +18,18 @@ This comment is written inside `:docn' form.")
 This function is performed from compiled executable.")
   main
 
-  (:dh1 "Auxiliary")
-  (:dock aux)
+  (:dh1 "Data and types")
+  (:dock auxdt)
+  (D1 ..) (D2 ..)
+
+  (:dh1 "Functions")
+  (:dock auxfn)
   f1 f2 f3 f4 f5 f6)
+
+
+;;; Functions
+
+(:dock auxfn "Section documentation for auxiliary functions.")
 
 (:docn "Documentation of 'f1'")
 (:: f1 (-> String (IO ())))
@@ -76,6 +85,37 @@ containing type class constraints. This documentation comment includes
 (= f6 a b
   (++ "f6: a=" (show a) ", b=" (show b)))
 
+
+;;; Data and types
+
+(:dock auxdt "Section documentation for auxiliary data and types.")
+
+;;; Unlike haddock comment in Haskell source code, constructor
+;;; documentation comments are permitted for ':docp' forms only.
+
+(:docn "Documentation for data type 'D1'.")
+(data (D1 a b)
+  (D1a a)
+  (:docp "Documentation for 'D1a'.")
+  (D1b #p(UNPACK) !b)
+  (:docp "Documentation for 'D1b'.
+
+This comment contains empty lines.
+
+To add a line break in generated HTML document, need to add an empty
+line. Otherwise, line breaks in source codes will disappear.")
+  (D1ab a b)
+  (:docp "Documentation for 'D1ab'.")
+  (deriving (Eq Show)))
+
+(newtype (D2 a)
+  (D2 a)
+  (:docp "Documentation for constructor."))
+(:docp "Documentation for top level newtype declaration.")
+
+
+;;; Main function
+
 (:: main (IO ()))
 (:docp "Documentation of 'main'.")
 (= main
@@ -83,5 +123,3 @@ containing type class constraints. This documentation comment includes
       (f1 "foo")
       (f2 "bar")
       (f3 3 "buzz")))
-
-(:dock aux "Section documentation for auxiliary functions.")

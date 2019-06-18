@@ -203,12 +203,18 @@ import Language.SK.Syntax.SynUtils
 --
 -- ---------------------------------------------------------------------
 
+docnext :: { LHsDocString }
+    : 'docn' {% b_docString $1}
+
+docprev :: { LHsDocString }
+    : 'docp' {% b_docString $1 }
+
 mbdocnext :: { Maybe LHsDocString }
-    : 'docn'      {% fmap Just (b_docnextE $1) }
+    : docnext     { Just $1 }
     | {- empty -} { Nothing }
 
 mbdocprev :: { Maybe LHsDocString }
-    : 'docp'      {% fmap Just (b_docnextE $1) }
+    : docprev     { Just $1 }
     | {- empty -} { Nothing}
 
 
@@ -357,8 +363,8 @@ rconstrs :: { (HDeriving, [HConDecl]) }
     | rconstrs constr        { fmap ($2:) $1 }
 
 constr :: { HConDecl }
-    : mbdocnext conid  {% flip addConDoc $1 `fmap` b_conOnlyD $2 }
-    | mbdocnext 'list' {% flip addConDoc $1 `fmap` parse p_lconstr $2 }
+    : conid mbdocprev  {% flip addConDoc $2 `fmap` b_conOnlyD $1 }
+    | 'list' mbdocprev {% flip addConDoc $2 `fmap` parse p_lconstr $1 }
 
 deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }

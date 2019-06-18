@@ -27,34 +27,40 @@ module Language.SK.Emit
 #if MIN_VERSION_base(4,11,0)
 import Prelude hiding ((<>))
 #endif
+import Data.Maybe (fromMaybe)
 
 -- ghc
+import BasicTypes (LexicalFixity(..))
 import GHC (OutputableBndrId, getPrintUnqual)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
 import HsBinds (Sig(..))
-import HsDecls (DocDecl(..), HsDecl(..), TyClDecl(..))
+import HsDecls ( ConDecl(..), DocDecl(..), HsDataDefn(..), HsDecl(..)
+               , LConDecl, TyClDecl(..) )
 import HsDoc (LHsDocString)
 import HsImpExp (IE(..), LIE)
 import HsSyn (HsModule(..))
-import HsTypes ( HsContext, HsImplicitBndrs(..), HsWildCardBndrs(..)
-               , HsType(..), LHsType, LHsTyVarBndr )
-import Outputable ( (<+>), (<>), ($+$), Outputable(..)
+import HsTypes ( HsConDetails(..), HsContext, HsImplicitBndrs(..)
+               , HsWildCardBndrs(..), HsType(..), LHsQTyVars(..)
+               , LHsType, LHsTyVarBndr
+               , pprConDeclFields, pprHsContext, pprHsForAll )
+import Outputable ( (<+>), (<>), ($$), ($+$), Outputable(..)
                   , OutputableBndr(..), SDoc
-                  , comma, dcolon, darrow, dot, empty, forAllLit
-                  , fsep, hsep, interppSP, interpp'SP
+                  , char, comma, dcolon, darrow, dot, empty, equals
+                  , forAllLit, fsep, hang, hsep, interppSP, interpp'SP
                   , lparen, nest, parens, punctuate
                   , showSDocForUser, sep, text, vcat )
 import RdrName (RdrName)
-import SrcLoc ( GenLocated(..), unLoc )
+import SrcLoc ( GenLocated(..), Located, noLoc, unLoc )
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsDoc (HsDocString, unpackHDS)
-import HsExtension (GhcPass)
+import HsExtension (GhcPass, IdP)
 #elif MIN_VERSION_ghc(8,4,0)
 import HsDoc (HsDocString(..))
-import HsExtension (SourceTextX)
+import HsExtension (SourceTextX, IdP)
 import FastString (unpackFS)
 #else
+#define IdP {- empty -}
 import HsDoc (HsDocString(..))
 import OccName (HasOccName(..))
 import FastString (unpackFS)
@@ -224,16 +230,16 @@ instance OUTPUTABLE a pr
 instance (OUTPUTABLE a pr, HasOccName a)
 #endif
          => HsSrc (Hsrc (HsModule a)) where
-  toHsSrc st (Hsrc a) = case a of
+  toHsSrc st a = case unHsrc a of
     HsModule Nothing _ imports decls _ mbDoc ->
       vcat [ pp_langExts st
-           , pp_mbModuleHeaderDoc mbDoc
+           , pp_mbndoc mbDoc
            , pp_nonnull imports
            , hsSrc_nonnull st (map unLoc decls)
            , text "" ]
     HsModule (Just name) exports imports decls deprec mbDoc ->
       vcat [ pp_langExts st
-           , pp_mbModuleHeaderDoc mbDoc
+           , pp_mbndoc mbDoc
            , case exports of
                Nothing ->
                  pp_header (text "where")
@@ -265,6 +271,13 @@ instance (OUTPUTABLE a pr, HasOccName a)
       IEDocNamed _EXT doc -> text ("-- $" ++ doc)
       _                   -> ppr ie
 
+
+-- --------------------------------------------------------------------
+--
+-- Top level declarations
+--
+-----------------------------------------------------------------------
+
 instance OUTPUTABLE a pr => HsSrc (HsDecl a) where
   toHsSrc st decl =
     case decl of
@@ -272,6 +285,13 @@ instance OUTPUTABLE a pr => HsSrc (HsDecl a) where
       TyClD _EXT tycld -> toHsSrc st tycld
       DocD _EXT doc    -> toHsSrc st doc
       decl'            -> ppr decl'
+
+
+-- --------------------------------------------------------------------
+--
+-- Type signature
+--
+-----------------------------------------------------------------------
 
 instance OUTPUTABLE a pr => HsSrc (Sig a) where
   toHsSrc st sig = case sig of
@@ -330,14 +350,121 @@ pprHsContextAlways [] = parens empty <+> darrow
 pprHsContextAlways [L _ ty] = ppr ty <+> darrow
 pprHsContextAlways cxt = parens (interpp'SP cxt) <+> darrow
 
--- XXX: TODO. Documentation for constructors need manual formatting.
+
+-- --------------------------------------------------------------------
+--
+-- Data type
+--
+-----------------------------------------------------------------------
+
 instance OUTPUTABLE a pr => HsSrc (TyClDecl a) where
-  toHsSrc _st = ppr
+  toHsSrc _st tcd =
+    case tcd of
+      DataDecl { tcdLName = ltycon, tcdTyVars = tyvars
+               , tcdFixity = fixity, tcdDataDefn = defn } ->
+        pp_data_defn (pp_vanilla_decl_head ltycon tyvars fixity) defn
+      _ -> ppr tcd
+
+-- From 'HsDecls.pp_data_defn'.
+pp_data_defn :: (OUTPUTABLE n pr)
+             => (HsContext n -> SDoc)
+             -> HsDataDefn n
+             -> SDoc
+pp_data_defn
+  pp_hdr (HsDataDefn { dd_ND = new_or_data, dd_ctxt = L _ context
+                     , dd_cType = mb_ct, dd_kindSig = mb_sig
+                     , dd_cons = condecls, dd_derivs = derivings })
+  | null condecls
+  = ppr new_or_data <+> pp_ct <+> pp_hdr context <+> pp_sig
+    <+> pp_derivings derivings
+  | otherwise
+  = hang (ppr new_or_data <+> pp_ct <+> pp_hdr context <+> pp_sig)
+       2 (pp_condecls condecls $$ pp_derivings derivings)
+  where
+    pp_ct = case mb_ct of
+              Nothing -> empty
+              Just ct -> ppr ct
+    pp_sig = case mb_sig of
+               Nothing   -> empty
+               Just kind -> dcolon <+> ppr kind
+    pp_derivings (L _ ds) = vcat (map ppr ds)
+#if MIN_VERSION_ghc(8,6,0)
+pp_data_defn _ (XHsDataDefn x) = ppr x
+#endif
+
+-- From 'HsDecls.pp_condecls'.
+pp_condecls :: (OUTPUTABLE n pr) => [LConDecl n] -> SDoc
+pp_condecls cs@(L _ ConDeclGADT {} : _) =
+  hang (text "where") 2 (vcat (map ppr cs))
+pp_condecls cs =
+  equals <+> sep (punctuate (text " |") (map (pprConDecl . unLoc) cs))
+
+-- This function does the pretty printing of documentation for
+-- constructors.
+pprConDecl :: OUTPUTABLE n pr => ConDecl n -> SDoc
+#if MIN_VERSION_ghc(8,6,0)
+pprConDecl (ConDeclH98 { con_name = L _ con
+                       , con_ex_tvs = ex_tvs
+                       , con_mb_cxt = mcxt
+                       , con_args = args
+                       , con_doc = doc})
+  = pp_mbndoc doc $+$ sep [pprHsForAll ex_tvs cxt, ppr_details args]
+  where
+#else
+pprConDecl (ConDeclH98 { con_name = L _ con
+                       , con_qvars = mtvs
+                       , con_cxt = mcxt
+                       , con_details = details
+                       , con_doc = doc})
+  = pp_mbndoc doc $+$ sep [pprHsForAll tvs cxt, ppr_details details]
+  where
+    tvs = maybe [] hsq_explicit mtvs
+#endif
+    ppr_details (InfixCon t1 t2) =
+      hsep [ppr t1, pprInfixOcc con, ppr t2]
+    ppr_details (PrefixCon tys) =
+      hsep (pprPrefixOcc con : map (ppr . unLoc) tys)
+    ppr_details (RecCon fields) =
+      pprPrefixOcc con <+> pprConDeclFields (unLoc fields)
+    cxt = fromMaybe (noLoc []) mcxt
+pprConDecl con = ppr con
+
+-- From 'HsDecls.pp_vanilla_decl_head'.
+pp_vanilla_decl_head :: (OUTPUTABLE n pr)
+                     => Located (IdP n)
+                     -> LHsQTyVars n
+                     -> LexicalFixity
+                     -> HsContext n
+                     -> SDoc
+pp_vanilla_decl_head thing (HsQTvs {hsq_explicit=tyvars}) fixity context
+  = hsep [pprHsContext context, pp_tyvars tyvars]
+  where
+    pp_tyvars (varl:varsr)
+      | fixity == Infix && length varsr > 1
+      = hsep [ char '(', ppr (unLoc varl), pprInfixOcc (unLoc thing)
+             , ppr (unLoc (head varsr)), char ')'
+             , hsep (map (ppr . unLoc) (tail varsr)) ]
+      | fixity == Infix
+      = hsep [ ppr (unLoc varl), pprInfixOcc (unLoc thing)
+             , hsep (map (ppr . unLoc) varsr) ]
+      | otherwise = hsep [ pprPrefixOcc (unLoc thing)
+                         , hsep (map (ppr . unLoc) (varl: varsr)) ]
+    pp_tyvars [] = pprPrefixOcc (unLoc thing)
+#if MIN_VERSION_ghc(8,6,0)
+pp_vanilla_decl_head _ (XLHsQTyVars x) _ _ = ppr x
+#endif
+
+-- ---------------------------------------------------------------------
+--
+-- DocDecl
+--
+-- ---------------------------------------------------------------------
 
 instance HsSrc DocDecl where
   toHsSrc _st d = case d of
     DocCommentNext ds       -> text "" $+$ commentWithHeader "-- |" ds
-    DocCommentPrev ds       -> commentWithHeader "-- ^" ds $+$ text ""
+    DocCommentPrev ds       -> text "" $+$ commentWithHeader "-- ^" ds
+                               $+$ text ""
     DocCommentNamed name ds -> namedDoc name ds
     DocGroup n ds           -> let stars = replicate n '*'
                                in  commentWithHeader ("-- " ++ stars) ds
@@ -358,6 +485,9 @@ pp_nonnull :: Outputable t => [t] -> SDoc
 pp_nonnull [] = empty
 pp_nonnull xs = vcat (map ppr xs)
 
+pp_mbndoc :: Maybe LHsDocString -> SDoc
+pp_mbndoc = maybe empty (commentWithHeader "-- |" . unLoc)
+
 pp_langExts :: SPState -> SDoc
 pp_langExts sp = vcat (map f (langExts sp))
   where
@@ -368,11 +498,6 @@ hsSrc_nonnull st xs =
   case xs of
     [] -> empty
     _  -> vcat (map (toHsSrc st) xs)
-
-pp_mbModuleHeaderDoc :: Maybe LHsDocString -> SDoc
-pp_mbModuleHeaderDoc = maybe empty mod_header
-  where
-    mod_header (L _ doc) = commentWithHeader "-- |" doc
 
 commentWithHeader :: String -> HsDocString -> SDoc
 commentWithHeader header doc =
