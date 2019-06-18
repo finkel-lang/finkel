@@ -425,8 +425,8 @@ rfielddecls :: { [HConDeclField] }
     | rfielddecls fielddecl { $2:$1 }
 
 fielddecl :: { HConDeclField }
-    : idsym  type {% b_recFieldD [$1] $2 }
-    | idsyms type {% b_recFieldD $1 $2 }
+    : idsym  type_without_doc mbdocprev {% b_recFieldD [$1] $2 $3 }
+    | idsyms type_without_doc mbdocprev {% b_recFieldD $1 $2 $3 }
 
 qtycl :: { ([HType], HType) }
     : 'list' {% parse p_lqtycl $1 }

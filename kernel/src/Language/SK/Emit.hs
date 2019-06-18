@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances#-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- | Emit Haskell source code from Haskell syntax data type.
 --
@@ -39,15 +39,15 @@ import HsDecls ( ConDecl(..), DocDecl(..), HsDataDefn(..), HsDecl(..)
 import HsDoc (LHsDocString)
 import HsImpExp (IE(..), LIE)
 import HsSyn (HsModule(..))
-import HsTypes ( HsConDetails(..), HsContext, HsImplicitBndrs(..)
-               , HsWildCardBndrs(..), HsType(..), LHsQTyVars(..)
-               , LHsType, LHsTyVarBndr
-               , pprConDeclFields, pprHsContext, pprHsForAll )
+import HsTypes ( ConDeclField(..), HsConDetails(..), HsContext
+               , HsImplicitBndrs(..), HsWildCardBndrs(..), HsType(..)
+               , LConDeclField, LHsQTyVars(..), LHsType, LHsTyVarBndr
+               , pprHsContext, pprHsForAll )
 import Outputable ( (<+>), (<>), ($$), ($+$), Outputable(..)
                   , OutputableBndr(..), SDoc
-                  , char, comma, dcolon, darrow, dot, empty, equals
-                  , forAllLit, fsep, hang, hsep, interppSP, interpp'SP
-                  , lparen, nest, parens, punctuate
+                  , braces, char, comma, dcolon, darrow, dot, empty
+                  , equals, forAllLit, fsep, hang, hsep, interppSP
+                  , interpp'SP, lparen, nest, parens, punctuate
                   , showSDocForUser, sep, text, vcat )
 import RdrName (RdrName)
 import SrcLoc ( GenLocated(..), Located, noLoc, unLoc )
@@ -233,13 +233,13 @@ instance (OUTPUTABLE a pr, HasOccName a)
   toHsSrc st a = case unHsrc a of
     HsModule Nothing _ imports decls _ mbDoc ->
       vcat [ pp_langExts st
-           , pp_mbndoc mbDoc
+           , pp_mbdocn mbDoc
            , pp_nonnull imports
            , hsSrc_nonnull st (map unLoc decls)
            , text "" ]
     HsModule (Just name) exports imports decls deprec mbDoc ->
       vcat [ pp_langExts st
-           , pp_mbndoc mbDoc
+           , pp_mbdocn mbDoc
            , case exports of
                Nothing ->
                  pp_header (text "where")
@@ -392,15 +392,15 @@ pp_data_defn
 pp_data_defn _ (XHsDataDefn x) = ppr x
 #endif
 
--- From 'HsDecls.pp_condecls'.
+-- Modified version of 'HsDecls.pp_condecls', no space in front of "|".
 pp_condecls :: (OUTPUTABLE n pr) => [LConDecl n] -> SDoc
 pp_condecls cs@(L _ ConDeclGADT {} : _) =
   hang (text "where") 2 (vcat (map ppr cs))
 pp_condecls cs =
-  equals <+> sep (punctuate (text " |") (map (pprConDecl . unLoc) cs))
+  equals <+> sep (punctuate (text "|") (map (pprConDecl . unLoc) cs))
 
--- This function does the pretty printing of documentation for
--- constructors.
+-- Modified version of 'HsDecls.pprConDecl'. This function does the
+-- pretty printing of documentation for constructors.
 pprConDecl :: OUTPUTABLE n pr => ConDecl n -> SDoc
 #if MIN_VERSION_ghc(8,6,0)
 pprConDecl (ConDeclH98 { con_name = L _ con
@@ -408,7 +408,8 @@ pprConDecl (ConDeclH98 { con_name = L _ con
                        , con_mb_cxt = mcxt
                        , con_args = args
                        , con_doc = doc})
-  = pp_mbndoc doc $+$ sep [pprHsForAll ex_tvs cxt, ppr_details args]
+  = sep [pprHsForAll ex_tvs cxt, ppr_details args] $+$
+    pp_mbdocp doc $$ text ""
   where
 #else
 pprConDecl (ConDeclH98 { con_name = L _ con
@@ -416,7 +417,8 @@ pprConDecl (ConDeclH98 { con_name = L _ con
                        , con_cxt = mcxt
                        , con_details = details
                        , con_doc = doc})
-  = pp_mbndoc doc $+$ sep [pprHsForAll tvs cxt, ppr_details details]
+  = sep [pprHsForAll tvs cxt, ppr_details details] $+$
+    pp_mbdocp doc $$ text ""
   where
     tvs = maybe [] hsq_explicit mtvs
 #endif
@@ -428,6 +430,24 @@ pprConDecl (ConDeclH98 { con_name = L _ con
       pprPrefixOcc con <+> pprConDeclFields (unLoc fields)
     cxt = fromMaybe (noLoc []) mcxt
 pprConDecl con = ppr con
+
+-- Modified version of 'HsTypes.pprConDeclFields', to emit documentation
+-- comments of fields in record data type.
+pprConDeclFields :: OUTPUTABLE n pr
+                  => [LConDeclField n] -> SDoc
+pprConDeclFields fields =
+  braces (sep (punctuate comma (map ppr_fld fields)))
+  where
+    ppr_fld (L _ (ConDeclField { cd_fld_names = ns
+                               , cd_fld_type = ty
+                               , cd_fld_doc = doc }))
+      = ppr_names ns <+> dcolon <+> ppr ty
+        $+$ pp_mbdocp doc $+$ text ""
+#if MIN_VERSION_ghc (8,6,0)
+    ppr_fld (L _ (XConDeclField x)) = ppr x
+#endif
+    ppr_names [n] = ppr n
+    ppr_names ns = sep (punctuate comma (map ppr ns))
 
 -- From 'HsDecls.pp_vanilla_decl_head'.
 pp_vanilla_decl_head :: (OUTPUTABLE n pr)
@@ -485,8 +505,11 @@ pp_nonnull :: Outputable t => [t] -> SDoc
 pp_nonnull [] = empty
 pp_nonnull xs = vcat (map ppr xs)
 
-pp_mbndoc :: Maybe LHsDocString -> SDoc
-pp_mbndoc = maybe empty (commentWithHeader "-- |" . unLoc)
+pp_mbdocn :: Maybe LHsDocString -> SDoc
+pp_mbdocn = maybe empty (commentWithHeader "-- |" . unLoc)
+
+pp_mbdocp :: Maybe LHsDocString -> SDoc
+pp_mbdocp = maybe empty (commentWithHeader "-- ^" . unLoc)
 
 pp_langExts :: SPState -> SDoc
 pp_langExts sp = vcat (map f (langExts sp))

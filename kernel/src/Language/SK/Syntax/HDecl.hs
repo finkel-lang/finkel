@@ -22,6 +22,7 @@ import HsDecls ( ClsInstDecl(..), ConDecl (..), DataFamInstDecl(..)
                , HsDataDefn(..), HsDecl(..), HsDerivingClause(..)
                , InstDecl(..), NewOrData(..), TyClDecl(..)
                , TyFamInstDecl(..), TyFamInstEqn )
+import HsDoc (LHsDocString)
 import HsExpr (HsMatchContext(..), Match(..))
 import HsPat (Pat(..))
 import HsTypes ( ConDeclField(..), HsConDetails(..), HsType(..)
@@ -168,11 +169,12 @@ b_conDeclDetails = PrefixCon
 {-# INLINE b_conDeclDetails #-}
 
 b_recFieldsD :: [HConDeclField] -> HConDeclDetails
-b_recFieldsD flds = RecCon (mkLocatedList flds)
+b_recFieldsD = RecCon . mkLocatedList
 {-# INLINE b_recFieldsD #-}
 
-b_recFieldD :: [Code] -> HType -> Builder HConDeclField
-b_recFieldD names ty = do
+b_recFieldD :: [Code] -> HType -> Maybe LHsDocString
+            -> Builder HConDeclField
+b_recFieldD names ty mb_doc = do
   let f (LForm (L l form))
         | Atom (ASymbol name) <- form
         = return (L l (mkFieldOcc (L l (mkRdrName name))))
@@ -184,7 +186,7 @@ b_recFieldD names ty = do
                            , cd_fld_ext = noExt
 #endif
                            , cd_fld_type = ty
-                           , cd_fld_doc = Nothing }
+                           , cd_fld_doc = mb_doc }
       loc = getLoc (mkLocatedForm names)
   return (L loc field)
 {-# INLINE b_recFieldD #-}

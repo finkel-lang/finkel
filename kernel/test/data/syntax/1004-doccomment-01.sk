@@ -20,7 +20,7 @@ This function is performed from compiled executable.")
 
   (:dh1 "Data and types")
   (:dock auxdt)
-  (D1 ..) (D2 ..)
+  (D1 ..) (D2 ..) (D3 ..)
 
   (:dh1 "Functions")
   (:dock auxfn)
@@ -40,12 +40,17 @@ This function is performed from compiled executable.")
 (= f2 (. putStrLn (++ "From f2: ")))
 
 (:docn "Documentation of 'f3'")
-(:: f3 (-> Int (:docp "Single line comments")
+(:: f3 (-> Int (:docp "Single line comment")
            String
-           (:docp "Multiple line comments for the second argument.
+           (:docp "Multiple lines comment for the second argument.
 
-Message body to display in this function.
-This documentation comment has empty line.")
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
+commodo consequat. Duis aute irure dolor in reprehenderit in voluptate
+velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint
+occaecat cupidatat non proident, sunt in culpa qui officia deserunt
+mollit anim id est laborum.")
            (IO ())
            (:docp "Action to print given message for given times")))
 (= f3 n msg
@@ -112,6 +117,26 @@ line. Otherwise, line breaks in source codes will disappear.")
   (D2 a)
   (:docp "Documentation for constructor."))
 (:docp "Documentation for top level newtype declaration.")
+
+(data (D3 a)
+  (D3a {d3_f1 Int (:docp "Documentation for 'd3_f1' field.")
+        d3_f2 a
+        (:docp "Documentation for 'd3_f2' field.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
+commodo consequat. Duis aute irure dolor in reprehenderit in voluptate
+velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint
+occaecat cupidatat non proident, sunt in culpa qui officia deserunt
+mollit anim id est laborum.")
+        (d3_f3 d3_f4) a
+        (:docp "Documentation for 'd3_f3' and 'd3_f4' fields.")})
+  (:docp "Documentation for 'D3a'.")
+  (D3b a a)
+  (:docp "Documentation for 'D3b'.")
+  (deriving (Eq Show)))
+(:docp "Documentation for top level 'D3' data type declaration.")
 
 
 ;;; Main function
