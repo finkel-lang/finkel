@@ -291,7 +291,7 @@ instance OUTPUTABLE a pr => HsSrc (HsDecl a) where
       SigD  _EXT sig   -> toHsSrc st sig
       TyClD _EXT tycld -> toHsSrc st tycld
       DocD _EXT doc    -> toHsSrc st doc
-      decl'            -> ppr decl'
+      _                -> ppr decl
 
 
 -- --------------------------------------------------------------------
@@ -378,7 +378,7 @@ instance OUTPUTABLE a pr => HsSrc (TyClDecl a) where
            4 (toHsSrc st rhs)
       DataDecl { tcdLName = ltycon, tcdTyVars = tyvars
                , tcdFixity = fixity, tcdDataDefn = defn } ->
-        pp_data_defn (pp_vanilla_decl_head ltycon tyvars fixity) defn
+        pp_data_defn st (pp_vanilla_decl_head ltycon tyvars fixity) defn
       ClassDecl { tcdCtxt = context, tcdLName = lclas
                 , tcdTyVars = tyvars, tcdFixity = fixity
                 , tcdFDs = fds, tcdSigs = sigs, tcdMeths = methods
@@ -407,19 +407,20 @@ instance OUTPUTABLE a pr => HsSrc (TyClDecl a) where
 -- --------------------------------------------------------------------
 
 pp_data_defn :: (OUTPUTABLE n pr)
-             => (HsContext n -> SDoc)
+             => SPState
+             -> (HsContext n -> SDoc)
              -> HsDataDefn n
              -> SDoc
 pp_data_defn
-  pp_hdr (HsDataDefn { dd_ND = new_or_data, dd_ctxt = L _ context
-                     , dd_cType = mb_ct, dd_kindSig = mb_sig
-                     , dd_cons = condecls, dd_derivs = derivings })
+  st pp_hdr (HsDataDefn { dd_ND = new_or_data, dd_ctxt = L _ context
+                        , dd_cType = mb_ct, dd_kindSig = mb_sig
+                        , dd_cons = condecls, dd_derivs = derivings })
   | null condecls
   = ppr new_or_data <+> pp_ct <+> pp_hdr context <+> pp_sig
     <+> pp_derivings derivings
   | otherwise
   = hang (ppr new_or_data <+> pp_ct <+> pp_hdr context <+> pp_sig)
-       2 (pp_condecls condecls $$ pp_derivings derivings)
+       2 (pp_condecls st condecls $$ pp_derivings derivings)
   where
     pp_ct = case mb_ct of
               Nothing -> empty
@@ -429,44 +430,51 @@ pp_data_defn
                Just kind -> dcolon <+> ppr kind
     pp_derivings (L _ ds) = vcat (map ppr ds)
 #if MIN_VERSION_ghc(8,6,0)
-pp_data_defn _ (XHsDataDefn x) = ppr x
+pp_data_defn _ _ (XHsDataDefn x) = ppr x
 #endif
 
 -- Modified version of 'HsDecls.pp_condecls', no space in front of "|".
-pp_condecls :: (OUTPUTABLE n pr) => [LConDecl n] -> SDoc
-pp_condecls cs@(L _ ConDeclGADT {} : _) =
+pp_condecls :: (OUTPUTABLE n pr) => SPState -> [LConDecl n] -> SDoc
+pp_condecls _ cs@(L _ ConDeclGADT {} : _) =
   hang (text "where") 2 (vcat (map ppr cs))
-pp_condecls cs =
-  equals <+> sep (punctuate vbar (map (pprConDecl . unLoc) cs))
+pp_condecls st cs =
+  equals <+> sep (punctuate (text " |") (map (pprConDecl st . unLoc) cs))
 
 -- Modified version of 'HsDecls.pprConDecl'. This function does the
 -- pretty printing of documentation for constructors.
-pprConDecl :: OUTPUTABLE n pr => ConDecl n -> SDoc
-pprConDecl (ConDeclH98 { con_name = L _ con
+--
+-- Although the syntax parser for constructor documentation accepts
+-- ":docp" form, this function emit documentation before the constructor
+-- declaration, to support documentation for constructor argument. This
+-- is because haddock may concatenate the docstring for the last
+-- constructor argument and the docstring for constructor itself.
+pprConDecl :: OUTPUTABLE n pr => SPState -> ConDecl n -> SDoc
+pprConDecl st (ConDeclH98 { con_name = L _ con
 #if MIN_VERSION_ghc (8,6,0)
-                       , con_ex_tvs = tvs
-                       , con_mb_cxt = mcxt
-                       , con_args = details
+                          , con_ex_tvs = tvs
+                          , con_mb_cxt = mcxt
+                          , con_args = details
 #else
-                       , con_qvars = mtvs
-                       , con_cxt = mcxt
-                       , con_details = details
+                          , con_qvars = mtvs
+                          , con_cxt = mcxt
+                          , con_details = details
 #endif
-                       , con_doc = doc})
-  = sep [pprHsForAll tvs cxt, ppr_details details] $+$
-    pp_mbdocp doc $$ text ""
+                        , con_doc = doc})
+  = pp_mbdocn doc $+$ sep [pprHsForAll tvs cxt, ppr_details details]
   where
 #if !MIN_VERSION_ghc (8,6,0)
     tvs = maybe [] hsq_explicit mtvs
 #endif
     ppr_details (InfixCon t1 t2) =
-      hsep [ppr t1, pprInfixOcc con, ppr t2]
+      hsep [hsrc t1, pprInfixOcc con, hsrc t2]
     ppr_details (PrefixCon tys) =
-      hsep (pprPrefixOcc con : map (ppr . unLoc) tys)
+      sep (pprPrefixOcc con : map (hsrc . unLoc) tys)
     ppr_details (RecCon fields) =
       pprPrefixOcc con <+> pprConDeclFields (unLoc fields)
     cxt = fromMaybe (noLoc []) mcxt
-pprConDecl con = ppr con
+    hsrc :: HsSrc a => a -> SDoc
+    hsrc = toHsSrc st
+pprConDecl _ con = ppr con
 
 -- Modified version of 'HsTypes.pprConDeclFields', to emit documentation
 -- comments of fields in record data type.
@@ -485,7 +493,6 @@ pprConDeclFields fields =
 #endif
     ppr_names [n] = ppr n
     ppr_names ns = sep (punctuate comma (map ppr ns))
-
 
 -- From 'HsDecls.pp_vanilla_decl_head'.
 pp_vanilla_decl_head :: (OUTPUTABLE n pr)
