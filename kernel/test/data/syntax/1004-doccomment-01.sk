@@ -1,4 +1,5 @@
-#p(LANGUAGE RankNTypes)
+#p(LANGUAGE RankNTypes
+            TypeFamilies)
 (:docn "
 Module      : Main
 Description : Module for documentation comment
@@ -18,10 +19,9 @@ This comment is written inside `:docn' form.")
 This function is performed from compiled executable.")
   main
 
-  (:dh1 "Data and types")
+  (:dh1 "Types and classes")
   (:dock auxdt)
-  (D1 ..) (D2 ..) (D3 ..)
-  (T1)
+  (D1 ..) (D2 ..) (D3 ..) (T1) (C1 ..)
 
   (:dh1 "Functions")
   (:dock auxfn)
@@ -143,6 +143,32 @@ mollit anim id est laborum.")
   (Maybe (, a a))
   (:docp "T1 is a synonym of optional pair of __@a@__ values."))
 (:docp "Documentation for top level 'T1' type synonym.")
+
+(class (C1 a)
+  (type (C1T1 a))
+  (:docp "Documentation for 'C1T1'.")
+
+  (type (C1T2 a))
+  (:docp "Documentation for 'C1T2'.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
+commodo consequat. Duis aute irure dolor in reprehenderit in voluptate
+velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint
+occaecat cupidatat non proident, sunt in culpa qui officia deserunt
+mollit anim id est laborum.")
+
+  (:: c1_m1 (-> a String))
+  (:docp "Documentation for 'c1_m1' method in 'C1'.")
+
+  (:: c1_m2 (-> a (:docp "1st arg.")
+                a (:docp "2nd arg.")
+                String))
+  (:docp "documentation for 'c1_m2' method in 'C1'.
+
+This method takes two __@a@__ arguments. "))
+(:docp "Documentation for top level 'C1' type class.")
 
 ;;; Main function
 

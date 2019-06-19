@@ -27,15 +27,22 @@ module Language.SK.Emit
 #if MIN_VERSION_base(4,11,0)
 import Prelude hiding ((<>))
 #endif
+import Data.Function (on)
+import Data.List (sortBy)
 import Data.Maybe (fromMaybe)
 
 -- ghc
-import BasicTypes (LexicalFixity(..))
+import Bag (bagToList, isEmptyBag)
+import BasicTypes (LexicalFixity(..), TopLevelFlag(..))
+import Class (pprFundeps)
 import GHC (OutputableBndrId, getPrintUnqual)
 import GhcMonad (GhcMonad(..), getSessionDynFlags)
-import HsBinds (Sig(..))
-import HsDecls ( ConDecl(..), DocDecl(..), HsDataDefn(..), HsDecl(..)
-               , LConDecl, TyClDecl(..) )
+import HsBinds ( LHsBinds, LSig, Sig(..), pprDeclList )
+import HsDecls ( ConDecl(..), DocDecl(..), FamilyDecl(..)
+               , FamilyInfo(..), FamilyResultSig(..), HsDataDefn(..)
+               , HsDecl(..), InjectivityAnn(..), LConDecl, LDocDecl
+               , LFamilyDecl, LTyFamDefltEqn, TyClDecl(..)
+               , TyFamInstEqn )
 import HsDoc (LHsDocString)
 import HsImpExp (IE(..), LIE)
 import HsSyn (HsModule(..))
@@ -48,20 +55,24 @@ import Outputable ( (<+>), (<>), ($$), ($+$), Outputable(..)
                   , braces, char, comma, dcolon, darrow, dot, empty
                   , equals, forAllLit, fsep, hang, hsep, interppSP
                   , interpp'SP, lparen, nest, parens, punctuate
-                  , showSDocForUser, sep, text, vcat )
+                  , showSDocForUser, sep, text, vbar, vcat )
 import RdrName (RdrName)
 import SrcLoc ( GenLocated(..), Located, noLoc, unLoc )
 
 #if MIN_VERSION_ghc(8,6,0)
+import HsDecls (FamEqn (..), pprFamInstLHS)
 import HsDoc (HsDocString, unpackHDS)
 import HsExtension (GhcPass, IdP)
 #elif MIN_VERSION_ghc(8,4,0)
+import HsDecls (FamEqn (..), pprFamInstLHS)
 import HsDoc (HsDocString(..))
 import HsExtension (SourceTextX, IdP)
 import FastString (unpackFS)
 #else
 #define IdP {- empty -}
+import HsDecls (TyFamEqn (..), HsTyPats)
 import HsDoc (HsDocString(..))
+import HsTypes (pprParendHsType)
 import OccName (HasOccName(..))
 import FastString (unpackFS)
 #endif
@@ -84,6 +95,12 @@ type OUTPUTABLE a pr = (OutputableBndrId a, a ~ GhcPass pr)
 type OUTPUTABLE a pr = (OutputableBndrId a, SourceTextX a)
 #else
 type OUTPUTABLE a pr = (OutputableBndrId a, HsSrc a)
+#endif
+
+#if MIN_VERSION_ghc (8,4,0)
+type OUTPUTABLEOCC a pr = (OUTPUTABLE a pr)
+#else
+type OUTPUTABLEOCC a pr = (OUTPUTABLE a pr, HasOccName a)
 #endif
 
 
@@ -224,12 +241,7 @@ instance HsSrc RdrName where
 instance (HsSrc b) => HsSrc (GenLocated a b) where
   toHsSrc st (L _ e) = toHsSrc st e
 
-#if MIN_VERSION_ghc(8,4,0)
-instance OUTPUTABLE a pr
-#else
-instance (OUTPUTABLE a pr, HasOccName a)
-#endif
-         => HsSrc (Hsrc (HsModule a)) where
+instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (HsModule a)) where
   toHsSrc st a = case unHsrc a of
     HsModule Nothing _ imports decls _ mbDoc ->
       vcat [ pp_langExts st
@@ -257,12 +269,7 @@ instance (OUTPUTABLE a pr, HasOccName a)
             Just d  -> vcat [pp_modname, ppr d, rest]
         pp_modname = text "module" <+> ppr name
 
-#if MIN_VERSION_ghc(8,4,0)
-instance OUTPUTABLE a pr
-#else
-instance (OUTPUTABLE a pr, HasOccName a)
-#endif
-         => HsSrc (Hsrc (IE a)) where
+instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (IE a)) where
   toHsSrc _st (Hsrc ie) =
     case ie of
       IEGroup _EXT n doc  -> commentWithHeader ("-- " ++ replicate n '*')
@@ -297,6 +304,10 @@ instance OUTPUTABLE a pr => HsSrc (Sig a) where
   toHsSrc st sig = case sig of
     TypeSig _EXT vars ty -> pprVarSig (map unLoc vars)
                                       (toHsSrc st ty)
+    ClassOpSig _EXT is_dflt vars ty
+      | is_dflt   -> text "default" <+> pprVarSig (map unLoc vars)
+                                                  (toHsSrc st ty)
+      | otherwise -> pprVarSig (map unLoc vars) (toHsSrc st ty)
     _ -> ppr sig
 
 instance (OUTPUTABLE a pr, Outputable thing, HsSrc thing)
@@ -325,26 +336,26 @@ instance (OUTPUTABLE a pr) => HsSrc (HsType a) where
     HsFunTy _EXT ty1 ty2 ->
       sep [hsrc ty1, text "->", hsrc ty2]
     HsDocTy _EXT ty' (L _ docstr) ->
-      ppr ty' <+> commentWithHeader "-- ^" docstr
+      ppr ty' $+$ commentWithHeader "-- ^" docstr
     HsParTy _EXT ty1 -> parens (hsrc ty1)
     _ -> ppr ty
     where
       hsrc :: HsSrc a => a -> SDoc
       hsrc = toHsSrc st
 
--- Taken from 'HsBinds.pprVarSig'.
+-- From 'HsBinds.pprVarSig'.
 pprVarSig :: OutputableBndr id => [id] -> SDoc -> SDoc
 pprVarSig vars pp_ty = sep [pprvars <+> dcolon, nest 2 pp_ty]
   where
     pprvars = hsep $ punctuate comma (map pprPrefixOcc vars)
 
--- Taken from 'HsTypes.pprHsForAllTvs'.
+-- From 'HsTypes.pprHsForAllTvs'.
 pprHsForAllTvs :: OUTPUTABLE n pr => [LHsTyVarBndr n] -> SDoc
 pprHsForAllTvs qtvs
   | null qtvs = forAllLit <+> dot
   | otherwise = forAllLit <+> interppSP qtvs <> dot
 
--- Taken from 'HsTypes.pprHsContextAlways'.
+-- From 'HsTypes.pprHsContextAlways'.
 pprHsContextAlways :: OUTPUTABLE n pr => HsContext n -> SDoc
 pprHsContextAlways [] = parens empty <+> darrow
 pprHsContextAlways [L _ ty] = ppr ty <+> darrow
@@ -353,9 +364,9 @@ pprHsContextAlways cxt = parens (interpp'SP cxt) <+> darrow
 
 -- --------------------------------------------------------------------
 --
--- Data type
+-- TyClDecl
 --
------------------------------------------------------------------------
+-- --------------------------------------------------------------------
 
 instance OUTPUTABLE a pr => HsSrc (TyClDecl a) where
   toHsSrc st tcd =
@@ -368,9 +379,33 @@ instance OUTPUTABLE a pr => HsSrc (TyClDecl a) where
       DataDecl { tcdLName = ltycon, tcdTyVars = tyvars
                , tcdFixity = fixity, tcdDataDefn = defn } ->
         pp_data_defn (pp_vanilla_decl_head ltycon tyvars fixity) defn
+      ClassDecl { tcdCtxt = context, tcdLName = lclas
+                , tcdTyVars = tyvars, tcdFixity = fixity
+                , tcdFDs = fds, tcdSigs = sigs, tcdMeths = methods
+                , tcdATs = ats, tcdATDefs = at_defs
+                , tcdDocs = docs }
+        | null sigs && isEmptyBag methods && null ats && null at_defs
+        -> top_matter
+        | otherwise
+        -> vcat
+             [ top_matter <+> text "where"
+             , nest 2
+                    (pprDeclList
+                      (ppr_cdecl_body st ats at_defs methods sigs docs))]
+        where
+          top_matter =
+            text "class"
+            <+> pp_vanilla_decl_head lclas tyvars fixity (unLoc context)
+            <+> pprFundeps (map unLoc fds)
       _ -> ppr tcd
 
--- From 'HsDecls.pp_data_defn'.
+
+-- --------------------------------------------------------------------
+--
+-- For SynDecl and DataDecl
+--
+-- --------------------------------------------------------------------
+
 pp_data_defn :: (OUTPUTABLE n pr)
              => (HsContext n -> SDoc)
              -> HsDataDefn n
@@ -402,29 +437,26 @@ pp_condecls :: (OUTPUTABLE n pr) => [LConDecl n] -> SDoc
 pp_condecls cs@(L _ ConDeclGADT {} : _) =
   hang (text "where") 2 (vcat (map ppr cs))
 pp_condecls cs =
-  equals <+> sep (punctuate (text "|") (map (pprConDecl . unLoc) cs))
+  equals <+> sep (punctuate vbar (map (pprConDecl . unLoc) cs))
 
 -- Modified version of 'HsDecls.pprConDecl'. This function does the
 -- pretty printing of documentation for constructors.
 pprConDecl :: OUTPUTABLE n pr => ConDecl n -> SDoc
-#if MIN_VERSION_ghc(8,6,0)
 pprConDecl (ConDeclH98 { con_name = L _ con
-                       , con_ex_tvs = ex_tvs
+#if MIN_VERSION_ghc (8,6,0)
+                       , con_ex_tvs = tvs
                        , con_mb_cxt = mcxt
-                       , con_args = args
-                       , con_doc = doc})
-  = sep [pprHsForAll ex_tvs cxt, ppr_details args] $+$
-    pp_mbdocp doc $$ text ""
-  where
+                       , con_args = details
 #else
-pprConDecl (ConDeclH98 { con_name = L _ con
                        , con_qvars = mtvs
                        , con_cxt = mcxt
                        , con_details = details
+#endif
                        , con_doc = doc})
   = sep [pprHsForAll tvs cxt, ppr_details details] $+$
     pp_mbdocp doc $$ text ""
   where
+#if !MIN_VERSION_ghc (8,6,0)
     tvs = maybe [] hsq_explicit mtvs
 #endif
     ppr_details (InfixCon t1 t2) =
@@ -454,6 +486,7 @@ pprConDeclFields fields =
     ppr_names [n] = ppr n
     ppr_names ns = sep (punctuate comma (map ppr ns))
 
+
 -- From 'HsDecls.pp_vanilla_decl_head'.
 pp_vanilla_decl_head :: (OUTPUTABLE n pr)
                      => Located (IdP n)
@@ -477,6 +510,134 @@ pp_vanilla_decl_head thing (HsQTvs {hsq_explicit=tyvars}) fixity context
     pp_tyvars [] = pprPrefixOcc (unLoc thing)
 #if MIN_VERSION_ghc(8,6,0)
 pp_vanilla_decl_head _ (XLHsQTyVars x) _ _ = ppr x
+#endif
+
+
+-- --------------------------------------------------------------------
+--
+-- For ClassDecl
+--
+-- --------------------------------------------------------------------
+
+ppr_cdecl_body :: OUTPUTABLE n pr
+               => SPState
+               -> [LFamilyDecl n]
+               -> [LTyFamDefltEqn n]
+               -> LHsBinds n
+               -> [LSig n]
+               -> [LDocDecl]
+               -> [SDoc]
+ppr_cdecl_body st ats at_defs methods sigs docs = map snd body
+  where
+    body = sortBy (compare `on` fst) body0
+    body0 =
+      map (\(L l at) -> (l, pprFamilyDecl NotTopLevel at)) ats ++
+      map (\d@(L l _) -> (l, ppr_fam_deflt_eqn d)) at_defs ++
+      map (\(L l sig) -> (l, toHsSrc st sig)) sigs ++
+      map (\(L l bind) -> (l, ppr bind)) (bagToList methods) ++
+      map (\(L l doc) -> (l, toHsSrc st doc)) docs
+
+-- From 'HsDecls.pprFamilyDecl'. Used during pretty printing type class
+-- body contents, with first argument set to 'NonTopLevel'.
+pprFamilyDecl :: (OUTPUTABLE n pr)
+              => TopLevelFlag -> FamilyDecl n -> SDoc
+pprFamilyDecl top_level (FamilyDecl { fdInfo = info, fdLName = ltycon
+                                    , fdTyVars = tyvars
+                                    , fdFixity = fixity
+                                    , fdResultSig = L _ result
+                                    , fdInjectivityAnn = mb_inj })
+  = vcat [ pprFlavour info <+> pp_top_level <+>
+           pp_vanilla_decl_head ltycon tyvars fixity [] <+>
+           pp_kind <+> pp_inj <+> pp_where
+         , nest 2 $ pp_eqns ]
+  where
+    pp_top_level = case top_level of
+                     TopLevel    -> text "family"
+                     NotTopLevel -> empty
+
+    pp_kind = case result of
+                NoSig    _EXT         -> empty
+                KindSig  _EXT kind    -> dcolon <+> ppr kind
+                TyVarSig _EXT tv_bndr -> text "=" <+> ppr tv_bndr
+#if MIN_VERSION_ghc (8,6,0)
+                XFamilyResultSig x    -> ppr x
+#endif
+    pp_inj = case mb_inj of
+               Just (L _ (InjectivityAnn lhs rhs)) ->
+                 hsep [ vbar, ppr lhs, text "->", hsep (map ppr rhs) ]
+               Nothing -> empty
+    (pp_where, pp_eqns) = case info of
+      ClosedTypeFamily mb_eqns ->
+        ( text "where"
+        , case mb_eqns of
+            Nothing   -> text ".."
+            Just eqns -> vcat $ map (ppr_fam_inst_eqn . unLoc) eqns )
+      _ -> (empty, empty)
+#if MIN_VERSION_ghc (8,6,0)
+pprFamilyDecl _ (XFamilyDecl x) = ppr x
+#endif
+
+-- From 'HsDecls.pprFlavour'.
+pprFlavour :: FamilyInfo pass -> SDoc
+pprFlavour DataFamily            = text "data"
+pprFlavour OpenTypeFamily        = text "type"
+pprFlavour (ClosedTypeFamily {}) = text "type"
+
+-- From 'HsDecls.ppr_fam_inst_eqn'
+ppr_fam_inst_eqn :: (OUTPUTABLE n pr) => TyFamInstEqn n -> SDoc
+#if MIN_VERSION_ghc (8,4,0)
+ppr_fam_inst_eqn (HsIB { hsib_body = FamEqn { feqn_tycon  = tycon
+                                            , feqn_pats   = pats
+                                            , feqn_fixity = fixity
+                                            , feqn_rhs    = rhs }})
+    = pprFamInstLHS tycon pats fixity [] Nothing <+> equals <+> ppr rhs
+#  if MIN_VERSION_ghc (8,6,0)
+ppr_fam_inst_eqn (HsIB { hsib_body = XFamEqn x }) = ppr x
+ppr_fam_inst_eqn (XHsImplicitBndrs x) = ppr x
+#  endif
+#else
+ppr_fam_inst_eqn (TyFamEqn { tfe_tycon = tycon
+                           , tfe_pats  = pats
+                           , tfe_fixity = fixity
+                           , tfe_rhs   = rhs })
+    = pp_fam_inst_lhs tycon pats fixity [] <+> equals <+> ppr rhs
+
+-- From 'HsDecls.pp_fam_inst_lhs'
+pp_fam_inst_lhs :: (OutputableBndrId name) => Located name
+   -> HsTyPats name
+   -> LexicalFixity
+   -> HsContext name
+   -> SDoc
+pp_fam_inst_lhs thing (HsIB { hsib_body = typats }) fixity context
+                                              -- explicit type patterns
+   = hsep [pprHsContext context, pp_pats typats]
+   where
+     pp_pats (patl:patsr)
+       | fixity == Infix
+          = hsep [pprParendHsType (unLoc patl), pprInfixOcc (unLoc thing)
+          , hsep (map (pprParendHsType.unLoc) patsr)]
+       | otherwise = hsep [ pprPrefixOcc (unLoc thing)
+                   , hsep (map (pprParendHsType.unLoc) (patl:patsr))]
+     pp_pats [] = empty
+#endif
+
+-- From 'HsDecls.ppr_fam_deflt_eqn'
+ppr_fam_deflt_eqn :: OUTPUTABLE n pr => LTyFamDefltEqn n -> SDoc
+#if MIN_VERSION_ghc (8,4,0)
+ppr_fam_deflt_eqn (L _ (FamEqn { feqn_tycon  = tycon
+                               , feqn_pats   = tvs
+                               , feqn_fixity = fixity
+                               , feqn_rhs    = rhs }))
+#else
+ppr_fam_deflt_eqn (L _ (TyFamEqn { tfe_tycon = tycon
+                                 , tfe_pats = tvs
+                                 , tfe_fixity = fixity
+                                 , tfe_rhs = rhs}))
+#endif
+  = text "type" <+> pp_vanilla_decl_head tycon tvs fixity []
+                <+> equals <+> ppr rhs
+#if MIN_VERSION_ghc (8,6,0)
+ppr_fam_deflt_eqn (L _ (XFamEqn x)) = ppr x
 #endif
 
 -- ---------------------------------------------------------------------
@@ -539,13 +700,7 @@ commentWithHeader header doc =
 -- This function converts module export elements and comments to 'SDoc'.
 -- Export elements are punctuated with commas, and newlines are inserted
 -- between documentation comments.
-pp_lies ::
-#if MIN_VERSION_ghc (8,4,0)
-  OUTPUTABLE a pr
-#else
-  (OUTPUTABLE a pr, HasOccName a)
-#endif
-  => SPState -> [LIE a] -> SDoc
+pp_lies :: OUTPUTABLEOCC a pr => SPState -> [LIE a] -> SDoc
 pp_lies st = go
   where
     go [] = empty

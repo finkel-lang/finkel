@@ -242,7 +242,7 @@ b_classD (tys,ty) decls = do
                         , tcdMeths = cd_binds cd
                         , tcdATs = cd_fds cd
                         , tcdATDefs = atdefs
-                        , tcdDocs = []
+                        , tcdDocs = cd_docs cd
 #if MIN_VERSION_ghc(8,6,0)
                         , tcdCExt = noExt
 #else
@@ -285,7 +285,7 @@ b_tyfamD insts
   | otherwise  = mkFamilyDecl (ClosedTypeFamily (Just tfies))
   where
     tfies = map f insts
-    f ((L l name), argtys, ty) =
+    f (L l name, argtys, ty) =
       let rname = L l (mkUnqual tcName name)
       in  L l (mkTyFamInstEqn rname argtys ty)
 {-# INLINE b_tyfamD #-}
