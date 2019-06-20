@@ -52,18 +52,20 @@ import HsTypes ( ConDeclField(..), HsConDetails(..), HsContext
                , pprHsContext, pprHsForAll )
 import Outputable ( (<+>), (<>), ($$), ($+$), Outputable(..)
                   , OutputableBndr(..), SDoc
-                  , braces, char, comma, dcolon, darrow, dot, empty
-                  , equals, forAllLit, fsep, hang, hsep, interppSP
-                  , interpp'SP, lparen, nest, parens, punctuate
-                  , showSDocForUser, sep, text, vbar, vcat )
+                  , braces, char, comma, dcolon, darrow, dot
+                  , empty, equals, forAllLit, fsep, hang, hsep
+                  , interppSP, interpp'SP, lparen, nest, parens
+                  , pprWithCommas, punctuate, showSDocForUser
+                  , sep, text, vbar, vcat )
 import RdrName (RdrName)
 import SrcLoc ( GenLocated(..), Located, noLoc, unLoc )
 
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
 import HsDecls (FamEqn (..), pprFamInstLHS)
 import HsDoc (HsDocString, unpackHDS)
 import HsExtension (GhcPass, IdP)
-#elif MIN_VERSION_ghc(8,4,0)
+import Outputable (arrow, pprPanic)
+#elif MIN_VERSION_ghc (8,4,0)
 import HsDecls (FamEqn (..), pprFamInstLHS)
 import HsDoc (HsDocString(..))
 import HsExtension (SourceTextX, IdP)
@@ -89,9 +91,9 @@ import Language.SK.Lexer
 --
 -- ---------------------------------------------------------------------
 
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
 type OUTPUTABLE a pr = (OutputableBndrId a, a ~ GhcPass pr)
-#elif MIN_VERSION_ghc(8,4,0)
+#elif MIN_VERSION_ghc (8,4,0)
 type OUTPUTABLE a pr = (OutputableBndrId a, SourceTextX a)
 #else
 type OUTPUTABLE a pr = (OutputableBndrId a, HsSrc a)
@@ -197,7 +199,7 @@ emitPrevDocWithOffset offset st ref =
       AnnLineComment doc -> text "-- " <> text doc
       _                  -> ppr annotated
 
-#if !MIN_VERSION_ghc(8,4,0)
+#if !MIN_VERSION_ghc (8,4,0)
 -- | 'whenPprDebug' does not exist in ghc 8.2. Defining one with
 -- 'ifPprDebug'. Also, number of arguments in 'ifPprDebug' changed in
 -- ghc 8.4.
@@ -314,7 +316,7 @@ instance (OUTPUTABLE a pr, Outputable thing, HsSrc thing)
           => HsSrc (HsWildCardBndrs a thing) where
   toHsSrc st wc = case wc of
     HsWC { hswc_body = ty } -> toHsSrc st ty
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
     _ -> ppr wc
 #endif
 
@@ -323,7 +325,7 @@ instance (OUTPUTABLE a pr)
   toHsSrc st ib =
     case ib of
       HsIB { hsib_body = ty } -> toHsSrc st ty
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
       _ -> ppr ib
 #endif
 
@@ -429,14 +431,15 @@ pp_data_defn
                Nothing   -> empty
                Just kind -> dcolon <+> ppr kind
     pp_derivings (L _ ds) = vcat (map ppr ds)
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
 pp_data_defn _ _ (XHsDataDefn x) = ppr x
 #endif
 
--- Modified version of 'HsDecls.pp_condecls', no space in front of "|".
+-- Modified version of 'HsDecls.pp_condecls', no space in front of "|",
+-- taking 'SPState' as first argument.
 pp_condecls :: (OUTPUTABLE n pr) => SPState -> [LConDecl n] -> SDoc
-pp_condecls _ cs@(L _ ConDeclGADT {} : _) =
-  hang (text "where") 2 (vcat (map ppr cs))
+pp_condecls st cs@(L _ ConDeclGADT {} : _) =
+  hang (text "where") 2 (vcat (map (pprConDecl st . unLoc) cs))
 pp_condecls st cs =
   equals <+> sep (punctuate (text " |") (map (pprConDecl st . unLoc) cs))
 
@@ -474,7 +477,38 @@ pprConDecl st (ConDeclH98 { con_name = L _ con
     cxt = fromMaybe (noLoc []) mcxt
     hsrc :: HsSrc a => a -> SDoc
     hsrc = toHsSrc st
+
+#if MIN_VERSION_ghc (8,6,0)
+pprConDecl st (ConDeclGADT { con_names = cons
+                           , con_qvars = qvars
+                           , con_mb_cxt = mcxt
+                           , con_args = args
+                           , con_res_ty = res_ty
+                           , con_doc = doc })
+  = pp_mbdocn doc $+$ ppr_con_names cons <+> dcolon
+    <+> (sep [pprHsForAll (hsq_explicit qvars) cxt
+             ,ppr_arrow_chain (get_args args ++ [hsrc res_ty])])
+  where
+    get_args (PrefixCon as) = map hsrc as
+    get_args (RecCon fields)  = [pprConDeclFields (unLoc fields)]
+    get_args (InfixCon {})    = pprPanic "pprConDecl:GADT" (ppr cons)
+    cxt = fromMaybe (noLoc []) mcxt
+    ppr_arrow_chain [] = empty
+    ppr_arrow_chain (a:as) = sep (a : map (arrow <+>) as)
+    hsrc :: HsSrc a => a -> SDoc
+    hsrc = toHsSrc st
 pprConDecl _ con = ppr con
+#else
+pprConDecl st (ConDeclGADT { con_names = cons
+                           , con_type = res_ty
+                           , con_doc = doc })
+  = pp_mbdocn doc $+$
+    sep [ppr_con_names cons <+> dcolon <+> toHsSrc st res_ty]
+#endif
+
+-- From 'HsDecls.ppr_con_names'.
+ppr_con_names :: OutputableBndr a => [Located a] -> SDoc
+ppr_con_names = pprWithCommas (pprPrefixOcc . unLoc)
 
 -- Modified version of 'HsTypes.pprConDeclFields', to emit documentation
 -- comments of fields in record data type.
@@ -515,7 +549,7 @@ pp_vanilla_decl_head thing (HsQTvs {hsq_explicit=tyvars}) fixity context
       | otherwise = hsep [ pprPrefixOcc (unLoc thing)
                          , hsep (map (ppr . unLoc) (varl: varsr)) ]
     pp_tyvars [] = pprPrefixOcc (unLoc thing)
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
 pp_vanilla_decl_head _ (XLHsQTyVars x) _ _ = ppr x
 #endif
 
@@ -736,7 +770,7 @@ isDocIE ie =
 
 -- | GHC version compatible function for unpacking 'HsDocString'.
 unpackHDS' :: HsDocString -> String
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
 unpackHDS' = unpackHDS
 #else
 unpackHDS' (HsDocString fs) = unpackFS fs
