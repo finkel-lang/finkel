@@ -28,7 +28,6 @@ import BasicTypes ( Activation(..), FixityDirection(..)
                   , InlineSpec(..), OverlapMode(..) )
 import FastString (FastString)
 import ForeignCall (Safety)
-import HaddockUtils (addConDoc)
 import HsDoc (LHsDocString)
 import HsExpr (GRHS(..))
 import SrcLoc (GenLocated(..), Located, getLoc, noLoc)
@@ -363,8 +362,10 @@ rconstrs :: { (HDeriving, [HConDecl]) }
     | rconstrs constr        { fmap ($2:) $1 }
 
 constr :: { HConDecl }
-    : conid mbdocprev  {% flip addConDoc $2 `fmap` b_conOnlyD $1 }
-    | 'list' mbdocprev {% flip addConDoc $2 `fmap` parse p_lconstr $1 }
+    : conid mbdocprev  {% addConDoc' $2 `fmap` b_conOnlyD $1 }
+    | 'list' mbdocprev {% addConDoc' $2 `fmap` parse p_lconstr $1 }
+    | docnext conid    {% addConDoc'' $1 `fmap` b_conOnlyD $2 }
+    | docnext 'list'   {% addConDoc'' $1 `fmap` parse p_lconstr $2 }
 
 deriving :: { [HType] }
     : 'deriving' {% parse p_types $1 }
@@ -427,6 +428,8 @@ rfielddecls :: { [HConDeclField] }
 fielddecl :: { HConDeclField }
     : idsym  type_without_doc mbdocprev {% b_recFieldD [$1] $2 $3 }
     | idsyms type_without_doc mbdocprev {% b_recFieldD $1 $2 $3 }
+    | docnext idsym type_without_doc    {% b_recFieldD [$2] $3 (Just $1) }
+    | docnext idsyms type_without_doc   {% b_recFieldD $2 $3 (Just $1) }
 
 qtycl :: { ([HType], HType) }
     : 'list' {% parse p_lqtycl $1 }
@@ -445,6 +448,7 @@ rcdecls :: { [HDecl] }
 
 cdecl :: { HDecl }
     : 'docp' {% b_docprevD $1 }
+    | 'docn' {% b_docnextD $1 }
     | 'list' {% parse p_lcdecl $1 }
 
 lcdecl :: { HDecl }

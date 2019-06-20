@@ -21,7 +21,8 @@ This function is performed from compiled executable.")
 
   (:dh1 "Types and classes")
   (:dock auxdt)
-  (D1 ..) (D2 ..) (D3 ..) (T1) (C1 ..) (TF1) (DF1)
+  (D1 ..) (D2 ..) (D3 ..) (D4 ..) (T1)
+  (C1 ..) (C2 ..) (TF1) (DF1)
 
   (:dh1 "Functions")
   (:dock auxfn)
@@ -133,6 +134,7 @@ mollit anim id est laborum.")
 (:docp "Documentation for top level newtype declaration.")
 
 (data (D3 a)
+  (:docn "Documentation for 'D3a'.")
   (D3a {d3_f1 Int (:docp "Documentation for 'd3_f1' field.")
 
         d3_f2 a (:docp "Documentation for 'd3_f2' field.
@@ -146,12 +148,23 @@ occaecat cupidatat non proident, sunt in culpa qui officia deserunt
 mollit anim id est laborum.")
         (d3_f3 d3_f4) a
         (:docp "Documentation for 'd3_f3' and 'd3_f4' fields.")})
-  (:docp "Documentation for 'D3a'.")
 
+  (:docn "Documentation for 'D3b'.")
   (D3b a a)
-  (:docp "Documentation for 'D3b'.")
+
   (deriving (Eq Show)))
 (:docp "Documentation for top level 'D3' data type declaration.")
+
+(:docn "Documentation for top level `D4' data type declaration.")
+(data (D4 a)
+  (:docn "Documentation for `D4a'.")
+  (D4a {(:docn "Documentation for `d4_f1'.")
+        d4-f1 Int
+        (:docn "Documentation for `d4_f2' and `d4_f3'.")
+        (d4-f2 d4-f3) a})
+  (:docn "Documentation for `D4b'")
+  D4b
+  (deriving (Eq Show)))
 
 (type (T1 a)
   (Maybe (, a a))
@@ -182,7 +195,28 @@ mollit anim id est laborum.")
   (:docp "documentation for `c1_m2' method in 'C1'.
 
 This method takes two __@a@__ arguments. "))
+
 (:docp "Documentation for top level 'C1' type class.")
+
+(:docn "Documentation for top level `C2' type class.")
+(class (C2 a)
+  (:docn "Documentation for `C2T1'.")
+  (type (C2T1 a))
+
+  (:docn "Documentation for `c2_m1'.")
+  (:: c2-m1 (-> a String))
+
+  (:docn "Documentation for `c2_m2'.")
+  (:: c2-m2 (-> (C2T1 a) (:docp "1st arg.")
+                a (:docp "2nd arg.")
+                String)))
+
+(:docn "Documentation for instance declaration of `C2' for `Int'.")
+(instance (C2 Int)
+  (type (C2T1 Int) Int)
+  (= c2_m1 show)
+  (= c2_m2 a1 a2
+    (++ "arg1=" (show a1) ", arg2=" (show a2))))
 
 (type family (TF1 a))
 (:docp "Documentation for top level 'TF1' type family.")

@@ -13,10 +13,12 @@ import BasicTypes ( SourceText(..)
 #endif
                   )
 import FastString (FastString, fsLit, headFS, unpackFS)
+import HaddockUtils (addConDoc)
 import HsBinds ( HsBindLR(..), HsLocalBindsLR(..), HsValBindsLR(..)
                , emptyLocalBinds )
-import HsDecls ( HsDecl(..), InstDecl(..), LDataFamInstDecl
+import HsDecls ( HsDecl(..), InstDecl(..), LConDecl, LDataFamInstDecl
                , LDocDecl, LFamilyDecl, LTyFamInstDecl, TyClDecl(..) )
+import HsDoc (LHsDocString)
 import HsExpr ( GRHSs(..), LGRHS, LHsExpr, LMatch, Match(..)
               , MatchGroup(..) )
 import HsLit (HsOverLit(..))
@@ -346,3 +348,11 @@ mkHsQualTy_compat ctxt body
 nullLHsContext :: LHsContext PARSED -> Bool
 nullLHsContext (L _ cs) = null cs
 {-# INLINE nullLHsContext #-}
+
+addConDoc' :: Maybe LHsDocString -> LConDecl a -> LConDecl a
+addConDoc' = flip addConDoc
+{-# INLINE addConDoc' #-}
+
+addConDoc'' :: LHsDocString -> LConDecl a -> LConDecl a
+addConDoc'' = flip addConDoc . Just
+{-# INLINE addConDoc'' #-}
