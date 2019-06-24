@@ -70,8 +70,8 @@ import Language.SK.Form
 }
 
 $nl          = [\n\r\f]
-$whitechar   = [$nl\v\t\ ]
-$white_no_nl = $whitechar # \n
+$white   = [$nl\v\t\ ]
+$white_no_nl = $white # $nl
 
 $negative    = \-
 $octit       = [0-7]
@@ -89,12 +89,18 @@ $hsymtail    = [$hsymhead\'\#$digit]
 @exponent    = [eE] [\-\+]? @decimal
 @frac        = @decimal \. @decimal @exponent? | @decimal @exponent
 
+@contdoc     = $nl [\t\ ]* \;+ ~$nl+
 
 tokens :-
 
-$whitechar+  ;
+$white+  ;
 
 --- Comments
+
+\;+ $white+ \^ $white_no_nl+ ~$nl+ @contdoc*          { tok_doc_prev }
+\;+ $white+ \| $white_no_nl+ ~$nl+ @contdoc*          { tok_doc_next }
+\;+ $white+ \*+ $white_no_nl+ .*                      { tok_doc_group }
+\;+ $white+ \$ @hsymbol $white_no_nl* ~$nl* @contdoc* { tok_doc_named }
 
 \; .*    { tok_line_comment }
 \#\| .*  { tok_block_comment }
@@ -103,7 +109,7 @@ $whitechar+  ;
 \# $hsymtail* { tok_hash }
 
 --- Parenthesized commas, handled before parentheses
-\( $whitechar* \,+ $whitechar* \) { tok_pcommas }
+\( $white* \,+ $white* \) { tok_pcommas }
 
 --- Parentheses
 \( { tok_oparen }
@@ -357,6 +363,14 @@ data Token
   -- ^ Literal @#@.
   | TPcommas Int
   -- ^ Parenthesized commas with number of repeats.
+  | TDocNext String
+  -- ^ Documentation comment for next thing.
+  | TDocPrev String
+  -- ^ Documentation comment for previous thing.
+  | TDocGroup Int String
+  -- ^ Documentation comment for section.
+  | TDocNamed String (Maybe String)
+  -- ^ Documentation comment for named documentation.
   | TEOF
   -- ^ End of form.
   deriving (Eq, Show)
@@ -366,12 +380,12 @@ type Action = AlexInput -> Int -> SP Token
 -- Tokenizer actions for documentation
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
--- Currently, documentation 'Token's are converted to 'AnnotatedComment'
--- during lexical analysis. Once Token data were converted to
--- 'AnnotationComment', it cannot distinguish between block
--- documentation comment and line documentation comment. From this
+-- Currently, documentation comment starting with `;'s are converted to
+-- 'Token' data during lexical analysis. Once the documentation string
+-- were converted to 'Token' data type, it cannot distinguish between
+-- block documentation comment and line documentation comment. From this
 -- reason, the documentation comments generated with "Language.SK.Emit"
--- are always using multi-line comment syntax.
+-- are always using single-line comment syntax.
 
 tok_oparen :: Action
 tok_oparen _ _ = return TOparen
@@ -461,6 +475,49 @@ tok_block_comment_with tok ini inp0 _ = do
                        | otherwise             -> go inp' c (c:acc)
         Nothing                                -> Nothing
 {-# INLINE tok_block_comment_with #-}
+
+tok_doc_prev :: Action
+tok_doc_prev = tok_doc_with TDocPrev '^'
+{-# INLINE tok_doc_prev #-}
+
+tok_doc_next :: Action
+tok_doc_next = tok_doc_with TDocNext '|'
+{-# INLINE tok_doc_next #-}
+
+tok_doc_with :: (String -> Token) -> Char -> Action
+tok_doc_with constr char (AlexInput _ _ s) l = do
+  let str0 = takeUtf8 l s
+      line0:strs = C8.lines str0
+      line1 = C8.tail (C8.dropWhile (/= char) line0)
+      str1 = C8.unlines (line1 : map (C8.dropWhile (== ';')) strs)
+      str = utf8DecodeByteString (W8.toStrict str1)
+  return $! constr str
+{-# INLINE tok_doc_with #-}
+
+tok_doc_named :: Action
+tok_doc_named (AlexInput _ _ s) l =
+  let str0 = takeUtf8 l s
+      line1:strs = C8.lines str0
+      line2 = C8.dropWhile isSpace $ C8.dropWhile (== ';') line1
+      line3 = C8.tail line2
+      key = utf8DecodeByteString (W8.toStrict line3)
+      str1 = map (C8.dropWhile (== ';')) strs
+      str2 = utf8DecodeByteString (W8.toStrict (C8.unlines str1))
+      str3 = case strs of
+               [] -> Nothing
+               _  -> Just str2
+  in  return $! TDocNamed key str3
+{-# INLINE tok_doc_named #-}
+
+tok_doc_group :: Action
+tok_doc_group (AlexInput _ _ s) l =
+  let str0 = C8.dropWhile (== ';') (takeUtf8 l s)
+      str1 = C8.dropWhile isSpace str0
+      (stars, str2) = C8.span (== '*') str1
+      level = C8.length stars
+      str3 = utf8DecodeByteString (W8.toStrict (C8.tail str2))
+  in  return $! TDocGroup (fromIntegral level) str3
+{-# INLINE tok_doc_group #-}
 
 tok_lambda :: Action
 tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
