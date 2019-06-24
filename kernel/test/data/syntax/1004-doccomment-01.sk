@@ -1,5 +1,4 @@
-#p(LANGUAGE GADTs
-            RankNTypes
+#p(LANGUAGE RankNTypes
             TypeFamilies)
 (:docn "
 Module      : Main
@@ -22,7 +21,7 @@ This function is performed from compiled executable.")
 
   (:dh1 "Types and classes")
   (:dock auxdt)
-  (D1 ..) (D2 ..) (D3 ..) (D4 ..) (D5 ..) (T1)
+  (D1 ..) (D2 ..) (D3 ..) (D4 ..) (T1)
   (C1 ..) (C2 ..) (TF1) (DF1)
 
   (:dh1 "Functions")
@@ -166,14 +165,6 @@ mollit anim id est laborum.")
   (:docn "Documentation for `D4b'")
   D4b
   (deriving (Eq Show)))
-
-(:docn "Documentation for top level `D5' data type declaration.")
-(data (D5 a)
-  (:docn "Documentation for `D5a'.")
-  (:: D5a (-> a (D5 a)))
-  (:docn "Documentation for `D5Int'")
-  (:: D5Int (-> Int (:docp "An integer number.")
-                (D5 Int))))
 
 (type (T1 a)
   (Maybe (, a a))

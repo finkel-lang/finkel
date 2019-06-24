@@ -43,7 +43,30 @@
       (print (G2b n))
       (print (G2c n 43))))
 
+;; GADTs with documentation comments.
+
+(:docn "Documentation for top level `G3' data type declaration.")
+(data (G3 a)
+  (:docn "Documentation for `G3a'.")
+  (:: G3a (-> a (G3 a)))
+  (:docn "Documentation for `G3Int'")
+  (:: G3Int (-> Int (:docp "An integer number.")
+                (G3 Int))))
+
+(:docn "Documentation for `Show' instance of `G3'.")
+(instance (=> (Show a) (Show (G3 a)))
+  (= show g3
+    (case g3
+      (G3a a) (++ "G3a" (show a))
+      (G3Int n) (++ "G3Int " (show n)))))
+
+(:: gadt3 (-> Int (IO ())))
+(= gadt3 n
+  (do (print (G3a True))
+      (print (G3Int n))))
+
 (:: main (IO ()))
 (= main
   (do gadt1
-      (gadt2 42)))
+      (gadt2 42)
+      (gadt3 42)))
