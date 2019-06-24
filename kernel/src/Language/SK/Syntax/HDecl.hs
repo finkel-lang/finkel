@@ -133,6 +133,17 @@ b_conD form@(LForm (L l _)) details = do
   return (L l (mkConDeclH98 name' Nothing cxt details))
 {-# INLINE b_conD #-}
 
+b_qtyconD :: (HConDecl, [HType]) -> HConDecl
+b_qtyconD (whole@(L l decl), tys) =
+  case tys of
+    [] -> whole
+#if MIN_VERSION_ghc(8,6,0)
+    _  -> L l (decl { con_mb_cxt = Just (mkLocatedList tys) })
+#else
+    _  -> L l (decl { con_cxt = Just (mkLocatedList tys) })
+#endif
+{-# INLINE b_qtyconD #-}
+
 b_forallD :: [HTyVarBndr] -> (HConDecl, [HType]) -> HConDecl
 b_forallD vars ((L l cdecl), cxts) =
 #if MIN_VERSION_ghc(8,6,0)

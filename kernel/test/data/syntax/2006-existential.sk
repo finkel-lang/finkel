@@ -18,6 +18,12 @@
   (= show (AnyShow2 {as2a a as2b b})
     (concat ["(AnyShow2 " (show a) " " (show b) ")"])))
 
+(data (AnyShow3 a)
+  (=> (Show a) AnyShow3))
+
+(:: show3 (-> (AnyShow3 a) a String))
+(= show3 AnyShow3 a (show a))
+
 (:: main (IO ()))
 (= main
   (do (print [(AnyShow1 (:: 42 Int))
@@ -25,4 +31,5 @@
               (AnyShow1 \x)])
       (print [(AnyShow2 (:: 42 Int) (:: 43 Integer))
               (AnyShow2 False (Just \x))
-              (AnyShow2 \x "bar")])))
+              (AnyShow2 \x "bar")])
+      (print (show3 AnyShow3 True))))

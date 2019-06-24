@@ -373,7 +373,7 @@ deriving :: { [HType] }
 lconstr :: { HConDecl }
     : '::' conid dtype   {% b_gadtD $2 $3 }
     | 'forall' forallcon { b_forallD (fst $2) (snd $2) }
-    | lh98constr         { $1 }
+    | lqtycon            { b_qtyconD $1 }
 
 forallcon :: { ([HTyVarBndr], (HConDecl, [HType])) }
     : qtycon           { ([], $1) }
@@ -406,7 +406,8 @@ tys_h98constr :: { (HConDecl, [HType]) }
     | type tys_h98constr { let (c,ts) = $2 in (c,$1:ts) }
 
 h98constr :: { HConDecl }
-    : 'list' {% parse p_lh98constr $1 }
+    : conid  {% b_conOnlyD $1 }
+    | 'list' {% parse p_lh98constr $1 }
 
 lh98constr :: { HConDecl }
     : conid condetails         {% b_conD $1 $2 }
