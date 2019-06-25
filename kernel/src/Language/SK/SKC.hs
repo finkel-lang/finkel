@@ -7,6 +7,7 @@ module Language.SK.SKC
   , SkEnvRef(..)
   , Macro(..)
   , MacroFunction
+  , MakeFunction
   , EnvMacros
   , runSkc
   , debugSkc
@@ -80,7 +81,7 @@ import InteractiveEval (setContext)
 import Module (ModuleName, mkModuleName)
 import Outputable ( alwaysQualify, neverQualify, showSDocForUser, text
                   , ppr )
-import SrcLoc (GenLocated(..))
+import SrcLoc (GenLocated(..), Located)
 import UniqSupply (mkSplitUniqSupply, uniqFromSupply)
 import Var (varType)
 
@@ -174,6 +175,11 @@ instance Show Macro where
 -- | Type synonym to express mapping of macro name to 'Macro' data.
 type EnvMacros = Map.Map FastString Macro
 
+-- | Type synonym for the function to recursively compile modules during
+-- @require@.
+type MakeFunction =
+  Bool -> Located String -> Skc [(ModuleName, HomeModInfo)]
+
 -- | Environment state in 'Skc'.
 data SkEnv = SkEnv
    { -- | Macros accessible in current compilation context.
@@ -196,13 +202,13 @@ data SkEnv = SkEnv
      -- necessary. Arguments are force recompilation flag and module
      -- name. Returned values are list of pair of name and info of the
      -- compiled home module.
-   , envMake :: Maybe (Bool -> String -> Skc [(ModuleName, HomeModInfo)])
+   , envMake :: Maybe MakeFunction
      -- | 'DynFlags' used by function in 'envMake' field.
    , envMakeDynFlags :: Maybe DynFlags
      -- | Messager used in make.
    , envMessager :: Messager
      -- | Required modules names in current target.
-   , envRequiredModuleNames :: [String]
+   , envRequiredModuleNames :: [Located String]
      -- | Compile home modules during macro-expansion of /require/.
    , envCompiledInRequire :: [(ModuleName, HomeModInfo)]
 

@@ -130,7 +130,8 @@ main' sk_env orig_args args = do
 main'' :: [String] -> [String] -> Skc ()
 main'' orig_args args = do
   dflags0 <- getDynFlags
-  let largs = map (mkGeneralLocated "on the command line") args
+  let largs = map onTheCmdLine args
+      onTheCmdLine = mkGeneralLocated "on the commandline"
       dflags1 = dflags0 {verbosity = 1}
   (dflags2, lfileish, warnings) <- parseDynamicFlagsCmdLine dflags1 largs
 
@@ -162,7 +163,7 @@ main'' orig_args args = do
        -- At the moment, compiling with phase specification are not
        -- supported, phase is always set to 'Nothing'.
        let phased_srcs = map phase_it srcs
-           phase_it path = (normalise path, Nothing)
+           phase_it path = (onTheCmdLine (normalise path), Nothing)
            force_recomp = gopt Opt_ForceRecomp dflags2
 
        -- Do the `make' work.

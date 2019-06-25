@@ -19,6 +19,7 @@ import qualified System.FilePath as FilePath
 import DynFlags (HasDynFlags(..), GeneralFlag(..), gopt_set)
 import ErrUtils (printBagOfErrors)
 import Outputable (Outputable(..), neverQualify, printForUser)
+import SrcLoc (mkGeneralLocated)
 import qualified GHC as GHC
 
 -- sk-kernel
@@ -156,5 +157,7 @@ doMake :: [FilePath] -> IO ()
 doMake files =
   do let act = do
            Make.initSessionForMake
-           Make.make (zip files (repeat Nothing)) False False Nothing
+           Make.make (zipWith f files (repeat Nothing))
+                     False False Nothing
+         f file phase = (mkGeneralLocated "commandline" file, phase)
      SKC.runSkc act Make.defaultSkEnv

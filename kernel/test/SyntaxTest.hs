@@ -18,6 +18,9 @@ import System.Directory ( createDirectoryIfMissing, doesFileExist
 -- filepath
 import System.FilePath ((</>), (<.>), takeBaseName)
 
+-- ghc
+import SrcLoc (noLoc)
+
 -- hspec
 import Test.Hspec
 
@@ -53,7 +56,7 @@ mkTest path = do
     it "should compile with skc" $ do
       let task = do
             initSessionForTest
-            make [(path, Nothing)] False True (Just aDotOut)
+            make [(noLoc path, Nothing)] False True (Just aDotOut)
       ret <- runSkc task skEnv
       ret `shouldBe` ()
 
@@ -70,7 +73,7 @@ mkTest path = do
     it "should compile resulting Haskell code" $ do
       let task = do
             initSessionForTest
-            make [(dotHs, Nothing)] False True (Just aDotOut)
+            make [(noLoc dotHs, Nothing)] False True (Just aDotOut)
 #if MIN_VERSION_ghc (8,4,0)
           skipThisTest _ = (False, "")
 #else

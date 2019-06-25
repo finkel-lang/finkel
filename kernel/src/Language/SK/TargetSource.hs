@@ -41,7 +41,7 @@ import Exception  (gtry)
 import HscTypes (throwOneError)
 import Module (mkModuleName, moduleNameSlashes)
 import Outputable (neverQualify, text)
-import SrcLoc (noSrcSpan)
+import SrcLoc (GenLocated(..), Located)
 import Util (looksLikeModuleName)
 
 -- Internal
@@ -153,8 +153,8 @@ findFileInImportPaths dirs modName = do
 
 -- | Find 'TargetSource' from command line argument. This function
 -- throws 'SkException' when the target source was not found.
-findTargetSource :: String -> Skc TargetSource
-findTargetSource modNameOrFilePath= do
+findTargetSource :: Located String -> Skc TargetSource
+findTargetSource (L l modNameOrFilePath)= do
   dflags <- getDynFlags
   mb_inputPath <-
     findFileInImportPaths (importPaths dflags) modNameOrFilePath
@@ -169,14 +169,14 @@ findTargetSource modNameOrFilePath= do
   case mb_inputPath of
     Just path -> detectSource path
     Nothing   -> do
-      let err = mkErrMsg dflags noSrcSpan neverQualify doc
+      let err = mkErrMsg dflags l neverQualify doc
           doc = text ("cannot find target source: " ++ modNameOrFilePath)
       throwOneError err
 
 -- | Like 'findTargetSource', but the result wrapped in 'Maybe'.
-findTargetSourceMaybe :: String -> Skc (Maybe TargetSource)
+findTargetSourceMaybe :: Located String -> Skc (Maybe TargetSource)
 findTargetSourceMaybe modName = do
-  et_ret <- gtry (findTargetSource (modName))
+  et_ret <- gtry (findTargetSource modName)
   case et_ret of
     Right found -> return (Just found)
     Left _err   -> let _err' = _err :: SomeException

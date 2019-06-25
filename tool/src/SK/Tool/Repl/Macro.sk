@@ -67,7 +67,7 @@
                 showPpr showSDoc showSDocForUser text vcat))
    (Module ((Module ..) mkModuleName))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
-   (SrcLoc (getLoc isGoodSrcSpan noLoc unLoc))
+   (SrcLoc (getLoc isGoodSrcSpan mkGeneralLocated noLoc unLoc))
    (TyCoRep ((TyThing ..)))
    (Util (looksLikeModuleName))
 
@@ -199,8 +199,9 @@
           (putSkEnv skenv)))
     (= work (, dflags skenv)
       (do (putSkEnv (skenv {envQualifyQuotePrimitives False}))
-          (let ((= force-recomp (gopt Opt-ForceRecomp dflags))))
-          (make [(, str Nothing)] True force-recomp Nothing)
+          (let ((= force-recomp (gopt Opt-ForceRecomp dflags))
+                (= onTheREPL (mkGeneralLocated "on the REPL"))))
+          (make [(, (onTheREPL str) Nothing)] True force-recomp Nothing)
           (return '(begin))))))
 
 (defn (compile-and-import (-> FilePath (Skc Code)))

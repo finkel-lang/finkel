@@ -111,7 +111,7 @@ import Language.SK.TargetSource
 -- situation might change.
 
 -- | SK variant of @"ghc --make"@.
-make :: [(FilePath, Maybe Phase)]
+make :: [(Located FilePath, Maybe Phase)]
         -- ^ List of pairs of input file and phase.
      -> Bool -- ^ Skip linking when 'True'.
      -> Bool -- ^ Force recompilation when 'True'.
@@ -149,8 +149,8 @@ make infiles no_link force_recomp mb_output = do
   -- SkEnv, to reset the language extension later, to keep fresh set of
   -- language extensios per module.
   let lexts = (language dflags3, extensionFlags dflags3)
-      findIt (path, mb_phase) =
-        fmap (\ts -> (ts, mb_phase)) (findTargetSource path)
+      findIt (lpath, mb_phase) =
+        fmap (\ts -> (ts, mb_phase)) (findTargetSource lpath)
   modifySkEnv (\e -> e {envDefaultLangExts = lexts})
 
   -- Decide the kind of sources of the inputs, inputs arguments could be
@@ -187,9 +187,9 @@ initSessionForMake = do
 
 -- | Simple make function returning compiled home module
 -- information. Intended to be used for 'envMake' field in 'SkEnv'.
-simpleMake :: Bool -> String -> Skc [(ModuleName, HomeModInfo)]
-simpleMake force_recomp name = do
-  make [(name, Nothing)] False force_recomp Nothing
+simpleMake :: MakeFunction
+simpleMake force_recomp lname = do
+  make [(lname, Nothing)] False force_recomp Nothing
   hsc_env <- getSession
   let as_pair hmi = (moduleName (mi_module (hm_iface hmi)), hmi)
   return (map as_pair (eltsHpt (hsc_HPT hsc_env)))
@@ -589,19 +589,22 @@ checkUpToDate ms dependencies =
 --   return (recomp, mb_iface)
 
 -- | Search 'ModSummary' of required module.
-findRequiredModSummary :: HscEnv -> String -> Skc (Maybe ModSummary)
-findRequiredModSummary hsc_env mname = do
+findRequiredModSummary :: HscEnv
+                       -> Located String
+                       -> Skc (Maybe ModSummary)
+findRequiredModSummary hsc_env lmname = do
   -- Searching in reachable source paths before imported modules,
   -- because we want to use the source modified time from home package
   -- modules, to support recompilation of a module which requiring other
   -- home package modules.
-  mb_ts <- findTargetSourceMaybe mname
+  mb_ts <- findTargetSourceMaybe lmname
   case mb_ts of
     Just ts -> mkReadTimeModSummary (emptyTargetUnit ts)
     Nothing -> do
       -- The module name should be found somewhere else than current
       -- target sources. If not, complain what's missing.
       let mname' = mkModuleName mname
+          mname = unLoc lmname
       fresult <- liftIO (findImportedModule hsc_env mname' Nothing)
       case fresult of
         Found {} -> return Nothing
@@ -636,8 +639,7 @@ findNotCompiledImport hsc_env acc idecl = do
                     if moduleName mdl `elem` map ms_mod_name acc
                        then return Nothing
                        else do
-                         -- Just <$> findTargetSource (name, Nothing)
-                         ts <- findTargetSource name
+                         ts <- findTargetSource (L (getLoc idecl) name)
                          return (Just (ts, Nothing))
         _ | inSameUnit && notInAcc -> do
             -- Workaround for loading home package modules when
@@ -660,7 +662,8 @@ findNotCompiledImport hsc_env acc idecl = do
             --
             -- mb_ts <- findTargetSourceMaybe name
             -- return (fmap emptyTargetUnit mb_ts)
-            fmap (fmap emptyTargetUnit) (findTargetSourceMaybe name)
+            fmap (fmap emptyTargetUnit)
+                 (findTargetSourceMaybe (L (getLoc idecl) name))
           | otherwise -> return Nothing
         where
           inSameUnit =
@@ -668,12 +671,12 @@ findNotCompiledImport hsc_env acc idecl = do
           notInAcc =
             moduleName mdl `notElem` map ms_mod_name acc
     _              -> do
-      mb_ts <- findTargetSourceMaybe name
+      let loc = getLoc idecl
+      mb_ts <- findTargetSourceMaybe (L loc name)
       case mb_ts of
         Just ts -> return (Just (emptyTargetUnit ts))
         Nothing -> do
-          let loc = getLoc idecl
-              doc = cannotFindModule dflags mname findResult
+          let doc = cannotFindModule dflags mname findResult
               err = mkErrMsg dflags loc neverQualify doc
           throwOneError err
   where
@@ -801,7 +804,7 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
     colons = replicate 12 ';'
 
 compileToHsModule :: TargetUnit
-                  -> Skc (Maybe (HModule, DynFlags, [String]))
+                  -> Skc (Maybe (HModule, DynFlags, [Located String]))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
     SkSource _ mn form sp -> Just <$> compileSkModuleForm' sp mn form
@@ -812,7 +815,7 @@ compileToHsModule (tsrc, mbphase) =
 -- language extensions, and macros in 'SkEnv'. Returns tuple of compiled
 -- module and 'Dynflags' to update 'ModSummary'.
 compileSkModuleForm' :: SPState -> String -> [Code]
-                     -> Skc (HModule, DynFlags, [String])
+                     -> Skc (HModule, DynFlags, [Located String])
 compileSkModuleForm' sp modname forms = do
   dflags0 <- getDynFlagsFromSPState sp
   hsc_env <- getSession
@@ -829,7 +832,7 @@ compileSkModuleForm' sp modname forms = do
       hpt1 = addHomeModInfoIfMissing hpt0 compiled
   setSession (hsc_env {hsc_HPT = hpt1})
 
-  debugSkc (";;; reqs=" ++ show reqs)
+  debugSkc (";;; reqs=" ++ show (map unLoc reqs))
   return (mdl, dflags0, reverse reqs)
   where
     act = timeIt ("SkModule [" ++ modname ++ "]") $ do

@@ -79,7 +79,7 @@ buildFile pre path =
                     (defaultSkEnv { envSilent = True })
       ret `shouldBe` ()
   where
-    targets = [(path, Nothing)]
+    targets = [(noLoc path, Nothing)]
     make' flags sources out = do
       dflags0 <- getSessionDynFlags
       let dflags1 = dflags0 {importPaths = [".", odir]}

@@ -292,7 +292,7 @@ m_require form =
   case form of
     LForm (L _ (List (_:code))) ->
       case evalBuilder parseLImport code of
-        Right lidecl@(L _ idecl) -> do
+        Right lidecl@(L loc idecl) -> do
           hsc_env <- getSession
           sk_env <- getSkEnv
 
@@ -300,6 +300,7 @@ m_require form =
               recomp = gopt Opt_ForceRecomp dflags
               mname = unLoc (ideclName idecl)
               mname' = moduleNameString mname
+              lmname' = L loc mname'
 
           debugSkc (";;; require: " ++ showPpr dflags idecl)
 
@@ -317,7 +318,7 @@ m_require form =
               Found {} -> return []
               _        ->
                 case envMake sk_env of
-                  Just mk -> withRequiredSettings (mk recomp mname')
+                  Just mk -> withRequiredSettings (mk recomp lmname')
                   Nothing -> failS "require: no make function"
 
           -- Add the module to current compilation context.
@@ -327,7 +328,7 @@ m_require form =
           -- Update required module names and compiled home modules to
           -- SkEnv. These are used by the callee module (i.e. the module
           -- containing this 'require' form).
-          let reqs = mname':envRequiredModuleNames sk_env
+          let reqs = lmname':envRequiredModuleNames sk_env
               sk_env' = sk_env {envRequiredModuleNames = reqs
                                ,envCompiledInRequire = compiled}
           putSkEnv sk_env'

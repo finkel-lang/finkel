@@ -16,7 +16,7 @@ import GHC.Paths (libdir)
 import FastString (fsLit)
 import Exception (gbracket)
 import HscTypes (SourceError)
-import SrcLoc (GenLocated(..))
+import SrcLoc (GenLocated(..), unLoc)
 
 -- hspec
 import Test.Hspec
@@ -222,7 +222,7 @@ envTest = do
    it "should not have set envMake" $
      isNothing (envMake emptySkEnv) `shouldBe` True
    it "should not have required module names" $
-     envRequiredModuleNames emptySkEnv `shouldBe` []
+     map unLoc (envRequiredModuleNames emptySkEnv) `shouldBe` []
 
 emptyForm :: Code
 emptyForm =
