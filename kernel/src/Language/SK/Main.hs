@@ -26,7 +26,7 @@ import System.Process (rawSystem)
 import DynFlags ( DynFlags(..), GeneralFlag(..), HasDynFlags(..)
                 , defaultFatalMessager, defaultFlushOut
                 , gopt, parseDynamicFlagsCmdLine)
-import GHC (defaultErrorHandler, setSessionDynFlags)
+import GHC (defaultErrorHandler)
 import GhcMonad (printException)
 import HscTypes (handleFlagWarnings, handleSourceError)
 import Panic (GhcException(..), throwGhcException)
@@ -145,7 +145,11 @@ main'' orig_args args = do
   case srcs of
      [] -> liftIO (rawGhc orig_args)
      _  -> do
-       _ <- setSessionDynFlags dflags2
+       -- Using 'setDynFlags' instead of 'setSessionDynFlags', since
+       -- 'setSessionDynFlags' will be called from 'initSessionForMake'
+       -- below.
+       setDynFlags dflags2
+
        -- Some IO works. Check unknown flags, update uniq supply ...
        liftIO (do checkUnknownFlags fileish
                   initUniqSupply (initialUnique dflags2)

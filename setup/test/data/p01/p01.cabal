@@ -1,4 +1,4 @@
-cabal-version:       2.0
+cabal-version:       >= 2.0
 name:                p01
 version:             0.1.0.0
 synopsis:            Test package
@@ -14,8 +14,8 @@ build-type:          Custom
 extra-source-files:  src/P01/*.sk
 
 custom-setup
-  setup-depends:       base >= 4.7 && < 5
-                     , Cabal >= 1.10
+  setup-depends:       base  >= 4.7 && < 5
+                     , Cabal >= 2.0
                      , sk-setup
 
 library

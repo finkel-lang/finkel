@@ -1,13 +1,18 @@
 module Main where
 
 -- base
-import System.Environment (unsetEnv, withArgs)
+import Control.Exception (SomeException(..), catch)
+import Data.List (isSubsequenceOf)
+import System.Environment (getEnv, getExecutablePath, unsetEnv, withArgs)
+
+-- ghc
+import Config
 
 -- directory
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 
 -- filepath
-import System.FilePath ((</>))
+import System.FilePath ((</>), joinPath, splitDirectories)
 
 -- hspec
 import Test.Hspec
@@ -20,8 +25,14 @@ import Distribution.Simple.SK
 
 main :: IO ()
 main = do
-  pkgdbs <- getStackPackageDbs
+  executable <- getExecutablePath
+  pkgdbs <- getPackageDbs executable
   cwd <- getCurrentDirectory
+
+  putChar '\n'
+  putStrLn ("executable: " ++ executable)
+  putStrLn (unlines ("pkgdbs:" : map ("  - " ++) pkgdbs))
+  putStrLn ("cwd: " ++ cwd)
 
   -- Required to unset "GHC_PACKAGE_PATH" environment variable before
   -- invoking setup script, otherwise the setup script will complain.
@@ -54,12 +65,35 @@ buildPackage cwd pkgdbs name =
 setup :: [String] -> IO ()
 setup = flip withArgs skkcMain
 
+getPackageDbs :: String -> IO [String]
+getPackageDbs executable_path =
+  if ".stack-work" `isSubsequenceOf` executable_path
+     then getStackPackageDbs
+     else getCabalPackageDbs executable_path
+
 getStackPackageDbs :: IO [String]
 getStackPackageDbs = do
-  snapshot_pkgdb <- getStackOutput ["path", "--snapshot-pkg-db"]
-  local_pkgdb <- getStackOutput ["path", "--local-pkg-db"]
-  let removeTrailingNewline = takeWhile (/= '\n')
-  return (map removeTrailingNewline [snapshot_pkgdb, local_pkgdb])
+  -- Getting package database paths from "GHC_PACKAGE_PATH" environment
+  -- variable, so that we can get the package database paths without
+  -- knowing which "stack.yaml" file were used.
+  paths <- catch (getEnv "GHC_PACKAGE_PATH")
+                 (\(SomeException _) -> return "")
+  return (reverse (sepByColon paths))
 
-getStackOutput :: [String] -> IO String
-getStackOutput args = readProcess "stack" args ""
+sepByColon :: String -> [String]
+sepByColon xs =
+  case dropWhile (== ':') xs of
+    "" -> []
+    ys -> case break (== ':') ys of
+           (w, ys') -> w : sepByColon ys'
+
+getCabalPackageDbs :: String -> IO [String]
+getCabalPackageDbs executable_path = do
+  home <- getEnv "HOME"
+  let dirs = splitDirectories executable_path
+      distdir = takeWhile (/= "dist-newstyle") dirs
+      ghc_ver = "ghc-" ++ cProjectVersion
+      localdb = joinPath distdir </>
+                joinPath ["dist-newstyle", "packagedb", ghc_ver]
+      storedb = joinPath [home, ".cabal", "store", ghc_ver, "package.db"]
+  return [storedb, localdb]

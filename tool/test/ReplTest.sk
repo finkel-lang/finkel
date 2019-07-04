@@ -19,10 +19,13 @@
    ;; base
    (Control.Concurrent
     (forkIO newEmptyMVar killThread putMVar takeMVar threadDelay))
-   (Control.Exception (bracket))
+   (Control.Exception (evaluate bracket))
    (Control.Monad (void))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate isSubsequenceOf))
+
+   ;; filepath
+   (System.FilePath (</>))
 
    ;; haskeline
    (System.Console.Haskeline (defaultSettings runInputT))
@@ -227,34 +230,44 @@
              "*** Exception: Prelude.head: empty list")))))
 
 (defn (listenTests Spec)
-  (let ((= act
-          (do (<- tid (forkIO (replMain ["--listen=50322"])))
+  (let ((= with-repl-connection
+          (bracket acquire release))
+        (= acquire
+          (do (<- tid (forkIO
+                       ;; Passing a file to work for, so that the REPL
+                       ;; thread will not terminate before the testing
+                       ;; client connect.
+                       (replMain [(++ "--listen=" port)
+                                  (++ "--file=" input-file)])))
               ;; Pause for a bit after forking server action.
               (threadDelay 500000)
-              (<- addr (resolve "127.0.0.1" "50322"))
-              (bracket (open-sock addr) (cleanup tid) send-forms)))
+              (<- addr (resolve "127.0.0.1" port))
+              (<- conn (socket (addrFamily addr)
+                               (addrSocketType addr)
+                               (addrProtocol addr)))
+              (connect conn (addrAddress addr))
+              (return (, conn tid))))
+        (= release (, conn tid)
+          (do (sendAll conn ",quit")
+              (<- _msg (recv conn 1024))
+              (close conn)
+              (killThread tid)))
+        (= port "50322")
+        (= input-file (</> "test" "data" "sleep-for-while.sk"))
         (= resolve host port
-          (do (let ((= hints
-                      (defaultHints {addrSocketType Stream}))))
+          (do (let ((= hints (defaultHints {addrSocketType Stream}))))
               (<- addrs
                 (getAddrInfo (Just hints) (Just host) (Just port)))
               (case addrs
                 (: addr _) (return addr)
                 _ (error "REPL client: address error"))))
-        (= cleanup tid sock
-          (do (killThread tid)
-              (close sock)))
-        (= open-sock addr
-          (do (<- sock (socket (addrFamily addr)
-                               (addrSocketType addr)
-                               (addrProtocol addr)))
-              (connect sock (addrAddress addr))
-              (return sock)))
-        (= send-forms sock
-          (do (<- _msg1 (recv sock 1024))
-              (sendAll sock "(* 7 (+ 4 2))")
-              (<- msg2 (recv sock 1024))
-              (return msg2))))
-    (describe "listener"
-              (it "should evaluate form sent from connected client"
-                  (shouldReturn (liftIO act) "42")))))
+        (= work (, conn _)
+          (do (<- _msg1 (recv conn 1024))
+              (sendAll conn "(* 7 (+ 4 2))")
+              (<- msg2 (recv conn 1024))
+              (return msg2)))
+        (= d describe))
+    (around with-repl-connection
+            (d "listener"
+               (it "evaluate form sent from connected client"
+                   (\ args (shouldReturn (work args) "42")))))))

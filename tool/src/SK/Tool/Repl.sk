@@ -24,7 +24,6 @@
    ;; base
    (Control.Monad (mplus))
    (Control.Monad.IO.Class ((MonadIO ..)))
-   ;; (System.Exit (exitFailure))
    (System.Console.GetOpt
     ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
    (System.Environment (getProgName))
@@ -71,11 +70,13 @@
 
 (data ReplOption
   (ReplOption {repl-mode ReplMode
-               repl-listen-port (Maybe Int)}))
+               repl-listen-port (Maybe Int)
+               repl-input-path (Maybe FilePath)}))
 
 (defn (initial-option ReplOption)
   (ReplOption {repl-mode Run
-               repl-listen-port Nothing}))
+               repl-listen-port Nothing
+               repl-input-path Nothing}))
 
 (defn (descrs [OptDescr (-> ReplOption ReplOption)])
   [(Option [\h] ["help"]
@@ -89,13 +90,20 @@
                        (o {repl-mode Run
                            repl-listen-port port})))
                    "PORT")
-           "Listen to port (default: 50321)")])
+           "Listen to port (default: 50321)")
+   (Option [\f] ["file"]
+           (ReqArg (\ file o
+                     (o {repl-input-path (Just file)}))
+                   "FILE")
+           "File to get input from.")])
 
 (defn (act (=> (CLI m) (-> ReplOption (m ()))))
   [ro]
   (case (repl-mode ro)
     Help print-usage
-    Run (liftIO (start-repl (repl-listen-port ro) repl-env))))
+    Run (liftIO (start-repl (repl-input-path ro)
+                            (repl-listen-port ro)
+                            repl-env))))
 
 (defn (print-errors (=> (CLI m) (-> [String] (m ()))))
   [errs]

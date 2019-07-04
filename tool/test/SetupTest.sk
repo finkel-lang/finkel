@@ -10,16 +10,20 @@
    setupTests)
   (use
    ;; base
-   (Control.Exception (catch throw))
-   (System.Environment (unsetEnv withArgs))
+   (Control.Exception ((SomeException ..) catch throw))
+   (Data.List (isSubsequenceOf))
+   (System.Environment (getEnv getExecutablePath unsetEnv withArgs))
    (System.IO.Error (isDoesNotExistError))
+
+   ;; ghc
+   (Config (cProjectVersion))
 
    ;; directory
    (System.Directory
     (getCurrentDirectory removeFile setCurrentDirectory))
 
    ;; filepath
-   (System.FilePath (</>))
+   (System.FilePath (</>  joinPath splitDirectories))
 
    ;; hspec
    (Test.Hspec)
@@ -31,8 +35,9 @@
    (SK.Setup (skMakeMain))))
 
 (defn (setupTests Spec)
-  (do (<- cwd (runIO getCurrentDirectory))
-      (<- pkgdbs (runIO getStackPackageDbs))
+  (do (<- executable (runIO getExecutablePath))
+      (<- cwd (runIO getCurrentDirectory))
+      (<- pkgdbs (runIO (getPackageDbs executable)))
       (runIO (unsetEnv "GHC_PACKAGE_PATH"))
       (after_ (setCurrentDirectory cwd)
               (before_ (removeTixWhenFound cwd "p02")
@@ -71,12 +76,34 @@
              (return ())
              (throw e)))))
 
-(defn (getStackPackageDbs (IO [String]))
-  (do (<- snapshot-pkgdb (getStackOutput ["path" "--snapshot-pkg-db"]))
-      (<- local-pkgdb (getStackOutput ["path" "--local-pkg-db"]))
-      (return (map (takeWhile (/= \\n))
-                   [snapshot-pkgdb local-pkgdb]))))
+(defn (getPackageDbs (-> String (IO [String])))
+  [exec]
+  (if (isSubsequenceOf ".stack-work" exec)
+      getStackPackageDbs
+      (getCabalPackageDbs exec)))
 
-(defn (getStackOutput (-> [String] (IO String)))
-  [args]
-  (readProcess "stack" args ""))
+(defn (getStackPackageDbs (IO [String]))
+  (do (<- paths (catch (getEnv "GHC_PACKAGE_PATH")
+                  (\ (SomeException _) (return []))))
+      ($ return reverse sepByColon paths)))
+
+(defn (sepByColon (-> String [String]))
+  [xs]
+  (case (dropWhile (== \:) xs)
+    "" []
+    ys (case (break (== \:) ys)
+         (, w ys') (: w (sepByColon ys')))))
+
+(defn (getCabalPackageDbs (-> String (IO [String])))
+  [exec]
+  (do (<- home (getEnv "HOME"))
+      (let ((= dirs (splitDirectories exec))
+            (= distdir (takeWhile (/= "dist-newstyle") dirs))
+            (= ghc-ver (++ "ghc-" cProjectVersion))
+            (= localdb (</> (joinPath distdir)
+                            (joinPath ["dist-newstyle"
+                                       "packagedb"
+                                       ghc-ver])))
+            (= storedb (joinPath [home ".cabal" "store"
+                                  ghc-ver "package.db"]))))
+      (return [storedb localdb])))

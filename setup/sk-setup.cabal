@@ -41,6 +41,7 @@ test-suite sk-setup-test
   build-depends:       base
                      , filepath
                      , directory
+                     , ghc
                      , hspec
                      , process
                      , sk-kernel

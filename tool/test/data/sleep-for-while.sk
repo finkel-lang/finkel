@@ -1,0 +1,4 @@
+(Control.Concurrent.threadDelay 1000000)
+(Control.Concurrent.threadDelay 1000000)
+(Control.Concurrent.threadDelay 1000000)
+(putStrLn "bye")

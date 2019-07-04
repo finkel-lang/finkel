@@ -21,6 +21,10 @@ import System.FilePath ((</>), takeExtension)
 
 -- ghc
 import DynFlags (DynFlags(..), HasDynFlags(..))
+#if !MIN_VERSION_ghc (8,4,4)
+import DynFlags (parseDynamicFlagsCmdLine)
+import SrcLoc (noLoc)
+#endif
 
 -- sk-kernel
 import Language.SK.SKC (Skc, setDynFlags)
@@ -51,7 +55,15 @@ resetPackageEnv = do
   dflags <- getDynFlags
   setDynFlags dflags {packageEnv = Just "-"}
 #else
-resetPackageEnv = return ()
+resetPackageEnv = do
+  -- Seems like package environment does not work well with stack
+  -- version 2.1. Manually adding packages used in test codes.
+  dflags0 <- getDynFlags
+  let dflags1 = dflags0 { packageEnv = Nothing }
+      flagstrs = map noLoc ["-package", "sk-kernel"
+                           ,"-package", "ghc-prim"]
+  (dflags2, _, _) <- parseDynamicFlagsCmdLine dflags1 flagstrs
+  setDynFlags dflags2
 #endif
 
 -- | Initialize session with 'initSessionForMake', then reset package
