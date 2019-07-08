@@ -294,13 +294,13 @@ object code."
       (let ((= things (catMaybes mb-things))
             (= prettyThings (map pretty things))))
       (<- str (show-sdoc-for-user-m (vcat prettyThings)))
-      (return `(putStrLn ,str))))
+      (return `(System.IO.putStrLn ,str))))
 
 (defn (expand-with (-> String (-> Code (Skc Code)) ReplAction))
   [label f forms]
   (case forms
     [] (return '(begin))
-    [expr] (>>= (f expr) (\ x (return `(print ',x))))
+    [expr] (>>= (f expr) (\ x (return `(System.IO.print ',x))))
     _ (let ((= l (located-list forms)))
         (skSrcError l (++ label (++ ": invalid form " (show l)))))))
 
@@ -309,7 +309,7 @@ object code."
   [thing]
   (do (<- sdoc (info-thing True (show thing)))
       (<- str (show-sdoc-for-user-m sdoc))
-      (return `(putStrLn ,str))))
+      (return `(System.IO.putStrLn ,str))))
 
 (defn (info-thing (-> Bool String (Skc SDoc)))
   [all-info str]
@@ -341,7 +341,7 @@ object code."
   (where (do (<- bs getBindings)
              (<- docs (mapM make-doc (reverse bs)))
              (<- str (show-sdoc-for-user-m (vcat docs)))
-             (return `(putStrLn ,str)))
+             (return `(System.IO.putStrLn ,str)))
     (:: make-doc (-> TyThing (Skc SDoc)))
     (= make-doc tt
       (case tt
@@ -354,7 +354,7 @@ object code."
 (defn (show-context (Skc Code))
   (where (do (<- context getContext)
              (<- dflags getSessionDynFlags)
-             (return `(putStr ,(result dflags context))))
+             (return `(System.IO.putStr ,(result dflags context))))
     (= result dflags context
       (unlines (: "; context" (map (context-string dflags) context))))
     (= context-string dflags ctx
@@ -379,7 +379,7 @@ object code."
                 CompManager "CompManager"
                 OneShot     "OneShot"
                 MkDepend    "MkDepend"))))
-      (return `(putStr ,(unlines ss)))))
+      (return `(System.IO.putStr ,(unlines ss)))))
 
 (defn (show-hpt (Skc Code))
   "Show home package table."
@@ -388,7 +388,7 @@ object code."
       (let ((= str1 (if (null str0)
                         "show: no home package table found"
                         str0))))
-      (return `(putStrLn ,str1))))
+      (return `(System.IO.putStrLn ,str1))))
 
 ;;; Mostly taken from `GHCi.UI.showLanguages''.
 (defn (show-language (-> Bool (Skc Code)))
@@ -420,7 +420,7 @@ object code."
                         (text "all active language options:")
                         (text "with the following modifiers:"))
                     (nest 2 (vcat (map (setting xopt) xFlags))))])))
-      (return `(putStrLn ,str))))
+      (return `(System.IO.putStrLn ,str))))
 
 (defn (show-linker (Skc Code))
   ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
@@ -438,14 +438,14 @@ object code."
               (unlines
                (: "; macros: "
                   (map (++ ";  ") (macroNames macros)))))))
-      (return `(putStr ,macro-strings))))
+      (return `(System.IO.putStr ,macro-strings))))
 
 (defn (show-modules (Skc Code))
   (do (<- graph0 getModuleGraph)
       (let ((= graph1 (graph-to-summaries graph0))))
       (<- graph2 (filterM (. isLoaded ms_mod_name) graph1))
       (<- mods (mapM showModule graph2))
-      (return `(putStr ,(unlines mods)))))
+      (return `(System.IO.putStr ,(unlines mods)))))
 
 (defn (show-options (-> Bool (Skc Code)))
   [show-all]
@@ -482,7 +482,9 @@ object code."
                                       wWarningFlags))))])))
       (<- printLang (show-language show-all))
       (let ((= printOthers
-              `(mapM_ putStrLn ,(map (showSDoc dflags) sdocs)))))
+              `(Data.Foldable.mapM_
+                System.IO.putStrLn
+                ,(map (showSDoc dflags) sdocs)))))
       (return `(>> ,printLang ,printOthers))))
 
 (defn (show-packages (Skc Code))
@@ -494,7 +496,7 @@ object code."
                 (HidePackage n) (pr (++ "hiding " n))))
             (= pkgs
               (: "; packages" (map pr-flag (packageFlags dflags))))))
-      (return `(putStr ,(unlines pkgs)))))
+      (return `(System.IO.putStr ,(unlines pkgs)))))
 
 (defn (show-paths (Skc Code))
   (do (<- dflags getDynFlags)
@@ -509,7 +511,7 @@ object code."
                  (if (null ipaths)
                      [";    none"]
                      (map (++ ";    ") ipaths))])))))
-      (return `(putStr ,result))))
+      (return `(System.IO.putStr ,result))))
 
 (defn (show-targets (Skc Code))
   (do (<- hsc-env getSession)
@@ -517,7 +519,7 @@ object code."
                      (hsc-targets hsc-env)))
       (let ((= ts (| ((null strs) "none")
                      (otherwise (unwords strs))))))
-      (return `(putStrLn (++ ";; targets: " ,ts)))))
+      (return `(System.IO.putStrLn (++ ";; targets: " ,ts)))))
 
 
 ;;; REPL commands
@@ -525,7 +527,7 @@ object code."
 (defn (help-cmd ReplAction)
   [_form]
   (return
-    `(putStrLn ,(++ "DESCRIPTION:
+    `(System.IO.putStrLn ,(++ "DESCRIPTION:
 
   REPL meta macro, ARGS varies per COMMAND.
 
@@ -563,7 +565,7 @@ COMMANDS:
                 Nothing (do (let ((= mname (moduleName mdl))
                                   (= str (moduleNameString mname))
                                   (= msg (++ "unknown module: " str))))
-                            (return `(putStrLn ,msg))))))
+                            (return `(System.IO.putStrLn ,msg))))))
         (= err
           (skSrcError (located-list forms)
                       (++ "browse: invalid form: " (show forms)))))
@@ -588,11 +590,12 @@ COMMANDS:
   [forms]
   (case forms
     [] (do (<- bool (fmap envDebug getSkEnv))
-           (return `(putStrLn (++ "Debug flag is " ,(show bool)))))
+           (return `(System.IO.putStrLn
+                     (++ "Debug flag is " ,(show bool)))))
     [form] (| ((<- (Just bool) (fromCode form))
                (do (modifySkEnv (\ e (e {envDebug bool})))
                    (let ((= msg (++ "Debug flag set to " (show bool)))))
-                   (return `(putStrLn ,msg)))))
+                   (return `(System.IO.putStrLn ,msg)))))
     _ (let ((= l (located-list forms)))
         (skSrcError l (++ "debug: invalid form: " (show l))))))
 
@@ -624,7 +627,7 @@ COMMANDS:
                               dcolon
                               (pprTypeForUser kind)]))))
                (<- str (show-sdoc-for-user-m sdoc))
-               (return `(putStrLn ,str)))
+               (return `(System.IO.putStrLn ,str)))
     _      (invalid-form-error "kind" forms)))
 
 (defn (load-cmd ReplAction)
@@ -703,8 +706,8 @@ paths from import directories."
             (<- ctx1 (adjust-current-target path ctx0))
             (setContext ctx1)
             (let ((= msg (++ "; reloaded " path))))
-            (return `(putStrLn ,msg)))
-        _ (return '(putStrLn "; reload: invalid target")))))
+            (return `(System.IO.putStrLn ,msg)))
+        _ (return '(System.IO.putStrLn "; reload: invalid target")))))
 
 (defn (set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
@@ -767,7 +770,7 @@ paths from import directories."
                              (nest 2 (<+> dcolon
                                           (pprTypeForUser ty)))]))))
                (<- str (show-sdoc-for-user-m sdoc))
-               (return `(putStrLn ,str)))
+               (return `(System.IO.putStrLn ,str)))
     _ (invalid-form-error "type" forms)))
 
 
