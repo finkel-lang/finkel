@@ -1,9 +1,11 @@
+{-# LANGUAGE CPP #-}
 module Main where
 
 -- base
 import Control.Exception (SomeException(..), catch)
 import Data.List (isSubsequenceOf)
-import System.Environment (getEnv, getExecutablePath, unsetEnv, withArgs)
+import System.Environment ( getEnv, getExecutablePath, setEnv
+                          , unsetEnv, withArgs )
 
 -- ghc
 import Config
@@ -38,6 +40,14 @@ main = do
   -- invoking setup script, otherwise the setup script will complain.
   unsetEnv "GHC_PACKAGE_PATH"
 
+  -- Setting the `null' package environment for ghc >= 8.4.0, to support
+  -- building executable in test packages. In ghc 8.2.x, the use of "-"
+  -- in GHC_ENVIRONMENT will show "No such package environment" error,
+  -- so "executable" and "test" stanzas in ".cabal" file are disabled.
+#if MIN_VERSION_ghc (8,4,0)
+  setEnv "GHC_ENVIRONMENT" "-"
+#endif
+
   hspec (afterAll_ (setCurrentDirectory cwd)
                    (buildPackage cwd pkgdbs "p01"))
 
@@ -57,13 +67,17 @@ buildPackage cwd pkgdbs name =
             [ setCurrentDirectory pkgdir
             , setup configure_args
             , setup ["build"]
+#if MIN_VERSION_ghc (8,4,0)
             , setup ["test"]
+#endif
             , setup ["haddock"]
             , setup ["clean"]
             ]
 
 setup :: [String] -> IO ()
-setup = flip withArgs skkcMain
+setup args = do
+  putStrLn (unwords ("running:" : args))
+  withArgs args skkcMain
 
 getPackageDbs :: String -> IO [String]
 getPackageDbs executable_path =

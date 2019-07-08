@@ -8,6 +8,15 @@
 (defmodule SetupTest
   (export
    setupTests)
+  (load
+   ;; base
+   (Prelude)
+
+   ;; sk-lang
+   (SK.Prelude)
+
+   ;; Internal
+   (SK.Tool.Compat (with-ghc-version-cond)))
   (use
    ;; base
    (Control.Exception ((SomeException ..) catch throw))
@@ -48,12 +57,19 @@
   (where (describe (++ "package " name)
                    (it "should compile and pass the tests" work))
     (defn work
-      (mapM_ run [(setCurrentDirectory (pkgdir cwd name))
-                  (setup configure-args)
-                  (setup ["build"])
-                  (setup ["test"])
-                  (setup ["haddock"])
-                  (setup ["clean"])]))
+      (mapM_ run
+             (++  [(setCurrentDirectory (pkgdir cwd name))
+                   (setup configure-args)
+                   (setup ["build"])]
+                  test-work
+                  [(setup ["haddock"])
+                   (setup ["clean"])])))
+    (defn test-work
+      (with-ghc-version-cond v
+        ((<= 804 v)
+         [(setup ["test"])])
+        (otherwise
+         [])))
     (defn run [act]
       (shouldReturn act ()))
     (defn pkgdb-flags
