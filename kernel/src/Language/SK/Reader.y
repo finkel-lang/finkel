@@ -257,7 +257,7 @@ pragma orig@(LForm (L l form)) =
         sp <- getSPState
         putSPState (sp {ghcOptions = flags})
         return (emptyBody l)
-    _ -> error ("unknown pragma: " ++ show form)
+    _ -> errorSP orig ("unknown pragma: " ++ show form)
   where
     normalize = map toLower . unpackFS
     inlinePragmas = ["inline", "noinline", "inlinable"]
