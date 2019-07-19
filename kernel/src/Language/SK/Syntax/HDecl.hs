@@ -438,9 +438,9 @@ b_fixityD dir (LForm (L l form)) syms
   | otherwise = builderError
 {-# INLINE b_fixityD #-}
 
-b_ffiD :: Code -> Code -> HCCallConv -> (Maybe (Located Safety), Code)
-       -> (Code, HType) -> Builder HDecl
-b_ffiD (LForm (L l _)) imp_or_exp ccnv (mb_safety, ename) (nm, ty) =
+b_ffiD :: Code -> Code -> HCCallConv -> Maybe (Located Safety)
+       -> Code -> (Code, HType) -> Builder HDecl
+b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty) =
   case unCode imp_or_exp of
     Atom (ASymbol ie)
       | ie == "import"
@@ -474,8 +474,11 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv (mb_safety, ename) (nm, ty) =
       LForm (L ln (Atom (ASymbol name))) = nm
       tsig = mkLHsSigType ty
       LForm (L _ls (Atom (AString ename'))) = ename
-      source = L l (quotedSourceText ename')
-      safety = fromMaybe (noLoc PlayRisky) mb_safety
+      source =
+         case ename' of
+            "" -> L l NoSourceText
+            _  -> L l (quotedSourceText ename')
+      safety = fromMaybe (noLoc PlaySafe) mb_safety
       forD = ForD NOEXT
 {-# INLINE b_ffiD #-}
 

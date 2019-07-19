@@ -8,13 +8,15 @@
 
 ;;; 8.4.3 Import Declarations
 
+(foreign import ccall (:: rand (IO Int)))
+
 (foreign import ccall "sin"
   (:: csin (-> Double Double)))
 
-(foreign import ccall (safe "cos")
+(foreign import ccall safe "cos"
   (:: ccos (-> Double Double)))
 
-(foreign import ccall (unsafe "math.h tan")
+(foreign import ccall unsafe "math.h tan"
   (:: ctan (-> Double Double)))
 
 (:: s8_4_3 (IO ()))
@@ -33,6 +35,14 @@
 
 (foreign export ccall "printSomeThing"
   (:: printSomeThing (-> CString ( IO ()))))
+
+;; XXX: Not working. This code compiles with skkc, but fails to compile
+;; the generated Haskell code. 'Outputable.ppr' for operator function in
+;; FFI export does not use parenthesis in ghc. This also happens when
+;; running ghc with "-ddump-parsed" option.
+;;
+;; (foreign export ccall "addInt"
+;;   (:: + (-> Int Int Int)))
 
 ;;; Main
 

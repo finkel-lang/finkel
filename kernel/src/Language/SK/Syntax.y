@@ -66,7 +66,6 @@ import Language.SK.Syntax.SynUtils
 %name p_famconhd famconhd
 %name p_lfinsthd lfinsthd
 %name p_lfameq lfameq
-%name p_lsname lsname
 %name p_phase phase
 
 %name p_type type
@@ -332,8 +331,7 @@ top_decl :: { HDecl }
     | 'instance' overlap qtycl idecls      {% b_instD $2 $3 $4 }
     | 'default' zero_or_more_types         { b_defaultD $2 }
     | fixity 'integer' idsyms1             {% b_fixityD $1 $2 $3 }
-    | 'foreign' 'symbol' ccnv sname 'list' {% parse p_sfsig $5 >>=
-                                              b_ffiD $1 $2 $3 $4 }
+    | foreign                              { $1 }
     | decl                                 { $1 }
 
 overlap :: { Maybe (Located OverlapMode) }
@@ -509,15 +507,24 @@ fixity :: { FixityDirection }
     | 'infixr' { InfixR }
     | 'infix'  { InfixN }
 
+foreign :: { HDecl }
+    : 'foreign' 'symbol' ccnv {- safety -} {- "" -} 'list'
+      {% do { (name, ty) <- parse p_sfsig $4
+            ; let entity = LForm (noLoc (Atom (AString "")))
+            ; b_ffiD $1 $2 $3 Nothing entity (name, ty) } }
+    | 'foreign' 'symbol' ccnv {- safety -} fentity  'list'
+      {% parse p_sfsig $5 >>= b_ffiD $1 $2 $3 Nothing $4 }
+    | 'foreign' 'symbol' ccnv safety       fentity  'list'
+      {% parse p_sfsig $6 >>= b_ffiD $1 $2 $3 (Just $4) $5 }
+
 ccnv :: { HCCallConv }
     : 'symbol' {% b_callConv $1 }
 
-sname :: { (Maybe (Located Safety), Code) }
-    : 'string' { (Nothing, $1) }
-    | 'list'   {% parse p_lsname $1 }
+safety :: { Located Safety }
+    : 'symbol' {% b_safety $1 }
 
-lsname :: { (Maybe (Located Safety), Code) }
-    : 'symbol' 'string' {% (\s -> (Just s, $2)) `fmap` b_safety $1 }
+fentity :: { Code }
+    : 'string' { $1 }
 
 decl :: { HDecl }
     : '=' pats_and_guards    {% case $2 of (g,p) -> b_funOrPatD $1 p g }
