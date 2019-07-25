@@ -9,9 +9,6 @@
   (export
    setupTests)
   (load
-   ;; base
-   (Prelude)
-
    ;; sk-lang
    (SK.Prelude)
 

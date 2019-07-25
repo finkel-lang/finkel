@@ -7,7 +7,6 @@
    (TestIO ..) (TestIOState ..) runTestIO
    (EvalTestFns ..) makeEvalTestFns)
   (load
-   (Prelude)
    (SK.Prelude)
    (SK.Tool.Compat))
   (use

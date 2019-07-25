@@ -6,9 +6,6 @@
   (export
    eval-loop)
   (load
-   ;; base
-   (Prelude)
-
    ;; sk-lang
    (SK.Prelude)
 

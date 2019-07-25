@@ -12,11 +12,8 @@
   (export
    replMain repl-env)
   (load
-   ;; base
-   (Prelude)
-
-   ;; sk-kernel
-   (Language.SK)
+   ;; sk-lang
+   (SK.Prelude)
 
    ;; internal
    (SK.Tool.Repl.Macro))

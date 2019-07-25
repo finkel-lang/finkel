@@ -10,9 +10,6 @@
 
 (defmodule SK.Tool.Repl.Macro
   (load
-   ;; base
-   (Prelude)
-
    ;; sk-lang
    (SK.Prelude)
 

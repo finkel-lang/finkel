@@ -7,9 +7,6 @@
 (defmodule ReplTest
   (export replTests)
   (load
-   ;; base
-   (Prelude)
-
    ;; sk-lang
    (SK.Prelude)
 

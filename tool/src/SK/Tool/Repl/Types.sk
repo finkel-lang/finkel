@@ -19,9 +19,6 @@
    ;; re-export
    (MonadTrans ..))
   (load
-   ;; base
-   (Prelude)
-
    ;; sk-lang
    (SK.Prelude)
 

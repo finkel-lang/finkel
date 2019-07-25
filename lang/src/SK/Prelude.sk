@@ -3,7 +3,13 @@
 (module SK.Prelude
   (module All))
 
+;; base
+(import Prelude as All)
+
+;; sk-kernel
 (import Language.SK as All)
+
+;; Internal
 (import SK.Core as All)
 (import SK.Core.Error as All)
 (import SK.Core.List as All)

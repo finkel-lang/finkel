@@ -1010,8 +1010,7 @@ Sample module header:
 
 @
 (defmodule Foo
-  (load (Prelude hiding (head tail))
-        (SK.Prelude))
+  (load (SK.Prelude hiding (head tail))
   (load-use (Control.Monad (foldM)))
   (use (Control.Monad (when))
        (qualified Data.ByteString as BS))
@@ -1022,8 +1021,7 @@ Expands to below:
 
 @
 (begin
-  (require Prelude hiding (head tail))
-  (require SK.Prelude)
+  (require SK.Prelude hiding (head tail))
   (require Control.Monad (foldM))
   (module Foo foo bar buzz)
   (import Control.Monad (when))

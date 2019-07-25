@@ -6,9 +6,6 @@
   (export
    compatTests)
   (load
-   ;; base
-   (Prelude)
-
    ;; sk-lang
    (SK.Prelude))
   (use
