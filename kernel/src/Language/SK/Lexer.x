@@ -103,7 +103,7 @@ $white+  ;
 \;+ $white+ \$ @hsymbol $white_no_nl* ~$nl* @contdoc* { tok_doc_named }
 
 \; .*    { tok_line_comment }
-\#\| .*  { tok_block_comment }
+\#\; .*  { tok_block_comment }
 
 --- Hashes
 \# $hsymtail* { tok_hash }
@@ -463,7 +463,7 @@ tok_block_comment_with :: (String -> Token)
 tok_block_comment_with tok ini inp0 _ = do
   case alexGetChar inp0 of
     Just ('#', inp1)
-      | Just ('|', inp2) <- alexGetChar inp1
+      | Just (';', inp2) <- alexGetChar inp1
       , Just (c, inp3) <- ini inp2
       , Just (com, inp4) <- go inp3 c ""
       -> alexSetInput inp4 >> return (tok (reverse com))
@@ -471,7 +471,7 @@ tok_block_comment_with tok ini inp0 _ = do
   where
     go inp prev acc =
       case alexGetChar inp of
-        Just (c, inp') | prev == '|', c == '#' -> Just (tail acc, inp')
+        Just (c, inp') | prev == ';', c == '#' -> Just (tail acc, inp')
                        | otherwise             -> go inp' c (c:acc)
         Nothing                                -> Nothing
 {-# INLINE tok_block_comment_with #-}

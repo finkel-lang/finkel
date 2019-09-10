@@ -16,7 +16,7 @@
 
 (module Main)
 
-#|
+#;
 
 Sample block comment. All literals between character sequence `#' `|',
 and `|' `#' are block comment. Block comments understand UNICODE
@@ -26,7 +26,7 @@ characters:
 - ฉันกินกระจกได้ แต่มันไม่ทำให้ฉันเจ็บ
 - მინას ვჭამ და არა მტკივა.
 
-|#
+;#
 
 ;;; * The main function
 
@@ -57,7 +57,7 @@ characters:
 
 (= foo-aux putStrLn)
 
-#|onelineblockcommentwithoutspaces|#
+#;onelineblockcommentwithoutspaces;#
 
 ;;; ** The bar function
 
@@ -80,8 +80,8 @@ characters:
             Int                 ; ^ Arg 2.
             (IO ())))
 (= bar a b
-  (putStrLn #|more|#
-   (++ #|block|# "From bar: " #|comments|# (show (+ a b)))))
+  (putStrLn #;more;#
+   (++ #;block;# "From bar: " #;comments;# (show (+ a b)))))
 
 ;;; ** The buzz function
 
