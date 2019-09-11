@@ -18,8 +18,8 @@
 
 (:: unpackprgm (IO ()))
 (= unpackprgm
-  (do (print (C1 42 \x))
-      (print (C2 42 \x))))
+  (do (print (C1 42 #'x))
+      (print (C2 42 #'x))))
 
 ;; SPECIALIZE INLNE
 

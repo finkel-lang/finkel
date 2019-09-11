@@ -39,7 +39,7 @@
 
 (:: gadt2 (-> Int (IO ())))
 (= gadt2 n
-  (do (print (G2a (Just \x)))
+  (do (print (G2a (Just #'x)))
       (print (G2b n))
       (print (G2c n 43))))
 

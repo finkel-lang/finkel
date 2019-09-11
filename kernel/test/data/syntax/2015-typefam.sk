@@ -64,7 +64,7 @@
 (:: ctfs1 (IO ()))
 (= ctfs1
   (do (print (:: 3 (TF3 Int)))
-      (print (:: \x (TF3 Bool)))
+      (print (:: #'x (TF3 Bool)))
       (print (:: "foo" (TF3 Char)))))
 
 

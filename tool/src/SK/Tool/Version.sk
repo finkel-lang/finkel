@@ -47,19 +47,19 @@
   VersionHelp)
 
 (defn (version-descrs [OptDescr VersionMode])
-  [(Option [\a] ["all"]
+  [(Option [#'a] ["all"]
            (NoArg AllVersions)
            "show all versions (default)")
-   (Option [\g] ["ghc"]
+   (Option [#'g] ["ghc"]
            (NoArg GhcVersion)
            "show ghc version")
-   (Option [\k] ["kernel"]
+   (Option [#'k] ["kernel"]
            (NoArg KernelVersion)
            "show sk kernel version")
-   (Option [\l] ["lang"]
+   (Option [#'l] ["lang"]
            (NoArg LangVersion)
            "show sk lang version")
-   (Option [\h] ["help"]
+   (Option [#'h] ["help"]
            (NoArg VersionHelp)
            "show this help and exit")])
 

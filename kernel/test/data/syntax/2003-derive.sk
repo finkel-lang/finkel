@@ -45,7 +45,7 @@
 (:: main (IO ()))
 (= main
   (do (print (typeOf (D1 True False)))
-      (print (dataTypeOf (D1 \a \b)))
+      (print (dataTypeOf (D1 #'a #'b)))
       (print (fmap succ (D2 (:: 41 Int))))
       (print (from (D3 False)))
       (let ((:: l1 (Lst Int))

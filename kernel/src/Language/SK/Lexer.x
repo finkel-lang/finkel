@@ -70,7 +70,7 @@ import Language.SK.Form
 }
 
 $nl          = [\n\r\f]
-$white   = [$nl\v\t\ ]
+$white       = [$nl\v\t\ ]
 $white_no_nl = $white # $nl
 
 $negative    = \-
@@ -78,8 +78,9 @@ $octit       = [0-7]
 $digit       = [0-9]
 $hexit       = [$digit A-F a-f]
 
-$hsymhead    = [^\\\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
+$hsymhead    = [^\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
 $hsymtail    = [$hsymhead\'\#$digit]
+$hsymtail2   = $hsymtail # \'
 
 @hsymbol     = $hsymhead $hsymtail*
 @signed      = $negative?
@@ -106,7 +107,8 @@ $white+  ;
 \#\; .*  { tok_block_comment }
 
 --- Hashes
-\# $hsymtail* { tok_hash }
+\# \'          { tok_char }
+\# $hsymtail2* { tok_hash }
 
 --- Parenthesized commas, handled before parentheses
 \( $white* \,+ $white* \) { tok_pcommas }
@@ -131,10 +133,9 @@ $white+  ;
 \,   { tok_unquote }
 
 -- Lambda
-\\\  { tok_lambda }
+\\ { tok_lambda }
 
 --- Literal values
-\\                         { tok_char }
 \"                         { tok_string }
 @signed @decimal           { tok_integer }
 @signed 0[oO] @octal       { tok_integer }
@@ -544,10 +545,14 @@ replaceHyphens = C8.map (\c -> if c == '-' then '_' else c)
 tok_char :: Action
 tok_char inp0 _ = do
   case alexGetChar inp0 of
-    Just ('\\', inp1) -> go inp1
-    _                 -> alexError "tok_char: panic"
+    Just ('#', inp1) -> go0 inp1
+    _                -> alexError "tok_char: panic"
   where
-    go inp
+    go0 inp =
+      case alexGetChar inp of
+        Just ('\'', inp') -> go1 inp'
+        _                 -> alexError "tok_char.go0: panic"
+    go1 inp
       | Just (c, inp') <- alexGetChar inp =
         case c of
           '\\' -> case escapeChar inp' of
@@ -555,10 +560,8 @@ tok_char inp0 _ = do
               alexSetInput inp'' >> (return $! TChar c')
             Nothing ->
               alexSetInput inp' >> (return $! TChar '\\')
-          _    -> do
-            alexSetInput inp'
-            return $! TChar c
-      | otherwise = alexError "tok_char: panic"
+          _    -> alexSetInput inp' >> (return $! TChar c)
+      | otherwise = alexError "tok_char.go1: panic"
 {-# INLINE tok_char #-}
 
 tok_string :: Action
@@ -699,10 +702,12 @@ scanToken = do
       let span = RealSrcSpan $ mkRealSrcSpan loc0 loc1
       return (L span tok)
     AlexError (AlexInput loc1 ch _) -> do
+      sp <- getSPState
       let l = srcLocLine loc1
           c = srcLocCol loc1
-      alexError ("lexical error at line " ++ show l ++
-                 ", column" ++ show c ++
+          trg = unpackFS (targetFile sp)
+      alexError (trg ++ ": lexical error at line " ++ show l ++
+                 ", column " ++ show c ++
                  ", near " ++ show ch)
     AlexSkip inp1 _ -> do
       alexSetInput inp1

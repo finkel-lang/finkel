@@ -283,7 +283,7 @@ See 'eval_when'.
 
   (:: replace-hyphens (-> String String))
   (= replace-hyphens
-    (map (\ x (if (== x \-) \_ x))))
+    (map (\ x (if (== x #'-) #'_ x))))
   #p(INLINABLE replace-hyphens)
 
   (:: subst-gensyms (-> [(, Atom Atom)] Code Code))
@@ -296,8 +296,8 @@ See 'eval_when'.
   (:: acc-gensym-names (-> [(, Atom Atom)] Atom (Skc [(, Atom Atom)])))
   (= acc-gensym-names acc form
     (case form
-      (ASymbol sym) (| ((<- (: \$ (@ cs (: c _))) (unpackFS sym))
-                        (elem c [\a .. \z])
+      (ASymbol sym) (| ((<- (: #'$ (@ cs (: c _))) (unpackFS sym))
+                        (elem c [#'a .. #'z])
                         (<- Nothing (lookup form acc))
                         (do (let ((= cs' (replace-hyphens cs))))
                             (<- x (fmap unCode (gensym' cs')))

@@ -273,8 +273,8 @@
   (defn (eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
     [(Atom (ASymbol a)) (Atom (ASymbol b))]
     (| ((nullFS a) (nullFS b))
-       ((== (headFS a) \$) True)
-       ((== (headFS b) \$) True)
+       ((== (headFS a) #'$) True)
+       ((== (headFS b) #'$) True)
        (otherwise (== a b)))
     [(List as) (List bs)] (eqGensymCodes as bs)
     [(HsList as) (HsList bs)] (eqGensymCodes as bs)
@@ -446,7 +446,7 @@
              (it "should detect invalid arg"
                  (expandFailure
                   (defmacro-m m1 "string"
-                    (return `(putChar \x)))))
+                    (return `(putChar #'x)))))
              (it "should detect invalid form"
                  (expandFailure
                   (defmacro-m m1 too many parameters
@@ -519,7 +519,7 @@
              (it "should replace () arg with _"
                  (expandTo
                   (macrolet-m ((m1 ()
-                                 (return `(print \x))))
+                                 (return `(print #'x))))
                     (m1))
                   (with-macro ((= m1
                                  (let ((:: $m1 (-> Code (Skc Code)))
@@ -527,7 +527,7 @@
                                          (case __form__
                                            (LForm (L _loc (List [_])))
                                            (return
-                                             (quasiquote (print \x)))
+                                             (quasiquote (print #'x)))
                                            _ (skSrcError
                                               __form__
                                               (concat
@@ -610,8 +610,8 @@
                   (= (: a b c _) [1 2 ..])))
              (it "should expand to pattern match for tuple"
                  (expandTo
-                  (defn (, a b c) (, True \x "string"))
-                  (= (, a b c) (, True \x "string"))))
+                  (defn (, a b c) (, True #'x "string"))
+                  (= (, a b c) (, True #'x "string"))))
              (it "should expand argument patterns"
                  (expandTo
                   (defn foo

@@ -47,7 +47,7 @@
       (f2 i1)
       (M.when (< 3 5)
               (putStrLn "Control Monad imported as `M'"))
-      (let ((= arr (array (, 0 15) (zip [0 .. 15] [\a ..])))))
+      (let ((= arr (array (, 0 15) (zip [0 .. 15] [#'a ..])))))
       (print (! arr 3))
       (let ((= c (mkPolar 1.2 3.4))))
       (print (realPart c))

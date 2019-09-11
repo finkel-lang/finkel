@@ -102,9 +102,9 @@
 
 (defn (sepByColon (-> String [String]))
   [xs]
-  (case (dropWhile (== \:) xs)
+  (case (dropWhile (== #':) xs)
     "" []
-    ys (case (break (== \:) ys)
+    ys (case (break (== #':) ys)
          (, w ys') (: w (sepByColon ys')))))
 
 (defn (getCabalPackageDbs (-> String (IO [String])))

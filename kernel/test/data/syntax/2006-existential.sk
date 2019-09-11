@@ -28,8 +28,8 @@
 (= main
   (do (print [(AnyShow1 (:: 42 Int))
               (AnyShow1 False)
-              (AnyShow1 \x)])
+              (AnyShow1 #'x)])
       (print [(AnyShow2 (:: 42 Int) (:: 43 Integer))
-              (AnyShow2 False (Just \x))
-              (AnyShow2 \x "bar")])
+              (AnyShow2 False (Just #'x))
+              (AnyShow2 #'x "bar")])
       (print (show3 AnyShow3 True))))

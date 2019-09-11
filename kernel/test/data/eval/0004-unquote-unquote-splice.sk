@@ -6,11 +6,11 @@
                (Macro
                 (const
                  (return
-                   `(let ((= foo \a)
+                   `(let ((= foo #'a)
                           (= bar 'v1)
                           (= buzz 'v2))
                       `(let (,,@(map (\ n ``(= ,,n \b)) ['bar 'buzz]))
                          [,foo ,bar ,buzz])))))))
   (== (m1)
       '(let ((= v1 \b) (= v2 \b))
-        [\a v1 v2])))
+        [#'a v1 v2])))

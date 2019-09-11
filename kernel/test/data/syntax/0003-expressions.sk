@@ -90,9 +90,9 @@
       (return d)))
 
 (= tupexprs
-  (do (print (tup1 \x 1.23 "4567"))
-      (print (tup2 True \y))
-      (print (tup3 True \a False \b))))
+  (do (print (tup1 #'x 1.23 "4567"))
+      (print (tup2 True #'y))
+      (print (tup3 True #'a False #'b))))
 
 ;;; 3.9 Unit Expressions and Parenthesized Expressions
 
@@ -204,7 +204,7 @@
                       (= f a b (+ a b)))
            Nothing "nothing")
     (= h i
-      (replicate (+ i y) \@))))
+      (replicate (+ i y) #'@))))
 
 ;;; Using non-reserved special value names (e.g. `as', `hiding' ...), in
 ;;; pattern.
@@ -377,21 +377,21 @@
 (:: charpat (-> Char String))
 (= charpat x
   (case x
-    \a "GOT A"
-    \b "GOT B"
+    #'a "GOT A"
+    #'b "GOT B"
     _ "UNKNOWN"))
 
 (= patexprs2
   (do (print (tupp1 (, True False)))
-      (print (tupp2 (, \a \b \c)))
+      (print (tupp2 (, #'a #'b #'c)))
       (print (intpat 1))
       (print (intpat 2))
       (print (intpat 3))
       (print (strpat "foo"))
       (print (strpat "bar"))
       (print (strpat "buzz"))
-      (print (charpat \a))
-      (print (charpat \X))))
+      (print (charpat #'a))
+      (print (charpat #'X))))
 
 (:: aspat1 (-> (Maybe Char) String))
 (= aspat1 mbc
@@ -412,14 +412,14 @@
 
 (:: ap4 [String])
 (= ap4
-  (let ((= (@ as (, a b)) (, \a \b))
-        (= (@ ccall (, c d)) (, \c \d))
-        (= (@ hiding (, e f)) (, \e \f))
-        (= (@ qualified (, g h)) (, \g \h)))
+  (let ((= (@ as (, a b)) (, #'a #'b))
+        (= (@ ccall (, c d)) (, #'c #'d))
+        (= (@ hiding (, e f)) (, #'e #'f))
+        (= (@ qualified (, g h)) (, #'g #'h)))
     [(show as) (show ccall) (show hiding) (show qualified)]))
 
 (= patexprs3
-  (do (print (aspat1 (Just \p)))
+  (do (print (aspat1 (Just #'p)))
       (print ap2a)
       (print ap2b)
       (print ap2c)
@@ -460,13 +460,13 @@
 
 (= patexprs4
   (do (print (lzp1 (Just undefined)))
-      (print (lzp2 (, 3 undefined (, \x [1 2 3]))))
-      (print (lzp2 (, 4 [\a \b] (, undefined []))))
+      (print (lzp2 (, 3 undefined (, #'x [1 2 3]))))
+      (print (lzp2 (, 4 [#'a #'b] (, undefined []))))
       (print (lzp3 undefined))
       (lzp4 undefined)
       (lzp5 undefined)
       (lzp6 undefined)
-      (lzp7 (, 42 (, \g True)))))
+      (lzp7 (, 42 (, #'g True)))))
 
 (= lfp1 mb
   (case mb

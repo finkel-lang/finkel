@@ -16,7 +16,7 @@
 ;;; OverloadedLists
 
 (:: f2 (Set Char))
-(= f2 [\a \e \i \o \u])
+(= f2 [#'a #'e #'i #'o #'u])
 
 ;;; Main
 

@@ -54,12 +54,12 @@
 (:: s4_2_1 (IO ()))
 (= s4_2_1
   (do (print (MyD1Con1 123 True ()))
-      (print (MyD1Con2 [(, 1 2) (, 3 4)] 1.23 \z))
-      (print [(MyD2Con1 (:: 123 Int) \z)
+      (print (MyD1Con2 [(, 1 2) (, 3 4)] 1.23 #'z))
+      (print [(MyD2Con1 (:: 123 Int) #'z)
               (MyD2Con2 (:: 789 Int) 0 False)])
-      (print (MyD3Con1 \x (Just "/foo/bar")))
+      (print (MyD3Con1 #'x (Just "/foo/bar")))
       (print (:: (MyD3Con2 1 2 3) (MyData3 Double)))
-      (print (MyD3Con3 \a \b \c (Right \z)))
+      (print (MyD3Con3 #'a #'b #'c (Right #'z)))
       (print [M4A M4B M4C])
       (print (:: undefined MyData5))
       (print [(M6L 42) (M6S1 42) (M6S2 Nothing)])
@@ -129,7 +129,7 @@
       False "f")))
 
 (instance (MyShow Char)
-  (= myShow \d "dddddddddddddddddddd")
+  (= myShow #'d "dddddddddddddddddddd")
   (= myShow c (++ "myShow: " (show c))))
 
 ;;; Typeclass with context and default method.
@@ -160,7 +160,7 @@
 (:: s4_3_1 (IO ()))
 (= s4_3_1
   (do (print (map myShow [True False]))
-      (print (map myShow [\a \b \c \d \e]))
+      (print (map myShow [#'a #'b #'c #'d #'e]))
       (print (map myShow2 [True False]))
       (putStrLn (tup2 (, undefined undefined)))
       (putStrLn (tup3 (, undefined undefined undefined)))
@@ -214,7 +214,7 @@
 (= s4_3_2
   (do (print (fmap (* 2) (MyF 21)))
       (print (EmptyContext 42))
-      (print (MCs True \a))
+      (print (MCs True #'a))
       (putStrLn (c1m1 []))
       (putStrLn (c1m1 [() () ()]))
       (myFmap putStrLn show (:: 42 Int))))
@@ -416,7 +416,7 @@
       (putStrLn (fpb2 (Nothing) (Just 8)))
       (putStrLn (fpb2 Nothing Nothing))
       (print fpb3)
-      (putStrLn (fpb4 \= 30))
+      (putStrLn (fpb4 #'= 30))
       (print (fpb5 10))
       (print (fpb6 2))
       (putStrLn (++ "xs: " (show xs)))

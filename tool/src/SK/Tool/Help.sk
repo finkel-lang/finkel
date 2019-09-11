@@ -55,7 +55,7 @@
               (length (maximumBy (on compare length)
                                  (fmap cmd-name cmds))))
             (= pad n str
-              (++ str (replicate (- n (length str)) \\SP)))
+              (++ str (replicate (- n (length str)) #'\SP)))
             (= descr n cmd
               (concat ["  " (pad n (cmd-name cmd))
                        "  " (cmd-descr cmd)]))))

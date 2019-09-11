@@ -74,15 +74,15 @@ instance Show Atom where
       AUnit -> showString "()"
       ASymbol s -> showString (unpackFS s)
       AChar c -> showString $ case c of
-        '\a' -> "\\\\BEL"
-        '\b' -> "\\\\BS"
-        '\f' -> "\\\\FF"
-        '\n' -> "\\\\LF"
-        '\r' -> "\\\\CR"
-        '\t' -> "\\\\HT"
-        '\v' -> "\\\\VT"
-        ' '  -> "\\\\SP"
-        _    -> ['\\', c]
+        '\a' -> "#'\\BEL"
+        '\b' -> "#'\\BS"
+        '\f' -> "#'\\FF"
+        '\n' -> "#'\\LF"
+        '\r' -> "#'\\CR"
+        '\t' -> "#'\\HT"
+        '\v' -> "#'\\VT"
+        ' '  -> "#'\\SP"
+        _    -> ['#', '\'', c]
       AString s -> showsPrec d s
       AInteger i -> showsPrec d i
       AFractional f -> showString (fl_text_compat f)

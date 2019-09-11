@@ -290,8 +290,8 @@ and definition of 'cdadr' is:
 (eval-when-compile
   (:: ads [String])
   (= ads
-    (let ((= f (concatMap (\ x [(: \a x) (: \d x)]))))
-      (concat (take 3 (tail (iterate f [[\a] [\d]]))))))
+    (let ((= f (concatMap (\ x [(: #'a x) (: #'d x)]))))
+      (concat (take 3 (tail (iterate f [[#'a] [#'d]]))))))
 
   (:: cxr-name (-> String Code))
   (= cxr-name x

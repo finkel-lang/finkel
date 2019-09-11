@@ -76,10 +76,10 @@
                repl-input-path Nothing}))
 
 (defn (descrs [OptDescr (-> ReplOption ReplOption)])
-  [(Option [\h] ["help"]
+  [(Option [#'h] ["help"]
            (NoArg (\ o (o {repl-mode Help})))
            "Show this help and exit")
-   (Option [\l] ["listen"]
+   (Option [#'l] ["listen"]
            (OptArg (\ mb-port o
                      (let ((= port
                              (mplus (fmap read mb-port)
@@ -88,7 +88,7 @@
                            repl-listen-port port})))
                    "PORT")
            "Listen to port (default: 50321)")
-   (Option [\f] ["file"]
+   (Option [#'f] ["file"]
            (ReqArg (\ file o
                      (o {repl-input-path (Just file)}))
                    "FILE")

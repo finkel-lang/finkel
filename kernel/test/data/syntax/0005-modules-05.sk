@@ -6,7 +6,7 @@
 (= main
   (where go
     (= go
-      (do (<- n (foldM f 0 [\a .. \z]))
+      (do (<- n (foldM f 0 [#'a .. #'z]))
           (print n)))
     (= f n a
       (do (print a)

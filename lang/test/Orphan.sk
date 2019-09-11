@@ -32,7 +32,7 @@
                    (fmap AInteger arbitrary)
                    (fmap aFractional (:: arbitrary (Gen Double)))])
       (= headChars
-        (++ [\A .. \Z] [\a .. \z] "_!$%*+./<=>?@^~:"))
+        (++ [#'A .. #'Z] [#'a .. #'z] "_!$%*+./<=>?@^~:"))
       (= tailChars
         (++ headChars "0123456789'-"))
       (= symbolG

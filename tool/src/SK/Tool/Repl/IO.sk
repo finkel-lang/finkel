@@ -62,7 +62,7 @@ reading the input until successful parse result."
             (: h tl) (| ((== line "(quit)")
                          (quit eval-tid))
                         ((null (pending-input st0))
-                         (== \, h)
+                         (== #', h)
                          (if (elem tl (tail (inits "quit")))
                              (quit eval-tid)
                              (go-command result-mv tl)))
@@ -119,7 +119,7 @@ reading the input until successful parse result."
   (do (<- st getReplState)
       (let ((= input1
               (++ (pending-input st)
-                  [(toLazyByteString (stringUtf8 (: \\n input0)))]))
+                  [(toLazyByteString (stringUtf8 (: #'\n input0)))]))
             (= put-and-return pending ret
               (do (putReplState (st {pending-input pending}))
                   (return ret)))))

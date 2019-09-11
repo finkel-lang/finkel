@@ -74,7 +74,7 @@ This function contains unnecessary explicit @forall@ keyword.")
 
 This function contains rank-n type function argument.")
 
-(= f5 f (, (f \a) (f True)))
+(= f5 f (, (f #'a) (f True)))
 
 (:: f6
   (=> (Show a) (Show b)
