@@ -17,7 +17,7 @@ import HsExpr ( ArithSeqInfo(..), GRHS(..), HsExpr(..)
 import HsDoc (HsDocString)
 import HsLit (HsLit(..), HsOverLit(..))
 import HsPat (HsRecFields(..))
-import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsDo
+import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsComp, mkHsDo
                , mkHsFractional, mkHsIf, mkHsLam, mkLHsPar
                , mkLHsSigWcType, mkLHsTupleExpr, mkMatchGroup )
 import Lexeme (isLexCon, isLexSym)
@@ -257,6 +257,11 @@ b_hsListE expr =
 #endif
     Left arithSeqExpr -> arithSeqExpr
 {-# INLINE b_hsListE #-}
+
+b_lcompE :: HExpr -> [HStmt] -> HExpr
+b_lcompE ret stmts = L l (mkHsComp ListComp stmts ret)
+  where l = getLoc ret
+{-# INLINE b_lcompE #-}
 
 b_arithSeqE :: HExpr -> Maybe HExpr -> Maybe HExpr -> HExpr
 b_arithSeqE fromE thenE toE =

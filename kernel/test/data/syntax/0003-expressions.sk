@@ -112,6 +112,19 @@
 (= aseqexprs
   (do ase1 ase2 ase3 ase4))
 
+;;; 3.11 List Comprehensions
+
+(= lcmp1 [x | (<- x [1 2 3])])
+(= lcmp2 [x | (<- x [1 2 3]) (even x)])
+(= lcmp3 [y | (<- x [1 2 3]) (even x) (let ((= y (+ x 1))))])
+(= lcmp4 [(, x y) | (<- x [1 2 3]) (even x) (let ((= y (+ x 1))))])
+
+(= lcmpexprs
+  (do (print lcmp1)
+      (print lcmp2)
+      (print lcmp3)
+      (print lcmp4)))
+
 ;;; 3.12 Let Expressions
 
 ;;; Expression with empty 'let'.
@@ -512,6 +525,7 @@
       tupexprs
       uparenexprs
       aseqexprs
+      lcmpexprs
       letexprs
       caseexprs
       doexpres

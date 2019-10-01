@@ -699,7 +699,7 @@ exprs :: { HExpr }
     | 'let' lbinds expr     {% b_letE $1 $2 $3 }
     | 'if' expr expr expr   { b_ifE $1 $2 $3 $4 }
     | 'case' expr matches   { b_caseE $1 $2 $3 }
-    | 'do' do_stmts         { b_doE $1 $2 }
+    | 'do' stmts            { b_doE $1 $2 }
     | '::' expr dtype       { b_tsigE $1 $2 $3 }
     | idsym '{' fbinds '}'  {% b_recConOrUpdE $1 $3 }
     | 'list' '{' fbinds '}' {% b_recUpdE (parse p_exprs $1) $3 }
@@ -753,6 +753,7 @@ hlist :: { Either HExpr [HExpr] }
     | expr expr '..'      { Left (b_arithSeqE $1 (Just $2) Nothing) }
     | expr '..' expr      { Left (b_arithSeqE $1 Nothing (Just $3)) }
     | expr '..'           { Left (b_arithSeqE $1 Nothing Nothing) }
+    | expr '|' stmts      { Left (b_lcompE $1 $3) }
     | hlist0              { Right $1 }
 
 hlist0 :: { [HExpr] }
@@ -796,12 +797,12 @@ where :: { ([HGRHS],[HDecl]) }
 --
 -- ---------------------------------------------------------------------
 
-do_stmts :: { [HStmt] }
-    : rdo_stmts { reverse $1 }
+stmts :: { [HStmt] }
+    : rstmts { reverse $1 }
 
-rdo_stmts :: { [HStmt] }
+rstmts :: { [HStmt] }
     : stmt           { [$1] }
-    | rdo_stmts stmt { $2 : $1 }
+    | rstmts stmt { $2 : $1 }
 
 stmt :: { HStmt }
     : atom     { b_bodyS $1 }
