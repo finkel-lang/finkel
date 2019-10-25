@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                sk-tool
-version:             0.15.0.0
+version:             0.16.0.0
 synopsis:            SK tool
 description:         SK tool
 homepage:            https://github.com/githubuser/sk/sk-tool#readme
@@ -59,8 +59,8 @@ library
                      , network
                      , process
                      , transformers
-                     , sk-kernel    >= 0.27
-                     , sk-lang      >= 0.14
+                     , sk-kernel    >= 0.28
+                     , sk-lang      >= 0.15
                      , sk-setup     >= 0.1
   default-language:    Haskell2010
   ghc-options:       -Wall

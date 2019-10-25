@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                sk-lang
-version:             0.15.0.0
+version:             0.16.0.0
 synopsis:            SK language core
 description:         SK language core macros and functions.
 homepage:            https://github.com/githubuser/sk-lang#readme
@@ -36,7 +36,7 @@ library
   reexported-modules:  Language.SK
   build-depends:       base         >= 4.7 && < 5
                      , ghc
-                     , sk-kernel    >= 0.27.0
+                     , sk-kernel    >= 0.28.0
   default-language:    Haskell2010
   ghc-options:       -Wall
 
