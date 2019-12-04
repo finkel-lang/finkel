@@ -79,7 +79,6 @@
    ;; sk-kernel
    (Language.SK)
    (Language.SK.Eval (evalExprType evalTypeKind))
-   (Language.SK.Expand (expand1))
    (Language.SK.Form (mkLocatedForm symbolName))
    (Language.SK.Make (buildHsSyn make))
    (Language.SK.SKC
@@ -713,17 +712,15 @@ paths from import directories."
       ;; Always using `setSessionDynFlags' for `set' REPL command to
       ;; support `-package' flag.
       (do (<- dflags0 getSessionDynFlags)
-          (let ((= flags (map (. noLoc symbolName) forms))
-                (= complain fs
-                  (putStrLn
-                   (++ "ignored flags: "
-                       (intercalate ", " (map unLoc fs)))))))
+          (let ((= flags (map (. noLoc symbolName) forms))))
           (<- (, dflags1 leftovers warns)
             (parseDynamicFlagsCmdLine dflags0 flags))
           (liftIO
            (do (handleFlagWarnings dflags1 warns)
                (unless (null leftovers)
-                 (complain leftovers))))
+                 (putStrLn
+                  (++ "Some flags have not been recognized: "
+                      (intercalate ", " (map unLoc leftovers)))))))
           (<- _ (setSessionDynFlags dflags1))
           (return '(begin))))
      (otherwise

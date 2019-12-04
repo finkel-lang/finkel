@@ -69,6 +69,10 @@ import Util ( getModificationUTCTime, modificationTimeIfExists
 import qualified Parser as GHCParser
 import qualified Lexer as GHCLexer
 
+#if MIN_VERSION_ghc (8,8,0)
+import HscTypes (throwErrors)
+#endif
+
 -- ghc-paths
 import GHC.Paths (libdir)
 
@@ -762,6 +766,10 @@ mkModSummary' mbfile modName imports mb_pm = do
                           , ms_hs_date = hs_date
                           , ms_obj_date = obj_date
                           , ms_iface_date = iface_date
+#if MIN_VERSION_ghc (8,8,0)
+                            -- XXX: .hie file not supported yet.
+                          , ms_hie_date = Nothing
+#endif
                           , ms_parsed_mod = mb_pm
                           , ms_srcimps = []
                           , ms_textual_imps = imported
@@ -890,7 +898,7 @@ compileHsFile :: FilePath -> Maybe Phase
                -> Skc (HModule, DynFlags, [a])
 compileHsFile source mbphase = do
   hsc_env <- getSession
-  (dflags, source') <- liftIO (preprocess hsc_env (source, mbphase))
+  (dflags, source') <- liftIO (preprocess' hsc_env (source, mbphase))
   contents <- liftIO (readFile source')
   let location = mkRealSrcLoc (fsLit source) 1 1
       sbuf = stringToStringBuffer contents
@@ -1006,4 +1014,15 @@ mkModuleGraph' :: [ModSummary] -> ModuleGraph
 mkModuleGraph' = mkModuleGraph
 #else
 mkModuleGraph' = id
+#endif
+
+preprocess' :: HscEnv -> (FilePath, Maybe Phase) -> IO (DynFlags, FilePath)
+#if MIN_VERSION_ghc (8,8,0)
+preprocess' hsc_env (path, mb_phase) =
+  do et_result <- preprocess hsc_env path Nothing mb_phase
+     case et_result of
+       Left err -> throwErrors err
+       Right pair -> return pair
+#else
+preprocess' = preprocess
 #endif

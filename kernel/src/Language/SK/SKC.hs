@@ -49,7 +49,11 @@ module Language.SK.SKC
 -- base
 import Control.Exception (Exception(..), throwIO)
 import Control.Monad (when)
+
+#if !MIN_VERSION_ghc (8,8,0)
 import Control.Monad.Fail (MonadFail(..))
+#endif
+
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.IORef ( IORef, atomicModifyIORef', newIORef, readIORef
                   , writeIORef )

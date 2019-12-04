@@ -103,6 +103,9 @@ evalDecls decls = do
       interactive_loc =
          ModLocation { ml_hs_file = Nothing
                      , ml_hi_file = error "ewc:ml_hi_file"
+#if MIN_VERSION_ghc (8,8,0)
+                     , ml_hie_file = error "ewc:ml_hie_file"
+#endif
                      , ml_obj_file = error "ewc:ml_obj_file"}
   ds_result <- skcDesugar' interactive_loc tc_gblenv
   simpl_mg <- liftIO (hscSimplify' hsc_env ds_result tc_gblenv)

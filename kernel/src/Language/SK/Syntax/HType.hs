@@ -8,27 +8,37 @@ import BasicTypes (Boxity(..), SourceText(..))
 import FastString (headFS, lengthFS, nullFS, tailFS)
 import HsDoc (LHsDocString)
 import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
-               , LHsTyVarBndr, Promoted(..), SrcStrictness(..)
+               , LHsTyVarBndr, SrcStrictness(..)
                , SrcUnpackedness(..), mkAnonWildCardTy
                , mkHsAppTy, mkHsAppTys, mkHsOpTy )
 import Lexeme (isLexCon, isLexConSym)
 import OccName (tcName, tvName)
-import PrelNames (eqTyCon_RDR)
 import RdrName (getRdrName, mkQual, mkUnqual)
 import SrcLoc (GenLocated(..), Located, getLoc)
 import TysPrim (funTyCon)
 import TysWiredIn (listTyCon, tupleTyCon)
 
-#if MIN_VERSION_ghc(8,6,0)
-import BasicTypes (PprPrec, funPrec)
+#if MIN_VERSION_ghc (8,8,0)
+import BasicTypes (PprPrec, PromotionFlag(..), funPrec)
 import HsExtension (IdP, noExt)
 import qualified HsTypes (parenthesizeHsType)
-#elif MIN_VERSION_ghc(8,4,0)
+import TysWiredIn (eqTyCon_RDR)
+#elif MIN_VERSION_ghc (8,6,0)
+import BasicTypes (PprPrec, funPrec)
+import HsExtension (IdP, noExt)
+import HsTypes (Promoted (..))
+import qualified HsTypes (parenthesizeHsType)
+import PrelNames (eqTyCon_RDR)
+#elif MIN_VERSION_ghc (8,4,0)
 import HsExtension (IdP)
 import TysWiredIn (starKindTyCon)
+import HsTypes (Promoted (..))
+import PrelNames (eqTyCon_RDR)
 #else
 #define IdP {- empty -}
 import TysWiredIn (starKindTyCon)
+import HsTypes (Promoted (..))
+import PrelNames (eqTyCon_RDR)
 #endif
 
 -- Internal
@@ -37,6 +47,12 @@ import Language.SK.Form
 import Language.SK.Syntax.SynUtils
 
 #include "Syntax.h"
+
+#if MIN_VERSION_ghc (8,8,0)
+type PROMOTIONFLAG = PromotionFlag
+#else
+type PROMOTIONFLAG = Promoted
+#endif
 
 
 -- ---------------------------------------------------------------------
@@ -161,7 +177,14 @@ b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
 {-# INLINE b_forallT #-}
 
 b_kindedType :: Code -> HType -> HType -> HType
-b_kindedType (LForm (L l _)) ty kind = L l (HsKindSig NOEXT ty kind)
+b_kindedType (LForm (L l _)) ty kind =
+#if MIN_VERSION_ghc (8,8,0)
+   -- Parens for kind signature were removed in ghc 8.8.1. To show
+   -- parens in generated Haskell code, explicitly adding at this point.
+   L l (HsParTy NOEXT (L l (HsKindSig NOEXT ty kind)))
+#else
+   L l (HsKindSig NOEXT ty kind)
+#endif
 {-# INLINE b_kindedType #-}
 
 b_docT :: HType -> LHsDocString -> HType
@@ -199,7 +222,7 @@ hsParTy :: HType -> HsType PARSED
 hsParTy = HsParTy NOEXT
 {-# INLINE hsParTy #-}
 
-hsTyVar :: Promoted -> Located (IdP PARSED) -> HsType PARSED
+hsTyVar :: PROMOTIONFLAG -> Located (IdP PARSED) -> HsType PARSED
 hsTyVar = HsTyVar NOEXT
 {-# INLINE hsTyVar #-}
 

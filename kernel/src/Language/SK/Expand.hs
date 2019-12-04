@@ -1,6 +1,9 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 -- | Module for macro expansion.
 module Language.SK.Expand
   ( expand
@@ -60,6 +63,7 @@ import Language.SK.Form
 import Language.SK.SKC
 import Language.SK.Syntax ( parseExpr, parseDecls
                           , parseModule, parseLImport )
+import Language.SK.Syntax.SynUtils (cL, dL)
 
 
 -- ---------------------------------------------------------------------
@@ -174,8 +178,8 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
   -- 'toImportList' borrowed from local definition in
   -- 'TcRnDriver.tcPreludeClashWarn'.
   let exportedNames = modInfoExports minfo
-      ieName' (L l ie) = L l (ieName ie)
-      toImportList (h, loc) = (h, map ieName' (unLoc loc))
+      ieName' (dL->L l ie) = cL l (ieName ie)
+      toImportList (h, dL->L _ loc) = (h, map ieName' loc)
       getNames =
         case fmap toImportList (ideclHiding idecl) of
           -- Import with `hiding' entities. Comparing 'Name' and

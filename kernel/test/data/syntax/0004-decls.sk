@@ -47,8 +47,12 @@
   (deriving (Eq Show)))
 
 ;; Using non-reserved special names in type variable.
-(data (MyData8 as ccall forall hiding qualified)
-  (M8a as ccall forall hiding qualified)
+;;
+;; GHC 8.8.1 introduced "More explicit foralls", and using "forall" in
+;; type variable will show a parse error.
+
+(data (MyData8 as ccall forAll hiding qualified)
+  (M8a as ccall forAll hiding qualified)
   (deriving (Eq Show)))
 
 (:: s4_2_1 (IO ()))

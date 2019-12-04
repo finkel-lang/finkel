@@ -22,8 +22,7 @@ import HsDoc (LHsDocString)
 import HsExpr ( GRHSs(..), LGRHS, LHsExpr, LMatch, Match(..)
               , MatchGroup(..) )
 import HsLit (HsOverLit(..))
-import HsPat ( HsRecField'(..), LHsRecField
-             , LHsRecUpdField )
+import HsPat ( HsRecField'(..), LHsRecField, LHsRecUpdField )
 import HsTypes ( AmbiguousFieldOcc(..), FieldOcc(..), LHsContext
                , HsTyVarBndr(..), HsType(..), mkFieldOcc )
 import HsUtils (mkFunBind, mkHsIntegral)
@@ -36,7 +35,11 @@ import SrcLoc ( GenLocated(..), Located, SrcSpan, combineLocs
               , combineSrcSpans, noLoc, unLoc )
 import TysWiredIn (consDataConName)
 
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,8,0)
+import qualified SrcLoc
+#endif
+
+#if MIN_VERSION_ghc (8,6,0)
 import HsDoc (HsDocString, mkHsDocString)
 import HsExtension (noExt)
 #else
@@ -50,11 +53,6 @@ import Language.SK.Form
 
 #include "Syntax.h"
 
--- ---------------------------------------------------------------------
---
--- Auxiliary
---
--- ---------------------------------------------------------------------
 
 mkRdrName :: FastString -> RdrName
 mkRdrName = mkRdrName' tcName
@@ -180,9 +178,9 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
 {-# INLINE cfld2ufld #-}
 
 -- | Make 'HsRecField' with given name and located data.
-mkcfld :: (Located FastString, Located a) -> LHsRecField PARSED (Located a)
-mkcfld ((L nl name), e@(L fl _)) =
-  L fl HsRecField { hsRecFieldLbl = mkfname name
+mkcfld :: (Located FastString, a) -> LHsRecField PARSED a
+mkcfld ((L nl name), e) =
+  L nl HsRecField { hsRecFieldLbl = mkfname name
                   , hsRecFieldArg = e
                   , hsRecPun = False }
   where
@@ -356,3 +354,24 @@ addConDoc' = flip addConDoc
 addConDoc'' :: LHsDocString -> LConDecl a -> LConDecl a
 addConDoc'' = flip addConDoc . Just
 {-# INLINE addConDoc'' #-}
+
+--
+-- For 8.8.0 compatibility in source code location management
+--
+
+#if MIN_VERSION_ghc (8,8,0)
+dL :: SrcLoc.HasSrcSpan a => a -> Located (SrcLoc.SrcSpanLess a)
+dL = SrcLoc.dL
+
+cL :: SrcLoc.HasSrcSpan a => SrcSpan -> SrcLoc.SrcSpanLess a -> a
+cL = SrcLoc.cL
+#else
+dL :: Located a -> Located a
+dL = id
+
+cL :: SrcSpan -> a -> Located a
+cL = L
+#endif
+
+{-# INLINE cL #-}
+{-# INLINE dL #-}

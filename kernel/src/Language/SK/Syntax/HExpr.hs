@@ -86,7 +86,7 @@ b_caseE (LForm (L l _)) expr matches = L l (hsCase expr mg)
 {-# INCLUDE b_caseE #-}
 
 b_match :: HPat -> ([HGRHS],[HDecl]) -> HMatch
-b_match pat@(L l _) (grhss,decls) =
+b_match pat (grhss,decls) =
 #if MIN_VERSION_ghc(8,6,0)
     L l (Match noExt ctxt [pat] grhss')
 #elif MIN_VERSION_ghc(8,4,0)
@@ -97,6 +97,7 @@ b_match pat@(L l _) (grhss,decls) =
   where
     grhss' = mkGRHSs grhss decls l
     ctxt = CaseAlt
+    l = getLoc (dL pat)
 {-# INLINE b_match #-}
 
 b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
@@ -121,7 +122,9 @@ b_tsigE (LForm (L l _)) e (ctxt,t) =
   let t' = case ctxt of
              [] -> t
              _  -> L l (mkHsQualTy_compat (mkLocatedList ctxt) t)
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,8,0)
+      e' = ExprWithTySig noExt e (mkLHsSigWcType t')
+#elif MIN_VERSION_ghc(8,6,0)
       e' = ExprWithTySig (mkLHsSigWcType t') e
 #else
       e' = ExprWithTySig e (mkLHsSigWcType t')

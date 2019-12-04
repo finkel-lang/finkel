@@ -49,7 +49,7 @@ import HsSyn (HsModule(..))
 import HsTypes ( ConDeclField(..), HsConDetails(..), HsContext
                , HsImplicitBndrs(..), HsWildCardBndrs(..), HsType(..)
                , LConDeclField, LHsQTyVars(..), LHsType, LHsTyVarBndr
-               , pprHsContext, pprHsForAll )
+               , pprHsForAll )
 import Outputable ( (<+>), (<>), ($$), ($+$), Outputable(..)
                   , OutputableBndr(..), SDoc
                   , braces, char, comma, dcolon, darrow, dot
@@ -60,21 +60,29 @@ import Outputable ( (<+>), (<>), ($$), ($+$), Outputable(..)
 import RdrName (RdrName)
 import SrcLoc ( GenLocated(..), Located, noLoc, unLoc )
 
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc (8,8,0)
+import HsDecls (FamEqn (..), pprHsFamInstLHS)
+import HsDoc (HsDocString, unpackHDS)
+import HsExtension (GhcPass, IdP)
+import HsTypes (noLHsContext, pprLHsContext)
+import Outputable (arrow, pprPanic)
+#elif MIN_VERSION_ghc (8,6,0)
 import HsDecls (FamEqn (..), pprFamInstLHS)
 import HsDoc (HsDocString, unpackHDS)
 import HsExtension (GhcPass, IdP)
+import HsTypes (pprHsContext)
 import Outputable (arrow, pprPanic)
 #elif MIN_VERSION_ghc (8,4,0)
 import HsDecls (FamEqn (..), pprFamInstLHS)
 import HsDoc (HsDocString(..))
 import HsExtension (SourceTextX, IdP)
+import HsTypes (pprHsContext)
 import FastString (unpackFS)
 #else
 #define IdP {- empty -}
 import HsDecls (TyFamEqn (..), HsTyPats)
 import HsDoc (HsDocString(..))
-import HsTypes (pprParendHsType)
+import HsTypes (pprParendHsType, pprHsContext)
 import OccName (HasOccName(..))
 import FastString (unpackFS)
 #endif
@@ -208,6 +216,11 @@ whenPprDebug d = ifPprDebug d
 #endif
 
 -}
+
+#if MIN_VERSION_ghc (8,8,0)
+pprHsContext :: OUTPUTABLE n a => HsContext (GhcPass a) -> SDoc
+pprHsContext = pprLHsContext . noLoc
+#endif
 
 
 -- ---------------------------------------------------------------------
@@ -626,7 +639,17 @@ pprFlavour (ClosedTypeFamily {}) = text "type"
 
 -- From 'HsDecls.ppr_fam_inst_eqn'
 ppr_fam_inst_eqn :: (OUTPUTABLE n pr) => TyFamInstEqn n -> SDoc
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc (8,8,0)
+ppr_fam_inst_eqn (HsIB { hsib_body = FamEqn { feqn_tycon = L _ tycon
+                                            , feqn_bndrs = bndrs
+                                            , feqn_pats = pats
+                                            , feqn_fixity = fixity
+                                            , feqn_rhs = rhs }})
+    = pprHsFamInstLHS tycon bndrs pats fixity noLHsContext <+>
+      equals <+> ppr rhs
+ppr_fam_inst_eqn (XHsImplicitBndrs x) = ppr x
+ppr_fam_inst_eqn _ = error "ppr_fam_inst_eqn"
+#elif MIN_VERSION_ghc (8,4,0)
 ppr_fam_inst_eqn (HsIB { hsib_body = FamEqn { feqn_tycon  = tycon
                                             , feqn_pats   = pats
                                             , feqn_fixity = fixity

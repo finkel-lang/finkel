@@ -54,7 +54,7 @@ functions defined in this modules are used in macro defined in
 (import Control.Exception ((Exception ..) throw))
 
 ;; ghc
-(import SrcLoc ((GenLocated ..) getLoc))
+(import SrcLoc (getLoc))
 
 ;; sk-kernel
 (import Language.SK)
