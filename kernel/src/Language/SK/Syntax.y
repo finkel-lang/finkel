@@ -344,12 +344,13 @@ overlap :: { Maybe (Located OverlapMode) }
 sfsig :: { (Code, HType) }
     : '::' idsym type { ($2, $3) }
 
-simpletype :: { (FastString, [HTyVarBndr])}
-    : conid  {% getConId $1 >>= \n -> return (n, []) }
+simpletype :: { (FastString, [HTyVarBndr], Maybe HKind)}
+    : conid  {% getConId $1 >>= \n -> return (n, [], Nothing) }
     | 'list' {% parse p_lsimpletype $1 }
 
-lsimpletype :: { (FastString, [HTyVarBndr]) }
-    : conid tvbndrs {% getConId $1 >>= \n -> return (n, $2) }
+lsimpletype :: { (FastString, [HTyVarBndr], Maybe HKind) }
+    : '::' conid type {% getConId $2 >>= \n -> return (n, [], Just $3) }
+    | conid tvbndrs   {% getConId $1 >>= \n -> return (n, $2, Nothing) }
 
 constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs { let (m,d) = $1 in (m,reverse d) }
@@ -588,6 +589,8 @@ type_no_symbol :: { HType }
     | '_'                { b_anonWildT $1 }
     | 'unit'             { b_unitT $1 }
     | '~'                { b_tildeT $1 }
+    | 'string'           {% b_tyLitT $1 }
+    | 'integer'          {% b_tyLitT $1 }
     | 'hslist'           {% case toListL $1 of
                               LForm (L _ (List [])) -> return (b_nilT $1)
                               xs -> b_listT `fmap` parse p_type [xs] }

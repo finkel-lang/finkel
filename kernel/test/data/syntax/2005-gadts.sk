@@ -1,8 +1,10 @@
 ;;; GADTs
 
-#p(LANGUAGE GADTs)
+#p(LANGUAGE GADTs KindSignatures)
 
 (module Main)
+
+(import GHC.Types)
 
 (data (Expr a)
   (:: I (-> Int (Expr Int)))
@@ -65,8 +67,43 @@
   (do (print (G3a True))
       (print (G3Int n))))
 
+;;; GADTs with `deriving'
+
+(data (Maybe1 a)
+  (:: Nothing1 (Maybe1 a))
+  (:: Just1 (-> a (Maybe1 a)))
+  (deriving (Eq Show)))
+
+(:: gadt4 (-> Int (IO ())))
+(= gadt4 n
+  (print [Nothing1 (Just1 n)]))
+
+;;; XXX: GADTs with record syntax
+
+;; (data Person
+;;   (:: Adult (-> {name String children [Person]} Person))
+;;   (:: Child (=> (Show a) (-> {name !String funny a} Person))))
+
+;; (:: gadt5 (-> Int (IO ())))
+;; (= gadt5 n
+;;   (do (let ((= adult (Adult {name "foo" children [child]}))
+;;             (= child (Chilc [name "bar" funny n]))))
+;;       (putStrLn (name adult))
+;;       (putStrLn (name child))
+;;       (mapM_ (. print funny) (children adult))))
+
+;;; GADTs with kind signature
+
+(data Ze)
+(data (Su n))
+
+(data (:: Vec (-> Type Type Type))
+  (:: Nil (Vec a Ze))
+  (:: Cons (-> a (Vec a n) (Vec a (Su n)))))
+
 (:: main (IO ()))
 (= main
   (do gadt1
       (gadt2 42)
-      (gadt3 42)))
+      (gadt3 42)
+      (gadt4 42)))

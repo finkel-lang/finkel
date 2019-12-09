@@ -1,0 +1,106 @@
+;;;; File containing codes using `DataKinds' language extension
+
+#p(LANGUAGE DataKinds
+            GADTs
+            KindSignatures
+            MultiParamTypeClasses
+            TypeFamilies
+            TypeOperators)
+
+;;; Ghc <= 8.4 need `FlexibleInstances' language extension for instance
+;;; declarations of `Has' type class.
+#p(LANGUAGE FlexibleInstances)
+
+(module Main)
+
+;; base
+(import Data.Proxy ((Proxy ..)))
+(import GHC.Types ((Type)))
+
+;;; XXX: Need "ExplicitNamespace" extension.
+;; (import GHC.TypeLits ((Symbol) natVal (type +))
+(import GHC.TypeLits)
+
+;; sk-kernel
+(import Language.SK)
+
+;;; Value-level quoted symbols
+
+(:: quoted-1 (IO ()))
+(= quoted-1
+  (do (print 'foo)
+      (print 'bar)))
+
+(:: quoted-2 (IO ()))
+(= quoted-2
+  (do (print '[])
+      (print '(, a b c))))
+
+;;; Overview
+
+(data Na
+  Ze
+  (Su Na))
+
+(data (Vec (:: a Type) (:: n Na))
+  (:: Nil  (Vec a 'Ze))
+  (:: Cons (-> a (Vec a n) (Vec a ('Su n)))))
+
+;;; Promoted list and tuple types
+
+;; HList
+
+;; (data (:: HList (-> [Type] Type))
+;;   (:: HNil (HList '[]))
+;;   (:: HCons (-> a (HList t) (HList (': a t)))))
+
+;; Tuple
+
+;; (data (:: Tuple (-> (, Type Type) Type))
+;;   (:: Tuple (-> a b (Tuple '(, a b)))))
+
+;;; Promoting existential data constructors
+
+;;; Type-Level literals
+
+(data (Label (:: l Symbol)) Get)
+
+(class (Has a l)
+  (type (Res a l))
+  (:: from (-> a (Label l) (Res a l))))
+
+(data Point
+  (Point Int Int)
+  (deriving (Show)))
+
+(instance (Has Point "x")
+  (type (Res Point "x") Int)
+  (= from (Point x _) _ x))
+
+(instance (Has Point "y")
+  (type (Res Point "y") Int)
+  (= from (Point _ y) _ y))
+
+(:: tylit-syms (IO ()))
+(= tylit-syms
+  (do (let ((= p (Point 12 34))))
+      (print (from p (:: Get (Label "x"))))
+      (print (from p (:: Get (Label "y"))))))
+
+(:: tylit-nats-simple (IO ()))
+(= tylit-nats-simple
+  (do (print (natVal (:: Proxy (Proxy 1))))
+      (print (natVal (:: Proxy (Proxy 2))))))
+
+(:: tylit-nats-with-op (IO ()))
+(= tylit-nats-with-op
+  (do (print (natVal (:: Proxy (Proxy (+ 1 2)))))
+      (print (natVal (:: Proxy (Proxy (+ 3 4)))))))
+
+(:: main (IO ()))
+(= main
+  (do (putStrLn ";;; datakinds ;;;")
+      quoted-1
+      quoted-2
+      tylit-syms
+      tylit-nats-simple))

@@ -281,6 +281,7 @@ groupExts = foldr f ([],[])
 supportedLangExts :: [(FastString, String)]
 supportedLangExts =
     f [ BangPatterns
+      , DataKinds
       , DeriveDataTypeable
       , DeriveFoldable
       , DeriveFunctor

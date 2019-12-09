@@ -26,7 +26,7 @@ import HsPat ( HsRecField'(..), LHsRecField, LHsRecUpdField )
 import HsTypes ( AmbiguousFieldOcc(..), FieldOcc(..), LHsContext
                , HsTyVarBndr(..), HsType(..), mkFieldOcc )
 import HsUtils (mkFunBind, mkHsIntegral)
-import Lexeme (isLexCon, isLexConSym, isLexVar)
+import Lexeme (isLexCon, isLexConSym, isLexVar, isLexVarSym)
 import OccName (NameSpace, srcDataName, tcName, tvName, varName)
 import OrdList (OrdList, fromOL, toOL)
 import RdrHsSyn (cvTopDecls)
@@ -117,7 +117,10 @@ checkVarId orig name
 
 getConId :: Code -> Builder FastString
 getConId orig@(LForm (L _ form))
-  | Atom (ASymbol sym) <- form, isLexCon sym = return sym
+  | Atom (ASymbol sym) <- form
+  -- `isLexVarSym' is for "TypeOperators" extension.
+  , isLexCon sym || isLexVarSym sym
+  = return sym
   | otherwise = do
     setLastToken orig
     failB "invalid constructor identifier"

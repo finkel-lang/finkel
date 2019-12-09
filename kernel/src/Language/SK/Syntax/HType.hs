@@ -1,22 +1,24 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 -- | Syntax for type.
 module Language.SK.Syntax.HType where
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
-import FastString (headFS, lengthFS, nullFS, tailFS)
+import FastString (fsLit, headFS, lengthFS, nullFS, tailFS)
 import HsDoc (LHsDocString)
-import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..)
+import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..), HsTyLit(..)
                , LHsTyVarBndr, SrcStrictness(..)
                , SrcUnpackedness(..), mkAnonWildCardTy
                , mkHsAppTy, mkHsAppTys, mkHsOpTy )
-import Lexeme (isLexCon, isLexConSym)
-import OccName (tcName, tvName)
+import Lexeme (isLexCon, isLexConSym, isLexVarSym)
+import OccName (dataName, tcName, tvName)
 import RdrName (getRdrName, mkQual, mkUnqual)
 import SrcLoc (GenLocated(..), Located, getLoc)
 import TysPrim (funTyCon)
-import TysWiredIn (listTyCon, tupleTyCon)
+import TysWiredIn (consDataCon, listTyCon_RDR, nilDataCon, tupleTyCon)
 
 #if MIN_VERSION_ghc (8,8,0)
 import BasicTypes (PprPrec, PromotionFlag(..), funPrec)
@@ -48,10 +50,22 @@ import Language.SK.Syntax.SynUtils
 
 #include "Syntax.h"
 
+-- ---------------------------------------------------------------------
+--
+-- Promotion
+--
+-- ---------------------------------------------------------------------
+
 #if MIN_VERSION_ghc (8,8,0)
 type PROMOTIONFLAG = PromotionFlag
+
+iSPROMOTED :: PROMOTIONFLAG
+iSPROMOTED = IsPromoted
 #else
 type PROMOTIONFLAG = Promoted
+
+iSPROMOTED :: PROMOTIONFLAG
+iSPROMOTED = Promoted
 #endif
 
 
@@ -86,8 +100,9 @@ b_symT whole@(LForm (L l form))
               | otherwise -> tv (mkUnqual (namespace name) name)
             Just qual -> tv (mkQual (namespace name) qual)
         namespace ns
-          | isLexCon ns = tcName
-          | otherwise   = tvName
+          -- Using "isLexVarSym" for "TypeOperator" extension.
+          | isLexCon ns || isLexVarSym ns = tcName
+          | otherwise                     = tvName
         x = headFS name
         xs = tailFS name
         arity = 1 + lengthFS name
@@ -122,17 +137,76 @@ b_funT (LForm (L l _)) ts =
     funty = L l (hsTyVar NotPromoted (L l (getRdrName funTyCon)))
 {-# INLINE b_funT #-}
 
+b_tyLitT :: Code -> Builder HType
+b_tyLitT (LForm (L l form))
+  | Atom (AString str) <- form =
+    return (mkLit l (HsStrTy (SourceText str) (fsLit str)))
+  | Atom (AInteger n) <- form =
+    return (mkLit l (HsNumTy (SourceText (show n)) n))
+  | otherwise = builderError
+  where
+    mkLit loc lit = cL loc (HsTyLit NOEXT lit)
+{-# INLINE b_tyLitT #-}
+
 b_opOrAppT :: Code -> [HType] -> Builder HType
 b_opOrAppT form@(LForm (L l ty)) typs
+  -- Perhaps empty list
   | null typs = b_symT form
+  -- Promoted constructor
+  | isQSymbol ty
+  , [L ln (HsTyLit _EXT (HsStrTy _ name))] <- map dL typs =
+    let rname =
+          case name of
+            -- ":" is wired-in data constructor.
+            ":" -> getRdrName consDataCon
+            -- Usual, non-special data constructor.
+            _   -> maybe (mkUnqual dataName name)
+                         (mkQual dataName)
+                         (splitQualName name)
+    -- in  return (L l (hsTyVar iSPROMOTED (cL ln rname)))
+    in  return (mkPTyVar ln rname)
+  -- Promoted HsList data constructor
+  | isQHsList ty =
+    case typs of
+      -- Promoted empty list constructor.
+      (dL->L ln (HsTyVar {})) : _ ->
+        return (mkPTyVar ln (getRdrName nilDataCon))
+        -- return (L l (hsTyVar iSPROMOTED (cL ln (getRdrName nilDataCon))))
+        -- error "b_opOrAppT: qHsList HsTyVar"
+      -- Promoted list constructor with elements.
+      (dL->L ln (HsListTy {})) :_ ->
+        error "b_opOrAppT: qHsList HsListTy"
+
+      _ -> error "b_opOrAppT: isQHsList"
+  -- | isQHsList ty = error "b_opOrAppT: got qHsList with contents"
+  -- Constructor application (not promoted)
   | Atom (ASymbol name) <- ty
   , isLexConSym name =
     let lrname = L l (mkUnqual tcName name)
         f lhs rhs = L l (mkHsOpTy lhs lrname rhs)
     in  return (L l (hsParTy (foldr1 f typs)))
+  -- Var type application
   | otherwise =
     do op <- b_symT form
        b_appT (op:typs)
+  where
+    -- "qSymbol" (when compiling files) and "Language.SK.qSymbol" (from
+    -- REPL) are used for quoted names after macro expansion.
+    isQSymbol :: Form Atom -> Bool
+    isQSymbol aform
+      | Atom (ASymbol qsym) <- aform
+      = qsym == "qSymbol" || qsym == "Language.SK.qSymbol"
+      | otherwise = False
+
+    -- Similar to above, for "qHsList" or "Language.SK.qHsList".
+    isQHsList :: Form Atom -> Bool
+    isQHsList aform
+      | Atom (ASymbol qsym) <- aform
+      = qsym == "qHsList" || qsym == "Language.SK.qSymbol"
+      | otherwise = False
+
+    -- Make promoted HsTyVar.
+    mkPTyVar ln rname = L l (hsTyVar iSPROMOTED (cL ln rname))
 {-# INLINE b_opOrAppT #-}
 
 b_appT :: [HType] -> Builder HType
@@ -151,7 +225,7 @@ b_listT ty@(L l _) = L l (HsListTy NOEXT ty)
 
 b_nilT :: Code -> HType
 b_nilT (LForm (L l _)) =
-  L l (hsTyVar NotPromoted (L l (getRdrName listTyCon)))
+  L l (hsTyVar NotPromoted (L l (listTyCon_RDR)))
 {-# INLINE b_nilT #-}
 
 b_tupT :: Code -> [HType] -> HType
@@ -225,7 +299,6 @@ hsParTy = HsParTy NOEXT
 hsTyVar :: PROMOTIONFLAG -> Located (IdP PARSED) -> HsType PARSED
 hsTyVar = HsTyVar NOEXT
 {-# INLINE hsTyVar #-}
-
 
 -- ---------------------------------------------------------------------
 --

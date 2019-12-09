@@ -43,6 +43,7 @@ module Language.SK.Builder
   , HIE
   , HIEWrappedName
   , HImportDecl
+  , HKind
   , HLocalBinds
   , HMatch
   , HModule
@@ -254,6 +255,8 @@ type HIE = LIE PARSED
 type HIEWrappedName = LIEWrappedName PARSED
 
 type HImportDecl = LImportDecl PARSED
+
+type HKind = HType
 
 type HLocalBinds = Located (HsLocalBinds PARSED)
 

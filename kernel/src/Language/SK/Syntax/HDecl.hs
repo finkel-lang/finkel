@@ -70,23 +70,25 @@ import Language.SK.Syntax.SynUtils
 -- ---------------------------------------------------------------------
 
 b_dataD :: Code
-        -> (FastString, [HTyVarBndr])
+        -> (FastString, [HTyVarBndr], Maybe HKind)
         -> (HDeriving, [HConDecl])
         -> HDecl
 b_dataD = mkNewtypeOrDataD DataType
 {-# INLINE b_dataD #-}
 
-b_newtypeD :: Code -> (FastString, [HTyVarBndr])
+b_newtypeD :: Code
+           -> (FastString, [HTyVarBndr], Maybe HKind)
            -> (HDeriving, [HConDecl])
            -> HDecl
 b_newtypeD = mkNewtypeOrDataD NewType
 {-# INLINE b_newtypeD #-}
 
-mkNewtypeOrDataD :: NewOrData -> Code
-                 -> (FastString, [HTyVarBndr])
+mkNewtypeOrDataD :: NewOrData
+                 -> Code
+                 -> (FastString, [HTyVarBndr], Maybe HKind)
                  -> (HDeriving, [HConDecl])
                  -> HDecl
-mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
+mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
   L l (tyClD decl)
   where
     decl = DataDecl { tcdLName = L l (mkUnqual tcName name)
@@ -103,7 +105,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
     defn = HsDataDefn { dd_ND = newOrData
                       , dd_ctxt = noLoc []
                       , dd_cType = Nothing
-                      , dd_kindSig = Nothing
+                      , dd_kindSig = ksig
                       , dd_cons = cs
                       , dd_derivs = derivs
 #if MIN_VERSION_ghc (8,6,0)
@@ -112,8 +114,11 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs) (derivs, cs) =
                       }
 {-# INLINE mkNewtypeOrDataD #-}
 
-b_typeD :: Code -> (FastString, [HTyVarBndr]) -> HType -> HDecl
-b_typeD (LForm (L l _)) (name, tvs) ty = L l (tyClD synonym)
+b_typeD :: Code
+        -> (FastString, [HTyVarBndr], Maybe HKind)
+        -> HType
+        -> HDecl
+b_typeD (LForm (L l _)) (name, tvs, _) ty = L l (tyClD synonym)
   where
     synonym = SynDecl { tcdLName = L l (mkUnqual tcName name)
                       , tcdFixity = Prefix
