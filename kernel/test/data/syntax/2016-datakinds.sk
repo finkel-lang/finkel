@@ -4,6 +4,7 @@
             GADTs
             KindSignatures
             MultiParamTypeClasses
+            RankNTypes
             TypeFamilies
             TypeOperators)
 
@@ -50,16 +51,44 @@
 
 ;; HList
 
-;; (data (:: HList (-> [Type] Type))
-;;   (:: HNil (HList '[]))
-;;   (:: HCons (-> a (HList t) (HList (': a t)))))
+(data (:: HList (-> [Type] Type))
+  (:: HNil (HList '[]))
+  (:: HCons (-> a (HList as) (HList (': a as)))))
+
+(:: foo0 (HList '[]))
+(= foo0 HNil)
+
+(:: foo1 (HList '[Int]))
+(= foo1 (HCons (:: 3 Int) foo0))
+
+;; Explicit quote is required for promoted list.
+(:: foo2 (HList '[Bool Int]))
+(= foo2 (HCons True foo1))
+
+(:: print-foo2 (IO ()))
+(= print-foo2
+  (case foo2
+    (HCons a (HCons b HNil))
+    (putStrLn (++ "foo2: [" (show a) " " (show b) "]"))))
 
 ;; Tuple
 
-;; (data (:: Tuple (-> (, Type Type) Type))
-;;   (:: Tuple (-> a b (Tuple '(, a b)))))
+(data (:: Tuple (-> (, Type Type) Type))
+  (:: Tuple (-> a b (Tuple '(, a b)))))
 
 ;;; Promoting existential data constructors
+
+(data (:: Ex Type)
+  (:: MkEx (forall a (-> a Ex))))
+
+(type family (UnEx (:: ex Ex)))
+(type instance (UnEx ('MkEx ex)) ex)
+
+(:: print-ex (IO ()))
+(= print-ex
+  (let ((:: ex (UnEx ('MkEx Bool)))
+        (= ex True))
+    (print ex)))
 
 ;;; Type-Level literals
 
@@ -102,5 +131,7 @@
   (do (putStrLn ";;; datakinds ;;;")
       quoted-1
       quoted-2
+      print-foo2
+      print-ex
       tylit-syms
       tylit-nats-simple))

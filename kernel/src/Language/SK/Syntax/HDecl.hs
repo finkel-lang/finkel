@@ -156,7 +156,7 @@ b_qtyconD (whole@(L l decl), tys) =
 {-# INLINE b_qtyconD #-}
 
 b_forallD :: [HTyVarBndr] -> (HConDecl, [HType]) -> HConDecl
-b_forallD vars ((L l cdecl), cxts) =
+b_forallD vars (L l cdecl, cxts) =
 #if MIN_VERSION_ghc (8,6,0)
   L l cdecl { con_forall = noLoc True
             , con_ex_tvs = vars

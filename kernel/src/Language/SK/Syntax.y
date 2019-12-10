@@ -182,6 +182,17 @@ import Language.SK.Syntax.SynUtils
 'dh3'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh3"))) : _))) }
 'dh4'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh4"))) : _))) }
 
+-- SK specific
+--
+-- Following keywords are used in promoted list constructors. The
+-- `qHsList' is for module file compilatoin, and `qualQHsList' is for
+-- REPL.
+
+'qHsList'     { LForm (L _ (Atom (ASymbol "qHsList"))) }
+'qualQHsList' { LForm (L _ (Atom (ASymbol "Language.SK.qHsList"))) }
+'qList'       { LForm (L _ (Atom (ASymbol "qList"))) }
+'qualQList'   { LForm (L _ (Atom (ASymbol "Language.SK.qList"))) }
+
 -- Plain constructors
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _))) }
@@ -601,6 +612,10 @@ types0 :: { HType }
     | ',' zero_or_more_types            { b_tupT $1 $2 }
     | 'forall' forallty                 { b_forallT $1 $2 }
     | '::' type type                    { b_kindedType $1 $2 $3 }
+    | 'qHsList' 'hslist'                {% b_prmListT (parse p_types) $2 }
+    | 'qualQHsList' 'hslist'            {% b_prmListT (parse p_types) $2 }
+    | 'qList' 'hslist'                  {% b_prmTupT (parse p_types) $2 }
+    | 'qualQList' 'hslist'              {% b_prmTupT (parse p_types) $2 }
     | 'symbol' zero_or_more_types       {% b_opOrAppT $1 $2 }
     | type_no_symbol zero_or_more_types {% b_appT ($1:$2) }
 
@@ -832,11 +847,15 @@ special_id :: { Code }
     | special_id_no_bang { $1 }
 
 special_id_no_bang :: { Code }
-    : 'as'        { $1 }
-    | 'family'    { $1 }
-    | 'forall'    { $1 }
-    | 'hiding'    { $1 }
-    | 'qualified' { $1 }
+    : 'as'          { $1 }
+    | 'family'      { $1 }
+    | 'forall'      { $1 }
+    | 'hiding'      { $1 }
+    | 'qualified'   { $1 }
+    | 'qHsList'     { $1 }
+    | 'qualQHsList' { $1 }
+    | 'qList'       { $1 }
+    | 'qualQList'   { $1 }
 
 idsyms :: { [Code] }
     : 'list' {% parse p_idsyms1 $1 }

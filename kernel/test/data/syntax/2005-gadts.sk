@@ -78,6 +78,12 @@
 (= gadt4 n
   (print [Nothing1 (Just1 n)]))
 
+;;; XXX: GADTs with multiple constructors with single signature
+
+;; (data Multi
+;;   (:: (MA MB) Multi)
+;;   (:: MC (-> Int Multi)))
+
 ;;; XXX: GADTs with record syntax
 
 ;; (data Person

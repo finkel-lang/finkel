@@ -78,8 +78,10 @@ mkTest path = do
           skipThisTest _ = (False, "")
 #else
           skipThisTest p =
-            ( "2012-typeop" == takeBaseName p
-            , "Generated Haskell code has unwanted parenthesis" )
+            let b = takeBaseName p
+            in ( or ["2012-typeop" == b
+                    ,"1004-doccomment-01" == b]
+               , "Generated Haskell code is malformed" )
 #endif
       case skipThisTest path of
         (True, reason) -> pendingWith reason
