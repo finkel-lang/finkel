@@ -29,11 +29,11 @@ import System.FilePath ( dropExtension, splitExtension
 import BasicTypes (SuccessFlag(..))
 import DriverPhases (HscSource(..), Phase(..))
 import DriverPipeline (compileOne', link, oneShot, preprocess)
-import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
-                , GhcMode(..), getDynFlags, gopt, gopt_set, gopt_unset
-                , interpWays, isObjectTarget, parseDynamicFilePragma
-                , thisPackage )
-import ErrUtils (mkErrMsg, withTiming)
+import DynFlags ( DumpFlag(..), DynFlags(..), GeneralFlag(..)
+                , GhcLink(..), GhcMode(..), getDynFlags
+                , gopt, gopt_set, gopt_unset, interpWays
+                , isObjectTarget, parseDynamicFilePragma, thisPackage )
+import ErrUtils (dumpIfSet_dyn, mkErrMsg, withTiming)
 import FastString (fsLit)
 import Finder ( addHomeModuleToFinder, cannotFindModule
               , findImportedModule, findObjectLinkableMaybe
@@ -41,10 +41,12 @@ import Finder ( addHomeModuleToFinder, cannotFindModule
 import GHC ( setSessionDynFlags )
 import GhcMake (topSortModuleGraph)
 import GhcMonad ( GhcMonad(..), modifySession, withTempSession )
-import Outputable ( neverQualify, text, showPpr )
+import Outputable ( neverQualify, ppr, text, showPpr )
 import HeaderInfo (getOptionsFromFile)
+import HsDumpAst (BlankSrcSpan(..), showAstData)
 import HsImpExp (ImportDecl(..))
 import HsSyn (HsModule(..))
+import HscStats (ppSourceStats)
 import HscTypes ( FindResult(..), ModIface(..), ModSummary(..)
                 , HomeModInfo(..), HomePackageTable, HsParsedModule(..)
                 , HscEnv(..), InteractiveContext(..)
@@ -446,6 +448,9 @@ doMakeOne i total mb_sp ms src_modified = do
                         iface = hm_iface hm_info
       obj_allowed = isObjectTarget (hscTarget dflags)
 
+  -- Dump the parsed AST.
+  dumpParsedAST dflags ms
+
   -- Lookup reusable old linkable. Reuse strategy for object codes and
   -- byte codes differs to support reloading modules from REPL, and to
   -- support rebuilding cabal package without unnecessary recompilation.
@@ -810,6 +815,27 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
     sp = fromMaybe dummy_sp mb_sp
     dummy_sp = initialSPState (fsLit orig_path) 1 1
     colons = replicate 12 ';'
+
+-- See: "hscParse'" in main/HscMain.hs
+dumpParsedAST :: DynFlags -> ModSummary -> Skc ()
+dumpParsedAST dflags ms =
+  liftIO
+    (case ms_parsed_mod ms of
+       Just pm ->
+         do let rdr_module = hpm_module pm
+            dumpIfSet_dyn dflags Opt_D_dump_parsed "Parser"
+                          (ppr rdr_module)
+            dumpIfSet_dyn dflags Opt_D_dump_parsed_ast "Parser AST"
+                          (txt (showAstData NoBlankSrcSpan rdr_module))
+            dumpIfSet_dyn dflags Opt_D_source_stats "Source Statistic"
+                          (ppSourceStats False rdr_module)
+       Nothing -> return ())
+  where
+#if MIN_VERSION_ghc (8,4,0)
+    txt = id
+#else
+    txt = text
+#endif
 
 compileToHsModule :: TargetUnit
                   -> Skc (Maybe (HModule, DynFlags, [Located String]))
