@@ -185,9 +185,11 @@ import Language.SK.Syntax.SynUtils
 -- SK specific
 --
 -- Following keywords are used in promoted list constructors. The
--- `qHsList' is for module file compilatoin, and `qualQHsList' is for
--- REPL.
+-- `qSymbol' is for module file compilatoin, and `qualQSymbol' is for
+-- REPL, and so on.
 
+'qSymbol'     { LForm (L _ (Atom (ASymbol "qSymbol"))) }
+'qualQSymbol' { LForm (L _ (Atom (ASymbol "Language.SK.qSymbol"))) }
 'qHsList'     { LForm (L _ (Atom (ASymbol "qHsList"))) }
 'qualQHsList' { LForm (L _ (Atom (ASymbol "Language.SK.qHsList"))) }
 'qList'       { LForm (L _ (Atom (ASymbol "qList"))) }
@@ -612,6 +614,8 @@ types0 :: { HType }
     | ',' zero_or_more_types            { b_tupT $1 $2 }
     | 'forall' forallty                 { b_forallT $1 $2 }
     | '::' type type                    { b_kindedType $1 $2 $3 }
+    | 'qSymbol' 'string'                {% b_prmConT $2 }
+    | 'qualQSymbol' 'string'            {% b_prmConT $2 }
     | 'qHsList' 'hslist'                {% b_prmListT (parse p_types) $2 }
     | 'qualQHsList' 'hslist'            {% b_prmListT (parse p_types) $2 }
     | 'qList' 'hslist'                  {% b_prmTupT (parse p_types) $2 }
@@ -852,6 +856,8 @@ special_id_no_bang :: { Code }
     | 'forall'      { $1 }
     | 'hiding'      { $1 }
     | 'qualified'   { $1 }
+    | 'qSymbol'     { $1 }
+    | 'qualQSymbol' { $1 }
     | 'qHsList'     { $1 }
     | 'qualQHsList' { $1 }
     | 'qList'       { $1 }

@@ -41,7 +41,7 @@ import PrelNames (eqTyCon_RDR)
 #else
 #define IdP {- empty -}
 import TysWiredIn (starKindTyCon)
-import HsTypes (Promoted (..), HsAppType(..))
+import HsTypes (Promoted (..))
 import PlaceHolder (placeHolderKind)
 import PrelNames (eqTyCon_RDR)
 #endif
@@ -167,22 +167,6 @@ b_opOrAppT :: Code -> [HType] -> Builder HType
 b_opOrAppT form@(LForm (L l ty)) typs
   -- Perhaps empty list
   | null typs = b_symT form
-  -- Promoted constructor
-  | isQSymbol ty
-  , [L ln (HsTyLit _EXT (HsStrTy _ name))] <- map dL typs =
-    let rname =
-          case name of
-            -- ":" is wired-in data constructor.
-            ":" -> getRdrName consDataCon
-            -- Usual, non-special data constructor.
-            _   -> maybe (mkUnqual (namespace name) name)
-                         (mkQual dataName)
-                         (splitQualName name)
-        namespace n
-          | isLexCon n    = dataName
-          | isLexVarSym n = dataName
-          | otherwise     = tvName
-    in  return (L l (hsTyVar iSPROMOTED (cL ln rname)))
   -- Constructor application (not promoted)
   | Atom (ASymbol name) <- ty
   , isLexConSym name =
@@ -194,6 +178,23 @@ b_opOrAppT form@(LForm (L l ty)) typs
     do op <- b_symT form
        b_appT (op:typs)
 {-# INLINE b_opOrAppT #-}
+
+b_prmConT :: Code -> Builder HType
+b_prmConT (LForm (L l form))
+  | Atom (AString str) <- form =
+    let name = fsLit str
+        rname =
+          case name of
+            ":" -> getRdrName consDataCon
+            _   -> maybe (mkUnqual (namespace name) name)
+                         (mkQual dataName)
+                         (splitQualName name)
+        namespace n
+          | isLexCon n    = dataName
+          | isLexVarSym n = dataName
+          | otherwise     = tvName
+    in  return (L l (hsTyVar iSPROMOTED (cL l rname)))
+  | otherwise = builderError
 
 -- | 'True' when given form is for qSymbol. There are two situations:
 -- "qSymbol" (when compiling files) and "Language.SK.qSymbol" (from
