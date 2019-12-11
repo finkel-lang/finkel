@@ -300,9 +300,11 @@ supportedLangExts =
       , MonomorphismRestriction
       , OverloadedStrings
       , OverloadedLists
+      , PolyKinds
       , RankNTypes
       , ScopedTypeVariables
       , TypeFamilies
+      , TypeInType
       , TypeOperators
       , TypeSynonymInstances
       , UndecidableInstances ]
