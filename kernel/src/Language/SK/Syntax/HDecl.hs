@@ -415,10 +415,9 @@ b_qtyclC :: [HType] -> Builder ([HType], HType)
 b_qtyclC ts =
   case ts of
     []  -> builderError
-    [_] -> builderError
-    _   -> do
-      let (ctxt,t) = splitAt (length ts - 1) ts
-      return (ctxt, head t)
+    _   -> case splitAt (length ts - 1) ts of
+            (ctxt, [t]) -> return (ctxt, t)
+            _           -> builderError
 {-# INLINE b_qtyclC #-}
 
 b_defaultD :: [HType] -> HDecl

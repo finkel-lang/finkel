@@ -16,7 +16,7 @@
 
 ;; base
 (import Data.Proxy ((Proxy ..)))
-(import GHC.Types ((Type)))
+(import Data.Kind ((Type)))
 
 ;;; XXX: Need "ExplicitNamespace" extension.
 ;; (import GHC.TypeLits ((Symbol) natVal (type +))
@@ -46,6 +46,18 @@
 (data (Vec (:: a Type) (:: n Na))
   (:: Nil  (Vec a 'Ze))
   (:: Cons (-> a (Vec a n) (Vec a ('Su n)))))
+
+;;; Alternative syntax
+
+(data (:: Vec2 (-> Type Na Type))
+  (:: Nil2 (Vec2 a 'Ze))
+  (:: Cons2 (-> a (Vec2 a n) (Vec2 a ('Su n)))))
+
+;;; Another alternative syntax
+
+(data (:: (Vec3 (:: a Type)) (-> Na Type))
+  (:: Nil3 (Vec3 a 'Ze))
+  (:: Cons3 (-> a (Vec3 a n) (Vec3 a ('Su n)))))
 
 ;;; Promoted list and tuple types
 

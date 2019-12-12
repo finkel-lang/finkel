@@ -6,7 +6,7 @@
 
 (module Main)
 
-(import GHC.Types ((Type)))
+(import Data.Kind ((Type)))
 
 (data (KS1 (:: m (-> Type Type)) a)
   (KS1 [a]))

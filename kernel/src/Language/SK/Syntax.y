@@ -62,7 +62,7 @@ import Language.SK.Syntax.SynUtils
 %name p_lqtycl lqtycl
 %name p_sfsig sfsig
 %name p_lsimpletype lsimpletype
-%name p_ldatafamcon ldatafamcon
+%name p_ldconhead ldconhead
 %name p_famconhd famconhd
 %name p_lfinsthd lfinsthd
 %name p_lfameq lfameq
@@ -333,10 +333,10 @@ top_decl_with_doc :: { HDecl }
 
 top_decl :: { HDecl }
     : 'data' simpletype constrs            { b_dataD $1 $2 $3 }
-    | 'data' 'family' datafamcon           { b_datafamD $1 $3 }
+    | 'data' 'family' dconhead             { b_datafamD $1 $3 }
     | 'data' 'instance' finsthd constrs    { b_datainstD $1 $3 $4 }
     | 'type' simpletype type               { b_typeD $1 $2 $3 }
-    | 'type' 'family' datafamcon fameqs    { b_tyfamD $4 $1 $3 }
+    | 'type' 'family' dconhead fameqs      { b_tyfamD $4 $1 $3 }
     | 'type' 'instance' finsthd type       { b_tyinstD $1 $3 $4 }
     | 'newtype' simpletype constrs         { b_newtypeD $1 $2 $3 }
     | 'newtype' 'instance' finsthd constrs { b_newtypeinstD $1 $3 $4 }
@@ -363,7 +363,7 @@ simpletype :: { (FastString, [HTyVarBndr], Maybe HKind)}
 
 lsimpletype :: { (FastString, [HTyVarBndr], Maybe HKind) }
     : '::' conid type {% getConId $2 >>= \n -> return (n, [], Just $3) }
-    | conid tvbndrs   {% getConId $1 >>= \n -> return (n, $2, Nothing) }
+    | ldconhead     { $1 }
 
 constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs { let (m,d) = $1 in (m,reverse d) }
@@ -450,7 +450,7 @@ qtycl :: { ([HType], HType) }
 lqtycl :: { ([HType], HType) }
     : '=>' 'unit' type  { ([], $3) }
     | '=>' 'list' types {% parse p_types0 $2 >>= b_qtyclC . (:$3) }
-    | types0            { ([], $1) }
+    | types0_no_qtype   { ([], $1) }
 
 cdecls :: { [HDecl] }
     : rcdecls { reverse $1 }
@@ -465,9 +465,9 @@ cdecl :: { HDecl }
     | 'list' {% parse p_lcdecl $1 }
 
 lcdecl :: { HDecl }
-    : 'type' datafamcon              { b_tyfamD [] $1 $2 }
+    : 'type' dconhead                { b_tyfamD [] $1 $2 }
     | 'type' 'instance' finsthd type { b_tyinstD $1 $3 $4 }
-    | 'data' datafamcon              { b_datafamD $1 $2 }
+    | 'data' dconhead                { b_datafamD $1 $2 }
     | decl                           { $1 }
 
 idecls :: { [HDecl] }
@@ -485,10 +485,10 @@ lidecl :: { HDecl }
     | 'data' finsthd constrs { b_datainstD $1 $2 $3 }
     | decl                   { $1 }
 
-datafamcon :: { (FastString, [HTyVarBndr], Maybe HType) }
-    : 'list' {% parse p_ldatafamcon $1 }
+dconhead :: { (FastString, [HTyVarBndr], Maybe HType) }
+    : 'list' {% parse p_ldconhead $1 }
 
-ldatafamcon :: { (FastString, [HTyVarBndr], Maybe HType)  }
+ldconhead :: { (FastString, [HTyVarBndr], Maybe HType)  }
     : '::' 'list' type {% do { (n,tv) <- parse p_famconhd $2
                              ; return (n,tv,Just $3)} }
     | famconhd         { case $1 of (n,tv) -> (n,tv,Nothing) }
@@ -610,6 +610,10 @@ type_no_symbol :: { HType }
     | 'list'             {% parse p_types0 $1 }
 
 types0 :: { HType }
+    : '=>' qtypes     { b_qualT $1 $2 }
+    | types0_no_qtype { $1 }
+
+types0_no_qtype :: { HType }
     : '->' zero_or_more_types           {% b_funT $1 $2 }
     | ',' zero_or_more_types            { b_tupT $1 $2 }
     | 'forall' forallty                 { b_forallT $1 $2 }
@@ -626,6 +630,10 @@ types0 :: { HType }
 forallty :: { ([HTyVarBndr], ([HType], HType)) }
     : qtycl           { ([], $1) }
     | tvbndr forallty { case $2 of (vs,ty) -> ($1:vs,ty) }
+
+qtypes :: { ([HType], HType) }
+    : type        { ([], $1) }
+    | type qtypes { case $2 of (ctxts,ty) -> ($1:ctxts,ty) }
 
 types :: { [HType] }
     : rtypes { reverse $1 }

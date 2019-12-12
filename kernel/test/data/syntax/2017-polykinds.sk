@@ -12,7 +12,7 @@
 
 (module Main)
 
-(import GHC.Types ((Type)))
+(import Data.Kind ((Type)))
 
 (data (App f a) (MkApp (f a)))
 

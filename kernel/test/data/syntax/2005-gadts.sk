@@ -1,10 +1,10 @@
 ;;; GADTs
 
-#p(LANGUAGE GADTs KindSignatures)
+#p(LANGUAGE GADTs KindSignatures RankNTypes)
 
 (module Main)
 
-(import GHC.Types)
+(import Data.Kind)
 
 (data (Expr a)
   (:: I (-> Int (Expr Int)))
@@ -106,6 +106,16 @@
 (data (:: Vec (-> Type Type Type))
   (:: Nil (Vec a Ze))
   (:: Cons (-> a (Vec a n) (Vec a (Su n)))))
+
+;;; GADT and RankNTypes
+
+(data (Equal a b)
+  (:: Refl (Equal a a)))
+
+(:: subst (-> (Equal a b) (=> (~ a b) r) r))
+(= subst Refl r r)
+
+;;; Main function
 
 (:: main (IO ()))
 (= main

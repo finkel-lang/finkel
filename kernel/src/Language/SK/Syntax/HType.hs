@@ -242,14 +242,19 @@ b_bangT (LForm (L l _)) t = L l (hsBangTy srcBang t)
 
 b_forallT :: Code -> ([HTyVarBndr], ([HType], HType)) -> HType
 b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
-  let ty0 = L l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
+  let ty0 = cL l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
 #if MIN_VERSION_ghc (8,4,0)
-      ty1 = hsParTy (L l0 (forAllTy bndrs ty0))
+      ty1 = hsParTy (cL l0 (forAllTy bndrs ty0))
 #else
       ty1 = forAllTy bndrs ty0
 #endif
-  in  L l0 ty1
+  in  cL l0 ty1
 {-# INLINE b_forallT #-}
+
+b_qualT :: Code -> ([HType], HType) -> HType
+b_qualT (LForm (L l _)) (ctxts, body) =
+  cL l (mkHsQualTy_compat (mkLocatedList ctxts) body)
+{-# INLINE b_qualT #-}
 
 b_kindedType :: Code -> HType -> HType -> HType
 b_kindedType (LForm (L l _)) ty kind =
