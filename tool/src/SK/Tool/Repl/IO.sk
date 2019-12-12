@@ -1,6 +1,6 @@
 ;;;; IO related function for REPL
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.Repl.IO
   (export

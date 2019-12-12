@@ -1,6 +1,6 @@
 ;;; Command line interface utilities.
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.CLI
   (export

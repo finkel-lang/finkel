@@ -6,7 +6,7 @@
 
 #p(OPTIONS_GHC -fno-warn-orphans)
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule Orphan
   (use

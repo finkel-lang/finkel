@@ -1,20 +1,20 @@
-(require P01.G1)
+(:require P01.G1)
 
 (module P01.G2)
 
 (import Language.SK)
 
 (defmacro m1 (name str)
-  `(begin
+  `(:begin
      (:: ,name String)
      (= ,name ,str)))
 
 (defmacro define-p01-module (name imp)
-  `(begin
+  `(:begin
      (module ,name)
      (import ,imp)))
 
 (defmacro define-p01-function (name typ val)
-  `(begin
+  `(:begin
      (:: ,name ,typ)
      (= ,name ,val)))

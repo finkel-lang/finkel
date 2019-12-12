@@ -21,7 +21,7 @@
   (do
     ;; "'foo" is same as "(quote foo)".
     (print 'foo)
-    (print (quote foo))
+    (print (:quote foo))
 
     ;; Quotes can nest.
     (print ''foo)
@@ -37,7 +37,7 @@
 
     ;; Quasiquote.
     (print `foo)
-    (print (quasiquote foo))
+    (print (:quasiquote foo))
 
     (f1 'foo)
     (f2 'foo)

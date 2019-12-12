@@ -6,7 +6,7 @@
 ;;; This module contains `require' special form which adds `P01.G2'
 ;;; module to the context during macro expansion phase in skc.
 
-(require P01.G2)
+(:require P01.G2)
 
 (define-p01-module P01.H P01.I)
 

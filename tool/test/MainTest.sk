@@ -1,6 +1,6 @@
 ;;; Tests for main function
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule MainTest
   (export

@@ -126,19 +126,19 @@ li l xs = LForm $ L l $ List xs
 {-# INLINE li #-}
 
 mkQuote :: Located Token -> Code -> Code
-mkQuote (L l _) body = li l [sym l "quote", body]
+mkQuote (L l _) body = li l [sym l ":quote", body]
 {-# INLINE mkQuote #-}
 
 mkQuasiquote :: Located Token -> Code -> Code
-mkQuasiquote (L l _) body = li l [sym l "quasiquote", body]
+mkQuasiquote (L l _) body = li l [sym l ":quasiquote", body]
 {-# INLINE mkQuasiquote #-}
 
 mkUnquote :: Located Token -> Code -> Code
-mkUnquote (L l _) body = li l [sym l "unquote", body]
+mkUnquote (L l _) body = li l [sym l ":unquote", body]
 {-# INLINE mkUnquote #-}
 
 mkUnquoteSplice :: Located Token -> Code -> Code
-mkUnquoteSplice (L l _) body = li l [sym l "unquote_splice", body]
+mkUnquoteSplice (L l _) body = li l [sym l ":unquote-splice", body]
 {-# INLINE mkUnquoteSplice #-}
 
 mkHsList :: Located Token -> [Code] -> Code
@@ -328,7 +328,7 @@ makeOptionFlags = foldl' f []
         _ -> acc
 
 emptyBody :: SrcSpan -> Code
-emptyBody l = li l [sym l "begin"]
+emptyBody l = li l [sym l ":begin"]
 
 dispatch :: Located Token -> Code -> SP Code
 dispatch (L _ (TSymbol sym)) form =

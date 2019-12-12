@@ -1,6 +1,6 @@
 ;;; Loop for network connection.
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.Repl.Listen
   (use

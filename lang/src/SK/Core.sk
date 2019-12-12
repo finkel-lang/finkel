@@ -31,19 +31,19 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
 ;;; Requires
 
 ;; base
-(require Prelude)
-(require Control.Monad (foldM))
+(:require Prelude)
+(:require Control.Monad (foldM))
 
 ;; ghc
-(require FastString (unpackFS))
-(require SrcLoc ((SrcSpan ..)))
+(:require FastString (unpackFS))
+(:require SrcLoc ((SrcSpan ..)))
 
 ;; sk-kernel
-(require Language.SK)
+(:require Language.SK)
 
 ;; Internal
-(require SK.Core.Error)
-(require SK.Core.List)
+(:require SK.Core.Error)
+(:require SK.Core.List)
 
 ;;; Imports
 
@@ -80,12 +80,12 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
 ;;; `define-macro'' to define macros in compilation context and compiled
 ;;; result.
 
-(with-macro ((= eval-when-compile-and-load
+(:with-macro ((= eval-when-compile-and-load
                (Macro
                 (\ form
                   (case (unCode form)
-                    (List (: _ rest)) (return `(begin
-                                                 (eval-when-compile
+                    (List (: _ rest)) (return `(:begin
+                                                 (:eval-when-compile
                                                    ,@rest)
                                                  ,@rest))
                     _ (skSrcError
@@ -110,14 +110,14 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
        (case (unCode form)
          (List [_ name arg body])
          (do (<- decl (macro-decl name arg body))
-             (return `(begin
+             (return `(:begin
                         ,(make-tsig name)
                         ,decl)))
 
          (List [_ name doc arg body])
          (| ((<- (Atom (AString _)) (unCode doc))
              (do (<- decl (macro-decl name arg body))
-                 (return `(begin
+                 (return `(:begin
                             ,(make-tsig name)
                             (:docp ,doc)
                             ,decl)))))
@@ -135,11 +135,11 @@ default, i.e., available without /require/-ing \"SK.Core\" module.")
        (case (unCode form)
          (List (: _self (LForm (L _l (List ms))) rest))
          (do (<- ms' (mapM f ms))
-             (return `(with-macro (,@ms') ,@rest)))
+             (return `(:with-macro (,@ms') ,@rest)))
          _ (skSrcError form "lmac: malformed args"))))
    #p(INLINABLE lmac)))
 
-(eval-when-compile
+(:eval-when-compile
   (:docn "Simple macro for defining macro. This macro is used internally
 in \"SK.Core\" module to define other macros.
 
@@ -175,14 +175,14 @@ With documentation comment:
   (:: define-macro Macro)
   (= define-macro (Macro dmac)))
 
-(eval-when-compile
+(:eval-when-compile
   (define-macro define-macro'
     "Auxiliary macro to define a macro for both compile time and load
 time. Used only in this module until 'defmacro-m'' is defined."
     form
     (do (<- body (dmac form))
-        (return `(begin
-                   (eval-when-compile
+        (return `(:begin
+                   (:eval-when-compile
                      ,body)
                    ,body)))))
 
@@ -239,15 +239,15 @@ and temporally macro @m@ at compilation time.
         (= gen-eval-when phases body
           (| ((&& (at-compile phases) (at-load phases))
               (return
-                `(begin
-                   (eval-when-compile
+                `(:begin
+                   (:eval-when-compile
                      ,@body)
                    ,@body)))
              ((at-compile phases)
-              (return `(eval-when-compile
+              (return `(:eval-when-compile
                          ,@(List body))))
              ((at-load phases)
-              (return `(begin
+              (return `(:begin
                          ,@(List body))))
              (otherwise
               (skSrcError form (++ "eval-when: invalid phase: "
@@ -380,7 +380,7 @@ See 'eval_when'.
       (case (unCode whole)
         (List (: _ (LForm (L l0 (List forms))) rest))
         (do (<- macros (mapM make-macro forms))
-            (lmac `(with-macro ,(LForm (L l0 (List macros)))
+            (lmac `(:with-macro ,(LForm (L l0 (List macros)))
                      ,@(List rest))))
 
         _ (skSrcError whole (++ label ": invalid form")))))
@@ -637,7 +637,7 @@ Sample runs:
   `(unsafeSkSrcError ,the-macro-arg ,msg))
 
 ;;; Pattern matching macro for `LForm' of `Atom' with `AString'.
-(eval-when-compile
+(:eval-when-compile
   (defmacro pAstring
     [val]
     `(LForm (L _ (Atom (AString ,val))))))
@@ -727,7 +727,7 @@ The last /fib2/ example is same as below:
              (otherwise False)))
         (:: build-tysig (-> Code Code (Maybe Code) [Code] (Skc Code)))
         (= build-tysig name ty mb-doc bodies
-          (return `(begin
+          (return `(:begin
                      (:: ,name ,ty)
                      ,@(build-doc mb-doc)
                      ,@(build-decls name bodies))))
@@ -739,7 +739,7 @@ The last /fib2/ example is same as below:
                   (<- [x] xs)
                   (return x))
                  (otherwise
-                  (return `(begin ,@xs ,@(build-doc mb-doc))))))
+                  (return `(:begin ,@xs ,@(build-doc mb-doc))))))
             (= xs (build-decls name bodies))))
         (:: build (-> Code (Maybe Code) [Code] (Skc Code)))
         (= build sig mb-doc bodies
@@ -887,12 +887,12 @@ functions.
 
 >>> (macroexpand-1 '(defmacro f1 [x] `(+ ,x 1)))
 (defmacro_m f1 [x]
-  (let ((= f1_cs2 (quasiquote (+ (unquote x) 1))))
+  (let ((= f1_cs2 (:quasiquote (+ (:unquote x) 1))))
     (return f1_cs2)))
 "
   [form]
   (case (unCode form)
-    (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
+    (List [q x]) (| ((|| (== q ':quote) (== q ':quasiquote))
                      (do (<- expanded (expand1 x))
                          (return `',expanded))))
     _ (return form)))
@@ -908,17 +908,17 @@ forms.
 ==== __Examples__
 
 >>> (macroexpand '(defmacro f1 [x] `(+ ,x 1)))
-(begin
+(:begin
   (:: f1 Macro)
   (= f1 (let ((:: tmp_cnp (-> Code (Skc Code)))
               (= tmp_cnp __form__
                 (case __form__
                   (LForm (L _loc (List [_ x])))
-                  (let ((= tmp_cno (quasiquote (+ (unquote x) 1))))
+                  (let ((= tmp_cno (:quasiquote (+ (:unquote x) 1))))
                     (return tmp_cno))
                   _ (skSrcError
                      __form__
-                     (concat [(show (quote f1))
+                     (concat [(show (:quote f1))
                               \"\\ninvalid args: `\"
                               (show __form__)
                               \"'\"])))))
@@ -926,7 +926,7 @@ forms.
 "
   [form]
   (case (unCode form)
-    (List [q x]) (| ((|| (== q 'quote) (== q 'quasiquote))
+    (List [q x]) (| ((|| (== q ':quote) (== q ':quasiquote))
                      (let ((= go expr
                              (do (<- expr' (expand1 expr))
                                  (if (== expr expr')
@@ -1020,9 +1020,9 @@ Sample module header:
 Expands to below:
 
 @
-(begin
-  (require SK.Prelude hiding (head tail))
-  (require Control.Monad (foldM))
+(:begin
+  (:require SK.Prelude hiding (head tail))
+  (:require Control.Monad (foldM))
   (module Foo foo bar buzz)
   (import Control.Monad (when))
   (import qualified Data.ByteString as BS)
@@ -1054,8 +1054,8 @@ Expands to below:
                             acc)))
                       ((== label 'load)
                        (return
-                         (: (, 'require (mapcar (\ es `(require ,@es))
-                                                payload))
+                         (: (, ':require (mapcar (\ es `(:require ,@es))
+                                                 payload))
                             acc)))
                       ((== label 'load-use)
                        (return (: (, 'load-use payload) acc)))
@@ -1074,8 +1074,8 @@ Expands to below:
                         (append e1 e2)
                         e1)))))
           (return
-            `(begin
-               ,@(emit True 'require)
+            `(:begin
+               ,@(emit True ':require)
                (module ,name ,@(emit False 'export))
                ,@(emit True 'import))))
 

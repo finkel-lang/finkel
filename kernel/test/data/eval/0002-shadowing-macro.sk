@@ -3,7 +3,7 @@
 ;;; Expression to test name shadowing with conflictinging names bounded
 ;;; to macro with `with-macro' and locally declared function with `let'.
 
-(with-macro ((= foo
+(:with-macro ((= foo
                (Macro (\ form
                         (case form
                           (LForm (L _ (List [_ body])))

@@ -1,4 +1,4 @@
-(require P01.G2)
+(:require P01.G2)
 
 (module P01.C)
 

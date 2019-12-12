@@ -1,6 +1,6 @@
 ;;;; Tests for version compatibility macro
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule CompatTest
   (export
@@ -37,7 +37,7 @@
                              [a b c]
                              (buzz a b c version))
                            (\ form
-                             (== (car form) 'eval-when-compile)))))
+                             (== (car form) ':eval-when-compile)))))
       (d "with-ghc-version-cond"
          (it "should expand to macrolet"
              (expand-macro with-ghc-version-cond

@@ -6,7 +6,7 @@
 ;;;; shall be easier to support reading forms from other sources than
 ;;;; line oriented user input, e.g. network sockets.
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.Repl
   (export

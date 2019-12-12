@@ -1,4 +1,4 @@
-(require M3)
+(:require M3)
 
 (module Main)
 

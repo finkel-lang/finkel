@@ -11,7 +11,7 @@
                (let ((= __name
                        (toCode (qSymbol (++ "__" (show name))))))
                  (return
-                   `(begin
+                   `(:begin
                       (:: ,name Macro)
                       (= ,name
                         (let ((:: ,__name (-> Code (Skc Code)))

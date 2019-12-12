@@ -1,19 +1,19 @@
 ;;; Tests for begin.
 
-(begin
+(:begin
   (module Main)
-  (begin
+  (:begin
     (:: bgn01 (IO ()))
     (= bgn01
       (do (putStrLn "=== start bgn01 ===")
-          (putStrLn "begin")
+          (putStrLn ":begin")
           (putStrLn "in")
           (putStrLn "do")
           (putStrLn "=== end bgn01 ===")))))
 
-(begin
+(:begin
   (:: bgn02 (IO ())))
-(begin
+(:begin
   (= bgn02
     (let ((= f str
             (putStrLn str))
@@ -21,11 +21,11 @@
             (concat ["=== " str " ==="])))
       (f (g "bgn02")))))
 
-(begin
-  (begin
+(:begin
+  (:begin
     (:: bgn03 (IO ())))
-  (begin
-    (begin
+  (:begin
+    (:begin
       (= bgn03
         (let ((= f str (++ "f:" str))
               (= g str (++ "g:" str)))

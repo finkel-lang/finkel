@@ -1,6 +1,6 @@
 ;;; Main entry point
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.Main
   (export

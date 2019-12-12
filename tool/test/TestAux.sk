@@ -1,6 +1,6 @@
 ;;;; Auxiliary codes for tests
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule TestAux
   (export
@@ -35,7 +35,7 @@
 
 (with-ghc-version-cond v
   ((<= 804 v)
-   (begin))
+   (:begin))
   (otherwise
    (import Data.Monoid (<>))))
 
@@ -62,7 +62,7 @@
    (instance (Semigroup TestIOState)
      (= <> mappend)))
   (otherwise
-   (begin)))
+   (:begin)))
 
 (defn (emptyTestIOState TestIOState)
   (TestIOState {tst-inputs []

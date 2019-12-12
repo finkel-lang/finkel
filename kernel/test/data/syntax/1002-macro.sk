@@ -2,12 +2,12 @@
 
 (module Main)
 
-(require Prelude)
-(require Language.SK)
+(:require Prelude)
+(:require Language.SK)
 
 (import Language.SK)
 
-(eval-when-compile
+(:eval-when-compile
   (:: define-macro Macro)
   (= define-macro
     (Macro (\ form
@@ -16,7 +16,7 @@
                (let ((= __name
                        (toCode (qSymbol (++ "__" (show name))))))
                  (return
-                   `(begin
+                   `(:begin
                       (:: ,name Macro)
                       (= ,name
                         (let ((:: ,__name (-> Code (Skc Code)))
@@ -39,15 +39,15 @@
                (case (unCode form)
                  (List (: _self (: (LForm (L _l (List ms))) rest)))
                  (do (<- ms' (mapM f ms))
-                     (return `(with-macro (,@ms') ,@rest)))
+                     (return `(:with-macro (,@ms') ,@rest)))
                  _ (skSrcError form "let-macro: malformed args")))))))
 
-(eval-when-compile
+(:eval-when-compile
   (define-macro define-macro' form
     (case (unCode form)
       (List (: _ rest)) (return
-                          `(begin
-                             (eval-when-compile
+                          `(:begin
+                             (:eval-when-compile
                                (define-macro ,@rest))
                              (define-macro ,@rest)))
       _ (skSrcError form "error"))))

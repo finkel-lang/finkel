@@ -3,7 +3,7 @@
 ;;; This file contains similar tests written for the "sk-setup"
 ;;; package. See the main test file "setup/test/Main.hs" for sk-setup.
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SetupTest
   (export

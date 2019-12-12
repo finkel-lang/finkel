@@ -2,7 +2,7 @@
 
 #p(language RankNTypes)
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule CLITest
   (export cliTests)

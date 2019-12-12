@@ -3,7 +3,7 @@
 
 ;;;; Types for REPL.
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.Repl.Types
   (export
@@ -61,7 +61,7 @@
    (instance (Semigroup ReplState)
      (= <> mappend)))
   (otherwise
-   (begin)))
+   (:begin)))
 
 (defn (initial-repl-state ReplState)
   (ReplState {pending-input []}))

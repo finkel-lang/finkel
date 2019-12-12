@@ -2,7 +2,7 @@
 
 (:docn "Module exporting functions for Cabal setup script.")
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Setup
   (export

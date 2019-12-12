@@ -6,7 +6,7 @@
 ;;; the code could be invoked from REPL via evaluating the typed in
 ;;; forms.
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.Repl.Macro
   (load
@@ -94,11 +94,11 @@
 ;;; Extra imports
 (with-ghc-version-cond ver
   ((<= 804 ver)
-   (begin
+   (:begin
      (import Prelude hiding (<>))
      (import qualified HscTypes as HscTypes)))
   (otherwise
-   (begin)))
+   (:begin)))
 
 
 ;;; GHC version compatibility compile time helper
@@ -198,7 +198,7 @@
           (let ((= force-recomp (gopt Opt-ForceRecomp dflags))
                 (= onTheREPL (mkGeneralLocated "on the REPL"))))
           (make [(, (onTheREPL str) Nothing)] True force-recomp Nothing)
-          (return '(begin))))))
+          (return '(:begin))))))
 
 (defn (compile-and-import (-> FilePath (Skc Code)))
   [path]
@@ -218,7 +218,7 @@
       (let ((= me (| (is-interp (IIModule mname2))
                      (otherwise (IIDecl (simpleImportDecl mname2)))))))
       (setContext (: me imps0))
-      (return '(begin))))
+      (return '(:begin))))
 
 (defn (adjust-current-target
        (-> FilePath [InteractiveImport] (Skc [InteractiveImport])))
@@ -295,7 +295,7 @@ object code."
 (defn (expand-with (-> String (-> Code (Skc Code)) ReplAction))
   [label f forms]
   (case forms
-    [] (return '(begin))
+    [] (return '(:begin))
     [expr] (>>= (f expr) (\ x (return `(System.IO.print ',x))))
     _ (let ((= l (located-list forms)))
         (skSrcError l (++ label (++ ": invalid form " (show l)))))))
@@ -426,7 +426,7 @@ object code."
   (do (<- hsc-env getSession)
       (liftIO (do (initDynLinker hsc-env)
                   (showLinkerState (hsc_dflags hsc-env))))
-      (return '(begin))))
+      (return '(:begin))))
 
 (defn (show-macros (Skc Code))
   (do (<- macros (fmap envMacros getSkEnv))
@@ -544,7 +544,7 @@ COMMANDS:
   "Invoke system command."
   [forms]
   (do (<- _ecode (liftIO (system (intercalate " " (map show forms)))))
-      (return '(begin))))
+      (return '(:begin))))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
 (defn (browse-cmd ReplAction)
@@ -576,7 +576,7 @@ COMMANDS:
   (case forms
     [arg1] (| ((<- (Just path) (code-to-mb-string arg1))
                (do (liftIO (setCurrentDirectory path))
-                   (return '(begin)))))
+                   (return '(:begin)))))
     _ (let ((= l (located-list forms)))
         (skSrcError l (++ "cd: expecting symbol or string but got "
                           (show l))))))
@@ -676,7 +676,7 @@ paths from import directories."
                          (<- _ (setTargets [target]))
                          (<- _ (compile-and-import path))
                          (liftIO (putStrLn (++ "; loaded " path)))))
-                    (return '(begin))))
+                    (return '(:begin))))
               (code-to-mb-string form))
       _      (skSrcError (located-list forms)
                          (++ "load: invalid form: " (show forms))))))
@@ -722,7 +722,7 @@ paths from import directories."
                   (++ "Some flags have not been recognized: "
                       (intercalate ", " (map unLoc leftovers)))))))
           (<- _ (setSessionDynFlags dflags1))
-          (return '(begin))))
+          (return '(:begin))))
      (otherwise
       (skSrcError nil "set: empty-form"))))
 

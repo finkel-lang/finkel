@@ -1,6 +1,6 @@
 ;;; Starting REPL
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.Repl.Loop
   (export

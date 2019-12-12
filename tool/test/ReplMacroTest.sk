@@ -1,6 +1,6 @@
 ;;;; Tests for REPL macros
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule ReplMacroTest
   (export
@@ -111,7 +111,7 @@
                ";  objectDir: Nothing"
                ";  thisInstalledUnitId: main"
                ";  forceRecomp: False"]))
-         (ok '(begin
+         (ok '(:begin
                (repl-macro set -odir /tmp)
                (repl-macro show dflags))
              (delines
@@ -172,7 +172,7 @@
          ;; load and reload
          (let ((= m01-dot-sk (testdata "m01.sk"))
                (= dir01-m01 (testdata (</> "Dir01" "M01.sk")))))
-         (ok `(begin
+         (ok `(:begin
                 (repl-macro load ,(qSymbol m01-dot-sk))
                 main)
              "=== m01.sk ===")
@@ -185,7 +185,7 @@
                "bar :: Int -> Int"]))
          (ok `(writeFile ,m02-dot-sk "(defn main (print True))")
              "")
-         (ok `(begin
+         (ok `(:begin
                 (repl-macro load ,(qSymbol m02-dot-sk))
                 main)
              "True")

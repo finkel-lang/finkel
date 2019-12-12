@@ -1,6 +1,6 @@
 ;;;; Auxiliary macros for GHC version compatibility
 
-(require SK.Core)
+(:require SK.Core)
 
 (defmodule SK.Tool.Compat
   (export
@@ -16,7 +16,7 @@
 (defmacro define-ghc-version-macro
   "Macro to define macro with taking name for ghc version."
   [name version args body]
-  `(eval-when-compile
+  `(:eval-when-compile
      (defmacro ,name ,args
        (let ((= ,version ,(:: (read cProjectVersionInt) Int)))
          ,body))))

@@ -1,11 +1,11 @@
-(with-macro ((= foo
-               (Macro (\ (LForm (L _ (List [_ x])))
-                        (return `(do (print ,x)
-                                     (print ,x))))))
-             (= mex1
-               (Macro (\ (LForm (L _ (List [_ x])))
-                        (do (<- expanded (expand1 x))
-                            (return `',expanded))))))
+(:with-macro ((= foo
+                (Macro (\ (LForm (L _ (List [_ x])))
+                         (return `(do (print ,x)
+                                      (print ,x))))))
+              (= mex1
+                (Macro (\ (LForm (L _ (List [_ x])))
+                         (do (<- expanded (expand1 x))
+                             (return `',expanded))))))
   (== (mex1 (foo "bar"))
       '(do (print "bar")
            (print "bar"))))

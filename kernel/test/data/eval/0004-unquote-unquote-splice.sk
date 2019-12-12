@@ -2,15 +2,15 @@
 
 ;;; Expression containing ",,@(...)".
 
-(with-macro ((= m1
-               (Macro
-                (const
-                 (return
-                   `(let ((= foo #'a)
-                          (= bar 'v1)
-                          (= buzz 'v2))
-                      `(let (,,@(map (\ n ``(= ,,n \b)) ['bar 'buzz]))
-                         [,foo ,bar ,buzz])))))))
+(:with-macro ((= m1
+                (Macro
+                 (const
+                  (return
+                    `(let ((= foo #'a)
+                           (= bar 'v1)
+                           (= buzz 'v2))
+                       `(let (,,@(map (\ n ``(= ,,n \b)) ['bar 'buzz]))
+                          [,foo ,bar ,buzz])))))))
   (== (m1)
       '(let ((= v1 \b) (= v2 \b))
         [#'a v1 v2])))

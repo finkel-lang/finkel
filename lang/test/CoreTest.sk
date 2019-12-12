@@ -1,7 +1,7 @@
 ;;;; Module to test macros.
 
-(require SK.Core)
-(require SK.Core.List)
+(:require SK.Core)
+(:require SK.Core.List)
 
 (defmodule CoreTest
   (export coreTests
@@ -309,31 +309,31 @@
              (shouldBe (m1 "foo") "m1 foo")))
 
       (d "eval-when"
-         (do (it "should expand to (begin (eval-when-compile ...) ...)"
+         (do (it "should expand to (:begin (:eval-when-compile ...) ...)"
                  (expandTo
                   (eval-when (compile load)
                     (:: foo Int)
                     (= foo 42))
-                  (begin
-                    (eval-when-compile
+                  (:begin
+                    (:eval-when-compile
                       (:: foo Int)
                       (= foo 42))
                     (:: foo Int)
                     (= foo 42))))
-             (it "should expand to (eval-when-compile ...)"
+             (it "should expand to (:eval-when-compile ...)"
                  (expandTo
                   (eval-when (compile)
                     (:: foo Int)
                     (= foo 42))
-                  (eval-when-compile
+                  (:eval-when-compile
                     (:: foo Int)
                     (= foo 42))))
-             (it "should expand to (begin ...)"
+             (it "should expand to (:begin ...)"
                  (expandTo
                   (eval-when (load)
                     (:: foo Int)
                     (= foo 42))
-                  (begin
+                  (:begin
                     (:: foo Int)
                     (= foo 42))))
              (it "throws an exception with unknown phase"
@@ -363,7 +363,7 @@
                  (expandTo
                   (defmacro-m m1 (a)
                     (return `(putStrLn (++ "hello, " ,a))))
-                  (begin
+                  (:begin
                     (:: m1 Macro)
                     (= m1
                       (let ((:: $tmp (-> Code (Skc Code)))
@@ -371,13 +371,13 @@
                               (case __form__
                                 (LForm (L _loc (List [_ a])))
                                 (return
-                                  (quasiquote
+                                  (:quasiquote
                                    (putStrLn (++ "hello, "
-                                                 (unquote a)))))
+                                                 (:unquote a)))))
                                 _ (skSrcError
                                    __form__
                                    (concat ["in macro `"
-                                            (show (quote m1)) "'"
+                                            (show (:quote m1)) "'"
                                             "\ninvalid form: `"
                                             (show __form__) "'"])))))
                         (Macro $tmp))))))
@@ -385,7 +385,7 @@
                  (expandTo
                   (defmacro-m m1 ()
                     (return `(print True)))
-                  (begin
+                  (:begin
                     (:: m1 Macro)
                     (= m1
                       (let ((:: $tmp (-> Code (Skc Code)))
@@ -393,11 +393,11 @@
                               (case __form__
                                 (LForm (L _loc (List [_])))
                                 (return
-                                  (quasiquote (print True)))
+                                  (:quasiquote (print True)))
                                 _ (skSrcError
                                    __form__
                                    (concat ["in macro `"
-                                            (show (quote m1)) "'"
+                                            (show (:quote m1)) "'"
                                             "\ninvalid form: `"
                                             (show __form__) "'"])))))
                         (Macro $tmp))))))
@@ -405,7 +405,7 @@
                  (expandTo
                   (defmacro-m m1 args
                     (return `(print ,@args)))
-                  (begin
+                  (:begin
                     (:: m1 Macro)
                     (= m1
                       (let ((:: $tmp (-> Code (Skc Code)))
@@ -415,12 +415,12 @@
                                 (let ((= args
                                         (LForm (L $loc (List __arg__)))))
                                   (return
-                                    (quasiquote
-                                     (print (unquote_splice args)))))
+                                    (:quasiquote
+                                     (print (:unquote-splice args)))))
                                 _ (skSrcError
                                    __form__
                                    (concat ["in macro `"
-                                            (show (quote m1)) "'"
+                                            (show (:quote m1)) "'"
                                             "\ninvalid form: `"
                                             (show __form__) "'"])))))
                         (Macro $tmp))))))
@@ -428,18 +428,18 @@
                  (expandTo
                   (defmacro-m .$$$ ()
                     (return `(print True)))
-                  (begin
+                  (:begin
                     (:: .$$$ Macro)
                     (= .$$$
                       (let ((:: $tmp (-> Code (Skc Code)))
                             (= $tmp __form__
                               (case __form__
                                 (LForm (L _loc (List [_])))
-                                (return (quasiquote (print True)))
+                                (return (:quasiquote (print True)))
                                 _ (skSrcError
                                    __form__
                                    (concat ["in macro `"
-                                            (show (quote .$$$)) "'"
+                                            (show (:quote .$$$)) "'"
                                             "\ninvalid form: `"
                                             (show __form__) "'"])))))
                         (Macro $tmp))))))
@@ -459,7 +459,7 @@
                 `(return (putStrLn ,a)))
               (eval-and-compile
                 (defmacro-m m1 (a)
-                  (quasiquote (return (putStrLn (unquote a)))))))))
+                  (:quasiquote (return (putStrLn (:unquote a)))))))))
 
       (d "defmacro"
          (it "should expand to defmacro-m"
@@ -468,8 +468,8 @@
                 `(putStrLn (++ "hello, " ,a)))
               (defmacro-m m1 (a)
                 (let ((= $m1
-                        (quasiquote (putStrLn (++ "hello, "
-                                                  (unquote a))))))
+                        (:quasiquote (putStrLn (++ "hello, "
+                                                   (:unquote a))))))
                   (return $m1))))))
 
       (d "defmacro'"
@@ -479,7 +479,7 @@
                 `(putStrLn ,a))
               (eval-and-compile
                 (defmacro m1 (a)
-                  (quasiquote (putStrLn (unquote a))))))))
+                  (:quasiquote (putStrLn (:unquote a))))))))
 
       (d "macro containing `$foo'"
          (it "should replace `$foo' with gensym"
@@ -493,24 +493,24 @@
                               True))))
 
       (d "macrolet-m"
-         (do (it "should expand to with-macro"
+         (do (it "should expand to :with-macro"
                  (expandTo
                   (macrolet-m ((m1 (a b)
                                  (return `(+ ,a ,b))))
                     (m1 20 22))
-                  (with-macro
+                  (:with-macro
                       ((= m1
                          (let ((:: $m1 (-> Code (Skc Code)))
                                (= $m1 __form__
                                  (case __form__
                                    (LForm (L _loc (List [_ a b])))
                                    (return
-                                     (quasiquote
-                                      (+ (unquote a) (unquote b))))
+                                     (:quasiquote
+                                      (+ (:unquote a) (:unquote b))))
                                    _ (skSrcError
                                       __form__
                                       (concat ["in macro `"
-                                               (show (quote m1)) "'"
+                                               (show (:quote m1)) "'"
                                                "\ninvalid form: `"
                                                (show __form__)
                                                "'"])))))
@@ -521,21 +521,21 @@
                   (macrolet-m ((m1 ()
                                  (return `(print #'x))))
                     (m1))
-                  (with-macro ((= m1
-                                 (let ((:: $m1 (-> Code (Skc Code)))
-                                       (= $m1 __form__
-                                         (case __form__
-                                           (LForm (L _loc (List [_])))
-                                           (return
-                                             (quasiquote (print #'x)))
-                                           _ (skSrcError
-                                              __form__
-                                              (concat
-                                               ["in macro `"
-                                                (show (quote m1)) "'"
-                                                "\ninvalid form: `"
-                                                (show __form__) "'"])))))
-                                   (Macro $m1))))
+                  (:with-macro ((= m1
+                                  (let ((:: $m1 (-> Code (Skc Code)))
+                                        (= $m1 __form__
+                                          (case __form__
+                                            (LForm (L _loc (List [_])))
+                                            (return
+                                              (:quasiquote (print #'x)))
+                                            _ (skSrcError
+                                               __form__
+                                               (concat
+                                                ["in macro `"
+                                                 (show (:quote m1)) "'"
+                                                 "\ninvalid form: `"
+                                                 (show __form__) "'"])))))
+                                    (Macro $m1))))
                     (m1))))
              (it "should detect invalid form"
                  (expandFailure
@@ -552,18 +552,18 @@
               (macrolet ((m (a b)
                            `(+ ,a ,b)))
                 (m 20 22))
-              (with-macro
+              (:with-macro
                   ((= m (let ((:: $m (-> Code (Skc Code)))
                               (= $m __form__
                                 (case __form__
                                   (LForm (L _loc (List [_ a b])))
                                   (return
-                                    (quasiquote (+ (unquote a)
-                                                   (unquote b))))
+                                    (:quasiquote (+ (:unquote a)
+                                                    (:unquote b))))
                                   _ (skSrcError
                                      __form__
                                      (concat ["in macro `"
-                                              (show (quote m)) "'"
+                                              (show (:quote m)) "'"
                                               "\ninvalid form: `"
                                               (show __form__)
                                               "'"])))))
@@ -585,7 +585,7 @@
                  (expandTo
                   (defn (foo (-> Int Int Int)) (a b)
                     (+ a b))
-                  (begin
+                  (:begin
                     (:: foo (-> Int Int Int))
                     (= foo a b (+ a b)))))
              (it "should expand to function with no arguments"
@@ -617,7 +617,7 @@
                   (defn foo
                     [a 0] (* a 2)
                     [a b] (+ a b))
-                  (begin
+                  (:begin
                     (= foo a 0 (* a 2))
                     (= foo a b (+ a b)))))
              (it "should expand argument patterns with type signature"
@@ -625,7 +625,7 @@
                   (defn (foo (-> Int Int Int))
                     [a 0] (* a 2)
                     [a b] (+ a b))
-                  (begin
+                  (:begin
                     (:: foo (-> Int Int Int))
                     (= foo a 0 (* a 2))
                     (= foo a b (+ a b)))))
@@ -670,11 +670,11 @@
       (d "macroexpand-1"
          (do (it "should expand to '(toCode 3)"
                  (expandTo
-                  (macroexpand-1 '(quasiquote (unquote 3)))
+                  (macroexpand-1 '(:quasiquote (:unquote 3)))
                   '(toCode 3)))
              (it "should expand to '(toCode 4)"
                  (expandTo
-                  (macroexpand-1 `(quasiquote (unquote 4)))
+                  (macroexpand-1 `(:quasiquote (:unquote 4)))
                   '(toCode 4)))
              (it "should expand to (car nil)"
                  (expandTo
@@ -685,11 +685,11 @@
       (d "macroexpand"
          (do (it "should expand to '(toCode 3)"
                  (expandTo
-                  (macroexpand '(quasiquote (unquote 3)))
+                  (macroexpand '(:quasiquote (:unquote 3)))
                   '(toCode 3)))
              (it "should expand to '(toCode 4)"
                  (expandTo
-                  (macroexpand `(quasiquote (unquote 4)))
+                  (macroexpand `(:quasiquote (:unquote 4)))
                   '(toCode 4)))
              (it "should expand to (car nil)"
                  (expandTo
@@ -707,10 +707,10 @@
                     (use (qualified Foo.Types as Types)
                          (Foo.Buzz (buzz1 buzz2)))
                     (export (FooClass ..) f1 f2))
-                  (begin
-                    (require Data.Maybe)
-                    (require Data.List)
-                    (require Control.Monad)
+                  (:begin
+                    (:require Data.Maybe)
+                    (:require Data.List)
+                    (:require Control.Monad)
                     (module Foo (FooClass ..) f1 f2)
                     (import qualified Foo.Types as Types)
                     (import Foo.Buzz (buzz1 buzz2))
@@ -720,8 +720,8 @@
                   (defmodule Foo
                     (load (Data.Maybe))
                     (use (Control.Monad)))
-                  (begin
-                    (require Data.Maybe)
+                  (:begin
+                    (:require Data.Maybe)
                     (module Foo)
                     (import Control.Monad))))
              (it "should export ()"
@@ -729,7 +729,7 @@
                   (defmodule Foo
                     (use (Control.Monad))
                     (export))
-                  (begin
+                  (:begin
                     (module Foo ())
                     (import Control.Monad))))
              (it "should expand to plain (module ...)"

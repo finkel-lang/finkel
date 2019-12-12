@@ -165,12 +165,12 @@ expandTest = do
       length ret `shouldSatisfy` (>= 1)
   describe "expanding with macroFunction" $
     it "should return empty form" $ do
-      let mb_qt = lookupMacro (fsLit "quote") env
+      let mb_qt = lookupMacro (fsLit ":quote") env
           qt = fromMaybe (error "macro not found") mb_qt
           s x = LForm (genSrc (Atom (ASymbol (fsLit x))))
           li xs = LForm (genSrc (List xs))
           t x = LForm (genSrc (Atom (AString x)))
-          form0 = li [s "quote", s "a"]
+          form0 = li [s ":quote", s "a"]
           form1 = li [s "qSymbol", t "a"]
       ret <- runSkc (macroFunction qt form0) env
       ret `shouldBe` form1
@@ -180,15 +180,15 @@ envTest = do
   describe "deleting macro from specialForms" $
     it "should delete macro with matching name" $ do
       let m0 = specialForms
-          m1 = deleteMacro (fsLit "let-macro") m0
+          m1 = deleteMacro (fsLit ":with-macro") m0
           e1 = emptySkEnv {envMacros = m1}
-          mb_let_macro = lookupMacro (fsLit "let-macro") e1
+          mb_let_macro = lookupMacro (fsLit ":with-macro") e1
       isNothing mb_let_macro `shouldBe` True
 
   describe "deleting macro from emptyMacros" $
     it "should delete nothing" $ do
       let m0 = emptyEnvMacros
-          m1 = deleteMacro (fsLit "let-macro") m0
+          m1 = deleteMacro (fsLit ":no-such-macro") m0
           n0 = macroNames m0
           n1 = macroNames m1
       n0 `shouldBe` n1
@@ -204,7 +204,7 @@ envTest = do
   describe "showing special forms" $
     it "should be <special-forms>" $ do
       let e1 = emptySkEnv {envMacros = specialForms}
-          mb_let_macro = lookupMacro (fsLit "eval_when_compile") e1
+          mb_let_macro = lookupMacro (fsLit ":eval-when-compile") e1
           let_macro = fromMaybe (error "not found") mb_let_macro
       show let_macro `shouldBe` "<special-form>"
 
@@ -226,5 +226,5 @@ envTest = do
 
 emptyForm :: Code
 emptyForm =
-  let bgn = LForm (genSrc (Atom (ASymbol (fsLit "begin"))))
+  let bgn = LForm (genSrc (Atom (ASymbol (fsLit ":begin"))))
   in  LForm (genSrc (List [bgn]))

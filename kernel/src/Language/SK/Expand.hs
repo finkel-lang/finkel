@@ -104,12 +104,12 @@ quoteAtom qual l form =
 quasiquote :: Bool -> Code -> Code
 quasiquote qual orig@(LForm (L l form)) =
   case form of
-    List [LForm (L _ (Atom (ASymbol "unquote"))), x]
+    List [LForm (L _ (Atom (ASymbol ":unquote"))), x]
       | isUnquoteSplice x -> x
       | otherwise         -> tList l [tSym l (toCodeS qual), x]
     List forms'
       | [q, body] <- forms'
-      , q == tSym l "quasiquote"   -> qq (qq body)
+      , q == tSym l ":quasiquote"   -> qq (qq body)
       | any isUnquoteSplice forms' -> splicedList qListS forms'
       | otherwise                  -> nonSplicedList qListS forms'
     HsList forms'
@@ -140,7 +140,7 @@ quasiquote qual orig@(LForm (L l form)) =
 isUnquoteSplice :: Code -> Bool
 isUnquoteSplice (LForm form) =
   case form of
-    L _ (List (LForm (L _ (Atom (ASymbol "unquote_splice"))):_))
+    L _ (List (LForm (L _ (Atom (ASymbol ":unquote-splice"))):_))
       -> True
     _ -> False
 {-# INLINE isUnquoteSplice #-}
@@ -262,7 +262,7 @@ m_withMacro form =
 
       case expanded of
         [x] -> return x
-        _   -> return (tList l1 (tSym l1 "begin" : expanded))
+        _   -> return (tList l1 (tSym l1 ":begin" : expanded))
     _ -> skSrcError form ("with-macro: malformed args:\n" ++ show form)
   where
     evalMacroDef decl = do
@@ -371,11 +371,11 @@ m_evalWhenCompile form =
 specialForms :: EnvMacros
 specialForms =
   makeEnvMacros
-    [("eval_when_compile", SpecialForm m_evalWhenCompile)
-    ,("with_macro", SpecialForm m_withMacro)
-    ,("quote", SpecialForm m_quote)
-    ,("quasiquote", SpecialForm m_quasiquote)
-    ,("require", SpecialForm m_require)]
+    [(":eval-when-compile", SpecialForm m_evalWhenCompile)
+    ,(":with-macro", SpecialForm m_withMacro)
+    ,(":quote", SpecialForm m_quote)
+    ,(":quasiquote", SpecialForm m_quasiquote)
+    ,(":require", SpecialForm m_require)]
 
 
 -- ---------------------------------------------------------------------
@@ -511,7 +511,7 @@ expand' :: Code -> Skc [Code]
 expand' form = do
   form' <- expand form
   case unCode form' of
-    List (LForm (L _ (Atom (ASymbol "begin"))):rest) ->
+    List (LForm (L _ (Atom (ASymbol ":begin"))):rest) ->
       case rest of
         [] -> return []
         _  -> expands rest
@@ -665,7 +665,7 @@ tHsList l forms = LForm (L l (HsList forms))
 
 emptyForm :: Code
 emptyForm =
-  LForm (genSrc (List [LForm (genSrc (Atom (ASymbol "begin")))]))
+  LForm (genSrc (List [LForm (genSrc (Atom (ASymbol ":begin")))]))
 {-# INLINE emptyForm #-}
 
 -- Note: Qualified names for quoting functions
