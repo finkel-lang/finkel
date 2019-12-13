@@ -43,12 +43,12 @@
    (Orphan)))
 
 
-(defn (coreTests Spec)
+(defn (:: coreTests Spec)
   (do (describe "Cxr" cxrTests)
       (describe "List" listTests)
       (describe "Macro" macroTests)))
 
-(defn (cxrTests Spec)
+(defn (:: cxrTests Spec)
   (do (let ((= d describe)
             (= t 't)
             (= tt '(t t))
@@ -140,7 +140,7 @@
       (d "cddddr"
          (cdxr (cddddr '(_ _ _ _ t t))))))
 
-(defn (listTests Spec)
+(defn (:: listTests Spec)
   (do (let ((= d describe)))
       (d "list of x, y, and z"
          (it "should be a list"
@@ -262,15 +262,15 @@
   (instance (Eq GensymCode)
     (= == eqGensymCode))
 
-  (defn (eqGensymCode (-> GensymCode GensymCode Bool))
+  (defn (:: eqGensymCode (-> GensymCode GensymCode Bool))
     [(GensymCode a) (GensymCode b)]
     (eqGensymCode1 a b))
 
-  (defn (eqGensymCode1 (-> Code Code Bool))
+  (defn (:: eqGensymCode1 (-> Code Code Bool))
     [a b]
     (eqGensymCode2 (unCode a) (unCode b)))
 
-  (defn (eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
+  (defn (:: eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
     [(Atom (ASymbol a)) (Atom (ASymbol b))]
     (| ((nullFS a) (nullFS b))
        ((== (headFS a) #'$) True)
@@ -280,7 +280,7 @@
     [(HsList as) (HsList bs)] (eqGensymCodes as bs)
     [a b] (== a b))
 
-  (defn (eqGensymCodes (-> [Code] [Code] Bool))
+  (defn (:: eqGensymCodes (-> [Code] [Code] Bool))
     [[] []] True
     [[]  _] False
     [ _ []] False
@@ -302,7 +302,7 @@
                (evaluate ret))))
      (shouldThrow act anyException)))
 
-(defn (macroTests Spec)
+(defn (:: macroTests Spec)
   (do (let ((= d describe)))
       (d "m1"
          (it "should be \"m1 foo\""
@@ -583,7 +583,7 @@
                   (= foo a b (+ a b))))
              (it "should expand to function with type signature"
                  (expandTo
-                  (defn (foo (-> Int Int Int)) (a b)
+                  (defn (:: foo (-> Int Int Int)) (a b)
                     (+ a b))
                   (:begin
                     (:: foo (-> Int Int Int))
@@ -622,7 +622,7 @@
                     (= foo a b (+ a b)))))
              (it "should expand argument patterns with type signature"
                  (expandTo
-                  (defn (foo (-> Int Int Int))
+                  (defn (:: foo (-> Int Int Int))
                     [a 0] (* a 2)
                     [a b] (+ a b))
                   (:begin

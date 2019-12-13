@@ -34,7 +34,7 @@
 
 ;;; Starting the REPL
 
-(defn (start-repl (-> (Maybe FilePath) (Maybe Int) SkEnv (IO ())))
+(defn (:: start-repl (-> (Maybe FilePath) (Maybe Int) SkEnv (IO ())))
   "Start REPL, maybe listen to given port number when given."
   [mb-path mb-port ske]
   (bracket
@@ -48,14 +48,14 @@
                (= run (runInputTBehavior behavior defaultSettings))))
          (run-repl (run rpl) mempty)))))
 
-(defn (acquire-repl (IO (, FilePath Handle (MVar Input))))
+(defn (:: acquire-repl (IO (, FilePath Handle (MVar Input))))
   "Return a file path and handle for temporary use."
   (do (<- dir getTemporaryDirectory)
       (<- (, path hdl) (openTempFile dir "sk-repl-.out"))
       (<- mvar newEmptyMVar)
       (return (, path hdl mvar))))
 
-(defn (cleanup-repl (-> (, FilePath Handle a) (IO ())))
+(defn (:: cleanup-repl (-> (, FilePath Handle a) (IO ())))
   "Clean up temporary file."
   [(, path hdl _)]
   (catch (do (hClose hdl)
@@ -64,7 +64,7 @@
              (return ())
              (throwIO e)))))
 
-(defn (start-listener (-> (MVar Input) Int (IO ThreadId)))
+(defn (:: start-listener (-> (MVar Input) Int (IO ThreadId)))
   "Start listner in separate thread, and return temporary file for
 getting String output from statement."
   [in-mv port]

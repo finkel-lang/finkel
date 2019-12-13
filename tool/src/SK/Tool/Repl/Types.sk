@@ -63,7 +63,7 @@
   (otherwise
    (:begin)))
 
-(defn (initial-repl-state ReplState)
+(defn (:: initial-repl-state ReplState)
   (ReplState {pending-input []}))
 
 ;;; Newtype wrapper for REPL prompt.
@@ -103,14 +103,14 @@
                  (fmap (flip unRepl ref) (f run'))))))))
   #p(INLINE controlIO))
 
-(defn (run-repl (-> (Repl a) ReplState (IO a)))
+(defn (:: run-repl (-> (Repl a) ReplState (IO a)))
   [(Repl repl) st]
   (>>= (newIORef st) repl))
 
-(defn (get-repl-state (Repl ReplState))
+(defn (:: get-repl-state (Repl ReplState))
   (Repl readIORef))
 
-(defn (put-repl-state (-> ReplState (Repl ())))
+(defn (:: put-repl-state (-> ReplState (Repl ())))
   [st]
   (Repl (flip atomicWriteIORef st)))
 

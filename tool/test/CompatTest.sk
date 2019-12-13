@@ -28,7 +28,7 @@
    ;; Internal
    (SK.Tool.Compat)))
 
-(defn (compatTests Spec)
+(defn (:: compatTests Spec)
   (do (let ((= d describe)))
       (d "define-ghc-version-macro"
          (it "should expand to eval-when-compile"
@@ -47,7 +47,7 @@
                            (\ form
                              (== (car form) 'macrolet)))))))
 
-(defn expand-macro
+(defn (:: expand-macro (-> Macro Code (-> Code Bool) (IO ())))
   [macro form test]
   (do (<- v (gtry (runSkc (macroFunction macro form) defaultSkEnv)))
       (case v

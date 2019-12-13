@@ -64,7 +64,7 @@
   (otherwise
    (:begin)))
 
-(defn (emptyTestIOState TestIOState)
+(defn (:: emptyTestIOState TestIOState)
   (TestIOState {tst-inputs []
                 tst-outputs []
                 tst-exitcode Nothing
@@ -75,7 +75,7 @@
 (newtype (TestIO a)
   (TestIO {unTestIO (-> TestIOState (IO (, a TestIOState)))}))
 
-(defn (runTestIO (-> (TestIO a) [String] (IO (, a TestIOState))))
+(defn (:: runTestIO (-> (TestIO a) [String] (IO (, a TestIOState))))
   [test-io inputs]
   (unTestIO test-io (mempty {tst-inputs inputs})))
 
@@ -139,7 +139,7 @@
     etf-satisfy (-> Code (-> Result Bool) Spec)
     etf-cleanup (IO ())}))
 
-(defn (makeEvalTestFns (IO EvalTestFns))
+(defn (:: makeEvalTestFns (IO EvalTestFns))
   (do (<- out-mv newEmptyMVar)
       (<- (@ resources (, tmpfile hdl in-mv)) acquire-repl)
       (<- etid (forkIO (runSkc (eval-loop hdl in-mv) repl-env)))

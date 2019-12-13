@@ -27,8 +27,8 @@
 
 ;;; Exported function
 
-(defn (main (IO ()))
-  "Main entry point function for @sk@ executable."
+(defn (:: main (IO ()))
+  "Main entry point function for the executable."
   (do (<- args getArgs)
       (case args
         (: name rest) (maybe (show-usage commands)
@@ -36,8 +36,8 @@
                              (find-command commands name))
         _ (show-usage commands))))
 
-(defn (commands [Command])
-  "Available commands in sk executable."
+(defn (:: commands [Command])
+  "Available commands in the executable."
   [(Command "help" "show help information" (helpMain commands))
    (Command "make" "compile source codes" makeMain)
    (Command "repl" "start interactive REPL" replMain)
@@ -46,7 +46,7 @@
 
 ;;; Internal
 
-(defn (makeMain (-> [String] (IO ())))
+(defn (:: makeMain (-> [String] (IO ())))
   "Main function for compiler with macros from `SK.Prelude'."
   [args]
   (macrolet ((preloaded ()

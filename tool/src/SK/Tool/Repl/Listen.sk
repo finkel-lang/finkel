@@ -34,7 +34,7 @@
 
   (export listener accept-loop run-conn))
 
-(defn (listener (-> PortNumber (MVar Input) (IO ())))
+(defn (:: listener (-> PortNumber (MVar Input) (IO ())))
   [pnum mvar]
   (withSocketsDo
    (do (let ((= hints (defaultHints {addrFlags [AI_PASSIVE]
@@ -52,13 +52,13 @@
          (: addr _) (start-loop addr)
          _          (putStrLn "listener: unable to open address.")))))
 
-(defn (accept-loop (-> Socket (MVar Input) (IO ())))
+(defn (:: accept-loop (-> Socket (MVar Input) (IO ())))
   [sock mvar]
   (do (<- (, conn _) (accept sock))
       (<- _ (forkIO (run-conn conn mvar)))
       (accept-loop sock mvar)))
 
-(defn (run-conn (-> Socket (MVar Input) (IO ())))
+(defn (:: run-conn (-> Socket (MVar Input) (IO ())))
   [sock mvar]
   (do (<- hdl (socketToHandle sock ReadWriteMode))
       (hSetBuffering hdl (BlockBuffering Nothing))

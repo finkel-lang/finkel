@@ -28,10 +28,10 @@
    ;; Internal
    (TestAux)))
 
-(defn (replMacroTests Spec)
+(defn (:: replMacroTests Spec)
   (describe "ReplMacro" replMacroTests'))
 
-(defn (replMacroTests' Spec)
+(defn (:: replMacroTests' Spec)
   (do (let ((= delines (intercalate "\n"))
             (= testdata name
               (</> "test" (</> "data" name)))))
@@ -90,7 +90,7 @@
          (ok '(repl-macro pwd) (show current-dir))
 
          ;; show
-         (ok '(defn (f1 (-> Int Int)) [n] (+ n 1))
+         (ok '(defn (:: f1 (-> Int Int)) [n] (+ n 1))
              "; f1 :: Int -> Int")
          (satisfy
           '(repl-macro show bindings)
@@ -199,7 +199,7 @@
          (ng '(repl-macro info (foo bar))
              "<quoted code>: error: info: invalid form `(foo bar)'")))))
 
-(defn (remove-if-exist (-> FilePath (IO ())))
+(defn (:: remove-if-exist (-> FilePath (IO ())))
   [path]
   (catch (removeFile path)
     (\ e (if (isDoesNotExistError e)

@@ -215,17 +215,17 @@ and temporally macro @m@ at compilation time.
             (Language.SK)))
 
 (eval-when (compile load)
-  (defn (f (-> Code Code))
+  (defn (:: f (-> Code Code))
     [x]
     `(print ,x)))
 
-(defn (g (-> Code (IO ())))
+(defn (:: g (-> Code (IO ())))
   [x]
   (print (f x)))
 
 (macrolet ((m [x]
              (f x)))
-  (defn (main (IO ()))
+  (defn (:: main (IO ()))
     (do (g 'foo)
         (m 'bar))))
 @
@@ -854,7 +854,7 @@ dummy unit, or @if@ with @MultiWayIf@ GHC language extension.
 Simple function with weird tests:
 
 @
-(defn (c01 (-> Int Int Int))
+(defn (:: c01 (-> Int Int Int))
   [a b]
   (cond
     ((even b) b)

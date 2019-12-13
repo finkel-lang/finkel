@@ -57,7 +57,7 @@
 
 ;;; Exported test
 
-(defn (replTests Spec)
+(defn (:: replTests Spec)
   (do (describe "ReplState" replStateTests)
       (describe "Read" readTests)
       (describe "ReadPrint" readPrintTests)
@@ -66,7 +66,7 @@
 
 ;;; Internal
 
-(defn (replStateTests Spec)
+(defn (:: replStateTests Spec)
   (do (let ((= d describe)
             (= rs1 (ReplState {pending-input ["(foo"]}))
             (= rs2 (ReplState {pending-input [" bar)"]}))))
@@ -112,7 +112,7 @@
               (run-repl' (<*> (pure not) repl1))
               False)))))
 
-(defn (readTests Spec)
+(defn (:: readTests Spec)
   (do (let ((= d describe)))
       (d "reading single line form"
          (it "returns '(foo bar buzz)"
@@ -127,7 +127,7 @@
                                     initial-repl-state))
                  (shouldBe (Just '(a b c)) form))))))
 
-(defn (readPrintTests Spec)
+(defn (:: readPrintTests Spec)
   (describe
    "read and print loop"
    (do (rptest "multi line form" ["(print" "(+" "10" "32" "))"])
@@ -136,7 +136,7 @@
        (rptest "\",!\" command" [",! echo foo bar"])
        (rptest "\",q\" command" [",q"]))))
 
-(defn (rptest (-> String [String] Spec))
+(defn (:: rptest (-> String [String] Spec))
   [label inputs]
   (describe
    label
@@ -155,7 +155,7 @@
                        (shouldSatisfy (pending-input (tst-replstate tst))
                                       null)))))))
 
-(defn (evalTests Spec)
+(defn (:: evalTests Spec)
   (do (let ((= d describe)
             (= delines (intercalate "\n"))))
       (<- (EvalTestFns ok ng satisfy cleanup) (runIO makeEvalTestFns))
@@ -164,7 +164,7 @@
        (do
          ;; Statements and declarations
          (ok '(+ 10 32) "42")
-         (ok '(defn (f1 (-> Int Int))
+         (ok '(defn (:: f1 (-> Int Int))
                [n]
                (+ n 1))
              "; f1 :: Int -> Int")
@@ -176,7 +176,7 @@
              "; x :: Int\n; y :: Int")
          (ok '(<- z (return True))
              "; z :: Bool")
-         (ok '(defn (f2 (-> (Maybe Int) Int))
+         (ok '(defn (:: f2 (-> (Maybe Int) Int))
                [(Just n)] (* n 2)
                [Nothing]  0)
              "; f2 :: Maybe Int -> Int")
@@ -226,7 +226,7 @@
          (ng '(head [])
              "*** Exception: Prelude.head: empty list")))))
 
-(defn (listenTests Spec)
+(defn (:: listenTests Spec)
   (let ((= with-repl-connection
           (bracket acquire release))
         (= acquire

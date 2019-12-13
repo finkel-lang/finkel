@@ -73,7 +73,7 @@
 
 ;;; Version compatibility function
 
-(defn (optional-dynflags [GeneralFlag])
+(defn (:: optional-dynflags [GeneralFlag])
   "Optional 'GeneralFlag' set for REPL."
   (with-ghc-version-cond v
     ((<= 804 v)
@@ -86,7 +86,7 @@
 
 ;;; Eval loop
 
-(defn (eval-loop (-> Handle (MVar Input) (Skc ())))
+(defn (:: eval-loop (-> Handle (MVar Input) (Skc ())))
   "Loop to evaluate expressions."
   [hdl in-mvar]
   (let ((= initialize
@@ -158,7 +158,7 @@
                                 (loop wrapper)))))
     (>>= initialize loop)))
 
-(defn (set-print-name (-> String (Skc ())))
+(defn (:: set-print-name (-> String (Skc ())))
   "Set the name of function used for printing values in interactive
 context."
   [name]
@@ -170,7 +170,7 @@ context."
                                                      f)})))
         _ (failS "set-print-name: parse error"))))
 
-(defn (eval-form (-> Handle ForeignHValue InSource [Code] (Skc Result)))
+(defn (:: eval-form (-> Handle ForeignHValue InSource [Code] (Skc Result)))
   [hdl wrapper itype forms]
   (| ((null forms)
       (return (Right "")))
@@ -183,8 +183,8 @@ context."
         (Right idecl) (eval-imports idecl)
         (Left se) (skSrcError (syntaxErrCode se) (syntaxErrMsg se))))))
 
-(defn (eval-statement
-       (-> Handle ForeignHValue InSource HStmt (Skc Result)))
+(defn (:: eval-statement
+        (-> Handle ForeignHValue InSource HStmt (Skc Result)))
   [hdl wrapper itype stmt0]
   (do (<- hsc-env getSession)
       (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
@@ -193,7 +193,7 @@ context."
                                           is h f)
         Nothing (return (Left "eval-statement: no result")))))
 
-(defn (eval-imports (-> [HImportDecl] (Skc Result)))
+(defn (:: eval-imports (-> [HImportDecl] (Skc Result)))
   [imports]
   (do (<- dflags getSessionDynFlags)
       (<- ctx0 getContext)
@@ -208,7 +208,7 @@ context."
       (setContext ctx1)
       (return (Right mdls))))
 
-(defn (eval-decls (-> [HDecl] (Skc Result)))
+(defn (:: eval-decls (-> [HDecl] (Skc Result)))
   [decls]
   (do (let ((= decls' (cvTopDecls (toOL decls)))))
       (<- (, tythings _ic) (evalDecls decls'))
@@ -227,8 +227,8 @@ context."
             (= tystr (intercalate "\n" tystrs))))
       (return (Right tystr))))
 
-(defn (update-hsc-env (-> Handle ForeignHValue InSource HscEnv
-                          [Id] ForeignHValue FixityEnv (Skc Result)))
+(defn (:: update-hsc-env (-> Handle ForeignHValue InSource HscEnv
+                             [Id] ForeignHValue FixityEnv (Skc Result)))
   [hdl wrapper itype hsc-env ids hvals-io fixity-env]
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its implementation.
@@ -285,7 +285,7 @@ context."
 
 ;;; Auxiliary
 
-(defn (make-eval-wrapper (-> [String] (Skc ForeignHValue)))
+(defn (:: make-eval-wrapper (-> [String] (Skc ForeignHValue)))
   [args]
   (let ((= form
           `(\ m (System.Environment.withArgs ,args m)))
@@ -298,7 +298,7 @@ context."
       (Left err) (skSrcError (syntaxErrCode err)
                              (syntaxErrMsg err)))))
 
-(defn (var-name-and-type (-> DynFlags Name Var String))
+(defn (:: var-name-and-type (-> DynFlags Name Var String))
   [dflags name var]
   (let ((= nstr (occNameString (nameOccName name)))
         (= typ (showPpr dflags (varType var))))
@@ -308,21 +308,21 @@ context."
                      (map (++ "; ")
                           (lines (++ nstr (++ " :: " typ))))))))
 
-(defn (names-and-types (-> DynFlags [Name] [Var] String))
+(defn (:: names-and-types (-> DynFlags [Name] [Var] String))
   [dflags names vars]
   (let ((= tvs (zipWith (var-name-and-type dflags) names vars)))
     (if (all null tvs)
         ""
         (intercalate "\n" tvs))))
 
-(defn (add-gt-ii (-> InteractiveImport [InteractiveImport]
-                     [InteractiveImport]))
+(defn (:: add-gt-ii (-> InteractiveImport [InteractiveImport]
+                        [InteractiveImport]))
   [mdl acc]
   (if (any (subsume-ii mdl) acc)
       acc
       (: mdl acc)))
 
-(defn (subsume-ii (-> InteractiveImport InteractiveImport Bool))
+(defn (:: subsume-ii (-> InteractiveImport InteractiveImport Bool))
   ;; See `GHCi.UI.iiSubsumes'.
   [(IIModule x) (IIModule y)] (== x y)
   [(IIDecl x) (IIDecl y)] (and [(== (unLoc (ideclName x))
@@ -335,9 +335,9 @@ context."
 
   [_ _] False)
 
-(defn (hiding-subsumes (-> (Maybe (, Bool (Located [HIE])))
-                           (Maybe (, Bool (Located [HIE])))
-                           Bool))
+(defn (:: hiding-subsumes (-> (Maybe (, Bool (Located [HIE])))
+                              (Maybe (, Bool (Located [HIE])))
+                              Bool))
   [_ (Just (, False (L _ [])))] True
   [(Just (, False (L _ xs)))
    (Just (, False (L _ ys)))] (all (flip elem xs) ys)

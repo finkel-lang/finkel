@@ -40,7 +40,7 @@
    ;; Internal
    (SK.Setup (skMakeMain))))
 
-(defn (setupTests Spec)
+(defn (:: setupTests Spec)
   (do (<- executable (runIO getExecutablePath))
       (<- cwd (runIO getCurrentDirectory))
       (<- pkgdbs (runIO (getPackageDbs executable)))
@@ -49,7 +49,7 @@
               (before_ (removeTixWhenFound cwd "p02")
                        (buildPackage cwd pkgdbs "p02")))))
 
-(defn (buildPackage (-> FilePath [FilePath] String Spec))
+(defn (:: buildPackage (-> FilePath [FilePath] String Spec))
   [cwd pkgdbs name]
   (where (describe (++ "package " name)
                    (it "should compile and pass the tests" work))
@@ -75,39 +75,39 @@
     (defn configure-args
       (: "configure" (++ pkgdb-flags ["--enable-tests"])))))
 
-(defn (pkgdir (-> FilePath String FilePath))
+(defn (:: pkgdir (-> FilePath String FilePath))
   [cwd name]
   (</> cwd (</> "test" (</> "data" name))))
 
-(defn (setup (-> [String] (IO ())))
+(defn (:: setup (-> [String] (IO ())))
   (flip withArgs skMakeMain))
 
-(defn (removeTixWhenFound (-> FilePath String (IO ())))
+(defn (:: removeTixWhenFound (-> FilePath String (IO ())))
   [cwd name]
   (catch (removeFile (</> (pkgdir cwd name) "sk.tix"))
     (\ e (if (isDoesNotExistError e)
              (return ())
              (throw e)))))
 
-(defn (getPackageDbs (-> String (IO [String])))
+(defn (:: getPackageDbs (-> String (IO [String])))
   [exec]
   (if (isSubsequenceOf ".stack-work" exec)
       getStackPackageDbs
       (getCabalPackageDbs exec)))
 
-(defn (getStackPackageDbs (IO [String]))
+(defn (:: getStackPackageDbs (IO [String]))
   (do (<- paths (catch (getEnv "GHC_PACKAGE_PATH")
                   (\ (SomeException _) (return []))))
       ($ return reverse sepByColon paths)))
 
-(defn (sepByColon (-> String [String]))
+(defn (:: sepByColon (-> String [String]))
   [xs]
   (case (dropWhile (== #':) xs)
     "" []
     ys (case (break (== #':) ys)
          (, w ys') (: w (sepByColon ys')))))
 
-(defn (getCabalPackageDbs (-> String (IO [String])))
+(defn (:: getCabalPackageDbs (-> String (IO [String])))
   [exec]
   (do (<- home (getEnv "HOME"))
       (let ((= dirs (splitDirectories exec))

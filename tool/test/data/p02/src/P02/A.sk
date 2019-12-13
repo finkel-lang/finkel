@@ -5,10 +5,10 @@ This module contains the 'main' function for @p02@ executable.")
 (defmodule P02.A
   (export main message))
 
-(defn (message String)
+(defn (:: message String)
   "Message string used by the 'main' function."
   "P02.A.main")
 
-(defn (main (IO ()))
+(defn (:: main (IO ()))
   "The main function for p02 package."
   (putStrLn message))

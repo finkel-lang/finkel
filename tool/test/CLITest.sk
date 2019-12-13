@@ -25,18 +25,18 @@
    ;; Internal
    (SK.Tool.CLI)))
 
-(defn (cliTests Spec)
+(defn (:: cliTests Spec)
   (do (describe "IO instance" io-tests)
       (describe "InputT instance" inputT-tests)))
 
-(defn (io-tests Spec)
+(defn (:: io-tests Spec)
   (make-cli-tests id))
 
-(defn (inputT-tests Spec)
+(defn (:: inputT-tests Spec)
   (make-cli-tests (runInputT defaultSettings)))
 
-(defn (make-cli-tests
-       (=> (CLI m) (-> (forall a (-> (m a) (IO a))) Spec)))
+(defn (:: make-cli-tests
+        (=> (CLI m) (-> (forall a (-> (m a) (IO a))) Spec)))
   [toIO]
   (do (let ((= d describe)))
       (d "getString"
@@ -64,7 +64,7 @@
              (shouldThrow (toIO (exitWith (ExitFailure 1)))
                           (== (ExitFailure 1)))))))
 
-(defn (with-test-stdin (-> String (IO a) (IO a)))
+(defn (:: with-test-stdin (-> String (IO a) (IO a)))
   [path act]
   (bracket
    (do (<- stdin' (hDuplicate stdin))
@@ -76,6 +76,6 @@
          (hDuplicateTo stdin' stdin)))
    (const act)))
 
-(defn (datafile (-> String FilePath))
+(defn (:: datafile (-> String FilePath))
   [name]
   (</> "test" (</> "data" name)))

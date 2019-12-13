@@ -13,8 +13,8 @@
    ;; sk-kernel
    (Distribution.Simple.SK)))
 
-(defn (skMakeMain (IO ()))
-  "Main function with @sk make@.
+(defn (:: skMakeMain (IO ()))
+  "Main function with @make@ command.
 
 Intended to be used from cabal setup script."
   (skcMainWith "sk" ["make"]))

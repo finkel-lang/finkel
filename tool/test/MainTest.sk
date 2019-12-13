@@ -23,7 +23,7 @@
 
 ;;; Tests
 
-(defn (mainTests Spec)
+(defn (:: mainTests Spec)
   (do (let ((= d describe)
             (= main' args
               (withArgs args main))))
@@ -53,7 +53,7 @@
       replTests
       versionTests))
 
-(defn (helpTests Spec)
+(defn (:: helpTests Spec)
   (do (<- (, _ lns) (runIO (runTestIO (show-usage commands) [])))
       (let ((= d describe)
             (= messageShouldContain
@@ -64,7 +64,7 @@
                  (messageShouldContain "make")
                  (messageShouldContain "version"))))))
 
-(defn (replTests Spec)
+(defn (:: replTests Spec)
   (describe
    "repl command"
    (do (let ((= repl args
@@ -74,7 +74,7 @@
            (do (<- msg (repl ["--no-such-option"]))
                (shouldContain msg "--no-such-option"))))))
 
-(defn (versionTests Spec)
+(defn (:: versionTests Spec)
   (describe
    "version command"
    (do (let ((= version args

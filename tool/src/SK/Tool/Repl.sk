@@ -42,14 +42,14 @@
 
 ;;; Exported
 
-(defn (replMain (=> (CLI m) (-> [String] (m ()))))
+(defn (:: replMain (=> (CLI m) (-> [String] (m ()))))
   "Main entry point function for REPL."
   [args]
   (case (getOpt Permute descrs args)
     (, o _ []) (act (foldl (flip id) initial-option o))
     (, _ _ es) (print-errors es)))
 
-(defn (repl-env SkEnv)
+(defn (:: repl-env SkEnv)
   "Environment value used by the sk REPL."
   (let ((= modules ["Prelude"])
         (= macros (mergeMacros specialForms replMacros)))
@@ -70,12 +70,12 @@
                repl-listen-port (Maybe Int)
                repl-input-path (Maybe FilePath)}))
 
-(defn (initial-option ReplOption)
+(defn (:: initial-option ReplOption)
   (ReplOption {repl-mode Run
                repl-listen-port Nothing
                repl-input-path Nothing}))
 
-(defn (descrs [OptDescr (-> ReplOption ReplOption)])
+(defn (:: descrs [OptDescr (-> ReplOption ReplOption)])
   [(Option [#'h] ["help"]
            (NoArg (\ o (o {repl-mode Help})))
            "Show this help and exit")
@@ -94,7 +94,7 @@
                    "FILE")
            "File to get input from.")])
 
-(defn (act (=> (CLI m) (-> ReplOption (m ()))))
+(defn (:: act (=> (CLI m) (-> ReplOption (m ()))))
   [ro]
   (case (repl-mode ro)
     Help print-usage
@@ -102,13 +102,13 @@
                             (repl-listen-port ro)
                             repl-env))))
 
-(defn (print-errors (=> (CLI m) (-> [String] (m ()))))
+(defn (:: print-errors (=> (CLI m) (-> [String] (m ()))))
   [errs]
   (do (putString (concat errs))
       print-usage
       (exitWith (ExitFailure 1))))
 
-(defn (print-usage (=> (CLI m) (m ())))
+(defn (:: print-usage (=> (CLI m) (m ())))
   (do (<- name (liftIO getProgName))
       (putString
        (unlines
@@ -124,5 +124,5 @@
              `[,@(map (\ mac `(, ,mac ,(qSymbol mac)))
                       (++ (exported-macros SK.Core)
                           (exported-macros SK.Tool.Repl.Macro)))]))
-  (defn (replMacros EnvMacros)
+  (defn (:: replMacros EnvMacros)
     (makeEnvMacros (the-macros))))
