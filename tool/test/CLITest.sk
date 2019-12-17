@@ -6,7 +6,7 @@
 
 (defmodule CLITest
   (export cliTests)
-  (use
+  (import
    ;; base
    (Control.Exception (bracket))
    (Control.Monad (replicateM))

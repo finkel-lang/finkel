@@ -3,9 +3,8 @@
 (:require SK.Core)
 
 (defmodule MainTest
-  (export
-   mainTests)
-  (use
+  (export mainTests)
+  (import
    ;; base
    (Control.Monad.IO.Class ((MonadIO ..)))
    (System.Environment (withArgs))

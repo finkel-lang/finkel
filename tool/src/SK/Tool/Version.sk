@@ -5,7 +5,7 @@
 (defmodule SK.Tool.Version
   (export
    versionMain)
-  (use
+  (import
    ;; base
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Version (showVersion))

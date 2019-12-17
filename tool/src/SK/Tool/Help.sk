@@ -11,13 +11,13 @@
    ;; Help command
    helpMain
    show-usage)
-  (load
+  (require
    ;; sk-lang
    (SK.Prelude)
 
    ;; Internal
    (SK.Tool.Compat))
-  (use
+  (import
    ;; base
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))

@@ -5,13 +5,13 @@
 (defmodule SK.Tool.Repl.Eval
   (export
    eval-loop)
-  (load
+  (require
    ;; sk-lang
    (SK.Prelude)
 
    ;; Internal
    (SK.Tool.Compat))
-  (use
+  (import
    ;; base
    (Control.Concurrent.MVar ((MVar) putMVar takeMVar))
    (Control.Exception ((AsyncException ..) fromException throwIO))

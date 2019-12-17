@@ -6,7 +6,7 @@
   (export
    define-ghc-version-macro
    with-ghc-version-cond)
-  (use
+  (import
    ;; ghc
    (Config (cProjectVersionInt))
 

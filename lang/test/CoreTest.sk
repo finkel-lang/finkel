@@ -8,7 +8,7 @@
           macroTests
           cxrTests
           listTests)
-  (load-use
+  (require-and-import
    ;; base
    (Control.Exception)
 
@@ -19,13 +19,13 @@
    ;; sk-kernel
    (Language.SK.Make)
    (Language.SK.SKC))
-  (load
+  (require
    ;; base
    (Prelude)
 
    ;; sk-kernel
    (Language.SK))
-  (use
+  (import
    ;; ghc
    (FastString (fsLit))
 
@@ -701,12 +701,14 @@
          (do (it "should expand to module header"
                  (expandTo
                   (defmodule Foo
-                    (load (Data.Maybe)
-                          (Data.List))
-                    (load-use (Control.Monad))
-                    (use (qualified Foo.Types as Types)
-                         (Foo.Buzz (buzz1 buzz2)))
-                    (export (FooClass ..) f1 f2))
+                    (export (FooClass ..) f1 f2)
+                    (require
+                     (Data.Maybe)
+                     (Data.List))
+                    (require-and-import
+                     (Control.Monad))
+                    (import (qualified Foo.Types as Types)
+                            (Foo.Buzz (buzz1 buzz2))))
                   (:begin
                     (:require Data.Maybe)
                     (:require Data.List)
@@ -718,8 +720,8 @@
              (it "should ignore export when not given"
                  (expandTo
                   (defmodule Foo
-                    (load (Data.Maybe))
-                    (use (Control.Monad)))
+                    (require (Data.Maybe))
+                    (import (Control.Monad)))
                   (:begin
                     (:require Data.Maybe)
                     (module Foo)
@@ -727,7 +729,7 @@
              (it "should export ()"
                  (expandTo
                   (defmodule Foo
-                    (use (Control.Monad))
+                    (import (Control.Monad))
                     (export))
                   (:begin
                     (module Foo ())

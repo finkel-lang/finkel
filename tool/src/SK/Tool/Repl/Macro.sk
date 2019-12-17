@@ -9,13 +9,14 @@
 (:require SK.Core)
 
 (defmodule SK.Tool.Repl.Macro
-  (load
+  (export repl-macro)
+  (require
    ;; sk-lang
    (SK.Prelude)
 
-    ;; Internal
+   ;; Internal
    (SK.Tool.Compat))
-  (use
+  (import
    ;; base
    (Control.Exception ((Exception ..)))
    (Control.Monad (filterM unless void))
@@ -87,9 +88,7 @@
    (Language.SK.TargetSource (asModuleName))
 
    ;; sk-lang
-   (SK.Core.List))
-
-  (export repl-macro))
+   (SK.Core.List)))
 
 ;;; Extra imports
 (with-ghc-version-cond ver

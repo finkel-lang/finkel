@@ -6,15 +6,14 @@
 (:require SK.Core)
 
 (defmodule SetupTest
-  (export
-   setupTests)
-  (load
+  (export setupTests)
+  (require
    ;; sk-lang
    (SK.Prelude)
 
    ;; Internal
    (SK.Tool.Compat (with-ghc-version-cond)))
-  (use
+  (import
    ;; base
    (Control.Exception ((SomeException ..) catch throw))
    (Data.List (isSubsequenceOf))

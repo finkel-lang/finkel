@@ -6,10 +6,10 @@
   (export
    (TestIO ..) (TestIOState ..) runTestIO
    (EvalTestFns ..) makeEvalTestFns)
-  (load
+  (require
    (SK.Prelude)
    (SK.Tool.Compat))
-  (use
+  (import
    ;; base
    (Control.Concurrent
     (forkIO newEmptyMVar killThread putMVar takeMVar))

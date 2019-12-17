@@ -3,7 +3,8 @@
 (:require SK.Core)
 
 (defmodule SK.Tool.Repl.Listen
-  (use
+  (export listener accept-loop run-conn)
+  (import
    ;; base
    (Control.Concurrent
     ((MVar) forkIO newEmptyMVar putMVar takeMVar))
@@ -30,9 +31,7 @@
    (Language.SK.Reader (sexpr))
 
    ;; internal
-   (SK.Tool.Repl.Types))
-
-  (export listener accept-loop run-conn))
+   (SK.Tool.Repl.Types)))
 
 (defn (:: listener (-> PortNumber (MVar Input) (IO ())))
   [pnum mvar]

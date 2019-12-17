@@ -9,7 +9,7 @@
    skMakeMain
    defaultMainWithHooks
    skcHooksWith)
-  (use
+  (import
    ;; sk-kernel
    (Distribution.Simple.SK)))
 

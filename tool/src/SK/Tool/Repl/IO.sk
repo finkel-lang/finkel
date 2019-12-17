@@ -5,7 +5,7 @@
 (defmodule SK.Tool.Repl.IO
   (export
    init-form read-form read-print-loop with-io-redirect)
-  (use
+  (import
    ;; base
    (Control.Concurrent
     ((MVar) (ThreadId) killThread newEmptyMVar putMVar

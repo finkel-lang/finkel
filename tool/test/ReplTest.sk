@@ -6,13 +6,13 @@
 
 (defmodule ReplTest
   (export replTests)
-  (load
+  (require
    ;; sk-lang
    (SK.Prelude)
 
    ;; Internal
    (SK.Tool.Compat))
-  (use
+  (import
    ;; base
    (Control.Concurrent
     (forkIO newEmptyMVar killThread putMVar takeMVar threadDelay))

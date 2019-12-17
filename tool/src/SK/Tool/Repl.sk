@@ -11,13 +11,13 @@
 (defmodule SK.Tool.Repl
   (export
    replMain repl-env)
-  (load
+  (require
    ;; sk-lang
    (SK.Prelude)
 
    ;; internal
    (SK.Tool.Repl.Macro))
-  (use
+  (import
    ;; base
    (Control.Monad (mplus))
    (Control.Monad.IO.Class ((MonadIO ..)))

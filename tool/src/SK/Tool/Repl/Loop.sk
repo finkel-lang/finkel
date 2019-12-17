@@ -5,7 +5,7 @@
 (defmodule SK.Tool.Repl.Loop
   (export
    start-repl acquire-repl cleanup-repl)
-  (use
+  (import
    ;; base
    (Control.Concurrent ((ThreadId) forkIO))
    (Control.Concurrent.MVar ((MVar) newEmptyMVar))

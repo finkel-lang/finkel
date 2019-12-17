@@ -18,13 +18,13 @@
 
    ;; re-export
    (MonadTrans ..))
-  (load
+  (require
    ;; sk-lang
    (SK.Prelude)
 
    ;; Internal
    (SK.Tool.Compat))
-  (use
+  (import
    ;; base
    (Control.Concurrent ((MVar)))
    (Control.Monad.IO.Class ((MonadIO ..)))

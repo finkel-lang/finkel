@@ -5,10 +5,10 @@
 (defmodule CompatTest
   (export
    compatTests)
-  (load
+  (require
    ;; sk-lang
    (SK.Prelude))
-  (use
+  (import
    ;; base
    (Control.Exception ((SomeException)))
 

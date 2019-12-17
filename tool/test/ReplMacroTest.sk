@@ -3,9 +3,8 @@
 (:require SK.Core)
 
 (defmodule ReplMacroTest
-  (export
-   replMacroTests)
-  (use
+  (export replMacroTests)
+  (import
    ;; base
    (Control.Exception (catch throw))
    (Control.Monad.IO.Class ((MonadIO ..)))

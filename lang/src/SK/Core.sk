@@ -211,8 +211,9 @@ and temporally macro @m@ at compilation time.
 
 @
 (defmodule Main
-  (load-use (Prelude)
-            (Language.SK)))
+  (require-and-import
+    (Prelude)
+    (Language.SK)))
 
 (eval-when (compile load)
   (defn (:: f (-> Code Code))
@@ -1010,10 +1011,10 @@ Sample module header:
 
 @
 (defmodule Foo
-  (load (SK.Prelude hiding (head tail))
-  (load-use (Control.Monad (foldM)))
-  (use (Control.Monad (when))
-       (qualified Data.ByteString as BS))
+  (require (SK.Prelude hiding (head tail)))
+  (require-and-import (Control.Monad (foldM)))
+  (import (Control.Monad (when))
+          (qualified Data.ByteString as BS))
   (export foo bar buzz))
 @
 
@@ -1047,17 +1048,20 @@ Expands to below:
                          (if (null (cdr lst))
                              (: (, 'export (cons '() nil)) acc)
                              (: (, 'export payload) acc))))
-                      ((== label 'use)
+                      ((|| (== label 'use)
+                           (== label 'import))
                        (return
                          (: (, 'import (mapcar (\ es `(import ,@es))
                                                payload))
                             acc)))
-                      ((== label 'load)
+                      ((|| (== label 'load)
+                           (== label 'require))
                        (return
                          (: (, ':require (mapcar (\ es `(:require ,@es))
                                                  payload))
                             acc)))
-                      ((== label 'load-use)
+                      ((|| (== label 'load-use)
+                           (== label 'require-and-import))
                        (return (: (, 'load-use payload) acc)))
 
                       (otherwise

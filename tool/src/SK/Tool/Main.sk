@@ -6,10 +6,10 @@
   (export
    main
    commands)
-  (load
+  (require
    ;; sk-lang
    (SK.Prelude))
-  (use
+  (import
    ;; base
    (System.Environment (getArgs getProgName withArgs withProgName))
 

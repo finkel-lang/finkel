@@ -6,7 +6,7 @@
   (export
    (CLI ..)
    (ExitCode ..))
-  (use
+  (import
    ;; base
    (Control.Exception (catch throwIO))
    (Control.Monad.IO.Class ((MonadIO ..)))

@@ -9,7 +9,7 @@
 (:require SK.Core)
 
 (defmodule Orphan
-  (use
+  (import
    ;; ghc
    (BasicTypes ((FractionalLit ..)))
    (FastString (unpackFS))
