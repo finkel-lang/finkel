@@ -236,6 +236,10 @@
              (it "throws an exception with non-list arg2"
                  (expectFailure (=== nil (append nil 'foo))))))
 
+      (d "make-symbol"
+         (it "returns a symbol"
+             (== 'foo (make-symbol "foo"))))
+
       (d "mapcar"
          (do (it "replaces non-symbols"
                  (== '(foo bar _ buzz _ _)

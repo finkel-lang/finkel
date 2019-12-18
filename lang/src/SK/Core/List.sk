@@ -14,8 +14,8 @@ functions defined in this modules are used in macro defined in
   is-atom is-pair is-list is-hslist
   is-symbol is-string is-char is-integer is-fractional is-unit
 
-  (:dh1 "List constructors")
-  cons list (ListableType ..) append
+  (:dh1 "Code constructors")
+  cons list (ListableType ..) append make-symbol
 
   (:dh1 "CXrs")
   (:dh2 "Basic cXrs")
@@ -185,6 +185,11 @@ Examples:
                   (cons (car as) (go (cdr as) ys)))))
         (go xs ys)))))
 #p(INLINABLE append)
+
+(:docn "Make `ASymbol' from given `String'.")
+(:: make-symbol (-> String Code))
+(= make-symbol qSymbol)
+#p(INLINABLE make-symbol)
 
 (:docn "Type class for constructing 'List' with polyvariadic function.")
 (class (ListableType l)
