@@ -147,7 +147,7 @@ isUnquoteSplice (LForm form) =
 
 -- | Internally used by macro expander for @unquote-splice@ special
 -- form.
-unquoteSplice :: Homoiconic a => a -> [Code]
+unquoteSplice :: ToCode a => a -> [Code]
 unquoteSplice form =
   case unCode (toCode form) of
     List xs           -> xs

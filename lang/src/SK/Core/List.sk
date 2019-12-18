@@ -161,7 +161,7 @@ Examples:
 >>> (cons 'a 'b)
 (a b)
 ")
-(:: cons (=> (Homoiconic a) (-> a Code Code)))
+(:: cons (=> (ToCode a) (-> a Code Code)))
 (= cons x (@ whole (LForm (L _ xs)))
   (let ((= (@ x' (LForm (L l0 _))) (toCode x)))
     (LForm (L l0 (case xs
@@ -198,7 +198,7 @@ Examples:
 (instance (ListableType Code)
   (= list_ (. qList reverse)))
 
-(instance (=> (Homoiconic elem) (ListableType l)
+(instance (=> (ToCode elem) (ListableType l)
               (ListableType (-> elem l)))
   (= list_ acc
     (\ x (list_ (: (toCode x) acc)))))

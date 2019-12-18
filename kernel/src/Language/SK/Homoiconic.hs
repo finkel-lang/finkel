@@ -4,7 +4,8 @@
 -- | Module containing 'Homoiconic' type class and its instances
 -- declarations.
 module Language.SK.Homoiconic
-  ( Homoiconic(..)
+  ( ToCode(..)
+  , FromCode(..)
   ) where
 
 -- base
@@ -42,31 +43,18 @@ import Language.SK.Form
 --
 -- -------------------------------------------------------------------
 
--- | Class for handling Haskell value as code, and vice versa.
+-- | Class for handling Haskell value as code.
 --
--- Instances should satisfy following law:
+-- The function 'listToCode' is used when handling Haskell values
+-- specially (e.g., 'Char'). This function have default implementation
+-- which simply applies 'toCode' to elements of the argument list.
 --
--- > fromCode (toCode x) == Just x
---
--- The functions 'listToCode' and 'listFromCode' are used when handling
--- list of Haskell values specially (e.g., 'Char').  These functions
--- have default implmenetation which simply applys 'toCode' to elements
--- of the argument list, and 'fromCode' to elements of the 'HsList'.
---
-class Homoiconic a where
-
+class ToCode a where
   -- | Convert Haskell value to 'Code'.
   toCode :: a -> Code
   {-# INLINE toCode #-}
-
   default toCode :: Data a => a -> Code
   toCode = dataToCode
-
-  -- | Convert 'Code' to 'Just' Haskell value, or 'Nothing' if the code
-  -- could not be converted.
-  fromCode :: Code -> Maybe a
-  fromCode _ = Nothing
-  {-# INLINE fromCode #-}
 
   -- | Convert list of Haskell values to 'Code'.
   listToCode :: [a] -> Code
@@ -75,6 +63,20 @@ class Homoiconic a where
          l = getLoc (mkLocatedForm xs')
      in  LForm (L l (HsList xs'))
   {-# INLINE listToCode #-}
+
+-- | Class for handling code as Haskell value.
+--
+-- The function 'listFromCode' is used when handling list of code
+-- specially. This function have default implementation which simply
+-- applies 'fromCode' to elements of the elements of the 'HsList'.
+--
+class FromCode a where
+
+  -- | Convert 'Code' to 'Just' Haskell value, or 'Nothing' if the code
+  -- could not be converted.
+  fromCode :: Code -> Maybe a
+  fromCode _ = Nothing
+  {-# INLINE fromCode #-}
 
   -- | Convert 'Code' to 'Just' list of Haskell values, or 'Nothing' if
   -- the code could not be converted.
@@ -89,61 +91,81 @@ class Homoiconic a where
 -- Prelude
 --
 
-instance Homoiconic () where
+instance ToCode () where
   toCode _ = LForm (genSrc (Atom AUnit))
+
+instance FromCode () where
   fromCode a =
     case unCode a of
       Atom AUnit -> Just ()
       _          -> Nothing
 
-instance Homoiconic Char where
+instance ToCode Char where
   toCode = LForm . genSrc . Atom . AChar
+  listToCode = LForm . genSrc . Atom . AString
+
+instance FromCode Char where
   fromCode a =
     case unCode a of
       Atom (AChar x)  -> Just x
       _               -> Nothing
-  listToCode = LForm . genSrc . Atom . AString
   listFromCode a = case unCode a of
                      Atom (AString s) -> Just s
                      _                -> Nothing
 
-instance Homoiconic Int where
+instance ToCode Int where
   toCode = integralToCode
+
+instance FromCode Int where
   fromCode = integralFromCode
 
-instance Homoiconic Word where
+instance ToCode Word where
   toCode = integralToCode
+
+instance FromCode Word where
   fromCode = integralFromCode
 
-instance Homoiconic Integer where
+instance ToCode Integer where
   toCode = LForm . genSrc . Atom . AInteger
+
+instance FromCode Integer where
   fromCode a =
     case unCode a of
       Atom (AInteger n) -> Just n
       _                 -> Nothing
 
-instance Homoiconic Float where
+instance ToCode Float where
   toCode = realFracToCode
+
+instance FromCode Float where
   fromCode = fractionalFromCode
 
-instance Homoiconic Double where
+instance ToCode Double where
   toCode = realFracToCode
+
+instance FromCode Double where
   fromCode = fractionalFromCode
 
-instance Homoiconic a => Homoiconic [a] where
+instance ToCode a => ToCode [a] where
   toCode = listToCode
+
+instance FromCode a => FromCode [a] where
   fromCode = listFromCode
 
-instance Homoiconic Bool where
+instance ToCode Bool where
   toCode = showAsSymbolCode
+
+instance FromCode Bool where
   fromCode a =
     case unCode a of
       Atom (ASymbol sym) | sym == "True"  -> Just True
                          | sym == "False" -> Just False
       _                                   -> Nothing
 
-instance Homoiconic Ordering where
+instance ToCode Ordering where
   toCode = showAsSymbolCode
+
+instance FromCode Ordering where
   fromCode a =
     case unCode a of
       Atom (ASymbol sym) | sym == "EQ" -> Just EQ
@@ -151,22 +173,26 @@ instance Homoiconic Ordering where
                          | sym == "GT" -> Just GT
       _                                -> Nothing
 
-instance Homoiconic a => Homoiconic (Maybe a) where
+instance ToCode a => ToCode (Maybe a) where
   toCode a =
     case a of
       Nothing -> toCode (aSymbol "Nothing")
       Just x  -> toCode1 "Just" x
+
+instance FromCode a => FromCode (Maybe a) where
   fromCode a =
     case unCode a of
       Atom (ASymbol "Nothing") -> Just Nothing
       List [LForm (L _ (Atom (ASymbol "Just"))), x] -> Just (fromCode x)
       _                                             -> Nothing
 
-instance (Homoiconic a, Homoiconic b) => Homoiconic (Either a b) where
+instance (ToCode a, ToCode b) => ToCode (Either a b) where
   toCode a =
     case a of
       Right x -> toCode1 "Right" x
       Left x  -> toCode1 "Left" x
+
+instance (FromCode a, FromCode b) => FromCode (Either a b) where
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol x))), y]
@@ -174,14 +200,19 @@ instance (Homoiconic a, Homoiconic b) => Homoiconic (Either a b) where
         | x == "Left"  -> fmap Left (fromCode y)
       _                -> Nothing
 
-instance (Homoiconic a, Homoiconic b) => Homoiconic (a, b) where
+instance (ToCode a, ToCode b) => ToCode (a, b) where
   toCode (a1, a2) = toCode2 "," a1 a2
+
+instance (FromCode a, FromCode b) => FromCode (a, b) where
   fromCode = fromCode2 "," (\x y -> (x, y))
 
-instance (Homoiconic a, Homoiconic b, Homoiconic c)
-         => Homoiconic (a, b, c) where
+instance (ToCode a, ToCode b, ToCode c)
+         => ToCode (a, b, c) where
   toCode (a1, a2, a3) =
     toCode (List [symbolCode ",", toCode a1, toCode a2, toCode a3])
+
+instance (FromCode a, FromCode b, FromCode c)
+         => FromCode (a, b, c) where
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3]
@@ -189,11 +220,14 @@ instance (Homoiconic a, Homoiconic b, Homoiconic c)
            fromCode a1 <*> fromCode a2 <*> fromCode a3
       _ -> Nothing
 
-instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d)
-         => Homoiconic (a, b, c, d) where
+instance (ToCode a, ToCode b, ToCode c, ToCode d)
+         => ToCode (a, b, c, d) where
   toCode (a1, a2, a3, a4) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4])
+
+instance (FromCode a, FromCode b, FromCode c, FromCode d)
+         => FromCode (a, b, c, d) where
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4]
@@ -201,12 +235,14 @@ instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d)
            fromCode a1 <*> fromCode a2 <*> fromCode a3 <*> fromCode a4
       _ -> Nothing
 
-instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d,
-          Homoiconic e)
-         => Homoiconic (a, b, c, d, e) where
+instance (ToCode a, ToCode b, ToCode c, ToCode d, ToCode e)
+         => ToCode (a, b, c, d, e) where
   toCode (a1, a2, a3, a4, a5) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4, toCode a5])
+
+instance (FromCode a, FromCode b, FromCode c, FromCode d, FromCode e)
+         => FromCode (a, b, c, d, e) where
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4, a5]
@@ -215,12 +251,15 @@ instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d,
            fromCode a4 <*> fromCode a5
       _ -> Nothing
 
-instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d,
-          Homoiconic e, Homoiconic f)
-         => Homoiconic (a, b, c, d, e, f) where
+instance (ToCode a, ToCode b, ToCode c, ToCode d, ToCode e, ToCode f)
+         => ToCode (a, b, c, d, e, f) where
   toCode (a1, a2, a3, a4, a5, a6) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4, toCode a5, toCode a6])
+
+instance ( FromCode a, FromCode b, FromCode c, FromCode d, FromCode e
+         , FromCode f)
+         => FromCode (a, b, c, d, e, f) where
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4, a5, a6]
@@ -229,64 +268,79 @@ instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d,
            fromCode a4 <*> fromCode a5 <*> fromCode a6
       _ -> Nothing
 
+
 --
 -- Data.Complex
 --
 
-instance Homoiconic a => Homoiconic (Complex a) where
+instance ToCode a => ToCode (Complex a) where
   toCode (a :+ b) = toCode2 ":+" a b
+
+instance FromCode a => FromCode (Complex a) where
   fromCode = fromCode2 ":+" (:+)
 
 --
 -- Data.Fixed
 --
 
-instance Homoiconic (Fixed a) where
+instance ToCode (Fixed a) where
   toCode (MkFixed a) = toCode1 "MkFixed" a
+
+instance FromCode (Fixed a) where
   fromCode = fromCode1 "MkFixed" MkFixed
 
 --
 -- Data.Functor.Compose
 
-instance Homoiconic (f (g a)) => Homoiconic (Compose f g a) where
+instance ToCode (f (g a)) => ToCode (Compose f g a) where
   toCode (Compose a) = toCode1 "Compose" a
+
+instance FromCode (f (g a)) => FromCode (Compose f g a) where
   fromCode = fromCode1 "Compose" Compose
 
 --
 -- Data.Functor.Const
 --
 
-instance Homoiconic a => Homoiconic (Const a b) where
+instance ToCode a => ToCode (Const a b) where
   toCode (Const a) = toCode1 "Const" a
+
+instance FromCode a => FromCode (Const a b) where
   fromCode = fromCode1 "Const" Const
 
 --
 -- Data.Functor.Identity
 --
 
-instance Homoiconic a=> Homoiconic (Identity a) where
+instance ToCode a=> ToCode (Identity a) where
   toCode (Identity a) = toCode1 "Identity" a
+
+instance FromCode a=> FromCode (Identity a) where
   fromCode = fromCode1 "Identity" Identity
 
 --
 -- Data.Functor.Product
 --
 
-instance (Homoiconic (f a), Homoiconic (g a))
-         => Homoiconic (Product.Product f g a) where
+instance (ToCode (f a), ToCode (g a))
+         => ToCode (Product.Product f g a) where
   toCode (Product.Pair a b) = toCode2 "Pair" a b
+
+instance (FromCode (f a), FromCode (g a))
+         => FromCode (Product.Product f g a) where
   fromCode = fromCode2 "Pair" Product.Pair
 
 --
 -- Data.Functor.Sum
 --
 
-instance (Homoiconic (f a), Homoiconic (g a))
-         => Homoiconic (Sum.Sum f g a) where
+instance (ToCode (f a), ToCode (g a)) => ToCode (Sum.Sum f g a) where
   toCode a =
     case a of
       Sum.InL x -> toCode1 "InL" x
       Sum.InR x -> toCode1 "InR" x
+
+instance (FromCode (f a), FromCode (g a)) => FromCode (Sum.Sum f g a) where
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol tag))), b]
@@ -298,72 +352,100 @@ instance (Homoiconic (f a), Homoiconic (g a))
 -- Data.Int
 --
 
-instance Homoiconic Int8 where
+instance ToCode Int8 where
   toCode = integralToCode
+
+instance FromCode Int8 where
   fromCode = integralFromCode
 
-instance Homoiconic Int16 where
+instance ToCode Int16 where
   toCode = integralToCode
+
+instance FromCode Int16 where
   fromCode = integralFromCode
 
-instance Homoiconic Int32 where
+instance ToCode Int32 where
   toCode = integralToCode
+
+instance FromCode Int32 where
   fromCode = integralFromCode
 
-instance Homoiconic Int64 where
+instance ToCode Int64 where
   toCode = integralToCode
+
+instance FromCode Int64 where
   fromCode = integralFromCode
 
 --
 -- Data.List.NonEmpty
 --
 
-instance Homoiconic a => Homoiconic (NonEmpty a) where
+instance ToCode a => ToCode (NonEmpty a) where
   toCode (a :| as) = toCode2 ":|" a as
+
+instance FromCode a => FromCode (NonEmpty a) where
   fromCode = fromCode2 ":|" (:|)
 
 --
 -- Data.Monoid
 --
 
-instance Homoiconic All where
+instance ToCode All where
   toCode (All a) = toCode1 "All" a
+
+instance FromCode All where
   fromCode = fromCode1 "All" All
 
-instance Homoiconic (f a) => Homoiconic (Alt f a) where
+instance ToCode (f a) => ToCode (Alt f a) where
   toCode (Alt a) = toCode1 "Alt" a
+
+instance FromCode (f a) => FromCode (Alt f a) where
   fromCode = fromCode1 "Alt" Alt
 
-instance Homoiconic Any where
+instance ToCode Any where
   toCode (Any a) = toCode1 "Any" a
+
+instance FromCode Any where
   fromCode = fromCode1 "Any" Any
 
-instance Homoiconic a => Homoiconic (Dual a) where
+instance ToCode a => ToCode (Dual a) where
   toCode (Dual a) = toCode1 "Dual" a
+
+instance FromCode a => FromCode (Dual a) where
   fromCode = fromCode1 "Dual" Dual
 
-instance Homoiconic a => Homoiconic (First a) where
+instance ToCode a => ToCode (First a) where
   toCode (First a) = toCode1 "First" a
+
+instance FromCode a => FromCode (First a) where
   fromCode = fromCode1 "First" First
 
-instance Homoiconic a => Homoiconic (Last a) where
+instance ToCode a => ToCode (Last a) where
   toCode (Last a) = toCode1 "Last" a
+
+instance FromCode a => FromCode (Last a) where
   fromCode = fromCode1 "Last" Last
 
-instance Homoiconic a => Homoiconic (Product a) where
+instance ToCode a => ToCode (Product a) where
   toCode (Product a) = toCode1 "Product" a
+
+instance FromCode a => FromCode (Product a) where
   fromCode = fromCode1 "Product" Product
 
-instance Homoiconic a => Homoiconic (Sum a) where
+instance ToCode a => ToCode (Sum a) where
   toCode (Sum a) = toCode1 "Sum" a
+
+instance FromCode a => FromCode (Sum a) where
   fromCode = fromCode1 "Sum" Sum
 
 --
 -- Data.Proxy
 --
 
-instance Homoiconic a => Homoiconic (Proxy a) where
+instance ToCode a => ToCode (Proxy a) where
   toCode _ = symbolCode "Proxy"
+
+instance FromCode a => FromCode (Proxy a) where
   fromCode a = case unCode a of
                  Atom (ASymbol "Proxy") -> Just Proxy
                  _ -> Nothing
@@ -372,99 +454,133 @@ instance Homoiconic a => Homoiconic (Proxy a) where
 -- Data.Version
 --
 
-instance Homoiconic Version where
+instance ToCode Version where
   toCode (Version b t) = toCode2 "Version" b t
+
+instance FromCode Version where
   fromCode = fromCode2 "Version" Version
 
 --
 -- Data.Ratio
 --
 
-instance (Integral a, Homoiconic a) => Homoiconic (Ratio a) where
+instance (Integral a, ToCode a) => ToCode (Ratio a) where
   toCode a =
     let n = toCode (numerator a)
         d = toCode (denominator a)
     in toCode (List [symbolCode ":%", n, d])
+
+instance (Integral a, FromCode a) => FromCode (Ratio a) where
   fromCode = fromCode2 ":%" (%)
+
 
 --
 -- Data.Semigroup
 --
 
-instance (Homoiconic a, Homoiconic b)
-         => Homoiconic (Semigroup.Arg a b) where
+instance (ToCode a, ToCode b) => ToCode (Semigroup.Arg a b) where
   toCode (Semigroup.Arg a b) = toCode2 "Arg" a b
+
+instance (FromCode a, FromCode b) => FromCode (Semigroup.Arg a b) where
   fromCode = fromCode2 "Arg" Semigroup.Arg
 
-instance (Homoiconic a) => Homoiconic (Semigroup.First a) where
+instance ToCode a => ToCode (Semigroup.First a) where
   toCode (Semigroup.First a) = toCode1 "First" a
+
+instance FromCode a => FromCode (Semigroup.First a) where
   fromCode = fromCode1 "First" Semigroup.First
 
-instance (Homoiconic a) => Homoiconic (Semigroup.Last a) where
+instance ToCode a => ToCode (Semigroup.Last a) where
   toCode (Semigroup.Last a) = toCode1 "Last" a
+
+instance FromCode a => FromCode (Semigroup.Last a) where
   fromCode = fromCode1 "Last" Semigroup.Last
 
-instance (Homoiconic a) => Homoiconic (Semigroup.Max a) where
+instance ToCode a => ToCode (Semigroup.Max a) where
   toCode (Semigroup.Max a) = toCode1 "Max" a
+
+instance FromCode a => FromCode (Semigroup.Max a) where
   fromCode = fromCode1 "Max" Semigroup.Max
 
-instance (Homoiconic a) => Homoiconic (Semigroup.Min a) where
+instance ToCode a => ToCode (Semigroup.Min a) where
   toCode (Semigroup.Min a) = toCode1 "Min" a
+
+instance FromCode a => FromCode (Semigroup.Min a) where
   fromCode = fromCode1 "Min" Semigroup.Min
 
-instance (Homoiconic a) => Homoiconic (Semigroup.Option a) where
+instance ToCode a => ToCode (Semigroup.Option a) where
   toCode (Semigroup.Option a) = toCode1 "Option" a
+
+instance FromCode a => FromCode (Semigroup.Option a) where
   fromCode = fromCode1 "Option" Semigroup.Option
 
-instance (Homoiconic a) => Homoiconic (Semigroup.WrappedMonoid a) where
+instance ToCode a => ToCode (Semigroup.WrappedMonoid a) where
   toCode (Semigroup.WrapMonoid a) = toCode1 "WrapMonoid" a
+
+instance FromCode a => FromCode (Semigroup.WrappedMonoid a) where
   fromCode = fromCode1 "WrapMonoid" Semigroup.WrapMonoid
 
 --
 -- Data.Word
 --
 
-instance Homoiconic Word8 where
+instance ToCode Word8 where
   toCode = integralToCode
+
+instance FromCode Word8 where
   fromCode = integralFromCode
 
-instance Homoiconic Word16 where
+instance ToCode Word16 where
   toCode = integralToCode
+
+instance FromCode Word16 where
   fromCode = integralFromCode
 
-instance Homoiconic Word32 where
+instance ToCode Word32 where
   toCode = integralToCode
+
+instance FromCode Word32 where
   fromCode = integralFromCode
 
-instance Homoiconic Word64 where
+instance ToCode Word64 where
   toCode = integralToCode
+
+instance FromCode Word64 where
   fromCode = integralFromCode
 
 --
 -- Numeric.Natural
 --
 
-instance Homoiconic Natural where
+instance ToCode Natural where
   toCode = integralToCode
+
+instance FromCode Natural where
   fromCode = integralFromCode
 
 --
 -- Language.SK.Form
 --
 
-instance Homoiconic Atom where
+instance ToCode Atom where
   toCode = LForm . genSrc . Atom
+
+instance FromCode Atom where
   fromCode a =
     case unCode a of
       Atom x -> Just x
       _      -> Nothing
 
-instance Homoiconic (Form Atom) where
+instance ToCode (Form Atom) where
   toCode = LForm . genSrc
+
+instance FromCode (Form Atom) where
   fromCode = Just . unCode
 
-instance Homoiconic (LForm Atom) where
+instance ToCode (LForm Atom) where
   toCode = id
+
+instance FromCode (LForm Atom) where
   fromCode = Just
 
 
@@ -522,19 +638,19 @@ dataToCode x =
              [] -> hd
              _  -> toCode (List (hd:gmapQ dataToCode x))
 
-toCode1 :: (Homoiconic a) => FastString -> a -> Code
+toCode1 :: ToCode a => FastString -> a -> Code
 toCode1 tag arg1 =
   toCode (List [LForm (genSrc (Atom (ASymbol tag))), toCode arg1])
 {-# INLINABLE toCode1 #-}
 
-toCode2 :: (Homoiconic a, Homoiconic b) =>
+toCode2 :: (ToCode a, ToCode b) =>
            FastString -> a -> b -> Code
 toCode2 tag arg1 arg2 =
   toCode (List [ LForm (genSrc (Atom (ASymbol tag)))
                , toCode arg1, toCode arg2 ])
 {-# INLINABLE toCode2 #-}
 
-fromCode1 :: (Homoiconic a) =>
+fromCode1 :: (FromCode a) =>
              FastString -> (a -> h) -> Code -> Maybe h
 fromCode1 tag f a =
   case unCode a of
@@ -543,7 +659,7 @@ fromCode1 tag f a =
     _               -> Nothing
 {-# INLINABLE fromCode1 #-}
 
-fromCode2 :: (Homoiconic a, Homoiconic b) =>
+fromCode2 :: (FromCode a, FromCode b) =>
              FastString -> (a -> b -> h) -> Code -> Maybe h
 fromCode2 tag f a =
   case unCode a of

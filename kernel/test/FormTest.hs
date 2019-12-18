@@ -449,8 +449,10 @@ symbolNameTest =
 
 data Foo = Foo deriving (Eq, Show)
 
-instance Homoiconic Foo where
+instance ToCode Foo where
   toCode foo = toCode (aSymbol (show foo))
+
+instance FromCode Foo
 
 fromCodeTest :: Foo -> Spec
 fromCodeTest _foo =
@@ -461,22 +463,26 @@ fromCodeTest _foo =
 data D1 = D1a | D1b | D1c
   deriving (Eq, Show, Data, Typeable)
 
-instance Homoiconic D1
+instance ToCode D1
+instance FromCode D1
 
 data D2 a = D2a a | D2b a a
   deriving (Eq, Show, Data, Typeable)
 
-instance Data a => Homoiconic (D2 a)
+instance Data a => ToCode (D2 a)
+instance Data a => FromCode (D2 a)
 
 data D3 a b = D3a Int a b
   deriving (Eq, Show, Data, Typeable)
 
-instance (Data a, Data b) => Homoiconic (D3 a b)
+instance (Data a, Data b) => ToCode (D3 a b)
+instance (Data a, Data b) => FromCode (D3 a b)
 
 data D4 a = D4a (a, a, a, a)
   deriving (Eq, Show, Data, Typeable)
 
-instance Data a => Homoiconic (D4 a)
+instance Data a => ToCode (D4 a)
+instance Data a => FromCode (D4 a)
 
 dataToCodeTest :: Spec
 dataToCodeTest = do

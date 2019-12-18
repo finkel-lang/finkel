@@ -10,7 +10,8 @@ module Language.SK
     Atom(..)
   , Form(..)
   , LForm(..)
-  , Homoiconic(..)
+  , ToCode(..)
+  , FromCode(..)
   , Code
   , unCode
   , nil
