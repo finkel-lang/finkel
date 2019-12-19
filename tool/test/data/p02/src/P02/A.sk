@@ -1,4 +1,4 @@
-(:docn "Main module for sample package.
+(:doc "Main module for sample package.
 
 This module contains the 'main' function for @p02@ executable.")
 

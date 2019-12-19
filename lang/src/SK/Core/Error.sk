@@ -1,6 +1,6 @@
 ;;;; Module containing functions for sk related errors.
 
-(:docn "Unsafe functions for showing errors in sk macro functions.")
+(:doc "Unsafe functions for showing errors in sk macro functions.")
 
 (module SK.Core.Error
   unsafeSkSrcError)
@@ -13,7 +13,7 @@
 (import Language.SK.Make (defaultSkEnv))
 (import Language.SK.SKC (runSkc))
 
-(:docn "Throw exception with 'skSrcError', with given code and
+(:doc "Throw exception with 'skSrcError', with given code and
 message. This function uses 'unsafePerformIO'.")
 (:: unsafeSkSrcError (-> Code String a))
 (= unsafeSkSrcError code msg

@@ -67,10 +67,10 @@ import Language.SK.Syntax
 'integer' { L _ (TInteger _) }
 'frac'    { L _ (TFractional _) }
 
-'docn'    { L _ (TDocNext _) }
-'docp'    { L _ (TDocPrev _) }
+'doc'     { L _ (TDocNext _) }
+'doc^'    { L _ (TDocPrev _) }
 'doch'    { L _ (TDocGroup _ _) }
-'dock'    { L _ (TDocNamed _ _) }
+'doc$'    { L _ (TDocNamed _ _) }
 
 %%
 
@@ -107,10 +107,10 @@ atom :: { Code }
     | 'frac'    { mkAFractional $1 }
     | '{'       { mkOcSymbol $1 }
     | '}'       { mkCcSymbol $1 }
-    | 'docn'    { mkDocn $1 }
-    | 'docp'    { mkDocp $1 }
+    | 'doc'     { mkDoc $1 }
+    | 'doc^'    { mkDocp $1 }
     | 'doch'    { mkDoch $1 }
-    | 'dock'    { mkDock $1 }
+    | 'doc$'    { mkDock $1 }
 
 {
 atom :: SrcSpan -> Atom -> Code
@@ -184,12 +184,12 @@ mkCcSymbol :: Located Token -> Code
 mkCcSymbol (L l _) = sym l "}"
 {-# INLINE mkCcSymbol #-}
 
-mkDocn :: Located Token -> Code
-mkDocn (L l (TDocNext str)) = li l [sym l ":docn", atom l (AString str)]
-{-# INLINE mkDocn #-}
+mkDoc :: Located Token -> Code
+mkDoc (L l (TDocNext str)) = li l [sym l ":doc", atom l (AString str)]
+{-# INLINE mkDoc #-}
 
 mkDocp :: Located Token -> Code
-mkDocp (L l (TDocPrev str)) = li l [sym l ":docp", atom l (AString str)]
+mkDocp (L l (TDocPrev str)) = li l [sym l ":doc^", atom l (AString str)]
 {-# INLINE mkDocp #-}
 
 mkDoch :: Located Token -> Code
@@ -200,6 +200,7 @@ mkDoch (L l (TDocGroup n s)) = li l [sym l dh, atom l (AString s)]
            2 -> ":dh2"
            3 -> ":dh3"
            _ -> ":dh4"
+{-# INLINE mkDoch #-}
 
 mkDock :: Located Token -> Code
 mkDock (L l (TDocNamed k mb_doc)) =
@@ -207,7 +208,8 @@ mkDock (L l (TDocNamed k mb_doc)) =
     Nothing -> li l pre
     Just d  -> li l (pre ++ [atom l (AString d)])
   where
-    pre = [sym l ":dock", atom l (ASymbol (fsLit k))]
+    pre = [sym l ":doc$", atom l (ASymbol (fsLit k))]
+{-# INLINE mkDock #-}
 
 rmac :: Located Token -> Code -> SP Code
 rmac h expr =

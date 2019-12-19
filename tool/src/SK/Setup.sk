@@ -1,6 +1,6 @@
 ;;; Setup script for SK package.
 
-(:docn "Module exporting functions for Cabal setup script.")
+(:doc "Module exporting functions for Cabal setup script.")
 
 (:require SK.Core)
 

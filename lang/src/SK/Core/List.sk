@@ -3,7 +3,7 @@
 #p(LANGUAGE FlexibleInstances
             TypeSynonymInstances)
 
-(:docn "List related functions.
+(:doc "List related functions.
 
 This module is compiled before defining core macros, since some of the
 functions defined in this modules are used in macro defined in
@@ -22,7 +22,7 @@ functions defined in this modules are used in macro defined in
   car cdr
 
   (:dh2 "Composed cXrs")
-  (:dock cxr)
+  (:doc$ cxr)
 
   caar cadr
   caaar caadr cadar caddr
@@ -82,7 +82,7 @@ functions defined in this modules are used in macro defined in
 
 ;;; Predicates
 
-(:docn "True when the argument is an 'Atom' or 'nil'.
+(:doc "True when the argument is an 'Atom' or 'nil'.
 
 Examples:
 
@@ -102,7 +102,7 @@ False
     (List []) True
     _         False))
 
-(:docn "True when the argument is a non-nil 'List'.")
+(:doc "True when the argument is a non-nil 'List'.")
 (:: is-pair (-> Code Bool))
 (= is-pair (LForm (L _ form))
   (case form
@@ -115,7 +115,7 @@ False
                          (case (unCode form)
                            (List [_ doc name pat])
                            (return `(:begin
-                                      (:docn ,doc)
+                                      (:doc ,doc)
                                       (:: ,name (-> Code Bool))
                                       (= ,name (LForm (L _ form))
                                         (case form
@@ -142,7 +142,7 @@ False
 
 ;;; CONS
 
-(:docn "Extend the second argument with the first argument by appending
+(:doc "Extend the second argument with the first argument by appending
 to the tip.
 
 Consing to 'HsList' will result in 'List', and consing to non-list value
@@ -170,7 +170,7 @@ Examples:
                    _            (List [x' whole]))))))
 #p(INLINABLE cons)
 
-(:docn "Append two lists.")
+(:doc "Append two lists.")
 (:: append (-> Code Code Code))
 (= append xs ys
   (| ((not (|| (is-list xs) (is-hslist xs)))
@@ -186,12 +186,12 @@ Examples:
         (go xs ys)))))
 #p(INLINABLE append)
 
-(:docn "Make `ASymbol' from given `String'.")
+(:doc "Make `ASymbol' from given `String'.")
 (:: make-symbol (-> String Code))
 (= make-symbol qSymbol)
 #p(INLINABLE make-symbol)
 
-(:docn "Type class for constructing 'List' with polyvariadic function.")
+(:doc "Type class for constructing 'List' with polyvariadic function.")
 (class (ListableType l)
   (:: list_ (-> [Code] l)))
 
@@ -203,7 +203,7 @@ Examples:
   (= list_ acc
     (\ x (list_ (: (toCode x) acc)))))
 
-(:docn "Make a list from given arguments.
+(:doc "Make a list from given arguments.
 
 This function can take variable number of arguments, but requires
 resulting type to be a concrete type.
@@ -221,7 +221,7 @@ Examples:
 
 ;;; CXR
 
-(:docn "Get first element of list 'Code'.
+(:doc "Get first element of list 'Code'.
 
 The function 'car' returns the first element of 'List' and 'HsList'
 constructor, or 'nil' value when the 'List' or 'HsList' were empty.
@@ -248,7 +248,7 @@ nil
     _                (error-non-list "car" whole)))
 #p(INLINABLE car)
 
-(:docn "Get list without the first element.
+(:doc "Get list without the first element.
 
 The function 'cdr' returns list value without the first element of
 'List' or 'HsList' argument. When the argument is a 'HsList', returned
@@ -281,7 +281,7 @@ nil
       _                 (error-non-list "cdr" whole))))
 #p(INLINABLE cdr)
 
-(:dock cxr "Rest of /cxr/ functions are composed from 'car' and 'cdr'.
+(:doc$ cxr "Rest of /cxr/ functions are composed from 'car' and 'cdr'.
 
 E.g., definition of 'cadr' is:
 
@@ -320,7 +320,7 @@ and definition of 'cdadr' is:
 
 ;;; Higher Order Functions
 
-(:docn "Apply given function to immediate elements of 'List' and
+(:doc "Apply given function to immediate elements of 'List' and
 'HsList'. When the second argument was 'HsList', the resulting value
 converted to 'List'.")
 (:: mapcar (-> (-> Code Code) Code Code))

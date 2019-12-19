@@ -174,9 +174,9 @@ import Language.SK.Syntax.SynUtils
 
 -- Documentation forms
 
-'docn' { LForm (L _ (List [LForm (L _ (Atom (ASymbol ":docn"))), $$])) }
-'docp' { LForm (L _ (List [LForm (L _ (Atom (ASymbol ":docp"))), $$])) }
-'dock' { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dock"))) : _))) }
+'doc'  { LForm (L _ (List [LForm (L _ (Atom (ASymbol ":doc"))), $$])) }
+'doc^' { LForm (L _ (List [LForm (L _ (Atom (ASymbol ":doc^"))), $$])) }
+'doc$' { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":doc$"))) : _))) }
 'dh1'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh1"))) : _))) }
 'dh2'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh2"))) : _))) }
 'dh3'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh3"))) : _))) }
@@ -215,10 +215,10 @@ import Language.SK.Syntax.SynUtils
 -- ---------------------------------------------------------------------
 
 docnext :: { LHsDocString }
-    : 'docn' {% b_docString $1}
+    : 'doc' {% b_docString $1}
 
 docprev :: { LHsDocString }
-    : 'docp' {% b_docString $1 }
+    : 'doc^' {% b_docString $1 }
 
 mbdocnext :: { Maybe LHsDocString }
     : docnext     { Just $1 }
@@ -262,8 +262,8 @@ export :: { HIE }
     | 'dh2'    {% b_ieGroup 2 $1 }
     | 'dh3'    {% b_ieGroup 3 $1 }
     | 'dh4'    {% b_ieGroup 4 $1 }
-    | 'docn'   {% b_ieDoc $1 }
-    | 'dock'   {% b_ieDocNamed $1 }
+    | 'doc'    {% b_ieDoc $1 }
+    | 'doc$'   {% b_ieDocNamed $1 }
     | 'list'   {% parse p_entity $1 }
 
 entity :: { HIE }
@@ -323,13 +323,13 @@ rtop_decls :: { [HDecl] }
 
 top_decl_with_doc :: { HDecl }
     : 'list'    {% parse p_top_decl $1 }
-    | 'docn'    {% b_docnextD $1 }
-    | 'docp'    {% b_docprevD $1 }
+    | 'doc'     {% b_docnextD $1 }
+    | 'doc^'    {% b_docprevD $1 }
     | 'dh1'     {% b_docGroupD 1 $1 }
     | 'dh2'     {% b_docGroupD 2 $1 }
     | 'dh3'     {% b_docGroupD 3 $1 }
     | 'dh4'     {% b_docGroupD 4 $1 }
-    | 'dock'    {% b_docNamed $1 }
+    | 'doc$'    {% b_docNamed $1 }
 
 top_decl :: { HDecl }
     : 'data' simpletype constrs            { b_dataD $1 $2 $3 }
@@ -460,8 +460,8 @@ rcdecls :: { [HDecl] }
     | rcdecls cdecl { $2:$1 }
 
 cdecl :: { HDecl }
-    : 'docp' {% b_docprevD $1 }
-    | 'docn' {% b_docnextD $1 }
+    : 'doc^' {% b_docprevD $1 }
+    | 'doc'  {% b_docnextD $1 }
     | 'list' {% parse p_lcdecl $1 }
 
 lcdecl :: { HDecl }
@@ -933,18 +933,18 @@ unListL (LForm (L _ form)) =
 --
 -- There are four kinds of forms for documentation comments.
 --
--- [@:docn@]: The @(:docn "comment")@ form is for writing
+-- [@:doc@]: The @(:doc "comment")@ form is for writing
 -- documentation with @comment@ for the next element. It can appear in
 -- export entities list, or in top level declarations. It is analogous
 -- to Haskell comments starting with @|@.
 --
--- [@:docp@]: The @(:docp "comment")@ form is like /:docn/, but for
--- previous form. Unlike /:docn/, it cannot appear in export entities
+-- [@:doc@]: The @(:doc^ "comment")@ form is like /:doc/, but for
+-- previous form. Unlike /:doc/, it cannot appear in export entities
 -- list. It is analogous to Haskell comments starting with @^@.
 --
--- [@:dock@]: The @(:dock name)@ and @(:dock name "comment")@ form is
--- for referencing documentation. @(:dock name)@ is used in export
--- entities list to refer other documentation comment, and @(:dock name
+-- [@:doc$@]: The @(:doc$ name)@ and @(:doc$ name "comment")@ form is
+-- for referencing documentation. @(:doc$ name)@ is used in export
+-- entities list to refer other documentation comment, and @(:doc$ name
 -- "comment")@ is for top level to contain the documentation contents.
 -- It is analogous to Haskell comment starting with @$name@.
 --
