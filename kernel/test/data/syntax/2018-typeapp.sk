@@ -1,0 +1,11 @@
+;;;; File containing codes using `TypeApplications' language extension
+
+#p(LANGUAGE TypeApplications)
+
+(module Main)
+
+(:: main (IO ()))
+(= main
+  (do (print (read @ Int "42"))
+      (print (read @ (Maybe Bool) "Just True"))
+      (print (foldr @ Maybe @ Int @ Int + 1 (Just 41)))))

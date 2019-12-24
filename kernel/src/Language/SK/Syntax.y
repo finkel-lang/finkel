@@ -724,7 +724,7 @@ atom_no_idsym :: { HExpr }
 
 exprs :: { HExpr }
     : '\\' lambda           { b_lamE $2 }
-    | ',' app               { b_tupE $1 $2 }
+    | ',' app               { b_tupE $1 (fst $2) }
     | ','                   { b_tupConE $1 }
     | 'let' lbinds expr     {% b_letE $1 $2 $3 }
     | 'if' expr expr expr   { b_ifE $1 $2 $3 $4 }
@@ -733,9 +733,9 @@ exprs :: { HExpr }
     | '::' expr dtype       { b_tsigE $1 $2 $3 }
     | idsym '{' fbinds '}'  {% b_recConOrUpdE $1 $3 }
     | 'list' '{' fbinds '}' {% b_recUpdE (parse p_exprs $1) $3 }
-    | expr                  { $1 }
     | idsym app             {% b_opOrAppE $1 $2 }
-    | expr_no_idsym app     { b_appE ($1:$2) }
+    | expr_no_idsym app     { case $2 of (es,ts) -> b_appE ($1:es,ts) }
+    | expr                  { $1 }
 
 lambda :: { (HExpr,[HPat]) }
      : expr       { ($1,[]) }
@@ -761,12 +761,14 @@ rfbinds :: { [(Located FastString, HExpr)] }
                                 LForm (L l _) ->
                                     (L l (symbolNameFS $2), $3):$1 }
 
-app :: { [HExpr] }
-    : rapp { reverse $1 }
+app :: { ([HExpr], [HType]) }
+    : rapp { case $1 of (es,ts) -> (reverse es, reverse ts) }
 
-rapp :: { [HExpr] }
-    : expr      { [$1] }
-    | rapp expr { $2 : $1 }
+rapp :: { ([HExpr], [HType]) }
+    : expr          { ([$1], []) }
+    | '@' type      { ([], [$2]) }
+    | rapp expr     { case $1 of (es,ts) -> ($2:es,ts) }
+    | rapp '@' type { case $1 of (es,ts) -> (es,$3:ts) }
 
 matches :: { [HMatch] }
     : rmatches { reverse $1 }

@@ -5,7 +5,7 @@
 module Language.SK.Syntax.HExpr where
 
 -- base
-import Data.List (foldl1')
+import Data.List (foldl', foldl1')
 
 -- ghc
 import BasicTypes ( Arity, Boxity(..), FractionalLit(..), Origin(..)
@@ -17,8 +17,9 @@ import HsExpr ( ArithSeqInfo(..), GRHS(..), HsExpr(..)
 import HsDoc (HsDocString)
 import HsLit (HsLit(..), HsOverLit(..))
 import HsPat (HsRecFields(..))
-import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsComp, mkHsDo
-               , mkHsFractional, mkHsIf, mkHsLam, mkLHsPar
+import HsTypes (mkHsWildCardBndrs)
+import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsComp
+               , mkHsDo, mkHsFractional, mkHsIf, mkHsLam, mkLHsPar
                , mkLHsSigWcType, mkLHsTupleExpr, mkMatchGroup )
 import Lexeme (isLexCon, isLexSym)
 import OrdList (toOL)
@@ -156,16 +157,17 @@ b_recUpdE expr flds = do
    return (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
 {-# INLINE b_recUpdE #-}
 
-b_opOrAppE :: Code -> [HExpr] -> Builder HExpr
-b_opOrAppE code args = do
+b_opOrAppE :: Code -> ([HExpr], [HType]) -> Builder HExpr
+b_opOrAppE code (args, tys) = do
   fn <- b_varE code
-  let mkOp loc lhs rhs = L loc (mkOpApp fn lhs rhs)
+  let fn' = mkAppTypes fn tys
+      mkOp loc lhs rhs = L loc (mkOpApp fn' lhs rhs)
   case code of
     LForm (L l (Atom (ASymbol name)))
       | isLexSym name
       , _:_:_ <- args
       -> pure (mkLHsPar (foldl1' (mkOp l) args))
-    _ -> pure (b_appE (fn:args))
+    _ -> pure (b_appE (fn':args, tys))
 {-# INLINE b_opOrAppE #-}
 
 mkOpApp :: HExpr -> HExpr -> HExpr -> HsExpr PARSED
@@ -177,11 +179,27 @@ mkOpApp op l r =
 #endif
 {-# INLINE mkOpApp #-}
 
-b_appE :: [HExpr] -> HExpr
-b_appE = foldl1' f
+b_appE :: ([HExpr], [HType]) -> HExpr
+b_appE (args,_tys) = foldl1' f args
   where
     f a b = mkHsApp a (mkLHsPar b)
 {-# INLINE b_appE #-}
+
+mkAppTypes :: HExpr -> [HType] -> HExpr
+mkAppTypes = foldl' mkAppType
+{-# INLINE mkAppTypes #-}
+
+mkAppType :: HExpr -> HType -> HExpr
+mkAppType expr ty =
+  let l = getLoc expr
+#if MIN_VERSION_ghc (8,8,0)
+  in  cL l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
+#elif MIN_VERSION_ghc (8,6,0)
+  in  cL l (HsAppType (mkHsWildCardBndrs ty) expr)
+#else
+  in  cL l (HsAppType expr (mkHsWildCardBndrs ty))
+#endif
+{-# INLINE mkAppType #-}
 
 b_charE :: Code -> Builder HExpr
 b_charE (LForm (L l form))
