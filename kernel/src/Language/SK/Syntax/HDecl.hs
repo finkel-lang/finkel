@@ -13,7 +13,7 @@ import BasicTypes ( Activation(..), Fixity(..),  FixityDirection(..)
                   , InlineSpec(..), LexicalFixity(..), OverlapMode(..)
                   , PhaseNum, RuleMatchInfo(..), SourceText(..) )
 import DataCon (SrcStrictness(..))
-import FastString (FastString, fsLit, unpackFS)
+import FastString (FastString, unpackFS)
 import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
 import HsBinds (FixitySig(..), HsBind, HsBindLR(..), Sig(..))
 import HsDecls ( ClsInstDecl(..), ConDecl (..), DataFamInstDecl(..)
@@ -474,7 +474,7 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty) =
 #endif
                                , fd_fe = e }
             e = CExport (L l (CExportStatic (SourceText ename')
-                                            (fsLit ename')
+                                            ename'_fs
                                             (unLoc ccnv)))
                         (L l (SourceText ename'))
         return (L l (forD fe))
@@ -483,7 +483,8 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty) =
       lname = L ln (mkRdrName name)
       LForm (L ln (Atom (ASymbol name))) = nm
       tsig = mkLHsSigType ty
-      LForm (L _ls (Atom (AString ename'))) = ename
+      LForm (L _ls (Atom (AString ename'_fs))) = ename
+      ename' = unpackFS ename'_fs
       source =
          case ename' of
             "" -> L l NoSourceText
@@ -674,7 +675,7 @@ b_docNamed form@(LForm (L l body))
   = setLastToken form >> failB "Invalid named doc"
 {-# INLINE b_docNamed #-}
 
-docCommentNext :: String -> DocDecl
+docCommentNext :: FastString -> DocDecl
 docCommentNext = DocCommentNext . hsDocString
 {-# INLINE docCommentNext #-}
 

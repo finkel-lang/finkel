@@ -165,7 +165,7 @@ mkAChar (L l (TChar x)) = atom l $ AChar x
 {-# INLINE mkAChar #-}
 
 mkAString :: Located Token -> Code
-mkAString (L l (TString x)) = atom l $ AString x
+mkAString (L l (TString x)) = atom l $ aString x
 {-# INLINE mkAString #-}
 
 mkAInteger :: Located Token -> Code
@@ -208,7 +208,7 @@ mkDock (L l (TDocNamed k mb_doc)) =
     Nothing -> li l pre
     Just d  -> li l (pre ++ [atom l (AString d)])
   where
-    pre = [sym l ":doc$", atom l (ASymbol (fsLit k))]
+    pre = [sym l ":doc$", atom l (ASymbol k)]
 {-# INLINE mkDock #-}
 
 rmac :: Located Token -> Code -> SP Code

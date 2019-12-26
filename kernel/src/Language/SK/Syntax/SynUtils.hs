@@ -12,7 +12,7 @@ import BasicTypes ( SourceText(..)
                   , IntegralLit(..)
 #endif
                   )
-import FastString (FastString, fsLit, headFS, unpackFS)
+import FastString ( FastString, fsLit, headFS, unpackFS )
 import HaddockUtils (addConDoc)
 import HsBinds ( HsBindLR(..), HsLocalBindsLR(..), HsValBindsLR(..)
                , emptyLocalBinds )
@@ -40,7 +40,8 @@ import qualified SrcLoc
 #endif
 
 #if MIN_VERSION_ghc (8,6,0)
-import HsDoc (HsDocString, mkHsDocString)
+import FastString (fastStringToByteString)
+import HsDoc (HsDocString, mkHsDocStringUtf8ByteString)
 import HsExtension (noExt)
 #else
 import HsDoc (HsDocString(..))
@@ -295,11 +296,11 @@ codeToUserTyVar code =
 {-# INLINE codeToUserTyVar #-}
 
 -- | Auxiliary function to make 'HsDocString'.
-hsDocString :: String -> HsDocString
+hsDocString :: FastString -> HsDocString
 #if MIN_VERSION_ghc(8,6,0)
-hsDocString = mkHsDocString
+hsDocString = mkHsDocStringUtf8ByteString . fastStringToByteString
 #else
-hsDocString = HsDocString . fsLit
+hsDocString = HsDocString
 #endif
 {-# INLINE hsDocString #-}
 

@@ -24,6 +24,7 @@ module Language.SK.Form
   -- * Auxiliary functions
   , aFractional
   , aSymbol
+  , aString
   , genSrc
   , mkLocatedForm
   , showLoc
@@ -63,7 +64,7 @@ data Atom
   = AUnit
   | ASymbol {-# UNPACK #-} !FastString
   | AChar {-# UNPACK #-} !Char
-  | AString String
+  | AString {-# UNPACK #-} !FastString
   | AInteger Integer
   | AFractional {-# UNPACK #-} !FractionalLit
   deriving (Eq, Data, Typeable, Generic)
@@ -93,7 +94,7 @@ instance NFData Atom where
       AUnit         -> ()
       ASymbol fs    -> seq fs ()
       AChar c       -> seq c ()
-      AString str   -> rnf str
+      AString str   -> seq str ()
       AInteger i    -> rnf i
       AFractional y -> seq y ()
 
@@ -222,7 +223,7 @@ qChar = quoted . Atom . AChar
 
 -- | Make quoted string from 'String'.
 qString :: String -> Code
-qString = quoted . Atom . AString
+qString = quoted . Atom . aString
 
 -- | Make quoted integer from 'Integer'.
 qInteger :: Integer -> Code
@@ -247,6 +248,12 @@ qHsList = quoted . HsList
 -- | Auxiliary function to construct 'ASymbol' atom.
 aSymbol :: String -> Atom
 aSymbol = ASymbol . fsLit
+{-# INLINE aSymbol #-}
+
+-- | Auxiliary function to construct 'AString' atom.
+aString :: String -> Atom
+aString = AString . fsLit
+{-# INLINE aString #-}
 
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.

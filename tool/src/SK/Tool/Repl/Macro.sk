@@ -161,7 +161,7 @@
   [code]
   (case (unCode code)
     (Atom (ASymbol sym)) (Just (unpackFS sym))
-    (Atom (AString str)) (Just str)
+    (Atom (AString str)) (Just (unpackFS str))
     _ Nothing))
 
 (defn (:: located-list (-> [Code] Code))

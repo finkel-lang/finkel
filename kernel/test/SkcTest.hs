@@ -169,7 +169,7 @@ expandTest = do
           qt = fromMaybe (error "macro not found") mb_qt
           s x = LForm (genSrc (Atom (ASymbol (fsLit x))))
           li xs = LForm (genSrc (List xs))
-          t x = LForm (genSrc (Atom (AString x)))
+          t x = LForm (genSrc (Atom (AString (fsLit x))))
           form0 = li [s ":quote", s "a"]
           form1 = li [s "qSymbol", t "a"]
       ret <- runSkc (macroFunction qt form0) env

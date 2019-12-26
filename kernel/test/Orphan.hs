@@ -23,7 +23,7 @@ instance Arbitrary Atom where
     oneof [ return AUnit
           , aSymbol <$> symbolG
           , AChar <$> arbitraryUnicodeChar
-          , AString <$> stringG
+          , aString <$> stringG
           , AInteger <$> arbitrary
           , aFractional <$> (arbitrary :: Gen Double) ]
     where
@@ -41,7 +41,7 @@ instance CoArbitrary Atom where
       AUnit         -> var 0
       ASymbol sym   -> var 1 . coarbitrary (unpackFS sym)
       AChar c       -> var 2 . coarbitrary c
-      AString str   -> var 3 . coarbitrary str
+      AString str   -> var 3 . coarbitrary (unpackFS str)
       AInteger i    -> var 4 . coarbitrary i
       AFractional d -> var 5 . coarbitrary (fl_value d)
     where

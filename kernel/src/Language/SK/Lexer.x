@@ -364,13 +364,13 @@ data Token
   -- ^ Literal @#@.
   | TPcommas Int
   -- ^ Parenthesized commas with number of repeats.
-  | TDocNext String
+  | TDocNext FastString
   -- ^ Documentation comment for next thing.
-  | TDocPrev String
+  | TDocPrev FastString
   -- ^ Documentation comment for previous thing.
-  | TDocGroup Int String
+  | TDocGroup Int FastString
   -- ^ Documentation comment for section.
-  | TDocNamed String (Maybe String)
+  | TDocNamed FastString (Maybe FastString)
   -- ^ Documentation comment for named documentation.
   | TEOF
   -- ^ End of form.
@@ -485,13 +485,13 @@ tok_doc_next :: Action
 tok_doc_next = tok_doc_with TDocNext '|'
 {-# INLINE tok_doc_next #-}
 
-tok_doc_with :: (String -> Token) -> Char -> Action
+tok_doc_with :: (FastString -> Token) -> Char -> Action
 tok_doc_with constr char (AlexInput _ _ s) l = do
   let str0 = takeUtf8 l s
       line0:strs = C8.lines str0
       line1 = C8.tail (C8.dropWhile (/= char) line0)
       str1 = C8.unlines (line1 : map (C8.dropWhile (== ';')) strs)
-      str = utf8DecodeByteString (W8.toStrict str1)
+      str = mkFastStringByteString (W8.toStrict str1)
   return $! constr str
 {-# INLINE tok_doc_with #-}
 
@@ -501,9 +501,9 @@ tok_doc_named (AlexInput _ _ s) l =
       line1:strs = C8.lines str0
       line2 = C8.dropWhile isSpace $ C8.dropWhile (== ';') line1
       line3 = C8.tail line2
-      key = utf8DecodeByteString (W8.toStrict line3)
+      key  = mkFastStringByteString (W8.toStrict line3)
       str1 = map (C8.dropWhile (== ';')) strs
-      str2 = utf8DecodeByteString (W8.toStrict (C8.unlines str1))
+      str2 = mkFastStringByteString (W8.toStrict (C8.unlines str1))
       str3 = case strs of
                [] -> Nothing
                _  -> Just str2
@@ -516,7 +516,7 @@ tok_doc_group (AlexInput _ _ s) l =
       str1 = C8.dropWhile isSpace str0
       (stars, str2) = C8.span (== '*') str1
       level = C8.length stars
-      str3 = utf8DecodeByteString (W8.toStrict (C8.tail str2))
+      str3 = mkFastStringByteString (W8.toStrict (C8.tail str2))
   in  return $! TDocGroup (fromIntegral level) str3
 {-# INLINE tok_doc_group #-}
 

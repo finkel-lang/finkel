@@ -9,7 +9,7 @@ import Data.List (foldl1')
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
-import FastString (fsLit, headFS, nullFS, tailFS)
+import FastString (headFS, nullFS, tailFS)
 import HsLit (HsLit(..))
 import HsPat (HsRecFields(..), Pat(..))
 import HsTypes (HsConDetails(..))
@@ -55,7 +55,7 @@ b_stringP (LForm (L l form))
   | otherwise
   = builderError
   where
-    lit str = hsIsString (SourceText (show str)) (fsLit str)
+    lit str = hsIsString (SourceText (show str)) str
     hsIsString s t =
 #if MIN_VERSION_ghc(8,6,0)
       mkHsIsString s t

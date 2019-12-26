@@ -7,7 +7,7 @@ module Language.SK.Syntax.HType where
 
 -- ghc
 import BasicTypes (Boxity(..), SourceText(..))
-import FastString (fsLit, headFS, lengthFS, nullFS, tailFS)
+import FastString (headFS, lengthFS, nullFS, tailFS)
 import HsDoc (LHsDocString)
 import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..), HsTyLit(..)
                , LHsTyVarBndr, SrcStrictness(..)
@@ -155,7 +155,7 @@ b_funT (LForm (L l _)) ts =
 b_tyLitT :: Code -> Builder HType
 b_tyLitT (LForm (L l form))
   | Atom (AString str) <- form =
-    return (mkLit l (HsStrTy (SourceText str) (fsLit str)))
+    return (mkLit l (HsStrTy (SourceText (show str)) str))
   | Atom (AInteger n) <- form =
     return (mkLit l (HsNumTy (SourceText (show n)) n))
   | otherwise = builderError
@@ -182,7 +182,7 @@ b_opOrAppT form@(LForm (L l ty)) typs
 b_prmConT :: Code -> Builder HType
 b_prmConT (LForm (L l form))
   | Atom (AString str) <- form =
-    let name = fsLit str
+    let name = str
         rname =
           case name of
             ":" -> getRdrName consDataCon

@@ -28,7 +28,7 @@
     (where (oneof [(return AUnit)
                    (fmap aSymbol symbolG)
                    (fmap AChar arbitraryUnicodeChar)
-                   (fmap AString stringG)
+                   (fmap aString stringG)
                    (fmap AInteger arbitrary)
                    (fmap aFractional (:: arbitrary (Gen Double)))])
       (= headChars

@@ -10,7 +10,7 @@ import Data.List (foldl', foldl1')
 -- ghc
 import BasicTypes ( Arity, Boxity(..), FractionalLit(..), Origin(..)
                   , SourceText(..), fl_value)
-import FastString (FastString, fsLit, lengthFS, unpackFS)
+import FastString (FastString, lengthFS, unpackFS)
 import HsExpr ( ArithSeqInfo(..), GRHS(..), HsExpr(..)
               , HsMatchContext(..), HsStmtContext(..), HsTupArg(..)
               , Match(..), StmtLR(..) )
@@ -213,7 +213,7 @@ b_stringE :: Code -> Builder HExpr
 b_stringE (LForm (L l form))
   | Atom (AString x) <- form
   = return
-      (L l (hsLit (HsString (SourceText (show x)) (fsLit x))))
+      (L l (hsLit (HsString (SourceText (show x)) x)))
   | otherwise
   = builderError
 {-# INLINE b_stringE #-}

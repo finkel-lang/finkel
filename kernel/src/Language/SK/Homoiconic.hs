@@ -30,7 +30,7 @@ import qualified Data.Semigroup as Semigroup
 
 -- ghc
 import BasicTypes (fl_value)
-import FastString (FastString)
+import FastString (FastString, unpackFS)
 import SrcLoc (GenLocated(..), getLoc)
 
 -- internal
@@ -102,7 +102,7 @@ instance FromCode () where
 
 instance ToCode Char where
   toCode = LForm . genSrc . Atom . AChar
-  listToCode = LForm . genSrc . Atom . AString
+  listToCode = LForm . genSrc . Atom . aString
 
 instance FromCode Char where
   fromCode a =
@@ -110,7 +110,7 @@ instance FromCode Char where
       Atom (AChar x)  -> Just x
       _               -> Nothing
   listFromCode a = case unCode a of
-                     Atom (AString s) -> Just s
+                     Atom (AString s) -> Just (unpackFS s)
                      _                -> Nothing
 
 instance ToCode Int where

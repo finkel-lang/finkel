@@ -86,7 +86,7 @@ quote qual orig@(LForm (L l form)) =
 quoteAtom :: Bool -> SrcSpan -> Atom -> Code
 quoteAtom qual l form =
   case form of
-    ASymbol s     -> li [tSym l (qSymbolS qual), tString l (unpackFS s)]
+    ASymbol s     -> li [tSym l (qSymbolS qual), tString l s]
     AChar c       -> li [tSym l (qCharS qual), tChar l c]
     AString s     -> li [tSym l (qStringS qual), tString l s]
     AInteger n    -> li [tSym l (qIntegerS qual), tInteger l n]
@@ -153,7 +153,7 @@ unquoteSplice form =
     List xs           -> xs
     HsList xs         -> xs
     Atom AUnit        -> []
-    Atom (AString xs) -> map toCode xs
+    Atom (AString xs) -> map toCode (unpackFS xs)
     _                 -> throw (SkException
                                   ("unquote splice: got " ++
                                    show (toCode form)))
@@ -643,7 +643,7 @@ tChar :: SrcSpan -> Char -> Code
 tChar l c = LForm (L l (Atom (AChar c)))
 {-# INLINE tChar #-}
 
-tString :: SrcSpan -> String -> Code
+tString :: SrcSpan -> FastString -> Code
 tString l s = LForm (L l (Atom (AString s)))
 {-# INLINE tString #-}
 
