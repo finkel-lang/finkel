@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                sk-lang
-version:             0.16.0.0
+version:             0.17.0.0
 synopsis:            SK language core
 description:         SK language core macros and functions.
 homepage:            https://github.com/githubuser/sk-lang#readme
