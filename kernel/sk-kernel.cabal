@@ -8,7 +8,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              8c6794b6
 maintainer:          example@example.com
-copyright:           2017 8c6794b6
+copyright:           2017-2020 8c6794b6
 category:            Language
 build-type:          Custom
 extra-source-files:  README.md

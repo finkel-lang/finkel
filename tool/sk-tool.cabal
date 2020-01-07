@@ -6,9 +6,9 @@ description:         SK tool
 homepage:            https://github.com/githubuser/sk/sk-tool#readme
 license:             BSD3
 license-file:        LICENSE
-author:              Author name here
+author:              8c6794b6
 maintainer:          example@example.com
-copyright:           2019 Author name here
+copyright:           2017-2020 8c6794b6
 category:            Language
 build-type:          Custom
 extra-source-files:  README.md
