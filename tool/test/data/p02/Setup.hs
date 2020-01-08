@@ -1,2 +1,2 @@
-import SK.Setup
-main = skMakeMain
+import Finkel.Setup
+main = finkelMakeMain

@@ -1,0 +1,19 @@
+;;;; File: fib-macro.fnk
+
+(defmodule Main
+  (require (Finkel.Prelude)))
+
+(eval-when [compile]
+  (defn (:: fib (-> Int Int))
+    [n]
+    (if (< n 2)
+        n
+        (+ (fib (- n 1)) (fib (- n 2)))))
+
+  (defmacro fib-macro [n]
+    (case (fromCode n)
+      (Just i) (toCode (fib i))
+      Nothing (error "fib-macro: not an integer literal"))))
+
+(defn (:: main (IO ()))
+  (print (fib-macro 10)))

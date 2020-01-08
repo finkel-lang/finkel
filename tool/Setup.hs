@@ -1,6 +1,6 @@
 module Main where
 
-import Distribution.Simple.SK (skkcMain)
+import Distribution.Simple.Finkel (fnkMain)
 
 main :: IO ()
-main = skkcMain
+main = fnkMain

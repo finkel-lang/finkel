@@ -43,12 +43,12 @@ import Test.Hspec
 -- QuickCheck
 import Test.QuickCheck
 
--- sk-kernel
-import Language.SK.Expand
-import Language.SK.Form
-import Language.SK.Homoiconic
-import Language.SK.Lexer
-import Language.SK.Reader
+-- finkel-kernel
+import Language.Finkel.Expand
+import Language.Finkel.Form
+import Language.Finkel.Homoiconic
+import Language.Finkel.Lexer
+import Language.Finkel.Reader
 
 -- Internal
 import Orphan ()

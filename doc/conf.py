@@ -19,7 +19,7 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'sk'
+project = 'Finkel'
 copyright = '2019-2020, 8c6794b6'
 author = '8c6794b6'
 
@@ -112,7 +112,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'Skdoc'
+htmlhelp_basename = 'Finkeldoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -139,7 +139,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'Sk.tex', 'Sk Documentation',
+    (master_doc, 'Finkel.tex', 'Finkel Documentation',
      '8c6794b6', 'manual'),
 ]
 
@@ -149,7 +149,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'sk', 'Sk Documentation',
+    (master_doc, 'finkel', 'Finkel Documentation',
      [author], 1)
 ]
 
@@ -160,8 +160,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'Sk', 'Sk Documentation',
-     author, 'Sk', 'Lisp Flavored Haskell',
+    (master_doc, 'Finkel', 'Finkel Documentation',
+     author, 'Finkel', 'Lisp Flavored Haskell',
      'Miscellaneous'),
 ]
 
@@ -192,20 +192,20 @@ from sphinx.highlighting import lexers
 
 import re
 
-class SkLexer(RegexLexer):
-    name = 'sk'
+class FinkelLexer(RegexLexer):
+    name = 'finkel'
     reserved = (
-        # haskell 2010
+        # Haskell 2010
         'case', 'class', 'data', 'default', 'deriving', 'do',
         'family', 'if', 'infix[lr]?', 'instance', 'let', 'newtype',
         'type', 'where',
         '_', '=', '=>', '<-', '->', '::',
 
-        # sk kernel special forms
+        # Finkel kernel special forms
         ':begin', ':eval-when-compile', ':quote', ':quasiquote',
         ':require', ':unquote', ':unquote-splice',
 
-        # sk core
+        # Finkel core
         'eval-when', 'export', 'defn', 'defmacro', 'defmodule',
         'macrolet', 'require'
     )
@@ -272,4 +272,4 @@ class SkLexer(RegexLexer):
     }
 
 def setup(sphinx):
-    sphinx.add_lexer("sk", SkLexer())
+    sphinx.add_lexer("finkel", FinkelLexer())

@@ -1,0 +1,62 @@
+cabal-version:       2.0
+name:                finkel-lang
+version:             0.17.0.0
+synopsis:            Finkel language core
+description:         Finkel language core macros and functions.
+homepage:            https://github.com/finkel-lang/lang#readme
+license:             BSD3
+license-file:        LICENSE
+author:              8c6794b6
+maintainer:          example@example.com
+copyright:           2017-2020 8c6794b6
+category:            Language
+build-type:          Custom
+extra-source-files:  README.md
+                     src/Finkel/*.fnk
+                     src/Finkel/Core/*.fnk
+                     test/*.fnk
+
+tested-with:           GHC == 8.2.2
+                     , GHC == 8.4.3
+                     , GHC == 8.6.4
+                     , GHC == 8.8.1
+
+custom-setup
+  setup-depends:       base         >= 4.7 && < 5
+                     , Cabal        >= 2.0
+                     , finkel-setup >= 0.1
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Paths_finkel_lang
+                       Finkel.Core.Error
+                       Finkel.Core.List
+                       Finkel.Core
+                       Finkel.Prelude
+  autogen-modules:     Paths_finkel_lang
+  reexported-modules:  Language.Finkel
+  build-depends:       base          >= 4.7 && < 5
+                     , ghc
+                     , finkel-kernel >= 0.28.0
+  default-language:    Haskell2010
+  ghc-options:       -Wall
+
+test-suite finkel-lang-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       QuickCheck
+                     , base
+                     , directory
+                     , ghc
+                     , hspec
+                     , finkel-lang
+                     , finkel-kernel
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  other-modules:       Orphan
+                       CoreTest
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/finkel-lang/lang

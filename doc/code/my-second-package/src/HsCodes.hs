@@ -2,10 +2,10 @@
 
 module HsCodes
   ( hsfactorial
-  , skfactorial
+  , fnkfactorial
   ) where
 
-import SkCodes
+import FnkCodes
 
 hsfactorial :: Int -> Int
-hsfactorial = skfactorial
+hsfactorial = fnkfactorial

@@ -1,9 +1,9 @@
 Building Package
 ================
 
-To build a library package with sk, make a cabal configuration file as
-in the Haskell cabal package, but with custom setup script and some
-build tool and package dependencies.
+To build a library package with Finkel, make a cabal configuration
+file as in the Haskell cabal package, but with custom setup script and
+some build tool and package dependencies.
 
 .. note::
 
@@ -29,10 +29,11 @@ And a custom ``Setup.hs`` script:
 .. literalinclude:: ../code/my-first-package/Setup.hs
    :language: haskell
 
-And a sk source code ``src/MyFirstSkProject.sk`` for exposed module:
+And a Finkel source code ``src/MyFirstPackage.fnk`` for exposed
+module:
 
-.. literalinclude:: ../code/my-first-package/src/MyFirstPackage.sk
-   :language: sk
+.. literalinclude:: ../code/my-first-package/src/MyFirstPackage.fnk
+   :language: finkel
 
 At this point the files under the ``my-first-project`` directory
 should look like below:
@@ -43,7 +44,7 @@ should look like below:
    ├── package.yaml
    ├── Setup.hs
    └── src
-      └── MyFirstPackage.sk
+      └── MyFirstPackage.fnk
 
 
 Now one can build the ``my-first-package`` package with ``stack``:
@@ -55,7 +56,7 @@ Now one can build the ``my-first-package`` package with ``stack``:
    [1 of 2] Compiling Main
    [2 of 2] Compiling StacksetupShim
    ... More output messages ...
-   [1 of 1] Compiling MyFirstSkProject
+   [1 of 1] Compiling MyFirstPackage
 
 .. note:: While building packages with ``stack``, one may see a warning
    message saying "Unable to find a known candidate for the Cabal
@@ -64,21 +65,21 @@ Now one can build the ``my-first-package`` package with ``stack``:
    fix in not so far future.
 
 
-Mixing Sk And Haskell Source Codes
-----------------------------------
+Mixing Finkel And Haskell Source Codes
+--------------------------------------
 
-One can mix sk source codes and Haskell source codes in a package.
-This time, making a package ``my-second-package`` from sk specific
+One can mix Finkel source codes and Haskell source codes in a package.
+This time, making a package ``my-second-package`` from Finkel specific
 template:
 
 .. code-block:: console
 
-   $ stack new my-second-package github:sk-lang/sk/tool/sk.hsfiles
+   $ stack new my-second-package github:finkel-lang/finkel/tool/finkel.hsfiles
 
 The above command will make a directory named ``my-second-package``
-with a cabal configuration file, ``Setup.hs`` script, and a stub sk
-source code file. Directory contents of ``my-second-package`` should
-look like below:
+with a cabal configuration file, ``Setup.hs`` script, and a stub
+Finkel source code file. Directory contents of ``my-second-package``
+should look like below:
 
 ::
 
@@ -90,15 +91,15 @@ look like below:
    ├── README.md
    ├── Setup.hs
    ├── src
-   │  └── Lib.sk
+   │  └── Lib.fnk
    └── test
       └── Spec.hs
 
-Add a new file named ``my-second-package/src/SkCodes.sk``, with sk
-source codes:
+Add a new file named ``my-second-package/src/FnkCodes.fnk``, with
+Finkel source codes:
 
-.. literalinclude:: ../code/my-second-package/src/SkCodes.sk
-   :language: sk
+.. literalinclude:: ../code/my-second-package/src/FnkCodes.fnk
+   :language: finkel
 
 And another new file named ``my-second-package/src/HsCodes.hs``, with
 Haskell source codes:
@@ -107,18 +108,18 @@ Haskell source codes:
    :language: haskell
 
 Modify the ``library`` stanza of the file ``my-second-package.cabal``
-and add ``HsCodes`` and ``SkCodes`` modules as shown below:
+and add ``HsCodes`` and ``FnkCodes`` modules as shown below:
 
 .. literalinclude:: ../code/my-second-package/my-second-package.cabal
    :lines: 22-29
 
 The functions exported from ``HsCodes`` module could be used from
-``Lib`` module, as in compilation of cabal package without sk
-codes. Modify the file ``my-second-package/src/Lib.sk`` to import
-``hsfactorial`` and ``skfactorial`` functions from ``HsCodes``:
+``Lib`` module, as in compilation of cabal package without Finkel
+codes. Modify the file ``my-second-package/src/Lib.fnk`` to import
+``hsfactorial`` and ``fnkfactorial`` functions from ``HsCodes``:
 
-.. literalinclude:: ../code/my-second-package/src/Lib.sk
-  :language: sk
+.. literalinclude:: ../code/my-second-package/src/Lib.fnk
+  :language: finkel
 
 One can build the ``my-second-package`` with ``stack build`` command, as
 before:
@@ -129,7 +130,7 @@ before:
 
 .. note::
 
-   It is also possible to use a library package containing sk code
+   It is also possible to use a library package containing Finkel code
    from other Haskell packages as a build dependency in cabal
    configuration file since the resulting object codes are compiled by
    ``ghc``.
@@ -141,9 +142,9 @@ Executable In Package
 As of cabal version 2.4.0, the file extension of an executable in a
 cabal package needs to end with ``.hs`` or ``.c`` file extension. From
 this restriction, one needs to make a wrapper file to run an
-executable written in sk. This is why the executable and test stanzas
-in cabal configuration file generated from template contained dummy
-``Main.hs`` and ``Spec.hs`` files instead of ``*.sk`` files.
+executable written in Finkel. This is why the executable and test
+stanzas in cabal configuration file generated from template contained
+dummy ``Main.hs`` and ``Spec.hs`` files instead of ``*.fnk`` files.
 
 
 Test, Coverage, And Haddock

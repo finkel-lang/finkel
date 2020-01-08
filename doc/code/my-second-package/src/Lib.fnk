@@ -1,0 +1,10 @@
+;;;; File: my-second-package/src/Lib.fnk
+
+(defmodule Lib
+  (export someFunc)
+  (import (HsCodes (hsfactorial fnkfactorial))))
+
+(defn (:: someFunc (IO ()))
+  (do (putStrLn "someFunc")
+      (print (hsfactorial 10))
+      (print (fnkfactorial 10))))

@@ -1,0 +1,15 @@
+;;;; Prelude module for Finkel.
+
+(module Finkel.Prelude
+  (module All))
+
+;; base
+(import Prelude as All)
+
+;; finkel-kernel
+(import Language.Finkel as All)
+
+;; Internal
+(import Finkel.Core as All)
+(import Finkel.Core.Error as All)
+(import Finkel.Core.List as All)

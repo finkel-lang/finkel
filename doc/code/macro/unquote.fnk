@@ -1,0 +1,15 @@
+;;;; File: unquote.fnk
+
+(defmodule Main
+  (require (Finkel.Prelude)))
+
+(eval-when [compile]
+  (defmacro uq1 [arg]
+    `(putStrLn (++ "uq1: arg = " (show ,arg))))
+
+  (defmacro uq2 [arg]
+    `(putStrLn ,(++ "uq2: arg = " (show arg)))))
+
+(defn (:: main (IO ()))
+  (do (uq1 "foo")
+      (uq2 "bar")))

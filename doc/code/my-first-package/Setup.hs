@@ -1,6 +1,6 @@
 -- File: my-first-package/Setup.hs
 
-import SK.Setup (skMakeMain)
+import Finkel.Setup (finkelMakeMain)
 
 main :: IO ()
-main = skMakeMain
+main = finkelMakeMain

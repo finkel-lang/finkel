@@ -1,0 +1,129 @@
+;;;; | Simple Finkel REPL.
+;;;;
+;;;; This implementation uses two threads: one for reading and printing,
+;;;; and another for evaluating and modifying the FnkEnv. Using `MVar'
+;;;; containing `Code' to communicate between the threads. This design
+;;;; shall be easier to support reading forms from other sources than
+;;;; line oriented user input, e.g. network sockets.
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Repl
+  (export
+   replMain repl-env)
+  (require
+   ;; finkel-lang
+   (Finkel.Prelude)
+
+   ;; internal
+   (Finkel.Tool.Repl.Macro))
+  (import
+   ;; base
+   (Control.Monad (mplus))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (System.Console.GetOpt
+    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
+   (System.Environment (getProgName))
+
+   ;; finkel-kernel
+   (Language.Finkel.Expand (specialForms))
+   (Language.Finkel.Make (defaultFnkEnv))
+   (Language.Finkel.Fnk
+    ((FnkEnv ..) (EnvMacros) makeEnvMacros mergeMacros))
+
+   ;; finkel-lang
+   (Finkel.Core)
+
+   ;; Internal
+   (Finkel.Tool.CLI)
+   (Finkel.Tool.Repl.Macro)
+   (Finkel.Tool.Repl.Loop)))
+
+
+
+;;; Exported
+
+(defn (:: replMain (=> (CLI m) (-> [String] (m ()))))
+  "Main entry point function for REPL."
+  [args]
+  (case (getOpt Permute descrs args)
+    (, o _ []) (act (foldl (flip id) initial-option o))
+    (, _ _ es) (print-errors es)))
+
+(defn (:: repl-env FnkEnv)
+  "Environment value used by the Finkel REPL."
+  (let ((= modules ["Prelude"])
+        (= macros (mergeMacros specialForms replMacros)))
+    (defaultFnkEnv {envContextModules modules
+                   envMacros macros
+                   envDefaultMacros macros
+                   envQualifyQuotePrimitives True})))
+
+
+;;; Internal
+
+(data ReplMode
+  Help
+  Run)
+
+(data ReplOption
+  (ReplOption {repl-mode ReplMode
+               repl-listen-port (Maybe Int)
+               repl-input-path (Maybe FilePath)}))
+
+(defn (:: initial-option ReplOption)
+  (ReplOption {repl-mode Run
+               repl-listen-port Nothing
+               repl-input-path Nothing}))
+
+(defn (:: descrs [OptDescr (-> ReplOption ReplOption)])
+  [(Option [#'h] ["help"]
+           (NoArg (\ o (o {repl-mode Help})))
+           "Show this help and exit")
+   (Option [#'l] ["listen"]
+           (OptArg (\ mb-port o
+                     (let ((= port
+                             (mplus (fmap read mb-port)
+                                    (Just 50321))))
+                       (o {repl-mode Run
+                           repl-listen-port port})))
+                   "PORT")
+           "Listen to port (default: 50321)")
+   (Option [#'f] ["file"]
+           (ReqArg (\ file o
+                     (o {repl-input-path (Just file)}))
+                   "FILE")
+           "File to get input from.")])
+
+(defn (:: act (=> (CLI m) (-> ReplOption (m ()))))
+  [ro]
+  (case (repl-mode ro)
+    Help print-usage
+    Run (liftIO (start-repl (repl-input-path ro)
+                            (repl-listen-port ro)
+                            repl-env))))
+
+(defn (:: print-errors (=> (CLI m) (-> [String] (m ()))))
+  [errs]
+  (do (putString (concat errs))
+      print-usage
+      (exitWith (ExitFailure 1))))
+
+(defn (:: print-usage (=> (CLI m) (m ())))
+  (do (<- name (liftIO getProgName))
+      (putString
+       (unlines
+        [(concat ["USAGE: " name " repl [OPTIONS]"])
+         ""
+         "Start interactive REPL."
+         ""
+         (usageInfo "OPTIONS:\n" descrs)]))))
+
+;;; Default macros imported in REPL. These macros always get imported
+;;; after loading compiled modules.
+(macrolet ((the-macros ()
+             `[,@(map (\ mac `(, ,mac ,(qSymbol mac)))
+                      (++ (exported-macros Finkel.Core)
+                          (exported-macros Finkel.Tool.Repl.Macro)))]))
+  (defn (:: replMacros EnvMacros)
+    (makeEnvMacros (the-macros))))

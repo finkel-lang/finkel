@@ -1,0 +1,38 @@
+;;;; Auxiliary macros for GHC version compatibility
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Compat
+  (export
+   define-ghc-version-macro
+   with-ghc-version-cond)
+  (import
+   ;; ghc
+   (Config (cProjectVersionInt))
+
+   ;; finkel-lang
+   (Finkel.Prelude)))
+
+(defmacro define-ghc-version-macro
+  "Macro to define macro with taking name for ghc version."
+  [name version args body]
+  `(:eval-when-compile
+     (defmacro ,name ,args
+       (let ((= ,version ,(:: (read cProjectVersionInt) Int)))
+         ,body))))
+
+(defmacro with-ghc-version-cond
+  "Macro to generate code with ghc version variable."
+  forms
+  (let ((= ver-name (car forms))
+        (= ver-value (:: (read cProjectVersionInt) Int))
+        (= bodies (cdr forms))
+        (= f test-and-body
+          (let ((= test (car test-and-body))
+                (= body (cadr test-and-body)))
+            `(,test ',body))))
+    `(macrolet (($tmp ()
+                  (let ((= ,ver-name ,ver-value))
+                    (cond
+                      ,@(mapcar f bodies)))))
+       ($tmp))))

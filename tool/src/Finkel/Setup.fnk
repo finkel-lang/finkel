@@ -1,0 +1,20 @@
+;;; Setup script for Finkel package.
+
+(:doc "Module exporting functions for Cabal setup script.")
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Setup
+  (export
+   finkelMakeMain
+   defaultMainWithHooks
+   fnkHooksWith)
+  (import
+   ;; finkel-kernel
+   (Distribution.Simple.Finkel)))
+
+(defn (:: finkelMakeMain (IO ()))
+  "Main function with @make@ command.
+
+Intended to be used from cabal setup script."
+  (fnkMainWith "finkel" ["make"]))

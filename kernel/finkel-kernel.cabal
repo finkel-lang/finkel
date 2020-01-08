@@ -1,0 +1,137 @@
+cabal-version:       2.0
+name:                finkel-kernel
+version:             0.29.0.0
+synopsis:            Finkel kernel language and compiler
+description:         Finkel kernel language and compiler
+homepage:            https://github.com/finkel-lang/kernel#readme
+license:             BSD3
+license-file:        LICENSE
+author:              8c6794b6
+maintainer:          example@example.com
+copyright:           2017-2020 8c6794b6
+category:            Language
+build-type:          Custom
+extra-source-files:  README.md
+                     include/Syntax.h
+                     test/data/syntax/*.fnk
+                     test/data/main/*.c
+                     test/data/main/*.hs
+                     test/data/main/*.fnk
+                     test/data/make/*.c
+                     test/data/make/*.hs
+                     test/data/make/*.fnk
+
+tested-with:           GHC == 8.2.2
+                     , GHC == 8.4.4
+                     , GHC == 8.6.4
+                     , GHC == 8.8.1
+
+custom-setup
+  setup-depends:       base  >= 4.10 && < 5
+                     , Cabal >= 2.0
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Paths_finkel_kernel
+                       Language.Finkel
+                       Language.Finkel.Builder
+                       Language.Finkel.Emit
+                       Language.Finkel.Eval
+                       Language.Finkel.Expand
+                       Language.Finkel.Form
+                       Language.Finkel.Homoiconic
+                       Language.Finkel.Lexer
+                       Language.Finkel.Make
+                       Language.Finkel.Main
+                       Language.Finkel.Reader
+                       Language.Finkel.Fnk
+                       Language.Finkel.Syntax
+                       Language.Finkel.TargetSource
+  other-modules:       Language.Finkel.Syntax.HDecl
+                       Language.Finkel.Syntax.HExpr
+                       Language.Finkel.Syntax.HIE
+                       Language.Finkel.Syntax.HPat
+                       Language.Finkel.Syntax.HType
+                       Language.Finkel.Syntax.SynUtils
+  autogen-modules:     Paths_finkel_kernel
+  includes:            Syntax.h
+  include-dirs:        include
+  c-sources:           include/hooks.c
+  build-depends:       array        >= 0.5.2
+                     , base         >= 4.10 && < 5
+                     , bytestring   >= 0.10.8
+                     , containers   >= 0.5.10
+                     , deepseq      >= 1.4.3
+                     , directory    >= 1.3.0
+                     , filepath     >= 1.4.1
+                     , ghc          >= 8.2.0 && < 8.10.0
+                     , ghc-boot     >= 8.2.0 && < 8.10.0
+                     , ghc-paths
+                     , ghci         >= 8.2.0 && < 8.10.0
+                     , process      >= 1.6.1
+                     , time         >= 1.8.0
+  build-tool-depends:  alex:alex    >= 3.2.4
+                     , happy:happy  >= 1.19.9
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+
+flag dynamic
+  description:         Dynamically link executables
+  default:             True
+  manual:              True
+
+executable fnkc
+  hs-source-dirs:      exec
+  main-is:             fnkc.hs
+  if flag(dynamic)
+    ghc-options:       -dynamic
+  ghc-options:         -Wall -threaded -rtsopts
+  build-depends:       base >= 4.10 && < 5
+                     , finkel-kernel
+  default-language:    Haskell2010
+
+executable finkel-profile
+  hs-source-dirs:      exec
+  main-is:             profile.hs
+  ghc-options:         -Wall -threaded -rtsopts
+  if flag(dynamic)
+    ghc-options:       -dynamic
+  build-depends:       base
+                     , bytestring
+                     , filepath
+                     , ghc
+                     , finkel-kernel
+  default-language:    Haskell2010
+
+test-suite finkel-kernel-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Main.hs
+  other-modules:       FormTest
+                       FnkTest
+                       EmitTest
+                       EvalTest
+                       MainTest
+                       MakeTest
+                       SyntaxTest
+                       Orphan
+                       TestAux
+  build-depends:       QuickCheck
+                     , base
+                     , bytestring
+                     , containers
+                     , deepseq
+                     , directory
+                     , filepath
+                     , ghc
+                     , ghc-paths
+                     , hspec
+                     , process
+                     , transformers
+                     , finkel-kernel
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/finkel-lang/kernel

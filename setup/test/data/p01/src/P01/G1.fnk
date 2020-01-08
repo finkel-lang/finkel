@@ -1,0 +1,43 @@
+(module P01.G1)
+
+(import Language.Finkel)
+
+;; Simple definition of `define-macro' used in `p01' package.
+(:: define-macro Macro)
+(= define-macro
+    (Macro (\ form
+             (case (unCode form)
+               (List [_ name arg body])
+               (let ((= __name
+                       (toCode (qSymbol (++ "__" (show name))))))
+                 (return
+                   `(:begin
+                      (:: ,name Macro)
+                      (= ,name
+                        (let ((:: ,__name (-> Code (Fnk Code)))
+                              (= ,__name ,arg ,body))
+                          (Macro ,__name))))))
+               _ (finkelSrcError form "define-macro: invalid args")))))
+
+;;; Simple definition of `defmacro' used in `p01' package.
+(:: defmacro Macro)
+(= defmacro
+  (Macro (\ form
+           (case (unLForm form)
+             (L _ (List [_ name args body]))
+             (case (unLForm args)
+               (L l1 (List _))
+               (let ((= body'
+                       `(define-macro ,name form
+                          (case (unLForm form)
+                            (L l2 (List [_ ,@args])) (return ,body)
+                            _ (finkelSrcError ',name ": error")))))
+                 (return body'))
+
+               (L l1 (Atom _))
+               (let ((= body'
+                       `(define-macro ,name ,args
+                          (return ,body))))
+                 (return body')))
+
+             _ (finkelSrcError form "defmacro: error")))))

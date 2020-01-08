@@ -1,0 +1,21 @@
+;;;; Module containing functions for Finkel related errors.
+
+(:doc "Unsafe functions for showing errors in Finkel macro
+functions.")
+
+(module Finkel.Core.Error
+  unsafeFinkelSrcError)
+
+;; base
+(import System.IO.Unsafe (unsafePerformIO))
+
+;; finkel-kernel
+(import Language.Finkel)
+(import Language.Finkel.Make (defaultFnkEnv))
+(import Language.Finkel.Fnk (runFnk))
+
+(:doc "Throw exception with 'finkelSrcError', with given code and
+message. This function uses 'unsafePerformIO'.")
+(:: unsafeFinkelSrcError (-> Code String a))
+(= unsafeFinkelSrcError code msg
+  (unsafePerformIO (runFnk (finkelSrcError code msg) defaultFnkEnv)))

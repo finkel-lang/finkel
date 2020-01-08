@@ -15,7 +15,7 @@ import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
                        , oneof, scale, variant )
 
 -- Internal
-import Language.SK.Form
+import Language.Finkel.Form
 
 instance Arbitrary Atom where
    -- XXX: Unicode symbols are not generated.

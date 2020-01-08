@@ -1,1 +1,1 @@
-# sk-lang
+# finkel-lang

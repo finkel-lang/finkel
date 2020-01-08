@@ -1,0 +1,31 @@
+;;;; -*- mode: finkel -*-
+;;;;
+;;;; Code containing `eval-when-compile'.
+
+(module Main)
+
+(:require Prelude)
+(:require Language.Finkel)
+
+;;; Function declaration and macro definition done during compilation
+;;; phase. Codes inside `eval-when-compile' do won't appear in resulting
+;;; Haskell code.
+(:eval-when-compile
+  ;; Function called later from macro `m1'.
+  (:: f1 (-> Int Int Int))
+  (= f1 a b (+ a b))
+
+  ;; Macro defined in compiler's interactive context.
+  (:: macro-ct Macro)
+  (= macro-ct
+    (Macro (const (return '(putStrLn "From `macro-ct'."))))))
+
+;;; Macro `m1' is calling `f1' declared above.
+(:with-macro ((= m1
+               (Macro (\ form
+                        (let ((= ret (* (f1 4 2) 7)))
+                          (return (toCode ret)))))))
+  (:: main (IO ()))
+  (= main
+    (do (macro-ct)
+        (print (m1)))))

@@ -1,4 +1,4 @@
-# sk-tool
+# finkel-tool
 
-Package containing a command line executable tool and library functions
-for building sk package.
+Package containing a command line executable tool and library
+functions for building Finkel package.

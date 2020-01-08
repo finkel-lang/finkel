@@ -1,4 +1,4 @@
--- | Main entry point of SK tests.
+-- | Main entry point of Finkel tests.
 module Main where
 
 import CoreTest

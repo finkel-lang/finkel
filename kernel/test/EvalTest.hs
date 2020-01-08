@@ -15,15 +15,15 @@ import PprTyThing (pprTypeForUser)
 -- hspec
 import Test.Hspec
 
--- sk-kernel
-import Language.SK.Builder (Builder)
-import Language.SK.Eval (evalExpr, evalExprType, evalTypeKind)
-import Language.SK.Lexer (evalSP)
-import Language.SK.Expand (expands, withExpanderSettings)
-import Language.SK.Make (buildHsSyn, defaultSkEnv)
-import Language.SK.Reader (sexprs)
-import Language.SK.SKC ( Skc, SkEnv(..), failS, runSkc )
-import Language.SK.Syntax (parseExpr, parseType)
+-- finkel-kernel
+import Language.Finkel.Builder (Builder)
+import Language.Finkel.Eval (evalExpr, evalExprType, evalTypeKind)
+import Language.Finkel.Lexer (evalSP)
+import Language.Finkel.Expand (expands, withExpanderSettings)
+import Language.Finkel.Make (buildHsSyn, defaultFnkEnv)
+import Language.Finkel.Reader (sexprs)
+import Language.Finkel.Fnk ( Fnk, FnkEnv(..), failS, runFnk )
+import Language.Finkel.Syntax (parseExpr, parseType)
 
 -- Test internal
 import TestAux
@@ -43,7 +43,7 @@ exprTest file =
       ret `shouldBe` True
   where
     evalContents bs =
-      runSkc (doEval "<exprTypeTest>" parseExpr act bs) evalSkEnv
+      runFnk (doEval "<exprTypeTest>" parseExpr act bs) evalFnkEnv
     act expr = do
       hval <- evalExpr expr
       return (unsafeCoerce hval)
@@ -56,8 +56,8 @@ exprTypeTest =
       ret `shouldBe` "Bool"
   where
     runEvalType str =
-      runSkc (doEval "<exprTypeTest>" parseExpr act (BL.pack str))
-             evalSkEnv
+      runFnk (doEval "<exprTypeTest>" parseExpr act (BL.pack str))
+             evalFnkEnv
     act expr  = do
       ty <- evalExprType expr
       dflags <- getDynFlags
@@ -72,8 +72,8 @@ typeKindTest = do
       ret `shouldBe` "* -> *"
   where
     runTypeKind str =
-      runSkc (doEval "<typeKindTest>" parseType act (BL.pack str))
-             evalSkEnv
+      runFnk (doEval "<typeKindTest>" parseType act (BL.pack str))
+             evalFnkEnv
     act expr = do
       (_, kind) <- evalTypeKind expr
       dflags <- getDynFlags
@@ -81,7 +81,7 @@ typeKindTest = do
       return (showSDocForUser dflags unqual (pprTypeForUser kind))
 
 doEval ::
-  String -> Builder a -> (a -> Skc b) -> BL.ByteString -> Skc b
+  String -> Builder a -> (a -> Fnk b) -> BL.ByteString -> Fnk b
 doEval label parser act input = do
   initSessionForTest
   case evalSP sexprs (Just label) input of
@@ -91,7 +91,7 @@ doEval label parser act input = do
       act hthing
     Left err -> failS err
 
-evalSkEnv :: SkEnv
-evalSkEnv = defaultSkEnv {envContextModules = modules}
+evalFnkEnv :: FnkEnv
+evalFnkEnv = defaultFnkEnv {envContextModules = modules}
   where
-    modules = ["Prelude", "Language.SK"]
+    modules = ["Prelude", "Language.Finkel"]

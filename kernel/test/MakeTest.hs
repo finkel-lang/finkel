@@ -19,11 +19,11 @@ import SrcLoc (noLoc)
 -- hspec
 import Test.Hspec
 
--- sk-kernel
-import Language.SK.Lexer
-import Language.SK.Make
-import Language.SK.SKC
-import Language.SK.TargetSource
+-- finkel-kernel
+import Language.Finkel.Lexer
+import Language.Finkel.Make
+import Language.Finkel.Fnk
+import Language.Finkel.TargetSource
 
 -- Internal
 import TestAux
@@ -31,33 +31,33 @@ import TestAux
 makeTests :: Spec
 makeTests = beforeAll_ (removeArtifacts odir) $ do
   showTargetTest
-  buildSk "main1.sk"
-  buildSk "main2.sk"
-  buildSk "main3.sk"
-  buildSk "main4.sk"
-  buildSk "main5.sk"
+  buildFnk "main1.fnk"
+  buildFnk "main2.fnk"
+  buildFnk "main3.fnk"
+  buildFnk "main4.fnk"
+  buildFnk "main5.fnk"
   buildC "cbits1.c"
 
 showTargetTest :: Spec
 showTargetTest = do
-  let sksrc = SkSource "path1" "Foo" [] sp
+  let fnksrc = FnkSource "path1" "Foo" [] sp
       hssrc = HsSource "path2"
       otsrc = OtherSource "path3"
       sp = initialSPState (fsLit "showTargetTest") 1 1
   describe "show TargetSource" $
     it "should contain filepath" $ do
       let subseq xs ys = any (isPrefixOf xs) (tails ys)
-      show sksrc `shouldSatisfy` subseq "path1"
+      show fnksrc `shouldSatisfy` subseq "path1"
       show hssrc `shouldSatisfy` subseq "path2"
       show otsrc `shouldSatisfy` subseq "path3"
   describe "eq TargetSource" $
     it "should return True iff comparing with itself" $ do
-      sksrc `shouldBe` sksrc
-      sksrc `shouldNotBe` hssrc
-      sksrc `shouldNotBe` otsrc
+      fnksrc `shouldBe` fnksrc
+      fnksrc `shouldNotBe` hssrc
+      fnksrc `shouldNotBe` otsrc
 
-buildSk :: FilePath -> Spec
-buildSk = buildFile initSessionForTest
+buildFnk :: FilePath -> Spec
+buildFnk = buildFile initSessionForTest
 
 buildC :: FilePath -> Spec
 buildC = buildFile
@@ -65,18 +65,18 @@ buildC = buildFile
                dflags <- getSessionDynFlags
                void (setSessionDynFlags (dflags {ghcLink=NoLink})))
 
-buildFile :: Skc () -> FilePath -> Spec
+buildFile :: Fnk () -> FilePath -> Spec
 buildFile pre path =
   describe ("file " ++ path) $
     it "should compile successfully" $ do
-      ret <- runSkc
+      ret <- runFnk
                (do pre
                    -- Use dflags setttings for profile when running test
                    -- executable with "+RTS -p" option.
                    if WayProf `elem` interpWays
                       then make_profile targets Nothing
                       else make_simple targets Nothing)
-                    (defaultSkEnv { envSilent = True })
+                    (defaultFnkEnv { envSilent = True })
       ret `shouldBe` ()
   where
     targets = [(noLoc path, Nothing)]

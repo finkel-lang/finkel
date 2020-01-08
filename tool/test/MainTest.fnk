@@ -1,0 +1,101 @@
+;;; Tests for main function
+
+(:require Finkel.Core)
+
+(defmodule MainTest
+  (export mainTests)
+  (import
+   ;; base
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (System.Environment (withArgs))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; Internal
+   (Finkel.Tool.CLI)
+   (Finkel.Tool.Help)
+   (Finkel.Tool.Main)
+   (Finkel.Tool.Repl)
+   (Finkel.Tool.Version)
+   (TestAux)))
+
+;;; Tests
+
+(defn (:: mainTests Spec)
+  (do (let ((= d describe)
+            (= main' args
+              (withArgs args main))))
+      (d "main with no argument"
+         (it "should show usage"
+             (shouldReturn (main' []) ())))
+      (d "main with invalid command"
+         (it "should show usage"
+             (shouldReturn (main' ["no-such-command"]) ())))
+      (d "main with help command"
+         (do (it "should show usage"
+                 (shouldReturn (main' ["help"]) ()))
+             (it "should show help of repl command"
+                 (shouldReturn (main' ["help" "repl"]) ()))
+             (it "should show help of make command"
+                 (shouldReturn (main' ["help" "make"]) ()))))
+      (d "main with make command"
+         (it "should show help on --fnk-help"
+             (shouldReturn (main' ["make" "--fnk-help"]) ())))
+      (d "main with repl command"
+         (it "should show help on --help"
+             (shouldReturn (main' ["repl" "--help"]) ())))
+      (d "main with version command"
+         (it "should show all versions by default"
+             (shouldReturn (main' ["version"]) ())))
+      helpTests
+      replTests
+      versionTests))
+
+(defn (:: helpTests Spec)
+  (do (<- (, _ lns) (runIO (runTestIO (show-usage commands) [])))
+      (let ((= d describe)
+            (= messageShouldContain
+              (shouldContain (unlines (tst-outputs lns))))))
+      (d "help command"
+         (it "should contain command names in usage message"
+             (do (messageShouldContain "repl")
+                 (messageShouldContain "make")
+                 (messageShouldContain "version"))))))
+
+(defn (:: replTests Spec)
+  (describe
+   "repl command"
+   (do (let ((= repl args
+               (fmap (. unlines (. tst-outputs snd))
+                     (liftIO (runTestIO (replMain args) []))))))
+       (it "should complain unrecognized option"
+           (do (<- msg (repl ["--no-such-option"]))
+               (shouldContain msg "--no-such-option"))))))
+
+(defn (:: versionTests Spec)
+  (describe
+   "version command"
+   (do (let ((= version args
+               (fmap (. unlines (. tst-outputs snd))
+                     (liftIO (runTestIO (versionMain args) []))))))
+       (it "should show \"--help\" in help message"
+           (do (<- msg (version ["--help"]))
+               (shouldContain msg "--help")))
+       (it "should show \"ghc\" with \"--ghc\" option"
+           (do (<- msg (version ["--ghc"]))
+               (shouldContain msg "ghc")))
+       (it "should show \"finkel-kernel\" with \"--kernel\" option"
+           (do (<- msg (version ["--kernel"]))
+               (shouldContain msg "kernel")))
+       (it "should show \"finkel-lang\" with \"--lang\" option"
+           (do (<- msg (version ["--lang"]))
+               (shouldContain msg "lang")))
+       (it "should show all versions with \"--all\" option"
+           (do (<- msg (version ["--all"]))
+               (shouldContain msg "ghc")
+               (shouldContain msg "kernel")
+               (shouldContain msg "lang")))
+       (it "should complain unrecognized option"
+           (do (<- msg (version ["--no-such-option"]))
+               (shouldContain msg "--no-such-option"))))))

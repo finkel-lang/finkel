@@ -1,0 +1,92 @@
+;;; Loop for network connection.
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Repl.Listen
+  (export listener accept-loop run-conn)
+  (import
+   ;; base
+   (Control.Concurrent
+    ((MVar) forkIO newEmptyMVar putMVar takeMVar))
+   (Control.Exception ((SomeException ..) handle))
+   (Control.Monad (void when))
+   (Data.Char (isSpace))
+   (System.IO
+    ((BufferMode ..) (IOMode ..) hClose hFlush hPutStr hSetBuffering
+     hSetEncoding utf8))
+
+   ;; bytestring
+   (qualified Data.ByteString.Char8 as BS)
+   (qualified Data.ByteString.Lazy.Char8 as C8)
+
+   ;; network
+   (Network.Socket
+    ((AddrInfo ..) (AddrInfoFlag ..) (PortNumber)
+     (Socket) (SocketOption ..) (SocketType ..)
+     accept bind defaultHints getAddrInfo listen socket socketToHandle
+     setSocketOption withSocketsDo))
+
+   ;; finkel-kernel
+   (Language.Finkel.Lexer (evalSP))
+   (Language.Finkel.Reader (sexpr))
+
+   ;; internal
+   (Finkel.Tool.Repl.Types)))
+
+(defn (:: listener (-> PortNumber (MVar Input) (IO ())))
+  [pnum mvar]
+  (withSocketsDo
+   (do (let ((= hints (defaultHints {addrFlags [AI_PASSIVE]
+                                     addrSocketType Stream}))
+             (= start-loop addr
+               (do (<- sock (socket (addrFamily addr)
+                                    (addrSocketType addr)
+                                    (addrProtocol addr)))
+                   (setSocketOption sock ReuseAddr 1)
+                   (bind sock (addrAddress addr))
+                   (listen sock 2)
+                   (accept-loop sock mvar)))))
+       (<- addrs (getAddrInfo (Just hints) Nothing (Just (show pnum))))
+       (case addrs
+         (: addr _) (start-loop addr)
+         _          (putStrLn "listener: unable to open address.")))))
+
+(defn (:: accept-loop (-> Socket (MVar Input) (IO ())))
+  [sock mvar]
+  (do (<- (, conn _) (accept sock))
+      (<- _ (forkIO (run-conn conn mvar)))
+      (accept-loop sock mvar)))
+
+(defn (:: run-conn (-> Socket (MVar Input) (IO ())))
+  [sock mvar]
+  (do (<- hdl (socketToHandle sock ReadWriteMode))
+      (hSetBuffering hdl (BlockBuffering Nothing))
+      (hSetEncoding hdl utf8)
+      (hPutStr hdl "Connected to Finkel REPL.")
+      (hFlush hdl)
+      (<- my-mvar newEmptyMVar)
+      (let ((= handler (SomeException e)
+              (do (putStrLn (++ "run-conn: " (show e)))
+                  (hClose hdl)))
+            (= put-input form
+              (putMVar mvar (Input Connection form my-mvar)))
+            (= read-loop
+              ;; `BS.hGetSome' returns empty contents when the handle is
+              ;; closed.
+              (do (<- contents (BS.hGetSome hdl 65535))
+                  (when (not (BS.null contents))
+                    (do (when (BS.any (. not isSpace) contents)
+                          (case (evalSP sexpr (Just "<interactive>")
+                                        (C8.fromStrict contents))
+                            (Right form) (put-input form)
+                            (Left err) (putStrLn err)))
+                        read-loop))))
+            (= print-loop
+              (do (<- result (takeMVar my-mvar))
+                  (case result
+                    (Right r) (hPutStr hdl r)
+                    (Left err) (hPutStr hdl err))
+                  (hFlush hdl)
+                  print-loop))))
+      (void (forkIO print-loop))
+      (handle handler read-loop)))

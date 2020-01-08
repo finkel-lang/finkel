@@ -1,4 +1,4 @@
--- | Tests for SK.
+-- | Tests for Finkel.
 module Main where
 
 import Data.List
@@ -12,13 +12,13 @@ import EvalTest
 import FormTest
 import MainTest
 import MakeTest
-import SkcTest
+import FnkTest
 import SyntaxTest
 
 getTestFiles :: String -> IO [FilePath]
 getTestFiles name =
   let dir = "test" </> "data" </> name
-      f x acc = if takeExtension x == ".sk"
+      f x acc = if takeExtension x == ".fnk"
                   then (dir </> x) : acc
                   else acc
       files = getDirectoryContents dir
@@ -30,7 +30,7 @@ main = do
   evalFiles <- getTestFiles "eval"
   hspec
     (do describe "Form" formTests
-        describe "Skc" skcTests
+        describe "Fnk" fnkTests
         describe "Emit" emitTests
         describe "Eval" (evalTests evalFiles)
         describe "Main" mainTests

@@ -1,0 +1,59 @@
+;;;; Orphan instances for QuickCheck
+
+;;; This module contains duplicated codes with `Orphan' module used by
+;;; finkel-kernel test. At the moment, could not find a nice way to
+;;; avoid adding QuickCheck package dependency without code
+;;; duplication.
+
+#p(OPTIONS_GHC -fno-warn-orphans)
+
+(:require Finkel.Core)
+
+(defmodule Orphan
+  (import
+   ;; ghc
+   (BasicTypes ((FractionalLit ..)))
+   (FastString (unpackFS))
+   (SrcLoc ((GenLocated ..)))
+
+   ;; QuickCheck
+   (Test.QuickCheck ((Arbitrary ..) (Gen)
+                     arbitraryUnicodeChar elements getUnicodeString
+                     listOf oneof scale variant))
+
+   ;; finkel-kernel
+   (Language.Finkel.Form)))
+
+(instance (Arbitrary Atom)
+  (= arbitrary
+    (where (oneof [(return AUnit)
+                   (fmap aSymbol symbolG)
+                   (fmap AChar arbitraryUnicodeChar)
+                   (fmap aString stringG)
+                   (fmap AInteger arbitrary)
+                   (fmap aFractional (:: arbitrary (Gen Double)))])
+      (= headChars
+        (++ [#'A .. #'Z] [#'a .. #'z] "_!$%*+./<=>?@^~:"))
+      (= tailChars
+        (++ headChars "0123456789'-"))
+      (= symbolG
+        (do (<- x (elements headChars))
+            (<- xs (listOf (elements tailChars)))
+            (return (: x xs))))
+      (= stringG
+        (fmap getUnicodeString arbitrary)))))
+
+(instance (=> (Arbitrary a) (Arbitrary (Form a)))
+  (= arbitrary
+    (oneof [(fmap Atom arbitrary)
+            (fmap List (listOf (scale (flip div 3) arbitrary)))
+            (fmap HsList (listOf (scale (flip div 3) arbitrary)))]))
+  (= shrink x
+    (case x
+      (Atom _)    []
+      (List xs)   (++ (map unCode xs) (map List (shrink xs)))
+      (HsList xs) (++ (map unCode xs) (map HsList (shrink xs)))
+      TEnd        [])))
+
+(instance (=> (Arbitrary a) (Arbitrary (LForm a)))
+  (= arbitrary (fmap (. LForm genSrc) arbitrary)))

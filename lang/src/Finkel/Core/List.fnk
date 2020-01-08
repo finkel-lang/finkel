@@ -1,0 +1,331 @@
+;;; Fundamental functions for list
+
+#p(LANGUAGE FlexibleInstances
+            TypeSynonymInstances)
+
+(:doc "List related functions.
+
+This module is compiled before defining core macros, since some of the
+functions defined in this modules are used in macro defined in
+\"Finkel.Core\" module.")
+
+(module Finkel.Core.List
+  (:dh1 "Predicates")
+  is-atom is-pair is-list is-hslist
+  is-symbol is-string is-char is-integer is-fractional is-unit
+
+  (:dh1 "Code constructors")
+  cons list (ListableType ..) append make-symbol
+
+  (:dh1 "CXrs")
+  (:dh2 "Basic cXrs")
+  car cdr
+
+  (:dh2 "Composed cXrs")
+  (:doc$ cxr)
+
+  caar cadr
+  caaar caadr cadar caddr
+  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+
+  cdar cddr
+  cdaar cdadr cddar cdddr
+  cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+
+  (:dh1 "Higher order functions")
+  mapcar
+
+  (:dh1 "Exception")
+  (FinkelListException ..))
+
+;;; Requires
+
+;; base
+(:require Prelude)
+(:require Control.Exception (throw))
+
+;; finkel-kernel
+(:require Language.Finkel)
+(:require Language.Finkel.Fnk ((FinkelException ..)))
+
+;;; Imports
+
+;; base
+(import Control.Exception ((Exception ..) throw))
+
+;; ghc
+(import SrcLoc (getLoc))
+
+;; finkel-kernel
+(import Language.Finkel)
+(import Language.Finkel.Form (mkLocatedForm))
+
+
+;;; Exception
+
+(data FinkelListException
+  (NonListValue String))
+
+(instance (Show FinkelListException)
+  (= show e
+    (case e
+      (NonListValue str) str)))
+
+(instance (Exception FinkelListException))
+
+(:: error-non-list (-> String Code a))
+(= error-non-list fname what
+  (throw (NonListValue
+          (concat ["Finkel.Core.List." fname
+                   ": non-list value `" (show what) "'"]))))
+
+
+;;; Predicates
+
+(:doc "True when the argument is an 'Atom' or 'nil'.
+
+Examples:
+
+>>> (is-atom \'foo)
+True
+>>> (is-atom nil)
+True
+>>> (is-atom '(a b c))
+False
+>>> (is-atom '[a b c])
+False
+")
+(:: is-atom (-> Code Bool))
+(= is-atom (LForm (L _ form))
+  (case form
+    (Atom _)  True
+    (List []) True
+    _         False))
+
+(:doc "True when the argument is a non-nil 'List'.")
+(:: is-pair (-> Code Bool))
+(= is-pair (LForm (L _ form))
+  (case form
+    (List []) False
+    (List _)  True
+    _         False))
+
+(:with-macro ((= defpred
+                (Macro (\ form
+                         (case (unCode form)
+                           (List [_ doc name pat])
+                           (return `(:begin
+                                      (:doc ,doc)
+                                      (:: ,name (-> Code Bool))
+                                      (= ,name (LForm (L _ form))
+                                        (case form
+                                          ,pat True
+                                          _    False))))
+                           _ (finkelSrcError form "defpred"))))))
+  (defpred "True when the argument is a 'List'."
+    is-list (List _))
+  (defpred "True when the argument is a 'HsList'."
+    is-hslist (HsList _))
+  (defpred "True when the argument is an 'ASymbol'."
+    is-symbol (Atom (ASymbol _)))
+  (defpred "True when the argument is an 'AString'."
+    is-string (Atom (AString _)))
+  (defpred "True when the argument is an 'AChar'."
+    is-char (Atom (AChar _)))
+  (defpred "True when the argument is an 'AInteger'."
+    is-integer (Atom (AInteger _)))
+  (defpred "True when the argument is an 'AFractional'."
+    is-fractional (Atom (AFractional _)))
+  (defpred "True when the argument is an 'AUnit'."
+    is-unit (Atom AUnit)))
+
+
+;;; CONS
+
+(:doc "Extend the second argument with the first argument by appending
+to the tip.
+
+Consing to 'HsList' will result in 'List', and consing to non-list value
+will create a new 'List' instead of a /dotted-pair/.
+
+Examples:
+
+>>> (cons 'a '(b c))
+(a b c)
+>>> (cons 'a '[b c])
+(a b c)
+>>> (cons '(a b) '(c d))
+((a b) c d)
+>>> (cons '[a b] '[c d])
+([a b] c d)
+>>> (cons 'a 'b)
+(a b)
+")
+(:: cons (=> (ToCode a) (-> a Code Code)))
+(= cons x (@ whole (LForm (L _ xs)))
+  (let ((= (@ x' (LForm (L l0 _))) (toCode x)))
+    (LForm (L l0 (case xs
+                   (List xs')   (List (: x' xs'))
+                   (HsList xs') (List (: x' xs'))
+                   _            (List [x' whole]))))))
+#p(INLINABLE cons)
+
+(:doc "Append two lists.")
+(:: append (-> Code Code Code))
+(= append xs ys
+  (| ((not (|| (is-list xs) (is-hslist xs)))
+      (error-non-list "append" xs))
+     ((not (|| (is-list ys) (is-hslist ys)))
+      (error-non-list "append" ys))
+     (otherwise
+      (let ((:: go (-> Code Code Code))
+            (= go as bs
+              (if (null as)
+                  bs
+                  (cons (car as) (go (cdr as) ys)))))
+        (go xs ys)))))
+#p(INLINABLE append)
+
+(:doc "Make `ASymbol' from given `String'.")
+(:: make-symbol (-> String Code))
+(= make-symbol qSymbol)
+#p(INLINABLE make-symbol)
+
+(:doc "Type class for constructing 'List' with polyvariadic function.")
+(class (ListableType l)
+  (:: list_ (-> [Code] l)))
+
+(instance (ListableType Code)
+  (= list_ (. qList reverse)))
+
+(instance (=> (ToCode elem) (ListableType l)
+              (ListableType (-> elem l)))
+  (= list_ acc
+    (\ x (list_ (: (toCode x) acc)))))
+
+(:doc "Make a list from given arguments.
+
+This function can take variable number of arguments, but requires
+resulting type to be a concrete type.
+
+Examples:
+
+>>> (:: (list \'a \'b \'c) Code)
+(a b c)
+>>> (:: (list \'a \\b \"c\" (:: 0xd Int)) Code)
+(a \\b \"c\" 13)
+")
+(:: list (=> (ListableType lst) lst))
+(= list (list_ []))
+
+
+;;; CXR
+
+(:doc "Get first element of list 'Code'.
+
+The function 'car' returns the first element of 'List' and 'HsList'
+constructor, or 'nil' value when the 'List' or 'HsList' were empty.
+Throws 'FinkelListException' when the given argument was non-list value.
+
+Examples:
+
+>>> (car '(a b c))
+a
+>>> (car '[a b c])
+a
+>>> (car nil)
+nil
+>>> (car 'foo)
+*** Exception: Finkel.Core.List.car: non-list value `foo'
+")
+(:: car (-> Code Code))
+(= car (@ whole (LForm (L l code)))
+  (case code
+    (List (: x _))   x
+    (List [])        (LForm (L l (List [])))
+    (HsList (: x _)) x
+    (HsList [])      (LForm (L l (List [])))
+    _                (error-non-list "car" whole)))
+#p(INLINABLE car)
+
+(:doc "Get list without the first element.
+
+The function 'cdr' returns list value without the first element of
+'List' or 'HsList' argument. When the argument is a 'HsList', returned
+value is converted to a 'List'. Like 'car', throws 'FinkelListException'
+then the argument were non-list value.
+
+Examples:
+
+>>> (cdr '(a b c))
+(b c)
+>>> (cdr '[a b c])
+(b c)
+>>> (cdr nil)
+nil
+>>> (cdr 'foo)
+*** Exception: Finkel.Core.List.cdr: non-list value `foo'
+")
+(:: cdr (-> Code Code))
+(= cdr (@ whole (LForm (L l code)))
+  (let ((= f xs
+          (let ((= l' (getLoc (mkLocatedForm xs))))
+            (case xs
+              [] (LForm (L l' (List [])))
+              _  (LForm (L l' (List xs)))))))
+    (case code
+      (List (: _ xs))   (f xs)
+      (List [])         (LForm (L l (List [])))
+      (HsList (: _ xs)) (f xs)
+      (HsList [])       (LForm (L l (List [])))
+      _                 (error-non-list "cdr" whole))))
+#p(INLINABLE cdr)
+
+(:doc$ cxr "Rest of /cxr/ functions are composed from 'car' and 'cdr'.
+
+E.g., definition of 'cadr' is:
+
+> (cadr x) == (car (cdr x))
+
+and definition of 'cdadr' is:
+
+> (cdadr x) == (cdr (car (cdr x)))
+")
+
+(:eval-when-compile
+  (:: ads [String])
+  (= ads
+    (let ((= f (concatMap (\ x [(: #'a x) (: #'d x)]))))
+      (concat (take 3 (tail (iterate f [[#'a] [#'d]]))))))
+
+  (:: cxr-name (-> String Code))
+  (= cxr-name x
+    (qSymbol (concat ["c" x "r"])))
+
+  (:: cxr (-> String [Code]))
+  (= cxr xs
+    (let ((= name (cxr-name xs)))
+      (case xs
+        (: hd tl) [`(:: ,name (-> Code Code))
+                   `(= ,name
+                      (. ,(cxr-name (return hd)) ,(cxr-name tl)))
+                   `#p(INLINABLE ,name)]
+        _         (throw (FinkelException (++ "cxr: invalid arg: " xs)))))))
+
+(:with-macro ((= cxrs
+                (Macro (\ _ (return `(:begin
+                                       ,@(concatMap cxr ads)))))))
+  (cxrs))
+
+
+;;; Higher Order Functions
+
+(:doc "Apply given function to immediate elements of 'List' and
+'HsList'. When the second argument was 'HsList', the resulting value
+converted to 'List'.")
+(:: mapcar (-> (-> Code Code) Code Code))
+(= mapcar f (@ form (LForm (L l lst)))
+  (case lst
+    (List xs)   (LForm (L l (List (map f xs))))
+    (HsList xs) (LForm (L l (List (map f xs))))
+    _           (error-non-list "mapcar" form)))

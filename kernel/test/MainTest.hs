@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
--- | Tests for "Language.SK.Main"
+-- | Tests for "Language.Finkel.Main"
 module MainTest
   ( mainTests
   ) where
@@ -18,8 +18,8 @@ import Test.Hspec
 -- process
 -- import System.Process (readProcess)
 
--- sk-kernel
-import Language.SK.Main
+-- finkel-kernel
+import Language.Finkel.Main
 
 -- Internal
 import TestAux
@@ -29,12 +29,12 @@ mainTests =
   beforeAll_ (removeArtifacts odir) $ do
     packageEnvFlag <- runIO getPackageEnvFlag
     let common_flags = "-v0" : packageEnvFlag
-    compileFile common_flags "m001.sk"
+    compileFile common_flags "m001.fnk"
     compileFile common_flags "m002.hs"
     compileFile ("-c" : common_flags) "m003.c"
     rawGhcTest
-    skHelpTest
-    skVersionTest
+    finkelHelpTest
+    finkelVersionTest
 
 compileFile :: [String] -> FilePath -> Spec
 compileFile args file = describe ("file " ++ file) $
@@ -47,17 +47,17 @@ rawGhcTest =
               "should show project-version"
               ["--version"]
 
-skHelpTest :: Spec
-skHelpTest =
-  trivialTest "option --sk-help"
-              "should show sk help"
-              ["--sk-help"]
+finkelHelpTest :: Spec
+finkelHelpTest =
+  trivialTest "option --fnk-help"
+              "should show Finkel help"
+              ["--fnk-help"]
 
-skVersionTest :: Spec
-skVersionTest =
-  trivialTest "option --sk-version"
-              "should show sk-kernel package version"
-              ["--sk-version"]
+finkelVersionTest :: Spec
+finkelVersionTest =
+  trivialTest "option --fnk-version"
+              "should show finkel-kernel package version"
+              ["--fnk-version"]
 
 trivialTest :: String -> String -> [String] -> Spec
 trivialTest desc label flags = describe desc $
@@ -65,8 +65,8 @@ trivialTest desc label flags = describe desc $
 
 runDefaultMain :: [String] -> IO ()
 runDefaultMain args =
-  -- "defaultMain" uses "rawSystem" to delegate non-sk related works to
-  -- ghc, which throws "ExitSuccess" when successfully done.
+  -- "defaultMain" uses "rawSystem" to delegate non-finkel related
+  -- works to ghc, which throws "ExitSuccess" when successfully done.
   catch (withArgs args defaultMain)
         (\e -> case e of
                  ExitSuccess -> return ()

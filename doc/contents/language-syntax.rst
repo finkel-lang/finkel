@@ -1,19 +1,19 @@
 Language Syntax
 ===============
 
-The sk language is made from sk kernel keywords and sk core keywords.
+The Finkel language is made from Finkel kernel keywords and Finkel
+core keywords.
 
-The sk kernel keywords are designed to be compatible with `Haskell
+The Finkel kernel keywords are designed to be compatible with `Haskell
 2010 <https://www.haskell.org/onlinereport/haskell2010/>`_, with few
 exceptions.  The syntax for literal values and function applications
-are also defined in the sk kernel.  The rest of this section will go
-through the sk kernel language syntax with small example codes. Each
-sk code is compared to an equivalent Haskell code.
+are also defined in the Finkel kernel.  The rest of this section will
+go through the Finkel kernel language syntax with small example
+codes. Each Finkel code is compared to an equivalent Haskell code.
 
-The sk core keywords are implemented as macros made from sk kernel.
-Details of sk core keywords are described in the `haddock API
-documentation <https://hackage.haskell.org>`_ of the ``sk-core``
-package.
+The Finkel core keywords are implemented as macros.  Details of the
+Finkel core keywords are described in the `haddock API documentation
+<https://hackage.haskell.org>`_ of the ``finkel-core`` package.
 
 
 Literals
@@ -24,9 +24,9 @@ Comments
 
 Line contents after ``;`` are treated as comments.
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (putStrLn "foo") ; single-line comment in sk
+   (putStrLn "foo") ; single-line comment in Finkel
 
 .. code-block:: haskell
 
@@ -34,9 +34,9 @@ Line contents after ``;`` are treated as comments.
 
 Block style comment is supported with ``#;`` and ``;#``.
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (putStrLn #;sk block comment;# "bar")
+   (putStrLn #;Finkel block comment;# "bar")
 
 .. code-block:: haskell
 
@@ -45,15 +45,15 @@ Block style comment is supported with ``#;`` and ``;#``.
 Variable identifier
 ^^^^^^^^^^^^^^^^^^^
 
-Sk accepts valid variable identifiers defined in Haskell 2010, and
-variable identifiers starting with a non-operator character and containing
-hyphens. Hyphens in variable identifiers are internally converted to
-underscores. For instance, ``foo-bar-buzz`` will be converted to
-``foo_bar_buzz``:
+Finkel accepts valid variable identifiers defined in Haskell 2010, and
+variable identifiers containing hyphens which starting with a
+non-operator character. Hyphens in variable identifiers are internally
+converted to underscores. For instance, ``foo-bar-buzz`` will be
+converted to ``foo_bar_buzz``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (foo-bar-buzz quux) ; sk
+   (foo-bar-buzz quux) ; Finkel
 
 .. code-block:: haskell
 
@@ -72,7 +72,7 @@ As described in the `Numeric Literals
 section of the Haskell 2010 report, decimal, octal, hexadecimal
 integers and float with exponent are supported.
 
-.. code-block:: sk
+.. code-block:: finkel
 
    1    ; decimal integer
    0o77 ; octal integer
@@ -92,39 +92,39 @@ integers and float with exponent are supported.
 Character And String
 ^^^^^^^^^^^^^^^^^^^^
 
-A character literal in sk starts with ``#'`` instead of surrounding with
-single quotes. Other than that, sk mostly follows the `Characters and
-String Literals
+A character literal in Finkel starts with ``#'`` instead of
+surrounding with single quotes. Other than that, Finkel mostly follows
+the `Characters and String Literals
 <https://www.haskell.org/onlinereport/haskell2010/haskellch2.html#x7-200002.6>`_
 section in the Haskell 2010 report.
 
 Following code prints single lower case character ``a``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (putChar #'a) ; sk
+   (putChar #'a) ; Finkel
 
 .. code-block:: haskell
 
    putChar 'a'  -- Haskell
 
-Sk uses a backslash to escape special characters. Following code print
-escaped backslash and escaped single quote:
+Finkel uses a backslash to escape special characters. Following code
+prints backslash and single quote:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (print [#'\ #'']) ; sk
+   (print [#'\ #'']) ; Finkel
 
 .. code-block:: haskell
 
    print ['\\', '\''] -- Haskell
 
 Some characters like newline, space, NUL, etc. are expressed with
-escape characters and specific character sequences.
+escape character and specific character sequences.
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (print [#'\n #'  #'\NUL #'\^L]) ; sk
+   (print [#'\n #'  #'\NUL #'\^L]) ; Finkel
 
 .. code-block:: haskell
 
@@ -133,9 +133,9 @@ escape characters and specific character sequences.
 Characters could be expressed with their numeric code in decimal, octal,
 and hexadecimal:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (print [#'\97 #'\o141 #'\x61]) ; sk, prints "aaa"
+   (print [#'\97 #'\o141 #'\x61]) ; Finkel, prints "aaa"
 
 .. code-block:: haskell
 
@@ -144,17 +144,18 @@ and hexadecimal:
 String literals are written between double-quotes. Special characters are
 escaped with ``\``.
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   "foo\nbar\nbuzz. numeric escape \97 and control char \^X" ; sk
+   "foo\nbar\nbuzz. numeric escape \97 and control char \^X" ; Finkel
 
 .. code-block:: haskell
 
    "foo\nbar\nbuzz. numeric escape \97 and control char \^X" -- Haskell
 
-At the time of writing, sk does not support the **gap** feature, which
-is available in Haskell 2010 to ignore the string contents between two
-backslashes.
+At the time of writing, Finkel does not support the **gap** feature,
+which is available in Haskell 2010 to ignore the string contents
+between two backslashes.
+
 
 Expressions
 -----------
@@ -162,11 +163,11 @@ Expressions
 Function Applications
 ^^^^^^^^^^^^^^^^^^^^^
 
-Function application in sk is done with parentheses:
+Function application in Finkel is done with parentheses:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (putStrLn "hello") ; sk
+   (putStrLn "hello") ; Finkel
 
 .. code-block:: haskell
 
@@ -174,9 +175,9 @@ Function application in sk is done with parentheses:
 
 Unlike some other lisps, extra parentheses are ignored:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (((((putStrLn)) "hello"))) ; sk
+   (((((putStrLn)) "hello"))) ; Finkel
 
 .. code-block:: haskell
 
@@ -186,29 +187,29 @@ Unlike some other lisps, extra parentheses are ignored:
 Operator Applications
 ^^^^^^^^^^^^^^^^^^^^^
 
-Sk does not have native support for infix operator
+Finkel does not have native support for infix operator
 applications. However, a form applying operator function will be
 expanded to a form taking all of its arguments, with two operands for
 each. For example, adding numbers from 1 to 5 could be written as:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (+ 1 2 3 4 5) ; sk
+   (+ 1 2 3 4 5) ; Finkel
 
 .. code-block:: haskell
 
    1 + 2 + 3 + 4 + 5 -- Haskell
 
 Operator expansion understands right and left associativity. Operator
-precedence in sk is explicitly specified with parentheses.
+precedence in Finkel is explicitly specified with parentheses.
 
-.. code-block:: sk
+.. code-block:: finkel
 
-  (<*> (pure foldr) (Just +) (pure 0) (pure [])) ; sk
+  (<*> (pure foldr) (Just +) (pure 1) (pure [2 3])) ; Finkel
 
 .. code-block:: haskell
 
-  pure foldr <*> Just (+) <*> pure 0 <*> pure [] -- Haskell
+  pure foldr <*> Just (+) <*> pure 1 <*> pure [2, 3] -- Haskell
 
 
 The compiler treats the above expression as:
@@ -222,9 +223,9 @@ because the ``<*>`` operator is left-associative.
 When a single argument has been passed to operator function, the resulting
 expression is partial application:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (map (* 2) [1 2 3]) ; sk
+   (map (* 2) [1 2 3]) ; Finkel
 
 .. code-block:: haskell
 
@@ -232,25 +233,27 @@ expression is partial application:
 
 To apply more than two arguments to an operator function, one needs to
 explicitly surround the operator with parenthesis. Suppose that there
-is an operator function ``*+``, which takes three arguments:
+is an operator function ``*+`` which takes three arguments:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   ((*+) 2 3 4) ; sk
+   ((*+) 2 3 4) ; Finkel
 
 .. code-block:: haskell
 
    (*+) 2 3 4 -- Haskell
 
+
 Unary Operator Application
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The operator ``-`` is always treated as a binary operator in sk. In below
-sk example, ``(- 1)`` is a partially applied function:
+The operator ``-`` is always treated as a binary operator in
+Finkel. In below Finkel example, ``(- 1)`` is a partially applied
+function:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (map (- 1) [1 2 3]) ; sk
+   (map (- 1) [1 2 3]) ; Finkel
 
 .. code-block:: haskell
 
@@ -261,12 +264,12 @@ Lambda
 ^^^^^^
 
 Lambda expression starts with ``\``. At least one space after ``\`` is
-mandatory. The last form in the lambda expression is used as the body
-expression of entire lambda abstraction, others are argument patterns:
+mandatory. The last form in the lambda expression the body expression
+of entire lambda abstraction, others forms are argument patterns:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (zipWith (\ x y (* x (+ y 1))) [1 2 3] [4 5 6]) ; sk
+   (zipWith (\ x y (* x (+ y 1))) [1 2 3] [4 5 6]) ; Finkel
 
 .. code-block:: haskell
 
@@ -278,9 +281,9 @@ Conditionals
 
 An ``if`` expression does not take ``then`` and ``else``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-  (if test true-expr false-expr) ; sk
+  (if test true-expr false-expr) ; Finkel
 
 .. code-block:: haskell
 
@@ -289,9 +292,9 @@ An ``if`` expression does not take ``then`` and ``else``:
 A guard starts with ``|``, and supports pattern, local declaration,
 and boolean:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (case expr ; sk
+   (case expr ; Finkel
      (Just y) (| ((even y) r1)
                  ((odd y) (< y 10) r2)
                  ((<- (Just z) (lookup y kvs))
@@ -309,18 +312,18 @@ and boolean:
             -> r3 z'
             | otherwise -> r4
 
-See also `cond <https://hackage.haskell.org>`_ in sk core.
+See also `cond <https://hackage.haskell.org>`_ in ``finkel-core``.
 
 
 Tuples
 ^^^^^^
 
-Tuple constructor uses a single comma. At least one space after the
-comma is required:
+Tuple constructor expression uses single comma. At least one space
+after the comma is required:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (print (, True #'x)) ; sk
+   (print (, True #'x)) ; Finkel
 
 .. code-block:: haskell
 
@@ -328,9 +331,9 @@ comma is required:
 
 Single comma works for tuples with more than two elements:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (print (, True #'x 42 1.23 "foo")) ; sk
+   (print (, True #'x 42 1.23 "foo")) ; Finkel
 
 .. code-block:: haskell
 
@@ -339,9 +342,9 @@ Single comma works for tuples with more than two elements:
 To express tuple data and type constructor, use consecutive commas
 without spaces:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (<*> (pure (,,,)) (Just 1) (Just 2) (Just 3) (Just 4)) ; sk
+   (<*> (pure (,,,)) (Just 1) (Just 2) (Just 3) (Just 4)) ; Finkel
 
 .. code-block:: haskell
 
@@ -351,11 +354,11 @@ without spaces:
 Unit
 ^^^^
 
-Unit is expressed empty parenthesis:
+Unit is expressed with empty parentheses:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (return ()) ; sk
+   (return ()) ; Finkel
 
 .. code-block:: haskell
 
@@ -369,30 +372,31 @@ Lists
 
 List expression does not take commas:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (print [1 2 3]) ; sk
+   (print [1 2 3]) ; Finkel
 
 .. code-block:: haskell
 
    print [1, 2, 3] -- Haskell
 
-Arithmetic sequences use ``..``:
+Arithmetic sequences use ``..``. Space on each side of ``..`` are
+required:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (print [1 3 .. 9]) ; sk
+   (print [1 3 .. 9]) ; Finkel
 
 .. code-block:: haskell
 
    print [1, 3 .. 9] -- Haskell
 
-List comprehensions use ``|`` to separate a resulting expression.  Space
-between ``|`` and result expression is required.
+List comprehensions use ``|`` to separate the resulting expression.
+Space between ``|`` and the result is required.
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   [x | (<- x [1 .. 10]) (even x)] ; sk
+   [x | (<- x [1 .. 10]) (even x)] ; Finkel
 
 .. code-block:: haskell
 
@@ -401,11 +405,12 @@ between ``|`` and result expression is required.
 
 Let
 ^^^
+
 A let expression is expressed with ``let`` without ``in``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (let ((:: a Int)) ; sk
+   (let ((:: a Int)) ; Finkel
          (:: (b c) Int))
          (= a 10)
          (= b 4)
@@ -426,9 +431,9 @@ Case
 
 A case expression is expressed with ``case`` without ``of`` and ``->``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (case n ; sk
+   (case n ; Finkel
      0 "zero"
      1 "one"
      _ "many")
@@ -443,28 +448,30 @@ A case expression is expressed with ``case`` without ``of`` and ``->``:
 Do
 ^^^
 
-Do expression uses prefix ``<-``:
+Do expression is expressed with ``do``, and bindings inside
+do-expressions are expressed with ``<-``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (do (putStrLn "x: ") ; sk
+   (do (putStr "x: ") ; Finkel
        (<- l getLine)
        (return (words l)))
 
 .. code-block:: haskell
 
-   do putStrLn "x: " -- Haskell
+   do putStr "x: " -- Haskell
       l <- getLine
       return (words l)
+
 
 Datatypes with field labels
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Field labels are enclosed with ``{`` and ``}``, and does not use ``=``:
+Field labels are enclosed with ``{`` and ``}``. Does not use ``=``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (print (C {f1 1 f2 True f3 "abc"})) ; sk
+   (print (C {f1 1 f2 True f3 "abc"})) ; Finkel
 
 .. code-block:: haskell
 
@@ -476,9 +483,9 @@ Expression Type-Signatures
 
 Type signature uses ``::``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-    (:: 42 Int) ; sk
+    (:: 42 Int) ; Finkel
 
 .. code-block:: haskell
 
@@ -488,11 +495,12 @@ Type signature uses ``::``:
 Pattern Matching
 ^^^^^^^^^^^^^^^^
 
-A non-variable pattern requires parenthesis, as in ``Just`` shown below:
+A non-variable pattern requires parentheses, as in ``Just`` shown
+below:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (case expr ; sk
+   (case expr ; Finkel
      (Just x) (+ x 1)
      Nothing  0)
 
@@ -502,14 +510,15 @@ A non-variable pattern requires parenthesis, as in ``Just`` shown below:
      Just x -> x + 1
      Nothing -> 0
 
+
 As pattern
 """"""""""
 
 As pattern uses ``@``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-  (let ((= (@ x (Just n)) expr)) ; sk
+  (let ((= (@ x (Just n)) expr)) ; Finkel
     (+ n 1))
 
 .. code-block:: haskell
@@ -517,14 +526,15 @@ As pattern uses ``@``:
   let x@(Just n) = expr -- Haskell
   in  n + 1
 
+
 Irrefutable pattern
 """""""""""""""""""
 
-Irrefutable patterns use ``~``:
+Irrefutable patterns are expressed with ``~``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (let ((= ~(, a ~(, b c)) expr)) ; sk
+   (let ((= ~(, a ~(, b c)) expr)) ; Finkel
      (+ a (* b c)))
 
 .. code-block:: haskell
@@ -532,15 +542,16 @@ Irrefutable patterns use ``~``:
    let ~(a, ~(b, c)) = expr -- Haskell
    in  a + b * c
 
+
 Operator expansion
 """"""""""""""""""
 
 The Operator expansion rule applies to patterns. For instance, the
 ``:`` constructor for a list is expanded with its pattern arguments:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (case expr ; sk
+   (case expr ; Finkel
      (: a1 a2 _) (+ a1 a2)
      _ 0)
 
@@ -558,12 +569,12 @@ Algebraic Datatype
 ^^^^^^^^^^^^^^^^^^
 
 Algebraic datatype declaration uses ``data``. It does not use ``=``
-and ``|``. Optional ``deriving`` form may appear as the last element
+and ``|``. Optional ``deriving`` form may appear at the last element
 of the ``data`` form:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (data (D1 a b) ; sk
+   (data (D1 a b) ; Finkel
      C1
      (C2 a)
      (C3 b)
@@ -579,27 +590,29 @@ of the ``data`` form:
 
 Constructor with labeled fields are supported with ``{`` and ``}``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (data (D2 a b) ; sk
+   (data (D2 a b) ; Finkel
     (D2 {f1 a
-         f2 b}))
+         f2 b
+         f3 Int}))
 
 .. code-block:: haskell
 
    data D2 a b -- Haskell
     = D2 { f1 :: a
-         , f2 :: b }
+         , f2 :: b
+         , f3 :: Int }
+
 
 Type Synonym
 ^^^^^^^^^^^^
 
-Type synonym declaration uses ``type``. It does not use
-``=``:
+Type synonym declaration uses ``type``. It does not use ``=``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (type (T1 a) (Maybe (, a Bool String))) ; sk
+   (type (T1 a) (Maybe (, a Bool String))) ; Finkel
 
 .. code-block:: haskell
 
@@ -609,11 +622,11 @@ Type synonym declaration uses ``type``. It does not use
 Datatype Renamings
 ^^^^^^^^^^^^^^^^^^
 
-New type declaration uses ``newtype``:
+Newtype declaration uses ``newtype``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (newtype N (N {unN Int})) ; sk
+   (newtype N (N {unN Int})) ; Finkel
 
 .. code-block:: haskell
 
@@ -623,11 +636,11 @@ New type declaration uses ``newtype``:
 Class
 ^^^^^
 
-Class declaration uses ``class``:
+Type class declaration uses ``class``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (class (=> (Ord a) (C1 a)) ; sk
+   (class (=> (Ord a) (C1 a)) ; Finkel
      (:: m1 (-> a Int))
      (= m1 _ 0)
 
@@ -639,9 +652,9 @@ Class declaration uses ``class``:
 
 Class instance declaration uses ``instance``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (instance (C1 Int) ; sk
+   (instance (C1 Int) ; Finkel
      (= m1 n (+ n 1)))
 
 .. code-block:: haskell
@@ -649,14 +662,15 @@ Class instance declaration uses ``instance``:
     instance C1 Int where -- Haskell
       m1 n = n + 1
 
+
 Defaults for Overloaded Numeric Operations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Default declaration is done with ``default``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (default Int Double) ; sk
+   (default Int Double) ; Finkel
 
 .. code-block:: haskell
 
@@ -668,19 +682,19 @@ Type Signatures
 
 Type signature uses ``::``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (:: f (-> Int Int Int)) ; sk
+   (:: f (-> Int Int Int)) ; Finkel
 
 .. code-block:: haskell
 
    f :: Int -> Int -> Int -- Haskell
 
-Single type signature could be specified to multiple variables:
+Single type signature could be used for multiple variables:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (:: (f g h) (-> Int Int)) ; sk
+   (:: (f g h) (-> Int Int)) ; Finkel
 
 
 .. code-block:: haskell
@@ -690,9 +704,9 @@ Single type signature could be specified to multiple variables:
 Constraints in type signature are expressed with ``=>``. The last
 element of the form ``=>`` should be a type:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (:: f (=> (Eq a) (Ord a) (-> a a))) ; sk
+   (:: f (=> (Eq a) (Ord a) (-> a a))) ; Finkel
 
 .. code-block:: haskell
 
@@ -705,9 +719,9 @@ Fixity
 It is possible to declare fixity and precedence with ``infix``,
 ``infixl``, and ``infixr``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (= $+$ a b (+ a (f b))) ; sk
+   (= $+$ a b (+ a (f b))) ; Finkel
    (infixr 6 $+$)
 
 .. code-block:: haskell
@@ -716,8 +730,8 @@ It is possible to declare fixity and precedence with ``infix``,
    infixr 6 $+$
 
 
-Note that sk syntax is affected by the left and right associativity of
-operators, but not by the precedence of operators.
+Note that Finkel syntax is affected by the left and right
+associativity of operators, but not by the precedence of operators.
 
 
 Bindings
@@ -727,9 +741,9 @@ Function binding declaration uses ``=``. The form after ``=`` is the
 function name, the last form is the expression body. Rest of the forms
 are argument patterns:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (= f1 x y z (+ x (* y z))) ; sk
+   (= f1 x y z (+ x (* y z))) ; Finkel
 
 .. code-block:: haskell
 
@@ -737,9 +751,9 @@ are argument patterns:
 
 Keyword ``where`` can appear in the right-hand side:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (= f2 n ; sk
+   (= f2 n ; Finkel
      (where body
        (= body (+ n 1))))
 
@@ -751,9 +765,9 @@ Keyword ``where`` can appear in the right-hand side:
 
 Pattern bindings are similarly done with ``=``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-    (= (Just x) (lookup k vs)) ; sk
+    (= (Just x) (lookup k vs)) ; Finkel
 
 .. code-block:: haskell
 
@@ -765,9 +779,9 @@ Modules
 
 Top-level module definition does not use ``where``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (module M1) ; sk
+   (module M1) ; Finkel
    (= x 1)
    (= y 2)
 
@@ -777,7 +791,9 @@ Top-level module definition does not use ``where``:
    x = 1
    y = 2
 
-See also `defmodule <https://hackage.haskell.org>`_ in sk core.
+See also `defmodule <https://hackage.haskell.org>`_ in
+``finkel-core``.
+
 
 Export Lists
 ^^^^^^^^^^^^
@@ -786,9 +802,9 @@ Module definition can contain an explicit export list. Entities in the
 export list can contain bindings, type and data constructors, type
 classes, and modules:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-  (module M2 ; sk
+  (module M2 ; Finkel
     f1           ; Value, field name, or class method
     (T1)         ; Type constructor only
     (T2 ..)      ; Type constructor and all of its data constructors
@@ -818,9 +834,9 @@ Import Declarations
 
 Module import declarations use ``import``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (import Data.Maybe) ; sk
+   (import Data.Maybe) ; Finkel
 
 .. code-block:: haskell
 
@@ -828,9 +844,9 @@ Module import declarations use ``import``:
 
 Qualified import declarations use ``qualified`` and optional ``as``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (import qualified Data.Maybe as Mb) ; sk
+   (import qualified Data.Maybe as Mb) ; Finkel
 
 .. code-block:: haskell
 
@@ -838,9 +854,9 @@ Qualified import declarations use ``qualified`` and optional ``as``:
 
 Entity lists use list:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (import Data.Maybe (catMaybes fromMaybe)) ; sk
+   (import Data.Maybe (catMaybes fromMaybe)) ; Finkel
 
 .. code-block:: haskell
 
@@ -849,9 +865,9 @@ Entity lists use list:
 Hiding specified entities with ``hiding``. Form after ``hiding`` is a
 list of entity names to hide:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (import Data.Maybe hiding (fromJust fromMaybe)) ; sk
+   (import Data.Maybe hiding (fromJust fromMaybe)) ; Finkel
 
 .. code-block:: haskell
 
@@ -859,9 +875,9 @@ list of entity names to hide:
 
 Altogether:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (import qualified Data.Maybe as Mb hiding (fromJust)) ; sk
+   (import qualified Data.Maybe as Mb hiding (fromJust)) ; Finkel
 
 .. code-block:: haskell
 
@@ -876,9 +892,9 @@ Foreign Import
 
 Foreign import declarations start with ``foreign`` ``import``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   (foreign import ccall safe "string.h strlen" ; sk
+   (foreign import ccall safe "string.h strlen" ; Finkel
      (:: cstrlen (-> (Ptr CChar) (IO CSize))))
 
 .. code-block:: haskell
@@ -891,7 +907,7 @@ Foreign Export
 
 Foreign export declarations start with ``foreign`` ``export``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
    (foreign export ccall "addInt"
      (:: + (-> Int Int Int)))
@@ -912,9 +928,9 @@ Inlining
 
 Pragmas to control inlining of codes use ``INLINE`` and ``NOINLINE``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   #p(INLINE foo) ; sk
+   #p(INLINE foo) ; Finkel
 
 .. code-block:: haskell
 
@@ -922,9 +938,9 @@ Pragmas to control inlining of codes use ``INLINE`` and ``NOINLINE``:
 
 GHC specific phase controls are also supported:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   #p(INLINE [1] bar) ; sk
+   #p(INLINE [1] bar) ; Finkel
    #p(NOINLINE [~2] buzz)
 
 .. code-block:: haskell
@@ -938,9 +954,9 @@ Specialization
 Pragmas to control specialization of overloaded function use
 ``SPECIALIZE``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   #p(SPECIALIZE (:: factorial (-> Int Int))) ; sk
+   #p(SPECIALIZE (:: factorial (-> Int Int))) ; Finkel
 
 .. code-block:: haskell
 
@@ -951,9 +967,9 @@ Language extensions
 
 Pragma for language extensions use ``LANGUAGE``:
 
-.. code-block:: sk
+.. code-block:: finkel
 
-   #p(LANGUAGE GADTs OverloadedStrings) ; sk
+   #p(LANGUAGE GADTs OverloadedStrings) ; Finkel
 
 .. code-block:: haskell
 

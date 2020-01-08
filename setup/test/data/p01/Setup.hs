@@ -1,2 +1,2 @@
-import Distribution.Simple.SK
-main = skkcMain
+import Distribution.Simple.Finkel
+main = fnkMain

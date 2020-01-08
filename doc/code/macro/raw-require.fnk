@@ -1,0 +1,16 @@
+;;;; File: raw-require.fnk
+
+(:require Finkel.Prelude)
+
+(defmodule Main)
+
+(eval-when [compile]
+  (defmacro say-hello []
+    '(putStrLn "Hello macro!"))
+  (defmacro say-bye []
+    '(putStrLn "Goodbye.")))
+
+(defn (:: main (IO ()))
+  (do (putStrLn ";;; raw-require.fnk ;;;")
+      (say-hello)
+      (say-bye)))

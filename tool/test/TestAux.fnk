@@ -1,0 +1,170 @@
+;;;; Auxiliary codes for tests
+
+(:require Finkel.Core)
+
+(defmodule TestAux
+  (export
+   (TestIO ..) (TestIOState ..) runTestIO
+   (EvalTestFns ..) makeEvalTestFns)
+  (require
+   (Finkel.Prelude)
+   (Finkel.Tool.Compat))
+  (import
+   ;; base
+   (Control.Concurrent
+    (forkIO newEmptyMVar killThread putMVar takeMVar))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.Function (on))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; finkel-kernel
+   (Language.Finkel)
+   (Language.Finkel.Fnk (runFnk))
+
+   ;; Internal
+   (Finkel.Tool.CLI)
+   (Finkel.Tool.Repl)
+   (Finkel.Tool.Repl.Eval)
+   (Finkel.Tool.Repl.IO)
+   (Finkel.Tool.Repl.Loop)
+   (Finkel.Tool.Repl.Types)))
+
+;;; Extra imports
+
+(with-ghc-version-cond v
+  ((<= 804 v)
+   (:begin))
+  (otherwise
+   (import Data.Monoid (<>))))
+
+;;; Test IO
+
+(data TestIOState
+  (TestIOState {tst-inputs [String]
+                tst-outputs [String]
+                tst-exitcode (Maybe ExitCode)
+                tst-replstate ReplState}))
+
+(instance (Monoid TestIOState)
+  (= mempty
+    emptyTestIOState)
+  (= mappend s1 s2
+    (TestIOState
+     {tst-inputs (on mappend tst-inputs s1 s2)
+      tst-outputs (on mappend tst-outputs s1 s2)
+      tst-exitcode (maybe (tst-exitcode s1) pure (tst-exitcode s2))
+      tst-replstate (on mappend tst-replstate s1 s2)})))
+
+(with-ghc-version-cond v
+  ((<= 804 v)
+   (instance (Semigroup TestIOState)
+     (= <> mappend)))
+  (otherwise
+   (:begin)))
+
+(defn (:: emptyTestIOState TestIOState)
+  (TestIOState {tst-inputs []
+                tst-outputs []
+                tst-exitcode Nothing
+                tst-replstate initial-repl-state}))
+
+;;; Newtype wrapper to test IO actions, combination of TestIOState state
+;;; monad and IO.
+(newtype (TestIO a)
+  (TestIO {unTestIO (-> TestIOState (IO (, a TestIOState)))}))
+
+(defn (:: runTestIO (-> (TestIO a) [String] (IO (, a TestIOState))))
+  [test-io inputs]
+  (unTestIO test-io (mempty {tst-inputs inputs})))
+
+(instance (Functor TestIO)
+  (= fmap f (TestIO m)
+    (TestIO (\ st0 (fmap (\ (, a st) (, (f a) st)) (m st0))))))
+
+(instance (Applicative TestIO)
+  (= pure x
+    (TestIO (\ st (pure (, x st)))))
+  (= <*> (TestIO ft) (TestIO xt)
+    (TestIO (\ st0 (do (<- (, f st1) (ft st0))
+                       (<- (, x st2) (xt st1))
+                       (return (, (f x) st2)))))))
+
+(instance (Monad TestIO)
+  (= return pure)
+  (= >>= (TestIO m) k
+    (TestIO (\ st0 (do (<- (, a st1) (m st0))
+                       (unTestIO (k a) st1))))))
+
+(instance (MonadIO TestIO)
+  (= liftIO io
+    (TestIO (\ st (fmap (\ x (, x st)) io)))))
+
+(instance (CLI TestIO)
+  (= getString _prompt
+    (TestIO (\ tst
+              (case (tst-inputs tst)
+                (: s rest) (let ((= tst' (tst {tst-inputs rest})))
+                             (pure (, (Just s) tst')))
+                [] (pure (, Nothing tst))))))
+
+  (= putString str
+    (TestIO
+     (\ st (let ((= tst-outputs' (<> (tst-outputs st) [str])))
+             (pure (, () (st {tst-outputs tst-outputs'})))))))
+
+  ;;; XXX: Does nothing.
+  (= handleInterrupt _handler act act)
+
+  ;;; XXX: Does nothing.
+  (= withInterrupt act act)
+
+  (= exitWith ec
+    (TestIO (\ st (pure (, () (st {tst-exitcode (Just ec)})))))))
+
+(instance (HasReplState TestIO)
+  (= putReplState rst
+    (TestIO (\ st (pure (, () (st {tst-replstate rst}))))))
+  (= getReplState
+    (TestIO (\ st (pure (, (tst-replstate st) st))))))
+
+
+;;; Repl test environment
+
+(data EvalTestFns
+  (EvalTestFns
+   {etf-ok (-> Code String Spec)
+    etf-ng (-> Code String Spec)
+    etf-satisfy (-> Code (-> Result Bool) Spec)
+    etf-cleanup (IO ())}))
+
+(defn (:: makeEvalTestFns (IO EvalTestFns))
+  (do (<- out-mv newEmptyMVar)
+      (<- (@ resources (, tmpfile hdl in-mv)) acquire-repl)
+      (<- etid (forkIO (runFnk (eval-loop hdl in-mv) repl-env)))
+      (let ((= eval-form right-or-left form expect
+              (describe
+               (concat ["evaluate " (show form)])
+               (it "evaluates to expected result"
+                   (do (putMVar in-mv (Input Connection form out-mv))
+                       (<- ret (takeMVar out-mv))
+                       (shouldBe ret (right-or-left expect))))))
+            (= ok (eval-form Right))
+            (= ng (eval-form Left))
+            (= satisfy form test
+              (describe
+               (concat ["evaluate " (show form)])
+               (it "satisfies predicate"
+                   (do (putMVar in-mv (Input Connection form out-mv))
+                       (<- ret (takeMVar out-mv))
+                       (shouldSatisfy ret test)))))
+            (= cleanup
+              (do (killThread etid)
+                  (cleanup-repl resources)))))
+      (putMVar in-mv (Input Connection init-form out-mv))
+      (<- _ (takeMVar out-mv))
+      (return (EvalTestFns {etf-ok ok
+                            etf-ng ng
+                            etf-satisfy satisfy
+                            etf-cleanup cleanup}))))

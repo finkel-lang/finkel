@@ -1,0 +1,121 @@
+;;; Tests for setup.
+;;;
+;;; This file contains similar tests written for the "finkel-setup"
+;;; package. See the main test file "setup/test/Main.hs" for finkel-setup.
+
+(:require Finkel.Core)
+
+(defmodule SetupTest
+  (export setupTests)
+  (require
+   ;; finkel-lang
+   (Finkel.Prelude)
+
+   ;; Internal
+   (Finkel.Tool.Compat (with-ghc-version-cond)))
+  (import
+   ;; base
+   (Control.Exception ((SomeException ..) catch throw))
+   (Data.List (isSubsequenceOf))
+   (System.Environment (getEnv getExecutablePath unsetEnv withArgs))
+   (System.IO.Error (isDoesNotExistError))
+
+   ;; ghc
+   (Config (cProjectVersion))
+
+   ;; directory
+   (System.Directory
+    (getCurrentDirectory removeFile setCurrentDirectory))
+
+   ;; filepath
+   (System.FilePath (</>  joinPath splitDirectories))
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; process
+   (System.Process (readProcess))
+
+   ;; Internal
+   (Finkel.Setup (finkelMakeMain))))
+
+(defn (:: setupTests Spec)
+  (do (<- executable (runIO getExecutablePath))
+      (<- cwd (runIO getCurrentDirectory))
+      (<- pkgdbs (runIO (getPackageDbs executable)))
+      (runIO (unsetEnv "GHC_PACKAGE_PATH"))
+      (after_ (setCurrentDirectory cwd)
+              (before_ (removeTixWhenFound cwd "p02")
+                       (buildPackage cwd pkgdbs "p02")))))
+
+(defn (:: buildPackage (-> FilePath [FilePath] String Spec))
+  [cwd pkgdbs name]
+  (where (describe (++ "package " name)
+                   (it "should compile and pass the tests" work))
+    (defn work
+      (mapM_ run
+             (++  [(setCurrentDirectory (pkgdir cwd name))
+                   (setup configure-args)
+                   (setup ["build"])]
+                  test-work
+                  [(setup ["haddock"])
+                   (setup ["clean"])])))
+    (defn test-work
+      (with-ghc-version-cond v
+        ((<= 804 v)
+         [(setup ["test"])])
+        (otherwise
+         [])))
+    (defn run [act]
+      (shouldReturn act ()))
+    (defn pkgdb-flags
+      (++ ["--package-db=clear" "--package-db=global"]
+          (map (++ "--package-db=") pkgdbs)))
+    (defn configure-args
+      (: "configure" (++ pkgdb-flags ["--enable-tests"])))))
+
+(defn (:: pkgdir (-> FilePath String FilePath))
+  [cwd name]
+  (</> cwd (</> "test" (</> "data" name))))
+
+(defn (:: setup (-> [String] (IO ())))
+  (flip withArgs finkelMakeMain))
+
+(defn (:: removeTixWhenFound (-> FilePath String (IO ())))
+  [cwd name]
+  (catch (removeFile (</> (pkgdir cwd name) "finkel.tix"))
+    (\ e (if (isDoesNotExistError e)
+             (return ())
+             (throw e)))))
+
+(defn (:: getPackageDbs (-> String (IO [String])))
+  [exec]
+  (if (isSubsequenceOf ".stack-work" exec)
+      getStackPackageDbs
+      (getCabalPackageDbs exec)))
+
+(defn (:: getStackPackageDbs (IO [String]))
+  (do (<- paths (catch (getEnv "GHC_PACKAGE_PATH")
+                  (\ (SomeException _) (return []))))
+      ($ return reverse sepByColon paths)))
+
+(defn (:: sepByColon (-> String [String]))
+  [xs]
+  (case (dropWhile (== #':) xs)
+    "" []
+    ys (case (break (== #':) ys)
+         (, w ys') (: w (sepByColon ys')))))
+
+(defn (:: getCabalPackageDbs (-> String (IO [String])))
+  [exec]
+  (do (<- home (getEnv "HOME"))
+      (let ((= dirs (splitDirectories exec))
+            (= distdir (takeWhile (/= "dist-newstyle") dirs))
+            (= ghc-ver (++ "ghc-" cProjectVersion))
+            (= localdb (</> (joinPath distdir)
+                            (joinPath ["dist-newstyle"
+                                       "packagedb"
+                                       ghc-ver])))
+            (= storedb (joinPath [home ".cabal" "store"
+                                  ghc-ver "package.db"]))))
+      (return [storedb localdb])))

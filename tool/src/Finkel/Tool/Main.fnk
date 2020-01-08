@@ -1,0 +1,58 @@
+;;; Main entry point
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Main
+  (export
+   main
+   commands)
+  (require
+   ;; finkel-lang
+   (Finkel.Prelude))
+  (import
+   ;; base
+   (System.Environment (getArgs getProgName withArgs withProgName))
+
+   ;; finkel-kernel
+   (Language.Finkel.Main (defaultMainWith))
+
+   ;; finkel-lang
+   (Finkel.Prelude)
+
+   ;; Internal
+   (Finkel.Tool.Help)
+   (Finkel.Tool.Repl)
+   (Finkel.Tool.Version)))
+
+
+;;; Exported function
+
+(defn (:: main (IO ()))
+  "Main entry point function for the executable."
+  (do (<- args getArgs)
+      (case args
+        (: name rest) (maybe (show-usage commands)
+                             (flip cmd-act rest)
+                             (find-command commands name))
+        _ (show-usage commands))))
+
+(defn (:: commands [Command])
+  "Available commands in the executable."
+  [(Command "help" "show help information" (helpMain commands))
+   (Command "make" "compile source codes" makeMain)
+   (Command "repl" "start interactive REPL" replMain)
+   (Command "version" "show version" versionMain)])
+
+
+;;; Internal
+
+(defn (:: makeMain (-> [String] (IO ())))
+  "Main function for compiler with macros from `Finkel.Prelude'."
+  [args]
+  (macrolet ((preloaded ()
+               `[,@(map (\ mac (, mac (qSymbol mac)))
+                        (exported-macros Finkel.Prelude))]))
+    (do (<- name getProgName)
+        (let ((= name' (++ name " make"))))
+        (withArgs args (withProgName name'
+                                     (defaultMainWith (preloaded)))))))

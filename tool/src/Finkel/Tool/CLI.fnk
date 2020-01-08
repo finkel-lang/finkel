@@ -1,0 +1,57 @@
+;;; Command line interface utilities.
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.CLI
+  (export
+   (CLI ..)
+   (ExitCode ..))
+  (import
+   ;; base
+   (Control.Exception (catch throwIO))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (System.Exit ((ExitCode ..)))
+   (System.IO.Error (isEOFError))
+   (qualified System.Exit as Exit)
+
+   ;; haskeline
+   (System.Console.Haskeline ((InputT) (MonadException ..)))
+   (qualified System.Console.Haskeline as Haskeline)))
+
+;;; Type class for command line interface, ... actually, for 'InputT'
+;;; from haskeline package.
+(class (=> (MonadIO cl) (CLI cl))
+  ;; Show prompt string, and get input line. Return Nothing for EOF
+  ;; input.
+  (:: getString (-> String (cl (Maybe String))))
+
+  ;; Put output line.
+  (:: putString (-> String (cl ())))
+
+  ;; Interrupt signal handler.
+  (:: handleInterrupt (-> (cl a) (cl a) (cl a)))
+
+  ;; Perform computation with interrupt handler.
+  (:: withInterrupt (-> (cl a) (cl a)))
+
+  ;; Exit with given 'ExitCode'.
+  (:: exitWith (-> ExitCode (cl ()))))
+
+(instance (CLI IO)
+  (= getString prompt
+    (catch (>> (putStr prompt) (fmap Just getLine))
+      (\ e (if (isEOFError e)
+               (return Nothing)
+               (throwIO e)))))
+  (= putString putStrLn)
+  (= handleInterrupt _handler act act)
+  (= withInterrupt act act)
+  (= exitWith Exit.exitWith))
+
+(instance (=> (MonadIO m) (MonadException m)
+              (CLI (InputT m)))
+  (= getString Haskeline.getInputLine)
+  (= putString Haskeline.outputStrLn)
+  (= handleInterrupt Haskeline.handleInterrupt)
+  (= withInterrupt Haskeline.withInterrupt)
+  (= exitWith (. liftIO Exit.exitWith)))

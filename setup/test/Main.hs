@@ -23,7 +23,7 @@ import Test.Hspec
 import System.Process (readProcess)
 
 -- Internal
-import Distribution.Simple.SK
+import Distribution.Simple.Finkel
 
 main :: IO ()
 main = do
@@ -77,7 +77,7 @@ buildPackage cwd pkgdbs name =
 setup :: [String] -> IO ()
 setup args = do
   putStrLn (unwords ("running:" : args))
-  withArgs args skkcMain
+  withArgs args fnkMain
 
 getPackageDbs :: String -> IO [String]
 getPackageDbs executable_path =

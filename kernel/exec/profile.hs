@@ -22,15 +22,15 @@ import Outputable (Outputable(..), neverQualify, printForUser)
 import SrcLoc (mkGeneralLocated)
 import qualified GHC as GHC
 
--- sk-kernel
-import qualified Language.SK.Builder as Builder
-import qualified Language.SK.Emit as Emit
-import qualified Language.SK.Expand as Expand
-import qualified Language.SK.Lexer as Lexer
-import qualified Language.SK.Make as Make
-import qualified Language.SK.Reader as Reader
-import qualified Language.SK.SKC as SKC
-import qualified Language.SK.Syntax as Syntax
+-- finkel-kernel
+import qualified Language.Finkel.Builder as Builder
+import qualified Language.Finkel.Emit as Emit
+import qualified Language.Finkel.Expand as Expand
+import qualified Language.Finkel.Lexer as Lexer
+import qualified Language.Finkel.Make as Make
+import qualified Language.Finkel.Reader as Reader
+import qualified Language.Finkel.Fnk as Fnk
+import qualified Language.Finkel.Syntax as Syntax
 
 main :: IO ()
 main =
@@ -55,13 +55,13 @@ usage =
        ,"  count  - count number of forms"
        ,"  expand - print expanded forms"
        ,"  parse  - parse input file and print resulting forms"
-       ,"  ppr    - pretty print haskell or sk module with `ppr'"
-       ,"  hsrc   - convert SK source to Haskell source"
+       ,"  ppr    - pretty print haskell or finkel module with `ppr'"
+       ,"  hsrc   - convert Finkel source to Haskell source"
        ,"  lex    - lex input file and print resulting tokens"
        ,"  make   - compile given files to object code"])
 
 printExpandedForms :: FilePath -> IO ()
-printExpandedForms path = SKC.runSkc go Make.defaultSkEnv
+printExpandedForms path = Fnk.runFnk go Make.defaultFnkEnv
   where
     go = do
       Make.initSessionForMake
@@ -79,21 +79,21 @@ printForms path =
 
 pprFile :: FilePath -> IO ()
 pprFile path
-  | ext == ".sk" = pprSkModule path
-  | ext == ".hs" = pprHsModule path
-  | otherwise    = putStrLn "ppr: expeting .sk or .hs file"
+  | ext == ".fnk" = pprFnkModule path
+  | ext == ".hs"  = pprHsModule path
+  | otherwise     = putStrLn "ppr: expeting .fnk or .hs file"
   where
     ext = FilePath.takeExtension path
 
-pprSkModule :: FilePath -> IO ()
-pprSkModule =
-  parseSkModuleWith
+pprFnkModule :: FilePath -> IO ()
+pprFnkModule =
+  parseFnkModuleWith
     (\m _ ->
        do dflags <- getDynFlags
           liftIO (printForUser dflags stdout neverQualify (ppr m)))
 
 pprHsModule :: FilePath -> IO ()
-pprHsModule path = SKC.runSkc go Make.defaultSkEnv
+pprHsModule path = Fnk.runFnk go Make.defaultFnkEnv
   where
     go =
       do Make.initSessionForMake
@@ -116,13 +116,13 @@ pprHsModule path = SKC.runSkc go Make.defaultSkEnv
 
 printHsrc :: FilePath -> IO ()
 printHsrc =
-  parseSkModuleWith
-    (\mdl sp -> do sk_str <- Emit.genHsSrc sp (Emit.Hsrc mdl)
-                   liftIO (putStrLn sk_str))
+  parseFnkModuleWith
+    (\mdl sp -> do fnk_str <- Emit.genHsSrc sp (Emit.Hsrc mdl)
+                   liftIO (putStrLn fnk_str))
 
-parseSkModuleWith ::
-  (Builder.HModule -> Lexer.SPState -> SKC.Skc ()) -> FilePath -> IO ()
-parseSkModuleWith act path = SKC.runSkc go Make.defaultSkEnv
+parseFnkModuleWith ::
+  (Builder.HModule -> Lexer.SPState -> Fnk.Fnk ()) -> FilePath -> IO ()
+parseFnkModuleWith act path = Fnk.runFnk go Make.defaultFnkEnv
   where
     go =
      do Make.initSessionForMake
@@ -160,4 +160,4 @@ doMake files =
            Make.make (zipWith f files (repeat Nothing))
                      False False Nothing
          f file phase = (mkGeneralLocated "commandline" file, phase)
-     SKC.runSkc act Make.defaultSkEnv
+     Fnk.runFnk act Make.defaultFnkEnv

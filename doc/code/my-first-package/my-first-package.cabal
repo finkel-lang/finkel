@@ -1,22 +1,22 @@
 cabal-version: 1.24
 
--- This file has been generated from package.yaml by hpack version 0.31.1.
+-- This file has been generated from package.yaml by hpack version 0.31.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ef3ece3235324aaff1535b0dfb01b00793108870e0639c81dfb8d2500e97d375
+-- hash: 43c5319f65fb5cb1e290bc830e3659616d03b64f73e3c723d4e545d407c93b11
 
 name:           my-first-package
 version:        0.1.0.0
 build-type:     Custom
 extra-source-files:
-    src/MyFirstPackage.sk
+    src/MyFirstPackage.fnk
 
 custom-setup
   setup-depends:
       Cabal
     , base
-    , sk-tool
+    , finkel-tool
 
 library
   exposed-modules:
@@ -26,7 +26,7 @@ library
   hs-source-dirs:
       src
   build-tool-depends:
-      sk-tool:sk
+      finkel-tool:finkel
   build-depends:
       base
   default-language: Haskell2010

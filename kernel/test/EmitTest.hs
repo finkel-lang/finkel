@@ -8,11 +8,11 @@ import SrcLoc (GenLocated(..), noSrcSpan)
 -- hspec
 import Test.Hspec
 
--- sk-kernel
-import Language.SK.Emit
-import Language.SK.Lexer
-import Language.SK.Make
-import Language.SK.SKC
+-- finkel-kernel
+import Language.Finkel.Emit
+import Language.Finkel.Lexer
+import Language.Finkel.Make
+import Language.Finkel.Fnk
 
 emitTests :: Spec
 emitTests = do
@@ -27,6 +27,6 @@ emitTests = do
       x `shouldBe` "foo"
 
 emitSimple :: HsSrc a => a -> IO String
-emitSimple h = runSkc (genHsSrc sp h) defaultSkEnv
+emitSimple h = runFnk (genHsSrc sp h) defaultFnkEnv
   where
     sp = initialSPState (fsLit "<EmitTest>") 0 0

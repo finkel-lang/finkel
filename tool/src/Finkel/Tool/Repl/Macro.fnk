@@ -1,0 +1,813 @@
+;;;; Macros used in REPL.
+
+;;; This module contains macros accessible only from REPL. Main purpose
+;;; of using macros for REPL is to access runtime value of
+;;; `FnkEnv'. Macro body can contain codes accessing `FnkEnv', and then
+;;; the code could be invoked from REPL via evaluating the typed in
+;;; forms.
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Repl.Macro
+  (export repl-macro)
+  (require
+   ;; finkel-lang
+   (Finkel.Prelude)
+
+   ;; Internal
+   (Finkel.Tool.Compat))
+  (import
+   ;; base
+   (Control.Exception ((Exception ..)))
+   (Control.Monad (filterM unless void))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.Function (on))
+   (Data.List
+    (find intercalate intersperse isPrefixOf partition sortBy))
+   (Data.Maybe (catMaybes))
+   (Text.Printf (printf))
+
+   ;; directory
+   (System.Directory (getCurrentDirectory setCurrentDirectory))
+
+   ;; ghc
+   (BasicTypes ((StringLiteral ..)))
+   (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..) (HscTarget ..)
+              (Language ..) (PackageFlag ..) (GeneralFlag ..)
+              defaultDynFlags fFlags flagSpecFlag flagSpecName gopt
+              isObjectTarget lang_set parseDynamicFlagsCmdLine thisPackage
+              xFlags xopt wopt wWarningFlags))
+   (ErrUtils (pprErrMsgBagWithLoc))
+   (Exception (gcatch gbracket))
+   (FamInstEnv (pprFamInst))
+   (FastString ((FastString) fsLit unpackFS))
+   (Finder (flushFinderCaches uncacheModule))
+   (GHC ((ModuleInfo) findModule getBindings getModSummary getModuleGraph
+         getModuleInfo getPrintUnqual getTargets isLoaded lookupName
+         lookupModule modInfoExports setSessionDynFlags setTargets))
+   (GhcMake ((LoadHowMuch ..)))
+   (GhcMonad ((GhcMonad ..) getSessionDynFlags))
+   (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
+              (ModSummary ..) (ModuleGraph) (Target ..) (TargetId ..)
+              emptyInteractiveContext handleFlagWarnings ms_mod_name
+              pprHPT pprTarget srcErrorMessages tyThingParent_maybe))
+   (HsImpExp ((ImportDecl ..) simpleImportDecl))
+   (IfaceSyn (showToHeader))
+   (InstEnv (pprInstance))
+   (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
+                                parseName setContext showModule))
+   (Linker (initDynLinker showLinkerState unload))
+   (Module (mkModuleNameFS moduleNameString))
+   (Name (getName nameIsFromExternalPackage nameModule nameOccName
+                  nameSrcSpan))
+   (NameSet (elemNameSet mkNameSet))
+   (Outputable ((SDoc) $$ <+> <> empty dcolon hsep nest ppr sep
+                showPpr showSDoc showSDocForUser text vcat))
+   (Module ((Module ..) mkModuleName))
+   (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
+   (SrcLoc (getLoc isGoodSrcSpan mkGeneralLocated noLoc unLoc))
+   (TyCoRep ((TyThing ..)))
+   (Util (looksLikeModuleName))
+
+   (qualified GhcMake as GhcMake)
+
+   ;; ghci
+   (Debugger (pprTypeAndContents))
+
+   ;; process
+   (System.Process (system))
+
+   ;; finkel-kernel
+   (Language.Finkel)
+   (Language.Finkel.Eval (evalExprType evalTypeKind))
+   (Language.Finkel.Form (mkLocatedForm symbolName))
+   (Language.Finkel.Make (buildHsSyn make))
+   (Language.Finkel.Fnk
+    ((FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv setDynFlags))
+   (Language.Finkel.Syntax (parseExpr parseType))
+   (Language.Finkel.TargetSource (asModuleName))
+
+   ;; finkel-lang
+   (Finkel.Core.List)))
+
+;;; Extra imports
+(with-ghc-version-cond ver
+  ((<= 804 ver)
+   (:begin
+     (import Prelude hiding (<>))
+     (import qualified HscTypes as HscTypes)))
+  (otherwise
+   (:begin)))
+
+
+;;; GHC version compatibility compile time helper
+
+(define-ghc-version-macro ppr-info-args version
+  [thing cls fam]
+  (if (<= 804 version)
+      `(, ,thing _fixity ,cls ,fam _sd)
+      `(, ,thing _fixity ,cls ,fam)))
+
+(define-ghc-version-macro ppr-tt-args version
+  [name]
+  (if (<= 804 version)
+      `(, ,name _fixity _cls-insts _fam-insts _sd)
+      `(, ,name _fixity _cls-insts _fam-insts)))
+
+(define-ghc-version-macro gen-default-dflags version
+  [flg]
+  (cond
+    ((<= 806 version)
+     `(defaultDynFlags (settings ,flg)
+                       (, (llvmTargets ,flg) (llvmPasses ,flg))))
+    ((<= 804 version)
+     `(defaultDynFlags (settings ,flg) (llvmTargets ,flg)))
+    (otherwise
+     `(defaultDynFlags (settings ,flg)))))
+
+(define-ghc-version-macro child-filter version
+  _
+  (if (<= 804 version)
+      '(\ (, t _f _ci _fi _sd) t)
+      '(\ (, t _f _ci _fi) t)))
+
+(defn (:: graph-to-summaries (-> ModuleGraph [ModSummary]))
+  (with-ghc-version-cond ver
+    ((<= 804 ver)
+     HscTypes.mgModSummaries)
+    (otherwise
+     id)))
+
+
+;;; Auxiliary
+
+(type ReplAction
+  (-> [Code] (Fnk Code)))
+
+(data ReplCmd
+  (ReplCmd {rc-name String
+            rc-args (Maybe [String])
+            rc-action ReplAction
+            rc-help String}))
+
+(defn (:: mk-ii-fs (-> FastString InteractiveImport))
+  [name]
+  (IIDecl (simpleImportDecl (mkModuleNameFS name))))
+
+(defn (:: mk-ii (-> String InteractiveImport))
+  (. mk-ii-fs fsLit))
+
+(defn (:: code-to-mb-string (-> Code (Maybe String)))
+  [code]
+  (case (unCode code)
+    (Atom (ASymbol sym)) (Just (unpackFS sym))
+    (Atom (AString str)) (Just (unpackFS str))
+    _ Nothing))
+
+(defn (:: located-list (-> [Code] Code))
+  [xs]
+  (case xs
+    [] nil
+    _  (LForm (L (getLoc (mkLocatedForm xs)) (List xs)))))
+
+(defn (:: show-sdoc-for-user-m (-> SDoc (Fnk String)))
+  [sdoc]
+  (do (<- dflags getDynFlags)
+      (<- unqual getPrintUnqual)
+      (return (showSDocForUser dflags unqual sdoc))))
+
+(defn (:: invalid-form-error (-> String [Code] (Fnk a)))
+  [label forms]
+  (let ((= form (car (located-list forms)))
+        (= msg (concat [label ": invalid form `" (show form) "'"])))
+    (finkelSrcError form msg)))
+
+(defn (:: compile-module (-> String (Fnk Code)))
+  [str]
+  (where (gbracket acquire cleanup work)
+    (= acquire
+      (do (<- dflags getDynFlags)
+          (<- fkc-env getFnkEnv)
+          (return (, dflags fkc-env))))
+    (= cleanup (, dflags fkc-env)
+      (do (setDynFlags dflags)
+          (putFnkEnv fkc-env)))
+    (= work (, dflags fkc-env)
+      (do (putFnkEnv (fkc-env {envQualifyQuotePrimitives False}))
+          (let ((= force-recomp (gopt Opt-ForceRecomp dflags))
+                (= onTheREPL (mkGeneralLocated "on the REPL"))))
+          (make [(, (onTheREPL str) Nothing)] True force-recomp Nothing)
+          (return '(:begin))))))
+
+(defn (:: compile-and-import (-> FilePath (Fnk Code)))
+  [path]
+  ;; As done in ghci, adding `IIModule' if the module is interpreted as
+  ;; bytecode, `IIDecl' otherwise. Safe Haskell setting in DynFlags is
+  ;; ignored at the moment.
+  (do (<- finkel-env getFnkEnv)
+      (<- _ (compile-module path))
+      (let ((= mods (envContextModules finkel-env))
+            (= mname0 (asModuleName path))
+            (= mname1 (| ((null mname0) "Main")
+                         (otherwise     mname0)))
+            (= mname2 (mkModuleNameFS (fsLit mname1)))
+            (= imps0 (map mk-ii mods))))
+      (<- mdl (getModSummary mname2))
+      (<- is-interp (moduleIsInterpreted (ms-mod mdl)))
+      (let ((= me (| (is-interp (IIModule mname2))
+                     (otherwise (IIDecl (simpleImportDecl mname2)))))))
+      (setContext (: me imps0))
+      (return '(:begin))))
+
+(defn (:: adjust-current-target
+        (-> FilePath [InteractiveImport] (Fnk [InteractiveImport])))
+  "Adjust current IIModule target to IIDecl if current HscTarget is
+object code."
+  [path imports]
+  (do (<- dflags getDynFlags)
+      (let ((= current-module-name (mkModuleName (asModuleName path)))
+            (= iimodule-to-iidecl ii
+              (case ii
+                (IIModule mname) (| ((== mname current-module-name)
+                                     (IIDecl (simpleImportDecl mname))))
+                _                ii))
+            (= iidecl-to-iimodule ii
+              (case ii
+                (IIDecl idecl) (| ((== (unLoc (ideclName idecl))
+                                       current-module-name)
+                                   (IIModule current-module-name)))
+                _              ii))
+            (= ii-fn (if (isObjectTarget (hscTarget dflags))
+                         iimodule-to-iidecl
+                         iidecl-to-iimodule))))
+      (return (map ii-fn imports))))
+
+;;; Mostly taken from `GHCi.UI.guessCurrentModule'.
+(defn (:: guess-current-module (-> Code (Fnk Module)))
+  [form]
+  (do (<- imports getContext)
+      (case imports
+        (: (IIModule m) _) (findModule m Nothing)
+        (: (IIDecl d) _)   (findModule (unLoc (ideclName d))
+                                       (fmap sl-fs (ideclPkgQual d)))
+        _ (finkelSrcError form "browse: no current module"))))
+
+(defn (:: env-context-on-exception (-> (Fnk a) (Fnk ())))
+  [action]
+  (gcatch
+   (void action)
+   (\ e
+     (do (let ((= print-se se
+                 (do (<- dflags getSessionDynFlags)
+                     (liftIO
+                      (putStr (unlines
+                               (map (showSDoc dflags)
+                                    (pprErrMsgBagWithLoc
+                                     (srcErrorMessages se))))))))))
+         (case (fromException e)
+           (Just se) (print-se se)
+           _ (liftIO (print e)))
+         (<- mods (fmap envContextModules getFnkEnv))
+         (setContext (map mk-ii mods))))))
+
+(defn (:: browse-module (-> Module ModuleInfo (Fnk Code)))
+  "Simplified version of `GHCi.UI.browseModule'."
+  [mdl mod-info]
+  (do (let ((= names (modInfoExports mod-info))
+            (= sorted-names
+              (++ (loc-sort local) (occ-sort external)))
+            (= (, local external)
+              (partition (. (== mdl) nameModule) names))
+            (= occ-sort (sortBy (on compare nameOccName)))
+            (= loc-sort ns
+              (| ((<- (: n _) ns) (isGoodSrcSpan (nameSrcSpan n))
+                  (sortBy (on compare nameSrcSpan) ns))
+                 (otherwise (occ-sort ns))))
+            (= pretty
+              (pprTyThing showToHeader))))
+      (<- mb-things (mapM lookupName sorted-names))
+      (let ((= things (catMaybes mb-things))
+            (= prettyThings (map pretty things))))
+      (<- str (show-sdoc-for-user-m (vcat prettyThings)))
+      (return `(System.IO.putStrLn ,str))))
+
+(defn (:: expand-with (-> String (-> Code (Fnk Code)) ReplAction))
+  [label f forms]
+  (case forms
+    [] (return '(:begin))
+    [expr] (>>= (f expr) (\ x (return `(System.IO.print ',x))))
+    _ (let ((= l (located-list forms)))
+        (finkelSrcError l (++ label (++ ": invalid form " (show l)))))))
+
+;;; Mostly translated from `GHCi.UI.infoThing'.
+(defn (:: info-name (-> Code (Fnk Code)))
+  [thing]
+  (do (<- sdoc (info-thing True (show thing)))
+      (<- str (show-sdoc-for-user-m sdoc))
+      (return `(System.IO.putStrLn ,str))))
+
+(defn (:: info-thing (-> Bool String (Fnk SDoc)))
+  [all-info str]
+  (do (<- names (parseName str))
+      (<- mb_stuffs (mapM (getInfo all-info) names))
+      (let ((= filtered (filter-out-children
+                         (child-filter)
+                         (catMaybes mb_stuffs)))
+            (= ppr-info (ppr-info-args thing cls-insts fam-insts)
+              ($$ (pprTyThingInContextLoc thing)
+                  ($$ (vcat (map pprInstance cls-insts))
+                      (vcat (map pprFamInst fam-insts)))))))
+      (return
+        (vcat (intersperse (text "") (map ppr-info filtered))))))
+
+(defn (:: filter-out-children (-> (-> a TyThing) [a] [a]))
+  [get-thing xs]
+  (let ((= all-names (mkNameSet (map (. getName get-thing) xs)))
+        (= has-parent x
+          (| ((<- (Just p) (tyThingParent_maybe (get-thing x)))
+              (elemNameSet (getName p) all-names))
+             (otherwise False))))
+    (filter (. not has-parent) xs)))
+
+
+;;; Functions for show command
+
+(defn (:: show-bindings (Fnk Code))
+  (where (do (<- bs getBindings)
+             (<- docs (mapM make-doc (reverse bs)))
+             (<- str (show-sdoc-for-user-m (vcat docs)))
+             (return `(System.IO.putStrLn ,str)))
+    (:: make-doc (-> TyThing (Fnk SDoc)))
+    (= make-doc tt
+      (case tt
+        (AnId i) (pprTypeAndContents i)
+        _        (do (<- mb-stuff (getInfo False (getName tt)))
+                     (return (maybe (text "") ppr-tt mb-stuff)))))
+    (= ppr-tt (ppr-tt-args thing)
+      (pprTyThing showToHeader thing))))
+
+(defn (:: show-context (Fnk Code))
+  (where (do (<- context getContext)
+             (<- dflags getSessionDynFlags)
+             (return `(System.IO.putStr ,(result dflags context))))
+    (= result dflags context
+      (unlines (: "; context" (map (context-string dflags) context))))
+    (= context-string dflags ctx
+      (case ctx
+        (IIDecl d) (++ ";  IIDecl: " (showSDoc dflags (ppr d)))
+        (IIModule m) (++ ";  IIModule: " (moduleNameString m))))))
+
+(defn (:: show-dflags (Fnk Code))
+  (do (<- dflags getDynFlags)
+      (let ((= ss
+              ["; dflags:"
+               (++ ";  ghcLink: " (show (ghcLink dflags)))
+               (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
+               (++ ";  hscTarget: " (show (hscTarget dflags)))
+               (++ ";  objectDir: " (show (objectDir dflags)))
+               (++ ";  thisInstalledUnitId: "
+                   (showPpr dflags (thisInstalledUnitId dflags)))
+               (++ ";  forceRecomp: "
+                   (show (gopt Opt-ForceRecomp dflags)))])
+            (= showGhcMode m
+              (case m
+                CompManager "CompManager"
+                OneShot     "OneShot"
+                MkDepend    "MkDepend"))))
+      (return `(System.IO.putStr ,(unlines ss)))))
+
+(defn (:: show-hpt (Fnk Code))
+  "Show home package table."
+  (do (<- hsc-env getSession)
+      (<- str0 (show-sdoc-for-user-m (pprHPT (hsc-HPT hsc-env))))
+      (let ((= str1 (if (null str0)
+                        "show: no home package table found"
+                        str0))))
+      (return `(System.IO.putStrLn ,str1))))
+
+;;; Mostly taken from `GHCi.UI.showLanguages''.
+(defn (:: show-language (-> Bool (Fnk Code)))
+  [show-all]
+  (do (<- dflags getDynFlags)
+      (let ((= setting test flag
+              (where (| (quiet     empty)
+                        (is-on     (<> (text "-X") (text name)))
+                        (otherwise (<> (text "-XNo") (text name))))
+                (= name (flagSpecName flag))
+                (= f (flagSpecFlag flag))
+                (= is-on (test f dflags))
+                (= quiet (&& (not show-all)
+                             (== (test f default-dflags) is-on)))))
+
+            (= default-dflags
+              (lang_set (gen-default-dflags dflags)
+                        (case (language dflags)
+                          Nothing (Just Haskell2010)
+                          other   other)))))
+      (<- str
+        (show-sdoc-for-user-m
+         (vcat [(<> (text "base language is: ")
+                    (case (language dflags)
+                      Nothing (text "Haskell2010")
+                      (Just Haskell98) (text "Haskell98")
+                      (Just Haskell2010) (text "Haskell2010")))
+                ($$ (if show-all
+                        (text "all active language options:")
+                        (text "with the following modifiers:"))
+                    (nest 2 (vcat (map (setting xopt) xFlags))))])))
+      (return `(System.IO.putStrLn ,str))))
+
+(defn (:: show-linker (Fnk Code))
+  ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
+  ;; which is not exposed from the module its defined ... not sure how
+  ;; to get resulting output as `String' other than redirecting output
+  ;; to stdout.
+  (do (<- hsc-env getSession)
+      (liftIO (do (initDynLinker hsc-env)
+                  (showLinkerState (hsc_dflags hsc-env))))
+      (return '(:begin))))
+
+(defn (:: show-macros (Fnk Code))
+  (do (<- macros (fmap envMacros getFnkEnv))
+      (let ((= macro-strings
+              (unlines
+               (: "; macros: "
+                  (map (++ ";  ") (macroNames macros)))))))
+      (return `(System.IO.putStr ,macro-strings))))
+
+(defn (:: show-modules (Fnk Code))
+  (do (<- graph0 getModuleGraph)
+      (let ((= graph1 (graph-to-summaries graph0))))
+      (<- graph2 (filterM (. isLoaded ms_mod_name) graph1))
+      (<- mods (mapM showModule graph2))
+      (return `(System.IO.putStr ,(unlines mods)))))
+
+(defn (:: show-options (-> Bool (Fnk Code)))
+  [show-all]
+  (do (<- dflags getDynFlags)
+      (let ((= setting prefix no-prefix test flag
+              (where (| (quiet     empty)
+                        (is-on     (<> (text prefix) (text name)))
+                        (otherwise (<> (text no-prefix) (text name))))
+                (= name (flagSpecName flag))
+                (= f (flagSpecFlag flag))
+                (= is-on (test f dflags))
+                (= quiet (&& (not show-all)
+                             (== (test f default-dflags) is-on)))))
+            (= default-dflags
+              (gen-default-dflags dflags))
+            (= (, ghciFlags others)
+              (partition (\ f (elem (flagSpecFlag f) flgs)) fFlags))
+            (= flgs
+              [Opt_PrintExplicitForalls
+               Opt_PrintExplicitKinds
+               Opt_PrintBindResult
+               Opt_BreakOnException
+               Opt_BreakOnError
+               Opt_PrintEvldWithShow])
+            (= sdocs
+              [($$ (text "REPL specific dynamic flag settings:")
+                   (nest 2 (vcat (map (setting "-f" "-fno-" gopt)
+                                      ghciFlags))))
+               ($$ (text "other dynamic, non-language, flag settings:")
+                   (nest 2 (vcat (map (setting "-f" "-fno-" gopt)
+                                      others))))
+               ($$ (text "warning settings:")
+                   (nest 2 (vcat (map (setting "-W" "-Wno-" wopt)
+                                      wWarningFlags))))])))
+      (<- printLang (show-language show-all))
+      (let ((= printOthers
+              `(Data.Foldable.mapM_
+                System.IO.putStrLn
+                ,(map (showSDoc dflags) sdocs)))))
+      (return `(>> ,printLang ,printOthers))))
+
+(defn (:: show-packages (Fnk Code))
+  (do (<- dflags getDynFlags)
+      (let ((= pr (++ ";   "))
+            (= pr-flag flag
+              (case flag
+                (ExposePackage n _ _) (pr n)
+                (HidePackage n) (pr (++ "hiding " n))))
+            (= pkgs
+              (: "; packages" (map pr-flag (packageFlags dflags))))))
+      (return `(System.IO.putStr ,(unlines pkgs)))))
+
+(defn (:: show-paths (Fnk Code))
+  (do (<- dflags getDynFlags)
+      (<- cwd (liftIO getCurrentDirectory))
+      (let ((= ipaths (importPaths dflags))
+            (= result
+              (unlines
+               (concat
+                [["; current working directory:"
+                  (++ ";   " cwd)
+                  "; module import search paths:"]
+                 (if (null ipaths)
+                     [";    none"]
+                     (map (++ ";    ") ipaths))])))))
+      (return `(System.IO.putStr ,result))))
+
+(defn (:: show-targets (Fnk Code))
+  (do (<- hsc-env getSession)
+      (<- strs (mapM (. show-sdoc-for-user-m pprTarget)
+                     (hsc-targets hsc-env)))
+      (let ((= ts (| ((null strs) "none")
+                     (otherwise (unwords strs))))))
+      (return `(System.IO.putStrLn (++ ";; targets: " ,ts)))))
+
+
+;;; REPL commands
+
+(defn (:: help-cmd ReplAction)
+  [_form]
+  (return
+    `(System.IO.putStrLn ,(++ "DESCRIPTION:
+
+  REPL meta macro, ARGS varies per COMMAND.
+
+COMMANDS:
+
+" (unlines
+   (map (\ rc
+          (let ((= pre
+                  (++ (rc-name rc)
+                      (maybe ""
+                             (. (++ " ") unwords)
+                             (rc-args rc)))))
+            (concat
+             ["  ," (printf "%-14s" pre) " - " (rc-help rc)])))
+        commands))))))
+
+(defn (:: system-cmd ReplAction)
+  "Invoke system command."
+  [forms]
+  (do (<- _ecode (liftIO (system (intercalate " " (map show forms)))))
+      (return '(:begin))))
+
+;;; Mostly taken from `GHCi.UI.browseCmd'.
+(defn (:: browse-cmd ReplAction)
+  [forms]
+  (let ((= go mb-name
+          (| ((<- (Just name) mb-name) (looksLikeModuleName name)
+              (>>= (lookupModule (mkModuleName name) Nothing) go'))
+             (otherwise
+              (>>= (guess-current-module (located-list forms)) go'))))
+        (= go' mdl
+          (do (<- mb-mod-info (getModuleInfo mdl))
+              (case mb-mod-info
+                (Just mod-info) (browse-module mdl mod-info)
+                Nothing (do (let ((= mname (moduleName mdl))
+                                  (= str (moduleNameString mname))
+                                  (= msg (++ "unknown module: " str))))
+                            (return `(System.IO.putStrLn ,msg))))))
+        (= err
+          (finkelSrcError (located-list forms)
+                      (++ "browse: invalid form: " (show forms)))))
+    (case (map unCode forms)
+      [(Atom (ASymbol sym))] (go (Just (unpackFS sym)))
+      [] (go Nothing)
+      _ err)))
+
+(defn (:: cd-cmd ReplAction)
+  "Function to change current directory."
+  [forms]
+  (case forms
+    [arg1] (| ((<- (Just path) (code-to-mb-string arg1))
+               (do (liftIO (setCurrentDirectory path))
+                   (return '(:begin)))))
+    _ (let ((= l (located-list forms)))
+        (finkelSrcError l (++ "cd: expecting symbol or string but got "
+                          (show l))))))
+
+(defn (:: debug-cmd ReplAction)
+  "Modify debug settings in REPL."
+  [forms]
+  (case forms
+    [] (do (<- bool (fmap envDebug getFnkEnv))
+           (return `(System.IO.putStrLn
+                     (++ "Debug flag is " ,(show bool)))))
+    [form] (| ((<- (Just bool) (fromCode form))
+               (do (modifyFnkEnv (\ e (e {envDebug bool})))
+                   (let ((= msg (++ "Debug flag set to " (show bool)))))
+                   (return `(System.IO.putStrLn ,msg)))))
+    _ (let ((= l (located-list forms)))
+        (finkelSrcError l (++ "debug: invalid form: " (show l))))))
+
+(defn (:: expand-cmd ReplAction)
+  "Expand given form for one layer."
+  (expand-with "expand" expand1))
+
+(defn (:: expand-full-cmd ReplAction)
+  "Fully expand given form."
+  (expand-with "expand!" expand))
+
+(defn (:: info-cmd ReplAction)
+  [forms]
+  (let ((= err (invalid-form-error "info" forms)))
+    (case (map unCode forms)
+      [(@ form (Atom (ASymbol _)))] (info-name (toCode form))
+      [(Atom AUnit)] (info-name (qSymbol "()"))
+      [(HsList [])] (info-name (qSymbol "[]"))
+      _ err)))
+
+;; From `GHCi.UI.kindOfType'
+(defn (:: kind-cmd ReplAction)
+  [forms]
+  (case forms
+    [form] (do (<- ty0 (buildHsSyn parseType forms))
+               (<- (, _ kind) (evalTypeKind ty0))
+               (let ((= sdoc
+                       (hsep [(text (show form))
+                              dcolon
+                              (pprTypeForUser kind)]))))
+               (<- str (show-sdoc-for-user-m sdoc))
+               (return `(System.IO.putStrLn ,str)))
+    _      (invalid-form-error "kind" forms)))
+
+(defn (:: load-cmd ReplAction)
+  "Load a module source code file. Handles absolute paths and relative
+paths from import directories."
+  [forms]
+  (let ((= discardIC hsc-env
+          ;; From `GhcMake.discardIC'.
+          (let ((= empty-ic (emptyInteractiveContext dflags))
+                (= new-ic-monad (keep-external-name ic_monad))
+                (= old-ic (hsc_IC hsc-env))
+                (= dflags (hsc_dflags hsc-env))
+                (= keep-external-name ic-name
+                  (where (| (external-and-old old-name)
+                            (otherwise        (ic-name empty-ic)))
+                    (= external-and-old
+                      (nameIsFromExternalPackage this-pkg old-name))
+                    (= this-pkg (thisPackage dflags))
+                    (= old-name (ic-name old-ic)))))
+            (hsc-env {hsc_IC (empty-ic {ic_monad new-ic-monad})})))
+        (= clear-all
+          ;; Cleare various states: finder cache, targets, interactive
+          ;; context ... etc.
+          (do (<- graph0 getModuleGraph)
+              (<- _ abandonAll)
+              (<- _ (setTargets []))
+              (<- _ (GhcMake.load LoadAllTargets))
+              (<- hsc-env getSession)
+              (let ((= graph1 (graph-to-summaries graph0))
+                    (= uncache (. (uncacheModule hsc-env) ms_mod_name))))
+              (liftIO (do (mapM_ uncache graph1)
+                          (flushFinderCaches hsc-env)))
+              (setSession (discardIC hsc-env))))
+        (= make-target path
+          (do (<- hsc-target (fmap hscTarget getDynFlags))
+              (let ((= allow-obj (not (== hsc-target HscInterpreted)))
+                    (= tfile (TargetFile path Nothing))))
+              (return (Target tfile allow-obj Nothing)))))
+
+    (case forms
+      [form] (maybe
+              (finkelSrcError form (++ "load: not a FilePath: "
+                                   (show form)))
+              (\ path
+                ;; Clear current state first. Then find the source file
+                ;; path and compile, load, and link.
+                (do clear-all
+                    (env-context-on-exception
+                     (do (<- target (make-target path))
+                         (<- _ (setTargets [target]))
+                         (<- _ (compile-and-import path))
+                         (liftIO (putStrLn (++ "; loaded " path)))))
+                    (return '(:begin))))
+              (code-to-mb-string form))
+      _      (finkelSrcError (located-list forms)
+                         (++ "load: invalid form: " (show forms))))))
+
+(defn (:: pwd-cmd ReplAction)
+  "Function to show current directory."
+  [_forms]
+  (do (<- dir (liftIO getCurrentDirectory))
+      (return `,dir)))
+
+(defn (:: reload-cmd ReplAction)
+  "Function to reload previously loaded module."
+  [_forms]
+  (do (<- targets getTargets)
+      (case targets
+        (: (Target (TargetFile path _) _ _) _)
+        ;; Unloading before compilation, to re-link the compiled
+        ;; modules.
+        (do (<- ctx0 getContext)
+            (<- hsc-env getSession)
+            (liftIO (unload hsc-env []))
+            (<- _ (compile-module path))
+            (<- ctx1 (adjust-current-target path ctx0))
+            (setContext ctx1)
+            (let ((= msg (++ "; reloaded " path))))
+            (return `(System.IO.putStrLn ,msg)))
+        _ (return '(System.IO.putStrLn "; reload: invalid target")))))
+
+(defn (:: set-cmd ReplAction)
+  "Set command line flags, see `GHCi.UI.newDynFlags'."
+  [forms]
+  (| ((<- (: _ _) forms) (all is-symbol forms)
+      ;; Always using `setSessionDynFlags' for `set' REPL command to
+      ;; support `-package' flag.
+      (do (<- dflags0 getSessionDynFlags)
+          (let ((= flags (map (. noLoc symbolName) forms))))
+          (<- (, dflags1 leftovers warns)
+            (parseDynamicFlagsCmdLine dflags0 flags))
+          (liftIO
+           (do (handleFlagWarnings dflags1 warns)
+               (unless (null leftovers)
+                 (putStrLn
+                  (++ "Some flags have not been recognized: "
+                      (intercalate ", " (map unLoc leftovers)))))))
+          (<- _ (setSessionDynFlags dflags1))
+          (return '(:begin))))
+     (otherwise
+      (finkelSrcError nil "set: empty-form"))))
+
+(defn (:: show-cmd ReplAction)
+  [forms]
+  (where go
+    (defn go
+      (case forms
+        [form] (| ((is-symbol form) (work (symbolName form))))
+        _      show-cmd-error))
+    (defn work [thing]
+      (maybe show-cmd-error id (lookup thing things)))
+    (defn show-cmd-error
+      (finkelSrcError nil (++ "show: expecting one of:\n"
+                          (intercalate ", " (map fst things)))))
+    (defn things
+      [(, "bindings" show-bindings)
+       (, "context" show-context)
+       (, "dflags" show-dflags)
+       (, "hpt" show-hpt)
+       (, "language" (show-language False))
+       (, "linker" show-linker)
+       (, "macros" show-macros)
+       (, "modules" show-modules)
+       (, "options" (show-options False))
+       (, "options!" (show-options True))
+       (, "packages" show-packages)
+       (, "paths" show-paths)
+       (, "targets" show-targets)])))
+
+;; From `GHCi.UI.typeOfExpr'.
+(defn (:: type-cmd ReplAction)
+  [forms]
+  (case forms
+    [form] (do (<- expr (buildHsSyn parseExpr forms))
+               (<- ty (evalExprType expr))
+               (let ((= sdoc
+                       (sep [(text (show form))
+                             (nest 2 (<+> dcolon
+                                          (pprTypeForUser ty)))]))))
+               (<- str (show-sdoc-for-user-m sdoc))
+               (return `(System.IO.putStrLn ,str)))
+    _ (invalid-form-error "type" forms)))
+
+
+;;; REPL command macro
+
+(defn (:: commands [ReplCmd])
+  (let ((= c ReplCmd))
+    [(c "!" (Just ["CMD" "ARGS" "..."]) system-cmd
+        "run system CMD with ARGS")
+     (c "?" Nothing help-cmd
+        "show this help")
+     (c "browse" (Just ["MODULE"]) browse-cmd
+        "browse contents of MODULE")
+     (c "cd" (Just ["DIR"]) cd-cmd
+        "change working directory to DIR")
+     (c "debug" (Just ["BOOL"]) debug-cmd
+        "set finkel debug to BOOL")
+     (c "expand" (Just ["FORM"]) expand-cmd
+        "show expanded result of FORM")
+     (c "expand!" (Just ["FORM"]) expand-full-cmd
+        "show fully expanded result of FORM")
+     (c "info" (Just ["NAME"]) info-cmd
+        "show info of NAME")
+     (c "kind" (Just ["TYPE"]) kind-cmd
+        "show kind of TYPE")
+     (c "load" (Just ["FILE"]) load-cmd
+        "compile and load FILE")
+     (c "pwd" Nothing pwd-cmd
+        "show working directory")
+     (c "reload" Nothing reload-cmd
+        "reload previous module")
+     (c "set" (Just ["FLAGS" "..."]) set-cmd
+        "parse and set FLAGS")
+     (c "show" (Just ["ARG"]) show-cmd
+        "show information of ARG")
+     (c "type" (Just ["EXPR"]) type-cmd
+        "show type of EXPR")]))
+
+(defmacro-m repl-macro form
+  (case (unCode form)
+    (List (: name args)) (| ((<- (Just name') (code-to-mb-string name))
+                             (<- (Just rc)
+                               (find (. (isPrefixOf name') rc-name)
+                                     commands))
+                             (rc-action rc args))
+                            (otherwise (help-cmd [])))
+    _ (finkelSrcError form (++ "invalid args: " (show form)))))

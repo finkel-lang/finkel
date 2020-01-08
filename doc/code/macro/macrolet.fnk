@@ -1,0 +1,13 @@
+;;;; File: macrolet.fnk
+
+(defmodule Main
+  (require (Finkel.Prelude)))
+
+(macrolet ((say-hello []
+             '(putStrLn "Hello macro!"))
+           (say-bye []
+             '(putStrLn "Goodbye.")))
+  (defn (:: main (IO ()))
+    (do (putStrLn ";;; macrolet ;;;")
+        (say-hello)
+        (say-bye))))

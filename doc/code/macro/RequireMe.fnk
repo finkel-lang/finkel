@@ -1,0 +1,11 @@
+;;;; File: RequireMe.fnk
+
+(defmodule RequireMe
+  (export say-hello say-bye)
+  (import (Finkel.Prelude)))
+
+(defmacro say-hello []
+  '(putStrLn "Hello macro!"))
+
+(defmacro say-bye []
+  '(putStrLn "Goodbye."))

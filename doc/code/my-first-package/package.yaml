@@ -4,18 +4,18 @@ name: my-first-package
 version: 0.1.0.0
 
 extra-source-files:
-  - src/**.sk
+  - src/**.fnk
 
 custom-setup:
   dependencies:
     - base
     - Cabal
-    - sk-tool
+    - finkel-tool
 
 library:
   source-dirs: src
   exposed-modules: MyFirstPackage
   build-tools:
-    - sk-tool:sk
+    - finkel-tool:finkel
   dependencies:
     - base

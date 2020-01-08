@@ -26,9 +26,9 @@ import DynFlags (parseDynamicFlagsCmdLine)
 import SrcLoc (noLoc)
 #endif
 
--- sk-kernel
-import Language.SK.SKC (Skc, setDynFlags)
-import Language.SK.Make (initSessionForMake)
+-- fnk-kernel
+import Language.Finkel.Fnk (Fnk, setDynFlags)
+import Language.Finkel.Make (initSessionForMake)
 
 -- | Perform the first action when invoked from @stack@, other wise
 -- perform the second.
@@ -48,7 +48,7 @@ whenUsingStack act = ifUsingStack act (return ())
 -- When running tests with stack, explicitly specify "-" as package env
 -- to avoid using ".ghc.environment.xxx" files for preserving package
 -- environment. This need to be done before 'initSessionForMake'.
-resetPackageEnv :: Skc ()
+resetPackageEnv :: Fnk ()
 #if MIN_VERSION_ghc (8,4,4)
 resetPackageEnv = do
   -- Use of "-" to reset package env is NOT supported until 8.4.4.
@@ -60,7 +60,7 @@ resetPackageEnv = do
   -- version 2.1. Manually adding packages used in test codes.
   dflags0 <- getDynFlags
   let dflags1 = dflags0 { packageEnv = Nothing }
-      flagstrs = map noLoc ["-package", "sk-kernel"
+      flagstrs = map noLoc ["-package", "finkel-kernel"
                            ,"-package", "ghc-prim"]
   (dflags2, _, _) <- parseDynamicFlagsCmdLine dflags1 flagstrs
   setDynFlags dflags2
@@ -68,7 +68,7 @@ resetPackageEnv = do
 
 -- | Initialize session with 'initSessionForMake', then reset package
 -- env when invoked from stack.
-initSessionForTest :: Skc ()
+initSessionForTest :: Fnk ()
 initSessionForTest = do
   whenUsingStack resetPackageEnv
   initSessionForMake

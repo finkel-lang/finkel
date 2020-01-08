@@ -1,8 +1,8 @@
-Macros In Sk
-============
+Macros In Finkel
+================
 
-This section shows how to write and use macros. Macros in sk are
-similar to macros in Common Lisp and Clojure. Macros in sk are
+This section shows how to write and use macros. Macros in Finkel are
+similar to macros in Common Lisp and Clojure. Macros in Finkel are
 implemented as a function taking codes and returning a code.
 
 
@@ -31,12 +31,12 @@ specifies the phase of declaration in its body form. The phase
 source code.
 
 Open a new file and save following contents to a file named
-``eval-when.sk``:
+``eval-when.fnk``:
 
-.. literalinclude:: ../code/macro/eval-when.sk
-   :language: sk
+.. literalinclude:: ../code/macro/eval-when.fnk
+   :language: finkel
 
-In the above example, ``(require (SK.Prelude))`` is added in the
+In the above example, ``(require (Finkel.Prelude))`` is added in the
 ``defmodule`` to introduce functions and data types for writing
 macros.
 
@@ -54,11 +54,11 @@ macros. Unlike functions, macros taking no arguments need to be
 surrounded by parentheses.
 
 One can run the compiler with the ``-ddump-parsed`` option to observe
-parsed Haskell representation:
+the parsed Haskell representation:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed eval-when.sk
+   $ finkel make -fno-code -ddump-parsed eval-when.fnk
 
    ==================== Parser ====================
    module Main where
@@ -69,25 +69,25 @@ parsed Haskell representation:
           putStrLn "Goodbye."
 
 
-   [1 of 1] Compiling Main             ( eval-when.sk, nothing )
+   [1 of 1] Compiling Main             ( eval-when.fnk, nothing )
 
 
 Defining Macro With ``macrolet``
 --------------------------------
 
 One can add a temporary macro with the ``macrolet`` macro. Following
-``macrolet.sk`` example do similar work done in the previous example,
+``macrolet.fnk`` example do similar work done in the previous example,
 but using ``macrolet`` instead of ``eval-when`` and ``defmacro``.
 
-.. literalinclude:: ../code/macro/macrolet.sk
-   :language: sk
+.. literalinclude:: ../code/macro/macrolet.fnk
+   :language: finkel
 
 Note that single ``macrolet`` form can define multiple temporary
 macros.
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed macrolet.sk
+   $ finkel make -fno-code -ddump-parsed macrolet.fnk
 
    ==================== Parser ====================
    module Main where
@@ -98,36 +98,36 @@ macros.
           putStrLn "Goodbye."
 
 
-   [1 of 1] Compiling Main             ( macrolet.sk, nothing )
+   [1 of 1] Compiling Main             ( macrolet.fnk, nothing )
 
 
 Loading Macros With ``require``
 -------------------------------
 
 Another way to add macros to the current module is to ``require`` a
-module containing macros. Open a file named ``RequireMe.sk`` and save
+module containing macros. Open a file named ``RequireMe.fnk`` and save
 the following code:
 
-.. literalinclude:: ../code/macro/RequireMe.sk
-   :language: sk
+.. literalinclude:: ../code/macro/RequireMe.fnk
+   :language: finkel
 
 Note that the ``RequireMe`` module has the ``import`` of
-``SK.Prelude`` inside ``defmodule``. This is because the macros
+``Finkel.Prelude`` inside ``defmodule``. This is because the macros
 defined in ``RequireMe`` are not for itself, but other modules.
 
-Next, open and edit another file named ``require.sk`` to require the
+Next, open and edit another file named ``require.fnk`` to require the
 ``RequireMe`` module:
 
-.. literalinclude:: ../code/macro/require.sk
-   :language: sk
+.. literalinclude:: ../code/macro/require.fnk
+   :language: finkel
 
 Compilation output:
 
 .. code-block:: console
 
-   $ sk make -dynamic-too RequireMe.sk require.sk
+   $ finkel make -dynamic-too RequireMe.fnk require.fnk
 
-   [1 of 2] Compiling RequireMe        ( RequireMe.sk, RequireMe.o )
+   [1 of 2] Compiling RequireMe        ( RequireMe.fnk, RequireMe.o )
 
    ==================== Parser ====================
    module Main where
@@ -138,19 +138,19 @@ Compilation output:
           putStrLn "Goodbye."
 
 
-   [2 of 2] Compiling Main             ( require.sk, require.o )
+   [2 of 2] Compiling Main             ( require.fnk, require.o )
    Linking doc/code/macro/require ...
 
 Unlike the previous two examples, one needs to generate an object code
 of the ``RequireMe`` module so that the macro functions defined in
-``RequireMe`` could be used in the file ``require.sk``.
+``RequireMe`` could be used in the file ``require.fnk``.
 
 
 .. note::
 
-   As of sk-kernel version 0.28.0.0, one may need to add
-   ``-dynamic-too`` option to the ``sk`` executable when compiling a
-   source code file containing ``require``.
+   As of finkel-kernel version 0.28.0.0, one may need to add
+   ``-dynamic-too`` option to the ``finkel`` executable when compiling
+   a source code file containing ``require``.
 
 
 Quasiquote, Unquote, And Unquote-Splice
@@ -159,10 +159,10 @@ Quasiquote, Unquote, And Unquote-Splice
 Macro can *unquote* and *unquote-splice* a form inside
 *quasiquote*.
 
-Open a new file named ``unquote.sk`` and save the following contents:
+Open a new file named ``unquote.fnk`` and save the following contents:
 
-.. literalinclude:: ../code/macro/unquote.sk
-   :language: sk
+.. literalinclude:: ../code/macro/unquote.fnk
+   :language: finkel
 
 The example defines two macros: ``uq1`` and ``uq2``. Both macros use
 ````` (back-tick) instead of ``'`` in body expression.
@@ -176,7 +176,7 @@ Observing parsed result with ``-ddump-parsed``:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed unquote.sk
+   $ finkel make -fno-code -ddump-parsed unquote.fnk
 
    ==================== Parser ====================
    module Main where
@@ -186,7 +186,7 @@ Observing parsed result with ``-ddump-parsed``:
           putStrLn "uq2: arg = \"bar\""
 
 
-   [1 of 1] Compiling Main             ( unquote.sk, nothing )
+   [1 of 1] Compiling Main             ( unquote.fnk, nothing )
 
 Parsed Haskell representation shows ``++`` in the expanded form of
 ``uq1`` macro. Expanded result of ``uq2`` evaluates ``++`` at the time
@@ -196,14 +196,14 @@ of macro expansion, so the resulting form of ``uq2`` is a literal
 Inside the quasi-quoted form, ``,@`` is used to unquote-splice a list
 form. The ``,@`` can unquote-splice a quoted list and a Haskell list.
 
-.. literalinclude:: ../code/macro/unquote-splice.sk
-   :language: sk
+.. literalinclude:: ../code/macro/unquote-splice.fnk
+   :language: finkel
 
 Observing parsed Haskell code:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed unquote-splice.sk
+   $ finkel make -fno-code -ddump-parsed unquote-splice.fnk
 
    ==================== Parser ====================
    module Main where
@@ -213,7 +213,7 @@ Observing parsed Haskell code:
           putStrLn (concat ["foo", "bar", "buzz"])
 
 
-   [1 of 1] Compiling Main             ( unquote-splice.sk, nothing )
+   [1 of 1] Compiling Main             ( unquote-splice.fnk, nothing )
 
 
 Getting Macro Arguments As A List
@@ -223,14 +223,14 @@ Macro can take its entire argument as a list form. Below example codes
 show a macro which takes entire arguments passed to it as a list named
 ``args``:
 
-.. literalinclude:: ../code/macro/arglist.sk
-   :language: sk
+.. literalinclude:: ../code/macro/arglist.fnk
+   :language: finkel
 
 Parsed Haskell code:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed arglist.sk
+   $ finkel make -fno-code -ddump-parsed arglist.fnk
 
    ==================== Parser ====================
    module Main where
@@ -238,7 +238,7 @@ Parsed Haskell code:
    main = putStrLn (unwords ["foo", "bar", "buzz"])
 
 
-   [1 of 1] Compiling Main             ( arglist.sk, nothing )
+   [1 of 1] Compiling Main             ( arglist.fnk, nothing )
 
 
 Getting Values From Macro Arguments
@@ -246,8 +246,8 @@ Getting Values From Macro Arguments
 
 One can obtain Haskell values from arguments passed to macro:
 
-.. literalinclude:: ../code/macro/fib-macro.sk
-   :language: sk
+.. literalinclude:: ../code/macro/fib-macro.fnk
+   :language: finkel
 
 The above example applies the ``fromCode`` function to the macro
 argument to get an ``Int`` value from the code object. To return the
@@ -260,7 +260,7 @@ Sample compilation output:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed fib-macro.sk
+   $ finkel make -fno-code -ddump-parsed fib-macro.fnk
 
    ==================== Parser ====================
    module Main where
@@ -268,21 +268,22 @@ Sample compilation output:
    main = print 55
 
 
-   [1 of 1] Compiling Main             ( fib-macro.sk, nothing )
+   [1 of 1] Compiling Main             ( fib-macro.fnk, nothing )
 
 
 Special forms
 -------------
 
-The sk core keywords are implemented as macros made from sk kernel.
-Details of sk core keywords are described in the `haddock API
-documentation <https://hackage.haskell.org>`_ of the ``sk-core``
+The Finkel core keywords are implemented as macros made from Finkel
+kernel.  Details of Finkel core keywords are described in the `haddock API
+documentation <https://hackage.haskell.org>`_ of the ``finkel-core``
 package.
 
-This section explains built-in macros in the sk kernel language. These
-built-in macros are sometimes called *special forms*. All special
-forms start with ``:``, followed by lower case alphabetic character,
-to avoid name conflict with existing Haskell functions.
+This section explains built-in macros in the Finkel kernel
+language. These built-in macros are sometimes called *special
+forms*. All special forms start with ``:``, followed by lower case
+alphabetic character, to avoid name conflict with existing Haskell
+functions.
 
 
 :begin
@@ -293,14 +294,14 @@ multiple top-level declarations. Following code shows an example use
 of ``:begin``, to return type synonym declarations from the
 ``nat-types`` macro:
 
-.. literalinclude:: ../code/macro/begin.sk
-   :language: sk
+.. literalinclude:: ../code/macro/begin.fnk
+   :language: finkel
 
 Observing parsed Haskell code:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed begin.sk
+   $ finkel make -fno-code -ddump-parsed begin.fnk
 
    ==================== Parser ====================
    module Main where
@@ -317,7 +318,7 @@ Observing parsed Haskell code:
    main = print (Proxy :: (Proxy N6))
 
 
-   [1 of 1] Compiling Main             ( begin.sk, nothing )
+   [1 of 1] Compiling Main             ( begin.fnk, nothing )
 
 
 :eval-when-compile
@@ -333,14 +334,14 @@ function ``wrap-actions`` is defined inside ``:eval-when-compile``, so
 that later the compiler can use the function in the ``doactions``
 macro.
 
-.. literalinclude:: ../code/macro/eval-when-compile.sk
-   :language: sk
+.. literalinclude:: ../code/macro/eval-when-compile.fnk
+   :language: finkel
 
 Parsed Haskell code:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed eval-when-compile.sk
+   $ finkel make -fno-code -ddump-parsed eval-when-compile.fnk
 
    ==================== Parser ====================
    module Main where
@@ -358,7 +359,7 @@ Parsed Haskell code:
           bar 10 16
 
 
-   [1 of 1] Compiling Main             ( eval-when-compile.sk, nothing )
+   [1 of 1] Compiling Main             ( eval-when-compile.fnk, nothing )
 
 
 :quote
@@ -367,23 +368,23 @@ Parsed Haskell code:
 The ``:quote`` special form is used for quoting the given value as a
 code object. The ``'`` is syntax sugar of this special
 form. Internally, quoted values are passed to functions exported from
-the sk kernel package.
+the ``finkel-kernel`` package.
 
-Following code shows how underlying sk kernel functions are applied to
-literal values in source code:
+Following code shows how underlying Finkel kernel functions are
+applied to literal values in source code:
 
-.. literalinclude:: ../code/macro/quote.sk
-   :language: sk
+.. literalinclude:: ../code/macro/quote.fnk
+   :language: finkel
 
 Parsed Haskell source:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed quote.sk
+   $ finkel make -fno-code -ddump-parsed quote.fnk
 
    ==================== Parser ====================
    module Main where
-   import SK.Prelude
+   import Finkel.Prelude
    main :: IO ()
    main
      = do putStrLn ";;; quote ;;;"
@@ -395,7 +396,7 @@ Parsed Haskell source:
           print (qString "string")
 
 
-   [1 of 1] Compiling Main             ( quote.sk, nothing )
+   [1 of 1] Compiling Main             ( quote.fnk, nothing )
 
 
 :quasiquote
@@ -407,15 +408,15 @@ syntax sugar. Inside a quasi-quoted form, ``:unquote`` and
 code. Indeed, ``,`` is a syntax sugar of ``:unquote``, and ``,@`` is a
 syntax sugar of ``:unquote-splice``.
 
-.. literalinclude:: ../code/macro/quasiquote.sk
-   :language: sk
+.. literalinclude:: ../code/macro/quasiquote.fnk
+   :language: finkel
 
 Above example prints ``True``:
 
 .. code-block:: console
 
-   $ sk make -o a.out quasiquote.sk
-   [1 of 1] Compiling Main             ( quasiquote.sk, quasiquote.o )
+   $ finkel make -o a.out quasiquote.fnk
+   [1 of 1] Compiling Main             ( quasiquote.fnk, quasiquote.o )
    Linking a.out ...
    $ ./a.out
    True
@@ -429,25 +430,25 @@ expansion. It also adds macros defined in the required module to the
 current compiler environment. This special form is used by the
 ``defmodule`` macro.
 
-.. literalinclude:: ../code/macro/raw-require.sk
-   :language: sk
+.. literalinclude:: ../code/macro/raw-require.fnk
+   :language: finkel
 
 Parsed Haskell code:
 
 .. code-block:: console
 
-   $ sk make -fno-code -ddump-parsed raw-reruire.sk
+   $ finkel make -fno-code -ddump-parsed raw-reruire.fnk
 
    ==================== Parser ====================
    module Main where
    main :: IO ()
    main
-     = do putStrLn ";;; raw-require.sk ;;;"
+     = do putStrLn ";;; raw-require.fnk ;;;"
           putStrLn "Hello macro!"
           putStrLn "Goodbye."
 
 
-   [1 of 1] Compiling Main             ( raw-require.sk, nothing )
+   [1 of 1] Compiling Main             ( raw-require.fnk, nothing )
 
 
 :with-macro
@@ -456,4 +457,4 @@ Parsed Haskell code:
 The ``:with-macro`` is the underlying special form for ``macrolet``
 macro. This special form is perhaps not useful unless one wants to
 write an alternative implementation of the ``macrolet`` macro. See the
-source code of ``SK.Core`` module for usage.
+source code of ``Finkel.Core`` module for usage.

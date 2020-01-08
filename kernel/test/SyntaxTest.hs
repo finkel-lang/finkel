@@ -1,8 +1,8 @@
 {-# LANGUAGE CPP #-}
 -- | Tests for syntax.
 --
--- All files under "test/data" directory with '.sk' extension (i.e.:
--- "test/data/*.sk") are read and compiled, then type checked.
+-- All files under "test/data" directory with '.fnk' extension (i.e.:
+-- "test/data/*.fnk") are read and compiled, then type checked.
 --
 module SyntaxTest (syntaxTests) where
 
@@ -27,9 +27,9 @@ import Test.Hspec
 -- process
 import System.Process (readProcessWithExitCode)
 
--- sk-kernel
-import Language.SK.Make
-import Language.SK.SKC
+-- finkel-kernel
+import Language.Finkel.Make
+import Language.Finkel.Fnk
 
 -- Internal
 import TestAux
@@ -41,11 +41,11 @@ mkTest path = do
         exist <- doesFileExist file
         when exist (removeFile file)
   tmpdir <- runIO getTemporaryDirectory
-  skORef <- mkRef "skORef"
+  fnkORef <- mkRef "fnkORef"
   hsORef <- mkRef "hsORef"
-  let skEnv = defaultSkEnv { envSilent = True
+  let fnkEnv = defaultFnkEnv { envSilent = True
                            , envHsDir = Just odir }
-      odir = tmpdir </> "sk_mk_test"
+      odir = tmpdir </> "fnk_mk_test"
       aDotOut = odir </> "a.out"
       dotHs = odir </> takeBaseName path <.> "hs"
       dotTix = "a.out.tix"
@@ -53,17 +53,17 @@ mkTest path = do
       runDotO = readProcessWithExitCode aDotOut [] ""
   runIO (createDirectoryIfMissing True odir)
   beforeAll_ (removeArtifacts syndir) $ describe path $ do
-    it "should compile with skc" $ do
+    it "should compile with Fnk" $ do
       let task = do
             initSessionForTest
             make [(noLoc path, Nothing)] False True (Just aDotOut)
-      ret <- runSkc task skEnv
+      ret <- runFnk task fnkEnv
       ret `shouldBe` ()
 
-    it "should run executable compiled with skc" $ do
+    it "should run executable compiled with Fnk" $ do
       removeWhenExist dotTix
       (ecode, stdout, _stderr) <- runDotO
-      writeIORef skORef stdout
+      writeIORef fnkORef stdout
       ecode `shouldBe` ExitSuccess
 
     it "should dump Haskell source" $ do
@@ -85,7 +85,7 @@ mkTest path = do
 #endif
       case skipThisTest path of
         (True, reason) -> pendingWith reason
-        _ -> runSkc task skEnv >>= \ret -> ret `shouldBe` ()
+        _ -> runFnk task fnkEnv >>= \ret -> ret `shouldBe` ()
 
     it "should run executable compiled from Haskell code" $ do
       removeWhenExist dotTix
@@ -93,10 +93,10 @@ mkTest path = do
       writeIORef hsORef stdout
       ecode `shouldBe` ExitSuccess
 
-    it "should have same output from skc and ghc executables" $ do
-      sko <- readIORef skORef
+    it "should have same output from fnkc and ghc executables" $ do
+      fnko <- readIORef fnkORef
       hso <- readIORef hsORef
-      sko `shouldBe` hso
+      fnko `shouldBe` hso
 
 syntaxTests :: [FilePath] -> Spec
 syntaxTests = mapM_ mkTest
