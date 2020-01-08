@@ -1,0 +1,4 @@
+;;;; File: hello.sk
+
+(defn main
+  (putStrLn "Hello, World!"))

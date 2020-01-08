@@ -1,0 +1,12 @@
+;;;; File: require.sk
+
+#p(OPTIONS_GHC -ddump-parsed)
+
+(defmodule Main
+  (require
+   (RequireMe (say-hello say-bye))))
+
+(defn (:: main (IO ()))
+  (do (putStrLn ";;; require ;;;")
+      (say-hello)
+      (say-bye)))

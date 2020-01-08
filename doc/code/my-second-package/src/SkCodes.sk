@@ -1,0 +1,10 @@
+;;;; File: my-second-package/src/SkCodes.sk
+
+(defmodule SkCodes
+  (export skfactorial))
+
+(defn (:: skfactorial (-> Int Int))
+  [n]
+  (if (<= n 1)
+      n
+      (* n (skfactorial (- n 1)))))

@@ -1,0 +1,15 @@
+;;;; File: quasiquote.sk
+
+(defmodule Main
+  (import (SK.Prelude)))
+
+(defn (:: with-sugar [Code])
+  [`(foo ,(length "123") bar)
+   `(foo ,@[True False] bar)])
+
+(defn (:: without-sugar [Code])
+  [(:quasiquote (foo (:unquote (length "123")) bar))
+   (:quasiquote (foo (:unquote-splice [True False]) bar))])
+
+(defn (:: main (IO ()))
+  (print (== with-sugar without-sugar)))

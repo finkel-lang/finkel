@@ -1,0 +1,15 @@
+;;; File: eval-when.sk
+
+(defmodule Main
+  (require (SK.Prelude)))
+
+(eval-when (compile)
+  (defmacro say-hello []
+    '(putStrLn "Hello macro!"))
+  (defmacro say-bye []
+    '(putStrLn "Goodbye.")))
+
+(defn (:: main (IO ()))
+  (do (putStrLn ";;; eval-when ;;;")
+      (say-hello)
+      (say-bye)))

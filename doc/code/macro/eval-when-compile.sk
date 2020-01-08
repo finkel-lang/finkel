@@ -1,0 +1,26 @@
+;;;; File: eval-when-compile.sk
+
+(defmodule Main
+  (require (SK.Prelude)))
+
+(:eval-when-compile
+  (defn (:: wrap-actions (-> [Code] Code))
+    [actions]
+    `(do ,@actions)))
+
+(macrolet ((doactions [xs]
+             (case (unCode xs)
+               (HsList actions) (wrap-actions actions)
+               _ (error "doactions: expecting HsList"))))
+  (defn (:: foo (-> Int (IO ())))
+    [n]
+    (doactions [(putStrLn "from foo")
+                (print (+ n 1))]))
+  (defn (:: bar (-> Int Int (IO ())))
+    [a b]
+    (doactions [(putStrLn "from bar")
+                (print (+ a (* b 2)))])))
+
+(defn (:: main (IO ()))
+  (do (foo 41)
+      (bar 10 16)))

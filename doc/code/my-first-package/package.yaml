@@ -1,0 +1,21 @@
+# File: my-first-package/package.yaml
+
+name: my-first-package
+version: 0.1.0.0
+
+extra-source-files:
+  - src/**.sk
+
+custom-setup:
+  dependencies:
+    - base
+    - Cabal
+    - sk-tool
+
+library:
+  source-dirs: src
+  exposed-modules: MyFirstPackage
+  build-tools:
+    - sk-tool:sk
+  dependencies:
+    - base

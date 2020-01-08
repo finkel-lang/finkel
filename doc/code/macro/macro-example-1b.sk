@@ -1,0 +1,10 @@
+(defmodule Main
+  (load (SK.Prelude)))
+
+(macrolet ((m1 []
+             `(putStrLn "m1: Hello macro!"))
+           (m2 [x]
+             `(putStrLn ,(++ "m2: got " (show x)))))
+  (defn (:: main (IO ()))
+    (do (m1)
+        (m2 True))))

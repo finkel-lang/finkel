@@ -1,0 +1,32 @@
+cabal-version: 1.24
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: ef3ece3235324aaff1535b0dfb01b00793108870e0639c81dfb8d2500e97d375
+
+name:           my-first-package
+version:        0.1.0.0
+build-type:     Custom
+extra-source-files:
+    src/MyFirstPackage.sk
+
+custom-setup
+  setup-depends:
+      Cabal
+    , base
+    , sk-tool
+
+library
+  exposed-modules:
+      MyFirstPackage
+  other-modules:
+      Paths_my_first_package
+  hs-source-dirs:
+      src
+  build-tool-depends:
+      sk-tool:sk
+  build-depends:
+      base
+  default-language: Haskell2010

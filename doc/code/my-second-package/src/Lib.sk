@@ -1,0 +1,10 @@
+;;;; File: my-second-package/src/Lib.sk
+
+(defmodule Lib
+  (export someFunc)
+  (import (HsCodes (hsfactorial skfactorial))))
+
+(defn (:: someFunc (IO ()))
+  (do (putStrLn "someFunc")
+      (print (hsfactorial 10))
+      (print (skfactorial 10))))

@@ -1,0 +1,16 @@
+;;;; File: raw-require.sk
+
+(:require SK.Prelude)
+
+(defmodule Main)
+
+(eval-when (compile)
+  (defmacro say-hello []
+    '(putStrLn "Hello macro!"))
+  (defmacro say-bye []
+    '(putStrLn "Goodbye.")))
+
+(defn (:: main (IO ()))
+  (do (putStrLn ";;; raw-require.sk ;;;")
+      (say-hello)
+      (say-bye)))
