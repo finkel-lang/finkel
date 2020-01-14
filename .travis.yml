@@ -1,0 +1,29 @@
+language: c
+
+cache:
+  directories:
+    - $HOME/.stack
+
+addons:
+  apt:
+    packages:
+      - libgmp-dev
+
+env:
+  matrix:
+    - RESOLVER="lts-11"
+    - RESOLVER="lts-12"
+    - RESOLVER="lts-14"
+
+before_install:
+  # Prepare stack executable
+  - mkdir -p ~/.local/bin
+  - export PATH=$HOME/.local/bin:$PATH
+  - travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+
+install:
+  - stack --resolver=${RESOLVER} --no-terminal --install-ghc test --only-dependencies
+
+script:
+  - stack --resolver=${RESOLVER} --no-terminal build --fast --test --coverage --no-run-tests finkel-kernel finkel-setup finkel-lang p02 finkel-tool
+  - stack --resolver=${RESOLVER} --no-terminal build --fast --test --coverage finkel-kernel finkel-setup finkel-lang finkel-tool
