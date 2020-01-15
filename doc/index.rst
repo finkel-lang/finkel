@@ -1,11 +1,11 @@
-Finkel Documentation
-====================
+Finkel
+======
 
 Introduction
 ------------
 
 Welcome to the documentation for the *Finkel programming
-language*. Finkel is a statically typed, purely functional,
+language*. Finkel is a statically typed, purely functional, and
 non-strict-by-default dialect of the `Lisp
 <https://en.wikipedia.org/wiki/Lisp_(programming_language)>`_
 programming language. Or in other words, **Haskell in
