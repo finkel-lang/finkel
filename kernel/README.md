@@ -1,7 +1,8 @@
 finkel-kernel
 =============
 
-Finkel is a purely functional, statically typed, non-strict dialect of
-Lisp programming language and implementation targeting GHC.
+Package for Finkel language kernel.
 
-In other words, Haskell in S-expression.
+See the [documentation][doc] for more details.
+
+[doc]: https://finkel.readthedocs.io/en/latest/
