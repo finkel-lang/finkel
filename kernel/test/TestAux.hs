@@ -61,7 +61,9 @@ resetPackageEnv = do
   dflags0 <- getDynFlags
   let dflags1 = dflags0 { packageEnv = Nothing }
       flagstrs = map noLoc ["-package", "finkel-kernel"
-                           ,"-package", "ghc-prim"]
+                           ,"-package", "ghc-prim"
+                           ,"-package", "array"
+                           ,"-package", "containers"]
   (dflags2, _, _) <- parseDynamicFlagsCmdLine dflags1 flagstrs
   setDynFlags dflags2
 #endif
