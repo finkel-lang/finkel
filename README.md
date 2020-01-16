@@ -1,11 +1,13 @@
 # Finkel
 
 [![Build status][build-status]][travis]
+[![Documentation Status][doc-status]][doc]
 
 Finkel is a statically typed, purely functional, non-strict-by-default
 dialect of the [Lisp][lisp] programming language.
 
 Or in other words, [Haskell][haskell] in S-expression.
+
 
 ## Sample code
 
@@ -47,8 +49,10 @@ fibonacci number of the argument.")
 
 See the [documentation][doc] for more details.
 
-[travis]: https://travis-ci.org/finkel-lang/finkel
+
 [build-status]: https://travis-ci.org/finkel-lang/finkel.svg?branch=master
+[travis]: https://travis-ci.org/finkel-lang/finkel
+[doc-status]: http://readthedocs.org/projects/finkel/badge/?version=latest
+[doc]: https://finkel.readthedocs.io/en/latest/
 [lisp]: https://en.wikipedia.org/wiki/Lisp_(programming_language)
 [haskell]: https://haskell.org
-[doc]: https://finkel.readthedocs.io/en/latest/
