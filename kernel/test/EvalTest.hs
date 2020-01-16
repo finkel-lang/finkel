@@ -1,32 +1,34 @@
 module EvalTest (evalTests) where
 
 -- base
-import Unsafe.Coerce
+import           Unsafe.Coerce
 
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
 
 -- ghc
-import DynFlags (HasDynFlags(..))
-import GHC (getPrintUnqual)
-import Outputable (showSDocForUser)
-import PprTyThing (pprTypeForUser)
+import           DynFlags                   (HasDynFlags (..))
+import           GHC                        (getPrintUnqual)
+import           Outputable                 (showSDocForUser)
+import           PprTyThing                 (pprTypeForUser)
 
 -- hspec
-import Test.Hspec
+import           Test.Hspec
 
 -- finkel-kernel
-import Language.Finkel.Builder (Builder)
-import Language.Finkel.Eval (evalExpr, evalExprType, evalTypeKind)
-import Language.Finkel.Lexer (evalSP)
-import Language.Finkel.Expand (expands, withExpanderSettings)
-import Language.Finkel.Make (buildHsSyn, defaultFnkEnv)
-import Language.Finkel.Reader (sexprs)
-import Language.Finkel.Fnk ( Fnk, FnkEnv(..), failS, runFnk )
-import Language.Finkel.Syntax (parseExpr, parseType)
+import           Language.Finkel.Builder    (Builder)
+import           Language.Finkel.Eval       (evalExpr, evalExprType,
+                                             evalTypeKind)
+import           Language.Finkel.Expand     (expands, withExpanderSettings)
+import           Language.Finkel.Fnk        (Fnk, FnkEnv (..), failS,
+                                             runFnk)
+import           Language.Finkel.Lexer      (evalSP)
+import           Language.Finkel.Make       (buildHsSyn, defaultFnkEnv)
+import           Language.Finkel.Reader     (sexprs)
+import           Language.Finkel.Syntax     (parseExpr, parseType)
 
 -- Test internal
-import TestAux
+import           TestAux
 
 evalTests :: [FilePath] -> Spec
 evalTests exprFiles = do

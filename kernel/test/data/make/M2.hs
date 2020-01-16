@@ -1,7 +1,7 @@
 module M2 where
 
+import           Data.List
 import qualified M1
-import Data.List
 
 main :: IO ()
 main = do

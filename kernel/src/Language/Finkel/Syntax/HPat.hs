@@ -1,30 +1,32 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 -- | Syntax for patterns.
 module Language.Finkel.Syntax.HPat where
 
 -- base
-import Data.List (foldl1')
+import Data.List                       (foldl1')
 
 -- ghc
-import BasicTypes (Boxity(..), SourceText(..))
-import FastString (headFS, nullFS, tailFS)
-import HsLit (HsLit(..))
-import HsPat (HsRecFields(..), Pat(..))
-import HsTypes (HsConDetails(..))
-import HsUtils (mkHsIsString, mkLHsSigWcType, mkNPat, nlWildPat)
-import Lexeme (isLexCon, isLexConId, isLexConSym, isLexSym)
-import SrcLoc (GenLocated(..))
+import BasicTypes                      (Boxity (..), SourceText (..))
+import FastString                      (headFS, nullFS, tailFS)
+import HsLit                           (HsLit (..))
+import HsPat                           (HsRecFields (..), Pat (..))
+import HsTypes                         (HsConDetails (..))
+import HsUtils                         (mkHsIsString, mkLHsSigWcType,
+                                        mkNPat, nlWildPat)
+import Lexeme                          (isLexCon, isLexConId, isLexConSym,
+                                        isLexSym)
+import SrcLoc                          (GenLocated (..))
 
 #if !MIN_VERSION_ghc (8,8,0)
-import SrcLoc (getLoc)
+import SrcLoc                          (getLoc)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import HsExtension (noExt)
+import HsExtension                     (noExt)
 #else
-import PlaceHolder (placeHolderType)
+import PlaceHolder                     (placeHolderType)
 #endif
 
 -- Internal

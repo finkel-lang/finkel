@@ -47,47 +47,50 @@ module Language.Finkel.Fnk
   ) where
 
 -- base
-import Control.Exception (Exception(..), throwIO)
-import Control.Monad (when)
+import           Control.Exception      (Exception (..), throwIO)
+import           Control.Monad          (when)
 
 #if !MIN_VERSION_ghc (8,8,0)
-import Control.Monad.Fail (MonadFail(..))
+import           Control.Monad.Fail     (MonadFail (..))
 #endif
 
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.IORef ( IORef, atomicModifyIORef', newIORef, readIORef
-                  , writeIORef )
-import System.Environment (lookupEnv)
-import System.IO (hPutStrLn, stderr)
+import           Control.Monad.IO.Class (MonadIO (..))
+import           Data.IORef             (IORef, atomicModifyIORef',
+                                         newIORef, readIORef, writeIORef)
+import           System.Environment     (lookupEnv)
+import           System.IO              (hPutStrLn, stderr)
 
 -- containers
-import qualified Data.Map as Map
+import qualified Data.Map               as Map
 
 #if !MIN_VERSION_ghc(8,4,0)
-import qualified Data.IntSet as IntSet
+import qualified Data.IntSet            as IntSet
 #endif
 
 -- ghc
-import Bag (unitBag)
-import DynFlags ( DynFlags(..), HasDynFlags(..), Language(..)
-                , unsafeGlobalDynFlags )
-import FastString (FastString, fsLit, unpackFS)
-import ErrUtils (mkErrMsg)
-import Exception (ExceptionMonad(..), ghandle)
-import GHC (runGhc)
-import GhcMonad ( Ghc(..), GhcMonad(..), getSessionDynFlags
-                , modifySession )
-import HsImpExp (simpleImportDecl)
-import HscMain (Messager, batchMsg)
-import HscTypes ( HomeModInfo, HscEnv(..), InteractiveContext(..)
-                , InteractiveImport(..), TyThing(..), mkSrcErr )
-import InteractiveEval (setContext)
-import Module (ModuleName, mkModuleName)
-import Outputable ( alwaysQualify, neverQualify, showSDocForUser, text
-                  , ppr )
-import SrcLoc (GenLocated(..), Located)
-import UniqSupply (mkSplitUniqSupply, uniqFromSupply)
-import Var (varType)
+import           Bag                    (unitBag)
+import           DynFlags               (DynFlags (..), HasDynFlags (..),
+                                         Language (..),
+                                         unsafeGlobalDynFlags)
+import           ErrUtils               (mkErrMsg)
+import           Exception              (ExceptionMonad (..), ghandle)
+import           FastString             (FastString, fsLit, unpackFS)
+import           GHC                    (runGhc)
+import           GhcMonad               (Ghc (..), GhcMonad (..),
+                                         getSessionDynFlags, modifySession)
+import           HscMain                (Messager, batchMsg)
+import           HscTypes               (HomeModInfo, HscEnv (..),
+                                         InteractiveContext (..),
+                                         InteractiveImport (..),
+                                         TyThing (..), mkSrcErr)
+import           HsImpExp               (simpleImportDecl)
+import           InteractiveEval        (setContext)
+import           Module                 (ModuleName, mkModuleName)
+import           Outputable             (alwaysQualify, neverQualify, ppr,
+                                         showSDocForUser, text)
+import           SrcLoc                 (GenLocated (..), Located)
+import           UniqSupply             (mkSplitUniqSupply, uniqFromSupply)
+import           Var                    (varType)
 
 #if MIN_VERSION_ghc(8,4,0)
 import qualified EnumSet
@@ -95,11 +98,11 @@ import qualified EnumSet
 
 -- ghc-boot
 #if MIN_VERSION_ghc(8,4,0)
-import GHC.LanguageExtensions as LangExt
+import           GHC.LanguageExtensions as LangExt
 #endif
 
 -- Internal
-import Language.Finkel.Form
+import           Language.Finkel.Form
 
 
 -- ---------------------------------------------------------------------
@@ -173,8 +176,8 @@ data Macro
 instance Show Macro where
   showsPrec _ m =
     case m of
-      Macro _      -> showString "<macro>"
-      SpecialForm _-> showString "<special-form>"
+      Macro _       -> showString "<macro>"
+      SpecialForm _ -> showString "<special-form>"
 
 -- | Type synonym to express mapping of macro name to 'Macro' data.
 type EnvMacros = Map.Map FastString Macro
@@ -187,42 +190,42 @@ type MakeFunction =
 -- | Environment state in 'Fnk'.
 data FnkEnv = FnkEnv
    { -- | Macros accessible in current compilation context.
-     envMacros :: EnvMacros
+     envMacros                 :: EnvMacros
      -- | Temporary macros in current compilation context.
-   , envTmpMacros :: [EnvMacros]
+   , envTmpMacros              :: [EnvMacros]
      -- | Default set of macros, these macros will be used when
      -- resetting 'FnkEnv'.
-   , envDefaultMacros :: EnvMacros
+   , envDefaultMacros          :: EnvMacros
      -- | Flag to hold debug setting.
-   , envDebug :: Bool
+   , envDebug                  :: Bool
      -- | Modules to import to context.
-   , envContextModules :: [String]
+   , envContextModules         :: [String]
      -- | Default values to reset the language extensions.
-   , envDefaultLangExts :: (Maybe Language, FlagSet)
+   , envDefaultLangExts        :: (Maybe Language, FlagSet)
      -- | Flag for controling informative output.
-   , envSilent :: Bool
+   , envSilent                 :: Bool
 
      -- | Function to compile required modules, when
      -- necessary. Arguments are force recompilation flag and module
      -- name. Returned values are list of pair of name and info of the
      -- compiled home module.
-   , envMake :: Maybe MakeFunction
+   , envMake                   :: Maybe MakeFunction
      -- | 'DynFlags' used by function in 'envMake' field.
-   , envMakeDynFlags :: Maybe DynFlags
+   , envMakeDynFlags           :: Maybe DynFlags
      -- | Messager used in make.
-   , envMessager :: Messager
+   , envMessager               :: Messager
      -- | Required modules names in current target.
-   , envRequiredModuleNames :: [Located String]
+   , envRequiredModuleNames    :: [Located String]
      -- | Compile home modules during macro-expansion of /require/.
-   , envCompiledInRequire :: [(ModuleName, HomeModInfo)]
+   , envCompiledInRequire      :: [(ModuleName, HomeModInfo)]
 
      -- | Whether to dump Haskell source code or not.
-   , envDumpHs :: Bool
+   , envDumpHs                 :: Bool
      -- | Directory to save generated Haskell source codes.
-   , envHsDir :: Maybe FilePath
+   , envHsDir                  :: Maybe FilePath
 
      -- | Lib directory passed to 'runGhc'.
-   , envLibDir :: Maybe FilePath
+   , envLibDir                 :: Maybe FilePath
 
      -- | Whether to use qualified name for primitive functions used in
      -- quoting codes.

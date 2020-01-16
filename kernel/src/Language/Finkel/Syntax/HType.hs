@@ -1,55 +1,71 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE ViewPatterns      #-}
 -- | Syntax for type.
 module Language.Finkel.Syntax.HType where
 
 -- ghc
-import BasicTypes (Boxity(..), SourceText(..))
-import FastString (headFS, lengthFS, nullFS, tailFS)
-import HsDoc (LHsDocString)
-import HsTypes ( HsSrcBang(..), HsType(..), HsTupleSort(..), HsTyLit(..)
-               , LHsTyVarBndr, SrcStrictness(..)
-               , SrcUnpackedness(..), mkAnonWildCardTy
-               , mkHsAppTy, mkHsAppTys, mkHsOpTy )
-import Lexeme (isLexCon, isLexConSym, isLexVarSym)
-import OccName (NameSpace, dataName, tcName, tvName)
-import RdrName (getRdrName, mkQual, mkUnqual)
-import RdrHsSyn (setRdrNameSpace)
-import SrcLoc (GenLocated(..), Located, getLoc)
-import TysPrim (funTyCon)
-import TysWiredIn (consDataCon, listTyCon_RDR, tupleTyCon)
+import           BasicTypes                      (Boxity (..),
+                                                  SourceText (..))
+import           FastString                      (headFS, lengthFS, nullFS,
+                                                  tailFS)
+import           HsDoc                           (LHsDocString)
+import           HsTypes                         (HsSrcBang (..),
+                                                  HsTupleSort (..),
+                                                  HsTyLit (..),
+                                                  HsType (..),
+                                                  LHsTyVarBndr,
+                                                  SrcStrictness (..),
+                                                  SrcUnpackedness (..),
+                                                  mkAnonWildCardTy,
+                                                  mkHsAppTy, mkHsAppTys,
+                                                  mkHsOpTy)
+import           Lexeme                          (isLexCon, isLexConSym,
+                                                  isLexVarSym)
+import           OccName                         (NameSpace, dataName,
+                                                  tcName, tvName)
+import           RdrHsSyn                        (setRdrNameSpace)
+import           RdrName                         (getRdrName, mkQual,
+                                                  mkUnqual)
+import           SrcLoc                          (GenLocated (..), Located,
+                                                  getLoc)
+import           TysPrim                         (funTyCon)
+import           TysWiredIn                      (consDataCon,
+                                                  listTyCon_RDR,
+                                                  tupleTyCon)
 
 #if MIN_VERSION_ghc (8,8,0)
-import BasicTypes (PprPrec, PromotionFlag(..), funPrec)
-import HsExtension (IdP, noExt)
-import qualified HsTypes (parenthesizeHsType)
-import TysWiredIn (eqTyCon_RDR)
+import           BasicTypes                      (PprPrec,
+                                                  PromotionFlag (..),
+                                                  funPrec)
+import           HsExtension                     (IdP, noExt)
+import qualified HsTypes                         (parenthesizeHsType)
+import           TysWiredIn                      (eqTyCon_RDR)
 #elif MIN_VERSION_ghc (8,6,0)
-import BasicTypes (PprPrec, funPrec)
-import HsExtension (IdP, noExt)
-import HsTypes (Promoted (..))
-import qualified HsTypes (parenthesizeHsType)
-import PrelNames (eqTyCon_RDR)
+import           BasicTypes                      (PprPrec, funPrec)
+import           HsExtension                     (IdP, noExt)
+import           HsTypes                         (Promoted (..))
+import qualified HsTypes                         (parenthesizeHsType)
+import           PrelNames                       (eqTyCon_RDR)
 #elif MIN_VERSION_ghc (8,4,0)
-import HsExtension (IdP)
-import TysWiredIn (starKindTyCon)
-import HsTypes (Promoted (..))
-import PlaceHolder (placeHolderKind)
-import PrelNames (eqTyCon_RDR)
+import           HsExtension                     (IdP)
+import           HsTypes                         (Promoted (..))
+import           PlaceHolder                     (placeHolderKind)
+import           PrelNames                       (eqTyCon_RDR)
+import           TysWiredIn                      (starKindTyCon)
 #else
 #define IdP {- empty -}
-import TysWiredIn (starKindTyCon)
-import HsTypes (Promoted (..))
-import PlaceHolder (placeHolderKind)
-import PrelNames (eqTyCon_RDR)
+import           HsTypes                         (Promoted (..))
+import           PlaceHolder                     (placeHolderKind)
+import           PrelNames                       (eqTyCon_RDR)
+import           TysWiredIn                      (starKindTyCon)
 #endif
 
 -- Internal
-import Language.Finkel.Builder
-import Language.Finkel.Form
-import Language.Finkel.Syntax.SynUtils
+import           Language.Finkel.Builder
+import           Language.Finkel.Form
+import           Language.Finkel.Syntax.SynUtils
 
 #include "Syntax.h"
 

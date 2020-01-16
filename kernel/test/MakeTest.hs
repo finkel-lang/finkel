@@ -4,25 +4,25 @@ module MakeTest
   ) where
 
 -- base
-import Control.Monad (void)
-import Data.List (isPrefixOf, tails)
-import System.FilePath ((</>))
+import Control.Monad                (void)
+import Data.List                    (isPrefixOf, tails)
+import System.FilePath              ((</>))
 
 -- ghc
-import DynFlags ( DynFlags(..), GhcLink(..), Way(..), interpWays
-                , parseDynamicFlagsCmdLine )
-import FastString (fsLit)
-import GHC (setSessionDynFlags )
-import GhcMonad (getSessionDynFlags)
-import SrcLoc (noLoc)
+import DynFlags                     (DynFlags (..), GhcLink (..), Way (..),
+                                     interpWays, parseDynamicFlagsCmdLine)
+import FastString                   (fsLit)
+import GHC                          (setSessionDynFlags)
+import GhcMonad                     (getSessionDynFlags)
+import SrcLoc                       (noLoc)
 
 -- hspec
 import Test.Hspec
 
 -- finkel-kernel
+import Language.Finkel.Fnk
 import Language.Finkel.Lexer
 import Language.Finkel.Make
-import Language.Finkel.Fnk
 import Language.Finkel.TargetSource
 
 -- Internal

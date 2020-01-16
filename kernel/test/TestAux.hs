@@ -9,26 +9,26 @@ module TestAux
   ) where
 
 -- base
-import Control.Monad (when)
-import Control.Monad.IO.Class (MonadIO(..))
-import System.Environment (lookupEnv)
+import Control.Monad          (when)
+import Control.Monad.IO.Class (MonadIO (..))
+import System.Environment     (lookupEnv)
 
 -- directory
-import System.Directory (getDirectoryContents, removeFile)
+import System.Directory       (getDirectoryContents, removeFile)
 
 -- filepath
-import System.FilePath ((</>), takeExtension)
+import System.FilePath        (takeExtension, (</>))
 
 -- ghc
-import DynFlags (DynFlags(..), HasDynFlags(..))
+import DynFlags               (DynFlags (..), HasDynFlags (..))
 #if !MIN_VERSION_ghc (8,4,4)
-import DynFlags (parseDynamicFlagsCmdLine)
-import SrcLoc (noLoc)
+import DynFlags               (parseDynamicFlagsCmdLine)
+import SrcLoc                 (noLoc)
 #endif
 
 -- fnk-kernel
-import Language.Finkel.Fnk (Fnk, setDynFlags)
-import Language.Finkel.Make (initSessionForMake)
+import Language.Finkel.Fnk    (Fnk, setDynFlags)
+import Language.Finkel.Make   (initSessionForMake)
 
 -- | Perform the first action when invoked from @stack@, other wise
 -- perform the second.

@@ -7,22 +7,20 @@
 module Main where
 
 -- base
-import Data.Function (on)
-import Data.List (unionBy)
+import Data.Function                      (on)
+import Data.List                          (unionBy)
 
 -- Cabal
-import Distribution.Simple ( defaultMainWithHooks
-                           , simpleUserHooks
-                           , UserHooks(..))
-import Distribution.Simple.Build (build)
+import Distribution.Simple                (UserHooks (..),
+                                           defaultMainWithHooks,
+                                           simpleUserHooks)
+import Distribution.Simple.Build          (build)
 import Distribution.Simple.LocalBuildInfo
-import Distribution.Simple.PreProcess (knownSuffixHandlers)
-import Distribution.Simple.Program.Db (updateProgram)
-import Distribution.Simple.Program.Types
-  ( ConfiguredProgram(..)
-  , ProgramLocation(..)
-  , simpleConfiguredProgram )
-
+import Distribution.Simple.PreProcess     (knownSuffixHandlers)
+import Distribution.Simple.Program.Db     (updateProgram)
+import Distribution.Simple.Program.Types  (ConfiguredProgram (..),
+                                           ProgramLocation (..),
+                                           simpleConfiguredProgram)
 
 main :: IO ()
 main = defaultMainWithHooks myHooks

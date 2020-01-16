@@ -2,17 +2,17 @@
 module Main where
 
 import Data.List
-import System.FilePath
 import System.Directory
+import System.FilePath
 
 import Test.Hspec
 
 import EmitTest
 import EvalTest
+import FnkTest
 import FormTest
 import MainTest
 import MakeTest
-import FnkTest
 import SyntaxTest
 
 getTestFiles :: String -> IO [FilePath]

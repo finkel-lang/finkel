@@ -18,37 +18,40 @@ module Language.Finkel.TargetSource
   ) where
 
 -- base
-import Control.Exception (SomeException)
-import Control.Monad (mplus)
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.Char (isUpper)
+import           Control.Exception          (SomeException)
+import           Control.Monad              (mplus)
+import           Control.Monad.IO.Class     (MonadIO (..))
+import           Data.Char                  (isUpper)
 
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
 
 -- directory
-import System.Directory (doesFileExist)
+import           System.Directory           (doesFileExist)
 
 -- filepath
-import System.FilePath ( dropExtension, normalise, pathSeparator
-                       , replaceExtension , splitPath, takeExtension
-                       , (<.>), (</>))
+import           System.FilePath            (dropExtension, normalise,
+                                             pathSeparator,
+                                             replaceExtension, splitPath,
+                                             takeExtension, (<.>), (</>))
 
 -- ghc
-import DynFlags (DynFlags(..), HasDynFlags(..))
-import ErrUtils (mkErrMsg)
-import Exception  (gtry)
-import HscTypes (throwOneError)
-import Module (mkModuleName, moduleNameSlashes)
-import Outputable (neverQualify, text)
-import SrcLoc (GenLocated(..), Located)
-import Util (looksLikeModuleName)
+import           DynFlags                   (DynFlags (..),
+                                             HasDynFlags (..))
+import           ErrUtils                   (mkErrMsg)
+import           Exception                  (gtry)
+import           HscTypes                   (throwOneError)
+import           Module                     (mkModuleName,
+                                             moduleNameSlashes)
+import           Outputable                 (neverQualify, text)
+import           SrcLoc                     (GenLocated (..), Located)
+import           Util                       (looksLikeModuleName)
 
 -- Internal
-import Language.Finkel.Form
-import Language.Finkel.Lexer
-import Language.Finkel.Reader
-import Language.Finkel.Fnk
+import           Language.Finkel.Fnk
+import           Language.Finkel.Form
+import           Language.Finkel.Lexer
+import           Language.Finkel.Reader
 
 
 -- ---------------------------------------------------------------------
@@ -80,8 +83,8 @@ targetSourcePath :: TargetSource -> FilePath
 targetSourcePath mt =
   case mt of
     FnkSource path _ _ _ -> path
-    HsSource path       -> path
-    OtherSource path    -> path
+    HsSource path        -> path
+    OtherSource path     -> path
 
 -- | 'True' is the 'TargetSource' is 'OtherSource'.
 isOtherSource :: TargetSource -> Bool

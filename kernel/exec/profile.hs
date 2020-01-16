@@ -5,32 +5,34 @@
 module Main where
 
 -- base
-import Control.Monad.IO.Class (MonadIO(..))
-import System.Environment (getArgs)
-import System.IO (stdout)
+import           Control.Monad.IO.Class     (MonadIO (..))
+import           System.Environment         (getArgs)
+import           System.IO                  (stdout)
 
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
 
 -- filepath
-import qualified System.FilePath as FilePath
+import qualified System.FilePath            as FilePath
 
 -- ghc
-import DynFlags (HasDynFlags(..), GeneralFlag(..), gopt_set)
-import ErrUtils (printBagOfErrors)
-import Outputable (Outputable(..), neverQualify, printForUser)
-import SrcLoc (mkGeneralLocated)
-import qualified GHC as GHC
+import           DynFlags                   (GeneralFlag (..),
+                                             HasDynFlags (..), gopt_set)
+import           ErrUtils                   (printBagOfErrors)
+import qualified GHC                        as GHC
+import           Outputable                 (Outputable (..), neverQualify,
+                                             printForUser)
+import           SrcLoc                     (mkGeneralLocated)
 
 -- finkel-kernel
-import qualified Language.Finkel.Builder as Builder
-import qualified Language.Finkel.Emit as Emit
-import qualified Language.Finkel.Expand as Expand
-import qualified Language.Finkel.Lexer as Lexer
-import qualified Language.Finkel.Make as Make
-import qualified Language.Finkel.Reader as Reader
-import qualified Language.Finkel.Fnk as Fnk
-import qualified Language.Finkel.Syntax as Syntax
+import qualified Language.Finkel.Builder    as Builder
+import qualified Language.Finkel.Emit       as Emit
+import qualified Language.Finkel.Expand     as Expand
+import qualified Language.Finkel.Fnk        as Fnk
+import qualified Language.Finkel.Lexer      as Lexer
+import qualified Language.Finkel.Make       as Make
+import qualified Language.Finkel.Reader     as Reader
+import qualified Language.Finkel.Syntax     as Syntax
 
 main :: IO ()
 main =
@@ -100,7 +102,7 @@ pprHsModule path = Fnk.runFnk go Make.defaultFnkEnv
          contents <- liftIO (readFile path)
          dflags0 <- getDynFlags
          let dflags1 = gopt_set dflags0 Opt_Haddock
-#if MIN_VERSION_ghc(8,4,0)
+#if MIN_VERSION_ghc (8,4,0)
              (_warnings, ret) = GHC.parser contents dflags1 path
 #else
              ret = case GHC.parser contents dflags1 path of

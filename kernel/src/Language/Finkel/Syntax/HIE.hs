@@ -1,25 +1,26 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 -- | Syntax for module header, import and export entities.
 module Language.Finkel.Syntax.HIE where
 
 -- ghc
-import FastString (unpackFS)
-import FieldLabel (FieldLbl(..))
-import HsDoc (LHsDocString)
-import HsImpExp ( IE(..), IEWildcard(..), IEWrappedName(..)
-                , ImportDecl(..), simpleImportDecl )
-import HsSyn (HsModule(..))
-import Lexeme (isLexCon)
-import Module (mkModuleNameFS)
-import OccName (tcName)
-import OrdList (toOL)
-import RdrHsSyn (cvTopDecls)
-import RdrName (mkQual, mkUnqual)
-import SrcLoc (GenLocated(..), noLoc)
+import FastString                      (unpackFS)
+import FieldLabel                      (FieldLbl (..))
+import HsDoc                           (LHsDocString)
+import HsImpExp                        (IE (..), IEWildcard (..),
+                                        IEWrappedName (..),
+                                        ImportDecl (..), simpleImportDecl)
+import HsSyn                           (HsModule (..))
+import Lexeme                          (isLexCon)
+import Module                          (mkModuleNameFS)
+import OccName                         (tcName)
+import OrdList                         (toOL)
+import RdrHsSyn                        (cvTopDecls)
+import RdrName                         (mkQual, mkUnqual)
+import SrcLoc                          (GenLocated (..), noLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
-import HsExtension (noExt)
+import HsExtension                     (noExt)
 #endif
 
 -- Internal

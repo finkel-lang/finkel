@@ -7,29 +7,29 @@
 module SyntaxTest (syntaxTests) where
 
 -- base
-import Control.Monad (when)
-import Data.IORef (newIORef, readIORef, writeIORef)
-import System.Exit (ExitCode(..))
+import Control.Monad        (when)
+import Data.IORef           (newIORef, readIORef, writeIORef)
+import System.Exit          (ExitCode (..))
 
 -- directory
-import System.Directory ( createDirectoryIfMissing, doesFileExist
-                        , getTemporaryDirectory, removeFile )
+import System.Directory     (createDirectoryIfMissing, doesFileExist,
+                             getTemporaryDirectory, removeFile)
 
 -- filepath
-import System.FilePath ((</>), (<.>), takeBaseName)
+import System.FilePath      (takeBaseName, (<.>), (</>))
 
 -- ghc
-import SrcLoc (noLoc)
+import SrcLoc               (noLoc)
 
 -- hspec
 import Test.Hspec
 
 -- process
-import System.Process (readProcessWithExitCode)
+import System.Process       (readProcessWithExitCode)
 
 -- finkel-kernel
-import Language.Finkel.Make
 import Language.Finkel.Fnk
+import Language.Finkel.Make
 
 -- Internal
 import TestAux

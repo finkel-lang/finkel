@@ -1,38 +1,44 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE ViewPatterns      #-}
 -- | Syntax for expression.
 module Language.Finkel.Syntax.HExpr where
 
 -- base
-import Data.List (foldl', foldl1')
+import Data.List                       (foldl', foldl1')
 
 -- ghc
-import BasicTypes ( Arity, Boxity(..), FractionalLit(..), Origin(..)
-                  , SourceText(..), fl_value)
-import FastString (FastString, lengthFS, unpackFS)
-import HsExpr ( ArithSeqInfo(..), GRHS(..), HsExpr(..)
-              , HsMatchContext(..), HsStmtContext(..), HsTupArg(..)
-              , Match(..), StmtLR(..) )
-import HsDoc (HsDocString)
-import HsLit (HsLit(..), HsOverLit(..))
-import HsPat (HsRecFields(..))
-import HsTypes (mkHsWildCardBndrs)
-import HsUtils ( mkBindStmt, mkBodyStmt, mkHsApp, mkHsComp
-               , mkHsDo, mkHsFractional, mkHsIf, mkHsLam, mkLHsPar
-               , mkLHsSigWcType, mkLHsTupleExpr, mkMatchGroup )
-import Lexeme (isLexCon, isLexSym)
-import OrdList (toOL)
-import RdrHsSyn ( mkRdrRecordCon, mkRdrRecordUpd )
-import RdrName ( RdrName, getRdrName )
-import SrcLoc (GenLocated(..), Located, getLoc, noLoc)
-import TysWiredIn ( tupleDataCon )
+import BasicTypes                      (Arity, Boxity (..),
+                                        FractionalLit (..), Origin (..),
+                                        SourceText (..), fl_value)
+import FastString                      (FastString, lengthFS, unpackFS)
+import HsDoc                           (HsDocString)
+import HsExpr                          (ArithSeqInfo (..), GRHS (..),
+                                        HsExpr (..), HsMatchContext (..),
+                                        HsStmtContext (..), HsTupArg (..),
+                                        Match (..), StmtLR (..))
+import HsLit                           (HsLit (..), HsOverLit (..))
+import HsPat                           (HsRecFields (..))
+import HsTypes                         (mkHsWildCardBndrs)
+import HsUtils                         (mkBindStmt, mkBodyStmt, mkHsApp,
+                                        mkHsComp, mkHsDo, mkHsFractional,
+                                        mkHsIf, mkHsLam, mkLHsPar,
+                                        mkLHsSigWcType, mkLHsTupleExpr,
+                                        mkMatchGroup)
+import Lexeme                          (isLexCon, isLexSym)
+import OrdList                         (toOL)
+import RdrHsSyn                        (mkRdrRecordCon, mkRdrRecordUpd)
+import RdrName                         (RdrName, getRdrName)
+import SrcLoc                          (GenLocated (..), Located, getLoc,
+                                        noLoc)
+import TysWiredIn                      (tupleDataCon)
 
 #if MIN_VERSION_ghc(8,6,0)
-import HsExtension (noExt)
+import HsExtension                     (noExt)
 #else
-import HsExpr (noPostTcExpr)
-import PlaceHolder (placeHolderType)
+import HsExpr                          (noPostTcExpr)
+import PlaceHolder                     (placeHolderType)
 #endif
 
 -- Internal
@@ -190,16 +196,14 @@ mkAppTypes = foldl' mkAppType
 {-# INLINE mkAppTypes #-}
 
 mkAppType :: HExpr -> HType -> HExpr
-mkAppType expr ty =
-  let l = getLoc expr
+mkAppType (dL->expr@(L l _)) ty =
 #if MIN_VERSION_ghc (8,8,0)
-  in  cL l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
+  cL l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
 #elif MIN_VERSION_ghc (8,6,0)
-  in  cL l (HsAppType (mkHsWildCardBndrs ty) expr)
+  cL l (HsAppType (mkHsWildCardBndrs ty) expr)
 #else
-  in  cL l (HsAppType expr (mkHsWildCardBndrs ty))
+  cL l (HsAppType expr (mkHsWildCardBndrs ty))
 #endif
-{-# INLINE mkAppType #-}
 
 b_charE :: Code -> Builder HExpr
 b_charE (LForm (L l form))

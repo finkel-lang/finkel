@@ -1,36 +1,36 @@
 module FnkTest where
 
 -- base
-import Control.Exception
-import Control.Monad.IO.Class
-import Data.Maybe (fromMaybe, isNothing)
-import qualified Control.Monad.Fail as MonadFail
+import           Control.Exception
+import qualified Control.Monad.Fail         as MonadFail
+import           Control.Monad.IO.Class
+import           Data.Maybe                 (fromMaybe, isNothing)
 
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
 
 -- ghc-paths
-import GHC.Paths (libdir)
+import           GHC.Paths                  (libdir)
 
 -- ghc
-import FastString (fsLit)
-import Exception (gbracket)
-import HscTypes (SourceError)
-import SrcLoc (GenLocated(..), unLoc)
+import           Exception                  (gbracket)
+import           FastString                 (fsLit)
+import           HscTypes                   (SourceError)
+import           SrcLoc                     (GenLocated (..), unLoc)
 
 -- hspec
-import Test.Hspec
-import Test.QuickCheck
+import           Test.Hspec
+import           Test.QuickCheck
 
 -- Internal
-import Language.Finkel.Builder
-import Language.Finkel.Expand
-import Language.Finkel.Form
-import Language.Finkel.Homoiconic
-import Language.Finkel.Make
-import Language.Finkel.Reader
-import Language.Finkel.Fnk
-import Language.Finkel.Syntax
+import           Language.Finkel.Builder
+import           Language.Finkel.Expand
+import           Language.Finkel.Fnk
+import           Language.Finkel.Form
+import           Language.Finkel.Homoiconic
+import           Language.Finkel.Make
+import           Language.Finkel.Reader
+import           Language.Finkel.Syntax
 
 fnkTests :: Spec
 fnkTests = do

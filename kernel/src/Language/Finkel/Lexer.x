@@ -30,43 +30,47 @@ module Language.Finkel.Lexer
   ) where
 
 -- base
-import Control.Monad (ap, liftM, msum)
-import Data.Char ( chr, ord, isDigit, isOctDigit, isHexDigit
-                 , isSpace, toUpper )
-import Data.List (intercalate)
-import Data.Maybe (fromMaybe)
-import Data.Word (Word8)
-import qualified GHC.Char as Char
+import           Control.Monad              (ap, liftM, msum)
+import           Data.Char                  (chr, ord, isDigit, isOctDigit,
+                                             isHexDigit, isSpace, toUpper)
+import           Data.List                  (intercalate)
+import           Data.Maybe                 (fromMaybe)
+import           Data.Word                  (Word8)
+import qualified GHC.Char                   as Char
 
 -- bytestring
-import Data.ByteString.Internal (w2c)
-import qualified Data.ByteString.Lazy as W8
+import           Data.ByteString.Internal   (w2c)
+import qualified Data.ByteString.Lazy       as W8
 import qualified Data.ByteString.Lazy.Char8 as C8
 
 -- containers
-import qualified Data.Map as Map
+import qualified Data.Map                   as Map
 
 -- ghc
-import ApiAnnotation (AnnotationComment(..))
-import BasicTypes ( FractionalLit(..)
-#if MIN_VERSION_ghc(8,4,0)
-                  , SourceText(..)
+import           ApiAnnotation              (AnnotationComment(..))
+import           BasicTypes                 (FractionalLit(..))
+import           Encoding                   (utf8DecodeByteString)
+import           FastString                 (FastString, fsLit,
+                                             mkFastStringByteString,
+                                             unpackFS)
+import           Lexeme                     (startsConSym, startsVarSym)
+import           SrcLoc                     (GenLocated(..), Located,
+                                             RealSrcLoc, SrcLoc(..),
+                                             SrcSpan(..), advanceSrcLoc,
+                                             mkRealSrcLoc, mkRealSrcSpan,
+                                             srcLocCol, srcLocLine)
+import           Util                       (readRational)
+
+#if MIN_VERSION_ghc (8,4,0)
+import           BasicTypes                 (SourceText(..))
 #endif
-                  )
-import Encoding (utf8DecodeByteString)
-import FastString (FastString, fsLit, mkFastStringByteString, unpackFS)
-import Lexeme (startsConSym, startsVarSym)
-import SrcLoc ( GenLocated(..), Located, RealSrcLoc, SrcLoc(..)
-              , SrcSpan(..), advanceSrcLoc, mkRealSrcLoc, mkRealSrcSpan
-              , srcLocCol, srcLocLine )
-import Util (readRational)
 
 -- ghc-boot
-import qualified GHC.LanguageExtensions as LangExt
+import qualified GHC.LanguageExtensions     as LangExt
 
 -- Internal
-import Language.Finkel.Builder
-import Language.Finkel.Form
+import           Language.Finkel.Builder
+import           Language.Finkel.Form
 }
 
 $nl          = [\n\r\f]

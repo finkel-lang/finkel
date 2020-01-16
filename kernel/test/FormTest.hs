@@ -3,55 +3,56 @@
 module FormTest where
 
 -- base
-import Control.Exception
-import Data.Complex
-import Data.Data
-import qualified Data.Fixed as Fixed
-import Data.Functor.Compose
-import Data.Functor.Const
-import Data.Functor.Identity
-import qualified Data.Functor.Product as Product
-import qualified Data.Functor.Sum as Sum
-import Data.Int
-import Data.List (isPrefixOf, isSubsequenceOf)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid
-import Data.Version
-import Data.Ratio
-import qualified Data.Semigroup as Semigroup
-import Data.Word
-import Numeric.Natural
-import Text.Show.Functions ()
+import           Control.Exception
+import           Data.Complex
+import           Data.Data
+import qualified Data.Fixed                 as Fixed
+import           Data.Functor.Compose
+import           Data.Functor.Const
+import           Data.Functor.Identity
+import qualified Data.Functor.Product       as Product
+import qualified Data.Functor.Sum           as Sum
+import           Data.Int
+import           Data.List                  (isPrefixOf, isSubsequenceOf)
+import           Data.List.NonEmpty         (NonEmpty (..))
+import           Data.Monoid
+import           Data.Ratio
+import qualified Data.Semigroup             as Semigroup
+import           Data.Version
+import           Data.Word
+import           Numeric.Natural
+import           Text.Show.Functions        ()
 
 -- bytestring
-import Data.ByteString.Builder (stringUtf8, toLazyByteString)
+import           Data.ByteString.Builder    (stringUtf8, toLazyByteString)
 
 -- deepseq
-import Control.DeepSeq
+import           Control.DeepSeq
 
 -- ghc
-import BasicTypes (fl_value)
-import FastString (fsLit, unpackFS)
-import SrcLoc (GenLocated(..), SrcSpan(..), noSrcSpan)
+import           BasicTypes                 (fl_value)
+import           FastString                 (fsLit, unpackFS)
+import           SrcLoc                     (GenLocated (..), SrcSpan (..),
+                                             noSrcSpan)
 
 -- transformers
-import Control.Monad.Trans.State
+import           Control.Monad.Trans.State
 
 -- hspec
-import Test.Hspec
+import           Test.Hspec
 
 -- QuickCheck
-import Test.QuickCheck
+import           Test.QuickCheck
 
 -- finkel-kernel
-import Language.Finkel.Expand
-import Language.Finkel.Form
-import Language.Finkel.Homoiconic
-import Language.Finkel.Lexer
-import Language.Finkel.Reader
+import           Language.Finkel.Expand
+import           Language.Finkel.Form
+import           Language.Finkel.Homoiconic
+import           Language.Finkel.Lexer
+import           Language.Finkel.Reader
 
 -- Internal
-import Orphan ()
+import           Orphan                     ()
 
 formTests :: Spec
 formTests = do
@@ -278,7 +279,7 @@ foldableTest :: Spec
 foldableTest = do
   let fsum = foldr (\x acc -> case x of
                                 AInteger n -> acc + n
-                                _ -> acc)
+                                _          -> acc)
                    0
   describe "taking sum of 1 to 10 with foldr" $ do
     let str1 = "(1 2 3 4 5 6 7 8 9 10)"
@@ -357,7 +358,7 @@ homoiconicTests = do
   let t x = describe ("to/from code " ++ show x) $
               it "shoult match the input" $
                  case fromCode (toCode x) of
-                   Just y -> y `shouldBe` x
+                   Just y  -> y `shouldBe` x
                    Nothing -> error ("got Nothing with " ++ show x)
   t (AInteger 42)
   t ()

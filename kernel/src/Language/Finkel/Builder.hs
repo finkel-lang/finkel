@@ -7,7 +7,7 @@
 -- The main purpose of AST type synonyms defined in this module are
 -- for managing ghc version compatibility.
 --
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Language.Finkel.Builder
   ( -- * Builders type and functions
@@ -56,21 +56,23 @@ module Language.Finkel.Builder
   ) where
 
 -- ghc
-import Bag (Bag)
-import ForeignCall (CCallConv(..))
-import HsBinds (HsLocalBinds, LHsBind, LSig)
-import HsDecls (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
-import HsExpr (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
-import HsImpExp (LIE, LIEWrappedName, LImportDecl)
-import HsPat (LPat)
-import HsSyn (HsModule)
-import HsTypes (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
-import SrcLoc (Located, GenLocated(..), noLoc)
+import Bag                  (Bag)
+import ForeignCall          (CCallConv (..))
+import HsBinds              (HsLocalBinds, LHsBind, LSig)
+import HsDecls              (HsConDeclDetails, HsDeriving, LConDecl,
+                             LHsDecl)
+import HsExpr               (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
+import HsImpExp             (LIE, LIEWrappedName, LImportDecl)
+import HsPat                (LPat)
+import HsSyn                (HsModule)
+import HsTypes              (LConDeclField, LHsSigWcType, LHsTyVarBndr,
+                             LHsType)
+import SrcLoc               (GenLocated (..), Located, noLoc)
 
 #if MIN_VERSION_ghc (8,4,0)
-import HsExtension (GhcPs)
+import HsExtension          (GhcPs)
 #else
-import RdrName (RdrName)
+import RdrName              (RdrName)
 #endif
 
 -- Internal
@@ -86,7 +88,7 @@ import Language.Finkel.Form
 -- | State for 'Builder'.
 data BState = BState
     { -- | Input tokens to parse.
-      inputs :: [Code]
+      inputs    :: [Code]
       -- | Last token, for error message.
     , lastToken :: Maybe Code
     }

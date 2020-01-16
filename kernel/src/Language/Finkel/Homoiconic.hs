@@ -9,32 +9,33 @@ module Language.Finkel.Homoiconic
   ) where
 
 -- base
-import Data.Complex (Complex(..))
-import Data.Data
-import Data.Fixed (Fixed(..))
-import Data.Functor.Compose (Compose(..))
-import Data.Functor.Const (Const(..))
-import Data.Functor.Identity (Identity(..))
-import Data.Int (Int8, Int16, Int32, Int64)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid ( All(..), Alt(..), Any(..), Dual(..), First(..)
-                   , Last(..), Product(..), Sum(..) )
-import Data.Ratio (Ratio, (%), numerator, denominator)
-import Data.Version (Version(..))
-import Data.Word (Word8, Word16, Word32, Word64)
-import Numeric.Natural (Natural)
+import           Data.Complex          (Complex (..))
+import           Data.Data
+import           Data.Fixed            (Fixed (..))
+import           Data.Functor.Compose  (Compose (..))
+import           Data.Functor.Const    (Const (..))
+import           Data.Functor.Identity (Identity (..))
+import           Data.Int              (Int16, Int32, Int64, Int8)
+import           Data.List.NonEmpty    (NonEmpty (..))
+import           Data.Monoid           (All (..), Alt (..), Any (..),
+                                        Dual (..), First (..), Last (..),
+                                        Product (..), Sum (..))
+import           Data.Ratio            (Ratio, denominator, numerator, (%))
+import           Data.Version          (Version (..))
+import           Data.Word             (Word16, Word32, Word64, Word8)
+import           Numeric.Natural       (Natural)
 
-import qualified Data.Functor.Product as Product
-import qualified Data.Functor.Sum as Sum
-import qualified Data.Semigroup as Semigroup
+import qualified Data.Functor.Product  as Product
+import qualified Data.Functor.Sum      as Sum
+import qualified Data.Semigroup        as Semigroup
 
 -- ghc
-import BasicTypes (fl_value)
-import FastString (FastString, unpackFS)
-import SrcLoc (GenLocated(..), getLoc)
+import           BasicTypes            (fl_value)
+import           FastString            (FastString, unpackFS)
+import           SrcLoc                (GenLocated (..), getLoc)
 
 -- internal
-import Language.Finkel.Form
+import           Language.Finkel.Form
 
 
 -- -------------------------------------------------------------------
@@ -107,8 +108,8 @@ instance ToCode Char where
 instance FromCode Char where
   fromCode a =
     case unCode a of
-      Atom (AChar x)  -> Just x
-      _               -> Nothing
+      Atom (AChar x) -> Just x
+      _              -> Nothing
   listFromCode a = case unCode a of
                      Atom (AString s) -> Just (unpackFS s)
                      _                -> Nothing
@@ -182,7 +183,7 @@ instance ToCode a => ToCode (Maybe a) where
 instance FromCode a => FromCode (Maybe a) where
   fromCode a =
     case unCode a of
-      Atom (ASymbol "Nothing") -> Just Nothing
+      Atom (ASymbol "Nothing")                      -> Just Nothing
       List [LForm (L _ (Atom (ASymbol "Just"))), x] -> Just (fromCode x)
       _                                             -> Nothing
 
@@ -448,7 +449,7 @@ instance ToCode a => ToCode (Proxy a) where
 instance FromCode a => FromCode (Proxy a) where
   fromCode a = case unCode a of
                  Atom (ASymbol "Proxy") -> Just Proxy
-                 _ -> Nothing
+                 _                      -> Nothing
 
 --
 -- Data.Version

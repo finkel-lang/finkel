@@ -10,42 +10,51 @@ module Language.Finkel.Main
   ) where
 
 -- base
-import Control.Monad (unless)
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.List (isPrefixOf, partition)
-import Data.Version (showVersion)
-import System.Console.GetOpt ( ArgDescr(..), ArgOrder(..), OptDescr(..)
-                             , getOpt, usageInfo )
-import System.IO (BufferMode(..), hSetBuffering, stdout, stderr)
-import System.Environment (getArgs, getProgName)
-import System.Exit (exitFailure, exitWith)
-import System.FilePath (normalise)
-import System.Process (rawSystem)
+import           Control.Monad                (unless)
+import           Control.Monad.IO.Class       (MonadIO (..))
+import           Data.List                    (isPrefixOf, partition)
+import           Data.Version                 (showVersion)
+import           System.Console.GetOpt        (ArgDescr (..),
+                                               ArgOrder (..),
+                                               OptDescr (..), getOpt,
+                                               usageInfo)
+import           System.Environment           (getArgs, getProgName)
+import           System.Exit                  (exitFailure, exitWith)
+import           System.FilePath              (normalise)
+import           System.IO                    (BufferMode (..),
+                                               hSetBuffering, stderr,
+                                               stdout)
+import           System.Process               (rawSystem)
 
 -- ghc
-import DynFlags ( DynFlags(..), GeneralFlag(..), HasDynFlags(..)
-                , defaultFatalMessager, defaultFlushOut
-                , gopt, parseDynamicFlagsCmdLine)
-import GHC (defaultErrorHandler)
-import GhcMonad (printException)
-import HscTypes (handleFlagWarnings, handleSourceError)
-import Panic (GhcException(..), throwGhcException)
-import SrcLoc (mkGeneralLocated, unLoc)
-import UniqSupply (initUniqSupply)
-import Util (looksLikeModuleName)
+import           DynFlags                     (DynFlags (..),
+                                               GeneralFlag (..),
+                                               HasDynFlags (..),
+                                               defaultFatalMessager,
+                                               defaultFlushOut, gopt,
+                                               parseDynamicFlagsCmdLine)
+import           GHC                          (defaultErrorHandler)
+import           GhcMonad                     (printException)
+import           HscTypes                     (handleFlagWarnings,
+                                               handleSourceError)
+import           Panic                        (GhcException (..),
+                                               throwGhcException)
+import           SrcLoc                       (mkGeneralLocated, unLoc)
+import           UniqSupply                   (initUniqSupply)
+import           Util                         (looksLikeModuleName)
 
 -- ghc-boot
 #if MIN_VERSION_ghc(8,6,0)
-import GHC.HandleEncoding (configureHandleEncoding)
+import           GHC.HandleEncoding           (configureHandleEncoding)
 #endif
 
 -- ghc-paths
 import qualified GHC.Paths
 
 -- internal
-import Language.Finkel.Make
-import Language.Finkel.Fnk
-import Language.Finkel.TargetSource
+import           Language.Finkel.Fnk
+import           Language.Finkel.Make
+import           Language.Finkel.TargetSource
 import qualified Paths_finkel_kernel
 
 
@@ -181,10 +190,10 @@ main'' orig_args args = do
 -- ---------------------------------------------------------------------
 
 data FinkelOption = FinkelOption
-  { finkelDebug :: Bool
-  , finkelDumpHs :: Bool
-  , finkelHelp :: Bool
-  , finkelHsDir :: Maybe FilePath
+  { finkelDebug   :: Bool
+  , finkelDumpHs  :: Bool
+  , finkelHelp    :: Bool
+  , finkelHsDir   :: Maybe FilePath
   , finkelVersion :: Bool
   }
 

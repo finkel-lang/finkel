@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric      #-}
 -- | S-expression form data.
 module Language.Finkel.Form
   (
@@ -35,22 +35,22 @@ module Language.Finkel.Form
   ) where
 
 -- base
-import Data.Data (Data, Typeable)
-import GHC.Generics (Generic)
+import Data.Data       (Data, Typeable)
+import GHC.Generics    (Generic)
 
 -- ghc
-import BasicTypes ( FractionalLit (..)
-#if MIN_VERSION_ghc(8,4,0)
-                  , SourceText(..)
-                  , mkFractionalLit
+import BasicTypes      (FractionalLit (..))
+import FastString      (FastString, fsLit, unpackFS)
+import SrcLoc          (GenLocated (..), Located, SrcSpan (..),
+                        combineLocs, srcSpanFile, srcSpanStartCol,
+                        srcSpanStartLine)
+
+#if MIN_VERSION_ghc (8,4,0)
+import BasicTypes      (SourceText (..), mkFractionalLit)
 #endif
-                  )
-import FastString (FastString, fsLit, unpackFS)
-import SrcLoc ( GenLocated(..), Located, SrcSpan(..), combineLocs
-              , srcSpanFile, srcSpanStartCol, srcSpanStartLine )
 
 -- deepseq
-import Control.DeepSeq (NFData(..))
+import Control.DeepSeq (NFData (..))
 
 
 -- -------------------------------------------------------------------
@@ -129,10 +129,10 @@ instance Show a => Show (Form a) where
 instance Functor Form where
   fmap f form =
     case form of
-      Atom a -> Atom (f a)
-      List xs -> List (map (fmap f) xs)
+      Atom a    -> Atom (f a)
+      List xs   -> List (map (fmap f) xs)
       HsList xs -> HsList (map (fmap f) xs)
-      TEnd -> TEnd
+      TEnd      -> TEnd
   {-# INLINE fmap #-}
 
 instance Foldable Form where
@@ -329,16 +329,17 @@ mkLocatedForm ms = L (combineLocs (unLForm (head ms))
                      ms
 
 fl_text_compat :: FractionalLit -> String
-fl_text_compat fl =
-#if MIN_VERSION_ghc(8,4,0)
-  case fl_text fl of
-    NoSourceText -> error "fractional literal with no source"
-    SourceText s -> s
+fl_text_compat fl = str
+  where
+#if MIN_VERSION_ghc (8,4,0)
+    str = case fl_text fl of
+            NoSourceText -> error "fractional literal with no source"
+            SourceText s -> s
 #else
-  fl_text fl
+    str = fl_text fl
 #endif
 
-#if !MIN_VERSION_ghc(8,4,0)
+#if !MIN_VERSION_ghc (8,4,0)
 -- | 'mkFractionalLit' did not exist in 8.2.x.
 mkFractionalLit :: Real a => a -> FractionalLit
 mkFractionalLit x = FL (show (realToFrac x :: Double)) (toRational x)

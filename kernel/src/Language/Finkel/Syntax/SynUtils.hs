@@ -3,54 +3,69 @@
 module Language.Finkel.Syntax.SynUtils where
 
 -- base
-import Data.Char (isUpper)
+import           Data.Char               (isUpper)
 
 -- ghc
-import Bag (consBag, emptyBag, listToBag)
-import BasicTypes ( SourceText(..)
+import           Bag                     (consBag, emptyBag, listToBag)
+import           BasicTypes              (SourceText (..))
+import           FastString              (FastString, fsLit, headFS,
+                                          unpackFS)
+import           HaddockUtils            (addConDoc)
+import           HsBinds                 (HsBindLR (..),
+                                          HsLocalBindsLR (..),
+                                          HsValBindsLR (..),
+                                          emptyLocalBinds)
+import           HsDecls                 (HsDecl (..), InstDecl (..),
+                                          LConDecl, LDataFamInstDecl,
+                                          LDocDecl, LFamilyDecl,
+                                          LTyFamInstDecl, TyClDecl (..))
+import           HsDoc                   (LHsDocString)
+import           HsExpr                  (GRHSs (..), LGRHS, LHsExpr,
+                                          LMatch, Match (..),
+                                          MatchGroup (..))
+import           HsLit                   (HsOverLit (..))
+import           HsPat                   (HsRecField' (..), LHsRecField,
+                                          LHsRecUpdField)
+import           HsTypes                 (AmbiguousFieldOcc (..),
+                                          FieldOcc (..), HsTyVarBndr (..),
+                                          HsType (..), LHsContext,
+                                          mkFieldOcc)
+import           HsUtils                 (mkFunBind, mkHsIntegral)
+import           Lexeme                  (isLexCon, isLexConSym, isLexVar,
+                                          isLexVarSym)
+import           OccName                 (NameSpace, srcDataName, tcName,
+                                          tvName, varName)
+import           OrdList                 (OrdList, fromOL, toOL)
+import           RdrHsSyn                (cvTopDecls)
+import           RdrName                 (RdrName, mkQual, mkUnqual,
+                                          mkVarUnqual, nameRdrName)
+import           SrcLoc                  (GenLocated (..), Located,
+                                          SrcSpan, combineLocs,
+                                          combineSrcSpans, noLoc, unLoc)
+import           TysWiredIn              (consDataConName)
+
 #if MIN_VERSION_ghc (8,4,0)
-                  , IntegralLit(..)
+import           BasicTypes              (IntegralLit (..))
 #endif
-                  )
-import FastString ( FastString, fsLit, headFS, unpackFS )
-import HaddockUtils (addConDoc)
-import HsBinds ( HsBindLR(..), HsLocalBindsLR(..), HsValBindsLR(..)
-               , emptyLocalBinds )
-import HsDecls ( HsDecl(..), InstDecl(..), LConDecl, LDataFamInstDecl
-               , LDocDecl, LFamilyDecl, LTyFamInstDecl, TyClDecl(..) )
-import HsDoc (LHsDocString)
-import HsExpr ( GRHSs(..), LGRHS, LHsExpr, LMatch, Match(..)
-              , MatchGroup(..) )
-import HsLit (HsOverLit(..))
-import HsPat ( HsRecField'(..), LHsRecField, LHsRecUpdField )
-import HsTypes ( AmbiguousFieldOcc(..), FieldOcc(..), LHsContext
-               , HsTyVarBndr(..), HsType(..), mkFieldOcc )
-import HsUtils (mkFunBind, mkHsIntegral)
-import Lexeme (isLexCon, isLexConSym, isLexVar, isLexVarSym)
-import OccName (NameSpace, srcDataName, tcName, tvName, varName)
-import OrdList (OrdList, fromOL, toOL)
-import RdrHsSyn (cvTopDecls)
-import RdrName (RdrName, mkQual, mkUnqual, mkVarUnqual, nameRdrName)
-import SrcLoc ( GenLocated(..), Located, SrcSpan, combineLocs
-              , combineSrcSpans, noLoc, unLoc )
-import TysWiredIn (consDataConName)
 
 #if MIN_VERSION_ghc (8,8,0)
 import qualified SrcLoc
 #endif
 
 #if MIN_VERSION_ghc (8,6,0)
-import FastString (fastStringToByteString)
-import HsDoc (HsDocString, mkHsDocStringUtf8ByteString)
-import HsExtension (noExt)
+import           FastString              (fastStringToByteString)
+import           HsDoc                   (HsDocString,
+                                          mkHsDocStringUtf8ByteString)
+import           HsExtension             (noExt)
 #else
-import HsDoc (HsDocString(..))
-import PlaceHolder (PlaceHolder(..), placeHolderType)
+import           HsDoc                   (HsDocString (..))
+import           PlaceHolder             (PlaceHolder (..),
+                                          placeHolderType)
 #endif
 
 -- Internal
-import Language.Finkel.Builder
-import Language.Finkel.Form
+import           Language.Finkel.Builder
+import           Language.Finkel.Form
 
 #include "Syntax.h"
 
@@ -167,7 +182,7 @@ mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
 cfld2ufld :: LHsRecField PARSED HExpr
           -> LHsRecUpdField PARSED
 -- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
   where
@@ -205,11 +220,11 @@ quotedSourceText s = SourceText $ "\"" ++ s ++ "\""
 
 data CategorizedDecls = CategorizedDecls
   { cd_binds :: HBinds
-  , cd_sigs :: [HSig]
-  , cd_fds :: [LFamilyDecl PARSED]
-  , cd_tfis :: [LTyFamInstDecl PARSED]
-  , cd_dfis :: [LDataFamInstDecl PARSED]
-  , cd_docs :: [LDocDecl]
+  , cd_sigs  :: [HSig]
+  , cd_fds   :: [LFamilyDecl PARSED]
+  , cd_tfis  :: [LTyFamInstDecl PARSED]
+  , cd_dfis  :: [LDataFamInstDecl PARSED]
+  , cd_docs  :: [LDocDecl]
   }
 
 toCategorizedDecls :: ( HBinds
@@ -297,7 +312,7 @@ codeToUserTyVar code =
 
 -- | Auxiliary function to make 'HsDocString'.
 hsDocString :: FastString -> HsDocString
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
 hsDocString = mkHsDocStringUtf8ByteString . fastStringToByteString
 #else
 hsDocString = HsDocString
@@ -308,18 +323,17 @@ hsDocString = HsDocString
 -- 'mkHsIntegral'.
 mkHsIntegral_compat :: Integer -> HsOverLit PARSED
 mkHsIntegral_compat n =
-#if MIN_VERSION_ghc(8,6,0)
-  let il = IL { il_text = SourceText (show n)
-              , il_neg = n < 0
-              , il_value = n }
-  in  mkHsIntegral il
-#elif MIN_VERSION_ghc(8,4,0)
-  let il = IL { il_text = SourceText (show n)
-              , il_neg = n < 0
-              , il_value = n }
-  in  mkHsIntegral il placeHolderType
+#if MIN_VERSION_ghc (8,6,0)
+    mkHsIntegral (IL { il_text = SourceText (show n)
+                     , il_neg = n < 0
+                     , il_value = n })
+#elif MIN_VERSION_ghc (8,4,0)
+    mkHsIntegral (IL { il_text = SourceText (show n)
+                     , il_neg = n < 0
+                     , il_value = n })
+                 placeHolderType
 #else
-  mkHsIntegral (SourceText (show n)) n placeHolderType
+    mkHsIntegral (SourceText (show n)) n placeHolderType
 #endif
 {-# INLINE mkHsIntegral_compat #-}
 
@@ -329,7 +343,7 @@ mkGRHSs grhss decls l = GRHSs NOEXT grhss (declsToBinds l decls)
 
 mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
 mkHsValBinds_compat binds sigs =
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
   HsValBinds noExt (ValBinds noExt binds sigs)
 #else
   HsValBinds (ValBindsIn binds sigs)
@@ -341,7 +355,7 @@ mkHsQualTy_compat ctxt body
   | nullLHsContext ctxt = unLoc body
   | otherwise =
     HsQualTy { hst_ctxt = ctxt
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc (8,6,0)
              , hst_xqual = noExt
 #endif
              , hst_body = body }

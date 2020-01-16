@@ -40,10 +40,10 @@ module Language.Finkel
   ) where
 
 -- ghc
-import SrcLoc (GenLocated(..))
+import SrcLoc                     (GenLocated (..))
 
 -- Internal
 import Language.Finkel.Expand
+import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
-import Language.Finkel.Fnk

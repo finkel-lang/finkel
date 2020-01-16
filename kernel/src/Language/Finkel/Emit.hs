@@ -1,8 +1,8 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE ConstraintKinds      #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- | Emit Haskell source code from Haskell syntax data type.
@@ -25,66 +25,67 @@ module Language.Finkel.Emit
 
 -- base
 #if MIN_VERSION_base(4,11,0)
-import Prelude hiding ((<>))
+import Prelude               hiding ((<>))
 #endif
-import Data.Function (on)
-import Data.List (sortBy)
-import Data.Maybe (fromMaybe)
+import Data.Function         (on)
+import Data.List             (sortBy)
+import Data.Maybe            (fromMaybe)
 
 -- ghc
-import Bag (bagToList, isEmptyBag)
-import BasicTypes (LexicalFixity(..), TopLevelFlag(..))
-import Class (pprFundeps)
-import GHC (OutputableBndrId, getPrintUnqual)
-import GhcMonad (GhcMonad(..), getSessionDynFlags)
-import HsBinds ( LHsBinds, LSig, Sig(..), pprDeclList )
-import HsDecls ( ConDecl(..), DocDecl(..), FamilyDecl(..)
-               , FamilyInfo(..), FamilyResultSig(..), HsDataDefn(..)
-               , HsDecl(..), InjectivityAnn(..), LConDecl, LDocDecl
-               , LFamilyDecl, LTyFamDefltEqn, TyClDecl(..)
-               , TyFamInstEqn )
-import HsDoc (LHsDocString)
-import HsImpExp (IE(..), LIE)
-import HsSyn (HsModule(..))
-import HsTypes ( ConDeclField(..), HsConDetails(..), HsContext
-               , HsImplicitBndrs(..), HsWildCardBndrs(..), HsType(..)
-               , LConDeclField, LHsQTyVars(..), LHsType, LHsTyVarBndr
-               , pprHsForAll )
-import Outputable ( (<+>), (<>), ($$), ($+$), Outputable(..)
-                  , OutputableBndr(..), SDoc
-                  , braces, char, comma, dcolon, darrow, dot
-                  , empty, equals, forAllLit, fsep, hang, hsep
-                  , interppSP, interpp'SP, lparen, nest, parens
-                  , pprWithCommas, punctuate, showSDocForUser
-                  , sep, text, vbar, vcat )
-import RdrName (RdrName)
-import SrcLoc ( GenLocated(..), Located, noLoc, unLoc )
-
+import Bag                   (bagToList, isEmptyBag)
+import BasicTypes            (LexicalFixity (..), TopLevelFlag (..))
+import Class                 (pprFundeps)
+import GHC                   (OutputableBndrId, getPrintUnqual)
+import GhcMonad              (GhcMonad (..), getSessionDynFlags)
+import HsBinds               (LHsBinds, LSig, Sig (..), pprDeclList)
+import HsDecls               (ConDecl (..), DocDecl (..), FamilyDecl (..),
+                              FamilyInfo (..), FamilyResultSig (..),
+                              HsDataDefn (..), HsDecl (..),
+                              InjectivityAnn (..), LConDecl, LDocDecl,
+                              LFamilyDecl, LTyFamDefltEqn, TyClDecl (..),
+                              TyFamInstEqn)
+import HsDoc                 (LHsDocString)
+import HsImpExp              (IE (..), LIE)
+import HsSyn                 (HsModule (..))
+import HsTypes               (ConDeclField (..), HsConDetails (..),
+                              HsContext, HsImplicitBndrs (..), HsType (..),
+                              HsWildCardBndrs (..), LConDeclField,
+                              LHsQTyVars (..), LHsTyVarBndr, LHsType,
+                              pprHsForAll)
+import Outputable            (Outputable (..), OutputableBndr (..), SDoc,
+                              braces, char, comma, darrow, dcolon, dot,
+                              empty, equals, forAllLit, fsep, hang, hsep,
+                              interpp'SP, interppSP, lparen, nest, parens,
+                              pprWithCommas, punctuate, sep,
+                              showSDocForUser, text, vbar, vcat, ($$),
+                              ($+$), (<+>), (<>))
+import RdrName               (RdrName)
+import SrcLoc                (GenLocated (..), Located, noLoc, unLoc)
 #if MIN_VERSION_ghc (8,8,0)
-import HsDecls (FamEqn (..), pprHsFamInstLHS)
-import HsDoc (HsDocString, unpackHDS)
-import HsExtension (GhcPass, IdP)
-import HsTypes (noLHsContext, pprLHsContext)
-import Outputable (arrow, pprPanic)
+import HsDecls               (FamEqn (..), pprHsFamInstLHS)
+import HsDoc                 (HsDocString, unpackHDS)
+import HsExtension           (GhcPass, IdP)
+import HsTypes               (noLHsContext, pprLHsContext)
+import Outputable            (arrow, pprPanic)
 #elif MIN_VERSION_ghc (8,6,0)
-import HsDecls (FamEqn (..), pprFamInstLHS)
-import HsDoc (HsDocString, unpackHDS)
-import HsExtension (GhcPass, IdP)
-import HsTypes (pprHsContext)
-import Outputable (arrow, pprPanic)
+import HsDecls               (FamEqn (..), pprFamInstLHS)
+import HsDoc                 (HsDocString, unpackHDS)
+import HsExtension           (GhcPass, IdP)
+import HsTypes               (pprHsContext)
+import Outputable            (arrow, pprPanic)
 #elif MIN_VERSION_ghc (8,4,0)
-import HsDecls (FamEqn (..), pprFamInstLHS)
-import HsDoc (HsDocString(..))
-import HsExtension (SourceTextX, IdP)
-import HsTypes (pprHsContext)
-import FastString (unpackFS)
+import FastString            (unpackFS)
+import HsDecls               (FamEqn (..), pprFamInstLHS)
+import HsDoc                 (HsDocString (..))
+import HsExtension           (IdP, SourceTextX)
+import HsTypes               (pprHsContext)
 #else
 #define IdP {- empty -}
-import HsDecls (TyFamEqn (..), HsTyPats)
-import HsDoc (HsDocString(..))
-import HsTypes (pprParendHsType, pprHsContext)
-import OccName (HasOccName(..))
-import FastString (unpackFS)
+import FastString            (unpackFS)
+import HsDecls               (HsTyPats, TyFamEqn (..))
+import HsDoc                 (HsDocString (..))
+import HsTypes               (pprHsContext, pprParendHsType)
+import OccName               (HasOccName (..))
 #endif
 
 -- Internal
@@ -330,7 +331,7 @@ instance (OUTPUTABLE a pr, Outputable thing, HsSrc thing)
   toHsSrc st wc = case wc of
     HsWC { hswc_body = ty } -> toHsSrc st ty
 #if MIN_VERSION_ghc (8,6,0)
-    _ -> ppr wc
+    _                       -> ppr wc
 #endif
 
 instance (OUTPUTABLE a pr)
@@ -339,7 +340,7 @@ instance (OUTPUTABLE a pr)
     case ib of
       HsIB { hsib_body = ty } -> toHsSrc st ty
 #if MIN_VERSION_ghc (8,6,0)
-      _ -> ppr ib
+      _                       -> ppr ib
 #endif
 
 instance (OUTPUTABLE a pr) => HsSrc (HsType a) where
@@ -372,9 +373,9 @@ pprHsForAllTvs qtvs
 
 -- From 'HsTypes.pprHsContextAlways'.
 pprHsContextAlways :: OUTPUTABLE n pr => HsContext n -> SDoc
-pprHsContextAlways [] = parens empty <+> darrow
+pprHsContextAlways []       = parens empty <+> darrow
 pprHsContextAlways [L _ ty] = ppr ty <+> darrow
-pprHsContextAlways cxt = parens (interpp'SP cxt) <+> darrow
+pprHsContextAlways cxt      = parens (interpp'SP cxt) <+> darrow
 
 
 -- --------------------------------------------------------------------
@@ -502,11 +503,11 @@ pprConDecl st (ConDeclGADT { con_names = cons
     <+> (sep [pprHsForAll (hsq_explicit qvars) cxt
              ,ppr_arrow_chain (get_args args ++ [hsrc res_ty])])
   where
-    get_args (PrefixCon as) = map hsrc as
-    get_args (RecCon fields)  = [pprConDeclFields (unLoc fields)]
-    get_args (InfixCon {})    = pprPanic "pprConDecl:GADT" (ppr cons)
+    get_args (PrefixCon as)  = map hsrc as
+    get_args (RecCon fields) = [pprConDeclFields (unLoc fields)]
+    get_args (InfixCon {})   = pprPanic "pprConDecl:GADT" (ppr cons)
     cxt = fromMaybe (noLoc []) mcxt
-    ppr_arrow_chain [] = empty
+    ppr_arrow_chain []     = empty
     ppr_arrow_chain (a:as) = sep (a : map (arrow <+>) as)
     hsrc :: HsSrc a => a -> SDoc
     hsrc = toHsSrc st
@@ -539,7 +540,7 @@ pprConDeclFields fields =
     ppr_fld (L _ (XConDeclField x)) = ppr x
 #endif
     ppr_names [n] = ppr n
-    ppr_names ns = sep (punctuate comma (map ppr ns))
+    ppr_names ns  = sep (punctuate comma (map ppr ns))
 
 -- From 'HsDecls.pp_vanilla_decl_head'.
 pp_vanilla_decl_head :: (OUTPUTABLE n pr)
@@ -696,7 +697,7 @@ ppr_fam_deflt_eqn (L _ (FamEqn { feqn_tycon  = tycon
 ppr_fam_deflt_eqn (L _ (TyFamEqn { tfe_tycon = tycon
                                  , tfe_pats = tvs
                                  , tfe_fixity = fixity
-                                 , tfe_rhs = rhs}))
+                                 , tfe_rhs = rhs }))
 #endif
   = text "type" <+> pp_vanilla_decl_head tycon tvs fixity []
                 <+> equals <+> ppr rhs

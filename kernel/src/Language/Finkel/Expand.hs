@@ -1,9 +1,9 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MagicHash #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE MagicHash                  #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE ViewPatterns               #-}
 -- | Module for macro expansion.
 module Language.Finkel.Expand
   ( expand
@@ -15,55 +15,71 @@ module Language.Finkel.Expand
   ) where
 
 -- base
-import Control.Exception (throw)
-import Control.Monad (foldM, when)
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.Char (isLower)
-import Data.Maybe (catMaybes)
-import GHC.Exts (unsafeCoerce#)
+import           Control.Exception               (throw)
+import           Control.Monad                   (foldM, when)
+import           Control.Monad.IO.Class          (MonadIO (..))
+import           Data.Char                       (isLower)
+import           Data.Maybe                      (catMaybes)
+import           GHC.Exts                        (unsafeCoerce#)
 
 -- containers
-import qualified Data.Map as Map
+import qualified Data.Map                        as Map
 
 -- ghc
-import BasicTypes (FractionalLit(..))
-import DynFlags ( DynFlags(..), GeneralFlag(..), GhcLink(..)
-                , HscTarget(..), getDynFlags, gopt, gopt_unset
-                , updOptLevel, xopt_unset )
-import ErrUtils (compilationProgressMsg)
-import Exception (gbracket)
-import FastString (FastString, appendFS, fsLit, headFS, unpackFS)
-import Finder (findImportedModule)
-import GHC ( ModuleInfo, getModuleInfo, lookupModule, lookupName
-           , modInfoExports, setContext )
-import GhcMonad (GhcMonad(..))
-import HscMain (Messager, hscTcRnLookupRdrName, showModuleIndex)
-import HscTypes ( FindResult(..), HscEnv(..), InteractiveImport(..)
-                , showModMsg )
-import HsImpExp (ImportDecl(..), ieName)
-import HsSyn (HsModule(..))
-import InteractiveEval (getContext)
-import MkIface (RecompileRequired(..), recompileRequired)
-import Module (moduleNameString)
-import Name (nameOccName)
-import Outputable (showPpr)
-import RdrName (rdrNameOcc)
-import SrcLoc (GenLocated(..), SrcSpan, unLoc)
-import TyCoRep (TyThing(..))
-import Var (varName)
+import           BasicTypes                      (FractionalLit (..))
+import           DynFlags                        (DynFlags (..),
+                                                  GeneralFlag (..),
+                                                  GhcLink (..),
+                                                  HscTarget (..),
+                                                  getDynFlags, gopt,
+                                                  gopt_unset, updOptLevel,
+                                                  xopt_unset)
+import           ErrUtils                        (compilationProgressMsg)
+import           Exception                       (gbracket)
+import           FastString                      (FastString, appendFS,
+                                                  fsLit, headFS, unpackFS)
+import           Finder                          (findImportedModule)
+import           GHC                             (ModuleInfo,
+                                                  getModuleInfo,
+                                                  lookupModule, lookupName,
+                                                  modInfoExports,
+                                                  setContext)
+import           GhcMonad                        (GhcMonad (..))
+import           HscMain                         (Messager,
+                                                  hscTcRnLookupRdrName,
+                                                  showModuleIndex)
+import           HscTypes                        (FindResult (..),
+                                                  HscEnv (..),
+                                                  InteractiveImport (..),
+                                                  showModMsg)
+import           HsImpExp                        (ImportDecl (..), ieName)
+import           HsSyn                           (HsModule (..))
+import           InteractiveEval                 (getContext)
+import           MkIface                         (RecompileRequired (..),
+                                                  recompileRequired)
+import           Module                          (moduleNameString)
+import           Name                            (nameOccName)
+import           Outputable                      (showPpr)
+import           RdrName                         (rdrNameOcc)
+import           SrcLoc                          (GenLocated (..), SrcSpan,
+                                                  unLoc)
+import           TyCoRep                         (TyThing (..))
+import           Var                             (varName)
 
 -- ghc-boot
-import qualified GHC.LanguageExtensions as LangExt
+import qualified GHC.LanguageExtensions          as LangExt
 
 -- Internal
-import Language.Finkel.Builder (HImportDecl, evalBuilder, syntaxErrMsg)
-import Language.Finkel.Homoiconic
-import Language.Finkel.Eval
-import Language.Finkel.Form
-import Language.Finkel.Fnk
-import Language.Finkel.Syntax ( parseExpr, parseDecls
-                          , parseModule, parseLImport )
-import Language.Finkel.Syntax.SynUtils (cL, dL)
+import           Language.Finkel.Builder         (HImportDecl, evalBuilder,
+                                                  syntaxErrMsg)
+import           Language.Finkel.Eval
+import           Language.Finkel.Fnk
+import           Language.Finkel.Form
+import           Language.Finkel.Homoiconic
+import           Language.Finkel.Syntax          (parseDecls, parseExpr,
+                                                  parseLImport,
+                                                  parseModule)
+import           Language.Finkel.Syntax.SynUtils (cL, dL)
 
 
 -- ---------------------------------------------------------------------

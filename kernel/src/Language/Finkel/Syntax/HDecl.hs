@@ -1,59 +1,77 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE ViewPatterns      #-}
 -- | Syntax for declaration.
 module Language.Finkel.Syntax.HDecl where
 
 -- base
-import Data.Maybe (fromMaybe)
+import Data.Maybe                      (fromMaybe)
 
 -- ghc
-import BasicTypes ( Activation(..), Fixity(..),  FixityDirection(..)
-                  , InlineSpec(..), LexicalFixity(..), OverlapMode(..)
-                  , PhaseNum, RuleMatchInfo(..), SourceText(..) )
-import DataCon (SrcStrictness(..))
-import FastString (FastString, unpackFS)
-import ForeignCall (CCallConv(..), CExportSpec(..), Safety(..))
-import HsBinds (FixitySig(..), HsBind, HsBindLR(..), Sig(..))
-import HsDecls ( ClsInstDecl(..), ConDecl (..), DataFamInstDecl(..)
-               , DefaultDecl(..), DocDecl(..)
-               , FamilyDecl (..), FamilyInfo(..), FamilyResultSig (..)
-               , ForeignDecl(..), ForeignExport (..)
-               , HsDataDefn(..), HsDecl(..), HsDerivingClause(..)
-               , InstDecl(..), LTyFamDefltEqn, LTyFamInstDecl
-               , NewOrData(..), TyClDecl(..)
-               , TyFamInstDecl(..), TyFamInstEqn )
-import HsDoc (LHsDocString)
-import HsExpr (HsMatchContext(..), Match(..))
-import HsPat (Pat(..))
-import HsTypes ( ConDeclField(..), HsConDetails(..), HsType(..)
-               , HsTyVarBndr(..)
-               , mkFieldOcc, mkHsImplicitBndrs, mkHsQTvs )
-import HsUtils (mkClassOpSigs, mkFunBind, mkLHsSigType, mkLHsSigWcType)
-import OccName (dataName, tcName)
-import OrdList (toOL)
-import Outputable (SDoc, showSDocUnsafe)
-import RdrHsSyn ( mkATDefault, mkConDeclH98, mkGadtDecl, mkInlinePragma
-                , parseCImport )
-import RdrName (RdrName, mkUnqual)
-import SrcLoc (GenLocated(..), Located, SrcSpan, getLoc, noLoc, unLoc)
+import BasicTypes                      (Activation (..), Fixity (..),
+                                        FixityDirection (..),
+                                        InlineSpec (..),
+                                        LexicalFixity (..),
+                                        OverlapMode (..), PhaseNum,
+                                        RuleMatchInfo (..),
+                                        SourceText (..))
+import DataCon                         (SrcStrictness (..))
+import FastString                      (FastString, unpackFS)
+import ForeignCall                     (CCallConv (..), CExportSpec (..),
+                                        Safety (..))
+import HsBinds                         (FixitySig (..), HsBind,
+                                        HsBindLR (..), Sig (..))
+import HsDecls                         (ClsInstDecl (..), ConDecl (..),
+                                        DataFamInstDecl (..),
+                                        DefaultDecl (..), DocDecl (..),
+                                        FamilyDecl (..), FamilyInfo (..),
+                                        FamilyResultSig (..),
+                                        ForeignDecl (..),
+                                        ForeignExport (..),
+                                        HsDataDefn (..), HsDecl (..),
+                                        HsDerivingClause (..),
+                                        InstDecl (..), LTyFamDefltEqn,
+                                        LTyFamInstDecl, NewOrData (..),
+                                        TyClDecl (..), TyFamInstDecl (..),
+                                        TyFamInstEqn)
+import HsDoc                           (LHsDocString)
+import HsExpr                          (HsMatchContext (..), Match (..))
+import HsPat                           (Pat (..))
+import HsTypes                         (ConDeclField (..),
+                                        HsConDetails (..),
+                                        HsTyVarBndr (..), HsType (..),
+                                        mkFieldOcc, mkHsImplicitBndrs,
+                                        mkHsQTvs)
+import HsUtils                         (mkClassOpSigs, mkFunBind,
+                                        mkLHsSigType, mkLHsSigWcType)
+import OccName                         (dataName, tcName)
+import OrdList                         (toOL)
+import Outputable                      (SDoc, showSDocUnsafe)
+import RdrHsSyn                        (mkATDefault, mkConDeclH98,
+                                        mkGadtDecl, mkInlinePragma,
+                                        parseCImport)
+import RdrName                         (RdrName, mkUnqual)
+import SrcLoc                          (GenLocated (..), Located, SrcSpan,
+                                        getLoc, noLoc, unLoc)
 
 #if MIN_VERSION_ghc (8,8,0)
-import HsTypes (HsArg(..))
+import HsTypes                         (HsArg (..))
 #endif
 
 #if MIN_VERSION_ghc (8,6,0)
-import HsExtension (noExt)
+import HsExtension                     (noExt)
 #else
-import HsDecls (noForeignImportCoercionYet, noForeignExportCoercionYet)
-import PlaceHolder (PlaceHolder(..), placeHolderNames, placeHolderType)
+import HsDecls                         (noForeignExportCoercionYet,
+                                        noForeignImportCoercionYet)
+import PlaceHolder                     (PlaceHolder (..), placeHolderNames,
+                                        placeHolderType)
 #endif
 
 #if MIN_VERSION_ghc (8,4,0)
-import HsDecls (FamEqn(..))
+import HsDecls                         (FamEqn (..))
 #else
-import HsDecls (TyFamEqn(..))
+import HsDecls                         (TyFamEqn (..))
 #endif
 
 -- Internal
@@ -247,7 +265,7 @@ b_classD (tys,ty) decls = do
               return (l1, n, [L l1 (kindedTV n k)])
             _ -> builderError
         toATDef d = case mkATDefault' d of
-                      Right lty -> return lty
+                      Right lty      -> return lty
                       Left (_, sdoc) -> failB (showSDocUnsafe sdoc)
     (l, name, bndrs) <- unAppTy ty
     atdefs <- mapM toATDef (cd_tfis cd)
@@ -534,9 +552,9 @@ b_funOrPatD eq_form pats gxd@(grhss,decls) =
       | otherwise    -> setLastToken eq_form >> failB "malformed binding"
   where
     isVarPat (VarPat {}) = True
-    isVarPat _ = False
+    isVarPat _           = False
     varToName (VarPat _EXT lname) = return lname
-    varToName _ = failB "invalid name"
+    varToName _                   = failB "invalid name"
 {-# INLINE b_funOrPatD #-}
 
 b_funBindD :: Located RdrName -> [HPat] -> [HGRHS] -> [HDecl]
@@ -695,8 +713,8 @@ mkDataFamInstDecl :: Located RdrName
                   -> [HType]
                   -> HsDataDefn PARSED
                   -> DataFamInstDecl PARSED
-mkDataFamInstDecl tycon pats rhs =
 #if MIN_VERSION_ghc (8,4,0)
+mkDataFamInstDecl tycon pats rhs =
   DataFamInstDecl (mkHsImplicitBndrs feqn)
   where
     feqn = FamEqn { feqn_tycon = tycon
@@ -713,6 +731,7 @@ mkDataFamInstDecl tycon pats rhs =
 #endif
                   }
 #else
+mkDataFamInstDecl tycon pats rhs =
   DataFamInstDecl { dfid_tycon = tycon
                   , dfid_pats = mkHsImplicitBndrs pats
                   , dfid_fixity = Prefix
@@ -755,7 +774,7 @@ unParTy :: HType -> HType
 unParTy t0 =
   case t0 of
     L _ (HsParTy _EXT t1) -> t1
-    _                       -> t0
+    _                     -> t0
 {-# INLINE unParTy #-}
 
 noUserInline :: InlineSpec

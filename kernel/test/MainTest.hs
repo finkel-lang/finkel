@@ -5,12 +5,12 @@ module MainTest
   ) where
 
 -- base
-import Control.Exception (catch, throw)
-import System.Environment (withArgs)
-import System.Exit (ExitCode(..))
+import Control.Exception    (catch, throw)
+import System.Environment   (withArgs)
+import System.Exit          (ExitCode (..))
 
 -- filepath
-import System.FilePath ((</>))
+import System.FilePath      ((</>))
 
 -- hspec
 import Test.Hspec
@@ -70,7 +70,7 @@ runDefaultMain args =
   catch (withArgs args defaultMain)
         (\e -> case e of
                  ExitSuccess -> return ()
-                 _ -> throw e)
+                 _           -> throw e)
 
 odir :: FilePath
 odir = "test" </> "data" </> "main"

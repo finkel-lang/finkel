@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP          #-}
 -- | Module containing functions for code evaluation.
 module Language.Finkel.Eval
   ( evalDecls
@@ -9,41 +9,44 @@ module Language.Finkel.Eval
   ) where
 
 -- base
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class  (liftIO)
 #if MIN_VERSION_ghc(8,4,0)
-import Data.IORef (readIORef)
+import Data.IORef              (readIORef)
 #endif
 
 -- ghc
-import ByteCodeGen (byteCodeGen)
-import ConLike (ConLike(..))
-import CorePrep (corePrepPgm)
-import CoreSyn (CoreProgram, bindersOfBinds)
-import Desugar (deSugar)
-import ErrUtils (Messages)
-import Exception (throwIO)
-import FastString (fsLit)
-import GhcMonad (GhcMonad(..))
-import InteractiveEval (compileParsedExprRemote)
-import HscMain (hscAddSptEntries, hscSimplify)
-import HscTypes ( CgGuts(..), ModDetails(..), HscEnv(..), ModGuts(..)
-                , InteractiveContext(..), TyThing(..)
-                , extendInteractiveContext, mkSrcErr )
-import Id (idName, isDFunId, isImplicitId)
-import Linker (linkDecls)
-import Module (Module, ModLocation(..), moduleName, moduleNameString)
-import Name (isExternalName)
-import SrcLoc (SrcLoc(..), srcLocSpan)
-import TcRnDriver (TcRnExprMode(..), tcRnDeclsi, tcRnExpr, tcRnType)
-import TcRnTypes (TcGblEnv(..))
-import TidyPgm (tidyProgram)
-import TyCoRep (Type(..), Kind, tidyType)
-import TyCon (TyCon, isDataTyCon, isImplicitTyCon)
-import Util (filterOut)
-import VarEnv (emptyTidyEnv)
+import ByteCodeGen             (byteCodeGen)
+import ConLike                 (ConLike (..))
+import CorePrep                (corePrepPgm)
+import CoreSyn                 (CoreProgram, bindersOfBinds)
+import Desugar                 (deSugar)
+import ErrUtils                (Messages)
+import Exception               (throwIO)
+import FastString              (fsLit)
+import GhcMonad                (GhcMonad (..))
+import HscMain                 (hscAddSptEntries, hscSimplify)
+import HscTypes                (CgGuts (..), HscEnv (..),
+                                InteractiveContext (..), ModDetails (..),
+                                ModGuts (..), TyThing (..),
+                                extendInteractiveContext, mkSrcErr)
+import Id                      (idName, isDFunId, isImplicitId)
+import InteractiveEval         (compileParsedExprRemote)
+import Linker                  (linkDecls)
+import Module                  (ModLocation (..), Module, moduleName,
+                                moduleNameString)
+import Name                    (isExternalName)
+import SrcLoc                  (SrcLoc (..), srcLocSpan)
+import TcRnDriver              (TcRnExprMode (..), tcRnDeclsi, tcRnExpr,
+                                tcRnType)
+import TcRnTypes               (TcGblEnv (..))
+import TidyPgm                 (tidyProgram)
+import TyCon                   (TyCon, isDataTyCon, isImplicitTyCon)
+import TyCoRep                 (Kind, Type (..), tidyType)
+import Util                    (filterOut)
+import VarEnv                  (emptyTidyEnv)
 
 -- ghci
-import GHCi.RemoteTypes (HValue, localRef, withForeignRef)
+import GHCi.RemoteTypes        (HValue, localRef, withForeignRef)
 
 -- internal
 import Language.Finkel.Builder

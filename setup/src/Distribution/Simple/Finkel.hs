@@ -15,48 +15,52 @@ module Distribution.Simple.Finkel
   ) where
 
 -- base
-import Control.Exception (bracket_)
-import Control.Monad (foldM, mapAndUnzipM, when)
-import Data.Foldable (toList)
-import Data.Function (on)
-import Data.List (isSubsequenceOf, unionBy)
+import           Control.Exception                  (bracket_)
+import           Control.Monad                      (foldM, mapAndUnzipM,
+                                                     when)
+import           Data.Foldable                      (toList)
+import           Data.Function                      (on)
+import           Data.List                          (isSubsequenceOf,
+                                                     unionBy)
 
 #if !MIN_VERSION_base (4,13,0)
-import Data.Monoid (Monoid(..))
+import           Data.Monoid                        (Monoid (..))
 #endif
 
-import System.Environment (getExecutablePath)
+import           System.Environment                 (getExecutablePath)
 
 -- filepath
-import System.FilePath ((<.>), (</>))
+import           System.FilePath                    ((<.>), (</>))
 
 -- Cabal
-import Distribution.ModuleName (toFilePath)
-import Distribution.PackageDescription
-import Distribution.Simple
-import Distribution.Simple.BuildPaths (autogenComponentModulesDir)
-import Distribution.Simple.Configure (configure, findDistPrefOrDefault)
-import Distribution.Simple.Haddock (haddock)
-import Distribution.Simple.LocalBuildInfo
-import Distribution.Simple.Program
-import Distribution.Simple.Program.Types
-import Distribution.Simple.PreProcess
-import Distribution.Simple.Register (internalPackageDBPath)
-import Distribution.Simple.Setup
-import Distribution.Simple.Program.GHC
-import Distribution.Utils.NubList
+import           Distribution.ModuleName            (toFilePath)
+import           Distribution.PackageDescription
+import           Distribution.Simple
+import           Distribution.Simple.BuildPaths     (autogenComponentModulesDir)
+import           Distribution.Simple.Configure      (configure,
+                                                     findDistPrefOrDefault)
+import           Distribution.Simple.Haddock        (haddock)
+import           Distribution.Simple.LocalBuildInfo
+import           Distribution.Simple.PreProcess
+import           Distribution.Simple.Program
+import           Distribution.Simple.Program.GHC
+import           Distribution.Simple.Program.Types
+import           Distribution.Simple.Register       (internalPackageDBPath)
+import           Distribution.Simple.Setup
+import           Distribution.Utils.NubList
 
 #if MIN_VERSION_Cabal(2,4,0)
-import Distribution.Types.ExposedModule
+import           Distribution.Types.ExposedModule
 #else
-import Distribution.InstalledPackageInfo
+import           Distribution.InstalledPackageInfo
 #endif
 
 -- directory
-import System.Directory (findFile, doesFileExist, removeFile)
+import           System.Directory                   (doesFileExist,
+                                                     findFile, removeFile)
 
-import qualified Distribution.Simple.Setup as Setup
-import qualified Distribution.Verbosity as Verbosity
+import qualified Distribution.Simple.Setup          as Setup
+import qualified Distribution.Verbosity             as Verbosity
 
 
 -- --------------------------------------------------------------------

@@ -2,25 +2,26 @@
 module Main where
 
 -- base
-import Control.Exception (SomeException(..), catch)
-import Data.List (isSubsequenceOf)
-import System.Environment ( getEnv, getExecutablePath, setEnv
-                          , unsetEnv, withArgs )
+import Control.Exception          (SomeException (..), catch)
+import Data.List                  (isSubsequenceOf)
+import System.Environment         (getEnv, getExecutablePath, setEnv,
+                                   unsetEnv, withArgs)
 
 -- ghc
 import Config
 
 -- directory
-import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.Directory           (getCurrentDirectory,
+                                   setCurrentDirectory)
 
 -- filepath
-import System.FilePath ((</>), joinPath, splitDirectories)
+import System.FilePath            (joinPath, splitDirectories, (</>))
 
 -- hspec
 import Test.Hspec
 
 -- process
-import System.Process (readProcess)
+import System.Process             (readProcess)
 
 -- Internal
 import Distribution.Simple.Finkel

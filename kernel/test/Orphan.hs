@@ -4,15 +4,15 @@
 module Orphan where
 
 -- ghc
-import BasicTypes (FractionalLit(..))
-import FastString (unpackFS)
-import SrcLoc (GenLocated(..))
+import BasicTypes           (FractionalLit (..))
+import FastString           (unpackFS)
+import SrcLoc               (GenLocated (..))
 
 -- QuickCheck
-import Test.QuickCheck ( Arbitrary(..), CoArbitrary(..), Gen
-                       , arbitraryUnicodeChar, elements
-                       , getUnicodeString, listOf
-                       , oneof, scale, variant )
+import Test.QuickCheck      (Arbitrary (..), CoArbitrary (..), Gen,
+                             arbitraryUnicodeChar, elements,
+                             getUnicodeString, listOf, oneof, scale,
+                             variant)
 
 -- Internal
 import Language.Finkel.Form

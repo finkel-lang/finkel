@@ -14,27 +14,27 @@ module Language.Finkel.Reader
   ) where
 
 -- base
-import Control.Monad.Fail (MonadFail(..))
-import Data.Char (toLower)
-import Data.List (foldl')
+import           Control.Monad.Fail     (MonadFail(..))
+import           Data.Char              (toLower)
+import           Data.List              (foldl')
 
 -- bytestring
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy   as BL
 
 -- ghc
-import FastString (FastString, fsLit, unpackFS)
-import HsImpExp (ideclName)
-import Module (moduleNameString)
-import SrcLoc (GenLocated(..), Located, SrcSpan)
+import           FastString             (FastString, fsLit, unpackFS)
+import           HsImpExp               (ideclName)
+import           Module                 (moduleNameString)
+import           SrcLoc                 (GenLocated(..), Located, SrcSpan)
 
 -- ghc-boot
-import GHC.LanguageExtensions (Extension(..))
+import           GHC.LanguageExtensions (Extension(..))
 
 -- Internal
-import Language.Finkel.Builder
-import Language.Finkel.Form
-import Language.Finkel.Lexer
-import Language.Finkel.Syntax
+import           Language.Finkel.Builder
+import           Language.Finkel.Form
+import           Language.Finkel.Lexer
+import           Language.Finkel.Syntax
 }
 
 %name sexpr_ sexp
