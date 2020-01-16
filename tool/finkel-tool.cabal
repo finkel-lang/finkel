@@ -2,12 +2,16 @@ cabal-version:       2.0
 name:                finkel-tool
 version:             0.17.0.0
 synopsis:            Finkel tool
-description:         Finkel tool
-homepage:            https://github.com/finkel-lang/tool#readme
+description:
+  Finkel tool
+  .
+  See the <https://finkel.readthedocs.org documentation> for more info.
+
+homepage:            https://github.com/finkel-lang/finkel#readme
 license:             BSD3
 license-file:        LICENSE
 author:              8c6794b6
-maintainer:          example@example.com
+maintainer:          8c6794b6@gmail.com
 copyright:           2017-2020 8c6794b6
 category:            Language
 build-type:          Custom
@@ -32,7 +36,7 @@ tested-with:           GHC == 8.2.2
 
 custom-setup
   setup-depends:       base         >= 4.7 && < 5
-                     , Cabal        >= 2.0
+                     , Cabal        >= 2.0 && < 3.1
                      , finkel-setup >= 0.1
 
 library
@@ -50,19 +54,19 @@ library
                        Finkel.Tool.Version
                        Finkel.Tool.Main
                        Finkel.Setup
-  build-depends:       base         >= 4.7 && < 5
-                     , bytestring
-                     , directory
-                     , haskeline
-                     , ghc
-                     , ghc-boot
-                     , ghci
-                     , network
-                     , process
-                     , transformers
-                     , finkel-kernel >= 0.28
-                     , finkel-lang   >= 0.15
-                     , finkel-setup  >= 0.1
+  build-depends:       base          >= 4.7    && < 5
+                     , bytestring    >= 0.10.8 && < 0.11
+                     , directory     >= 1.3.0  && < 1.4
+                     , haskeline     >= 0.7.4  && < 0.8
+                     , ghc           >= 8.2.0  && < 8.10.0
+                     , ghc-boot      >= 8.2.0  && < 8.10.0
+                     , ghci          >= 8.2.0  && < 8.10.0
+                     , network       >= 2.6.3  && < 3.2
+                     , process       >= 1.6.1  && < 1.7
+                     , transformers  >= 0.5.2  && < 0.5.7
+                     , finkel-kernel >= 0.28   && < 1
+                     , finkel-lang   >= 0.15   && < 1
+                     , finkel-setup  >= 0.1    && < 1
   default-language:    Haskell2010
   ghc-options:       -Wall
 
@@ -75,18 +79,19 @@ test-suite finkel-tool-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  build-depends:       QuickCheck
-                     , base
+  build-depends:       base
                      , directory
-                     , filepath
                      , ghc
                      , haskeline
-                     , hspec
                      , network
                      , process
                      , finkel-lang
                      , finkel-kernel
                      , finkel-tool
+                     --
+                     , filepath   >= 1.4.1  && < 1.5
+                     , hspec      >= 2.4.8  && < 2.8
+                     , QuickCheck >= 2.10.1 && < 2.14
   if flag(dynamic)
     ghc-options:       -dynamic
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
@@ -105,10 +110,10 @@ executable finkel
   if flag(dynamic)
     ghc-options:       -dynamic
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base >= 4.10 && < 5
+  build-depends:       base
                      , finkel-tool
   default-language:    Haskell2010
 
 source-repository head
   type:     git
-  location: https://github.com/finkel-lang/tool
+  location: https://github.com/finkel-lang/finkel
