@@ -107,9 +107,6 @@ import           HscTypes                     (mkModuleGraph)
 import           HscTypes                     (throwErrors)
 #endif
 
--- ghc-paths
-import           GHC.Paths                    (libdir)
-
 -- time
 import           Data.Time                    (getCurrentTime)
 
@@ -122,6 +119,8 @@ import           Language.Finkel.Form
 import           Language.Finkel.Lexer
 import           Language.Finkel.Syntax
 import           Language.Finkel.TargetSource
+
+#include "finkel_kernel_config.h"
 
 
 -- ---------------------------------------------------------------------
@@ -239,6 +238,10 @@ defaultFnkEnv = emptyFnkEnv
   , envDefaultMacros  = specialForms
   , envMake           = Just simpleMake
   , envLibDir         = Just libdir }
+ where
+   -- CPP macro defined in "finkel_kernel_config.h", see "Setup.hs"
+   -- for detail.
+   libdir = FINKEL_KERNEL_LIBDIR
 
 -- | Run given builder.
 buildHsSyn :: Builder a -- ^ Builder to use.

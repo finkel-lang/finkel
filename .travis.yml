@@ -1,8 +1,13 @@
 language: c
 
+os: linux
+
 cache:
   directories:
     - $HOME/.stack
+    - $HOME/.cabal/packages
+    - $HOME/.cabal/store
+    - $HOME/.ghcup
 
 addons:
   apt:
@@ -10,20 +15,66 @@ addons:
       - libgmp-dev
 
 env:
-  matrix:
-    - RESOLVER="lts-11"
-    - RESOLVER="lts-12"
-    - RESOLVER="lts-14"
+  jobs:
+    - EXEC="stack" RESOLVER="lts-11"
+    - EXEC="stack" RESOLVER="lts-12"
+    - EXEC="stack" RESOLVER="lts-14"
+    - EXEC="cabal" GHC_VERSION="8.8.2"
 
 before_install:
-  # Prepare stack executable
-  - mkdir -p ~/.local/bin
-  - export PATH=$HOME/.local/bin:$PATH
-  - travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+  - |
+    case "$EXEC" in
+      stack)
+        mkdir -p ~/.local/bin
+        export PATH="$HOME/.local/bin:$PATH"
+        travis_retry curl -L \
+          https://get.haskellstack.org/stable/linux-x86_64.tar.gz | \
+          tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+        ;;
+      cabal)
+        mkdir -p ~/.ghcup/bin
+        curl -L \
+          https://gitlab.haskell.org/haskell/ghcup/raw/master/ghcup > \
+          ~/.ghcup/bin/ghcup
+        chmod +x ~/.ghcup/bin/ghcup
+        export PATH="$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
+        ghcup -c install-cabal
+        ghcup -c install $GHC_VERSION
+        ghcup -c set $GHC_VERSION
+        ;;
+    esac
 
 install:
-  - stack --resolver=${RESOLVER} --no-terminal --install-ghc test --only-dependencies
+  - |
+    case "$EXEC" in
+      stack)
+        stack --version
+        stack --resolver=${RESOLVER} --no-terminal --install-ghc \
+            test --only-dependencies
+        ;;
+      cabal)
+        which cabal
+        which ghc
+        cabal --version
+        ghc --version
+        travis_retry cabal v2-update
+        ;;
+    esac
 
 script:
-  - stack --resolver=${RESOLVER} --no-terminal build --fast --test --coverage --no-run-tests finkel-kernel finkel-setup finkel-lang p02 finkel-tool
-  - stack --resolver=${RESOLVER} --no-terminal build --fast --test --coverage finkel-kernel finkel-setup finkel-lang finkel-tool
+  - |
+    case "$EXEC" in
+      stack)
+        stack --resolver=${RESOLVER} --no-terminal build \
+              --fast --test --coverage --no-run-tests \
+              finkel-kernel finkel-setup finkel-lang p02 finkel-tool
+        stack --resolver=${RESOLVER} --no-terminal build \
+              --fast --test --coverage \
+              finkel-kernel finkel-setup finkel-lang finkel-tool
+        ;;
+      cabal)
+         cabal v2-build all
+         cabal v2-test all
+         cabal v2-haddock all
+         ;;
+    esac

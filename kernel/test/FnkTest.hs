@@ -9,9 +9,6 @@ import           Data.Maybe                 (fromMaybe, isNothing)
 -- bytestring
 import qualified Data.ByteString.Lazy.Char8 as BL
 
--- ghc-paths
-import           GHC.Paths                  (libdir)
-
 -- ghc
 import           Exception                  (gbracket)
 import           FastString                 (fsLit)
@@ -140,8 +137,7 @@ gensymTest =
             g2 <- gensym
             return $ toCode [g1, g2]
           f = macroFunction (Macro gen)
-          env = emptyFnkEnv {envMacros = specialForms
-                            ,envLibDir = Just libdir}
+          env = cleanFnkEnv
       ret <- runFnk (f nil) env
       case ret of
         LForm (L _ (HsList [g1, g2])) -> g1 `shouldNotBe` g2
@@ -151,8 +147,7 @@ expandTest :: Spec
 expandTest = do
   let expand1_fn code =
         runFnk (macroFunction (Macro expand1) code) env
-      env = emptyFnkEnv {envMacros = specialForms
-                        ,envLibDir = Just libdir}
+      env = cleanFnkEnv
   describe "expand-1 of nil" $
     it "should return nil" $ do
       ret <- expand1_fn nil
@@ -228,3 +223,7 @@ emptyForm :: Code
 emptyForm =
   let bgn = LForm (genSrc (Atom (ASymbol (fsLit ":begin"))))
   in  LForm (genSrc (List [bgn]))
+
+cleanFnkEnv :: FnkEnv
+cleanFnkEnv = defaultFnkEnv {envDefaultMacros = emptyEnvMacros
+                            ,envMake = Nothing}

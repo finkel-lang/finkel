@@ -114,8 +114,8 @@ executable.
 Getting More Help
 -----------------
 
-The ``finkel`` executable contains a ``help`` sub-command to show brief
-usage of available commands:
+The ``finkel`` executable contains a ``help`` sub-command to show
+brief usages of available commands:
 
 .. code-block:: console
 

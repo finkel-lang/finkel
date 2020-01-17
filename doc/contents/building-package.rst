@@ -74,7 +74,7 @@ template:
 
 .. code-block:: console
 
-   $ stack new my-second-package github:finkel-lang/finkel/tool/finkel.hsfiles
+   $ stack new my-second-package https://raw.githubusercontent.com/finkel-lang/finkel/master/tool/finkel.hsfiles
 
 The above command will make a directory named ``my-second-package``
 with a cabal configuration file, ``Setup.hs`` script, and a stub
@@ -94,6 +94,17 @@ should look like below:
    │  └── Lib.fnk
    └── test
       └── Spec.hs
+
+
+.. note::
+
+   As of cabal version 3.0.0, the file extension of an executable in a
+   cabal package needs to end with ``.hs`` or ``.c`` file
+   extension. From this restriction, one needs to make a wrapper file
+   to run an executable written in Finkel. This is why the executable
+   and test stanzas in cabal configuration file generated from
+   template contains dummy ``Main.hs`` and ``Spec.hs`` files instead
+   of ``*.fnk`` files.
 
 Add a new file named ``my-second-package/src/FnkCodes.fnk``, with
 Finkel source codes:
@@ -131,20 +142,8 @@ before:
 .. note::
 
    It is also possible to use a library package containing Finkel code
-   from other Haskell packages as a build dependency in cabal
-   configuration file since the resulting object codes are compiled by
-   ``ghc``.
-
-
-Executable In Package
----------------------
-
-As of cabal version 2.4.0, the file extension of an executable in a
-cabal package needs to end with ``.hs`` or ``.c`` file extension. From
-this restriction, one needs to make a wrapper file to run an
-executable written in Finkel. This is why the executable and test
-stanzas in cabal configuration file generated from template contained
-dummy ``Main.hs`` and ``Spec.hs`` files instead of ``*.fnk`` files.
+   from other Haskell packages as a build dependency, since the
+   resulting object codes are compiled by compatible ``ghc`` version.
 
 
 Test, Coverage, And Haddock

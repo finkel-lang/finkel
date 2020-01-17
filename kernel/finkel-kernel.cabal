@@ -31,8 +31,9 @@ tested-with:           GHC == 8.2.2
                      , GHC == 8.8.1
 
 custom-setup
-  setup-depends:       base  >= 4.10 && < 5
-                     , Cabal >= 2.0  && < 3.1
+  setup-depends:       base     >= 4.10  && < 5
+                     , Cabal    >= 2.0   && < 3.1
+                     , filepath >= 1.4.1 && < 1.5
 
 library
   hs-source-dirs:      src
@@ -70,7 +71,6 @@ library
                      , filepath     >= 1.4.1  && < 1.5
                      , ghc          >= 8.2.0  && < 8.10.0
                      , ghc-boot     >= 8.2.0  && < 8.10.0
-                     , ghc-paths    >= 0.1.0  && < 0.2
                      , ghci         >= 8.2.0  && < 8.10.0
                      , process      >= 1.6.1  && < 1.7
                      , time         >= 1.8.0  && < 1.10
@@ -120,6 +120,7 @@ test-suite finkel-kernel-test
                        SyntaxTest
                        Orphan
                        TestAux
+                       Paths_finkel_kernel
   build-depends:       base
                      , bytestring
                      , containers
@@ -127,7 +128,6 @@ test-suite finkel-kernel-test
                      , directory
                      , filepath
                      , ghc
-                     , ghc-paths
                      , process
                      , finkel-kernel
                      --

@@ -48,14 +48,13 @@ import           Util                         (looksLikeModuleName)
 import           GHC.HandleEncoding           (configureHandleEncoding)
 #endif
 
--- ghc-paths
-import qualified GHC.Paths
-
 -- internal
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make
 import           Language.Finkel.TargetSource
 import qualified Paths_finkel_kernel
+
+#include "finkel_kernel_config.h"
 
 
 -- ---------------------------------------------------------------------
@@ -268,7 +267,11 @@ printFinkelVersion = putStrLn v
 
 -- XXX: Add option to specify path of ghc executable?
 rawGhc :: [String] -> IO ()
-rawGhc args = rawSystem GHC.Paths.ghc args >>= exitWith
+rawGhc args = rawSystem ghc args >>= exitWith
+  where
+    -- CPP macro defined in "finkel_kernel_config.h", see "Setup.hs"
+    -- for detail.
+    ghc = FINKEL_KERNEL_GHC
 
 -- | When any of options listed here were found, invoke raw @ghc@
 -- without using Finkel compiler. Otherwise @ghc@ will complain with

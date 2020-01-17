@@ -15,13 +15,25 @@
     (forkIO newEmptyMVar killThread putMVar takeMVar))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
+   (System.Environment (lookupEnv))
+
+   ;; directory
+   (System.Directory (getHomeDirectory))
+
+   ;; filepath
+   (System.FilePath (</>))
+
+   ;; ghc
+   (Config (cProjectVersion))
+   (DynFlags ((DynFlags ..) (HasDynFlags ..) parseDynamicFlagsCmdLine))
+   (SrcLoc (noLoc))
 
    ;; hspec
    (Test.Hspec)
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Fnk (runFnk))
+   (Language.Finkel.Fnk (runFnk setDynFlags))
 
    ;; Internal
    (Finkel.Tool.CLI)
@@ -139,10 +151,40 @@
     etf-satisfy (-> Code (-> Result Bool) Spec)
     etf-cleanup (IO ())}))
 
+(defn (:: if-using-stack (=> (MonadIO m) (-> (m a) (m a) (m a))))
+  "Perform the first action when invoked from @stack@, otherwise
+  perform the second."
+  [stack-act other-act]
+  (do (<- mb-ghc-pkg-path (liftIO (lookupEnv "GHC_PACKAGE_PATH")))
+      (case mb-ghc-pkg-path
+        (Just _) stack-act
+        Nothing  other-act)))
+
+(defn (:: init-etf-for-cabal (Fnk ()))
+  "Initialization work for running eval tests with `cabal-install' 3.0.0."
+  (do (<- dflags0 getDynFlags)
+      (<- home (liftIO getHomeDirectory))
+      (let ((= ghc-ver (++ "ghc-" cProjectVersion))
+            (= storedb (</> home ".cabal" "store" ghc-ver "package.db"))
+            (= inplacedb
+              (</> ".." "dist-newstyle" "packagedb" ghc-ver))
+            (= args (map noLoc ["-package-db" storedb
+                                "-package-db" inplacedb]))
+            (= dflags1 (dflags0 {packageEnv (Just "-")}))))
+      (<- (, dflags2 _ _)
+        (parseDynamicFlagsCmdLine dflags0 args))
+      (setDynFlags dflags2)))
+
+(defn (:: init-etf (Fnk ()))
+  "Initialization work for `EvalTestFns'."
+  (if-using-stack (return ()) init-etf-for-cabal))
+
 (defn (:: makeEvalTestFns (IO EvalTestFns))
   (do (<- out-mv newEmptyMVar)
       (<- (@ resources (, tmpfile hdl in-mv)) acquire-repl)
-      (<- etid (forkIO (runFnk (eval-loop hdl in-mv) repl-env)))
+      (<- etid (forkIO (runFnk (do init-etf
+                                   (eval-loop hdl in-mv))
+                               repl-env)))
       (let ((= eval-form right-or-left form expect
               (describe
                (concat ["evaluate " (show form)])

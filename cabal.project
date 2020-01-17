@@ -1,7 +1,6 @@
 packages:
   kernel/
   setup/
-  setup/test/data/p01/
   lang/
   tool/
 
