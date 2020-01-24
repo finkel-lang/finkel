@@ -11,7 +11,7 @@ Or in other words, [Haskell][haskell] in S-expression.
 
 ## Sample code
 
-```lisp
+```clojure
 ;;;; File: fib.fnk
 
 (:doc "Simple example module for fib executable.
@@ -37,13 +37,34 @@ fibonacci number of the argument.")
          (fib (- n 2))))
 ```
 
-## Compiling and running:
+## Compiling an executable
 
-    $ finkel make -o fib fib.fnk
-    [1 of 1] Compiling Main             ( fib.fnk, fib.o )
-    Linking fib
-    $ ./fib 10
-    55
+```
+$ finkel make -o fib fib.fnk
+[1 of 1] Compiling Main             ( fib.fnk, fib.o )
+Linking fib
+$ ./fib 10
+55
+```
+
+## Running REPL
+
+```
+$ finkel repl
+Hit `Ctrl-d' or type ,q to quit, type ,? for help.
+> (+ 1 2 3 4 5)
+15
+> ,load fib.fnk
+[1 of 1] Compiling Main             ( fib.fnk, interpreted )
+; loaded fib.fnk
+> ,info fib
+fib :: Int -> Int       -- Defined at fib.fnk:18:11
+> (map fib [1 .. 10])
+[1,1,2,3,5,8,13,21,34,55]
+> (System.Environment.withArgs ["10"] main)
+55
+> ,q
+```
 
 ## Further resources
 
