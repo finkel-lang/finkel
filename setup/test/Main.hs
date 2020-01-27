@@ -56,7 +56,7 @@ buildPackage :: String -> [String] -> String -> Spec
 buildPackage cwd pkgdbs name =
   describe ("package " ++ name) $
     it "should compile and pass the tests" $ do
-      let pkgdir = cwd </> "test" </> "data" </> name
+      let pkgdir = joinPath [cwd, "test", "data", name]
           pkgdb_flags =
             [ "--package-db=clear"
             , "--package-db=global"
@@ -78,7 +78,7 @@ buildPackage cwd pkgdbs name =
 setup :: [String] -> IO ()
 setup args = do
   putStrLn (unwords ("running:" : args))
-  withArgs args fnkMain
+  withArgs args fnkInternalMain
 
 getPackageDbs :: String -> IO [String]
 getPackageDbs executable_path =

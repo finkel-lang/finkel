@@ -1,6 +1,6 @@
 module Main where
 
-import Distribution.Simple.Finkel (fnkMain)
+import Distribution.Simple.Finkel (fnkInternalMain)
 
 main :: IO ()
-main = fnkMain
+main = fnkInternalMain

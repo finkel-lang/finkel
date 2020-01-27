@@ -4,7 +4,9 @@ module Distribution.Simple.Finkel
   (
   -- * Main functions
     fnkMain
+  , fnkInternalMain
   , fnkMainWith
+  , makeFnkMain
 
   -- * UserHooks
   , fnkHooksWith
@@ -70,34 +72,56 @@ import qualified Distribution.Verbosity             as Verbosity
 -- ------------------------------------------------------------------------
 
 -- | Main function using /fnkc/ executable.
+--
+-- This acton uses the /fnkc/ executable found on system when building
+-- a package with /stack/, and wrap with /cabal v2-exec/ when
+-- buildiing with /cabal-install/.
 fnkMain :: IO ()
 fnkMain = fnkMainWith "fnkc" []
 
--- | Main function with given executable name and arguments passed to
--- the executable.  This function is intended to be used via @stack@ and
+-- | Main function using /fnkc/ executable for finkel-XXX packages.
+--
+-- This function is intended to be used via @stack@ and
 -- @cabal@. It calls given executable via @cabal new-run@ when the
 -- executable built from @Setup.hs@ were not for @stack@.
-fnkMainWith :: String   -- ^ Executable name.
-            -> [String] -- ^ Arguments passed to the executable.
-            -> IO ()
-fnkMainWith exec args = chooseOne >>= defaultMainWithHooks
-  where
-    chooseOne = do
-      exec_path <- getExecutablePath
-      if ".stack" `isSubsequenceOf` exec_path
-         then return plainHook
-         else return cabalHook
+fnkInternalMain :: IO ()
+fnkInternalMain = makeFnkMain "v2-run" "fnkc" []
 
+-- | Main function with given executable name and arguments passed to
+-- the executable.
+fnkMainWith :: String   -- ^ Executable name.
+            -> [String] -- ^ Args passed to the executable.
+            -> IO ()
+fnkMainWith = makeFnkMain "v2-exec"
+
+-- | Make a main function for compiling Finkel codes.
+makeFnkMain :: String   -- ^ Cabal command to invoke when building
+                        -- package with /cabal-install/.
+            -> String   -- ^ Executable name.
+            -> [String] -- ^ Argument passed to the executable.
+            -> IO ()
+makeFnkMain cabal_cmd exec args = actWithStackOrCabal stack cabal
+  where
     -- Stack change the PATH environment variable, no need to wrap the
     -- executable "stack run".
-    plainHook =
-      fnkHooksWith exec args False
+    stack = defaultMainWithHooks (fnkHooksWith exec args False)
 
     -- Cabal v2 style build does not change the PATH environment
-    -- varialbe as done in stack, wrapping the command with "v2-run".
-    cabalHook =
-      let cabal_args = ["v2-run", "-v0", "--", exec] ++ args
-      in  fnkHooksWith "cabal" cabal_args False
+    -- varialbe as done in stack, wrapping the exec with given cabal
+    -- command.
+    cabal = let cabal_args = [cabal_cmd, "-v0", "--", exec] ++ args
+                hooks = fnkHooksWith "cabal" cabal_args False
+            in  defaultMainWithHooks hooks
+
+-- | Choose building action for /stack/ or /cabal-install/.
+actWithStackOrCabal :: IO () -- ^ Main action for /stack/.
+                    -> IO () -- ^ Main action for /cabal-install/.
+                    -> IO ()
+actWithStackOrCabal stack_act cabal_act = do
+  exec_path <- getExecutablePath
+  if ".stack" `isSubsequenceOf` exec_path
+     then stack_act
+     else cabal_act
 
 
 -- ---------------------------------------------------------------------

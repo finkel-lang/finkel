@@ -5,10 +5,10 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Setup
-  (export
-   finkelMakeMain
-   defaultMainWithHooks
-   fnkHooksWith)
+  (export finkelMakeMain
+          finkelInternalMakeMain
+          defaultMainWithHooks
+          fnkHooksWith)
   (import
    ;; finkel-kernel
    (Distribution.Simple.Finkel)))
@@ -16,5 +16,11 @@
 (defn (:: finkelMakeMain (IO ()))
   "Main function with @make@ command.
 
-Intended to be used from cabal setup script."
-  (fnkMainWith "finkel" ["make"]))
+Intended to be used from /Setup.hs/ script in cabal package."
+  (makeFnkMain "v2-exec" "finkel" ["make"]))
+
+(defn (:: finkelInternalMakeMain (IO ()))
+  "Like `finkelMakeMain', but for internal development.
+
+This function is intended to be used in finkel project packages."
+  (makeFnkMain "v2-run" "finkel" ["make"]))

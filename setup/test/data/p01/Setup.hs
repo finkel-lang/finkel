@@ -1,2 +1,2 @@
 import Distribution.Simple.Finkel
-main = fnkMain
+main = fnkInternalMain

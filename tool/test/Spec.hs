@@ -3,8 +3,8 @@ module Main where
 import CLITest
 import CompatTest
 import MainTest
-import ReplTest
 import ReplMacroTest
+import ReplTest
 import SetupTest
 import Test.Hspec
 
