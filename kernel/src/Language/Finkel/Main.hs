@@ -313,7 +313,7 @@ isSourceTarget str =
 
 -- | Until ghc-8.6.0, 'configureHandleEncoding' did not exist.
 configureHandleEncoding' :: IO ()
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
 configureHandleEncoding' = configureHandleEncoding
 #else
 configureHandleEncoding' = return ()

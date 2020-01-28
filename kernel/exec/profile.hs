@@ -102,7 +102,7 @@ pprHsModule path = Fnk.runFnk go Make.defaultFnkEnv
          contents <- liftIO (readFile path)
          dflags0 <- getDynFlags
          let dflags1 = gopt_set dflags0 Opt_Haddock
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
              (_warnings, ret) = GHC.parser contents dflags1 path
 #else
              ret = case GHC.parser contents dflags1 path of

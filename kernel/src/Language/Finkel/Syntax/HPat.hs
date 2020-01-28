@@ -19,7 +19,7 @@ import Lexeme                          (isLexCon, isLexConId, isLexConSym,
                                         isLexSym)
 import SrcLoc                          (GenLocated (..))
 
-#if !MIN_VERSION_ghc (8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
 import SrcLoc                          (getLoc)
 #endif
 
@@ -128,7 +128,7 @@ b_symP orig@(LForm (dL->L l form))
 b_hsListP :: [HPat] -> HPat
 b_hsListP pats = pats'
   where
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
      pats' = listPat pats
 #else
      pats' = L (getLoc (mkLocatedList pats)) (listPat pats)
@@ -198,7 +198,7 @@ b_conP forms is_paren rest =
 
 b_sigP :: Code -> HPat -> HType -> HPat
 b_sigP (LForm (L l _)) pat ty =
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
   cL l (SigPat noExt pat (mkLHsSigWcType ty))
 #elif MIN_VERSION_ghc(8,6,0)
   cL l (SigPat (mkLHsSigWcType ty) pat)

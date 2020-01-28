@@ -73,7 +73,7 @@ whenUsingStack act = ifUsingStack act (return ())
 resetPackageEnvForStack :: Fnk ()
 resetPackageEnvForStack = do
   dflags0 <- getDynFlags
-#if MIN_VERSION_ghc (8,4,4)
+#if MIN_VERSION_ghc(8,4,4)
   setDynFlags (clearPackageEnv dflags0)
 #else
   -- Seems like package environment does not work well with stack
@@ -115,7 +115,7 @@ resetPackageEnvForCabal_3_0_0 = do
 -- | Clear 'packageEnv' field in 'DynFlags'.
 clearPackageEnv :: DynFlags -> DynFlags
 -- Use of "-" to reset package env is NOT supported until 8.4.4.
-#if MIN_VERSION_ghc (8,4,4)
+#if MIN_VERSION_ghc(8,4,4)
 clearPackageEnv dflags = dflags {packageEnv = Just "-"}
 #else
 clearPackageEnv dflags = dflags {packageEnv = Nothing}

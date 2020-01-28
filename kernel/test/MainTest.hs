@@ -77,7 +77,7 @@ odir = "test" </> "data" </> "main"
 
 getPackageEnvFlag :: IO [String]
 getPackageEnvFlag =
-#if MIN_VERSION_ghc (8,4,4)
+#if MIN_VERSION_ghc(8,4,4)
   ifUsingStack (return ["-package-env=-"]) (return [])
 #else
   return []

@@ -99,12 +99,12 @@ import           Util                         (getModificationUTCTime,
 import qualified Lexer                        as GHCLexer
 import qualified Parser                       as GHCParser
 
-#if MIN_VERSION_ghc (8,4,0)
-import           HscTypes                     (mkModuleGraph)
+#if MIN_VERSION_ghc(8,8,0)
+import           HscTypes                     (throwErrors)
 #endif
 
-#if MIN_VERSION_ghc (8,8,0)
-import           HscTypes                     (throwErrors)
+#if MIN_VERSION_ghc(8,4,0)
+import           HscTypes                     (mkModuleGraph)
 #endif
 
 -- time
@@ -806,7 +806,7 @@ mkModSummary' mbfile modName imports mb_pm = do
                           , ms_hs_date = hs_date
                           , ms_obj_date = obj_date
                           , ms_iface_date = iface_date
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
                             -- XXX: .hie file not supported yet.
                           , ms_hie_date = Nothing
 #endif
@@ -866,7 +866,7 @@ dumpParsedAST dflags ms =
                           (ppSourceStats False rdr_module)
        Nothing -> return ())
   where
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
     txt = id
 #else
     txt = text
@@ -1079,7 +1079,7 @@ mkModuleGraph' = id
 #endif
 
 preprocess' :: HscEnv -> (FilePath, Maybe Phase) -> IO (DynFlags, FilePath)
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
 preprocess' hsc_env (path, mb_phase) =
   do et_result <- preprocess hsc_env path Nothing mb_phase
      case et_result of

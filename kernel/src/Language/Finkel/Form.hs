@@ -45,7 +45,7 @@ import SrcLoc          (GenLocated (..), Located, SrcSpan (..),
                         combineLocs, srcSpanFile, srcSpanStartCol,
                         srcSpanStartLine)
 
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
 import BasicTypes      (SourceText (..), mkFractionalLit)
 #endif
 
@@ -331,7 +331,7 @@ mkLocatedForm ms = L (combineLocs (unLForm (head ms))
 fl_text_compat :: FractionalLit -> String
 fl_text_compat fl = str
   where
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
     str = case fl_text fl of
             NoSourceText -> error "fractional literal with no source"
             SourceText s -> s
@@ -339,7 +339,7 @@ fl_text_compat fl = str
     str = fl_text fl
 #endif
 
-#if !MIN_VERSION_ghc (8,4,0)
+#if !MIN_VERSION_ghc(8,4,0)
 -- | 'mkFractionalLit' did not exist in 8.2.x.
 mkFractionalLit :: Real a => a -> FractionalLit
 mkFractionalLit x = FL (show (realToFrac x :: Double)) (toRational x)

@@ -25,7 +25,7 @@ import           Data.Function                      (on)
 import           Data.List                          (isSubsequenceOf,
                                                      unionBy)
 
-#if !MIN_VERSION_base (4,13,0)
+#if !MIN_VERSION_base(4,13,0)
 import           Data.Monoid                        (Monoid (..))
 #endif
 
@@ -265,7 +265,7 @@ fnkHaddockHooks pd lbi hooks flags = do
           flag = Setup.Flag
           cmpl = compiler lbi
           platform = hostPlatform lbi
-          accumurateGeneratedFile acc m = do
+          accumulateGeneratedFile acc m = do
             let p = toFilePath m
             mb_found <- findFile hs_src_dirs (p <.> "fnk")
             case mb_found of
@@ -274,7 +274,7 @@ fnkHaddockHooks pd lbi hooks flags = do
                 return (dest:acc)
               Nothing    -> return acc
 
-      gen_files <- foldM accumurateGeneratedFile [] hs_mods
+      gen_files <- foldM accumulateGeneratedFile [] hs_mods
 
       let ghc = simpleProgram "ghc"
           acquire =

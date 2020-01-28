@@ -6,66 +6,62 @@
 module Language.Finkel.Syntax.HType where
 
 -- ghc
-import           BasicTypes                      (Boxity (..),
-                                                  SourceText (..))
-import           FastString                      (headFS, lengthFS, nullFS,
-                                                  tailFS)
-import           HsDoc                           (LHsDocString)
-import           HsTypes                         (HsSrcBang (..),
-                                                  HsTupleSort (..),
-                                                  HsTyLit (..),
-                                                  HsType (..),
-                                                  LHsTyVarBndr,
-                                                  SrcStrictness (..),
-                                                  SrcUnpackedness (..),
-                                                  mkAnonWildCardTy,
-                                                  mkHsAppTy, mkHsAppTys,
-                                                  mkHsOpTy)
-import           Lexeme                          (isLexCon, isLexConSym,
-                                                  isLexVarSym)
-import           OccName                         (NameSpace, dataName,
-                                                  tcName, tvName)
-import           RdrHsSyn                        (setRdrNameSpace)
-import           RdrName                         (getRdrName, mkQual,
-                                                  mkUnqual)
-import           SrcLoc                          (GenLocated (..), Located,
-                                                  getLoc)
-import           TysPrim                         (funTyCon)
-import           TysWiredIn                      (consDataCon,
-                                                  listTyCon_RDR,
-                                                  tupleTyCon)
+import BasicTypes                      (Boxity (..), SourceText (..))
+import FastString                      (headFS, lengthFS, nullFS, tailFS)
+import HsDoc                           (LHsDocString)
+import HsTypes                         (HsSrcBang (..), HsTupleSort (..),
+                                        HsTyLit (..), HsType (..),
+                                        LHsTyVarBndr, SrcStrictness (..),
+                                        SrcUnpackedness (..),
+                                        mkAnonWildCardTy, mkHsAppTy,
+                                        mkHsAppTys, mkHsOpTy)
+import Lexeme                          (isLexCon, isLexConSym, isLexVarSym)
+import OccName                         (NameSpace, dataName, tcName,
+                                        tvName)
+import RdrHsSyn                        (setRdrNameSpace)
+import RdrName                         (getRdrName, mkQual, mkUnqual)
+import SrcLoc                          (GenLocated (..), Located, getLoc)
+import TysPrim                         (funTyCon)
+import TysWiredIn                      (consDataCon, listTyCon_RDR,
+                                        tupleTyCon)
 
-#if MIN_VERSION_ghc (8,8,0)
-import           BasicTypes                      (PprPrec,
-                                                  PromotionFlag (..),
-                                                  funPrec)
-import           HsExtension                     (IdP, noExt)
-import qualified HsTypes                         (parenthesizeHsType)
-import           TysWiredIn                      (eqTyCon_RDR)
-#elif MIN_VERSION_ghc (8,6,0)
-import           BasicTypes                      (PprPrec, funPrec)
-import           HsExtension                     (IdP, noExt)
-import           HsTypes                         (Promoted (..))
-import qualified HsTypes                         (parenthesizeHsType)
-import           PrelNames                       (eqTyCon_RDR)
-#elif MIN_VERSION_ghc (8,4,0)
-import           HsExtension                     (IdP)
-import           HsTypes                         (Promoted (..))
-import           PlaceHolder                     (placeHolderKind)
-import           PrelNames                       (eqTyCon_RDR)
-import           TysWiredIn                      (starKindTyCon)
+#if MIN_VERSION_ghc(8,8,0)
+import BasicTypes                      (PromotionFlag (..))
+#else
+import HsTypes                         (Promoted (..))
+#endif
+
+#if MIN_VERSION_ghc(8,8,0)
+import TysWiredIn                      (eqTyCon_RDR)
+#else
+import PrelNames                       (eqTyCon_RDR)
+#endif
+
+#if MIN_VERSION_ghc(8,6,0)
+import BasicTypes                      (PprPrec, funPrec)
+import HsTypes                         (parenthesizeHsType)
+#endif
+
+#if MIN_VERSION_ghc(8,6,0)
+import HsExtension                     (noExt)
+#else
+import PlaceHolder                     (placeHolderKind)
+#endif
+
+#if !MIN_VERSION_ghc(8,6,0)
+import TysWiredIn                      (starKindTyCon)
+#endif
+
+#if MIN_VERSION_ghc(8,4,0)
+import HsExtension                     (IdP)
 #else
 #define IdP {- empty -}
-import           HsTypes                         (Promoted (..))
-import           PlaceHolder                     (placeHolderKind)
-import           PrelNames                       (eqTyCon_RDR)
-import           TysWiredIn                      (starKindTyCon)
 #endif
 
 -- Internal
-import           Language.Finkel.Builder
-import           Language.Finkel.Form
-import           Language.Finkel.Syntax.SynUtils
+import Language.Finkel.Builder
+import Language.Finkel.Form
+import Language.Finkel.Syntax.SynUtils
 
 #include "Syntax.h"
 
@@ -75,7 +71,7 @@ import           Language.Finkel.Syntax.SynUtils
 --
 -- ---------------------------------------------------------------------
 
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
 type PROMOTIONFLAG = PromotionFlag
 
 iSPROMOTED :: PROMOTIONFLAG
@@ -163,7 +159,7 @@ b_funT (LForm (L l _)) ts =
 #endif
     _            -> return (foldr1 f ts)
   where
-    f a@(L l1 _) b = L l1 (hsFunTy (parenthesizeHsType funPrec a) b)
+    f a@(L l1 _) b = L l1 (hsFunTy (parenthesizeHsType' funPrec a) b)
     hsFunTy = HsFunTy NOEXT
     funty = L l (hsTyVar NotPromoted (L l (getRdrName funTyCon)))
 {-# INLINE b_funT #-}
@@ -259,7 +255,7 @@ b_bangT (LForm (L l _)) t = L l (hsBangTy srcBang t)
 b_forallT :: Code -> ([HTyVarBndr], ([HType], HType)) -> HType
 b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
   let ty0 = cL l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
       ty1 = hsParTy (cL l0 (forAllTy bndrs ty0))
 #else
       ty1 = forAllTy bndrs ty0
@@ -274,7 +270,7 @@ b_qualT (LForm (L l _)) (ctxts, body) =
 
 b_kindedType :: Code -> HType -> HType -> HType
 b_kindedType (LForm (L l _)) ty kind =
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
    -- Parens for kind signature were removed in ghc 8.8.1. To show
    -- parens in generated Haskell code, explicitly adding at this point.
    L l (hsParTy (L l (HsKindSig NOEXT ty kind)))
@@ -357,7 +353,7 @@ hsTyVar = HsTyVar NOEXT
 
 hsExplicitListTy :: [HType] -> HsType PARSED
 hsExplicitListTy tys =
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
   HsExplicitListTy NOEXT iSPROMOTED tys
 #else
   HsExplicitListTy iSPROMOTED placeHolderKind tys
@@ -365,7 +361,7 @@ hsExplicitListTy tys =
 
 hsExplicitTupleTy :: [HType] -> HsType PARSED
 hsExplicitTupleTy tys =
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
   HsExplicitTupleTy NOEXT tys
 #else
   HsExplicitTupleTy [] tys
@@ -379,14 +375,15 @@ hsExplicitTupleTy tys =
 
 #if MIN_VERSION_ghc(8,6,0)
 
--- Unlike "parenthesizeHsType" defined in "HsTypes" module in ghc 8.6.x,
--- does not parenthesize "HsBangTy" constructor, because
--- "parenthesizeHsType" is used for parenthesizing argument in HsFunTy.
+-- Unlike "HsTypes.parenthesizeHsType" in ghc 8.6.x, does not
+-- parenthesize "HsBangTy" constructor, because
+-- "HsTypes.parenthesizeHsType" is used for parenthesizing argument in
+-- HsFunTy.
 
-parenthesizeHsType :: PprPrec -> HType -> HType
-parenthesizeHsType p lty@(L _ ty)
+parenthesizeHsType' :: PprPrec -> HType -> HType
+parenthesizeHsType' p lty@(L _ ty)
   | HsBangTy {} <- ty = lty
-  | otherwise         = HsTypes.parenthesizeHsType p lty
+  | otherwise         = parenthesizeHsType p lty
 
 #else
 
@@ -396,8 +393,8 @@ parenthesizeHsType p lty@(L _ ty)
 -- "hsTypeNeedsParens" and "parenthesizeHsType" are defined in
 -- "hsSyn/HsTypes.hs".
 
-parenthesizeHsType :: PprPrec -> HType -> HType
-parenthesizeHsType p lty@(L loc ty)
+parenthesizeHsType' :: PprPrec -> HType -> HType
+parenthesizeHsType' p lty@(L loc ty)
   | hsTypeNeedsParens p ty = L loc (HsParTy NOEXT lty)
   | otherwise              = lty
 

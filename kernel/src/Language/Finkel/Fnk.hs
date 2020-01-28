@@ -50,7 +50,7 @@ module Language.Finkel.Fnk
 import           Control.Exception      (Exception (..), throwIO)
 import           Control.Monad          (when)
 
-#if !MIN_VERSION_ghc (8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
 import           Control.Monad.Fail     (MonadFail (..))
 #endif
 
@@ -62,10 +62,6 @@ import           System.IO              (hPutStrLn, stderr)
 
 -- containers
 import qualified Data.Map               as Map
-
-#if !MIN_VERSION_ghc(8,4,0)
-import qualified Data.IntSet            as IntSet
-#endif
 
 -- ghc
 import           Bag                    (unitBag)
@@ -92,13 +88,15 @@ import           SrcLoc                 (GenLocated (..), Located)
 import           UniqSupply             (mkSplitUniqSupply, uniqFromSupply)
 import           Var                    (varType)
 
+-- Import for FlagSet
 #if MIN_VERSION_ghc(8,4,0)
+-- ghc
 import qualified EnumSet
-#endif
-
 -- ghc-boot
-#if MIN_VERSION_ghc(8,4,0)
 import           GHC.LanguageExtensions as LangExt
+#else
+-- containers
+import qualified Data.IntSet            as IntSet
 #endif
 
 -- Internal
@@ -139,7 +137,7 @@ type FlagSet =
 -- | Convert 'FlagSet' to list of 'Int' representation.
 flagSetToIntList :: FlagSet -> [Int]
 flagSetToIntList =
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
   map fromEnum . EnumSet.toList
 #else
   IntSet.toList

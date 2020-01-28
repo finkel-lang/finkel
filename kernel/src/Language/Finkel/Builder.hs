@@ -69,7 +69,7 @@ import HsTypes              (LConDeclField, LHsSigWcType, LHsTyVarBndr,
                              LHsType)
 import SrcLoc               (GenLocated (..), Located, noLoc)
 
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
 import HsExtension          (GhcPs)
 #else
 import RdrName              (RdrName)

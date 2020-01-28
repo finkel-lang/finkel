@@ -129,7 +129,7 @@ b_tsigE (LForm (L l _)) e (ctxt,t) =
   let t' = case ctxt of
              [] -> t
              _  -> L l (mkHsQualTy_compat (mkLocatedList ctxt) t)
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
       e' = ExprWithTySig noExt e (mkLHsSigWcType t')
 #elif MIN_VERSION_ghc(8,6,0)
       e' = ExprWithTySig (mkLHsSigWcType t') e
@@ -197,9 +197,9 @@ mkAppTypes = foldl' mkAppType
 
 mkAppType :: HExpr -> HType -> HExpr
 mkAppType (dL->expr@(L l _)) ty =
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
   cL l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
-#elif MIN_VERSION_ghc (8,6,0)
+#elif MIN_VERSION_ghc(8,6,0)
   cL l (HsAppType (mkHsWildCardBndrs ty) expr)
 #else
   cL l (HsAppType expr (mkHsWildCardBndrs ty))

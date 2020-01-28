@@ -74,7 +74,7 @@ mkTest path = do
       let task = do
             initSessionForTest
             make [(noLoc dotHs, Nothing)] False True (Just aDotOut)
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
           skipThisTest _ = (False, "")
 #else
           skipThisTest p =

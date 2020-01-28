@@ -45,7 +45,7 @@ main = do
   -- building executable in test packages. In ghc 8.2.x, the use of "-"
   -- in GHC_ENVIRONMENT will show "No such package environment" error,
   -- so "executable" and "test" stanzas in ".cabal" file are disabled.
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
   setEnv "GHC_ENVIRONMENT" "-"
 #endif
 
@@ -68,7 +68,7 @@ buildPackage cwd pkgdbs name =
             [ setCurrentDirectory pkgdir
             , setup configure_args
             , setup ["build"]
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
             , setup ["test"]
 #endif
             , setup ["haddock"]

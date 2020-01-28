@@ -61,7 +61,7 @@ import           SrcLoc                     (GenLocated(..), Located,
                                              srcLocCol, srcLocLine)
 import           Util                       (readRational)
 
-#if MIN_VERSION_ghc (8,4,0)
+#if MIN_VERSION_ghc(8,4,0)
 import           BasicTypes                 (SourceText(..))
 #endif
 

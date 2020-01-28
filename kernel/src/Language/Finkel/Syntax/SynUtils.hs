@@ -44,23 +44,27 @@ import           SrcLoc                  (GenLocated (..), Located,
                                           combineSrcSpans, noLoc, unLoc)
 import           TysWiredIn              (consDataConName)
 
-#if MIN_VERSION_ghc (8,4,0)
-import           BasicTypes              (IntegralLit (..))
-#endif
-
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
 import qualified SrcLoc
 #endif
 
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
 import           FastString              (fastStringToByteString)
 import           HsDoc                   (HsDocString,
                                           mkHsDocStringUtf8ByteString)
-import           HsExtension             (noExt)
 #else
 import           HsDoc                   (HsDocString (..))
+#endif
+
+#if MIN_VERSION_ghc(8,6,0)
+import           HsExtension             (noExt)
+#else
 import           PlaceHolder             (PlaceHolder (..),
                                           placeHolderType)
+#endif
+
+#if MIN_VERSION_ghc(8,4,0)
+import           BasicTypes              (IntegralLit (..))
 #endif
 
 -- Internal
@@ -182,7 +186,7 @@ mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
 cfld2ufld :: LHsRecField PARSED HExpr
           -> LHsRecUpdField PARSED
 -- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
   where
@@ -312,7 +316,7 @@ codeToUserTyVar code =
 
 -- | Auxiliary function to make 'HsDocString'.
 hsDocString :: FastString -> HsDocString
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
 hsDocString = mkHsDocStringUtf8ByteString . fastStringToByteString
 #else
 hsDocString = HsDocString
@@ -323,11 +327,11 @@ hsDocString = HsDocString
 -- 'mkHsIntegral'.
 mkHsIntegral_compat :: Integer -> HsOverLit PARSED
 mkHsIntegral_compat n =
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
     mkHsIntegral (IL { il_text = SourceText (show n)
                      , il_neg = n < 0
                      , il_value = n })
-#elif MIN_VERSION_ghc (8,4,0)
+#elif MIN_VERSION_ghc(8,4,0)
     mkHsIntegral (IL { il_text = SourceText (show n)
                      , il_neg = n < 0
                      , il_value = n })
@@ -343,7 +347,7 @@ mkGRHSs grhss decls l = GRHSs NOEXT grhss (declsToBinds l decls)
 
 mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
 mkHsValBinds_compat binds sigs =
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
   HsValBinds noExt (ValBinds noExt binds sigs)
 #else
   HsValBinds (ValBindsIn binds sigs)
@@ -355,7 +359,7 @@ mkHsQualTy_compat ctxt body
   | nullLHsContext ctxt = unLoc body
   | otherwise =
     HsQualTy { hst_ctxt = ctxt
-#if MIN_VERSION_ghc (8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
              , hst_xqual = noExt
 #endif
              , hst_body = body }
@@ -377,7 +381,7 @@ addConDoc'' = flip addConDoc . Just
 -- For 8.8.0 compatibility in source code location management
 --
 
-#if MIN_VERSION_ghc (8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
 dL :: SrcLoc.HasSrcSpan a => a -> Located (SrcLoc.SrcSpanLess a)
 dL = SrcLoc.dL
 
