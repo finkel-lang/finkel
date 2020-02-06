@@ -1,5 +1,6 @@
 # Finkel
 
+[![codecov][codecov-status]][codecov]
 [![Build status][build-status]][travis]
 [![Documentation Status][doc-status]][doc]
 
@@ -70,7 +71,8 @@ fib :: Int -> Int       -- Defined at fib.fnk:18:11
 
 See the [documentation][doc] for more details.
 
-
+[codecov-status]: https://codecov.io/gh/finkel-lang/finkel/branch/master/graph/badge.svg
+[codecov]: https://codecov.io/gh/finkel-lang/finkel
 [build-status]: https://travis-ci.org/finkel-lang/finkel.svg?branch=master
 [travis]: https://travis-ci.org/finkel-lang/finkel
 [doc-status]: http://readthedocs.org/projects/finkel/badge/?version=latest
