@@ -78,3 +78,27 @@ script:
          cabal v2-haddock all
          ;;
     esac
+
+after_script:
+  - |
+    case "$EXEC" in
+      stack)
+        git clone --depth=1 https://github.com/8c6794b6/hpc-codecov.git
+        ( cd hpc-codecov && stack --resolver=${RESOLVER} build --copy-bins )
+        which hpc-codecov
+        hpc-codecov --help
+        HPCROOT=$(stack --resolver=${RESOLVER} path --local-hpc-root)
+        DISTDIR=$(stack --resolver=${RESOLVER} path --dist-dir)
+        TIX=$(find $HPCROOT -name 'all.tix')
+        hpc-codecov \
+          --src=kernel --mix=kernel/$DISTDIR/hpc \
+          --src=setup --mix=setup/$DISTDIR/hpc \
+          --src=lang --mix=lang/$DISTDIR/hpc \
+          --src=tool --mix=tool/$DISTDIR/hpc \
+          $TIX --verbose -o codecov.json
+        bash <(curl -s https://codecov.io/bash)
+        ;;
+      cabal)
+        echo Not taking codecov for cabal-install yet
+        ;;
+    esac
