@@ -27,6 +27,7 @@ before_install:
       stack)
         mkdir -p ~/.local/bin
         export PATH="$HOME/.local/bin:$PATH"
+        export STACK="stack --resolver=$RESOLVER"
         travis_retry curl -L \
           https://get.haskellstack.org/stable/linux-x86_64.tar.gz | \
           tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
@@ -49,8 +50,8 @@ install:
     case "$EXEC" in
       stack)
         stack --version
-        stack --resolver=${RESOLVER} --no-terminal --install-ghc \
-            test --only-dependencies
+        $STACK update
+        $STACK --no-terminal --install-ghc test --only-dependencies
         ;;
       cabal)
         which cabal
@@ -65,12 +66,11 @@ script:
   - |
     case "$EXEC" in
       stack)
-        stack --resolver=${RESOLVER} --no-terminal build \
-              --fast --test --coverage --no-run-tests \
-              finkel-kernel finkel-setup finkel-lang p02 finkel-tool
-        stack --resolver=${RESOLVER} --no-terminal build \
-              --fast --test --coverage \
-              finkel-kernel finkel-setup finkel-lang finkel-tool
+        $STACK --no-terminal build --fast --test --coverage \
+          --no-run-tests \
+          finkel-kernel finkel-setup finkel-lang p02 finkel-tool
+        $STACK --no-terminal build --fast --test --coverage \
+          finkel-kernel finkel-setup finkel-lang finkel-tool
         ;;
       cabal)
          cabal v2-build all
@@ -83,19 +83,16 @@ after_script:
   - |
     case "$EXEC" in
       stack)
-        git clone --depth=1 https://github.com/8c6794b6/hpc-codecov.git
-        ( cd hpc-codecov && stack --resolver=${RESOLVER} build --copy-bins )
-        which hpc-codecov
-        hpc-codecov --help
-        HPCROOT=$(stack --resolver=${RESOLVER} path --local-hpc-root)
-        DISTDIR=$(stack --resolver=${RESOLVER} path --dist-dir)
+        $STACK install hpc-codecov
+        HPCROOT=$($STACK path --local-hpc-root)
+        DISTDIR=$($STACK path --dist-dir)
         TIX=$(find $HPCROOT -name 'all.tix')
         hpc-codecov \
           --src=kernel --mix=kernel/$DISTDIR/hpc \
           --src=setup --mix=setup/$DISTDIR/hpc \
           --src=lang --mix=lang/$DISTDIR/hpc \
           --src=tool --mix=tool/$DISTDIR/hpc \
-          $TIX --verbose -o codecov.json
+          --out=codecov.json --verbose $TIX
         bash <(curl -s https://codecov.io/bash)
         ;;
       cabal)
