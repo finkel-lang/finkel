@@ -80,14 +80,14 @@ library
   ghc-options:         -Wall
 
 flag dynamic
-  description:         Dynamically link executables
+  description:         Dynamically link executables (except Windows)
   default:             True
   manual:              True
 
 executable fnkc
   hs-source-dirs:      exec
   main-is:             fnkc.hs
-  if flag(dynamic)
+  if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
   ghc-options:         -Wall -threaded -rtsopts
   build-depends:       base
@@ -98,7 +98,7 @@ executable finkel-profile
   hs-source-dirs:      exec
   main-is:             profile.hs
   ghc-options:         -Wall -threaded -rtsopts
-  if flag(dynamic)
+  if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
   build-depends:       base
                      , bytestring

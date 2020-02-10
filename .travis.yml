@@ -1,101 +1,61 @@
 language: c
 
-os: linux
-
 cache:
   directories:
     - $HOME/.stack
     - $HOME/.cabal/packages
     - $HOME/.cabal/store
     - $HOME/.ghcup
+    - $HOME/AppData/Local/Programs/stack
+    - $HOME/AppData/Roaming/stack
 
 addons:
   apt:
     packages:
       - libgmp-dev
+  homebrew:
+    packages:
+      - haskell-stack
+
+os:
+  - linux
+  - osx
+  - windows
 
 env:
-  jobs:
-    - EXEC="stack" RESOLVER="lts-11"
-    - EXEC="stack" RESOLVER="lts-12"
-    - EXEC="stack" RESOLVER="lts-14"
-    - EXEC="cabal" GHC_VERSION="8.8.2"
+  - EXEC=stack RESOLVER=lts-11
+  - EXEC=stack RESOLVER=lts-12
+  - EXEC=stack RESOLVER=lts-14
+  - EXEC=cabal GHC_VERSION=8.8.2
+
+# OSX and WINDOWS are entirely excluded at the moment.
+jobs:
+  exclude:
+    - os: osx
+      env: EXEC=stack RESOLVER=lts-11
+    - os: osx
+      env: EXEC=stack RESOLVER=lts-12
+    - os: osx
+      env: EXEC=stack RESOLVER=lts-14
+    - os: osx
+      env: EXEC=cabal GHC_VERSION=8.8.2
+    - os: windows
+      env: EXEC=stack RESOLVER=lts-11
+    - os: windows
+      env: EXEC=stack RESOLVER=lts-12
+    - os: windows
+      env: EXEC=stack RESOLVER=lts-14
+    - os: windows
+      env: EXEC=cabal GHC_VERSION=8.8.2
 
 before_install:
-  - |
-    case "$EXEC" in
-      stack)
-        mkdir -p ~/.local/bin
-        export PATH="$HOME/.local/bin:$PATH"
-        export STACK="stack --resolver=$RESOLVER"
-        travis_retry curl -L \
-          https://get.haskellstack.org/stable/linux-x86_64.tar.gz | \
-          tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-        ;;
-      cabal)
-        mkdir -p ~/.ghcup/bin
-        curl -L \
-          https://gitlab.haskell.org/haskell/ghcup/raw/master/ghcup > \
-          ~/.ghcup/bin/ghcup
-        chmod +x ~/.ghcup/bin/ghcup
-        export PATH="$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
-        ghcup -c install-cabal
-        ghcup -c install $GHC_VERSION
-        ghcup -c set $GHC_VERSION
-        ;;
-    esac
+  - . ci/travis.sh
 
 install:
-  - |
-    case "$EXEC" in
-      stack)
-        stack --version
-        $STACK update
-        $STACK --no-terminal --install-ghc test --only-dependencies
-        ;;
-      cabal)
-        which cabal
-        which ghc
-        cabal --version
-        ghc --version
-        travis_retry cabal v2-update
-        ;;
-    esac
+  - travis_install
 
 script:
-  - |
-    case "$EXEC" in
-      stack)
-        $STACK --no-terminal build --fast --test --coverage \
-          --no-run-tests \
-          finkel-kernel finkel-setup finkel-lang p02 finkel-tool
-        $STACK --no-terminal build --fast --test --coverage \
-          finkel-kernel finkel-setup finkel-lang finkel-tool
-        ;;
-      cabal)
-         cabal v2-build all
-         cabal v2-test all
-         cabal v2-haddock all
-         ;;
-    esac
+  - travis_script
 
-after_script:
-  - |
-    case "$EXEC" in
-      stack)
-        $STACK install hpc-codecov
-        HPCROOT=$($STACK path --local-hpc-root)
-        DISTDIR=$($STACK path --dist-dir)
-        TIX=$(find $HPCROOT -name 'all.tix')
-        hpc-codecov \
-          --src=kernel --mix=kernel/$DISTDIR/hpc \
-          --src=setup --mix=setup/$DISTDIR/hpc \
-          --src=lang --mix=lang/$DISTDIR/hpc \
-          --src=tool --mix=tool/$DISTDIR/hpc \
-          --out=codecov.json --verbose $TIX
-        bash <(curl -s https://codecov.io/bash)
-        ;;
-      cabal)
-        echo Not taking codecov for cabal-install yet
-        ;;
-    esac
+after_success:
+  - travis_after_success
