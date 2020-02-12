@@ -20,9 +20,13 @@
    (Control.Monad (void))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate isSubsequenceOf))
+   (Data.String ((IsString ..)))
 
    ;; filepath
    (System.FilePath (</>))
+
+   ;; ghc
+   (StringBuffer ((StringBuffer) stringToStringBuffer))
 
    ;; haskeline
    (System.Console.Haskeline (defaultSettings runInputT))
@@ -64,26 +68,32 @@
       (describe "Eval" evalTests)
       (describe "Listen" listenTests)))
 
+;;; Orphan
+
+(instance (IsString StringBuffer)
+  (= fromString stringToStringBuffer))
+
 ;;; Internal
 
 (defn (:: replStateTests Spec)
   (do (let ((= d describe)
-            (= rs1 (ReplState {pending-input ["(foo"]}))
-            (= rs2 (ReplState {pending-input [" bar)"]}))))
+            (= rs1 (ReplState {pending-input (Just "(foo")}))
+            (= rs2 (ReplState {pending-input (Just " bar)")}))))
       (d "Show instance"
          (it "should show pending inputs"
-             (shouldBe "ReplState {pending_input = [\"(foo\"]}"
-                       (show rs1))))
+             (shouldBe
+              (show rs1)
+              "ReplState {pending_input = Just <stringbuffer(4,0)>}")))
       (d "Eq instance"
          (do (it "should equal to itself" (shouldBe rs1 rs1))
              (it "should not equal with different pending input"
                  (shouldNotBe rs1 rs2))))
       (d "Monoid laws for ReplState"
          (do (it "should have an identity element"
-                 (shouldBe rs1 (<> mempty rs1)))
+                 (shouldBe (<> mempty rs1) rs1))
              (it "should satisfy associativity law"
-                 (shouldBe (<> rs1 (<> mempty rs2))
-                           (<> (<> rs1 mempty) rs2)))))
+                 (shouldBe (<> (<> rs1 mempty) rs2)
+                           (<> rs1 (<> mempty rs2))))))
       (d "get and put ReplState for InputT"
          (do (let ((= act
                      (run-repl (runInputT defaultSettings work)
@@ -118,14 +128,14 @@
          (it "returns '(foo bar buzz)"
              (do (<- form (run-repl (read-form "(foo bar buzz)")
                                     initial-repl-state))
-                 (shouldBe (Just '(foo bar buzz)) form))))
+                 (shouldBe form (Just '(foo bar buzz))))))
       (d "reading multi line form"
          (it "returns '(a b c)"
              (do (<- form (run-repl (do (<- _ (read-form "(a "))
                                         (<- _ (read-form "b "))
                                         (read-form "c)"))
                                     initial-repl-state))
-                 (shouldBe (Just '(a b c)) form))))))
+                 (shouldBe form (Just '(a b c))))))))
 
 (defn (:: readPrintTests Spec)
   (describe

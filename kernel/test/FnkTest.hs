@@ -6,14 +6,12 @@ import qualified Control.Monad.Fail         as MonadFail
 import           Control.Monad.IO.Class
 import           Data.Maybe                 (fromMaybe, isNothing)
 
--- bytestring
-import qualified Data.ByteString.Lazy.Char8 as BL
-
 -- ghc
 import           Exception                  (gbracket)
 import           FastString                 (fsLit)
 import           HscTypes                   (SourceError)
 import           SrcLoc                     (GenLocated (..), unLoc)
+import           StringBuffer               (stringToStringBuffer)
 
 -- hspec
 import           Test.Hspec
@@ -115,8 +113,9 @@ exceptionTest = do
           sel :: SourceError -> Bool
           sel _ = True
           run a = runFnk a defaultFnkEnv
-          build = do (form', _) <- parseSexprs Nothing (BL.pack form)
-                     buildHsSyn parseDecls form'
+          form' = stringToStringBuffer form
+          build = do (form'', _) <- parseSexprs Nothing form'
+                     buildHsSyn parseDecls form''
       run build `shouldThrow` sel
 
 fromGhcTest :: Spec

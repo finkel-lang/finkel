@@ -18,14 +18,12 @@ import           Control.Monad.Fail     (MonadFail(..))
 import           Data.Char              (toLower)
 import           Data.List              (foldl')
 
--- bytestring
-import qualified Data.ByteString.Lazy   as BL
-
 -- ghc
 import           FastString             (FastString, fsLit, unpackFS)
 import           HsImpExp               (ideclName)
 import           Module                 (moduleNameString)
 import           SrcLoc                 (GenLocated(..), Located, SrcSpan)
+import           StringBuffer           (StringBuffer)
 
 -- ghc-boot
 import           GHC.LanguageExtensions (Extension(..))
@@ -345,7 +343,7 @@ happyError = lexErrorSP
 -- | Parse sexpressions.
 parseSexprs :: MonadFail m
             => Maybe FilePath -- ^ Name of input file.
-            -> BL.ByteString  -- ^ Contents to parse.
+            -> StringBuffer   -- ^ Contents to parse.
             -> m ([Code], SPState)
 parseSexprs mb_file contents =
   case runSP sexprs mb_file contents of

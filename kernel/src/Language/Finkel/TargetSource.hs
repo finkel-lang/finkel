@@ -18,40 +18,35 @@ module Language.Finkel.TargetSource
   ) where
 
 -- base
-import           Control.Exception          (SomeException)
-import           Control.Monad              (mplus)
-import           Control.Monad.IO.Class     (MonadIO (..))
-import           Data.Char                  (isUpper)
-
--- bytestring
-import qualified Data.ByteString.Lazy.Char8 as BL
+import Control.Exception      (SomeException)
+import Control.Monad          (mplus)
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Char              (isUpper)
 
 -- directory
-import           System.Directory           (doesFileExist)
+import System.Directory       (doesFileExist)
 
 -- filepath
-import           System.FilePath            (dropExtension, normalise,
-                                             pathSeparator,
-                                             replaceExtension, splitPath,
-                                             takeExtension, (<.>), (</>))
+import System.FilePath        (dropExtension, normalise, pathSeparator,
+                               replaceExtension, splitPath, takeExtension,
+                               (<.>), (</>))
 
 -- ghc
-import           DynFlags                   (DynFlags (..),
-                                             HasDynFlags (..))
-import           ErrUtils                   (mkErrMsg)
-import           Exception                  (gtry)
-import           HscTypes                   (throwOneError)
-import           Module                     (mkModuleName,
-                                             moduleNameSlashes)
-import           Outputable                 (neverQualify, text)
-import           SrcLoc                     (GenLocated (..), Located)
-import           Util                       (looksLikeModuleName)
+import DynFlags               (DynFlags (..), HasDynFlags (..))
+import ErrUtils               (mkErrMsg)
+import Exception              (gtry)
+import HscTypes               (throwOneError)
+import Module                 (mkModuleName, moduleNameSlashes)
+import Outputable             (neverQualify, text)
+import SrcLoc                 (GenLocated (..), Located)
+import StringBuffer           (hGetStringBuffer)
+import Util                   (looksLikeModuleName)
 
 -- Internal
-import           Language.Finkel.Fnk
-import           Language.Finkel.Form
-import           Language.Finkel.Lexer
-import           Language.Finkel.Reader
+import Language.Finkel.Fnk
+import Language.Finkel.Form
+import Language.Finkel.Lexer
+import Language.Finkel.Reader
 
 
 -- ---------------------------------------------------------------------
@@ -69,7 +64,6 @@ data TargetSource
   -- ^ Haskell source with file path of the source code.
   | OtherSource FilePath
   -- ^ Other source with file path of other contents.
-  deriving (Eq)
 
 instance Show TargetSource where
   show s = case s of
@@ -163,7 +157,7 @@ findTargetSource (L l modNameOrFilePath)= do
     findFileInImportPaths (importPaths dflags) modNameOrFilePath
   let detectSource path
         | isFnkFile path =
-          do contents <- liftIO (BL.readFile path)
+          do contents <- liftIO (hGetStringBuffer path)
              (forms, sp) <- parseSexprs (Just path) contents
              let modName = asModuleName modNameOrFilePath
              return (FnkSource path modName forms sp)

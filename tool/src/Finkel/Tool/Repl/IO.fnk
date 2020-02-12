@@ -19,9 +19,8 @@
                hSetFileSize stdout))
    (System.IO.Error (isEOFError))
 
-   ;; bytestring
-   (Data.ByteString.Builder (stringUtf8 toLazyByteString))
-   (qualified Data.ByteString.Lazy.Char8 as BS)
+   ;; ghc
+   (StringBuffer (appendStringBuffers stringToStringBuffer))
 
    ;; finkel-kernel
    (Language.Finkel)
@@ -112,20 +111,23 @@ reading the input until successful parse result."
                      _ (putString str)))
       (liftIO (hFlush stdout))))
 
-(defn (:: read-form (=> (HasReplState repl) (Monad repl)
+(defn (:: read-form (=> (HasReplState repl) (Monad repl) (MonadIO repl)
                         (-> String (repl (Maybe Code)))))
   "Read single S-expression form."
   [input0]
   (do (<- st getReplState)
-      (let ((= input1
-              (++ (pending-input st)
-                  [(toLazyByteString (stringUtf8 (: #'\n input0)))]))
+      (let ((= input1 (stringToStringBuffer (: #'\n input0)))
+
             (= put-and-return pending ret
               (do (putReplState (st {pending-input pending}))
                   (return ret)))))
-      (case (evalSP sexpr (Just "<interactive>") (BS.concat input1))
-        (Right forms) (put-and-return [] (Just forms))
-        (Left _err) (put-and-return input1 Nothing))))
+      (<- input2
+        (liftIO (maybe (pure input1)
+                       (flip appendStringBuffers input1)
+                       (pending-input st))))
+      (case (evalSP sexpr (Just "<interactive>") input2)
+        (Right forms) (put-and-return Nothing (Just forms))
+        (Left _err) (put-and-return (Just input2) Nothing))))
 
 ;;; IO redirect
 

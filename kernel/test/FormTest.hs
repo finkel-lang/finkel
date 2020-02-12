@@ -23,9 +23,6 @@ import           Data.Word
 import           Numeric.Natural
 import           Text.Show.Functions        ()
 
--- bytestring
-import           Data.ByteString.Builder    (stringUtf8, toLazyByteString)
-
 -- deepseq
 import           Control.DeepSeq
 
@@ -34,6 +31,7 @@ import           BasicTypes                 (fl_value)
 import           FastString                 (fsLit, unpackFS)
 import           SrcLoc                     (GenLocated (..), SrcSpan (..),
                                              noSrcSpan)
+import           StringBuffer               (stringToStringBuffer)
 
 -- transformers
 import           Control.Monad.Trans.State
@@ -567,9 +565,10 @@ parseE = parseE' Nothing
 
 parseE' :: Maybe FilePath -> String -> Code
 parseE' mb_path str =
-  case runSP sexpr mb_path (toLazyByteString (stringUtf8 str)) of
-    Right (expr, _) -> expr
-    Left err        -> error err
+  let inp = stringToStringBuffer str
+  in  case runSP sexpr mb_path inp of
+        Right (expr, _) -> expr
+        Left err        -> error err
 
 isListL :: Code -> Bool
 isListL (LForm (L _ (List _))) = True

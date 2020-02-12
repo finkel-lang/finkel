@@ -31,8 +31,9 @@
    (Data.Function (on))
    (Data.IORef ((IORef) atomicWriteIORef newIORef readIORef))
 
-   ;; bytestring
-   (qualified Data.ByteString.Lazy.Char8 as BS)
+   ;; ghc
+   (StringBuffer ((StringBuffer) appendStringBuffers))
+   (FastFunctions (inlinePerformIO))
 
    ;; haskeline
    (System.Console.Haskeline.MonadException
@@ -48,13 +49,26 @@
 
 ;;; Repl state type to hold intermediate line-wise inputs.
 (data ReplState
-  (ReplState {pending-input [BS.ByteString]})
-  (deriving (Eq Show)))
+  (ReplState {pending-input (Maybe StringBuffer)})
+  (deriving (Show)))
+
+(instance (Eq ReplState)
+  (= ==
+    (where (on eqStringBuffer pending-input)
+      (= eqStringBuffer (on == show)))))
 
 (instance (Monoid ReplState)
   (= mempty initial-repl-state)
   (= mappend r1 r2
-    (ReplState {pending-input (on mappend pending-input r1 r2)})))
+    (where (ReplState {pending-input (on unsafeAppendStringBuffers
+                                         pending-input r1 r2)})
+      ;; Note the use of `inlinePerformIO'.
+      (= unsafeAppendStringBuffers mb-s1 mb-s2
+        (| ((<- (Just s1) mb-s1) (<- (Just s2) mb-s2)
+            (Just (inlinePerformIO (appendStringBuffers s1 s2))))
+           ((<- (Just _) mb-s1) mb-s1)
+           ((<- (Just _) mb-s2) mb-s2)
+           (otherwise Nothing))))))
 
 (with-ghc-version-cond ver
   ((<= 804 ver)
@@ -64,7 +78,7 @@
    (:begin)))
 
 (defn (:: initial-repl-state ReplState)
-  (ReplState {pending-input []}))
+  (ReplState {pending-input Nothing}))
 
 ;;; Newtype wrapper for REPL prompt.
 (newtype (Repl a)

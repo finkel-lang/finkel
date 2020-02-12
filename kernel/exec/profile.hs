@@ -5,40 +5,38 @@
 module Main where
 
 -- base
-import           Control.Monad.IO.Class     (MonadIO (..))
-import           System.Environment         (getArgs)
-import           System.IO                  (stdout)
-
--- bytestring
-import qualified Data.ByteString.Lazy.Char8 as BL
+import           Control.Monad.IO.Class  (MonadIO (..))
+import           System.Environment      (getArgs)
+import           System.IO               (stdout)
 
 -- filepath
-import qualified System.FilePath            as FilePath
+import qualified System.FilePath         as FilePath
 
 -- ghc
-import           DynFlags                   (GeneralFlag (..),
-                                             HasDynFlags (..), gopt_set)
-import           ErrUtils                   (printBagOfErrors)
-import qualified GHC                        as GHC
-import           Outputable                 (Outputable (..), neverQualify,
-                                             printForUser)
-import           SrcLoc                     (mkGeneralLocated)
+import           DynFlags                (GeneralFlag (..),
+                                          HasDynFlags (..), gopt_set)
+import           ErrUtils                (printBagOfErrors)
+import qualified GHC                     as GHC
+import           Outputable              (Outputable (..), neverQualify,
+                                          printForUser)
+import           SrcLoc                  (mkGeneralLocated)
+import           StringBuffer            (hGetStringBuffer)
 
 -- finkel-kernel
-import qualified Language.Finkel.Builder    as Builder
-import qualified Language.Finkel.Emit       as Emit
-import qualified Language.Finkel.Expand     as Expand
-import qualified Language.Finkel.Fnk        as Fnk
-import qualified Language.Finkel.Lexer      as Lexer
-import qualified Language.Finkel.Make       as Make
-import qualified Language.Finkel.Reader     as Reader
-import qualified Language.Finkel.Syntax     as Syntax
+import qualified Language.Finkel.Builder as Builder
+import qualified Language.Finkel.Emit    as Emit
+import qualified Language.Finkel.Expand  as Expand
+import qualified Language.Finkel.Fnk     as Fnk
+import qualified Language.Finkel.Lexer   as Lexer
+import qualified Language.Finkel.Make    as Make
+import qualified Language.Finkel.Reader  as Reader
+import qualified Language.Finkel.Syntax  as Syntax
 
 main :: IO ()
 main =
   do args <- getArgs
      case args of
-       ["count", file]  -> countTokens file
+       -- ["count", file]  -> countTokens file
        ["expand", file] -> printExpandedForms file
        ["parse", file]  -> printForms file
        ["ppr", file]    -> pprFile file
@@ -54,7 +52,7 @@ usage =
        ["usage: profile MODE ARGS"
        ,""
        ,"MODE:"
-       ,"  count  - count number of forms"
+       -- ,"  count  - count number of forms"
        ,"  expand - print expanded forms"
        ,"  parse  - parse input file and print resulting forms"
        ,"  ppr    - pretty print haskell or finkel module with `ppr'"
@@ -67,14 +65,16 @@ printExpandedForms path = Fnk.runFnk go Make.defaultFnkEnv
   where
     go = do
       Make.initSessionForMake
-      contents <- liftIO (BL.readFile path)
+      -- contents <- liftIO (BL.readFile path)
+      contents <- liftIO (hGetStringBuffer path)
       (forms, _) <- Reader.parseSexprs (Just path) contents
       forms' <- Expand.withExpanderSettings (Expand.expands forms)
       liftIO (mapM_ print forms')
 
 printForms :: FilePath -> IO ()
 printForms path =
-  do contents <- BL.readFile path
+  do -- contents <- BL.readFile path
+     contents <- hGetStringBuffer path
      case Lexer.evalSP Reader.sexprs (Just path) contents of
        Right forms -> mapM_ print forms
        Left err    -> putStrLn err
@@ -128,7 +128,8 @@ parseFnkModuleWith act path = Fnk.runFnk go Make.defaultFnkEnv
   where
     go =
      do Make.initSessionForMake
-        contents <- liftIO (BL.readFile path)
+        -- contents <- liftIO (BL.readFile path)
+        contents <- liftIO (hGetStringBuffer path)
         case Lexer.runSP Reader.sexprs (Just path) contents of
           Right (forms, sp) -> do
             forms' <- Expand.withExpanderSettings (Expand.expands forms)
@@ -140,20 +141,22 @@ parseFnkModuleWith act path = Fnk.runFnk go Make.defaultFnkEnv
 
 printTokens :: FilePath -> IO ()
 printTokens path = do
-  contents <- BL.readFile path
+  contents <- hGetStringBuffer path
+  -- contents <- BL.readFile path
   case Lexer.lexTokens (Just path) contents of
     Right toks -> mapM_ (print . GHC.unLoc) toks
     Left err   -> putStrLn err
 
-countTokens :: FilePath -> IO ()
-countTokens path = do
-  contents <- BL.readFile path
-  let f x acc =
-        let n = x `seq` length x
-        in  n `seq` acc `seq` n + acc
-  case Lexer.incrSP Reader.psexpr f 0 (Just path) contents of
-    Right (n, _) -> print n
-    Left err     -> putStrLn err
+-- countTokens :: FilePath -> IO ()
+-- countTokens path = do
+--   contents <- hGetStringBuffer path
+--   -- contents <- BL.readFile path
+--   let f x acc =
+--         let n = x `seq` length x
+--         in  n `seq` acc `seq` n + acc
+--   case Lexer.incrSP Reader.psexpr f 0 (Just path) contents of
+--     Right (n, _) -> print n
+--     Left err     -> putStrLn err
 
 doMake :: [FilePath] -> IO ()
 doMake files =

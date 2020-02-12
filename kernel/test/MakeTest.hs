@@ -50,11 +50,6 @@ showTargetTest = do
       show fnksrc `shouldSatisfy` subseq "path1"
       show hssrc `shouldSatisfy` subseq "path2"
       show otsrc `shouldSatisfy` subseq "path3"
-  describe "eq TargetSource" $
-    it "should return True iff comparing with itself" $ do
-      fnksrc `shouldBe` fnksrc
-      fnksrc `shouldNotBe` hssrc
-      fnksrc `shouldNotBe` otsrc
 
 buildFnk :: FilePath -> Spec
 buildFnk = buildFile initSessionForTest

@@ -9,15 +9,18 @@
    (Control.Concurrent
     ((MVar) forkIO newEmptyMVar putMVar takeMVar))
    (Control.Exception ((SomeException ..) handle))
-   (Control.Monad (void when))
+   (Control.Monad (void unless when))
    (Data.Char (isSpace))
    (System.IO
     ((BufferMode ..) (IOMode ..) hClose hFlush hPutStr hSetBuffering
      hSetEncoding utf8))
 
    ;; bytestring
+   (Data.ByteString.Internal (toForeignPtr))
    (qualified Data.ByteString.Char8 as BS)
-   (qualified Data.ByteString.Lazy.Char8 as C8)
+
+   ;; ghc
+   (StringBuffer ((StringBuffer ..)))
 
    ;; network
    (Network.Socket
@@ -73,14 +76,15 @@
             (= read-loop
               ;; `BS.hGetSome' returns empty contents when the handle is
               ;; closed.
-              (do (<- contents (BS.hGetSome hdl 65535))
-                  (when (not (BS.null contents))
-                    (do (when (BS.any (. not isSpace) contents)
-                          (case (evalSP sexpr (Just "<interactive>")
-                                        (C8.fromStrict contents))
-                            (Right form) (put-input form)
-                            (Left err) (putStrLn err)))
-                        read-loop))))
+              (do (<- bs (BS.hGetSome hdl 65535))
+                  (unless (BS.null bs)
+                    (when (BS.any (. not isSpace) bs)
+                      (let ((= (, fp o l) (toForeignPtr bs))
+                            (= sbuf (StringBuffer fp l o)))
+                        (case (evalSP sexpr (Just "<interactive>") sbuf)
+                          (Right form) (put-input form)
+                          (Left err) (putStrLn err)))))
+                  read-loop))
             (= print-loop
               (do (<- result (takeMVar my-mvar))
                   (case result

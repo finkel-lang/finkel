@@ -22,7 +22,7 @@ module Language.Finkel.Lexer
   , initialSPState
   , runSP
   , evalSP
-  , incrSP
+  -- , incrSP
   , errorSP
   , lexErrorSP
   , putSPState
@@ -31,17 +31,20 @@ module Language.Finkel.Lexer
 
 -- base
 import           Control.Monad              (ap, liftM, msum)
-import           Data.Char                  (chr, ord, isDigit, isOctDigit,
-                                             isHexDigit, isSpace, toUpper)
+import           Data.Char                  (GeneralCategory(..), chr,
+                                             generalCategory, ord,
+                                             isDigit, isOctDigit,
+                                             isHexDigit, isSpace,
+                                             toUpper)
 import           Data.List                  (intercalate)
 import           Data.Maybe                 (fromMaybe)
 import           Data.Word                  (Word8)
 import qualified GHC.Char                   as Char
 
 -- bytestring
-import           Data.ByteString.Internal   (w2c)
-import qualified Data.ByteString.Lazy       as W8
-import qualified Data.ByteString.Lazy.Char8 as C8
+import           Data.ByteString.Internal   (w2c, fromForeignPtr)
+import qualified Data.ByteString            as W8
+import qualified Data.ByteString.Char8      as C8
 
 -- containers
 import qualified Data.Map                   as Map
@@ -50,7 +53,9 @@ import qualified Data.Map                   as Map
 import           ApiAnnotation              (AnnotationComment(..))
 import           BasicTypes                 (FractionalLit(..))
 import           Encoding                   (utf8DecodeByteString)
-import           FastString                 (FastString, fsLit,
+import           FastString                 (FastString,
+                                             fastStringToByteString,
+                                             fsLit, headFS, nullFS,
                                              mkFastStringByteString,
                                              unpackFS)
 import           Lexeme                     (startsConSym, startsVarSym)
@@ -59,6 +64,13 @@ import           SrcLoc                     (GenLocated(..), Located,
                                              SrcSpan(..), advanceSrcLoc,
                                              mkRealSrcLoc, mkRealSrcSpan,
                                              srcLocCol, srcLocLine)
+
+import           StringBuffer               (StringBuffer, atEnd,
+                                             byteDiff, currentChar,
+                                             lexemeToFastString,
+                                             lexemeToString, nextChar,
+                                             prevChar, stepOn)
+import qualified StringBuffer               as SB
 import           Util                       (readRational)
 
 #if MIN_VERSION_ghc(8,4,0)
@@ -165,12 +177,10 @@ data SPState = SPState
     -- | @{-# GHC_OPTIONS ... #-}@ found in target file.
   , ghcOptions :: [Located String]
     -- | Buffer to hold current input.
-  , buf :: C8.ByteString
+  , buf :: StringBuffer
     -- | Current location of input stream.
   , currentLoc :: RealSrcLoc
-    -- | Previous character in buffer, used by Alex.
-  , prevChar :: {-# UNPACK #-} !Char
-  } deriving (Eq)
+  }
 
 -- | Initial empty state for 'SP'.
 initialSPState :: FastString -> Int -> Int -> SPState
@@ -178,14 +188,13 @@ initialSPState file linum colnum =
   SPState { targetFile = file
           , langExts = []
           , ghcOptions = []
-          , buf = C8.empty
+          , buf = error "SPState.buf not initialized"
           , currentLoc = mkRealSrcLoc file linum colnum
-          , prevChar = '\n'}
+          }
 
 data SPResult a
   = SPOK {-# UNPACK #-} !SPState a
   | SPNG SrcLoc String
-  deriving (Eq)
 
 -- | A state monad newtype to pass around 'SPstate'.
 newtype SP a = SP { unSP :: SPState -> SPResult a }
@@ -208,12 +217,14 @@ instance Monad SP where
                    SPNG l msg -> SPNG l msg)
   {-# INLINE (>>=) #-}
 
+data AlexInput = AlexInput RealSrcLoc StringBuffer
+
 -- | Perform given 'SP' computation with target file name and input
 -- contents.
 runSP :: SP a           -- ^ Computation to perform.
       -> Maybe FilePath -- ^ File name of target. If 'Nothing', assumed
                         -- as anonymous target.
-      -> C8.ByteString  -- ^ Input contents.
+      -> StringBuffer   -- ^ Input contents.
       -> Either String (a, SPState)
 runSP sp target input =
   let st0 = initialSPState target' 1 1
@@ -224,7 +235,7 @@ runSP sp target input =
         SPNG _loc msg -> Left msg
 
 -- | Like 'runSP', but discard resulting 'SPState'.
-evalSP :: SP a -> Maybe FilePath -> C8.ByteString -> Either String a
+evalSP :: SP a -> Maybe FilePath -> StringBuffer -> Either String a
 evalSP sp target input = fmap fst (runSP sp target input)
 
 -- | Update current 'SPState' to given value.
@@ -237,26 +248,28 @@ getSPState :: SP SPState
 getSPState = SP (\st -> SPOK st st)
 {-# INLINE getSPState #-}
 
--- | Incrementally perform computation with parsed result and given
--- function.
-incrSP :: SP a          -- ^ The partial parser.
-       -> (a -> b -> b) -- ^ Function to apply.
-       -> b             -- ^ Initial argument to the function.
-       -> Maybe FilePath -> C8.ByteString -> Either String (b, SPState)
-incrSP sp f z target input = go st1 z
-  where
-    go st acc =
-      case unSP sp st of
-        SPNG _loc msg
-          | blank (buf st) -> Right (acc, st)
-          | otherwise      -> Left msg
-        SPOK st' ret       ->
-          let st'' = st' {buf=C8.cons (prevChar st') (buf st')}
-          in  go st'' $! f ret acc
-    blank bl = C8.null bl || C8.all (`elem` "\n\r\t") bl
-    st0 = initialSPState target' 1 1
-    st1 = st0 {buf = input}
-    target' = maybe (fsLit "anon") fsLit target
+-- -- | Incrementally perform computation with parsed result and given
+-- -- function.
+-- incrSP :: SP a           -- ^ The partial parser.
+--        -> (a -> b -> b)  -- ^ Function to apply.
+--        -> b              -- ^ Initial argument to the function.
+--        -> Maybe FilePath -- ^ Filepath of the input.
+--        -> StringBuffer   -- ^ Input contents.
+--        -> Either String (b, SPState)
+-- incrSP sp f z target input = go st1 z
+--   where
+--     go st acc =
+--       case unSP sp st of
+--         SPNG _loc msg
+--           | atEnd (buf st) -> Right (acc, st)
+--           | otherwise      -> Left msg
+--         SPOK st' ret       ->
+--           -- let st'' = st' {buf=C8.cons (prevChar st') (buf st')}
+--           let st'' = st' {} -- ... efficient way to cons prev char?
+--           in  go st'' $! f ret acc
+--     st0 = initialSPState target' 1 1
+--     st1 = st0 {buf = input}
+--     target' = maybe (fsLit "anon") fsLit target
 
 -- | Show alex error with location of given 'Code' and error message.
 errorSP :: Code   -- ^ Code for showing location information.
@@ -268,59 +281,53 @@ errorSP code msg = alexError (showLoc code ++ msg)
 lexErrorSP :: SP a
 lexErrorSP = do
   st <- getSPState
-  AlexInput loc c _ <- alexGetInput
+  AlexInput loc buf <- alexGetInput
   let lno = srcLocLine loc
       cno = srcLocCol loc
       trg = unpackFS (targetFile st)
+      c = prevChar buf '\n'
       msg = trg ++ ": lexer error at line " ++ show lno ++
             ", column " ++ show cno ++
             ", near " ++ show c
   alexError msg
 
-data AlexInput =
-  AlexInput RealSrcLoc {-# UNPACK #-} !Char C8.ByteString
-  deriving (Eq, Show)
-
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
-alexGetByte (AlexInput loc _ buf) =
-  case W8.uncons buf of
-    Just (w8, buf') ->
-      let c = w2c w8
-          loc' = advanceSrcLoc loc c
-      in w8 `seq` c `seq` loc' `seq` buf' `seq`
-         Just (w8, AlexInput loc' c buf')
-    Nothing -> Nothing
+alexGetByte (AlexInput loc0 buf0) =
+  if atEnd buf0
+     then Nothing
+     else case nextChar buf0 of
+            (c, buf1) -> let w = adjustChar c
+                             loc1 = advanceSrcLoc loc0 c
+                         in  w `seq` loc1 `seq` buf1 `seq`
+                             Just (w, AlexInput loc1 buf1)
 {-# INLINE alexGetByte #-}
 
 alexGetChar :: AlexInput -> Maybe (Char, AlexInput)
-alexGetChar (AlexInput l0 _c0 bs0)
-  | W8.null bs0 = Nothing
-  | otherwise   =
-    case utf8One bs0 fone fmore of
-      (# c, bs1 #) -> Just (c, AlexInput (advanceSrcLoc l0 c) c bs1)
-    where
-      fone = w2c
-      fmore ws = case utf8DecodeByteString (W8.toStrict ws) of
-                   c:_ -> c
-                   _   -> error "alexGetChar: utf8 decode error"
+alexGetChar (AlexInput loc0 buf0) =
+  if atEnd buf0
+     then Nothing
+     else case nextChar buf0 of
+            (c, buf1) -> let loc1 = advanceSrcLoc loc0 c
+                         in  c `seq` loc1 `seq` buf1 `seq`
+                             Just (c, AlexInput loc1 buf1)
 {-# INLINE alexGetChar #-}
 
 alexInputPrevChar :: AlexInput -> Char
-alexInputPrevChar (AlexInput _ c _) = c
+alexInputPrevChar (AlexInput _ buf) = prevChar buf '\NUL'
 {-# INLINE alexInputPrevChar #-}
 
 alexError :: String -> SP a
 alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st)) msg)
+{-# INLINE alexError #-}
 
 alexGetInput :: SP AlexInput
 alexGetInput =
-  SP (\st@SPState{currentLoc=l,buf=b,prevChar=c} ->
-        SPOK st (AlexInput l c b))
+  SP (\st@SPState {currentLoc=l,buf=b} -> SPOK st (AlexInput l b))
 {-# INLINE alexGetInput #-}
 
 alexSetInput :: AlexInput -> SP ()
-alexSetInput (AlexInput l c b) =
-  SP (\st -> SPOK (st {buf=b,currentLoc=l,prevChar=c}) ())
+alexSetInput (AlexInput l b) =
+  SP (\st -> SPOK (st {buf=b,currentLoc=l}) ())
 {-# INLINE alexSetInput #-}
 
 
@@ -426,10 +433,11 @@ tok_quasiquote _ _ = return TQuasiquote
 {-# INLINE tok_quasiquote #-}
 
 tok_pcommas :: Action
-tok_pcommas (AlexInput _ _ s) l = do
-  let cs0 = C8.take (fromIntegral l) s
-      cs1 = C8.filter (not . isSpace) cs0
-  return $! TPcommas (fromIntegral (C8.length cs1 - 2))
+tok_pcommas (AlexInput _ buf) l =
+  do let commas0 = lexemeToFastString buf (fromIntegral l)
+         commas1 = fastStringToByteString commas0
+         commas2 = C8.filter (not . isSpace) commas1
+     return $! TPcommas (fromIntegral (C8.length commas1 - 2))
 {-# INLINE tok_pcommas #-}
 
 tok_comma :: Action
@@ -445,14 +453,15 @@ tok_unquote_splice _ _ = return TUnquoteSplice
 {-# INLINE tok_unquote_splice #-}
 
 tok_hash :: Action
-tok_hash (AlexInput _ _ s) l
-  | l == 2, let c = C8.index s 1
+tok_hash (AlexInput _ buf) l
+  | l == 2
+  , let c = currentChar (snd (nextChar buf))
   , not (startsVarSym c)
   , not (startsConSym c)
   = return $! THash c
-  | otherwise =
-   let bs = C8.toStrict $! takeUtf8 l s
-   in  return $! TSymbol $! mkFastStringByteString bs
+  | otherwise
+  = let fs = lexemeToFastString buf l
+    in  fs `seq` return $! TSymbol fs
 {-# INLINE tok_hash #-}
 
 tok_line_comment :: Action
@@ -491,38 +500,40 @@ tok_doc_next = tok_doc_with TDocNext '|'
 {-# INLINE tok_doc_next #-}
 
 tok_doc_with :: (FastString -> Token) -> Char -> Action
-tok_doc_with constr char (AlexInput _ _ s) l = do
-  let str0 = takeUtf8 l s
-      line0:strs = C8.lines str0
+tok_doc_with constr char (AlexInput _ s) l = do
+  let fs0 = takeUtf8FS l s
+      bs0 = fastStringToByteString fs0
+      line0:bss = C8.lines bs0
       line1 = C8.tail (C8.dropWhile (/= char) line0)
-      str1 = C8.unlines (line1 : map (C8.dropWhile (== ';')) strs)
-      str = mkFastStringByteString (W8.toStrict str1)
-  return $! constr str
+      bs1 = C8.unlines (line1 : map (C8.dropWhile (== ';')) bss)
+      fs1 = mkFastStringByteString bs1
+  return $! constr fs1
 {-# INLINE tok_doc_with #-}
 
 tok_doc_named :: Action
-tok_doc_named (AlexInput _ _ s) l =
-  let str0 = takeUtf8 l s
-      line1:strs = C8.lines str0
-      line2 = C8.dropWhile isSpace $ C8.dropWhile (== ';') line1
+tok_doc_named (AlexInput _ s) l =
+  let fs0 = takeUtf8FS l s
+      bs0 = fastStringToByteString fs0
+      line1:bss = C8.lines bs0
+      line2 = C8.dropWhile isSpace (C8.dropWhile (== ';') line1)
       line3 = C8.tail line2
-      key  = mkFastStringByteString (W8.toStrict line3)
-      str1 = map (C8.dropWhile (== ';')) strs
-      str2 = mkFastStringByteString (W8.toStrict (C8.unlines str1))
-      str3 = case strs of
-               [] -> Nothing
-               _  -> Just str2
-  in  return $! TDocNamed key str3
+      key = mkFastStringByteString line3
+      bs1 = map (C8.dropWhile (== ';')) bss
+      fs1 = mkFastStringByteString (C8.unlines bs1)
+      fs2 = case bss of
+              [] -> Nothing
+              _  -> Just fs1
+  in  return $! TDocNamed key fs2
 {-# INLINE tok_doc_named #-}
 
 tok_doc_group :: Action
-tok_doc_group (AlexInput _ _ s) l =
-  let str0 = C8.dropWhile (== ';') (takeUtf8 l s)
-      str1 = C8.dropWhile isSpace str0
-      (stars, str2) = C8.span (== '*') str1
+tok_doc_group (AlexInput _ s) l =
+  let bs0 = fastStringToByteString (takeUtf8FS l s)
+      bs1 = C8.dropWhile isSpace (C8.dropWhile (== ';') bs0)
+      (stars, bs2) = C8.span (== '*') bs1
       level = C8.length stars
-      str3 = mkFastStringByteString (W8.toStrict (C8.tail str2))
-  in  return $! TDocGroup (fromIntegral level) str3
+      fs0 = mkFastStringByteString (C8.tail bs2)
+  in  return $! TDocGroup level fs0
 {-# INLINE tok_doc_group #-}
 
 tok_lambda :: Action
@@ -532,19 +543,19 @@ tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
 -- | Make token symbol.  When the given symbol starts with
 -- non-operatator character, replace hyphens with underscores.
 tok_symbol :: Action
-tok_symbol (AlexInput _ _ s) l = do
-  let bs0 = takeUtf8 l s
-  bs1 <- case C8.uncons bs0 of
-           Just (c, _)
-             | (startsVarSym c || startsConSym c)
-             -> return bs0
-             | otherwise -> return $! replaceHyphens bs0
-           Nothing       -> alexError "tok_symbol: panic"
-  return $! TSymbol $! mkFastStringByteString $! C8.toStrict $! bs1
+tok_symbol (AlexInput _ buf) l =
+  let fs0 = takeUtf8FS l buf
+      fs1 | startsVarSym c || startsConSym c = fs0
+          | otherwise = replaceHyphens fs0
+          where c = currentChar buf
+  in  fs0 `seq` fs1 `seq` return $! TSymbol fs1
 {-# INLINE tok_symbol #-}
 
-replaceHyphens :: C8.ByteString -> C8.ByteString
-replaceHyphens = C8.map (\c -> if c == '-' then '_' else c)
+replaceHyphens :: FastString -> FastString
+replaceHyphens =
+  mkFastStringByteString .
+  C8.map (\c -> if c == '-' then '_' else c) .
+  fastStringToByteString
 {-# INLINE replaceHyphens #-}
 
 tok_char :: Action
@@ -570,7 +581,7 @@ tok_char inp0 _ = do
 {-# INLINE tok_char #-}
 
 tok_string :: Action
-tok_string inp _l =
+tok_string inp@(AlexInput _ buf) _l =
   -- Currently String tokenizer does not update alex input per
   -- character. This makes the code a bit more effiicient, but getting
   -- unhelpful error message on illegal escape sequence.
@@ -578,7 +589,8 @@ tok_string inp _l =
     Just ('"', inp')
       | Just (str, inp'') <- go inp' "" ->
         alexSetInput inp'' >> return str
-    _ -> alexError ("lexical error in string: " ++ show inp)
+    _ -> alexError ("lexical error in string: " ++
+                    show (currentChar buf))
   where
     go inp0 acc =
       case alexGetChar inp0 of
@@ -657,21 +669,23 @@ escapeChar inp0
 {-# INLINE escapeChar #-}
 
 tok_integer :: Action
-tok_integer (AlexInput _ _ s) l = do
-  let str = C8.unpack $! C8.take (fromIntegral l) s
-  return $ TInteger $! read $! str
+tok_integer (AlexInput _ buf) l =
+  let str = lexemeToString buf (fromIntegral l)
+  in  return $ TInteger $! read $! str
 {-# INLINE tok_integer #-}
 
 tok_fractional :: Action
-tok_fractional (AlexInput _ _ s) l = do
-  let str = C8.unpack $! C8.take (fromIntegral l) s
-      rat = readRational str
+tok_fractional (AlexInput _ buf) l =
+  do let str = lexemeToString buf (fromIntegral l)
+         rat = readRational str
 #if MIN_VERSION_ghc(8,4,0)
-  let stxt = SourceText str
-      is_neg = if 0 < rat then True else False
-  return $ TFractional $! FL stxt is_neg rat
+     let stxt = SourceText str
+         is_neg = if 0 < rat
+                     then True
+                     else False
+     return $! TFractional $! FL stxt is_neg rat
 #else
-  return $ TFractional $! FL str rat
+     return $! TFractional $! FL str rat
 #endif
 {-# INLINE tok_fractional #-}
 
@@ -695,7 +709,7 @@ tokenLexer cont = do
 
 scanToken :: SP (Located Token)
 scanToken = do
-  inp0@(AlexInput loc0 _ _) <- alexGetInput
+  inp0@(AlexInput loc0 _) <- alexGetInput
   let sc = 0
   case alexScan inp0 sc of
     AlexToken inp1 len act -> do
@@ -706,14 +720,14 @@ scanToken = do
       loc1 <- fmap currentLoc getSPState
       let span = RealSrcSpan $ mkRealSrcSpan loc0 loc1
       return (L span tok)
-    AlexError (AlexInput loc1 ch _) -> do
+    AlexError (AlexInput loc1 buf) -> do
       sp <- getSPState
       let l = srcLocLine loc1
           c = srcLocCol loc1
           trg = unpackFS (targetFile sp)
       alexError (trg ++ ": lexical error at line " ++ show l ++
                  ", column " ++ show c ++
-                 ", near " ++ show ch)
+                 ", near " ++ show (currentChar buf))
     AlexSkip inp1 _ -> do
       alexSetInput inp1
       scanToken
@@ -722,7 +736,7 @@ scanToken = do
 
 -- | Lex the input to list of 'Token's.
 lexTokens :: Maybe FilePath
-          -> C8.ByteString
+          -> StringBuffer
           -> Either String [Located Token]
 lexTokens = evalSP go
   where
@@ -739,35 +753,76 @@ lexTokens = evalSP go
 --
 -- ---------------------------------------------------------------------
 
-takeUtf8 :: Int -> C8.ByteString -> C8.ByteString
-takeUtf8 n bs = case splitUtf8 n bs of (# bs', _ #) -> bs'
+takeUtf8 :: Int -> StringBuffer -> String
+takeUtf8 = go []
+  where
+    go acc n buf =
+      if n == 0
+         then reverse acc
+         else case nextChar buf of
+                (c, buf') -> let acc' = c: acc
+                                 n' = n - 1
+                             in  acc' `seq` n' `seq` go acc' n' buf'
 {-# INLINE takeUtf8 #-}
 
-splitUtf8 :: Int -> C8.ByteString -> (# C8.ByteString, C8.ByteString #)
-splitUtf8 n0 bs0 = go n0 bs0 W8.empty
+takeUtf8FS :: Int -> StringBuffer -> FastString
+takeUtf8FS n sb0 = lexemeToFastString sb0 diff
   where
-    go n bs acc
-      | n <= 0    = (# acc, bs #)
-      | otherwise =
-        case utf8One bs W8.singleton id of
-          (# pre, bs1 #) -> acc `seq` go (n-1) bs1 (W8.append acc pre)
-{-# INLINE splitUtf8 #-}
+    diff = byteDiff sb0 (step n sb0)
+    step i sb =
+      if i == 0
+         then sb
+         else let i' = i -1
+                  sb' = stepOn sb
+              in  i' `seq` sb' `seq` step i' sb'
+{-# INLINE takeUtf8FS #-}
 
-utf8One :: C8.ByteString
-        -> (Word8 -> a)         -- ^ Function for single byte.
-        -> (C8.ByteString -> a) -- ^ For multi-bytes.
-        -> (# a, C8.ByteString #)
-utf8One bs0 fone fmore =
-  case W8.uncons bs0 of
-    Just (w8, bs1)
-      | w8 < 0x80 -> (# fone w8, bs1 #)
-      | w8 < 0xe0 -> split 1
-      | w8 < 0xf0 -> split 2
-      | otherwise -> split 3
-     where
-      split k =
-        case W8.splitAt k bs1 of
-          (pre, bs2) -> (# fmore (W8.cons w8 pre), bs2 #)
-    Nothing -> error "utf8One: empty input"
-{-# INLINE utf8One #-}
+-- Taken from "compiler/parser/Lexer.x.source" ghc source.
+adjustChar :: Char -> Word8
+adjustChar c = fromIntegral $ ord adj_c
+  where non_graphic     = '\x00'
+        upper           = '\x01'
+        lower           = '\x02'
+        digit           = '\x03'
+        symbol          = '\x04'
+        space           = '\x05'
+        other_graphic   = '\x06'
+        uniidchar       = '\x07'
+
+        adj_c
+          | c <= '\x07' = non_graphic
+          | c <= '\x7f' = c
+          -- Alex doesn't handle Unicode, so when Unicode
+          -- character is encountered we output these values
+          -- with the actual character value hidden in the state.
+          | otherwise =
+                -- NB: The logic behind these definitions is also reflected
+                -- in basicTypes/Lexeme.hs
+                -- Any changes here should likely be reflected there.
+                case generalCategory c of
+                  UppercaseLetter       -> upper
+                  LowercaseLetter       -> lower
+                  TitlecaseLetter       -> upper
+                  ModifierLetter        -> uniidchar -- see #10196
+                  OtherLetter           -> lower -- see #1103
+                  NonSpacingMark        -> uniidchar -- see #7650
+                  SpacingCombiningMark  -> other_graphic
+                  EnclosingMark         -> other_graphic
+                  DecimalNumber         -> digit
+                  LetterNumber          -> other_graphic
+                  OtherNumber           -> digit -- see #4373
+                  ConnectorPunctuation  -> symbol
+                  DashPunctuation       -> symbol
+                  OpenPunctuation       -> other_graphic
+                  ClosePunctuation      -> other_graphic
+                  InitialQuote          -> other_graphic
+                  FinalQuote            -> other_graphic
+                  OtherPunctuation      -> symbol
+                  MathSymbol            -> symbol
+                  CurrencySymbol        -> symbol
+                  ModifierSymbol        -> symbol
+                  OtherSymbol           -> symbol
+                  Space                 -> space
+                  _other                -> non_graphic
+{-# INLINE adjustChar #-}
 }
