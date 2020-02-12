@@ -64,9 +64,24 @@
 (defn (:: replTests Spec)
   (do (describe "ReplState" replStateTests)
       (describe "Read" readTests)
-      (describe "ReadPrint" readPrintTests)
-      (describe "Eval" evalTests)
-      (describe "Listen" listenTests)))
+      (describe "ReadPrint"
+        (with-os-cond os
+          ((== os "mingw32")
+           (it "should skip under Windows"
+               (pendingWith "Windows not supported yet")))
+          (otherwise readPrintTests)))
+      (describe "Eval"
+        (with-os-cond os
+          ((== os "mingw32")
+           (it "should skip under Windows"
+               (pendingWith "Windows not supported yet")))
+          (otherwise evalTests)))
+      (describe "Listen"
+        (with-os-cond os
+          ((== os "mingw32")
+           (it "should be skipped under Windows"
+               (pendingWith "Windows not supported yet")))
+          (otherwise listenTests)))))
 
 ;;; Orphan
 
@@ -140,30 +155,31 @@
 (defn (:: readPrintTests Spec)
   (describe
    "read and print loop"
-   (do (rptest "multi line form" ["(print" "(+" "10" "32" "))"])
-       (rptest "quitting with \"(quit)\"" ["(quit)"])
-       (rptest "\",t\" command" [",t False"])
-       (rptest "\",!\" command" [",! echo foo bar"])
-       (rptest "\",q\" command" [",q"]))))
+    (do (rptest "multi line form" ["(print" "(+" "10" "32" "))"])
+        (rptest "quitting with \"(quit)\"" ["(quit)"])
+        (rptest "\",t\" command" [",t False"])
+        (rptest "\",!\" command" [",! echo foo bar"])
+        (rptest "\",q\" command" [",q"]))))
 
 (defn (:: rptest (-> String [String] Spec))
   [label inputs]
   (describe
    label
-   (do (let ((= run
-               (do (<- (@ resources (, _ hdl in-mv)) acquire-repl)
-                   (<- eval-tid
-                     (forkIO (runFnk (eval-loop hdl in-mv) repl-env)))
-                   (let ((= act
-                           (runTestIO (read-print-loop in-mv eval-tid)
-                                      inputs))))
-                   (return (, resources act))))))
-       (<- (, resources act) (runIO run))
-       (after_ (cleanup-repl resources)
-               (it "should evaluate successfully"
-                   (do (<- tst (fmap snd (liftIO act)))
-                       (shouldSatisfy (pending-input (tst-replstate tst))
-                                      null)))))))
+    (do (let ((= run
+                (do (<- (@ resources (, _ hdl in-mv)) acquire-repl)
+                    (<- eval-tid
+                      (forkIO (runFnk (eval-loop hdl in-mv) repl-env)))
+                    (let ((= act
+                            (runTestIO (read-print-loop in-mv eval-tid)
+                                       inputs))))
+                    (return (, resources act))))))
+        (<- (, resources act) (runIO run))
+        (after_ (cleanup-repl resources)
+                (it "should evaluate successfully"
+                    (do (<- tst (fmap snd (liftIO act)))
+                        (shouldSatisfy (pending-input
+                                        (tst-replstate tst))
+                                       null)))))))
 
 (defn (:: evalTests Spec)
   (do (let ((= d describe)

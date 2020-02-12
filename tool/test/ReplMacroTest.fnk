@@ -28,7 +28,12 @@
    (TestAux)))
 
 (defn (:: replMacroTests Spec)
-  (describe "ReplMacro" replMacroTests'))
+  (describe "ReplMacro"
+    (with-os-cond os
+      ((== os "mingw32")
+       (it "should skip under Windows"
+           (pendingWith "Windows not yet supported")))
+      (otherwise replMacroTests'))))
 
 (defn (:: replMacroTests' Spec)
   (do (let ((= delines (intercalate "\n"))
@@ -182,13 +187,15 @@
               ["main :: IO ()"
                "foo :: String"
                "bar :: Int -> Int"]))
-         (ok `(writeFile ,m02-dot-fnk "(defn main (print True))")
+         (ok `(writeFile ,m02-dot-fnk
+                         "(defn main (print True))")
              "")
          (ok `(:begin
                 (repl-macro load ,(qSymbol m02-dot-fnk))
                 main)
              "True")
-         (ok `(writeFile ,m02-dot-fnk "(defn main (print False))")
+         (ok `(writeFile ,m02-dot-fnk
+                         "(defn main (print False))")
              "")
          (ok '(repl-macro reload)
              (++ "; reloaded " m02-dot-fnk))

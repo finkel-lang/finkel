@@ -10,6 +10,7 @@ module SyntaxTest (syntaxTests) where
 import Control.Monad        (when)
 import Data.IORef           (newIORef, readIORef, writeIORef)
 import System.Exit          (ExitCode (..))
+import System.Info          (os)
 
 -- directory
 import System.Directory     (createDirectoryIfMissing, doesFileExist,
@@ -35,7 +36,18 @@ import Language.Finkel.Make
 import TestAux
 
 mkTest :: FilePath -> Spec
-mkTest path = do
+mkTest path =
+  if os == "mingw32" && or (let b = takeBaseName path
+                            in  [ b == "0002-lexical"
+                                , b == "0004-decls"
+                                , b == "1001-quote" ])
+     then describe path
+                   (it "is pending under Windows"
+                       (pendingWith "Unicode not supported yet"))
+     else mkTest' path
+
+mkTest' :: FilePath -> Spec
+mkTest' path = do
   let mkRef = runIO . newIORef . error
       removeWhenExist file = do
         exist <- doesFileExist file
@@ -78,10 +90,10 @@ mkTest path = do
           skipThisTest _ = (False, "")
 #else
           skipThisTest p =
-            let b = takeBaseName p
-            in ( or ["2012-typeop" == b
-                    ,"1004-doccomment-01" == b]
-               , "Generated Haskell code is malformed" )
+            ( or [ b == "2012-typeop"
+                 , b == "1004-doccomment-01"]
+            , "Generated Haskell code is malformed" )
+            where b = takeBaseName p
 #endif
       case skipThisTest path of
         (True, reason) -> pendingWith reason

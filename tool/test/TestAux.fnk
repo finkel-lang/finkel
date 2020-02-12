@@ -187,7 +187,7 @@
                                repl-env)))
       (let ((= eval-form right-or-left form expect
               (describe
-               (concat ["evaluate " (show form)])
+               (++ "evaluate " (show form))
                (it "evaluates to expected result"
                    (do (putMVar in-mv (Input Connection form out-mv))
                        (<- ret (takeMVar out-mv))
@@ -196,7 +196,7 @@
             (= ng (eval-form Left))
             (= satisfy form test
               (describe
-               (concat ["evaluate " (show form)])
+               (++ "evaluate " (show form))
                (it "satisfies predicate"
                    (do (putMVar in-mv (Input Connection form out-mv))
                        (<- ret (takeMVar out-mv))

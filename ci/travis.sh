@@ -111,11 +111,15 @@ travis_install_osx () {
 }
 
 travis_script_osx () {
-    travis_script_linux
+    $STACK --no-terminal --install-ghc test --only-dependencies
+    $STACK --no-terminal build --fast --test finkel-kernel
+    $STACK --no-terminal build --fast --test finkel-setup
+    $STACK --no-terminal build --fast --test finkel-lang
+    $STACK --no-terminal build --fast --test finkel-tool
 }
 
 travis_after_success_osx () {
-    travis_after_success_linux
+    echo "OSX after success not yet written"
 }
 
 
@@ -133,7 +137,7 @@ travis_install_windows () {
 }
 
 travis_script_windows () {
-    travis_script_linux
+    travis_script_osx
 }
 
 travis_after_success_windows () {

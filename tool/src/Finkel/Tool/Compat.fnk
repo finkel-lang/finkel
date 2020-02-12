@@ -5,8 +5,11 @@
 (defmodule Finkel.Tool.Compat
   (export
    define-ghc-version-macro
-   with-ghc-version-cond)
+   with-ghc-version-cond
+   with-os-cond)
   (import
+   ;; base
+   (qualified System.Info)
    ;; ghc
    (Config (cProjectVersionInt))
 
@@ -33,6 +36,24 @@
             `(,test ',body))))
     `(macrolet (($tmp ()
                   (let ((= ,ver-name ,ver-value))
+                    (cond
+                      ,@(mapcar f bodies)))))
+       ($tmp))))
+
+(defmacro with-os-cond
+  "Macro to generate code with os name variable.
+
+The name of os is taken from `System.Info.os'."
+  forms
+  (let ((= var-name (car forms))
+        (= bodies (cdr forms))
+        (= os-name System.Info.os)
+        (= f test-and-body
+          (let ((= test (car test-and-body))
+                (= body (cadr test-and-body)))
+            `(,test ',body))))
+    `(macrolet (($tmp []
+                  (let ((= ,var-name ,os-name))
                     (cond
                       ,@(mapcar f bodies)))))
        ($tmp))))

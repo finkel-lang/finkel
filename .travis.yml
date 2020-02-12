@@ -23,10 +23,13 @@ os:
   - windows
 
 env:
-  - EXEC=stack RESOLVER=lts-11
-  - EXEC=stack RESOLVER=lts-12
-  - EXEC=stack RESOLVER=lts-14
-  - EXEC=cabal GHC_VERSION=8.8.2
+  global:
+    - TMPDIR=$TRAVIS_BUILD_DIR/tmp
+  jobs:
+    - EXEC=stack RESOLVER=lts-11
+    - EXEC=stack RESOLVER=lts-12
+    - EXEC=stack RESOLVER=lts-14
+    - EXEC=cabal GHC_VERSION=8.8.2
 
 # OSX and WINDOWS are entirely excluded at the moment.
 jobs:
@@ -43,12 +46,13 @@ jobs:
       env: EXEC=stack RESOLVER=lts-11
     - os: windows
       env: EXEC=stack RESOLVER=lts-12
-    - os: windows
-      env: EXEC=stack RESOLVER=lts-14
+    # - os: windows
+    #   env: EXEC=stack RESOLVER=lts-14
     - os: windows
       env: EXEC=cabal GHC_VERSION=8.8.2
 
 before_install:
+  - mkdir -p $TMPDIR
   - . ci/travis.sh
 
 install:

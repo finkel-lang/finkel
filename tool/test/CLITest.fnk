@@ -6,6 +6,12 @@
 
 (defmodule CLITest
   (export cliTests)
+  (require
+   ;; finkel-lang
+   (Finkel.Prelude)
+
+   ;; Internal
+   (Finkel.Tool.Compat))
   (import
    ;; base
    (Control.Exception (bracket))
@@ -41,11 +47,15 @@
   (do (let ((= d describe)))
       (d "getString"
          (it "should end with Nothing"
-             (shouldReturn (with-test-stdin "input01.txt"
-                             (toIO (replicateM 3 (getString ""))))
-                           [(Just "First line")
-                            (Just "Second line")
-                            Nothing])))
+             (with-os-cond os
+               ((== os "mingw32")
+                (pendingWith "Windows CRLF handling not yet done"))
+               (otherwise
+                (shouldReturn (with-test-stdin "input01.txt"
+                                (toIO (replicateM 3 (getString ""))))
+                              [(Just "First line")
+                               (Just "Second line")
+                               Nothing])))))
       (d "putString"
          (it "should run successfully"
              (shouldReturn (toIO (putString "foo"))

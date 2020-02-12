@@ -51,10 +51,9 @@ reading the input until successful parse result."
                 ;; input, to handle `Ctrl-C' key presses without valid
                 ;; evaluation form, and to refresh intermediate user
                 ;; inputs in Repl state.
-                (handleInterrupt
-                 (do (putReplState mempty)
-                     (return (Just [])))
-                 (getString prompt)))
+                (handleInterrupt (do (putReplState mempty)
+                                     (return (Just [])))
+                                 (getString prompt)))
               (maybe (quit eval-tid) (go1 st0 result-mv) mb-input)))
         (= go1 st0 result-mv line
           (case line
@@ -117,7 +116,6 @@ reading the input until successful parse result."
   [input0]
   (do (<- st getReplState)
       (let ((= input1 (stringToStringBuffer (: #'\n input0)))
-
             (= put-and-return pending ret
               (do (putReplState (st {pending-input pending}))
                   (return ret)))))
