@@ -107,7 +107,7 @@ test-suite finkel-tool-test
 executable finkel
   hs-source-dirs:      exec
   main-is:             finkel.hs
-  if !os(windos) && flag(dynamic)
+  if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
