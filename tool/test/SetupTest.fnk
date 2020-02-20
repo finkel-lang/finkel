@@ -17,18 +17,18 @@
    ;; base
    (Control.Exception ((SomeException ..) catch throw))
    (Data.List (isSubsequenceOf))
-   (System.Environment (getEnv getExecutablePath unsetEnv withArgs))
+   (System.Environment
+    (getEnv getExecutablePath lookupEnv unsetEnv withArgs))
    (System.IO.Error (isDoesNotExistError))
 
    ;; ghc
    (Config (cProjectVersion))
 
    ;; directory
-   (System.Directory
-    (getCurrentDirectory removeFile setCurrentDirectory))
+   (System.Directory (getCurrentDirectory removeFile setCurrentDirectory))
 
    ;; filepath
-   (System.FilePath (</>  joinPath splitDirectories))
+   (System.FilePath (</> isSearchPathSeparator joinPath splitDirectories))
 
    ;; hspec
    (Test.Hspec)
@@ -107,16 +107,17 @@
       (getCabalPackageDbs exec)))
 
 (defn (:: getStackPackageDbs (IO [String]))
-  (do (<- paths (catch (getEnv "GHC_PACKAGE_PATH")
-                  (\ (SomeException _) (return []))))
-      ($ return reverse sepByColon paths)))
+  (do (<- mb-paths (lookupEnv "GHC_PACKAGE_PATH"))
+      (case mb-paths
+        (Just paths) ($ return reverse sepBySearchPathSeparator paths)
+        Nothing (return []))))
 
-(defn (:: sepByColon (-> String [String]))
+(defn (:: sepBySearchPathSeparator (-> String [String]))
   [xs]
-  (case (dropWhile (== #':) xs)
+  (case (dropWhile isSearchPathSeparator xs)
     "" []
-    ys (case (break (== #':) ys)
-         (, w ys') (: w (sepByColon ys')))))
+    ys (case (break isSearchPathSeparator ys)
+         (, w ys') (: w (sepBySearchPathSeparator ys')))))
 
 (defn (:: getCabalPackageDbs (-> FilePath (IO [String])))
   [exec]

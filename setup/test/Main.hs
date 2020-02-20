@@ -4,8 +4,8 @@ module Main where
 -- base
 import Control.Exception          (SomeException (..), catch)
 import Data.List                  (isSubsequenceOf)
-import System.Environment         (getEnv, getExecutablePath, setEnv,
-                                   unsetEnv, withArgs)
+import System.Environment         (getEnv, getExecutablePath, lookupEnv,
+                                   setEnv, unsetEnv, withArgs)
 
 -- ghc
 import Config
@@ -15,7 +15,8 @@ import System.Directory           (getCurrentDirectory,
                                    setCurrentDirectory)
 
 -- filepath
-import System.FilePath            (joinPath, splitDirectories, (</>))
+import System.FilePath            (isSearchPathSeparator, joinPath,
+                                   splitDirectories, (</>))
 
 -- hspec
 import Test.Hspec
@@ -91,16 +92,17 @@ getStackPackageDbs = do
   -- Getting package database paths from "GHC_PACKAGE_PATH" environment
   -- variable, so that we can get the package database paths without
   -- knowing which "stack.yaml" file were used.
-  paths <- catch (getEnv "GHC_PACKAGE_PATH")
-                 (\(SomeException _) -> return "")
-  return (reverse (sepByColon paths))
+  mb_paths <- lookupEnv "GHC_PACKAGE_PATH"
+  case mb_paths of
+    Just paths -> return (reverse (sepBySearchPathSeparator paths))
+    Nothing    -> return []
 
-sepByColon :: String -> [String]
-sepByColon xs =
-  case dropWhile (== ':') xs of
+sepBySearchPathSeparator :: String -> [String]
+sepBySearchPathSeparator xs =
+  case dropWhile isSearchPathSeparator xs of
     "" -> []
-    ys -> case break (== ':') ys of
-           (w, ys') -> w : sepByColon ys'
+    ys -> case break isSearchPathSeparator ys of
+           (w, ys') -> w : sepBySearchPathSeparator ys'
 
 getCabalPackageDbs :: String -> IO [String]
 getCabalPackageDbs executable_path = do
