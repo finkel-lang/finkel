@@ -17,6 +17,9 @@ addons:
     packages:
       - haskell-stack
 
+    # Workaround for "Unknown command: bundle", see: https://bit.ly/32d3V2d
+    update: true
+
 os:
   - linux
   - osx
@@ -38,8 +41,8 @@ jobs:
       env: EXEC=stack RESOLVER=lts-11
     - os: osx
       env: EXEC=stack RESOLVER=lts-12
-    - os: osx
-      env: EXEC=stack RESOLVER=lts-14
+    # - os: osx
+    #   env: EXEC=stack RESOLVER=lts-14
     - os: osx
       env: EXEC=cabal GHC_VERSION=8.8.2
     - os: windows

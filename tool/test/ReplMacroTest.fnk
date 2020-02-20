@@ -4,6 +4,11 @@
 
 (defmodule ReplMacroTest
   (export replMacroTests)
+  (require
+   ;; finkel-lang
+   (Finkel.Prelude)
+   ;; internal
+   (Finkel.Tool.Compat))
   (import
    ;; base
    (Control.Exception (catch throw))
@@ -187,19 +192,38 @@
               ["main :: IO ()"
                "foo :: String"
                "bar :: Int -> Int"]))
+
          (ok `(writeFile ,m02-dot-fnk
                          "(defn main (print True))")
              "")
-         (ok `(:begin
-                (repl-macro load ,(qSymbol m02-dot-fnk))
-                main)
-             "True")
+         (with-os-cond os
+           ((== os "darwin")
+            (describe "evaluate (repl-macro load m02.fnk)"
+              (it "should skip under darwin"
+                  (pendingWith "OSX not supported yet"))))
+           (otherwise
+            (ok `(:begin
+                   (repl-macro load ,(qSymbol m02-dot-fnk))
+                   main)
+                "True")))
          (ok `(writeFile ,m02-dot-fnk
                          "(defn main (print False))")
              "")
-         (ok '(repl-macro reload)
-             (++ "; reloaded " m02-dot-fnk))
-         (ok 'main "False")
+         (with-os-cond os
+           ((== os "darwin")
+            (describe "evaluate (repl-macro reload)"
+              (it "should skip under darwin"
+                  (pendingWith "OSX not supported yet"))))
+           (otherwise
+            (ok '(repl-macro reload)
+                (++ "; reloaded " m02-dot-fnk))))
+         (with-os-cond os
+           ((== os "darwin")
+            (describe "evaluate main"
+              (it "should skip under darwin"
+                  (pendingWith "OSX not supported yet"))))
+           (otherwise
+            (ok 'main "False")))
 
          ;; Errors
          (ng '(repl-macro info (foo bar))
