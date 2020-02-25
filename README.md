@@ -15,12 +15,10 @@ Or in other words, [Haskell][haskell] in S-expression.
 ```clojure
 ;;;; File: fib.fnk
 
-(:doc "Simple example module for fib executable.
+(:doc "Simple example module to show fibonacci number.
 
-This file contains a function named `main', which will be invoked when
-this module were compiled as an executable. The compiled executable
-taks an integer argument from command line input and print the
-fibonacci number of the argument.")
+The compiled executable takes an integer argument from command line
+input and print the fibonacci number of the argument.")
 
 (defmodule Main
   (import
@@ -53,13 +51,11 @@ $ ./fib 10
 ```
 $ finkel repl
 Hit `Ctrl-d' or type ,q to quit, type ,? for help.
-> (+ 1 2 3 4 5)
-15
 > ,load fib.fnk
 [1 of 1] Compiling Main             ( fib.fnk, interpreted )
 ; loaded fib.fnk
 > ,info fib
-fib :: Int -> Int       -- Defined at fib.fnk:18:11
+fib :: Int -> Int       -- Defined at fib.fnk:16:11
 > (map fib [1 .. 10])
 [1,1,2,3,5,8,13,21,34,55]
 > (System.Environment.withArgs ["10"] main)
