@@ -28,31 +28,23 @@ os:
 env:
   global:
     - TMPDIR=$TRAVIS_BUILD_DIR/tmp
-  jobs:
-    - EXEC=stack RESOLVER=lts-11
-    - EXEC=stack RESOLVER=lts-12
-    - EXEC=stack RESOLVER=lts-14
-    - EXEC=cabal GHC_VERSION=8.8.2
 
-# OSX and WINDOWS are entirely excluded at the moment.
 jobs:
-  exclude:
-    - os: osx
+  include:
+    - os: linux
       env: EXEC=stack RESOLVER=lts-11
-    - os: osx
+    - os: linux
       env: EXEC=stack RESOLVER=lts-12
-    # - os: osx
-    #   env: EXEC=stack RESOLVER=lts-14
+    - os: linux
+      env: EXEC=stack RESOLVER=lts-14
+    - os: linux
+      env: EXEC=stack RESOLVER=lts-15
+    - os: linux
+      env: EXEC=cabal GHC_VERSION=8.8.2
     - os: osx
-      env: EXEC=cabal GHC_VERSION=8.8.2
+      env: EXEC=stack RESOLVER=lts-15
     - os: windows
-      env: EXEC=stack RESOLVER=lts-11
-    - os: windows
-      env: EXEC=stack RESOLVER=lts-12
-    # - os: windows
-    #   env: EXEC=stack RESOLVER=lts-14
-    - os: windows
-      env: EXEC=cabal GHC_VERSION=8.8.2
+      env: EXEC=stack RESOLVER=lts-15
 
 before_install:
   - mkdir -p $TMPDIR

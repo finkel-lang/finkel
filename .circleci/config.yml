@@ -2,15 +2,54 @@
 # https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
-# Use a package of configuration called an orb.
-orbs:
-  # Declare a dependency on the welcome-orb
-  welcome: circleci/welcome-orb@0.4.1
+jobs:
+  build-linux:
+    docker:
+      - image: fpco/stack-build:lts
+    steps:
+      - checkout
+      - restore_cache:
+          name: Restore Cached Dependencies
+          keys:
+            - stack-{{ checksum "stack.yaml" }}
+            - kernel-{{ checksum "kernel/finkel-kernel.cabal" }}
+            - setup-{{ checksum "setup/finkel-setup.cabal" }}
+            - lang-{{ checksum "lang/finkel-lang.cabal" }}
+            - tool-{{ checksum "tool/finkel-tool.cabal" }}
+      - run:
+          name: Resolve/Update Dependencies
+          command: stack --no-terminal setup
+      - run:
+          name: Build Packages
+          command: |
+            stack --no-terminal build --test --no-run-tests \
+              finkel-kernel finkel-setup finkel-lang finkel-tool
+      - run:
+          name: Run tests
+          command: |
+            stack --no-terminal build --test \
+              finkel-kernel finkel-setup finkel-lang finkel-tool
+      - save_cache:
+          name: Cache dependencies
+          key: stack-{{ checksum "stack.yaml" }}
+          paths:
+            - ~/.stack
+            - ~/.stack-work
 
-# Orchestrate or schedule a set of jobs
 workflows:
-  # Name the workflow "welcome"
-  welcome:
-    # Run the welcome/run job in its own container
+  build:
     jobs:
-      - welcome/run
+      - build-linux
+
+# # Use a package of configuration called an orb.
+# orbs:
+#   # Declare a dependency on the welcome-orb
+#   welcome: circleci/welcome-orb@0.4.1
+
+# # Orchestrate or schedule a set of jobs
+# workflows:
+#   # Name the workflow "welcome"
+#   welcome:
+#     # Run the welcome/run job in its own container
+#     jobs:
+#       - welcome/run
