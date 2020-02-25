@@ -20,11 +20,6 @@ addons:
     # Workaround for "Unknown command: bundle", see: https://bit.ly/32d3V2d
     update: true
 
-os:
-  - linux
-  - osx
-  - windows
-
 env:
   global:
     - TMPDIR=$TRAVIS_BUILD_DIR/tmp
