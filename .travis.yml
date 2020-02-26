@@ -39,6 +39,9 @@ jobs:
     - os: osx
       env: EXEC=stack RESOLVER=lts-15
     - os: windows
+      env: EXEC=stack RESOLVER=lts-14
+  allow_failures:
+    - os: windows
       env: EXEC=stack RESOLVER=lts-15
 
 before_install:
