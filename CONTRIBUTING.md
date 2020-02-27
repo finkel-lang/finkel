@@ -58,7 +58,7 @@ version of Finkel built from the source.
 We believe every one has its taste in coding style. However, the
 following provides some suggestions:
 
-- By default, all source codes are written with max 75 characters per
+- By default, all source codes are written with max 80 characters per
   line, but there are some exceptions, e.g. use of long string
   constants in URL.
 
