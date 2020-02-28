@@ -65,3 +65,4 @@ test-suite finkel-lang-test
 source-repository head
   type:     git
   location: https://github.com/finkel-lang/finkel.git
+  subdir:   lang
