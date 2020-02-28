@@ -35,6 +35,11 @@ tested-with:           GHC == 8.2.2
                      , GHC == 8.6.4
                      , GHC == 8.8.1
 
+flag dynamic
+  description:         Dynamically link executables (except Windows)
+  default:             True
+  manual:              True
+
 custom-setup
   setup-depends:       base         >= 4.7 && < 5
                      , Cabal        >= 2.0 && < 3.1
@@ -71,10 +76,15 @@ library
   default-language:    Haskell2010
   ghc-options:       -Wall
 
-flag dynamic
-  description:         Dynamically link executables (except Windows)
-  default:             True
-  manual:              True
+executable finkel
+  hs-source-dirs:      exec
+  main-is:             finkel.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  if !os(windows) && flag(dynamic)
+    ghc-options:       -dynamic
+  build-depends:       base
+                     , finkel-tool
+  default-language:    Haskell2010
 
 test-suite finkel-tool-test
   type:                exitcode-stdio-1.0
@@ -93,9 +103,9 @@ test-suite finkel-tool-test
                      , filepath   >= 1.4.1  && < 1.5
                      , hspec      >= 2.4.8  && < 2.8
                      , QuickCheck >= 2.10.1 && < 2.14
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       CLITest
                        CompatTest
                        MainTest
@@ -103,16 +113,6 @@ test-suite finkel-tool-test
                        ReplMacroTest
                        SetupTest
                        TestAux
-  default-language:    Haskell2010
-
-executable finkel
-  hs-source-dirs:      exec
-  main-is:             finkel.hs
-  if !os(windows) && flag(dynamic)
-    ghc-options:       -dynamic
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base
-                     , finkel-tool
   default-language:    Haskell2010
 
 source-repository head

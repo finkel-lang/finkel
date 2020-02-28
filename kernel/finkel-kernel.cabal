@@ -27,13 +27,23 @@ extra-source-files:  README.md
 
 tested-with:           GHC == 8.2.2
                      , GHC == 8.4.4
-                     , GHC == 8.6.4
-                     , GHC == 8.8.1
+                     , GHC == 8.6.5
+                     , GHC == 8.8.2
 
 custom-setup
   setup-depends:       base     >= 4.10  && < 5
                      , Cabal    >= 2.0   && < 3.1
                      , filepath >= 1.4.1 && < 1.5
+
+flag dynamic
+  description:         Dynamically link executables (except Windows)
+  default:             True
+  manual:              True
+
+flag dev
+  description:         Flag for internal development
+  default:             False
+  manual:              True
 
 library
   hs-source-dirs:      src
@@ -74,27 +84,24 @@ library
                      , ghci         >= 8.2.0  && < 8.10.0
                      , process      >= 1.6.1  && < 1.7
                      , time         >= 1.8.0  && < 1.10
-  build-tool-depends:  alex:alex    >= 3.2.4  && < 3.3
-                     , happy:happy  >= 1.19.9 && < 1.20
+  build-tool-depends:  alex:alex    >= 3.1.7  && < 3.3
+                     , happy:happy  >= 1.19.5 && < 1.20
   default-language:    Haskell2010
   ghc-options:         -Wall
-
-flag dynamic
-  description:         Dynamically link executables (except Windows)
-  default:             True
-  manual:              True
 
 executable fnkc
   hs-source-dirs:      exec
   main-is:             fnkc.hs
+  ghc-options:         -Wall -threaded -rtsopts
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
-  ghc-options:         -Wall -threaded -rtsopts
   build-depends:       base
                      , finkel-kernel
   default-language:    Haskell2010
 
 executable finkel-profile
+  if !flag(dev)
+    buildable:         False
   hs-source-dirs:      exec
   main-is:             profile.hs
   ghc-options:         -Wall -threaded -rtsopts
