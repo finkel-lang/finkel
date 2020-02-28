@@ -29,7 +29,8 @@ import           Data.List                          (isSubsequenceOf,
 import           Data.Monoid                        (Monoid (..))
 #endif
 
-import           System.Environment                 (getExecutablePath)
+import           System.Environment                 (getExecutablePath,
+                                                     getProgName)
 
 -- filepath
 import           System.FilePath                    ((<.>), (</>))
@@ -85,7 +86,14 @@ fnkMain = fnkMainWith "fnkc" []
 -- @cabal@. It calls given executable via @cabal new-run@ when the
 -- executable built from @Setup.hs@ were not for @stack@.
 fnkInternalMain :: IO ()
-fnkInternalMain = makeFnkMain "v2-run" "fnkc" []
+fnkInternalMain =
+ do me <- getProgName
+    if me == "Setup.hs"
+       -- Directly invoked the "Setup.hs" of cabal package perhaps
+       -- with 'runhaskell'.  Use the 'fnkc' installed somewhere in
+       -- current 'PATH'.
+       then rawFnkMain "fnkc" [] False
+       else makeFnkMain "v2-run" "fnkc" []
 
 -- | Main function with given executable name and arguments passed to
 -- the executable.
@@ -104,7 +112,7 @@ makeFnkMain cabal_cmd exec args = actWithStackOrCabal stack cabal
   where
     -- Stack change the PATH environment variable, no need to wrap the
     -- executable "stack run".
-    stack = defaultMainWithHooks (fnkHooksWith exec args False)
+    stack = rawFnkMain exec args False
 
     -- Cabal v2 style build does not change the PATH environment
     -- varialbe as done in stack, wrapping the exec with given cabal
@@ -122,6 +130,14 @@ actWithStackOrCabal stack_act cabal_act = do
   if ".stack" `isSubsequenceOf` exec_path
      then stack_act
      else cabal_act
+
+-- | Run main using 'fnkHooksWith' and given executable.
+rawFnkMain :: String   -- ^ Executable
+           -> [String] -- ^ Argument passed to the executable.
+           -> Bool     -- ^ Debug flag
+           -> IO ()
+rawFnkMain exec args debug =
+  defaultMainWithHooks (fnkHooksWith exec args debug)
 
 
 -- ---------------------------------------------------------------------
