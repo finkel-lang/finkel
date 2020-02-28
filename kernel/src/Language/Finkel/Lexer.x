@@ -586,9 +586,9 @@ tok_string inp@(AlexInput _ buf) _l =
   -- character. This makes the code a bit more effiicient, but getting
   -- unhelpful error message on illegal escape sequence.
   case alexGetChar inp of
-    Just ('"', inp')
-      | Just (str, inp'') <- go inp' "" ->
-        alexSetInput inp'' >> return str
+    Just ('"', inp1)
+      | Just (str, inp2) <- go inp1 "" ->
+        alexSetInput inp2 >> return str
     _ -> alexError ("lexical error in string: " ++
                     show (currentChar buf))
   where
