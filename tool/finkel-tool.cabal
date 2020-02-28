@@ -17,6 +17,7 @@ category:            Language
 build-type:          Custom
 extra-source-files:  README.md
                      finkel.hsfiles
+                     src/Finkel/*.fnk
                      src/Finkel/Tool/*.fnk
                      src/Finkel/Tool/Repl/*.fnk
                      test/*.fnk
