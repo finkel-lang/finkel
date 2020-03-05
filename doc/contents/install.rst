@@ -30,7 +30,7 @@ And to install the ``finkel`` executable:
 
 .. code-block:: console
 
-   $ stack build --copy-bins finkel-tool
+   $ stack build --copy-bins finkel
 
 
 Building with ``cabal-install``
@@ -39,12 +39,11 @@ Building with ``cabal-install``
 .. note::
 
    As of ``cabal-install`` version 3.0.0.0, installing with ``cabal
-   v2-install`` does not work. This is a known issue related to the
-   file extension used by Finkel. See `this issue
-   <https://github.com/haskell/cabal/issues/6124>`_ for details.  To
-   install with ``cabal-install``, use the ``cabal v1-install``
-   command or the ``setup`` executable built under the
-   ``dist-newstyle`` directory.
+   v2-install`` does not work. This is `a known issue
+   <https://github.com/haskell/cabal/issues/6124>`_ related to the
+   file extension used by Finkel. To install with ``cabal-install``,
+   use the ``cabal v1-install`` command or the ``setup`` executable
+   built under the ``dist-newstyle`` directory.
 
 Building and testing with ``cabal-install`` is supported with
 ``ghc-8.8.x`` series:

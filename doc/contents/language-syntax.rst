@@ -13,7 +13,7 @@ codes. Each Finkel code is compared to an equivalent Haskell code.
 
 The Finkel core keywords are implemented as macros.  Details of the
 Finkel core keywords are described in the `haddock API documentation
-<https://hackage.haskell.org>`_ of the ``finkel-core`` package.
+<https://hackage.haskell.org>`_ of the ``finkel-lang`` package.
 
 
 Literals
@@ -312,7 +312,7 @@ and boolean:
             -> r3 z'
             | otherwise -> r4
 
-See also `cond <https://hackage.haskell.org>`_ in ``finkel-core``.
+See also `cond <https://hackage.haskell.org>`_ in ``finkel-lang``.
 
 
 Tuples
@@ -792,7 +792,7 @@ Top-level module definition does not use ``where``:
    y = 2
 
 See also `defmodule <https://hackage.haskell.org>`_ in
-``finkel-core``.
+``finkel-lang``.
 
 
 Export Lists

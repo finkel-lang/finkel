@@ -1,7 +1,7 @@
 Using The Finkel Executable
 ===========================
 
-The ``finkel`` executable from the ``finkel-tool`` package contains
+The ``finkel`` executable from the ``finkel`` package contains
 sub-commands to work with Finkel source codes.
 
 

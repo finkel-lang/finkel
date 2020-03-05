@@ -1,0 +1,13 @@
+resolver: lts-15.1
+packages:
+  - .
+extra-deps:
+  - git: https://github.com/finkel-lang/finkel
+    commit: 226132b044d99bdacdac438d18269d7d33c4d549
+    subdirs:
+      - kernel
+      - fkc
+      - setup
+      - lang
+      - tool
+      - finkel

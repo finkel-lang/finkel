@@ -1,9 +1,9 @@
 Building Package
 ================
 
-To build a library package with Finkel, make a cabal configuration
-file as in the Haskell cabal package, but with custom setup script and
-some build tool and package dependencies.
+To build a package with Finkel, make a cabal configuration file as in
+the Haskell cabal package, but with custom setup script and some build
+tool and package dependencies.
 
 .. note::
 
@@ -13,6 +13,7 @@ some build tool and package dependencies.
    `cabal-install <http://hackage.haskell.org/package/cabal-install>`_
    may translate the invoked commands and modify the file contents as
    necessary.
+
 
 Building My First Package
 -------------------------
@@ -35,6 +36,11 @@ module:
 .. literalinclude:: ../code/my-first-package/src/MyFirstPackage.fnk
    :language: finkel
 
+And a ``stack.yaml``:
+
+.. literalinclude:: ../code/my-first-package/stack.template.yaml
+   :language: yaml
+
 At this point the files under the ``my-first-project`` directory
 should look like below:
 
@@ -43,9 +49,9 @@ should look like below:
    my-first-package
    ├── package.yaml
    ├── Setup.hs
-   └── src
-      └── MyFirstPackage.fnk
-
+   ├── src
+   │   └── MyFirstPackage.fnk
+   └── stack.yaml
 
 Now one can build the ``my-first-package`` package with ``stack``:
 
@@ -58,11 +64,33 @@ Now one can build the ``my-first-package`` package with ``stack``:
    ... More output messages ...
    [1 of 1] Compiling MyFirstPackage
 
-.. note:: While building packages with ``stack``, one may see a warning
+.. note::
+
+   While building packages with ``stack``, one may see a warning
    message saying "Unable to find a known candidate for the Cabal
    entry". Although the message says it cannot find the candidate, the
    compilation process does work. This is a known issue, and hoping to
    fix in not so far future.
+
+.. tip::
+
+   To build a package containing Finkel source codes with the latest
+   ``finkel`` built from source, one can specify the packages from
+   `finkel git repository <https://github.com/finkel-lang/finkel>`_ as
+   extra dependencies.
+
+   For example, the following ``stack.yaml`` is set to build a package
+   in the current directory with ``finkel`` from the git repository:
+
+   .. literalinclude:: ../code/my-first-package/stack.git.yaml
+      :language: yaml
+
+   See the `stack documentation
+   <https://docs.haskellstack.org/en/stable/yaml_configuration/#extra-deps>`_
+   and the `Cabal User Guide
+   <https://www.haskell.org/cabal/users-guide/nix-local-build.html#specifying-packages-from-remote-version-control-locations>`_
+   for more information about using remote git repository for extra
+   dependencies.
 
 
 Mixing Finkel And Haskell Source Codes
@@ -75,6 +103,46 @@ template:
 .. code-block:: console
 
    $ stack new my-second-package https://raw.githubusercontent.com/finkel-lang/finkel/master/tool/finkel.hsfiles
+
+.. warning::
+
+   At the time of writing, one may encounter messages similar to the
+   following when running ``stack new`` with the above template:
+
+   .. code-block:: console
+
+      Selecting the best among 17 snapshots...
+
+      * Partially matches lts-15.2
+          finkel-setup not found
+              - my-second-pkg requires -any
+
+      * Partially matches nightly-2020-03-04
+          finkel-setup not found
+              - my-second-pkg requires -any
+
+      * Partially matches lts-14.27
+          finkel-setup not found
+              - my-second-pkg requires -any
+
+      ...
+
+      Selected resolver: lts-15.2
+      Resolver 'lts-15.2' does not have all the packages to match your requirements.
+          finkel-setup not found
+              - my-second-pkg requires -any
+
+      This may be resolved by:
+          - Using '--omit-packages' to exclude mismatching package(s).
+          - Using '--resolver' to specify a matching snapshot/resolver
+
+   This is because the packages for ``finkel`` is not yet uploaded to
+   `stackage <https://stackage.org>`_.
+
+   As the message indicates, one can pass ``--omit-packages`` option
+   or ``--resolver`` option to ``stack new`` until the ``finkel``
+   dependency packages are uploaded to the upstream, and add the git
+   repository to ``stack.yaml``.
 
 The above command will make a directory named ``my-second-package``
 with a cabal configuration file, ``Setup.hs`` script, and a stub
@@ -95,7 +163,6 @@ should look like below:
    └── test
       └── Spec.hs
 
-
 .. note::
 
    As of cabal version 3.0.0, the file extension of an executable in a
@@ -104,7 +171,7 @@ should look like below:
    to run an executable written in Finkel. This is why the executable
    and test stanzas in cabal configuration file generated from
    template contains dummy ``Main.hs`` and ``Spec.hs`` files instead
-   of ``*.fnk`` files.
+   of ``.fnk`` files.
 
 Add a new file named ``my-second-package/src/FnkCodes.fnk``, with
 Finkel source codes:
@@ -142,7 +209,7 @@ before:
 .. note::
 
    It is also possible to use a library package containing Finkel code
-   from other Haskell packages as a build dependency, since the
+   from other Haskell packages as a build dependency since the
    resulting object codes are compiled by compatible ``ghc`` version.
 
 

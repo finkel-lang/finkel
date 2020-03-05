@@ -275,9 +275,9 @@ Special forms
 -------------
 
 The Finkel core keywords are implemented as macros made from Finkel
-kernel.  Details of Finkel core keywords are described in the `haddock API
-documentation <https://hackage.haskell.org>`_ of the ``finkel-core``
-package.
+kernel.  Details of Finkel core keywords are described in the `haddock
+API documentation <https://hackage.haskell.org>`_ of the
+``finkel-lang`` package.
 
 This section explains built-in macros in the Finkel kernel
 language. These built-in macros are sometimes called *special
