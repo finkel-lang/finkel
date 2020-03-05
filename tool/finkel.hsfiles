@@ -24,7 +24,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib
   build-depends:       base >= 4.7 && < 5
-  build-tool-depends:  finkel-tool:finkel
+  build-tool-depends:  finkel:finkel
   default-language:    Haskell2010
 
 executable {{name}}
@@ -64,7 +64,7 @@ main = putStrLn "Test suite not yet implemented"
   (export someFunc))
 
 (defn (:: someFunc (IO ()))
-  (putStrLn "someFunc"))
+  (putStrLn "'Hello' from {{name}}"))
 
 {-# START_FILE app/Main.hs #-}
 module Main where

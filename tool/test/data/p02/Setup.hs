@@ -1,2 +1,2 @@
 import Finkel.Setup
-main = finkelInternalMakeMain
+main = finkelMakeMain

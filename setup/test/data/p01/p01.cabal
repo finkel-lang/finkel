@@ -35,7 +35,7 @@ library
   autogen-modules:     Paths_p01
   build-depends:       base >= 4.7 && < 5
                      , finkel-kernel
-  build-tool-depends:  finkel-kernel:fnkc
+  build-tool-depends:  fkc:fkc >= 0.1 && < 1
   default-language:    Haskell2010
 
 executable p01

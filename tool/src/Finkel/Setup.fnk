@@ -14,10 +14,10 @@
    (Distribution.Simple.Finkel)))
 
 (defn (:: finkelMakeMain (IO ()))
-  "Main function with @make@ command.
+  "Main function with @finkel make@ command.
 
 Intended to be used from /Setup.hs/ script in cabal package."
-  (makeFnkMain "v2-exec" "finkel" ["make"]))
+  (defaultMainWithHooks (fnkHooksWith "finkel" ["make"] False)))
 
 (defn (:: finkelInternalMakeMain (IO ()))
   "Like `finkelMakeMain', but for internal development.

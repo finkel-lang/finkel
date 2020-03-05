@@ -73,18 +73,9 @@ library
                      , finkel-kernel >= 0.28   && < 1
                      , finkel-lang   >= 0.15   && < 1
                      , finkel-setup  >= 0.1    && < 1
+  build-tool-depends:  fkc:fkc >= 0.1 && < 1
   default-language:    Haskell2010
   ghc-options:       -Wall
-
-executable finkel
-  hs-source-dirs:      exec
-  main-is:             finkel.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  if !os(windows) && flag(dynamic)
-    ghc-options:       -dynamic
-  build-depends:       base
-                     , finkel-tool
-  default-language:    Haskell2010
 
 test-suite finkel-tool-test
   type:                exitcode-stdio-1.0

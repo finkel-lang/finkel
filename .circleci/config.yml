@@ -13,9 +13,11 @@ jobs:
           keys:
             - stack-{{ checksum "stack.yaml" }}
             - kernel-{{ checksum "kernel/finkel-kernel.cabal" }}
+            - kernel-{{ checksum "fkc/fkc.cabal" }}
             - setup-{{ checksum "setup/finkel-setup.cabal" }}
             - lang-{{ checksum "lang/finkel-lang.cabal" }}
             - tool-{{ checksum "tool/finkel-tool.cabal" }}
+            - finkel-{{ checksum "finkel/finkel.cabal" }}
       - run:
           name: Resolve/Update Dependencies
           command: stack --no-terminal setup
@@ -23,12 +25,12 @@ jobs:
           name: Build Packages
           command: |
             stack --no-terminal build --test --no-run-tests \
-              finkel-kernel finkel-setup finkel-lang finkel-tool
+              finkel-kernel fkc finkel-setup finkel-lang finkel-tool finkel
       - run:
           name: Run tests
           command: |
             stack --no-terminal build --test \
-              finkel-kernel finkel-setup finkel-lang finkel-tool
+              finkel-kernel fkc finkel-setup finkel-lang finkel-tool finkel
       - save_cache:
           name: Cache dependencies
           key: stack-{{ checksum "stack.yaml" }}
@@ -40,16 +42,3 @@ workflows:
   build:
     jobs:
       - build-linux
-
-# # Use a package of configuration called an orb.
-# orbs:
-#   # Declare a dependency on the welcome-orb
-#   welcome: circleci/welcome-orb@0.4.1
-
-# # Orchestrate or schedule a set of jobs
-# workflows:
-#   # Name the workflow "welcome"
-#   welcome:
-#     # Run the welcome/run job in its own container
-#     jobs:
-#       - welcome/run

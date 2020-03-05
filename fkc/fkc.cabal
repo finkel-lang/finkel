@@ -1,0 +1,45 @@
+cabal-version:       2.0
+name:                fkc
+version:             0.29.0.0
+synopsis:            Finkel kernel compiler
+description:
+  Finkel kernel compiler
+  .
+  This package contains an executable @fkc@, which is internally used for
+  compiling Finkel related packages.
+  .
+  See the <https://finkel.readthedocs.org documentation> for more info.
+
+homepage:            https://github.com/finkel-lang/finkel#readme
+license:             BSD3
+license-file:        LICENSE
+author:              8c6794b6
+maintainer:          8c6794b6@gmail.com
+copyright:           2017-2020 8c6794b6
+category:            Language
+build-type:          Simple
+extra-source-files:  README.md
+
+tested-with:           GHC == 8.2.2
+                     , GHC == 8.4.4
+                     , GHC == 8.6.5
+                     , GHC == 8.8.2
+
+flag dynamic
+  description:         Dynamically link executables (except Windows)
+  default:             True
+  manual:              True
+
+executable fkc
+  main-is:             Main.hs
+  ghc-options:         -Wall -threaded -rtsopts
+  if !os(windows) && flag(dynamic)
+    ghc-options:       -dynamic
+  build-depends:       base
+                     , finkel-kernel
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/finkel-lang/finkel.git
+  subdir:   fkc

@@ -39,11 +39,11 @@ resolver: lts-15.1
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - kernel/
+- fkc
 - setup/
-- setup/test/data/p01
 - lang/
 - tool/
-- tool/test/data/p02
+- finkel/
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)

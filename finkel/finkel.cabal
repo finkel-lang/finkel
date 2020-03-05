@@ -1,0 +1,36 @@
+cabal-version:       2.0
+name:                finkel
+version:             0.1.0.0
+synopsis:            Haskell in S-expression
+license-file:        LICENSE
+author:              8c6794b6
+maintainer:          8c6794b6@gmail.com
+copyright:           2020 8c6794b6
+category:            Language
+build-type:          Simple
+extra-source-files:  CHANGELOG.md
+                     README.md
+
+description:
+  Package for the @finkel@ executable.
+  .
+  See the <https://finkel.readthedocs.org documentation> for more info.
+
+flag dynamic
+  description:         Dynamically link executables (except Windows)
+  default:             True
+  manual:              True
+
+executable finkel
+  main-is:             Main.hs
+  build-depends:       base        >= 4.7  && < 4.14
+                     , finkel-tool >= 0.17 && < 1
+  default-language:    Haskell2010
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  if !os(windows) && flag(dynamic)
+    ghc-options:       -dynamic
+
+source-repository head
+  type:     git
+  location: https://github.com/finkel-lang/finkel
+  subdir:   finkel

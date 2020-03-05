@@ -72,15 +72,15 @@ import qualified Distribution.Verbosity             as Verbosity
 --
 -- ------------------------------------------------------------------------
 
--- | Main function using /fnkc/ executable.
+-- | Main function using /fkc/ executable.
 --
--- This acton uses the /fnkc/ executable found on system when building
+-- This acton uses the /fkc/ executable found on system when building
 -- a package with /stack/, and wrap with /cabal v2-exec/ when
 -- buildiing with /cabal-install/.
 fnkMain :: IO ()
-fnkMain = fnkMainWith "fnkc" []
+fnkMain = rawFnkMain "fkc" [] False
 
--- | Main function using /fnkc/ executable for finkel-XXX packages.
+-- | Main function using /fkc/ executable for finkel related packages.
 --
 -- This function is intended to be used via @stack@ and
 -- @cabal@. It calls given executable via @cabal new-run@ when the
@@ -90,10 +90,10 @@ fnkInternalMain =
  do me <- getProgName
     if me == "Setup.hs"
        -- Directly invoked the "Setup.hs" of cabal package perhaps
-       -- with 'runhaskell'.  Use the 'fnkc' installed somewhere in
+       -- with 'runhaskell'.  Use the 'fkc' installed somewhere in
        -- current 'PATH'.
-       then rawFnkMain "fnkc" [] False
-       else makeFnkMain "v2-run" "fnkc" []
+       then rawFnkMain "fkc" [] False
+       else makeFnkMain "v2-run" "fkc" []
 
 -- | Main function with given executable name and arguments passed to
 -- the executable.

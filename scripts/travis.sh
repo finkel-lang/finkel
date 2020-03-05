@@ -68,9 +68,11 @@ travis_script_linux () {
             $STACK --no-terminal --install-ghc test --only-dependencies
             $STACK --no-terminal build --fast --test --coverage \
                    --no-run-tests \
-                   finkel-kernel finkel-setup finkel-lang p02 finkel-tool
+                   finkel-kernel fkc finkel-setup \
+                   finkel-lang finkel-tool finkel
             $STACK --no-terminal build --fast --test --coverage \
-                   finkel-kernel finkel-setup finkel-lang finkel-tool
+                   finkel-kernel fkc finkel-setup \
+                   finkel-lang finkel-tool finkel
             ;;
         cabal)
             cabal v2-build all
@@ -113,9 +115,11 @@ travis_install_osx () {
 travis_script_osx () {
     $STACK --no-terminal --install-ghc test --only-dependencies
     $STACK --no-terminal build --fast --test finkel-kernel
+    $STACK --no-terminal build --fast --test fkc
     $STACK --no-terminal build --fast --test finkel-setup
     $STACK --no-terminal build --fast --test finkel-lang
     $STACK --no-terminal build --fast --test finkel-tool
+    $STACK --no-terminal build --fast --test finkel
 }
 
 travis_after_success_osx () {

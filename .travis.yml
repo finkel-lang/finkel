@@ -46,7 +46,7 @@ jobs:
 
 before_install:
   - mkdir -p $TMPDIR
-  - . ci/travis.sh
+  - . scripts/travis.sh
 
 install:
   - travis_install

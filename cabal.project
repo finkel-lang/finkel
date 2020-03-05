@@ -1,8 +1,13 @@
 packages:
   kernel/
+  fkc/
   setup/
   lang/
   tool/
+  finkel/
 
 tests: True
 benchmarks: True
+
+package finkel-kernel
+  flags: +dev
