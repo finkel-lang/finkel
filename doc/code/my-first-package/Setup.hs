@@ -1,6 +1,6 @@
 -- File: my-first-package/Setup.hs
 
-import Finkel.Setup (finkelMakeMain)
+import Distribution.Simple.Finkel (finkelMakeMain)
 
 main :: IO ()
 main = finkelMakeMain

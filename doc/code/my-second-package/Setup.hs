@@ -1,4 +1,4 @@
 module Main where
-import SK.Setup
+import Distribution.Simple.Finkel
 main :: IO ()
-main = skMakeMain
+main = finkelMakeMain

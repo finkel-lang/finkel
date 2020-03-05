@@ -10,8 +10,8 @@
 # The functions with OS name suffix are specific to each OS.
 
 
-# Initialization
-# --------------
+# Auxiliary
+# ---------
 
 travis_init () {
     case "$TRAVIS_OS_NAME" in
@@ -30,6 +30,14 @@ travis_init () {
             export STACK="./stack.exe --resolver=$RESOLVER"
             ;;
     esac
+}
+
+build_doc_pkgs_stack () {
+    ( cd doc/code && $STACK build --fast --test )
+}
+
+build_doc_pkgs_cabal () {
+    ( cd doc/code && cabal v2-build all && cabal v2-test all )
 }
 
 
@@ -73,11 +81,13 @@ travis_script_linux () {
             $STACK --no-terminal build --fast --test --coverage \
                    finkel-kernel fkc finkel-setup \
                    finkel-lang finkel-tool finkel
+            build_doc_pkgs_stack
             ;;
         cabal)
             cabal v2-build all
             cabal v2-test all
             cabal v2-haddock all
+            build_doc_pkgs_cabal
             ;;
     esac
 }

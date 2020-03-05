@@ -1,0 +1,16 @@
+resolver: lts-15.1
+
+packages:
+  - my-first-package
+  - my-second-package
+
+ghc-options:
+  "$everything": -O0
+
+extra-deps:
+  - ../../kernel
+  - ../../fkc
+  - ../../setup
+  - ../../lang
+  - ../../tool
+  - ../../finkel

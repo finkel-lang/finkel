@@ -17,18 +17,11 @@ category:            Language
 build-type:          Custom
 extra-source-files:  README.md
                      finkel.hsfiles
-                     src/Finkel/*.fnk
                      src/Finkel/Tool/*.fnk
                      src/Finkel/Tool/Repl/*.fnk
                      test/*.fnk
                      test/data/*.fnk
                      test/data/input01.txt
-                     test/data/p02/LICENSE
-                     test/data/p02/Setup.hs
-                     test/data/p02/p02.cabal
-                     test/data/p02/exec/p02.hs
-                     test/data/p02/src/P02/A.fnk
-                     test/data/p02/test/Spec.hs
 
 tested-with:           GHC == 8.2.2
                      , GHC == 8.4.3
@@ -59,7 +52,6 @@ library
                        Finkel.Tool.Repl
                        Finkel.Tool.Version
                        Finkel.Tool.Main
-                       Finkel.Setup
   build-depends:       base          >= 4.7    && < 5
                      , bytestring    >= 0.10.8 && < 0.11
                      , directory     >= 1.3.0  && < 1.4
@@ -102,7 +94,6 @@ test-suite finkel-tool-test
                        MainTest
                        ReplTest
                        ReplMacroTest
-                       SetupTest
                        TestAux
   default-language:    Haskell2010
 

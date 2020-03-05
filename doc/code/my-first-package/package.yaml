@@ -10,12 +10,12 @@ custom-setup:
   dependencies:
     - base
     - Cabal
-    - finkel-tool
+    - finkel-setup
 
 library:
   source-dirs: src
   exposed-modules: MyFirstPackage
   build-tools:
-    - finkel-tool:finkel
+    - finkel:finkel
   dependencies:
     - base

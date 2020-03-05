@@ -18,7 +18,7 @@ cabal-version:       >=2.0
 custom-setup
   setup-depends:       base >= 4.7 && < 5
                      , Cabal >= 2.0
-                     , finkel-tool
+                     , finkel-setup
 
 library
   hs-source-dirs:      src
@@ -40,8 +40,8 @@ test-suite {{name}}-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
-                     , finkel-lang
                      , {{name}}
+  build-tool-depends:  finkel:finkel
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
@@ -93,7 +93,7 @@ modification, are permitted provided that the following conditions are met:
       disclaimer in the documentation and/or other materials provided
       with the distribution.
 
-    * Neither the name of {{author-name}}{{^author-name}}Author name here{{/author-name}} nor the names of other
+    * Neither the name of the copyright holder nor the names of other
       contributors may be used to endorse or promote products derived
       from this software without specific prior written permission.
 

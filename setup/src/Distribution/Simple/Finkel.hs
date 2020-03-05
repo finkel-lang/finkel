@@ -5,6 +5,7 @@ module Distribution.Simple.Finkel
   -- * Main functions
     fnkMain
   , fnkInternalMain
+  , finkelMakeMain
   , fnkMainWith
   , makeFnkMain
 
@@ -75,10 +76,16 @@ import qualified Distribution.Verbosity             as Verbosity
 -- | Main function using /fkc/ executable.
 --
 -- This acton uses the /fkc/ executable found on system when building
--- a package with /stack/, and wrap with /cabal v2-exec/ when
--- buildiing with /cabal-install/.
+-- a package.
 fnkMain :: IO ()
 fnkMain = rawFnkMain "fkc" [] False
+
+-- | Main function using /finkel/ executable with /make/ subcommand.
+--
+-- This action uses the /finkel/ executable found on system when
+-- building a package.
+finkelMakeMain :: IO ()
+finkelMakeMain = rawFnkMain "finkel" ["make"] False
 
 -- | Main function using /fkc/ executable for finkel related packages.
 --
