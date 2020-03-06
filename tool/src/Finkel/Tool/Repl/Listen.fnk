@@ -74,17 +74,18 @@
             (= put-input form
               (putMVar mvar (Input Connection form my-mvar)))
             (= read-loop
-              ;; `BS.hGetSome' returns empty contents when the handle is
-              ;; closed.
+              ;; `BS.hGetSome' returns empty contents when the handle is closed.
+              ;; Also, empty lines could be sent as input, evaluating the form
+              ;; only when it contained non-space characters.
               (do (<- bs (BS.hGetSome hdl 65535))
                   (unless (BS.null bs)
-                    (when (BS.any (. not isSpace) bs)
-                      (let ((= (, fp o l) (toForeignPtr bs))
-                            (= sbuf (StringBuffer fp l o)))
-                        (case (evalSP sexpr (Just "<interactive>") sbuf)
-                          (Right form) (put-input form)
-                          (Left err) (putStrLn err)))))
-                  read-loop))
+                    (do (when (BS.any (. not isSpace) bs)
+                          (let ((= (, fp o l) (toForeignPtr bs))
+                                (= sbuf (StringBuffer fp l o)))
+                            (case (evalSP sexpr (Just "<interactive>") sbuf)
+                              (Right form) (put-input form)
+                              (Left err) (putStrLn err))))
+                        read-loop))))
             (= print-loop
               (do (<- result (takeMVar my-mvar))
                   (case result

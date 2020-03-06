@@ -47,13 +47,12 @@ reading the input until successful parse result."
               (let ((= prompt
                       (if (null (pending-input st0)) "> " ""))))
               (<- mb-input
-                ;; Handle interrupt signals thrown while waiting for
-                ;; input, to handle `Ctrl-C' key presses without valid
-                ;; evaluation form, and to refresh intermediate user
-                ;; inputs in Repl state.
+                ;; Handle interrupt signals thrown while waiting for input, to
+                ;; handle `Ctrl-C' key presses without valid evaluation form,
+                ;; and to refresh intermediate user inputs in Repl state.
                 (handleInterrupt (do (putReplState mempty)
                                      (return (Just [])))
-                                 (getString prompt)))
+                                 (withInterrupt (getString prompt))))
               (maybe (quit eval-tid) (go1 st0 result-mv) mb-input)))
         (= go1 st0 result-mv line
           (case line
@@ -70,8 +69,8 @@ reading the input until successful parse result."
         (= go-command result-mv lin
           ;; Using raw symbol for REPL commands other than name-mangled
           ;; commands, to use hyphens without replacing to underscores.
-          ;; Otherwise, command arguments like "ghc-pkg" will be
-          ;; replaced to "ghc_pkg" by the parser.
+          ;; Otherwise, command arguments like "ghc-pkg" will be replaced to
+          ;; "ghc_pkg" by the parser.
           (| ((mangled-command lin)
               (go-line result-mv (concat ["(repl-macro " lin ")"])))
              (otherwise
@@ -79,35 +78,36 @@ reading the input until successful parse result."
         (= go-line result-mv line
           (do (<- mb-form (read-form line))
               (maybe (go result-mv) (go-form result-mv) mb-form)))
+
         (= go-form result-mv form
-          (do (let ((= input (Input Prompt form result-mv))))
-              (liftIO (putMVar to-mvar input))
-              (print-io result-mv)
-              (go result-mv)))
-        (= loop result-mv
-          (handleInterrupt
-           (do (liftIO (throwTo eval-tid UserInterrupt))
-               (print-io result-mv)
-               (loop result-mv))
-           (go result-mv))))
+          ;; Handle interrupt signals thrown while evaluation thread is
+          ;; working. Give a chance to interrupt here, after parsing input and
+          ;; before printing outputs.
+          (do (handleInterrupt
+               (do (liftIO (throwTo eval-tid UserInterrupt))
+                   (print-io result-mv))
+               (withInterrupt
+                (do (let ((= input (Input Prompt form result-mv))))
+                    (liftIO (putMVar to-mvar input))
+                    (print-io result-mv))))
+              (go result-mv))))
 
     ;; Print the result from boot expression, then start the loop.
-    (withInterrupt
-     (do (<- result-mv (liftIO newEmptyMVar))
-         (liftIO (putMVar to-mvar (Input Prompt init-form result-mv)))
-         (print-io result-mv)
-         (loop result-mv)))))
+    (do (<- result-mv (liftIO newEmptyMVar))
+        (liftIO (putMVar to-mvar (Input Prompt init-form result-mv)))
+        (print-io result-mv)
+        (go result-mv))))
 
 (defn (:: print-io (=> (MonadIO m) (CLI m)
                        (-> (MVar Result) (m ()))))
   [result-mv]
   (do (<- result (liftIO (takeMVar result-mv)))
+      (let ((= pr str
+              (when (not (null str))
+                (putString str)))))
       (case result
-        (Right str) (when (not (null str))
-                      (putString str))
-        (Left str) (case str
-                     [] (return ())
-                     _ (putString str)))
+        (Right str) (pr str)
+        (Left str) (pr str))
       (liftIO (hFlush stdout))))
 
 (defn (:: read-form (=> (HasReplState repl) (Monad repl) (MonadIO repl)
