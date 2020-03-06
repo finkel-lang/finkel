@@ -3,9 +3,9 @@
 # Functions for Travis CI
 # ------------------------
 #
-# This file is sourced in "before_install" section of
-# ".travis.yml". Environment variable set by Travis (e.g.;
-# $TRAVIS_OS_NAME) could be referred from this script.
+# This file is sourced in "before_install" section of ".travis.yml". Environment
+# variable set by Travis (e.g.; $TRAVIS_OS_NAME) could be referred from this
+# script.
 #
 # The functions with OS name suffix are specific to each OS.
 
@@ -32,8 +32,44 @@ travis_init () {
     esac
 }
 
+gen_stack_files () {
+    raw=raw.githubusercontent.com
+    tmpl=https://$raw/finkel-lang/finkel/master/tool/finkel.hsfiles
+
+    cat > $HOME/.stack/config.yaml <<EOF
+templates:
+  params:
+    author-name: finkel
+    author-email: finkel@dum.my
+    copyright: Copyright (c) 1000-3000 Finkel Project
+    github-username: finkel-lang
+EOF
+
+    cat > stack.yaml <<EOF
+resolver: lts-15.2
+ghc-options:
+  "\$everything": -O0
+packages:
+  - my-first-package
+  - my-second-package
+  - my-new-package
+extra-deps:
+  - git: https://github.com/finkel-lang/finkel
+    commit: $TRAVIS_COMMIT
+    subdirs:
+      - kernel
+      - fkc
+      - setup
+      - lang
+      - tool
+      - finkel
+EOF
+
+    $STACK new my-new-package --omit-packages $tmpl
+}
+
 build_doc_pkgs_stack () {
-    ( cd doc/code && $STACK build --fast --test )
+    ( cd doc/code && gen_stack_files && $STACK build --fast --test )
 }
 
 build_doc_pkgs_cabal () {
