@@ -213,8 +213,19 @@ before:
    resulting object codes are compiled by compatible ``ghc`` version.
 
 
-Test, Coverage, And Haddock
----------------------------
+Executable, Test, Coverage, And Haddock
+---------------------------------------
+
+The ``my-second-package`` cabal package contains an executable named
+``my-second-package``. The executable simply invokes the
+``Lib.someFunc`` function. To compile and run the executable:
+
+.. code-block:: console
+
+   $ stack run my-second-package:my-second-package
+   From `Lib.someFunc':
+     hsfactorial 10  : 3628800
+     fnkfactorial 10 : 3628800
 
 To run tests, invoke ``stack test`` or ``stack build --test``:
 

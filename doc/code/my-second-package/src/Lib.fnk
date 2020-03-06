@@ -5,6 +5,7 @@
   (import (HsCodes (hsfactorial fnkfactorial))))
 
 (defn (:: someFunc (IO ()))
-  (do (putStrLn "someFunc")
-      (print (hsfactorial 10))
-      (print (fnkfactorial 10))))
+  (putStrLn
+   (++ "From `Lib.someFunc':\n"
+       "  hsfactorial 10  : " (show (hsfactorial 10)) "\n"
+       "  fnkfactorial 10 : " (show (fnkfactorial 10)))))
