@@ -51,7 +51,7 @@ test-suite {{name}}-test
 
 {-# START_FILE Setup.hs #-}
 module Main where
-import Finkel.Setup
+import Distribution.Simple.Finkel
 main :: IO ()
 main = finkelMakeMain
 
@@ -64,7 +64,7 @@ main = putStrLn "Test suite not yet implemented"
   (export someFunc))
 
 (defn (:: someFunc (IO ()))
-  (putStrLn "'Hello' from {{name}}"))
+  (putStrLn "Hello from {{name}}"))
 
 {-# START_FILE app/Main.hs #-}
 module Main where
