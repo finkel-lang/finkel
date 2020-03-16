@@ -1,9 +1,9 @@
-Building Package
-================
+Building Cabal Package
+======================
 
-To build a package with Finkel, make a cabal configuration file as in
-the Haskell cabal package, but with custom setup script and some build
-tool and package dependencies.
+To build a cabal package with Finkel, make a cabal configuration file
+as in the Haskell cabal package, but with custom setup script and some
+build tool and package dependencies.
 
 .. note::
 
@@ -118,10 +118,6 @@ template:
               - my-second-pkg requires -any
 
       * Partially matches nightly-2020-03-04
-          finkel-setup not found
-              - my-second-pkg requires -any
-
-      * Partially matches lts-14.27
           finkel-setup not found
               - my-second-pkg requires -any
 

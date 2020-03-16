@@ -92,23 +92,10 @@ From Emacs
 
 There is a major mode named ``finkel-mode`` for the `Emacs
 <https://www.gnu.org/software/emacs/>`_ editor, with functionality to
-run an interactive REPL session from Emacs. As of the time of writing
-this documentation, the REPL interaction feature in the ``finkel-mode``
-contains simple functionalities only, similar to the ``inferior-lisp``
-mode for other LISP languages.
-
-To use the ``finkel-mode``, first clone the source repository:
-
-.. code-block:: console
-
-   $ git clone https://repository/of/finkel-mode.git
-
-
-Then place the ``finkel-mode.el`` to somewhere reachable from Emacs,
-byte-compile and load the ``finkel-mode.el``. After successful
-compilation and load, open a file with ``.fnk`` extension in Emacs,
-then hitting ``Ctrl-z`` will show a prompt to start the Finkel REPL
-executable.
+run an interactive REPL session from Emacs.  See the README file in
+the `finkel-mode repository
+<https://github.com/finkel-lang/finkel-mode/#finkel-mode>`_ for more
+details.
 
 
 Getting More Help

@@ -1,8 +1,12 @@
 Building And Installing
 ========================
 
-At the time of writing, Finkel related packages are not yet uploaded
-to hackage and stackage, so one need to build from source to install.
+
+.. note::
+
+   At the time of writing, Finkel related packages are not yet
+   uploaded to hackage and stackage, so one need to build from source
+   to install.
 
 
 Getting the source
