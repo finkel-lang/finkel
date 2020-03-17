@@ -1,3 +1,5 @@
+;;;; Finkel core language macros
+
 (:doc "Core language macros.
 
 Macros defined in this module are available in @finkel make@ compiler
@@ -82,16 +84,16 @@ module.")
 ;;; result.
 
 (:with-macro ((= eval-when-compile-and-load
-               (Macro
-                (\ form
-                  (case (unCode form)
-                    (List (: _ rest)) (return `(:begin
-                                                 (:eval-when-compile
-                                                   ,@rest)
-                                                 ,@rest))
-                    _ (finkelSrcError
-                       form
-                       "eval-when-compile-and-load: panic"))))))
+                (Macro
+                 (\ form
+                   (case (unCode form)
+                     (List (: _ rest)) (return `(:begin
+                                                  (:eval-when-compile
+                                                    ,@rest)
+                                                  ,@rest))
+                     _ (finkelSrcError
+                        form
+                        "eval-when-compile-and-load: panic"))))))
   (eval-when-compile-and-load
    (:doc "Code transformer function for macro declaration.")
    (:: macro-decl (-> Code Code Code (Fnk Code)))
@@ -241,10 +243,10 @@ and temporally macro @m@ at compilation time.
         (= gen-eval-when phases body
           (| ((&& (at-compile phases) (at-load phases))
               (return
-                `(:begin
-                   (:eval-when-compile
-                     ,@body)
-                   ,@body)))
+               `(:begin
+                  (:eval-when-compile
+                    ,@body)
+                  ,@body)))
              ((at-compile phases)
               (return `(:eval-when-compile
                          ,@(List body))))
@@ -253,13 +255,13 @@ and temporally macro @m@ at compilation time.
                          ,@(List body))))
              (otherwise
               (finkelSrcError form (++ "eval-when: invalid phase: "
-                                   (show phases)))))))
+                                       (show phases)))))))
     (case (unCode form)
       (List (: _ (LForm (L _ lst)) body))
       (| ((<- (List phases) lst) (gen-eval-when phases body))
          ((<- (HsList phases) lst) (gen-eval-when phases body)))
       _ (finkelSrcError form (++ "eval-when: invalid form: "
-                             (show form))))))
+                                 (show form))))))
 
 (define-macro' eval-and-compile
   "Same as 'eval_when' macro with __@compile@__ and __@load@__ phases.
@@ -323,12 +325,10 @@ See 'eval_when'.
   (= make-defmacro-body label whole name0 arg0 body0
     (let ((:: err (-> Code Code Code))
           (= err form-name name
-            `(finkelSrcError ,form-name
-                         (concat
-                          ["in macro `" (show ',name) "'"
-                           "\ninvalid form: `"
-                           (show ,the-macro-arg)
-                           "'"])))
+            `(finkelSrcError
+              ,form-name
+              (concat ["in macro `" (show ',name) "'\n"
+                       "invalid form: `" (show ,the-macro-arg) "'"])))
 
           (:: atom-arg-body (-> Code Code Code Code Code))
           (= atom-arg-body name arg body form-name
@@ -376,7 +376,7 @@ See 'eval_when'.
                   (<- body2
                     (make-defmacro-body label code name arg body1))
                   (return
-                    (LForm (L l (List [name the-macro-arg body2])))))
+                   (LForm (L l (List [name the-macro-arg body2])))))
 
               _ (finkelSrcError code (++ label ": invalid form")))))
       (case (unCode whole)
@@ -584,7 +584,8 @@ Expansions of /m3/:
           (do (<- tmp (gensym' "tmp"))
               (let ((:: doc [Code])
                     (= doc (maybe [] return mb-doc))))
-              (return `(defmacro-m ,name ,@doc ,args
+              (return `(defmacro-m ,name
+                         ,@doc ,args
                          (let ((= ,tmp ,body))
                            (return ,tmp)))))))
     (case (unCode form)
@@ -831,7 +832,9 @@ True
   form
   (case (unCode form)
     (List (: sig (@ doc (pAstring _)) args body))
-    `(defn ,sig ,doc ,args
+    `(defn ,sig
+       ,doc
+       ,args
        (do ,@body))
 
     (List (: sig args body))
@@ -968,7 +971,7 @@ Listing exported macros in \"Finkel.Core\" module:
                                 (mapM lookupName (modInfoExports mi)))
                               (<- dflags getDynFlags)
                               (return
-                                (foldr (f dflags) [] mb-things))))))
+                               (foldr (f dflags) [] mb-things))))))
         (= invalid-err
           (++ "exported-macros: got non-module name symbol `"
               (show name) "'")))
@@ -1046,21 +1049,21 @@ Expands to below:
                     (cond
                       ((== label 'export)
                        (return
-                         (if (null (cdr lst))
-                             (: (, 'export (cons '() nil)) acc)
-                             (: (, 'export payload) acc))))
+                        (if (null (cdr lst))
+                            (: (, 'export (cons '() nil)) acc)
+                            (: (, 'export payload) acc))))
                       ((|| (== label 'use)
                            (== label 'import))
                        (return
-                         (: (, 'import (mapcar (\ es `(import ,@es))
-                                               payload))
-                            acc)))
+                        (: (, 'import (mapcar (\ es `(import ,@es))
+                                              payload))
+                           acc)))
                       ((|| (== label 'load)
                            (== label 'require))
                        (return
-                         (: (, ':require (mapcar (\ es `(:require ,@es))
-                                                 payload))
-                            acc)))
+                        (: (, ':require (mapcar (\ es `(:require ,@es))
+                                                payload))
+                           acc)))
                       ((|| (== label 'load-use)
                            (== label 'require-and-import))
                        (return (: (, 'load-use payload) acc)))
@@ -1079,10 +1082,10 @@ Expands to below:
                         (append e1 e2)
                         e1)))))
           (return
-            `(:begin
-               ,@(emit True ':require)
-               (module ,name ,@(emit False 'export))
-               ,@(emit True 'import))))
+           `(:begin
+              ,@(emit True ':require)
+              (module ,name ,@(emit False 'export))
+              ,@(emit True 'import))))
 
       _ (finkelSrcError form "defmodule: invalid form"))
 

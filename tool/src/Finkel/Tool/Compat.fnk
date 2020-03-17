@@ -3,10 +3,9 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Compat
-  (export
-   define-ghc-version-macro
-   with-ghc-version-cond
-   with-os-cond)
+  (export define-ghc-version-macro
+          with-ghc-version-cond
+          with-os-cond)
   (import
    ;; base
    (qualified System.Info)

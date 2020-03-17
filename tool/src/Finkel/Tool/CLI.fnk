@@ -3,9 +3,8 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.CLI
-  (export
-   (CLI ..)
-   (ExitCode ..))
+  (export (CLI ..)
+          (ExitCode ..))
   (import
    ;; base
    (Control.Exception (catch throwIO))

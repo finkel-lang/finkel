@@ -37,7 +37,7 @@
     (with-os-cond os
       ((== os "mingw32")
        (it "should skip under Windows"
-           (pendingWith "Windows not yet supported")))
+         (pendingWith "Windows not yet supported")))
       (otherwise replMacroTests'))))
 
 (defn (:: replMacroTests' Spec)
@@ -200,7 +200,7 @@
            ((== os "darwin")
             (describe "evaluate (repl-macro load m02.fnk)"
               (it "should skip under darwin"
-                  (pendingWith "OSX not supported yet"))))
+                (pendingWith "OSX not supported yet"))))
            (otherwise
             (ok `(:begin
                    (repl-macro load ,(qSymbol m02-dot-fnk))
@@ -213,7 +213,7 @@
            ((== os "darwin")
             (describe "evaluate (repl-macro reload)"
               (it "should skip under darwin"
-                  (pendingWith "OSX not supported yet"))))
+                (pendingWith "OSX not supported yet"))))
            (otherwise
             (ok '(repl-macro reload)
                 (++ "; reloaded " m02-dot-fnk))))
@@ -221,7 +221,7 @@
            ((== os "darwin")
             (describe "evaluate main"
               (it "should skip under darwin"
-                  (pendingWith "OSX not supported yet"))))
+                (pendingWith "OSX not supported yet"))))
            (otherwise
             (ok 'main "False")))
 

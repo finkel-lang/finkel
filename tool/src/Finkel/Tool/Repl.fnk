@@ -9,8 +9,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Repl
-  (export
-   replMain repl-env)
+  (export replMain repl-env)
   (require
    ;; finkel-lang
    (Finkel.Prelude)
@@ -55,9 +54,9 @@
   (let ((= modules ["Prelude"])
         (= macros (mergeMacros specialForms replMacros)))
     (defaultFnkEnv {envContextModules modules
-                   envMacros macros
-                   envDefaultMacros macros
-                   envQualifyQuotePrimitives True})))
+                    envMacros macros
+                    envDefaultMacros macros
+                    envQualifyQuotePrimitives True})))
 
 
 ;;; Internal

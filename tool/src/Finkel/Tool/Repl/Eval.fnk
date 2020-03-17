@@ -3,8 +3,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Repl.Eval
-  (export
-   eval-loop)
+  (export eval-loop)
   (require
    ;; finkel-lang
    (Finkel.Prelude)
@@ -59,8 +58,8 @@
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Builder ((HDecl) (HIE) (HImportDecl)  (HStmt)
-                         syntaxErrCode syntaxErrMsg evalBuilder))
+   (Language.Finkel.Builder ((HDecl) (HIE) (HImportDecl) (HStmt)
+                             syntaxErrCode syntaxErrMsg evalBuilder))
    (Language.Finkel.Eval (evalDecls))
    (Language.Finkel.Expand (expands))
    (Language.Finkel.Make (initSessionForMake))
@@ -252,7 +251,7 @@ context."
                 [name] (| ((== (occNameString (nameOccName name)) "it")
                            (return (Right ret))))
                 _ (return
-                    (Right (names-and-types dflags names ids))))))
+                   (Right (names-and-types dflags names ids))))))
         (= exception serialized
           (case serialized
             (EOtherException e) (return (Left (++ "*** Exception: " e)))
@@ -339,6 +338,5 @@ context."
                               (Maybe (, Bool (Located [HIE])))
                               Bool))
   [_ (Just (, False (L _ [])))] True
-  [(Just (, False (L _ xs)))
-   (Just (, False (L _ ys)))] (all (flip elem xs) ys)
-  [a b] (== a b))
+  [(Just (, False (L _ xs))) (Just (, False (L _ ys)))] (all (flip elem xs) ys)
+  [a b ] (== a b))

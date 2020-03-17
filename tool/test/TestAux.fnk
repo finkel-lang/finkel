@@ -3,9 +3,8 @@
 (:require Finkel.Core)
 
 (defmodule TestAux
-  (export
-   (TestIO ..) (TestIOState ..) runTestIO
-   (EvalTestFns ..) makeEvalTestFns)
+  (export (TestIO ..) (TestIOState ..) runTestIO
+          (EvalTestFns ..) makeEvalTestFns)
   (require
    (Finkel.Prelude)
    (Finkel.Tool.Compat))
@@ -186,21 +185,19 @@
                                    (eval-loop hdl in-mv))
                                repl-env)))
       (let ((= eval-form right-or-left form expect
-              (describe
-               (++ "evaluate " (show form))
-               (it "evaluates to expected result"
-                   (do (putMVar in-mv (Input Connection form out-mv))
-                       (<- ret (takeMVar out-mv))
-                       (shouldBe ret (right-or-left expect))))))
+              (describe (++ "evaluate " (show form))
+                (it "evaluates to expected result"
+                  (do (putMVar in-mv (Input Connection form out-mv))
+                      (<- ret (takeMVar out-mv))
+                      (shouldBe ret (right-or-left expect))))))
             (= ok (eval-form Right))
             (= ng (eval-form Left))
             (= satisfy form test
-              (describe
-               (++ "evaluate " (show form))
-               (it "satisfies predicate"
-                   (do (putMVar in-mv (Input Connection form out-mv))
-                       (<- ret (takeMVar out-mv))
-                       (shouldSatisfy ret test)))))
+              (describe (++ "evaluate " (show form))
+                (it "satisfies predicate"
+                  (do (putMVar in-mv (Input Connection form out-mv))
+                      (<- ret (takeMVar out-mv))
+                      (shouldSatisfy ret test)))))
             (= cleanup
               (do (killThread etid)
                   (cleanup-repl resources)))))

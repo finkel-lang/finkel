@@ -3,8 +3,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Version
-  (export
-   versionMain)
+  (export versionMain)
   (import
    ;; base
    (Control.Monad.IO.Class ((MonadIO ..)))

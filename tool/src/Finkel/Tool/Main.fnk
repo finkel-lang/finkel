@@ -3,9 +3,8 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Main
-  (export
-   main
-   commands)
+  (export main
+          commands)
   (require
    ;; finkel-lang
    (Finkel.Prelude))

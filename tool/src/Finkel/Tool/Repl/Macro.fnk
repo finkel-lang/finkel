@@ -118,8 +118,9 @@
   [flg]
   (cond
     ((<= 806 version)
-     `(defaultDynFlags (settings ,flg)
-                       (, (llvmTargets ,flg) (llvmPasses ,flg))))
+     `(defaultDynFlags
+          (settings ,flg)
+          (, (llvmTargets ,flg) (llvmPasses ,flg))))
     ((<= 804 version)
      `(defaultDynFlags (settings ,flg) (llvmTargets ,flg)))
     (otherwise
@@ -318,7 +319,7 @@ object code."
                   ($$ (vcat (map pprInstance cls-insts))
                       (vcat (map pprFamInst fam-insts)))))))
       (return
-        (vcat (intersperse (text "") (map ppr-info filtered))))))
+       (vcat (intersperse (text "") (map ppr-info filtered))))))
 
 (defn (:: filter-out-children (-> (-> a TyThing) [a] [a]))
   [get-thing xs]
@@ -522,7 +523,7 @@ object code."
 (defn (:: help-cmd ReplAction)
   [_form]
   (return
-    `(System.IO.putStrLn ,(++ "DESCRIPTION:
+   `(System.IO.putStrLn ,(++ "DESCRIPTION:
 
   REPL meta macro, ARGS varies per COMMAND.
 
@@ -563,7 +564,7 @@ COMMANDS:
                             (return `(System.IO.putStrLn ,msg))))))
         (= err
           (finkelSrcError (located-list forms)
-                      (++ "browse: invalid form: " (show forms)))))
+                          (++ "browse: invalid form: " (show forms)))))
     (case (map unCode forms)
       [(Atom (ASymbol sym))] (go (Just (unpackFS sym)))
       [] (go Nothing)
@@ -578,7 +579,7 @@ COMMANDS:
                    (return '(:begin)))))
     _ (let ((= l (located-list forms)))
         (finkelSrcError l (++ "cd: expecting symbol or string but got "
-                          (show l))))))
+                              (show l))))))
 
 (defn (:: debug-cmd ReplAction)
   "Modify debug settings in REPL."
@@ -665,7 +666,7 @@ paths from import directories."
     (case forms
       [form] (maybe
               (finkelSrcError form (++ "load: not a FilePath: "
-                                   (show form)))
+                                       (show form)))
               (\ path
                 ;; Clear current state first. Then find the source file
                 ;; path and compile, load, and link.
@@ -678,7 +679,7 @@ paths from import directories."
                     (return '(:begin))))
               (code-to-mb-string form))
       _      (finkelSrcError (located-list forms)
-                         (++ "load: invalid form: " (show forms))))))
+                             (++ "load: invalid form: " (show forms))))))
 
 (defn (:: pwd-cmd ReplAction)
   "Function to show current directory."
@@ -736,7 +737,7 @@ paths from import directories."
       (maybe show-cmd-error id (lookup thing things)))
     (defn show-cmd-error
       (finkelSrcError nil (++ "show: expecting one of:\n"
-                          (intercalate ", " (map fst things)))))
+                              (intercalate ", " (map fst things)))))
     (defn things
       [(, "bindings" show-bindings)
        (, "context" show-context)

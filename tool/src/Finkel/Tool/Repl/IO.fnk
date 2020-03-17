@@ -3,8 +3,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Repl.IO
-  (export
-   init-form read-form read-print-loop with-io-redirect)
+  (export init-form read-form read-print-loop with-io-redirect)
   (import
    ;; base
    (Control.Concurrent

@@ -123,21 +123,21 @@ False
                                           _    False))))
                            _ (finkelSrcError form "defpred"))))))
   (defpred "True when the argument is a 'List'."
-    is-list (List _))
+      is-list (List _))
   (defpred "True when the argument is a 'HsList'."
-    is-hslist (HsList _))
+      is-hslist (HsList _))
   (defpred "True when the argument is an 'ASymbol'."
-    is-symbol (Atom (ASymbol _)))
+      is-symbol (Atom (ASymbol _)))
   (defpred "True when the argument is an 'AString'."
-    is-string (Atom (AString _)))
+      is-string (Atom (AString _)))
   (defpred "True when the argument is an 'AChar'."
-    is-char (Atom (AChar _)))
+      is-char (Atom (AChar _)))
   (defpred "True when the argument is an 'AInteger'."
-    is-integer (Atom (AInteger _)))
+      is-integer (Atom (AInteger _)))
   (defpred "True when the argument is an 'AFractional'."
-    is-fractional (Atom (AFractional _)))
+      is-fractional (Atom (AFractional _)))
   (defpred "True when the argument is an 'AUnit'."
-    is-unit (Atom AUnit)))
+      is-unit (Atom AUnit)))
 
 
 ;;; CONS
