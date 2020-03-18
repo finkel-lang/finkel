@@ -1004,9 +1004,9 @@ order, and starts with one of the following symbols:
 
 > DEFMODULE ::= 'defmodule' NAME IMPEXP*
 > NAME      ::= modid
-> IMPEXP    ::= '(' 'use' form+ ')'
->             | '(' 'load' form+ ')'
->             | '(' 'load-use' form+ ')'
+> IMPEXP    ::= '(' 'import' form+ ')'
+>             | '(' 'require' form+ ')'
+>             | '(' 'require-and-import' form+ ')'
 >             | '(' 'export' form* ')'
 
 ==== __Examples__

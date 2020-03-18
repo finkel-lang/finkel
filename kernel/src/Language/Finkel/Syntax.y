@@ -9,7 +9,11 @@
 -- syntax tree data defined in GHC.
 --
 module Language.Finkel.Syntax
-  ( -- * Haskell AST parsers
+  (
+    -- * Forms for documentation comment
+    -- $docforms
+
+    -- * Haskell AST parsers
     parseModule
   , parseImports
   , parseLImport
@@ -18,9 +22,6 @@ module Language.Finkel.Syntax
   , parseTopDecls
   , parseExpr
   , parseType
-
-    -- * Forms for documentation comment
-    -- $docforms
   ) where
 
 -- ghc
@@ -940,7 +941,7 @@ unListL (LForm (L _ form)) =
 -- export entities list, or in top level declarations. It is analogous
 -- to Haskell comments starting with @|@.
 --
--- [@:doc@]: The @(:doc^ "comment")@ form is like /:doc/, but for
+-- [@:doc^@]: The @(:doc^ "comment")@ form is like /:doc/, but for
 -- previous form. Unlike /:doc/, it cannot appear in export entities
 -- list. It is analogous to Haskell comments starting with @^@.
 --
