@@ -1,13 +1,22 @@
 # Finkel
 
-[![codecov][codecov-status]][codecov]
-[![Build status][build-status]][travis]
-[![Documentation Status][doc-status]][doc]
+[![Travis][build-badge]][travis]
+[![Documentation][doc-badge]][doc]
+[![Codecov][codecov-badge]][codecov]
 
 Finkel is a statically typed, purely functional, non-strict-by-default
 dialect of the [Lisp][lisp] programming language.
 
 Or in other words, [Haskell][haskell] in S-expression.
+
+
+## Features
+
+- Integration with existing Haskell modules.
+- Building Haskell-compatible [Cabal][cabal] packages.
+- Documentation generation with [Haddock][haddock].
+- Lisp style macro system.
+- Tool executable, including interactive REPL.
 
 
 ## Sample code
@@ -38,7 +47,7 @@ input and print the fibonacci number of the argument.")
 
 ## Compiling an executable
 
-```
+```console
 $ finkel make -o fib fib.fnk
 [1 of 1] Compiling Main             ( fib.fnk, fib.o )
 Linking fib
@@ -48,7 +57,7 @@ $ ./fib 10
 
 ## Running REPL
 
-```
+```console
 $ finkel repl
 Hit `Ctrl-d' or type ,q to quit, type ,? for help.
 > ,load fib.fnk
@@ -67,11 +76,21 @@ fib :: Int -> Int       -- Defined at fib.fnk:16:11
 
 See the [documentation][doc] for more details.
 
-[codecov-status]: https://codecov.io/gh/finkel-lang/finkel/branch/master/graph/badge.svg
-[codecov]: https://codecov.io/gh/finkel-lang/finkel
-[build-status]: https://travis-ci.org/finkel-lang/finkel.svg?branch=master
-[travis]: https://travis-ci.org/finkel-lang/finkel
-[doc-status]: http://readthedocs.org/projects/finkel/badge/?version=latest
+
+## Contributing
+
+Contributions are welcome. Please see the [CONTRIBUTING.md][contrib].
+
+
+[build-badge]: https://travis-ci.com/finkel-lang/finkel.svg?branch=master
+[travis]: https://travis-ci.com/finkel-lang/finkel
+[doc-badge]: http://readthedocs.org/projects/finkel/badge/?version=latest
 [doc]: https://finkel.readthedocs.io/en/latest/
-[lisp]: https://en.wikipedia.org/wiki/Lisp_(programming_language)
+[codecov-badge]: https://codecov.io/gh/finkel-lang/finkel/branch/master/graph/badge.svg
+[codecov]: https://codecov.io/gh/finkel-lang/finkel
+
+[cabal]: https://www.haskell.org/cabal/
+[contrib]: https://github.com/finkel-lang/finkel/blob/master/CONTRIBUTING.md
+[haddock]: https://www.haskell.org/haddock/
 [haskell]: https://haskell.org
+[lisp]: https://en.wikipedia.org/wiki/Lisp_(programming_language)
