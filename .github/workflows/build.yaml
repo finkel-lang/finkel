@@ -1,0 +1,179 @@
+name: build
+
+on:
+  pull_request:
+  push:
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  stack:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        plan:
+          - resolver: "lts-11"
+          - resolver: "lts-12"
+          - resolver: "lts-14"
+          - resolver: "lts-15"
+        exclude:
+          - os: macos-latest
+            plan:
+              resolver: "lts-11"
+          - os: macos-latest
+            plan:
+              resolver: "lts-12"
+          - os: macos-latest
+            plan:
+              resolver: "lts-14"
+          - os: windows-latest
+            plan:
+              resolver: "lts-11"
+          - os: windows-latest
+            plan:
+              resolver: "lts-12"
+          - os: windows-latest
+            plan:
+              resolver: "lts-15"
+
+    env:
+      STACK: stack --resolver=${{ matrix.plan.resolver }}
+
+    runs-on:
+      - ${{ matrix.os }}
+
+    steps:
+      - name: Checkout git repository
+        uses: actions/checkout@v2
+
+      - name: Cache stack package database (non-windows)
+        id: cache-stack-pkg-db-win
+        if: matrix.os != 'windows-latest'
+        uses: actions/cache@v1
+        with:
+          path: ~/.stack
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-pkg-db
+
+      - name: Cache stack (windows)
+        id: cache-stack-win
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v1
+        with:
+          path: C:\Users\runneradmin\AppData\Local\Programs\stack
+          key: ${{ runner.os }}-stack-local-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-local-${{ matrix.plan.resolver }}
+
+      - name: Cache stack packages (windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v1
+        with:
+          path: C:\Users\runneradmin\AppData\Roaming\stack
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}
+
+      - name: Install stack (non-windows)
+        if: matrix.os != 'windows-latest'
+        uses: mstksg/setup-stack@v1
+
+      # setup-stack@v1 action does not support windows, installing manually.
+      # See: https://github.com/mstksg/setup-stack/issues/5
+      - name: Install stack (windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          url=https://get.haskellstack.org/stable/windows-x86_64.zip
+          curl --silent --output stack.zip --location $url
+          7z x stack.zip stack.exe
+          echo "::add-path::."
+          echo "::add-path::C:/Users/runneradmin/AppData/Roaming/local/bin"
+
+      - name: Show stack version
+        shell: bash
+        run: $STACK --version
+
+      - name: Setup stack
+        shell: bash
+        run: $STACK setup
+
+      - name: Install dependency packages
+        shell: bash
+        run: $STACK build --test --only-dependencies
+
+      - name: Build package
+        shell: bash
+        run: $STACK build --fast --test --coverage --no-run-tests
+
+      - name: Run tests
+        shell: bash
+        run: $STACK build --fast --test --coverage
+
+      - name: Generate coverge report
+        shell: bash
+        run: |
+          $STACK install hpc-codecov
+          HPCROOT=$($STACK path --local-hpc-root)
+          DISTDIR=$($STACK path --dist-dir)
+          TIX=$(find $HPCROOT -name 'all.tix')
+          hpc-codecov \
+            --src=kernel --mix=kernel/$DISTDIR/hpc \
+            --src=setup --mix=setup/$DISTDIR/hpc \
+            --src=lang --mix=lang/$DISTDIR/hpc \
+            --src=tool --mix=tool/$DISTDIR/hpc \
+            --out=codecov.json --verbose $TIX
+
+      - name: Send coverage report
+        shell: bash
+        run: bash <(curl -s https://codecov.io/bash)
+
+  cabal:
+    strategy:
+      matrix:
+        os:
+          # setup-haskell@v1 action does not support windows and macos.
+          # See: https://github.com/actions/setup-haskell/issues/1
+          - ubuntu-latest
+        plan:
+          - ghc: "8.8.1"
+            cabal: "3.0"
+
+    runs-on:
+      - ${{ matrix.os }}
+
+    steps:
+      - name: Checkout project repository
+        uses: actions/checkout@v2
+
+      - name: Cache cabal package database
+        id: home-dot-cabal
+        uses: actions/cache@v1
+        with:
+          path: ~/.cabal
+          key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}
+
+      - name: Install ghc and cabal-install
+        uses: actions/setup-haskell@v1
+        with:
+          ghc-version: ${{ matrix.plan.ghc }}
+          cabal-version: ${{ matrix.plan.cabal }}
+
+      - name: Update cabal package list
+        run: cabal v2-update
+
+      - name: Build dependency packages
+        run: cabal v2-build all --only-dependencies
+
+      - name: Build package
+        run: cabal v2-build all
+
+      - name: Run tests
+        run: cabal v2-test all
+
+      - name: Run haddock
+        run: cabal v2-haddock all
