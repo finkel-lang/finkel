@@ -1,0 +1,106 @@
+;;;; Test codes for "language-syntax.rst"
+
+(defmodule Doc.LanguageSyntax
+  (export spec)
+  (import
+   ;; base
+   (Data.List (sort))
+
+   ;; directory
+   (System.Directory (listDirectory))
+
+   ;; filepath
+   (System.FilePath (</> <.> dropExtension takeExtension))
+
+   ;; ghc
+   (DynFlags ((DynFlags) unsafeGlobalDynFlags))
+   (FastString (fsLit))
+   (GHC (runGhc))
+   (Outputable ((Outputable ..) showPpr))
+   (Lexer ((P ..) (ParseResult ..) mkPState))
+   (SrcLoc ((GenLocated ..) mkRealSrcLoc interactiveSrcSpan))
+   (StringBuffer (hGetStringBuffer))
+   (qualified Parser as GhcParser)
+
+   ;; finkel-kernel
+   (Language.Finkel.Builder ((Builder) evalBuilder))
+   (Language.Finkel.Reader (parseSexprs))
+   (qualified Language.Finkel.Syntax as FnkParser)
+
+   ;; hspec
+   (Test.Hspec ((Spec) beforeAll_ describe expectationFailure it runIO
+                shouldBe))
+
+   ;; Internal
+   (Doc.TestAux)))
+
+(defn (:: spec Spec)
+  (beforeAll_
+   ;; Running `runGhc' to set the `unsafeGlobalDynFlags' with `initGhcMonad'.
+   (do (<- mb-ghc-lib get-ghc-lib)
+       (runGhc mb-ghc-lib (return ())))
+   (describe "language syntax"
+     (do (describe "expression"
+           (parser-tests "expr" (Parsers GhcParser.parseExpression
+                                         FnkParser.parseExpr)))
+         (describe "declaration"
+           (parser-tests "decl" (Parsers (fmap pure GhcParser.parseDeclaration)
+                                         FnkParser.parseTopDecls)))
+         (describe "module"
+           (parser-tests "module" (Parsers GhcParser.parseModule
+                                           (fmap (L interactiveSrcSpan)
+                                                 FnkParser.parseModule))))
+         (describe "import"
+           (parser-tests "import" (Parsers (fmap pure GhcParser.parseImport)
+                                           FnkParser.parseImports)))
+         (describe "ffi"
+           (parser-tests "ffi" (Parsers (fmap pure GhcParser.parseDeclaration)
+                                        FnkParser.parseTopDecls)))))))
+
+(defn (:: parser-tests
+        (=> (Outputable a) (-> FilePath (Parsers a) Spec)))
+  [subdir parsers]
+  (do (let ((= run-it name
+              (it (++ "should parse tests in " name)
+                (parser-test parsers (</> (language-dir subdir) name))))))
+      (<- files (runIO (list-base-names (language-dir subdir))))
+      (mapM_ run-it files)))
+
+(data (Parsers a)
+  (Parsers {hs-parser (P a)
+            fnk-parser (Builder a)}))
+
+(defn (:: parser-test
+        (=> (Outputable a) (-> (Parsers a) FilePath (IO ()))))
+  [parsers basename]
+  (do (let ((= fnk (<.> basename "fnk"))
+            (= hs (<.> basename "hs"))))
+      (<- buf (hGetStringBuffer hs))
+      (let ((= loc (mkRealSrcLoc (fsLit "<test>") 1 1))
+            (= dflags unsafeGlobalDynFlags)
+            (= ps (Lexer.mkPState dflags buf loc))))
+      (case (Lexer.unP (hs-parser parsers) ps)
+        (POk _st hres) (do (<- fstr (parse-fnk dflags parsers fnk))
+                           (shouldBe fstr (showPpr dflags hres)))
+        _ (expectationFailure "failed to parse haskell code"))))
+
+(defn (:: parse-fnk
+        (=> (Outputable a)
+            (-> DynFlags (Parsers a) FilePath (IO String))))
+  [dflags parser path]
+  (do (<- buf (hGetStringBuffer path))
+      (<- (, forms _sp) (parseSexprs (Just path) buf))
+      (case (evalBuilder (fnk-parser parser) forms)
+        (Right fexp) (return (showPpr dflags fexp))
+        (Left err) (return (show err)))))
+
+(defn (:: language-dir (-> String FilePath))
+  [subdir]
+  (</> "include" "language-syntax" subdir))
+
+(defn (:: list-base-names (-> FilePath (IO [FilePath])))
+  [dir]
+  (do (<- files (listDirectory dir))
+      (return
+       (sort [(dropExtension file)
+              | (<- file files) (== ".fnk" (takeExtension file))]))))

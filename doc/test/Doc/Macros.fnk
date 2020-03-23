@@ -1,0 +1,29 @@
+;;;; Test codes for "macros.rst"
+
+(defmodule Doc.Macros
+  (export spec)
+  (import
+   ;; base
+   (Data.Version (makeVersion))
+   (System.Info (os))
+
+   ;; filepath
+   (System.FilePath (</>))
+
+   ;; hspec
+   (Test.Hspec ((Spec) beforeAll_ describe))
+
+   ;; Internal
+   (Doc.TestAux)))
+
+(defn (:: spec Spec)
+  (let ((= dir (</> "include" "macros"))
+        (= skips
+          [(, "begin.console" (> (makeVersion [8 8 0])))
+           (, "quasiquote.console" (const (== os "darwin")))]))
+    (beforeAll_
+     (remove-compiled [(</> dir "quasiquote")
+                       (</> dir "require")
+                       (</> dir "RequireMe")])
+     (describe "macros in finkel"
+       (run-console-tests dir skips)))))

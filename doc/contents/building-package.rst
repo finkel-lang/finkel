@@ -22,23 +22,23 @@ Make a directory named ``my-first-package``, and create a file named
 ``package.yaml`` under the directory with following
 contents:
 
-.. literalinclude:: ../code/my-first-package/package.yaml
+.. literalinclude:: ../include/building-package/my-first-package/package.yaml
    :language: yaml
 
 And a custom ``Setup.hs`` script:
 
-.. literalinclude:: ../code/my-first-package/Setup.hs
+.. literalinclude:: ../include/building-package/my-first-package/Setup.hs
    :language: haskell
 
 And a Finkel source code ``src/MyFirstPackage.fnk`` for exposed
 module:
 
-.. literalinclude:: ../code/my-first-package/src/MyFirstPackage.fnk
+.. literalinclude:: ../include/building-package/my-first-package/src/MyFirstPackage.fnk
    :language: finkel
 
 And a ``stack.yaml``:
 
-.. literalinclude:: ../code/my-first-package/stack.template.yaml
+.. literalinclude:: ../include/building-package/my-first-package/stack.template.yaml
    :language: yaml
 
 At this point the files under the ``my-first-project`` directory
@@ -82,7 +82,7 @@ Now one can build the ``my-first-package`` package with ``stack``:
    For example, the following ``stack.yaml`` is set to build a package
    in the current directory with ``finkel`` from the git repository:
 
-   .. literalinclude:: ../code/my-first-package/stack.git.yaml
+   .. literalinclude:: ../include/building-package/my-first-package/stack.git.yaml
       :language: yaml
 
    See the `stack documentation
@@ -172,19 +172,19 @@ should look like below:
 Add a new file named ``my-second-package/src/FnkCodes.fnk``, with
 Finkel source codes:
 
-.. literalinclude:: ../code/my-second-package/src/FnkCodes.fnk
+.. literalinclude:: ../include/building-package/my-second-package/src/FnkCodes.fnk
    :language: finkel
 
 And another new file named ``my-second-package/src/HsCodes.hs``, with
 Haskell source codes:
 
-.. literalinclude:: ../code/my-second-package/src/HsCodes.hs
+.. literalinclude:: ../include/building-package/my-second-package/src/HsCodes.hs
    :language: haskell
 
 Modify the ``library`` stanza of the file ``my-second-package.cabal``
 and add ``HsCodes`` and ``FnkCodes`` modules as shown below:
 
-.. literalinclude:: ../code/my-second-package/my-second-package.cabal
+.. literalinclude:: ../include/building-package/my-second-package/my-second-package.cabal
    :lines: 22-29
 
 The functions exported from ``HsCodes`` module could be used from
@@ -192,7 +192,7 @@ The functions exported from ``HsCodes`` module could be used from
 codes. Modify the file ``my-second-package/src/Lib.fnk`` to import
 ``hsfactorial`` and ``fnkfactorial`` functions from ``HsCodes``:
 
-.. literalinclude:: ../code/my-second-package/src/Lib.fnk
+.. literalinclude:: ../include/building-package/my-second-package/src/Lib.fnk
   :language: finkel
 
 One can build the ``my-second-package`` with ``stack build`` command, as

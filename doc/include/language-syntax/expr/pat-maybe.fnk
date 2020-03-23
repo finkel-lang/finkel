@@ -1,0 +1,3 @@
+(case expr ; Finkel
+  (Just x) (+ x 1)
+  Nothing  0)

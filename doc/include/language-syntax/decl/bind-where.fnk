@@ -1,0 +1,3 @@
+(= f2 n ; Finkel
+  (where body
+    (= body (+ n 1))))

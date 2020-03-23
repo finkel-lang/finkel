@@ -32,50 +32,6 @@ travis_init () {
     esac
 }
 
-gen_stack_files () {
-    raw=raw.githubusercontent.com
-    tmpl=https://$raw/finkel-lang/finkel/master/tool/finkel.hsfiles
-
-    cat > $HOME/.stack/config.yaml <<EOF
-templates:
-  params:
-    author-name: finkel
-    author-email: finkel@dum.my
-    copyright: Copyright (c) 1000-3000 Finkel Project
-    github-username: finkel-lang
-EOF
-
-    cat > stack.yaml <<EOF
-resolver: lts-15.2
-ghc-options:
-  "\$everything": -O0
-packages:
-  - my-first-package
-  - my-second-package
-  - my-new-package
-extra-deps:
-  - git: https://github.com/finkel-lang/finkel
-    commit: $TRAVIS_COMMIT
-    subdirs:
-      - kernel
-      - fkc
-      - setup
-      - lang
-      - tool
-      - finkel
-EOF
-
-    $STACK new my-new-package --omit-packages $tmpl
-}
-
-build_doc_pkgs_stack () {
-    ( cd doc/code && gen_stack_files && $STACK build --fast --test )
-}
-
-build_doc_pkgs_cabal () {
-    ( cd doc/code && cabal v2-build all && cabal v2-test all )
-}
-
 
 # Linux
 # -----
@@ -117,13 +73,11 @@ travis_script_linux () {
             $STACK --no-terminal build --fast --test --coverage \
                    finkel-kernel fkc finkel-setup \
                    finkel-lang finkel-tool finkel
-            build_doc_pkgs_stack
             ;;
         cabal)
             cabal v2-build all
             cabal v2-test all
             cabal v2-haddock all
-            build_doc_pkgs_cabal
             ;;
     esac
 }

@@ -1,0 +1,12 @@
+$ finkel make -fno-code -ddump-parsed macrolet.fnk
+
+==================== Parser ====================
+module Main where
+main :: IO ()
+main
+  = do putStrLn ";;; macrolet ;;;"
+       putStrLn "Hello macro!"
+       putStrLn "Goodbye."
+
+
+[1 of 1] Compiling Main             ( macrolet.fnk, nothing )

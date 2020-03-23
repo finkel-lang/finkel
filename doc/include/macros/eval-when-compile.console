@@ -1,0 +1,19 @@
+$ finkel make -fno-code -ddump-parsed eval-when-compile.fnk
+
+==================== Parser ====================
+module Main where
+foo :: Int -> IO ()
+foo n
+  = do putStrLn "from foo"
+       print (n + 1)
+bar :: Int -> Int -> IO ()
+bar a b
+  = do putStrLn "from bar"
+       print (a + (b * 2))
+main :: IO ()
+main
+  = do foo 41
+       bar 10 16
+
+
+[1 of 1] Compiling Main             ( eval-when-compile.fnk, nothing )

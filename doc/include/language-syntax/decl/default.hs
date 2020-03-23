@@ -1,0 +1,1 @@
+default (Int, Double) -- Haskell

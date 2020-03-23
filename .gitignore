@@ -27,4 +27,7 @@ dist-newstyle/
 doc/_build
 doc/_static
 doc/_templates
-doc/code/my-first-package/*.cabal
+
+doc/include/finkel-executable/hello
+doc/include/macros/quasiquote
+doc/include/macros/require

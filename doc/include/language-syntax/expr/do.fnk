@@ -1,0 +1,3 @@
+(do (putStr "x: ") ; Finkel
+    (<- l getLine)
+    (return (words l)))

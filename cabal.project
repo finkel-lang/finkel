@@ -1,10 +1,17 @@
 packages:
+  -- Main components
   kernel/
   fkc/
   setup/
   lang/
   tool/
   finkel/
+
+  -- For test
+  doc/
+  doc/include/building-package/my-first-package
+  doc/include/building-package/my-second-package
+  doc/include/building-package/my-new-package
 
 tests: True
 benchmarks: True

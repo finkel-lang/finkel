@@ -1,0 +1,9 @@
+$ finkel make -fno-code -ddump-parsed fib-macro.fnk
+
+==================== Parser ====================
+module Main where
+main :: IO ()
+main = print 55
+
+
+[1 of 1] Compiling Main             ( fib-macro.fnk, nothing )

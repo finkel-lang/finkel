@@ -1,0 +1,2 @@
+(instance (C1 Int) ; Finkel
+  (= m1 n (+ n 1)))

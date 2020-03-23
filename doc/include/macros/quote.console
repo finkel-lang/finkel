@@ -1,0 +1,17 @@
+$ finkel make -fno-code -ddump-parsed quote.fnk
+
+==================== Parser ====================
+module Main where
+import Finkel.Prelude
+main :: IO ()
+main
+  = do putStrLn ";;; quote ;;;"
+       print (qSymbol "foo")
+       print (qSymbol "foo")
+       print (qInteger 42)
+       print (qInteger 42)
+       print (qString "string")
+       print (qString "string")
+
+
+[1 of 1] Compiling Main             ( quote.fnk, nothing )

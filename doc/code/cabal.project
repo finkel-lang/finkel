@@ -1,3 +1,0 @@
-optimization: False
-packages: ./*/*.cabal
-optional-packages: ../../*/*.cabal

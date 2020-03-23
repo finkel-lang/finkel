@@ -1,0 +1,2 @@
+(foreign import ccall safe "string.h strlen" ; Finkel
+  (:: cstrlen (-> (Ptr CChar) (IO CSize))))

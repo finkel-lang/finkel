@@ -1,0 +1,11 @@
+$ finkel make -fno-code -ddump-parsed unquote.fnk
+
+==================== Parser ====================
+module Main where
+main :: IO ()
+main
+  = do putStrLn ("uq1: arg = " ++ show "foo")
+       putStrLn "uq2: arg = \"bar\""
+
+
+[1 of 1] Compiling Main             ( unquote.fnk, nothing )

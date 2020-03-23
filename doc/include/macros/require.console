@@ -1,0 +1,14 @@
+$ finkel make -dynamic-too RequireMe.fnk require.fnk
+[1 of 2] Compiling RequireMe        ( RequireMe.fnk, RequireMe.o )
+
+==================== Parser ====================
+module Main where
+main :: IO ()
+main
+  = do putStrLn ";;; require ;;;"
+       putStrLn "Hello macro!"
+       putStrLn "Goodbye."
+
+
+[2 of 2] Compiling Main             ( require.fnk, require.o )
+Linking require ...

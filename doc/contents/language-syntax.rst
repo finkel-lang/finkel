@@ -24,23 +24,20 @@ Comments
 
 Line contents after ``;`` are treated as comments.
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/line-comment.fnk
+   :language: finkel
 
-   (putStrLn "foo") ; single-line comment in Finkel
-
-.. code-block:: haskell
-
-    putStrLn "foo" -- single-line comment in Haskell
+.. literalinclude:: ../include/language-syntax/expr/line-comment.hs
+   :language: haskell
 
 Block style comment is supported with ``#;`` and ``;#``.
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/block-comment.fnk
+   :language: finkel
 
-   (putStrLn #;Finkel block comment;# "bar")
+.. literalinclude:: ../include/language-syntax/expr/block-comment.hs
+   :language: haskell
 
-.. code-block:: haskell
-
-    putStrLn {- Haskell block comment -} "bar"
 
 Variable identifier
 ^^^^^^^^^^^^^^^^^^^
@@ -51,13 +48,11 @@ non-operator character. Hyphens in variable identifiers are internally
 converted to underscores. For instance, ``foo-bar-buzz`` will be
 converted to ``foo_bar_buzz``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/varid.fnk
+   :language: finkel
 
-   (foo-bar-buzz quux) ; Finkel
-
-.. code-block:: haskell
-
-   foo_bar_buzz quux -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/varid.hs
+   :language: haskell
 
 The hyphen conversion will be triggered only when the first letter of a
 variable identifier was a non-operator character. Operators like
@@ -72,21 +67,11 @@ As described in the `Numeric Literals
 section of the Haskell 2010 report, decimal, octal, hexadecimal
 integers and float with exponent are supported.
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/numeric.fnk
+   :language: finkel
 
-   1    ; decimal integer
-   0o77 ; octal integer
-   0xff ; hexadecimal integer
-   2.34 ; float
-   1e-2 ; float with exponent
-
-.. code-block:: haskell
-
-   1    -- decimal integer
-   0o77 -- octal integer
-   0xff -- hexadecimal integer
-   2.34 -- float
-   1e-2 -- float with exponent
+.. literalinclude:: ../include/language-syntax/expr/numeric.hs
+   :language: haskell
 
 
 Character And String
@@ -100,57 +85,47 @@ section in the Haskell 2010 report.
 
 Following code prints single lower case character ``a``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/char-a.fnk
+   :language: finkel
 
-   (putChar #'a) ; Finkel
-
-.. code-block:: haskell
-
-   putChar 'a'  -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/char-a.hs
+   :language: haskell
 
 Finkel uses a backslash to escape special characters. Following code
 prints backslash and single quote:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/char-escape.fnk
+   :language: finkel
 
-   (print [#'\ #'']) ; Finkel
-
-.. code-block:: haskell
-
-   print ['\\', '\''] -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/char-escape.hs
+   :language: haskell
 
 Some characters like newline, space, NUL, etc. are expressed with
 escape character and specific character sequences.
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/char-special.fnk
+   :language: finkel
 
-   (print [#'\n #'  #'\NUL #'\^L]) ; Finkel
-
-.. code-block:: haskell
-
-   print ['\n', ' ', '\NUL', '\^L'] -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/char-special.hs
+   :language: haskell
 
 Characters could be expressed with their numeric code in decimal, octal,
 and hexadecimal:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/char-ncode.fnk
+   :language: finkel
 
-   (print [#'\97 #'\o141 #'\x61]) ; Finkel, prints "aaa"
-
-.. code-block:: haskell
-
-   print ['\97', '\o141', '\x61'] -- Haskell, prints "aaa"
+.. literalinclude:: ../include/language-syntax/expr/char-ncode.hs
+   :language: haskell
 
 String literals are written between double-quotes. Special characters are
 escaped with ``\``.
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/string.fnk
+   :language: finkel
 
-   "foo\nbar\nbuzz. numeric escape \97 and control char \^X" ; Finkel
-
-.. code-block:: haskell
-
-   "foo\nbar\nbuzz. numeric escape \97 and control char \^X" -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/string.hs
+   :language: haskell
 
 At the time of writing, Finkel does not support the **gap** feature,
 which is available in Haskell 2010 to ignore the string contents
@@ -165,23 +140,21 @@ Function Applications
 
 Function application in Finkel is done with parentheses:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/funapp.fnk
+   :language: finkel
 
-   (putStrLn "hello") ; Finkel
+.. literalinclude:: ../include/language-syntax/expr/funapp.hs
+   :language: haskell
 
-.. code-block:: haskell
+Unlike some other lisps, extra parentheses are ignored. For instance:
 
-   putStrLn "hello" -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/funapp-pars.fnk
+   :language: finkel
 
-Unlike some other lisps, extra parentheses are ignored:
+is simplified to:
 
-.. code-block:: finkel
-
-   (((((putStrLn)) "hello"))) ; Finkel
-
-.. code-block:: haskell
-
-   ((((putStrLn)) "hello")) -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/funapp-pars.hs
+   :language: haskell
 
 
 Operator Applications
@@ -192,25 +165,20 @@ applications. However, a form applying operator function will be
 expanded to a form taking all of its arguments, with two operands for
 each. For example, adding numbers from 1 to 5 could be written as:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/opexp-add.fnk
+   :language: finkel
 
-   (+ 1 2 3 4 5) ; Finkel
-
-.. code-block:: haskell
-
-   1 + 2 + 3 + 4 + 5 -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/opexp-add.hs
+   :language: haskell
 
 Operator expansion understands right and left associativity. Operator
 precedence in Finkel is explicitly specified with parentheses.
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/opexp-app.fnk
+   :language: finkel
 
-  (<*> (pure foldr) (Just +) (pure 1) (pure [2 3])) ; Finkel
-
-.. code-block:: haskell
-
-  pure foldr <*> Just (+) <*> pure 1 <*> pure [2, 3] -- Haskell
-
+.. literalinclude:: ../include/language-syntax/expr/opexp-app.hs
+   :language: haskell
 
 The compiler treats the above expression as:
 
@@ -223,25 +191,21 @@ because the ``<*>`` operator is left-associative.
 When a single argument has been passed to operator function, the resulting
 expression is partial application:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/map-mul2.fnk
+   :language: finkel
 
-   (map (* 2) [1 2 3]) ; Finkel
-
-.. code-block:: haskell
-
-   map ((*) 2) [1, 2, 3] -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/map-mul2.hs
+   :language: haskell
 
 To apply more than two arguments to an operator function, one needs to
 explicitly surround the operator with parenthesis. Suppose that there
 is an operator function ``*+`` which takes three arguments:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/muladd.fnk
+   :language: finkel
 
-   ((*+) 2 3 4) ; Finkel
-
-.. code-block:: haskell
-
-   (*+) 2 3 4 -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/muladd.hs
+   :language: haskell
 
 
 Unary Operator Application
@@ -251,13 +215,11 @@ The operator ``-`` is always treated as a binary operator in
 Finkel. In below Finkel example, ``(- 1)`` is a partially applied
 function:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/map-unary.fnk
+   :language: finkel
 
-   (map (- 1) [1 2 3]) ; Finkel
-
-.. code-block:: haskell
-
-   map ((-) 1) [1, 2, 3] -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/map-unary.hs
+   :language: haskell
 
 
 Lambda
@@ -267,13 +229,11 @@ Lambda expression starts with ``\``. At least one space after ``\`` is
 mandatory. The last form in the lambda expression the body expression
 of entire lambda abstraction, others forms are argument patterns:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/lambda.fnk
+   :language: finkel
 
-   (zipWith (\ x y (* x (+ y 1))) [1 2 3] [4 5 6]) ; Finkel
-
-.. code-block:: haskell
-
-   zipWith (\x y -> x * (y + 1)) [1, 2, 3] [4, 5, 6] -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/lambda.hs
+   :language: haskell
 
 
 Conditionals
@@ -281,36 +241,20 @@ Conditionals
 
 An ``if`` expression does not take ``then`` and ``else``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/if.fnk
+   :language: finkel
 
-  (if test true-expr false-expr) ; Finkel
-
-.. code-block:: haskell
-
-  if test then true_expr else false_expr -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/if.hs
+   :language: haskell
 
 A guard starts with ``|``, and supports pattern, local declaration,
 and boolean:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/guard.fnk
+   :language: finkel
 
-   (case expr ; Finkel
-     (Just y) (| ((even y) r1)
-                 ((odd y) (< y 10) r2)
-                 ((<- (Just z) (lookup y kvs))
-                  (let ((= z' (* z 2))))
-                  (r3 z'))
-                 (otherwise r4)))
-
-.. code-block:: haskell
-
-   case expr of -- Haskell
-     Just y | even y -> r1
-            | odd y, y < 10 -> r2
-            | Just z <- lookup y kvs
-            , let z' = z * 2
-            -> r3 z'
-            | otherwise -> r4
+.. literalinclude:: ../include/language-syntax/expr/guard.hs
+   :language: haskell
 
 See also `cond <https://hackage.haskell.org>`_ in ``finkel-lang``.
 
@@ -321,34 +265,28 @@ Tuples
 Tuple constructor expression uses single comma. At least one space
 after the comma is required:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/tup2.fnk
+   :language: finkel
 
-   (print (, True #'x)) ; Finkel
-
-.. code-block:: haskell
-
-   print (True, 'x') -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/tup2.hs
+   :language: haskell
 
 Single comma works for tuples with more than two elements:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/tup5.fnk
+   :language: finkel
 
-   (print (, True #'x 42 1.23 "foo")) ; Finkel
-
-.. code-block:: haskell
-
-   print (True, 'x', 42, 1.23, "foo") -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/tup5.hs
+   :language: haskell
 
 To express tuple data and type constructor, use consecutive commas
 without spaces:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/tupfn.fnk
+   :language: finkel
 
-   (<*> (pure (,,,)) (Just 1) (Just 2) (Just 3) (Just 4)) ; Finkel
-
-.. code-block:: haskell
-
-   pure (,,,) <*> Just 1 <*> Just 2 <*> Just 3 <*> Just 4 -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/tupfn.hs
+   :language: haskell
 
 
 Unit
@@ -356,13 +294,11 @@ Unit
 
 Unit is expressed with empty parentheses:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/unit.fnk
+   :language: finkel
 
-   (return ()) ; Finkel
-
-.. code-block:: haskell
-
-   return () -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/unit.hs
+   :language: haskell
 
 See also `nil <https://hackage.haskell.org>`_ to express an empty form.
 
@@ -372,35 +308,29 @@ Lists
 
 List expression does not take commas:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/list-const.fnk
+   :language: finkel
 
-   (print [1 2 3]) ; Finkel
-
-.. code-block:: haskell
-
-   print [1, 2, 3] -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/list-const.hs
+   :language: haskell
 
 Arithmetic sequences use ``..``. Space on each side of ``..`` are
 required:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/list-range.fnk
+   :language: finkel
 
-   (print [1 3 .. 9]) ; Finkel
-
-.. code-block:: haskell
-
-   print [1, 3 .. 9] -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/list-range.hs
+   :language: haskell
 
 List comprehensions use ``|`` to separate the resulting expression.
 Space between ``|`` and the result is required.
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/list-comp.fnk
+   :language: finkel
 
-   [x | (<- x [1 .. 10]) (even x)] ; Finkel
-
-.. code-block:: haskell
-
-   [x | x <- [1 .. 10], even x] -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/list-comp.hs
+   :language: haskell
 
 
 Let
@@ -408,60 +338,36 @@ Let
 
 A let expression is expressed with ``let`` without ``in``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/let.fnk
+   :language: finkel
 
-   (let ((:: a Int)) ; Finkel
-         (:: (b c) Int))
-         (= a 10)
-         (= b 4)
-         (= c 2))
-     (+ (* a b) 2))
+.. literalinclude:: ../include/language-syntax/expr/let.hs
+   :language: haskell
 
-.. code-block:: haskell
-
-   let a :: Int -- Haskell
-       b, c :: Int
-       a = 10
-       b = 4
-       c = 2
-   in  a * b + 2
 
 Case
 ^^^^
 
 A case expression is expressed with ``case`` without ``of`` and ``->``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/case.fnk
+   :language: finkel
 
-   (case n ; Finkel
-     0 "zero"
-     1 "one"
-     _ "many")
+.. literalinclude:: ../include/language-syntax/expr/case.hs
+   :language: haskell
 
-.. code-block:: haskell
-
-   case n of -- Haskell
-     0 -> "zero"
-     1 -> "one"
-     _ -> "many"
 
 Do
 ^^^
 
-Do expression is expressed with ``do``, and bindings inside
-do-expressions are expressed with ``<-``:
+Do expression is expressed with ``do``, and bindings inside do-expressions are
+expressed with ``<-``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/do.fnk
+   :language: finkel
 
-   (do (putStr "x: ") ; Finkel
-       (<- l getLine)
-       (return (words l)))
-
-.. code-block:: haskell
-
-   do putStr "x: " -- Haskell
-      l <- getLine
-      return (words l)
+.. literalinclude:: ../include/language-syntax/expr/do.hs
+   :language: haskell
 
 
 Datatypes with field labels
@@ -469,13 +375,11 @@ Datatypes with field labels
 
 Field labels are enclosed with ``{`` and ``}``. Does not use ``=``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/fieldlabels.fnk
+   :language: finkel
 
-   (print (C {f1 1 f2 True f3 "abc"})) ; Finkel
-
-.. code-block:: haskell
-
-   print (C {f1=1, f2=True, f3="abc"}) -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/fieldlabels.hs
+   :language: haskell
 
 
 Expression Type-Signatures
@@ -483,13 +387,11 @@ Expression Type-Signatures
 
 Type signature uses ``::``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/sige.fnk
+   :language: finkel
 
-    (:: 42 Int) ; Finkel
-
-.. code-block:: haskell
-
-   42 :: Int -- Haskell
+.. literalinclude:: ../include/language-syntax/expr/sige.hs
+   :language: haskell
 
 
 Pattern Matching
@@ -498,17 +400,11 @@ Pattern Matching
 A non-variable pattern requires parentheses, as in ``Just`` shown
 below:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/pat-maybe.fnk
+   :language: finkel
 
-   (case expr ; Finkel
-     (Just x) (+ x 1)
-     Nothing  0)
-
-.. code-block:: haskell
-
-   case expr of -- Haskell
-     Just x -> x + 1
-     Nothing -> 0
+.. literalinclude:: ../include/language-syntax/expr/pat-maybe.hs
+   :language: haskell
 
 
 As pattern
@@ -516,15 +412,11 @@ As pattern
 
 As pattern uses ``@``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/pat-as.fnk
+   :language: finkel
 
-  (let ((= (@ x (Just n)) expr)) ; Finkel
-    (+ n 1))
-
-.. code-block:: haskell
-
-  let x@(Just n) = expr -- Haskell
-  in  n + 1
+.. literalinclude:: ../include/language-syntax/expr/pat-as.hs
+   :language: haskell
 
 
 Irrefutable pattern
@@ -532,15 +424,11 @@ Irrefutable pattern
 
 Irrefutable patterns are expressed with ``~``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/pat-irf.fnk
+   :language: finkel
 
-   (let ((= ~(, a ~(, b c)) expr)) ; Finkel
-     (+ a (* b c)))
-
-.. code-block:: haskell
-
-   let ~(a, ~(b, c)) = expr -- Haskell
-   in  a + b * c
+.. literalinclude:: ../include/language-syntax/expr/pat-irf.hs
+   :language: haskell
 
 
 Operator expansion
@@ -549,17 +437,11 @@ Operator expansion
 The Operator expansion rule applies to patterns. For instance, the
 ``:`` constructor for a list is expanded with its pattern arguments:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/expr/pat-opexp.fnk
+   :language: finkel
 
-   (case expr ; Finkel
-     (: a1 a2 _) (+ a1 a2)
-     _ 0)
-
-.. code-block:: haskell
-
-   case expr of -- Haskell
-     a1 : a2 : _ -> a1 + a2
-     _ -> 0
+.. literalinclude:: ../include/language-syntax/expr/pat-opexp.hs
+   :language: haskell
 
 
 Declarations And Bindings
@@ -572,37 +454,19 @@ Algebraic datatype declaration uses ``data``. It does not use ``=``
 and ``|``. Optional ``deriving`` form may appear at the last element
 of the ``data`` form:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/data-d1.fnk
+   :language: finkel
 
-   (data (D1 a b) ; Finkel
-     C1
-     (C2 a)
-     (C3 b)
-     (deriving (Eq Show)))
-
-.. code-block:: haskell
-
-   data D1 a b
-     = C1
-     | C2 a
-     | C3 b
-     deriving (Eq, Show)
+.. literalinclude:: ../include/language-syntax/decl/data-d1.hs
+   :language: haskell
 
 Constructor with labeled fields are supported with ``{`` and ``}``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/data-d2.fnk
+   :language: finkel
 
-   (data (D2 a b) ; Finkel
-    (D2 {f1 a
-         f2 b
-         f3 Int}))
-
-.. code-block:: haskell
-
-   data D2 a b -- Haskell
-    = D2 { f1 :: a
-         , f2 :: b
-         , f3 :: Int }
+.. literalinclude:: ../include/language-syntax/decl/data-d2.hs
+   :language: haskell
 
 
 Type Synonym
@@ -610,13 +474,11 @@ Type Synonym
 
 Type synonym declaration uses ``type``. It does not use ``=``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/tysym.fnk
+   :language: finkel
 
-   (type (T1 a) (Maybe (, a Bool String))) ; Finkel
-
-.. code-block:: haskell
-
-   type T1 a = Maybe (a, Bool, String) -- Haskell
+.. literalinclude:: ../include/language-syntax/decl/tysym.hs
+   :language: haskell
 
 
 Datatype Renamings
@@ -624,13 +486,11 @@ Datatype Renamings
 
 Newtype declaration uses ``newtype``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/newtype.fnk
+   :language: finkel
 
-   (newtype N (N {unN Int})) ; Finkel
-
-.. code-block:: haskell
-
-   newtype N = N { unN :: Int } -- Haskell
+.. literalinclude:: ../include/language-syntax/decl/newtype.hs
+   :language: haskell
 
 
 Class
@@ -638,29 +498,19 @@ Class
 
 Type class declaration uses ``class``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/class.fnk
+   :language: finkel
 
-   (class (=> (Ord a) (C1 a)) ; Finkel
-     (:: m1 (-> a Int))
-     (= m1 _ 0)
-
-.. code-block:: haskell
-
-   class Ord a => C1 a where -- Haskell
-     m1 :: a -> Int
-     m1 _ = 0
+.. literalinclude:: ../include/language-syntax/decl/class.hs
+   :language: haskell
 
 Class instance declaration uses ``instance``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/instance.fnk
+   :language: finkel
 
-   (instance (C1 Int) ; Finkel
-     (= m1 n (+ n 1)))
-
-.. code-block:: haskell
-
-    instance C1 Int where -- Haskell
-      m1 n = n + 1
+.. literalinclude:: ../include/language-syntax/decl/instance.hs
+   :language: haskell
 
 
 Defaults for Overloaded Numeric Operations
@@ -668,13 +518,11 @@ Defaults for Overloaded Numeric Operations
 
 Default declaration is done with ``default``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/default.fnk
+   :language: finkel
 
-   (default Int Double) ; Finkel
-
-.. code-block:: haskell
-
-   default (Int, Double) -- Haskell
+.. literalinclude:: ../include/language-syntax/decl/default.hs
+   :language: haskell
 
 
 Type Signatures
@@ -682,53 +530,41 @@ Type Signatures
 
 Type signature uses ``::``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/tysig-one.fnk
+   :language: finkel
 
-   (:: f (-> Int Int Int)) ; Finkel
-
-.. code-block:: haskell
-
-   f :: Int -> Int -> Int -- Haskell
+.. literalinclude:: ../include/language-syntax/decl/tysig-one.hs
+   :language: haskell
 
 Single type signature could be used for multiple variables:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/tysig-many.fnk
+   :language: finkel
 
-   (:: (f g h) (-> Int Int)) ; Finkel
-
-
-.. code-block:: haskell
-
-   f, g, h :: Int -> Int -- Haskell
+.. literalinclude:: ../include/language-syntax/decl/tysig-many.hs
+   :language: haskell
 
 Constraints in type signature are expressed with ``=>``. The last
 element of the form ``=>`` should be a type:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/tysig-constraints.fnk
+   :language: finkel
 
-   (:: f (=> (Eq a) (Ord a) (-> a a))) ; Finkel
-
-.. code-block:: haskell
-
-   f :: Eq a, Ord a => a -> a -- Haskell
+.. literalinclude:: ../include/language-syntax/decl/tysig-constraints.hs
+   :language: haskell
 
 
 Fixity
 ^^^^^^
 
-It is possible to declare fixity and precedence with ``infix``,
-``infixl``, and ``infixr``:
+It is possible to declare fixity and precedence with ``infix``, ``infixl``, and
+``infixr``. Assuming ``$+$`` as a binary operator:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/fixity.fnk
+   :language: finkel
 
-   (= $+$ a b (+ a (f b))) ; Finkel
-   (infixr 6 $+$)
-
-.. code-block:: haskell
-
-   ($+$) a b = a + f b -- Haskell
-   infixr 6 $+$
-
+.. literalinclude:: ../include/language-syntax/decl/fixity.hs
+   :language: haskell
 
 Note that Finkel syntax is affected by the left and right
 associativity of operators, but not by the precedence of operators.
@@ -741,37 +577,27 @@ Function binding declaration uses ``=``. The form after ``=`` is the
 function name, the last form is the expression body. Rest of the forms
 are argument patterns:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/bind-simpl.fnk
+   :language: finkel
 
-   (= f1 x y z (+ x (* y z))) ; Finkel
-
-.. code-block:: haskell
-
-   f1 x y z = x + (y * z) -- Haskell
+.. literalinclude:: ../include/language-syntax/decl/bind-simpl.hs
+   :language: haskell
 
 Keyword ``where`` can appear in the right-hand side:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/bind-where.fnk
+   :language: finkel
 
-   (= f2 n ; Finkel
-     (where body
-       (= body (+ n 1))))
-
-.. code-block:: haskell
-
-   f2 n = body -- Haskell
-     where
-       body = n + 1
+.. literalinclude:: ../include/language-syntax/decl/bind-where.hs
+   :language: haskell
 
 Pattern bindings are similarly done with ``=``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/decl/bind-pat.fnk
+   :language: finkel
 
-    (= (Just x) (lookup k vs)) ; Finkel
-
-.. code-block:: haskell
-
-    Just x = lookup k vs -- Haskell
+.. literalinclude:: ../include/language-syntax/decl/bind-pat.hs
+   :language: haskell
 
 
 Modules
@@ -779,17 +605,11 @@ Modules
 
 Top-level module definition does not use ``where``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/module/simpl.fnk
+   :language: finkel
 
-   (module M1) ; Finkel
-   (= x 1)
-   (= y 2)
-
-.. code-block:: haskell
-
-   module M1 where -- Haskell
-   x = 1
-   y = 2
+.. literalinclude:: ../include/language-syntax/module/simpl.hs
+   :language: haskell
 
 See also `defmodule <https://hackage.haskell.org>`_ in
 ``finkel-lang``.
@@ -802,31 +622,11 @@ Module definition can contain an explicit export list. Entities in the
 export list can contain bindings, type and data constructors, type
 classes, and modules:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/module/export-list.fnk
+   :language: finkel
 
-  (module M2 ; Finkel
-    f1           ; Value, field name, or class method
-    (T1)         ; Type constructor only
-    (T2 ..)      ; Type constructor and all of its data constructors
-    (T3 T3a T3b) ; Type constructor and specified data constructors
-    (T4 t4f1)    ; Type constructor and field label
-
-    (module Data.Char)      ; Module reexport
-    (Mb.Maybe Just Nothing) ; Reexport with a qualified name
-    )
-
-.. code-block:: haskell
-
-   module M2 -- Haskell
-     ( f1           -- Value, field name, or class method
-     , T1           -- Type constructor only
-     , T2(..)       -- Type constructor and all of its data constructors
-     , T3(T3a, T3b) -- Type constructor and specified data constructors
-     , T4(t4f1)     -- Type constructor and field label
-
-     , module Data.Char        -- Module reexport
-     , Mb.Maybe(Just, Nothing) -- Reexport with a qualified name
-     ) where
+.. literalinclude:: ../include/language-syntax/module/export-list.hs
+   :language: haskell
 
 
 Import Declarations
@@ -834,54 +634,44 @@ Import Declarations
 
 Module import declarations use ``import``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/import/simpl.fnk
+   :language: finkel
 
-   (import Data.Maybe) ; Finkel
-
-.. code-block:: haskell
-
-   import Data.Maybe -- Haskell
+.. literalinclude:: ../include/language-syntax/import/simpl.hs
+   :language: haskell
 
 Qualified import declarations use ``qualified`` and optional ``as``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/import/qualified-as.fnk
+   :language: finkel
 
-   (import qualified Data.Maybe as Mb) ; Finkel
-
-.. code-block:: haskell
-
-   import qualified Data.Maybe as Mb -- Haskell
+.. literalinclude:: ../include/language-syntax/import/qualified-as.hs
+   :language: haskell
 
 Entity lists use list:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/import/entity-list.fnk
+   :language: finkel
 
-   (import Data.Maybe (catMaybes fromMaybe)) ; Finkel
-
-.. code-block:: haskell
-
-   import Data.Maybe (catMaybes, fromMaybe) -- Haskell
+.. literalinclude:: ../include/language-syntax/import/entity-list.hs
+   :language: haskell
 
 Hiding specified entities with ``hiding``. Form after ``hiding`` is a
 list of entity names to hide:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/import/hiding.fnk
+   :language: finkel
 
-   (import Data.Maybe hiding (fromJust fromMaybe)) ; Finkel
-
-.. code-block:: haskell
-
-   import Data.Maybe hiding (fromJust, fromMaybe) -- Haskell
+.. literalinclude:: ../include/language-syntax/import/hiding.hs
+   :language: haskell
 
 Altogether:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/import/altogether.fnk
+   :language: finkel
 
-   (import qualified Data.Maybe as Mb hiding (fromJust)) ; Finkel
-
-.. code-block:: haskell
-
-   import qualified Data.Maybe as Mb hiding (fromJust) -- Haskell
+.. literalinclude:: ../include/language-syntax/import/altogether.hs
+   :language: haskell
 
 
 Foreign Function Interfaces
@@ -892,36 +682,30 @@ Foreign Import
 
 Foreign import declarations start with ``foreign`` ``import``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/ffi/import.fnk
+   :language: finkel
 
-   (foreign import ccall safe "string.h strlen" ; Finkel
-     (:: cstrlen (-> (Ptr CChar) (IO CSize))))
+.. literalinclude:: ../include/language-syntax/ffi/import.hs
+   :language: haskell
 
-.. code-block:: haskell
-
-   foreign import ccall safe "string.h strlen" -- Haskell
-     cstrlen :: Ptr CChar -> IO CSize
 
 Foreign Export
 ^^^^^^^^^^^^^^
 
 Foreign export declarations start with ``foreign`` ``export``:
 
-.. code-block:: finkel
+.. literalinclude:: ../include/language-syntax/ffi/export.fnk
+   :language: finkel
 
-   (foreign export ccall "addInt"
-     (:: + (-> Int Int Int)))
-
-.. code-block:: haskell
-
-   foreign export ccall "addInt"
-     (+) :: Int -> Int -> Int
+.. literalinclude:: ../include/language-syntax/ffi/export.hs
+   :language: haskell
 
 
 Compiler Pragmas
 ----------------
 
 All pragmas use ``#p(..)`` form.
+
 
 Inlining
 ^^^^^^^^
@@ -948,6 +732,7 @@ GHC specific phase controls are also supported:
    {-# INLINE [1] bar #-} -- Haskell
    {-# NOINLINE [~2] buzz #-}
 
+
 Specialization
 ^^^^^^^^^^^^^^
 
@@ -961,6 +746,7 @@ Pragmas to control specialization of overloaded function use
 .. code-block:: haskell
 
    {-# SPECIALIZE factorial :: Int -> Int #-} -- Haskell
+
 
 Language extensions
 ^^^^^^^^^^^^^^^^^^^

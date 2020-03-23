@@ -1,0 +1,5 @@
+(data (D1 a b) ; Finkel
+  C1
+  (C2 a)
+  (C3 b)
+  (deriving (Eq Show)))

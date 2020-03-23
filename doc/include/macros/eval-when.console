@@ -1,0 +1,12 @@
+$ finkel make -fno-code -ddump-parsed eval-when.fnk
+
+==================== Parser ====================
+module Main where
+main :: IO ()
+main
+  = do putStrLn ";;; eval-when ;;;"
+       putStrLn "Hello macro!"
+       putStrLn "Goodbye."
+
+
+[1 of 1] Compiling Main             ( eval-when.fnk, nothing )

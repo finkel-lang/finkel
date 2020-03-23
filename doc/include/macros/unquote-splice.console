@@ -1,0 +1,11 @@
+$ finkel make -fno-code -ddump-parsed unquote-splice.fnk
+
+==================== Parser ====================
+module Main where
+main :: IO ()
+main
+  = do putStrLn (concat ["foo", "bar", "buzz"])
+       putStrLn (concat ["foo", "bar", "buzz"])
+
+
+[1 of 1] Compiling Main             ( unquote-splice.fnk, nothing )

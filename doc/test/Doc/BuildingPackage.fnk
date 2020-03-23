@@ -1,0 +1,113 @@
+;;;; Test codes for "building-package.rst".
+
+(defmodule Doc.BuildingPackage
+  (export spec)
+  (import
+   ;; base
+   (Control.Exception (bracket))
+   (Control.Monad (zipWithM_))
+   (Data.List (sort))
+   (System.Exit ((ExitCode ..)))
+   (System.Process ((CreateProcess ..) createProcess proc waitForProcess))
+
+   ;; directory
+   (System.Directory
+    (canonicalizePath doesDirectoryExist doesFileExist getTemporaryDirectory
+                      listDirectory removeDirectoryRecursive))
+
+   ;; filepath
+   (System.FilePath (</> takeExtension))
+
+   ;; hspec
+   (Test.Hspec ((Spec) describe expectationFailure it pendingWith shouldBe))
+
+   ;; Internal
+   (Doc.TestAux)))
+
+
+;;; Spec
+
+(defn (:: spec Spec)
+  (describe "building cabal package"
+    (it "matches package made with hsfiles template"
+      (do (<- build-tool get-build-tool)
+          (case build-tool
+            Cabal (pendingWith "not running with cabal-install")
+            Stack compare-new-package)))))
+
+
+;;; Auxiliary
+
+(defn (:: compare-new-package (IO ()))
+  (bracket make-tmp-dir
+           remove-tmp-dir
+           compare-package-dirs))
+
+(defn (:: make-tmp-dir (IO (, FilePath String)))
+  (fmap (flip (,) "my-new-package") getTemporaryDirectory))
+
+(defn (:: remove-tmp-dir (-> (, FilePath String) (IO ())))
+  (. removeDirectoryRecursive (uncurry </>)))
+
+(defn (:: compare-package-dirs (-> (, FilePath String) (IO ())))
+  [(, tmpdir pkgname)]
+  (do (<- ec (stack-new tmpdir pkgname))
+      (case ec
+        ExitSuccess (compare-directory-contents
+                     (</> "include" "building-package" pkgname)
+                     (</> tmpdir pkgname))
+        _ (expectationFailure "stack new failed"))))
+
+(defn (:: compare-directory-contents (-> FilePath FilePath (IO ())))
+  "Recursively compare directory contents."
+  [path1 path2]
+  (do (<- path1-is-file (doesFileExist path1))
+      (<- path2-is-file (doesFileExist path2))
+      (if (&& path1-is-file path2-is-file)
+          (do (<- contents1 (readFile path1))
+              (<- contents2 (readFile path2))
+              (shouldBe contents1 contents2))
+          (do (<- path1-is-dir (doesDirectoryExist path1))
+              (<- path2-is-dir (doesDirectoryExist path2))
+              (if (&& path1-is-dir path2-is-dir)
+                  (do (<- ls1 (list-directory path1))
+                      (<- ls2 (list-directory path2))
+                      (let ((= add-dir dir (map (</> dir)))
+                            (= ls1' (add-dir path1 ls1))
+                            (= ls2' (add-dir path2 ls2))))
+                      (zipWithM_ compare-directory-contents ls1' ls2'))
+                  (expectationFailure (++ "differed: " path1 ", " path2)))))))
+
+(defn (:: list-directory (-> FilePath (IO [FilePath])))
+  "List directory contents, filter outs some ignored files."
+  (let ((= ignored path
+          (&& (/= ".stack-work" path)
+              (/= ".tix" (takeExtension path)))))
+    (. (fmap (. sort (filter ignored))) listDirectory)))
+
+(defn (:: stack-new (-> FilePath String (IO ExitCode)))
+  "Run stack new command to generate new package."
+  [dir pkgname]
+  ;; Temporary new package for comparison is always generated with "lts-15"
+  ;; resolver, since the prepared package contents is generated with that
+  ;; version.
+  (do (<- template get-template-path)
+      (run (Just dir)
+           "stack" ["--resolver" "lts-15" "--silent" "new" pkgname
+                    "--omit-packages" template])))
+
+(defn (:: get-template-path (IO FilePath))
+  "Get canonicalized template path."
+  ;; XXX: May move template to separate repository to support
+  ;; `github:finkel-lang/simple' style template argument.
+  ;;
+  ;; See: https://docs.haskellstack.org/en/stable/GUIDE/#templates
+  ;;
+  (canonicalizePath (</> ".." "tool" "finkel.hsfiles")))
+
+(defn (:: run (-> (Maybe String) String [String] (IO ExitCode)))
+  "Run command and wait."
+  [mb-dir cmd args]
+  (do (<- (, _mbin _mbout _mberr ph)
+        (createProcess ((proc cmd args) {cwd mb-dir})))
+      (waitForProcess ph)))

@@ -33,7 +33,7 @@ source code.
 Open a new file and save following contents to a file named
 ``eval-when.fnk``:
 
-.. literalinclude:: ../code/macro/eval-when.fnk
+.. literalinclude:: ../include/macros/eval-when.fnk
    :language: finkel
 
 In the above example, ``(require (Finkel.Prelude))`` is added in the
@@ -56,20 +56,8 @@ surrounded by parentheses.
 One can run the compiler with the ``-ddump-parsed`` option to observe
 the parsed Haskell representation:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed eval-when.fnk
-
-   ==================== Parser ====================
-   module Main where
-   main :: IO ()
-   main
-     = do putStrLn ";;; eval-when ;;;"
-          putStrLn "Hello macro!"
-          putStrLn "Goodbye."
-
-
-   [1 of 1] Compiling Main             ( eval-when.fnk, nothing )
+.. literalinclude:: ../include/macros/eval-when.console
+   :language: console
 
 
 Defining Macro With ``macrolet``
@@ -79,26 +67,14 @@ One can add a temporary macro with the ``macrolet`` macro. Following
 ``macrolet.fnk`` example do similar work done in the previous example,
 but using ``macrolet`` instead of ``eval-when`` and ``defmacro``.
 
-.. literalinclude:: ../code/macro/macrolet.fnk
+.. literalinclude:: ../include/macros/macrolet.fnk
    :language: finkel
 
 Note that single ``macrolet`` form can define multiple temporary
 macros.
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed macrolet.fnk
-
-   ==================== Parser ====================
-   module Main where
-   main :: IO ()
-   main
-     = do putStrLn ";;; macrolet ;;;"
-          putStrLn "Hello macro!"
-          putStrLn "Goodbye."
-
-
-   [1 of 1] Compiling Main             ( macrolet.fnk, nothing )
+.. literalinclude:: ../include/macros/macrolet.console
+   :language: console
 
 
 Loading Macros With ``require``
@@ -108,7 +84,7 @@ Another way to add macros to the current module is to ``require`` a
 module containing macros. Open a file named ``RequireMe.fnk`` and save
 the following code:
 
-.. literalinclude:: ../code/macro/RequireMe.fnk
+.. literalinclude:: ../include/macros/RequireMe.fnk
    :language: finkel
 
 Note that the ``RequireMe`` module has the ``import`` of
@@ -118,33 +94,17 @@ defined in ``RequireMe`` are not for itself, but other modules.
 Next, open and edit another file named ``require.fnk`` to require the
 ``RequireMe`` module:
 
-.. literalinclude:: ../code/macro/require.fnk
+.. literalinclude:: ../include/macros/require.fnk
    :language: finkel
 
 Compilation output:
 
-.. code-block:: console
-
-   $ finkel make -dynamic-too RequireMe.fnk require.fnk
-
-   [1 of 2] Compiling RequireMe        ( RequireMe.fnk, RequireMe.o )
-
-   ==================== Parser ====================
-   module Main where
-   main :: IO ()
-   main
-     = do putStrLn ";;; require ;;;"
-          putStrLn "Hello macro!"
-          putStrLn "Goodbye."
-
-
-   [2 of 2] Compiling Main             ( require.fnk, require.o )
-   Linking doc/code/macro/require ...
+.. literalinclude:: ../include/macros/require.console
+   :language: console
 
 Unlike the previous two examples, one needs to generate an object code
 of the ``RequireMe`` module so that the macro functions defined in
 ``RequireMe`` could be used in the file ``require.fnk``.
-
 
 .. note::
 
@@ -161,7 +121,7 @@ Macro can *unquote* and *unquote-splice* a form inside
 
 Open a new file named ``unquote.fnk`` and save the following contents:
 
-.. literalinclude:: ../code/macro/unquote.fnk
+.. literalinclude:: ../include/macros/unquote.fnk
    :language: finkel
 
 The example defines two macros: ``uq1`` and ``uq2``. Both macros use
@@ -174,19 +134,8 @@ with ``,``.
 
 Observing parsed result with ``-ddump-parsed``:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed unquote.fnk
-
-   ==================== Parser ====================
-   module Main where
-   main :: IO ()
-   main
-     = do putStrLn ("uq1: arg = " ++ show "foo")
-          putStrLn "uq2: arg = \"bar\""
-
-
-   [1 of 1] Compiling Main             ( unquote.fnk, nothing )
+.. literalinclude:: ../include/macros/unquote.console
+   :language: console
 
 Parsed Haskell representation shows ``++`` in the expanded form of
 ``uq1`` macro. Expanded result of ``uq2`` evaluates ``++`` at the time
@@ -196,24 +145,12 @@ of macro expansion, so the resulting form of ``uq2`` is a literal
 Inside the quasi-quoted form, ``,@`` is used to unquote-splice a list
 form. The ``,@`` can unquote-splice a quoted list and a Haskell list.
 
-.. literalinclude:: ../code/macro/unquote-splice.fnk
+.. literalinclude:: ../include/macros/unquote-splice.fnk
    :language: finkel
 
 Observing parsed Haskell code:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed unquote-splice.fnk
-
-   ==================== Parser ====================
-   module Main where
-   main :: IO ()
-   main
-     = do putStrLn (concat ["foo", "bar", "buzz"])
-          putStrLn (concat ["foo", "bar", "buzz"])
-
-
-   [1 of 1] Compiling Main             ( unquote-splice.fnk, nothing )
+.. literalinclude:: ../include/macros/unquote-splice.console
 
 
 Getting Macro Arguments As A List
@@ -223,22 +160,13 @@ Macro can take its entire argument as a list form. Below example codes
 show a macro which takes entire arguments passed to it as a list named
 ``args``:
 
-.. literalinclude:: ../code/macro/arglist.fnk
+.. literalinclude:: ../include/macros/arglist.fnk
    :language: finkel
 
 Parsed Haskell code:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed arglist.fnk
-
-   ==================== Parser ====================
-   module Main where
-   main :: IO ()
-   main = putStrLn (unwords ["foo", "bar", "buzz"])
-
-
-   [1 of 1] Compiling Main             ( arglist.fnk, nothing )
+.. literalinclude:: ../include/macros/arglist.console
+   :language: console
 
 
 Getting Values From Macro Arguments
@@ -246,7 +174,7 @@ Getting Values From Macro Arguments
 
 One can obtain Haskell values from arguments passed to macro:
 
-.. literalinclude:: ../code/macro/fib-macro.fnk
+.. literalinclude:: ../include/macros/fib-macro.fnk
    :language: finkel
 
 The above example applies the ``fromCode`` function to the macro
@@ -258,17 +186,8 @@ the function during macro expansion.
 
 Sample compilation output:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed fib-macro.fnk
-
-   ==================== Parser ====================
-   module Main where
-   main :: IO ()
-   main = print 55
-
-
-   [1 of 1] Compiling Main             ( fib-macro.fnk, nothing )
+.. literalinclude:: ../include/macros/fib-macro.console
+   :language: console
 
 
 Special forms
@@ -294,31 +213,13 @@ multiple top-level declarations. Following code shows an example use
 of ``:begin``, to return type synonym declarations from the
 ``nat-types`` macro:
 
-.. literalinclude:: ../code/macro/begin.fnk
+.. literalinclude:: ../include/macros/begin.fnk
    :language: finkel
 
 Observing parsed Haskell code:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed begin.fnk
-
-   ==================== Parser ====================
-   module Main where
-   import Data.Proxy
-   data Nat = Zero | Succ Nat
-   type N0 = 'Zero
-   type N1 = ('Succ 'Zero)
-   type N2 = ('Succ ('Succ 'Zero))
-   type N3 = ('Succ ('Succ ('Succ 'Zero)))
-   type N4 = ('Succ ('Succ ('Succ ('Succ 'Zero))))
-   type N5 = ('Succ ('Succ ('Succ ('Succ ('Succ 'Zero)))))
-   type N6 = ('Succ ('Succ ('Succ ('Succ ('Succ ('Succ 'Zero))))))
-   main :: IO ()
-   main = print (Proxy :: (Proxy N6))
-
-
-   [1 of 1] Compiling Main             ( begin.fnk, nothing )
+.. literalinclude:: ../include/macros/begin.console
+   :language: console
 
 
 :eval-when-compile
@@ -334,32 +235,13 @@ function ``wrap-actions`` is defined inside ``:eval-when-compile``, so
 that later the compiler can use the function in the ``doactions``
 macro.
 
-.. literalinclude:: ../code/macro/eval-when-compile.fnk
+.. literalinclude:: ../include/macros/eval-when-compile.fnk
    :language: finkel
 
 Parsed Haskell code:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed eval-when-compile.fnk
-
-   ==================== Parser ====================
-   module Main where
-   foo :: Int -> (IO ())
-   foo n
-     = do putStrLn "from foo"
-          print (n + 1)
-   bar :: Int -> Int -> (IO ())
-   bar a b
-     = do putStrLn "from bar"
-          print (a + (b * 2))
-   main :: IO ()
-   main
-     = do foo 41
-          bar 10 16
-
-
-   [1 of 1] Compiling Main             ( eval-when-compile.fnk, nothing )
+.. literalinclude:: ../include/macros/eval-when-compile.console
+   :language: console
 
 
 :quote
@@ -373,30 +255,13 @@ the ``finkel-kernel`` package.
 Following code shows how underlying Finkel kernel functions are
 applied to literal values in source code:
 
-.. literalinclude:: ../code/macro/quote.fnk
+.. literalinclude:: ../include/macros/quote.fnk
    :language: finkel
 
 Parsed Haskell source:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed quote.fnk
-
-   ==================== Parser ====================
-   module Main where
-   import Finkel.Prelude
-   main :: IO ()
-   main
-     = do putStrLn ";;; quote ;;;"
-          print (qSymbol "foo")
-          print (qSymbol "foo")
-          print (qInteger 42)
-          print (qInteger 42)
-          print (qString "string")
-          print (qString "string")
-
-
-   [1 of 1] Compiling Main             ( quote.fnk, nothing )
+.. literalinclude:: ../include/macros/quote.console
+   :language: console
 
 
 :quasiquote
@@ -408,18 +273,13 @@ syntax sugar. Inside a quasi-quoted form, ``:unquote`` and
 code. Indeed, ``,`` is a syntax sugar of ``:unquote``, and ``,@`` is a
 syntax sugar of ``:unquote-splice``.
 
-.. literalinclude:: ../code/macro/quasiquote.fnk
+.. literalinclude:: ../include/macros/quasiquote.fnk
    :language: finkel
 
 Above example prints ``True``:
 
-.. code-block:: console
-
-   $ finkel make -o a.out quasiquote.fnk
-   [1 of 1] Compiling Main             ( quasiquote.fnk, quasiquote.o )
-   Linking a.out ...
-   $ ./a.out
-   True
+.. literalinclude:: ../include/macros/quasiquote.console
+   :language: console
 
 
 :require
@@ -430,25 +290,13 @@ expansion. It also adds macros defined in the required module to the
 current compiler environment. This special form is used by the
 ``defmodule`` macro.
 
-.. literalinclude:: ../code/macro/raw-require.fnk
+.. literalinclude:: ../include/macros/raw-require.fnk
    :language: finkel
 
 Parsed Haskell code:
 
-.. code-block:: console
-
-   $ finkel make -fno-code -ddump-parsed raw-reruire.fnk
-
-   ==================== Parser ====================
-   module Main where
-   main :: IO ()
-   main
-     = do putStrLn ";;; raw-require.fnk ;;;"
-          putStrLn "Hello macro!"
-          putStrLn "Goodbye."
-
-
-   [1 of 1] Compiling Main             ( raw-require.fnk, nothing )
+.. literalinclude:: ../include/macros/raw-require.console
+   :language: console
 
 
 :with-macro

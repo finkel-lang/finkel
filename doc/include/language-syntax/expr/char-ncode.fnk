@@ -1,0 +1,1 @@
+(print [#'\97 #'\o141 #'\x61]) ; Finkel, prints "aaa"

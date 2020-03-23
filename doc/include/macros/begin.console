@@ -1,0 +1,18 @@
+$ finkel make -fno-code -ddump-parsed begin.fnk
+
+==================== Parser ====================
+module Main where
+import Data.Proxy
+data Nat = Zero | Succ Nat
+type N0 = 'Zero
+type N1 = 'Succ 'Zero
+type N2 = 'Succ ('Succ 'Zero)
+type N3 = 'Succ ('Succ ('Succ 'Zero))
+type N4 = 'Succ ('Succ ('Succ ('Succ 'Zero)))
+type N5 = 'Succ ('Succ ('Succ ('Succ ('Succ 'Zero))))
+type N6 = 'Succ ('Succ ('Succ ('Succ ('Succ ('Succ 'Zero)))))
+main :: IO ()
+main = print (Proxy :: Proxy N6)
+
+
+[1 of 1] Compiling Main             ( begin.fnk, nothing )

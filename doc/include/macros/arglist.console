@@ -1,0 +1,9 @@
+$ finkel make -fno-code -ddump-parsed arglist.fnk
+
+==================== Parser ====================
+module Main where
+main :: IO ()
+main = putStrLn (unwords ["foo", "bar", "buzz"])
+
+
+[1 of 1] Compiling Main             ( arglist.fnk, nothing )

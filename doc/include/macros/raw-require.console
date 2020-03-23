@@ -1,0 +1,12 @@
+$ finkel make -fno-code -ddump-parsed raw-require.fnk
+
+==================== Parser ====================
+module Main where
+main :: IO ()
+main
+  = do putStrLn ";;; raw-require.fnk ;;;"
+       putStrLn "Hello macro!"
+       putStrLn "Goodbye."
+
+
+[1 of 1] Compiling Main             ( raw-require.fnk, nothing )

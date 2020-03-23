@@ -1,0 +1,1 @@
+(type (T1 a) (Maybe (, a Bool String))) ; Finkel

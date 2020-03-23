@@ -12,25 +12,25 @@ To compile a Finkel source code file, one can use the ``make``
 sub-command. Open a file named ``hello.fnk`` with your favorite editor
 and save the file with the following contents:
 
-.. literalinclude:: ../code/hello.fnk
+.. literalinclude:: ../include/finkel-executable/hello.fnk
    :language: finkel
-
 
 Then invoke ``finkel make`` to compile the file. The command shown in
 the following line will compile the file as an executable named ``hello``:
 
-.. code-block:: console
-
-   $ finkel make -o hello hello.fnk
-   $ ./hello
-   Hello, World!
+.. literalinclude:: ../include/finkel-executable/hello.console
+   :language: console
 
 The ``make`` sub-command understands most of the options for the
 ``ghc`` executable ``--make`` mode:
 
+.. literalinclude:: ../include/finkel-executable/hello-prof.console
+   :language: console
+
+The compiled executable understands RTS options:
+
 .. code-block:: console
 
-   $ finkel make -o hello -fforce-recomp -prof -fprof-auto hello.fnk
    $ ./hello +RTS -s -p
    Hello, World!
              56,992 bytes allocated in the heap
@@ -84,7 +84,6 @@ invoke ``finkel repl``:
    > main
    Hello, World!
    > ,q
-   $
 
 
 From Emacs
@@ -104,17 +103,5 @@ Getting More Help
 The ``finkel`` executable contains a ``help`` sub-command to show
 brief usages of available commands:
 
-.. code-block:: console
-
-   $ finkel help make
-   USAGE: finkel make [command-line-options-and-files]
-
-   OPTIONS:
-
-       --fnk-debug      Show debug messages.
-       --fnk-dump-hs    Dump Haskell source code.
-       --fnk-help       Show this help.
-       --fnk-hsdir=DIR  Save Haskell source code to DIR.
-       --fnk-version    Dump Finkel version and exit.
-
-     Other options are passed to ghc.
+.. literalinclude:: ../include/finkel-executable/finkel-help-make.console
+   :language: console

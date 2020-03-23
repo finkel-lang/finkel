@@ -1,0 +1,13 @@
+$ finkel help make
+USAGE: finkel make [command-line-options-and-files]
+
+OPTIONS:
+
+    --fnk-debug      Show debug messages.
+    --fnk-dump-hs    Dump Haskell source code.
+    --fnk-help       Show this help.
+    --fnk-hsdir=DIR  Save Haskell source code to DIR.
+    --fnk-version    Dump Finkel version and exit.
+
+  Other options are passed to ghc.
+

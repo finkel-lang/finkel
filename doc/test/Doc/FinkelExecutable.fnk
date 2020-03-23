@@ -1,0 +1,24 @@
+;;;; Test codes for "finkel-executable.rst".
+
+(defmodule Doc.FinkelExecutable
+  (export spec)
+  (import
+   ;; base
+   (System.Info (os))
+
+   ;; filepath
+   (System.FilePath (</>))
+
+   ;; hspc
+   (Test.Hspec ((Spec) before_ describe))
+
+   ;; Internal
+   (Doc.TestAux)))
+
+(defn (:: spec Spec)
+  (let ((= dir (</> "include" "finkel-executable"))
+        (= skips [(, "hello.console" (const (== os "darwin")))]))
+    (before_
+     (remove-compiled [(</> dir "hello")])
+     (describe "using the finkel executable"
+       (run-console-tests dir skips)))))
