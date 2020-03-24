@@ -222,9 +222,13 @@ b_stringE (LForm (L l form))
 b_integerE :: Code -> Builder HExpr
 b_integerE (LForm (L l form))
   | Atom (AInteger x) <- form
-  = if x < 0
+#if MIN_VERSION_ghc(8,4,0)
+  = return $! expr x
+#else
+  = if il_value x < 0
        then return (L l (hsPar (expr x)))
        else return (expr x)
+#endif
   | otherwise = builderError
   where
     expr x = L l (hsOverLit $! mkHsIntegral_compat x)

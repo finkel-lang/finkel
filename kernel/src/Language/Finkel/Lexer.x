@@ -363,7 +363,7 @@ data Token
   -- ^ Character data.
   | TString SourceText String
   -- ^ Literal string data.
-  | TInteger Integer
+  | TInteger SourceText Integer
   -- ^ Literal integer number.
   | TFractional FractionalLit
   -- ^ Literal fractional number.
@@ -682,7 +682,7 @@ escapeChar inp0
 tok_integer :: Action
 tok_integer (AlexInput _ buf) l =
   let str = lexemeToString buf (fromIntegral l)
-  in  return $ TInteger $! read $! str
+  in  return $ TInteger (SourceText str) $! read $! str
 {-# INLINE tok_integer #-}
 
 tok_fractional :: Action

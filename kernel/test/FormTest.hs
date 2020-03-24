@@ -136,7 +136,7 @@ dataInstanceTests = do
         asym = ASymbol (fsLit "foo")
         achar = AChar NoSourceText 'a'
         astr = AString NoSourceText (fsLit "string")
-        aint = AInteger 42
+        aint = AInteger (mkIntegralLit (42 :: Int))
         afrac = aFractional (1.23 :: Double)
     it "should return Just self with simple gfoldl" $ do
       t_gfoldl_self aunit
@@ -276,8 +276,8 @@ functorTest str = do
 foldableTest :: Spec
 foldableTest = do
   let fsum = foldr (\x acc -> case x of
-                                AInteger n -> acc + n
-                                _          -> acc)
+                                AInteger il -> acc + il_value il
+                                _           -> acc)
                    0
   describe "taking sum of 1 to 10 with foldr" $ do
     let str1 = "(1 2 3 4 5 6 7 8 9 10)"
@@ -358,7 +358,7 @@ homoiconicTests = do
                  case fromCode (toCode x) of
                    Just y  -> y `shouldBe` x
                    Nothing -> error ("got Nothing with " ++ show x)
-  t (AInteger 42)
+  t (aIntegral (42 :: Int))
   t ()
   t 'x'
   t "string"
@@ -403,7 +403,7 @@ homoiconicTests = do
   t (Semigroup.Option (Just "foo"))
   t (Semigroup.WrapMonoid True)
   t (42 :: Natural)
-  t (Atom (AInteger 42))
+  t (Atom (aIntegral (42 :: Int)))
   t (parseE "(foo bar buzz)")
   t [True, False]
   t [EQ, LT, GT]

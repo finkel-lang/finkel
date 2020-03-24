@@ -23,7 +23,7 @@ instance Arbitrary Atom where
           , aSymbol <$> symbolG
           , AChar NoSourceText <$> arbitraryUnicodeChar
           , aString NoSourceText <$> stringG
-          , AInteger <$> arbitrary
+          , (AInteger . mkI) <$> arbitrary
           , aFractional <$> (arbitrary :: Gen Double) ]
     where
       headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "_!$%&*+./<=>?@^~:"
@@ -33,6 +33,8 @@ instance Arbitrary Atom where
         xs <- listOf (elements tailChars)
         return (x:xs)
       stringG = getUnicodeString <$> arbitrary
+      mkI :: Integer -> IntegralLit
+      mkI = mkIntegralLit
 
 instance CoArbitrary Atom where
   coarbitrary x =
@@ -41,7 +43,7 @@ instance CoArbitrary Atom where
       ASymbol s     -> var 1 . coarbitrary (unpackFS s)
       AChar _ c     -> var 2 . coarbitrary c
       AString _ s   -> var 3 . coarbitrary (unpackFS s)
-      AInteger i    -> var 4 . coarbitrary i
+      AInteger i    -> var 4 . coarbitrary (il_value i)
       AFractional d -> var 5 . coarbitrary (fl_value d)
     where
       var :: Int -> Gen a -> Gen a

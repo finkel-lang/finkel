@@ -127,13 +127,10 @@ instance FromCode Word where
   fromCode = integralFromCode
 
 instance ToCode Integer where
-  toCode = LForm . genSrc . Atom . AInteger
+  toCode = integralToCode
 
 instance FromCode Integer where
-  fromCode a =
-    case unCode a of
-      Atom (AInteger n) -> Just n
-      _                 -> Nothing
+  fromCode = integralFromCode
 
 instance ToCode Float where
   toCode = realFracToCode
@@ -607,12 +604,12 @@ showAsSymbolCode :: Show a => a -> Code
 showAsSymbolCode = symbolCode . show
 
 integralToCode :: Integral a => a -> Code
-integralToCode = LForm . genSrc . Atom . AInteger . fromIntegral
+integralToCode = LForm . genSrc . Atom . aIntegral
 
 integralFromCode :: Integral a => Code -> Maybe a
 integralFromCode a =
   case unCode a of
-    Atom (AInteger n) -> Just (fromIntegral n)
+    Atom (AInteger n) -> Just (fromIntegral (il_value n))
     _                 -> Nothing
 
 dataToCode :: Data d => d -> Code
@@ -630,9 +627,8 @@ dataToCode x =
                    | otherwise  -> str
       hd = toCode (aSymbol cstr)
   in  case constrRep constr of
-         IntConstr n   -> toCode (AInteger n)
-         FloatConstr f -> toCode (aFractional
-                                    (fromRational f :: Double))
+         IntConstr n   -> toCode (aIntegral n)
+         FloatConstr f -> toCode (aFractional (fromRational f :: Double))
          CharConstr c  -> toCode c
          _             ->
            case gmapQ dataToCode x of

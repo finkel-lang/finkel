@@ -23,6 +23,7 @@ module Language.Finkel.Form
 
   -- * Auxiliary functions
   , aFractional
+  , aIntegral
   , aSymbol
   , aString
   , genSrc
@@ -32,6 +33,10 @@ module Language.Finkel.Form
   , symbolNameFS
   , toListL
   , unCode
+
+  -- * Re-export
+  , IntegralLit (..)
+  , mkIntegralLit
   ) where
 
 -- base
@@ -45,7 +50,9 @@ import SrcLoc          (GenLocated (..), Located, SrcSpan (..), combineLocs,
                         srcSpanFile, srcSpanStartCol, srcSpanStartLine)
 
 #if MIN_VERSION_ghc(8,4,0)
-import BasicTypes      (mkFractionalLit)
+import BasicTypes      (IntegralLit (..), mkFractionalLit, mkIntegralLit)
+#else
+import Data.Function   (on)
 #endif
 
 -- deepseq
@@ -64,7 +71,7 @@ data Atom
   | ASymbol                {-# UNPACK #-} !FastString
   | AChar       SourceText {-# UNPACK #-} !Char
   | AString     SourceText {-# UNPACK #-} !FastString
-  | AInteger                               Integer
+  | AInteger               {-# UNPACK #-} !IntegralLit
   | AFractional            {-# UNPACK #-} !FractionalLit
   deriving (Data, Typeable, Generic)
 
@@ -94,7 +101,7 @@ instance Show Atom where
         ' '  -> "#'\\SP"
         _    -> ['#', '\'', c]
       AString _ s -> showsPrec d s
-      AInteger i -> showsPrec d i
+      AInteger il -> showsPrec d (il_value il)
       AFractional f -> showString (fl_text_compat f)
 
 instance NFData Atom where
@@ -104,7 +111,7 @@ instance NFData Atom where
       ASymbol fs    -> seq fs ()
       AChar _ c     -> seq c ()
       AString _ str -> seq str ()
-      AInteger i    -> rnf i
+      AInteger i    -> rnf (il_value i)
       AFractional y -> seq y ()
 
 -- | Form type. Also used as token. Elements of recursive structures
@@ -236,7 +243,7 @@ qString = quoted . Atom . aString NoSourceText
 
 -- | Make quoted integer from 'Integer'.
 qInteger :: Integer -> Code
-qInteger = quoted . Atom . AInteger
+qInteger = quoted . Atom . AInteger . mkIntegralLit
 
 -- | Make quoted fractional from read value.
 qFractional :: (Real a, Show a) => a -> Code
@@ -270,6 +277,11 @@ aFractional :: (Real a, Show a) => a -> Atom
 aFractional x = AFractional $! mkFractionalLit x
 {-# SPECIALIZE aFractional :: Double -> Atom #-}
 {-# SPECIALIZE aFractional :: Float -> Atom #-}
+
+aIntegral :: Integral a => a -> Atom
+aIntegral x = AInteger $! mkIntegralLit x
+{-# SPECIALIZE aIntegral :: Integer -> Atom #-}
+{-# SPECIALIZE aIntegral :: Int -> Atom #-}
 
 -- | A form with empty 'List'.
 nil :: Code
@@ -352,4 +364,26 @@ fl_text_compat fl = str
 -- | 'mkFractionalLit' did not exist in 8.2.x.
 mkFractionalLit :: Real a => a -> FractionalLit
 mkFractionalLit x = FL (show (realToFrac x :: Double)) (toRational x)
+
+-- | IntegralLit back ported to 8.2.x.
+data IntegralLit
+  = IL { il_text  :: SourceText
+       , il_neg   :: Bool
+       , il_value :: Integer
+       }
+  deriving (Data, Show)
+
+mkIntegralLit :: Integral a => a -> IntegralLit
+mkIntegralLit i = IL { il_text = SourceText (show i_integer)
+                     , il_neg = i < 0
+                     , il_value = i_integer }
+  where
+    i_integer :: Integer
+    i_integer = toInteger i
+
+instance Eq IntegralLit where
+  (==) = (==) `on` il_value
+
+instance Ord IntegralLit where
+  compare = compare `on` il_value
 #endif

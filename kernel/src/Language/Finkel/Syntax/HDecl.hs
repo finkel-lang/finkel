@@ -440,7 +440,7 @@ b_defaultD types = L l (defD (defaultDecl types))
 
 b_fixityD :: FixityDirection -> Code -> [Code] -> Builder HDecl
 b_fixityD dir (LForm (L l form)) syms
-  | Atom (AInteger n) <- form = do
+  | Atom (AInteger (IL {il_value=n})) <- form = do
     let lname (LForm (L l0 x))
           | (Atom (ASymbol name)) <- x
           = return (L l0 (mkRdrName name))
@@ -618,7 +618,7 @@ b_inlineD ispec mb_act (LForm (L l form))
 b_activation :: (SourceText -> PhaseNum -> Activation)
              -> Code -> Builder Activation
 b_activation f code@(LForm (L _l atom))
-  | Atom (AInteger n) <- atom = return (f source (fromIntegral n))
+  | Atom (AInteger il) <- atom = return (f source (fromIntegral (il_value il)))
   -- Supporting symbols in "~N" form, where "N" is an integer.
   | Atom (ASymbol s) <- atom
   , '~':rest <- unpackFS s

@@ -63,7 +63,7 @@ import           Language.Finkel.Syntax
 'symbol'  { L _ (TSymbol _) }
 'char'    { L _ (TChar _ _) }
 'string'  { L _ (TString _ _) }
-'integer' { L _ (TInteger _) }
+'integer' { L _ (TInteger _ _) }
 'frac'    { L _ (TFractional _) }
 
 'doc'     { L _ (TDocNext _) }
@@ -168,7 +168,11 @@ mkAString (L l (TString st x)) = atom l $ aString st x
 {-# INLINE mkAString #-}
 
 mkAInteger :: Located Token -> Code
-mkAInteger (L l (TInteger x)) = atom l $ AInteger x
+mkAInteger (L l (TInteger st n)) = atom l $ AInteger lit
+  where
+    lit = IL { il_text = st
+             , il_neg = n < 0
+             , il_value = n }
 {-# INLINE mkAInteger #-}
 
 mkAFractional :: Located Token -> Code

@@ -165,7 +165,7 @@ b_tyLitT :: Code -> Builder HType
 b_tyLitT (LForm (L l form))
   | Atom (AString _ str) <- form =
     return (mkLit l (HsStrTy (SourceText (show str)) str))
-  | Atom (AInteger n) <- form =
+  | Atom (AInteger (IL {il_value=n})) <- form =
     return (mkLit l (HsNumTy (SourceText (show n)) n))
   | otherwise = builderError
   where

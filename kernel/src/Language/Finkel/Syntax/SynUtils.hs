@@ -8,28 +8,23 @@ import           Data.Char               (isUpper)
 -- ghc
 import           Bag                     (consBag, emptyBag, listToBag)
 import           BasicTypes              (SourceText (..))
-import           FastString              (FastString, fsLit, headFS,
-                                          unpackFS)
+import           FastString              (FastString, fsLit, headFS, unpackFS)
 import           HaddockUtils            (addConDoc)
-import           HsBinds                 (HsBindLR (..),
-                                          HsLocalBindsLR (..),
-                                          HsValBindsLR (..),
-                                          emptyLocalBinds)
-import           HsDecls                 (HsDecl (..), InstDecl (..),
-                                          LConDecl, LDataFamInstDecl,
-                                          LDocDecl, LFamilyDecl,
-                                          LTyFamInstDecl, TyClDecl (..))
+import           HsBinds                 (HsBindLR (..), HsLocalBindsLR (..),
+                                          HsValBindsLR (..), emptyLocalBinds)
+import           HsDecls                 (HsDecl (..), InstDecl (..), LConDecl,
+                                          LDataFamInstDecl, LDocDecl,
+                                          LFamilyDecl, LTyFamInstDecl,
+                                          TyClDecl (..))
 import           HsDoc                   (LHsDocString)
-import           HsExpr                  (GRHSs (..), LGRHS, LHsExpr,
-                                          LMatch, Match (..),
-                                          MatchGroup (..))
+import           HsExpr                  (GRHSs (..), LGRHS, LHsExpr, LMatch,
+                                          Match (..), MatchGroup (..))
 import           HsLit                   (HsOverLit (..))
 import           HsPat                   (HsRecField' (..), LHsRecField,
                                           LHsRecUpdField)
-import           HsTypes                 (AmbiguousFieldOcc (..),
-                                          FieldOcc (..), HsTyVarBndr (..),
-                                          HsType (..), LHsContext,
-                                          mkFieldOcc)
+import           HsTypes                 (AmbiguousFieldOcc (..), FieldOcc (..),
+                                          HsTyVarBndr (..), HsType (..),
+                                          LHsContext, mkFieldOcc)
 import           HsUtils                 (mkFunBind, mkHsIntegral)
 import           Lexeme                  (isLexCon, isLexConSym, isLexVar,
                                           isLexVarSym)
@@ -39,9 +34,9 @@ import           OrdList                 (OrdList, fromOL, toOL)
 import           RdrHsSyn                (cvTopDecls)
 import           RdrName                 (RdrName, mkQual, mkUnqual,
                                           mkVarUnqual, nameRdrName)
-import           SrcLoc                  (GenLocated (..), Located,
-                                          SrcSpan, combineLocs,
-                                          combineSrcSpans, noLoc, unLoc)
+import           SrcLoc                  (GenLocated (..), Located, SrcSpan,
+                                          combineLocs, combineSrcSpans, noLoc,
+                                          unLoc)
 import           TysWiredIn              (consDataConName)
 
 #if MIN_VERSION_ghc(8,8,0)
@@ -59,12 +54,7 @@ import           HsDoc                   (HsDocString (..))
 #if MIN_VERSION_ghc(8,6,0)
 import           HsExtension             (noExt)
 #else
-import           PlaceHolder             (PlaceHolder (..),
-                                          placeHolderType)
-#endif
-
-#if MIN_VERSION_ghc(8,4,0)
-import           BasicTypes              (IntegralLit (..))
+import           PlaceHolder             (PlaceHolder (..), placeHolderType)
 #endif
 
 -- Internal
@@ -325,19 +315,15 @@ hsDocString = HsDocString
 
 -- | Auxiliary function to absorb version compatibiity of
 -- 'mkHsIntegral'.
-mkHsIntegral_compat :: Integer -> HsOverLit PARSED
-mkHsIntegral_compat n =
+mkHsIntegral_compat :: IntegralLit -> HsOverLit PARSED
+mkHsIntegral_compat il =
 #if MIN_VERSION_ghc(8,6,0)
-    mkHsIntegral (IL { il_text = SourceText (show n)
-                     , il_neg = n < 0
-                     , il_value = n })
+    mkHsIntegral il
 #elif MIN_VERSION_ghc(8,4,0)
-    mkHsIntegral (IL { il_text = SourceText (show n)
-                     , il_neg = n < 0
-                     , il_value = n })
-                 placeHolderType
+    mkHsIntegral il placeHolderType
 #else
     mkHsIntegral (SourceText (show n)) n placeHolderType
+      where n = il_value il
 #endif
 {-# INLINE mkHsIntegral_compat #-}
 

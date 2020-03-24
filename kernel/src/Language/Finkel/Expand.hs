@@ -100,7 +100,7 @@ quoteAtom qual l form =
     ASymbol s     -> li [tSym l (qSymbolS qual), tString l NoSourceText s]
     AChar st c    -> li [tSym l (qCharS qual), tChar l st c]
     AString st s  -> li [tSym l (qStringS qual), tString l st s]
-    AInteger n    -> li [tSym l (qIntegerS qual), tInteger l n]
+    AInteger il   -> li [tSym l (qIntegerS qual), tInteger l il]
     AFractional n -> li [tSym l (qFractionalS qual), tFractional l n]
     AUnit         -> tSym l (qUnitS qual)
   where
@@ -658,8 +658,8 @@ tString :: SrcSpan -> SourceText -> FastString -> Code
 tString l st s = LForm (L l (Atom (AString st s)))
 {-# INLINE tString #-}
 
-tInteger :: SrcSpan -> Integer -> Code
-tInteger l n = LForm (L l (Atom (AInteger n)))
+tInteger :: SrcSpan -> IntegralLit -> Code
+tInteger l il = LForm (L l (Atom (AInteger il)))
 {-# INLINE tInteger #-}
 
 tFractional :: SrcSpan -> FractionalLit -> Code

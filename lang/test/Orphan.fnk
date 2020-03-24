@@ -30,7 +30,7 @@
                    (fmap aSymbol symbolG)
                    (fmap (AChar NoSourceText) arbitraryUnicodeChar)
                    (fmap (aString NoSourceText) stringG)
-                   (fmap AInteger arbitrary)
+                   (fmap (. AInteger mkI) arbitrary)
                    (fmap aFractional (:: arbitrary (Gen Double)))])
       (= headChars
         (++ [#'A .. #'Z] [#'a .. #'z] "_!$%*+./<=>?@^~:"))
@@ -41,7 +41,9 @@
             (<- xs (listOf (elements tailChars)))
             (return (: x xs))))
       (= stringG
-        (fmap getUnicodeString arbitrary)))))
+        (fmap getUnicodeString arbitrary))
+      (:: mkI (-> Integer IntegralLit))
+      (= mkI mkIntegralLit))))
 
 (instance (=> (Arbitrary a) (Arbitrary (Form a)))
   (= arbitrary
