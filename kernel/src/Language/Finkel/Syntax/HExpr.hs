@@ -10,7 +10,7 @@ import Data.List                       (foldl', foldl1')
 
 -- ghc
 import BasicTypes                      (Arity, Boxity (..), FractionalLit (..),
-                                        Origin (..), fl_value)
+                                        Origin (..))
 import FastString                      (FastString, lengthFS, unpackFS)
 import HsDoc                           (HsDocString)
 import HsExpr                          (ArithSeqInfo (..), GRHS (..),
@@ -230,17 +230,21 @@ b_integerE (LForm (L l form))
     expr x = L l (hsOverLit $! mkHsIntegral_compat x)
 {-# INLINE b_integerE #-}
 
-b_floatE :: Code -> Builder HExpr
-b_floatE (LForm (L l form))
+b_fracE :: Code -> Builder HExpr
+b_fracE (LForm (L l form))
   | Atom (AFractional x) <- form
+#if MIN_VERSION_ghc(8,4,0)
+  = return (expr x)
+#else
   = if fl_value x < 0
        then return (L l (hsPar (expr x)))
        else return (expr x)
+#endif
   | otherwise
   = builderError
   where
     expr x = L l (hsOverLit $! hsFractional x)
-{-# INLINE b_floatE #-}
+{-# INLINE b_fracE #-}
 
 b_varE :: Code -> Builder HExpr
 b_varE (LForm (L l form))

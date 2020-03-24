@@ -719,7 +719,7 @@ atom_no_idsym :: { HExpr }
     : 'char'    {% b_charE $1 }
     | 'string'  {% b_stringE $1 }
     | 'integer' {% b_integerE $1 }
-    | 'frac'    {% b_floatE $1 }
+    | 'frac'    {% b_fracE $1 }
     | 'unit'    { b_unitE $1 }
     | 'hslist'  {% b_hsListE `fmap` parse p_hlist (unListL $1) }
 

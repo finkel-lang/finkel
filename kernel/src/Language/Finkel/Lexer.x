@@ -692,8 +692,8 @@ tok_fractional (AlexInput _ buf) l =
 #if MIN_VERSION_ghc(8,4,0)
      let stxt = SourceText str
          is_neg = if 0 < rat
-                     then True
-                     else False
+                     then False
+                     else True
      return $! TFractional $! FL stxt is_neg rat
 #else
      return $! TFractional $! FL str rat
