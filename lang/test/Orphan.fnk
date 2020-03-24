@@ -12,7 +12,7 @@
 (defmodule Orphan
   (import
    ;; ghc
-   (BasicTypes ((FractionalLit ..)))
+   (BasicTypes ((FractionalLit ..) (SourceText ..)))
    (FastString (unpackFS))
    (SrcLoc ((GenLocated ..)))
 
@@ -28,7 +28,7 @@
   (= arbitrary
     (where (oneof [(return AUnit)
                    (fmap aSymbol symbolG)
-                   (fmap AChar arbitraryUnicodeChar)
+                   (fmap (AChar NoSourceText) arbitraryUnicodeChar)
                    (fmap aString stringG)
                    (fmap AInteger arbitrary)
                    (fmap aFractional (:: arbitrary (Gen Double)))])

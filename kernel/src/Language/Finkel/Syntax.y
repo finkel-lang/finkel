@@ -198,7 +198,7 @@ import Language.Finkel.Syntax.SynUtils
 
 -- Plain constructors
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
-'char'    { LForm (L _ (Atom (AChar _))) }
+'char'    { LForm (L _ (Atom (AChar _ _))) }
 'string'  { LForm (L _ (Atom (AString _))) }
 'integer' { LForm (L _ (Atom (AInteger _))) }
 'frac'    { LForm (L _ (Atom (AFractional _))) }

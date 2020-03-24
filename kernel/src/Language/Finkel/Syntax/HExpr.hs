@@ -9,9 +9,8 @@ module Language.Finkel.Syntax.HExpr where
 import Data.List                       (foldl', foldl1')
 
 -- ghc
-import BasicTypes                      (Arity, Boxity (..),
-                                        FractionalLit (..), Origin (..),
-                                        SourceText (..), fl_value)
+import BasicTypes                      (Arity, Boxity (..), FractionalLit (..),
+                                        Origin (..), SourceText (..), fl_value)
 import FastString                      (FastString, lengthFS, unpackFS)
 import HsDoc                           (HsDocString)
 import HsExpr                          (ArithSeqInfo (..), GRHS (..),
@@ -30,8 +29,7 @@ import Lexeme                          (isLexCon, isLexSym)
 import OrdList                         (toOL)
 import RdrHsSyn                        (mkRdrRecordCon, mkRdrRecordUpd)
 import RdrName                         (RdrName, getRdrName)
-import SrcLoc                          (GenLocated (..), Located, getLoc,
-                                        noLoc)
+import SrcLoc                          (GenLocated (..), Located, getLoc, noLoc)
 import TysWiredIn                      (tupleDataCon)
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -207,8 +205,8 @@ mkAppType (dL->expr@(L l _)) ty =
 
 b_charE :: Code -> Builder HExpr
 b_charE (LForm (L l form))
-  | Atom (AChar x) <- form
-  = return (L l (hsLit (HsChar (SourceText (show x)) x)))
+  | Atom (AChar st x) <- form
+  = return (L l (hsLit (HsChar st x)))
   | otherwise
   = builderError
 {-# INLINE b_charE #-}

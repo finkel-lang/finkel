@@ -131,7 +131,7 @@ False
   (defpred "True when the argument is an 'AString'."
       is-string (Atom (AString _)))
   (defpred "True when the argument is an 'AChar'."
-      is-char (Atom (AChar _)))
+      is-char (Atom (AChar _ _)))
   (defpred "True when the argument is an 'AInteger'."
       is-integer (Atom (AInteger _)))
   (defpred "True when the argument is an 'AFractional'."

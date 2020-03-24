@@ -39,14 +39,13 @@ import Data.Data       (Data, Typeable)
 import GHC.Generics    (Generic)
 
 -- ghc
-import BasicTypes      (FractionalLit (..))
+import BasicTypes      (FractionalLit (..), SourceText (..))
 import FastString      (FastString, fsLit, unpackFS)
-import SrcLoc          (GenLocated (..), Located, SrcSpan (..),
-                        combineLocs, srcSpanFile, srcSpanStartCol,
-                        srcSpanStartLine)
+import SrcLoc          (GenLocated (..), Located, SrcSpan (..), combineLocs,
+                        srcSpanFile, srcSpanStartCol, srcSpanStartLine)
 
 #if MIN_VERSION_ghc(8,4,0)
-import BasicTypes      (SourceText (..), mkFractionalLit)
+import BasicTypes      (mkFractionalLit)
 #endif
 
 -- deepseq
@@ -62,19 +61,29 @@ import Control.DeepSeq (NFData (..))
 -- | Atom in tokens.
 data Atom
   = AUnit
-  | ASymbol {-# UNPACK #-} !FastString
-  | AChar {-# UNPACK #-} !Char
-  | AString {-# UNPACK #-} !FastString
-  | AInteger Integer
-  | AFractional {-# UNPACK #-} !FractionalLit
-  deriving (Eq, Data, Typeable, Generic)
+  | ASymbol                {-# UNPACK #-} !FastString
+  | AChar       SourceText {-# UNPACK #-} !Char
+  | AString                {-# UNPACK #-} !FastString
+  | AInteger                               Integer
+  | AFractional            {-# UNPACK #-} !FractionalLit
+  deriving (Data, Typeable, Generic)
+
+instance Eq Atom where
+  AUnit         == AUnit         = True
+  ASymbol x     == ASymbol y     = x == y
+  AChar _ x     == AChar _ y     = x == y
+  AString x     == AString y     = x == y
+  AInteger x    == AInteger y    = x == y
+  AFractional x == AFractional y = x == y
+  _             == _             = False
+  {-# INLINE (==) #-}
 
 instance Show Atom where
   showsPrec d x =
     case x of
       AUnit -> showString "()"
       ASymbol s -> showString (unpackFS s)
-      AChar c -> showString $ case c of
+      AChar _ c -> showString $ case c of
         '\a' -> "#'\\BEL"
         '\b' -> "#'\\BS"
         '\f' -> "#'\\FF"
@@ -93,7 +102,7 @@ instance NFData Atom where
     case x of
       AUnit         -> ()
       ASymbol fs    -> seq fs ()
-      AChar c       -> seq c ()
+      AChar _ c     -> seq c ()
       AString str   -> seq str ()
       AInteger i    -> rnf i
       AFractional y -> seq y ()
@@ -219,7 +228,7 @@ qSymbol = quoted . Atom . aSymbol
 
 -- | Make quoted char from 'Char'.
 qChar :: Char -> Code
-qChar = quoted . Atom . AChar
+qChar = quoted . Atom . AChar NoSourceText
 
 -- | Make quoted string from 'String'.
 qString :: String -> Code

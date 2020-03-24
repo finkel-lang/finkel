@@ -26,30 +26,26 @@ import           GHC.Exts                        (unsafeCoerce#)
 import qualified Data.Map                        as Map
 
 -- ghc
-import           BasicTypes                      (FractionalLit (..))
+import           BasicTypes                      (FractionalLit (..),
+                                                  SourceText (..))
 import           DynFlags                        (DynFlags (..),
                                                   GeneralFlag (..),
-                                                  GhcLink (..),
-                                                  HscTarget (..),
-                                                  getDynFlags, gopt,
-                                                  gopt_unset, updOptLevel,
-                                                  xopt_unset)
+                                                  GhcLink (..), HscTarget (..),
+                                                  getDynFlags, gopt, gopt_unset,
+                                                  updOptLevel, xopt_unset)
 import           ErrUtils                        (compilationProgressMsg)
 import           Exception                       (gbracket)
-import           FastString                      (FastString, appendFS,
-                                                  fsLit, headFS, unpackFS)
+import           FastString                      (FastString, appendFS, fsLit,
+                                                  headFS, unpackFS)
 import           Finder                          (findImportedModule)
-import           GHC                             (ModuleInfo,
-                                                  getModuleInfo,
+import           GHC                             (ModuleInfo, getModuleInfo,
                                                   lookupModule, lookupName,
-                                                  modInfoExports,
-                                                  setContext)
+                                                  modInfoExports, setContext)
 import           GhcMonad                        (GhcMonad (..))
 import           HscMain                         (Messager,
                                                   hscTcRnLookupRdrName,
                                                   showModuleIndex)
-import           HscTypes                        (FindResult (..),
-                                                  HscEnv (..),
+import           HscTypes                        (FindResult (..), HscEnv (..),
                                                   InteractiveImport (..),
                                                   showModMsg)
 import           HsImpExp                        (ImportDecl (..), ieName)
@@ -77,8 +73,7 @@ import           Language.Finkel.Fnk
 import           Language.Finkel.Form
 import           Language.Finkel.Homoiconic
 import           Language.Finkel.Syntax          (parseDecls, parseExpr,
-                                                  parseLImport,
-                                                  parseModule)
+                                                  parseLImport, parseModule)
 import           Language.Finkel.Syntax.SynUtils (cL, dL)
 
 
@@ -103,7 +98,7 @@ quoteAtom :: Bool -> SrcSpan -> Atom -> Code
 quoteAtom qual l form =
   case form of
     ASymbol s     -> li [tSym l (qSymbolS qual), tString l s]
-    AChar c       -> li [tSym l (qCharS qual), tChar l c]
+    AChar st c    -> li [tSym l (qCharS qual), tChar l st c]
     AString s     -> li [tSym l (qStringS qual), tString l s]
     AInteger n    -> li [tSym l (qIntegerS qual), tInteger l n]
     AFractional n -> li [tSym l (qFractionalS qual), tFractional l n]
@@ -655,8 +650,8 @@ tSym :: SrcSpan -> FastString -> Code
 tSym l s = LForm (L l (Atom (ASymbol s)))
 {-# INLINE tSym #-}
 
-tChar :: SrcSpan -> Char -> Code
-tChar l c = LForm (L l (Atom (AChar c)))
+tChar :: SrcSpan -> SourceText -> Char -> Code
+tChar l st c = LForm (L l (Atom (AChar st c)))
 {-# INLINE tChar #-}
 
 tString :: SrcSpan -> FastString -> Code

@@ -51,7 +51,7 @@ import qualified Data.Map                   as Map
 
 -- ghc
 import           ApiAnnotation              (AnnotationComment(..))
-import           BasicTypes                 (FractionalLit(..))
+import           BasicTypes                 (FractionalLit(..), SourceText(..))
 import           Encoding                   (utf8DecodeByteString)
 import           FastString                 (FastString,
                                              fastStringToByteString,
@@ -363,7 +363,7 @@ data Token
   -- ^ Comment.
   | TSymbol FastString
   -- ^ Symbol data.
-  | TChar Char
+  | TChar SourceText Char
   -- ^ Character data.
   | TString String
   -- ^ Literal string data.
@@ -572,11 +572,17 @@ tok_char inp0 _ = do
       | Just (c, inp') <- alexGetChar inp =
         case c of
           '\\' -> case escapeChar inp' of
-            Just (c', inp'') ->
-              alexSetInput inp'' >> (return $! TChar c')
+            Just (st, c', inp'') ->
+              do alexSetInput inp''
+                 return $! TChar st c'
             Nothing ->
-              alexSetInput inp' >> (return $! TChar '\\')
-          _    -> alexSetInput inp' >> (return $! TChar c)
+              do alexSetInput inp'
+                 return $! TChar (SourceText "'\\\\'") '\\'
+          _    ->
+            do alexSetInput inp'
+               let st | c == '\'' = '\'' : '\\' : c : "'"
+                      | otherwise = '\'' : c : "'"
+               return $! TChar (SourceText st) c
       | otherwise = alexError "tok_char.go1: panic"
 {-# INLINE tok_char #-}
 
@@ -599,31 +605,33 @@ tok_string inp@(AlexInput _ buf) _l =
           | c1 == '"'  -> return $! (TString (reverse acc), inp1)
           | c1 == '\\' ->
             case escapeChar inp1 of
-              Just (c1, inp2) -> go inp2 $! (c1:acc)
-              _               ->
+              Just (_st, c1, inp2) -> go inp2 $! (c1:acc)
+              _                    ->
                 case alexGetChar inp1 of
                   Just (c2, inp2) | c2 == '&' -> go inp2 $! acc
                   _                           -> Nothing
           | otherwise  -> go inp1 $! (c1:acc)
 {-# INLINE tok_string #-}
 
-escapeChar :: AlexInput -> Maybe (Char, AlexInput)
+escapeChar :: AlexInput -> Maybe (SourceText, Char, AlexInput)
 escapeChar inp0
   | Just (c1, inp1) <- alexGetChar inp0 =
-    let ret x = return $! (x, inp1)
+    let ret x = Just $! (SourceText (show x), x, inp1)
+        esc str = SourceText ('\'':'\\':str)
         numericChar test acc0 f =
           let lp inp acc =
                 case alexGetChar inp of
                   Just (c2, inp')
                     | test c2 -> lp inp' (c2:acc)
                     | otherwise ->
-                      return (Char.chr (read (f (reverse acc))), inp)
+                      let acc' = reverse acc
+                      in  Just (esc (acc'++"'"), Char.chr (read (f acc')), inp)
                   Nothing -> Nothing
           in lp inp1 acc0
         controlChar
           | Just (c2, inp2) <- alexGetChar inp1
           , c2 >= '@' && c2 <= '_' =
-            return (chr (ord c2 - ord '@'), inp2)
+            Just (esc ('^':c2:"'"), chr (ord c2 - ord '@'), inp2)
           | otherwise = Nothing
         lkup cs = lookup (C8.pack cs)
         bstbl = map (\(str,c) -> (C8.pack str, c))
@@ -660,9 +668,10 @@ escapeChar inp0
             | Just (c2, inp2) <- alexGetChar inp1
             , Just (c3, inp3) <- alexGetChar inp2
             -> case lkup [c1,c2,c3] tbl3 of
-                 Just c  -> Just (c, inp3)
+                 Just c  -> Just (esc [c1,c2,c3,'\''], c, inp3)
                  Nothing
-                   | Just c <- lkup [c1,c2] tbl2 -> Just (c, inp2)
+                   | Just c <- lkup [c1,c2] tbl2 ->
+                     Just (esc [c1,c2,'\''], c, inp2)
                  _ -> Nothing
             | otherwise -> Nothing
   | otherwise = Nothing

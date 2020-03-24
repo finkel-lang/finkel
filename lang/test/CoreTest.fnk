@@ -170,8 +170,8 @@
            (property (\ x
                        (==> (is-char (toCode x))
                             (case x
-                              (AChar _) True
-                              _         False))))))
+                              (AChar _ _) True
+                              _           False))))))
 
       (d "filtering integer"
          (it "should be AInteger"

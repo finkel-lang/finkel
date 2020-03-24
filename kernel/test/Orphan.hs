@@ -4,15 +4,14 @@
 module Orphan where
 
 -- ghc
-import BasicTypes           (FractionalLit (..))
+import BasicTypes           (FractionalLit (..), SourceText (..))
 import FastString           (unpackFS)
 import SrcLoc               (GenLocated (..))
 
 -- QuickCheck
 import Test.QuickCheck      (Arbitrary (..), CoArbitrary (..), Gen,
-                             arbitraryUnicodeChar, elements,
-                             getUnicodeString, listOf, oneof, scale,
-                             variant)
+                             arbitraryUnicodeChar, elements, getUnicodeString,
+                             listOf, oneof, scale, variant)
 
 -- Internal
 import Language.Finkel.Form
@@ -22,7 +21,7 @@ instance Arbitrary Atom where
   arbitrary =
     oneof [ return AUnit
           , aSymbol <$> symbolG
-          , AChar <$> arbitraryUnicodeChar
+          , AChar NoSourceText <$> arbitraryUnicodeChar
           , aString <$> stringG
           , AInteger <$> arbitrary
           , aFractional <$> (arbitrary :: Gen Double) ]
@@ -40,7 +39,7 @@ instance CoArbitrary Atom where
     case x of
       AUnit         -> var 0
       ASymbol sym   -> var 1 . coarbitrary (unpackFS sym)
-      AChar c       -> var 2 . coarbitrary c
+      AChar _ c     -> var 2 . coarbitrary c
       AString str   -> var 3 . coarbitrary (unpackFS str)
       AInteger i    -> var 4 . coarbitrary i
       AFractional d -> var 5 . coarbitrary (fl_value d)

@@ -30,7 +30,7 @@ import qualified Data.Functor.Sum      as Sum
 import qualified Data.Semigroup        as Semigroup
 
 -- ghc
-import           BasicTypes            (fl_value)
+import           BasicTypes            (SourceText(..), fl_value)
 import           FastString            (FastString, unpackFS)
 import           SrcLoc                (GenLocated (..), getLoc)
 
@@ -102,14 +102,14 @@ instance FromCode () where
       _          -> Nothing
 
 instance ToCode Char where
-  toCode = LForm . genSrc . Atom . AChar
+  toCode = LForm . genSrc . Atom . AChar NoSourceText
   listToCode = LForm . genSrc . Atom . aString
 
 instance FromCode Char where
   fromCode a =
     case unCode a of
-      Atom (AChar x) -> Just x
-      _              -> Nothing
+      Atom (AChar _ x) -> Just x
+      _                -> Nothing
   listFromCode a = case unCode a of
                      Atom (AString s) -> Just (unpackFS s)
                      _                -> Nothing

@@ -13,8 +13,8 @@ import FastString                      (headFS, nullFS, tailFS)
 import HsLit                           (HsLit (..))
 import HsPat                           (HsRecFields (..), Pat (..))
 import HsTypes                         (HsConDetails (..))
-import HsUtils                         (mkHsIsString, mkLHsSigWcType,
-                                        mkNPat, nlWildPat)
+import HsUtils                         (mkHsIsString, mkLHsSigWcType, mkNPat,
+                                        nlWildPat)
 import Lexeme                          (isLexCon, isLexConId, isLexConSym,
                                         isLexSym)
 import SrcLoc                          (GenLocated (..))
@@ -68,8 +68,8 @@ b_stringP (LForm (L l form))
 
 b_charP :: Code -> Builder HPat
 b_charP (LForm (dL->L l form))
-  | (Atom (AChar c)) <- form = return (cL l (LitPat NOEXT (lit c)))
-  | otherwise                = builderError
+  | (Atom (AChar _ c)) <- form = return (cL l (LitPat NOEXT (lit c)))
+  | otherwise                  = builderError
   where
     lit c = HsChar (SourceText (show c)) c
 {-# INLINE b_charP #-}

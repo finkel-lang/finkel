@@ -60,7 +60,7 @@ import           Language.Finkel.Syntax
 'pcommas' { L _ (TPcommas _) }
 
 'symbol'  { L _ (TSymbol _) }
-'char'    { L _ (TChar _) }
+'char'    { L _ (TChar _ _) }
 'string'  { L _ (TString _) }
 'integer' { L _ (TInteger _) }
 'frac'    { L _ (TFractional _) }
@@ -159,7 +159,7 @@ mkASymbol (L l (TSymbol x)) = atom l $ ASymbol x
 {-# INLINE mkASymbol #-}
 
 mkAChar :: Located Token -> Code
-mkAChar (L l (TChar x)) = atom l $ AChar x
+mkAChar (L l (TChar st x)) = atom l $ AChar st x
 {-# INLINE mkAChar #-}
 
 mkAString :: Located Token -> Code

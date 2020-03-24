@@ -27,7 +27,7 @@ import           Text.Show.Functions        ()
 import           Control.DeepSeq
 
 -- ghc
-import           BasicTypes                 (fl_value)
+import           BasicTypes                 (SourceText (..), fl_value)
 import           FastString                 (fsLit, unpackFS)
 import           SrcLoc                     (GenLocated (..), SrcSpan (..),
                                              noSrcSpan)
@@ -134,7 +134,7 @@ dataInstanceTests = do
   describe "Data instance for Atom" $ do
     let aunit = AUnit
         asym = ASymbol (fsLit "foo")
-        achar = AChar 'a'
+        achar = AChar NoSourceText 'a'
         astr = AString (fsLit "string")
         aint = AInteger 42
         afrac = aFractional (1.23 :: Double)
