@@ -162,8 +162,8 @@
            (property (\ x
                        (==> (is-string (toCode x))
                             (case x
-                              (AString _) True
-                              _           False))))))
+                              (AString _ _) True
+                              _             False))))))
 
       (d "filtering char"
          (it "should be AChar"

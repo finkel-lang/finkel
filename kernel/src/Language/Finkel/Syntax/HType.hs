@@ -10,20 +10,17 @@ import BasicTypes                      (Boxity (..), SourceText (..))
 import FastString                      (headFS, lengthFS, nullFS, tailFS)
 import HsDoc                           (LHsDocString)
 import HsTypes                         (HsSrcBang (..), HsTupleSort (..),
-                                        HsTyLit (..), HsType (..),
-                                        LHsTyVarBndr, SrcStrictness (..),
-                                        SrcUnpackedness (..),
-                                        mkAnonWildCardTy, mkHsAppTy,
-                                        mkHsAppTys, mkHsOpTy)
+                                        HsTyLit (..), HsType (..), LHsTyVarBndr,
+                                        SrcStrictness (..),
+                                        SrcUnpackedness (..), mkAnonWildCardTy,
+                                        mkHsAppTy, mkHsAppTys, mkHsOpTy)
 import Lexeme                          (isLexCon, isLexConSym, isLexVarSym)
-import OccName                         (NameSpace, dataName, tcName,
-                                        tvName)
+import OccName                         (NameSpace, dataName, tcName, tvName)
 import RdrHsSyn                        (setRdrNameSpace)
 import RdrName                         (getRdrName, mkQual, mkUnqual)
 import SrcLoc                          (GenLocated (..), Located, getLoc)
 import TysPrim                         (funTyCon)
-import TysWiredIn                      (consDataCon, listTyCon_RDR,
-                                        tupleTyCon)
+import TysWiredIn                      (consDataCon, listTyCon_RDR, tupleTyCon)
 
 #if MIN_VERSION_ghc(8,8,0)
 import BasicTypes                      (PromotionFlag (..))
@@ -166,7 +163,7 @@ b_funT (LForm (L l _)) ts =
 
 b_tyLitT :: Code -> Builder HType
 b_tyLitT (LForm (L l form))
-  | Atom (AString str) <- form =
+  | Atom (AString _ str) <- form =
     return (mkLit l (HsStrTy (SourceText (show str)) str))
   | Atom (AInteger n) <- form =
     return (mkLit l (HsNumTy (SourceText (show n)) n))
@@ -193,7 +190,7 @@ b_opOrAppT form@(LForm (L l ty)) typs
 
 b_prmConT :: Code -> Builder HType
 b_prmConT (LForm (L l form))
-  | Atom (AString str) <- form =
+  | Atom (AString _ str) <- form =
     let name = str
         rname =
           case name of
@@ -321,7 +318,7 @@ b_prmTupT prsr typs =
 isCommaSymbol :: Code -> Bool
 isCommaSymbol form
  | LForm (L _ (List [LForm (L _ qsym)
-                    ,LForm (L _ (Atom (AString ",")))])) <- form
+                    ,LForm (L _ (Atom (AString _ ",")))])) <- form
  = isQSymbol qsym
  | otherwise = False
 {-# INLINE isCommaSymbol #-}

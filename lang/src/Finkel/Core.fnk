@@ -118,7 +118,7 @@ module.")
                         ,decl)))
 
          (List [_ name doc arg body])
-         (| ((<- (Atom (AString _)) (unCode doc))
+         (| ((<- (Atom (AString _ _)) (unCode doc))
              (do (<- decl (macro-decl name arg body))
                  (return `(:begin
                             ,(make-tsig name)
@@ -482,7 +482,7 @@ Sample expansion:
                 Nothing (dmac `(_ ,name ,the-macro-arg ,body1))))))
     (case (unCode form)
       (List [_ name doc arg body])
-      (| ((<- (Atom (AString _)) (unCode doc))
+      (| ((<- (Atom (AString _ _)) (unCode doc))
           (make-def name (Just doc) arg body)))
 
       (List [_ name arg body])
@@ -589,7 +589,7 @@ Expansions of /m3/:
                          (let ((= ,tmp ,body))
                            (return ,tmp)))))))
     (case (unCode form)
-      (List [_ name (@ doc (LForm (L _ (Atom (AString _))))) args body])
+      (List [_ name (@ doc (LForm (L _ (Atom (AString _ _))))) args body])
       (build name (Just doc) args body)
 
       (List [_ name args body])
@@ -643,7 +643,7 @@ Sample runs:
 (:eval-when-compile
   (defmacro pAstring
     [val]
-    `(LForm (L _ (Atom (AString ,val))))))
+    `(LForm (L _ (Atom (AString _ ,val))))))
 
 (defmacro-m defn
   "Macro for defining function. Supports optional function type

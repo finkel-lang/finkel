@@ -10,7 +10,7 @@ import Data.List                       (foldl', foldl1')
 
 -- ghc
 import BasicTypes                      (Arity, Boxity (..), FractionalLit (..),
-                                        Origin (..), SourceText (..), fl_value)
+                                        Origin (..), fl_value)
 import FastString                      (FastString, lengthFS, unpackFS)
 import HsDoc                           (HsDocString)
 import HsExpr                          (ArithSeqInfo (..), GRHS (..),
@@ -213,9 +213,8 @@ b_charE (LForm (L l form))
 
 b_stringE :: Code -> Builder HExpr
 b_stringE (LForm (L l form))
-  | Atom (AString x) <- form
-  = return
-      (L l (hsLit (HsString (SourceText (show x)) x)))
+  | Atom (AString st x) <- form
+  = return (L l (hsLit (HsString st x)))
   | otherwise
   = builderError
 {-# INLINE b_stringE #-}
@@ -263,8 +262,8 @@ b_unitE (LForm (L l _)) = case mkLHsTupleExpr [] of L _ t -> L l t
 
 b_docString :: Code -> Builder (Located HsDocString)
 b_docString (LForm (L l form))
-  | Atom (AString x) <- form = return $! L l (hsDocString x)
-  | otherwise                = builderError
+  | Atom (AString _ x) <- form = return $! L l (hsDocString x)
+  | otherwise                  = builderError
 {-# INLINE b_docString #-}
 
 b_hsListE :: Either HExpr [HExpr] -> HExpr

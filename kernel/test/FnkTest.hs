@@ -7,6 +7,7 @@ import           Control.Monad.IO.Class
 import           Data.Maybe                 (fromMaybe, isNothing)
 
 -- ghc
+import           BasicTypes                 (SourceText (..))
 import           Exception                  (gbracket)
 import           FastString                 (fsLit)
 import           HscTypes                   (SourceError)
@@ -163,7 +164,7 @@ expandTest = do
           qt = fromMaybe (error "macro not found") mb_qt
           s x = LForm (genSrc (Atom (ASymbol (fsLit x))))
           li xs = LForm (genSrc (List xs))
-          t x = LForm (genSrc (Atom (AString (fsLit x))))
+          t x = LForm (genSrc (Atom (AString NoSourceText (fsLit x))))
           form0 = li [s ":quote", s "a"]
           form1 = li [s "qSymbol", t "a"]
       ret <- runFnk (macroFunction qt form0) env

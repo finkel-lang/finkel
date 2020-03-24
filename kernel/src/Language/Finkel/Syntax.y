@@ -25,8 +25,8 @@ module Language.Finkel.Syntax
   ) where
 
 -- ghc
-import BasicTypes ( Activation(..), FixityDirection(..)
-                  , InlineSpec(..), OverlapMode(..) )
+import BasicTypes ( Activation(..), FixityDirection(..), InlineSpec(..)
+                  , OverlapMode(..), SourceText(..) )
 import FastString (FastString)
 import ForeignCall (Safety)
 import HsDoc (LHsDocString)
@@ -199,7 +199,7 @@ import Language.Finkel.Syntax.SynUtils
 -- Plain constructors
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
 'char'    { LForm (L _ (Atom (AChar _ _))) }
-'string'  { LForm (L _ (Atom (AString _))) }
+'string'  { LForm (L _ (Atom (AString _ _))) }
 'integer' { LForm (L _ (Atom (AInteger _))) }
 'frac'    { LForm (L _ (Atom (AFractional _))) }
 'unit'    { LForm (L _ (Atom AUnit)) }
@@ -525,7 +525,7 @@ fixity :: { FixityDirection }
 foreign :: { HDecl }
     : 'foreign' 'symbol' ccnv {- safety -} {- "" -} 'list'
       {% do { (name, ty) <- parse p_sfsig $4
-            ; let entity = LForm (noLoc (Atom (AString "")))
+            ; let entity = LForm (noLoc (Atom (AString NoSourceText "")))
             ; b_ffiD $1 $2 $3 Nothing entity (name, ty) } }
     | 'foreign' 'symbol' ccnv {- safety -} fentity  'list'
       {% parse p_sfsig $5 >>= b_ffiD $1 $2 $3 Nothing $4 }

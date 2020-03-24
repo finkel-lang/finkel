@@ -116,7 +116,7 @@ readUnicodeStringProp =
     it "should return itself" $
       property (\uni ->
                   let str = getUnicodeString uni
-                  in  parseE (show str) == toCode (aString str))
+                  in  parseE (show str) == toCode (aString NoSourceText str))
 
 readShowFormProp :: Spec
 readShowFormProp =
@@ -135,7 +135,7 @@ dataInstanceTests = do
     let aunit = AUnit
         asym = ASymbol (fsLit "foo")
         achar = AChar NoSourceText 'a'
-        astr = AString (fsLit "string")
+        astr = AString NoSourceText (fsLit "string")
         aint = AInteger 42
         afrac = aFractional (1.23 :: Double)
     it "should return Just self with simple gfoldl" $ do
@@ -579,8 +579,8 @@ isHsListL (LForm (L _ (HsList _))) = True
 isHsListL _                        = False
 
 isStringL :: Code -> Bool
-isStringL (LForm (L _ (Atom (AString _)))) = True
-isStringL _                                = False
+isStringL (LForm (L _ (Atom (AString _ _)))) = True
+isStringL _                                  = False
 
 isUnitL :: Code -> Bool
 isUnitL (LForm (L _ (Atom AUnit))) = True

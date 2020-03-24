@@ -52,7 +52,7 @@ b_intP (LForm (L l form))
 
 b_stringP :: Code -> Builder HPat
 b_stringP (LForm (L l form))
-  | (Atom (AString str)) <- form
+  | (Atom (AString _ str)) <- form
   = return (cL l (mkNPat (L l (lit str)) Nothing))
   | otherwise
   = builderError

@@ -17,9 +17,9 @@ import           Data.Functor.Const    (Const (..))
 import           Data.Functor.Identity (Identity (..))
 import           Data.Int              (Int16, Int32, Int64, Int8)
 import           Data.List.NonEmpty    (NonEmpty (..))
-import           Data.Monoid           (All (..), Alt (..), Any (..),
-                                        Dual (..), First (..), Last (..),
-                                        Product (..), Sum (..))
+import           Data.Monoid           (All (..), Alt (..), Any (..), Dual (..),
+                                        First (..), Last (..), Product (..),
+                                        Sum (..))
 import           Data.Ratio            (Ratio, denominator, numerator, (%))
 import           Data.Version          (Version (..))
 import           Data.Word             (Word16, Word32, Word64, Word8)
@@ -30,7 +30,7 @@ import qualified Data.Functor.Sum      as Sum
 import qualified Data.Semigroup        as Semigroup
 
 -- ghc
-import           BasicTypes            (SourceText(..), fl_value)
+import           BasicTypes            (SourceText (..), fl_value)
 import           FastString            (FastString, unpackFS)
 import           SrcLoc                (GenLocated (..), getLoc)
 
@@ -103,7 +103,7 @@ instance FromCode () where
 
 instance ToCode Char where
   toCode = LForm . genSrc . Atom . AChar NoSourceText
-  listToCode = LForm . genSrc . Atom . aString
+  listToCode = LForm . genSrc . Atom . aString NoSourceText
 
 instance FromCode Char where
   fromCode a =
@@ -111,8 +111,8 @@ instance FromCode Char where
       Atom (AChar _ x) -> Just x
       _                -> Nothing
   listFromCode a = case unCode a of
-                     Atom (AString s) -> Just (unpackFS s)
-                     _                -> Nothing
+                     Atom (AString _ s) -> Just (unpackFS s)
+                     _                  -> Nothing
 
 instance ToCode Int where
   toCode = integralToCode

@@ -66,16 +66,12 @@ import           SrcLoc                     (GenLocated(..), Located,
                                              srcLocCol, srcLocLine)
 
 import           StringBuffer               (StringBuffer, atEnd,
-                                             byteDiff, currentChar,
+                                             byteDiff, cur, currentChar,
                                              lexemeToFastString,
                                              lexemeToString, nextChar,
                                              prevChar, stepOn)
 import qualified StringBuffer               as SB
 import           Util                       (readRational)
-
-#if MIN_VERSION_ghc(8,4,0)
-import           BasicTypes                 (SourceText(..))
-#endif
 
 -- ghc-boot
 import qualified GHC.LanguageExtensions     as LangExt
@@ -365,7 +361,7 @@ data Token
   -- ^ Symbol data.
   | TChar SourceText Char
   -- ^ Character data.
-  | TString String
+  | TString SourceText String
   -- ^ Literal string data.
   | TInteger Integer
   -- ^ Literal integer number.
@@ -593,8 +589,12 @@ tok_string inp@(AlexInput _ buf) _l =
   -- unhelpful error message on illegal escape sequence.
   case alexGetChar inp of
     Just ('"', inp1)
-      | Just (str, inp2) <- go inp1 "" ->
-        alexSetInput inp2 >> return str
+      | Just (TString _ str, inp2@(AlexInput _ buf2)) <- go inp1 "" ->
+        -- Refill the source text with string extracted with updated buffer
+        -- location.
+        do alexSetInput inp2
+           let src = lexemeToString buf (cur buf2 - cur buf)
+           return $! TString (SourceText src) str
     _ -> alexError ("lexical error in string: " ++
                     show (currentChar buf))
   where
@@ -602,7 +602,9 @@ tok_string inp@(AlexInput _ buf) _l =
       case alexGetChar inp0 of
         Nothing -> Nothing
         Just (c1, inp1)
-          | c1 == '"'  -> return $! (TString (reverse acc), inp1)
+          | c1 == '"'  -> do
+            let acc' = reverse acc
+            return $! (TString NoSourceText acc', inp1)
           | c1 == '\\' ->
             case escapeChar inp1 of
               Just (_st, c1, inp2) -> go inp2 $! (c1:acc)

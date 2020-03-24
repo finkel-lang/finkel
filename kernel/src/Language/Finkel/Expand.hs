@@ -97,9 +97,9 @@ quote qual orig@(LForm (L l form)) =
 quoteAtom :: Bool -> SrcSpan -> Atom -> Code
 quoteAtom qual l form =
   case form of
-    ASymbol s     -> li [tSym l (qSymbolS qual), tString l s]
+    ASymbol s     -> li [tSym l (qSymbolS qual), tString l NoSourceText s]
     AChar st c    -> li [tSym l (qCharS qual), tChar l st c]
-    AString s     -> li [tSym l (qStringS qual), tString l s]
+    AString st s  -> li [tSym l (qStringS qual), tString l st s]
     AInteger n    -> li [tSym l (qIntegerS qual), tInteger l n]
     AFractional n -> li [tSym l (qFractionalS qual), tFractional l n]
     AUnit         -> tSym l (qUnitS qual)
@@ -161,13 +161,13 @@ isUnquoteSplice (LForm form) =
 unquoteSplice :: ToCode a => a -> [Code]
 unquoteSplice form =
   case unCode (toCode form) of
-    List xs           -> xs
-    HsList xs         -> xs
-    Atom AUnit        -> []
-    Atom (AString xs) -> map toCode (unpackFS xs)
-    _                 -> throw (FinkelException
-                                  ("unquote splice: got " ++
-                                   show (toCode form)))
+    List xs             -> xs
+    HsList xs           -> xs
+    Atom AUnit          -> []
+    Atom (AString _ xs) -> map toCode (unpackFS xs)
+    _                   -> throw (FinkelException
+                                    ("unquote splice: got " ++
+                                     show (toCode form)))
 
 
 -- ---------------------------------------------------------------------
@@ -654,8 +654,8 @@ tChar :: SrcSpan -> SourceText -> Char -> Code
 tChar l st c = LForm (L l (Atom (AChar st c)))
 {-# INLINE tChar #-}
 
-tString :: SrcSpan -> FastString -> Code
-tString l s = LForm (L l (Atom (AString s)))
+tString :: SrcSpan -> SourceText -> FastString -> Code
+tString l st s = LForm (L l (Atom (AString st s)))
 {-# INLINE tString #-}
 
 tInteger :: SrcSpan -> Integer -> Code

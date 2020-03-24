@@ -29,7 +29,7 @@
     (where (oneof [(return AUnit)
                    (fmap aSymbol symbolG)
                    (fmap (AChar NoSourceText) arbitraryUnicodeChar)
-                   (fmap aString stringG)
+                   (fmap (aString NoSourceText) stringG)
                    (fmap AInteger arbitrary)
                    (fmap aFractional (:: arbitrary (Gen Double)))])
       (= headChars

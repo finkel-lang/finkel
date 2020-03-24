@@ -63,7 +63,7 @@ data Atom
   = AUnit
   | ASymbol                {-# UNPACK #-} !FastString
   | AChar       SourceText {-# UNPACK #-} !Char
-  | AString                {-# UNPACK #-} !FastString
+  | AString     SourceText {-# UNPACK #-} !FastString
   | AInteger                               Integer
   | AFractional            {-# UNPACK #-} !FractionalLit
   deriving (Data, Typeable, Generic)
@@ -72,7 +72,7 @@ instance Eq Atom where
   AUnit         == AUnit         = True
   ASymbol x     == ASymbol y     = x == y
   AChar _ x     == AChar _ y     = x == y
-  AString x     == AString y     = x == y
+  AString _ x   == AString _ y   = x == y
   AInteger x    == AInteger y    = x == y
   AFractional x == AFractional y = x == y
   _             == _             = False
@@ -93,7 +93,7 @@ instance Show Atom where
         '\v' -> "#'\\VT"
         ' '  -> "#'\\SP"
         _    -> ['#', '\'', c]
-      AString s -> showsPrec d s
+      AString _ s -> showsPrec d s
       AInteger i -> showsPrec d i
       AFractional f -> showString (fl_text_compat f)
 
@@ -103,7 +103,7 @@ instance NFData Atom where
       AUnit         -> ()
       ASymbol fs    -> seq fs ()
       AChar _ c     -> seq c ()
-      AString str   -> seq str ()
+      AString _ str -> seq str ()
       AInteger i    -> rnf i
       AFractional y -> seq y ()
 
@@ -232,7 +232,7 @@ qChar = quoted . Atom . AChar NoSourceText
 
 -- | Make quoted string from 'String'.
 qString :: String -> Code
-qString = quoted . Atom . aString
+qString = quoted . Atom . aString NoSourceText
 
 -- | Make quoted integer from 'Integer'.
 qInteger :: Integer -> Code
@@ -260,8 +260,8 @@ aSymbol = ASymbol . fsLit
 {-# INLINE aSymbol #-}
 
 -- | Auxiliary function to construct 'AString' atom.
-aString :: String -> Atom
-aString = AString . fsLit
+aString :: SourceText -> String -> Atom
+aString st = AString st . fsLit
 {-# INLINE aString #-}
 
 -- | Auxiliary function to construct an 'Atom' containing

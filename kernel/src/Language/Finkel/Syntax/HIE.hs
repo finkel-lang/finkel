@@ -8,8 +8,8 @@ import FastString                      (unpackFS)
 import FieldLabel                      (FieldLbl (..))
 import HsDoc                           (LHsDocString)
 import HsImpExp                        (IE (..), IEWildcard (..),
-                                        IEWrappedName (..),
-                                        ImportDecl (..), simpleImportDecl)
+                                        IEWrappedName (..), ImportDecl (..),
+                                        simpleImportDecl)
 import HsSyn                           (HsModule (..))
 import Lexeme                          (isLexCon)
 import Module                          (mkModuleNameFS)
@@ -80,7 +80,7 @@ b_ieSym form@(LForm (L l _)) = do
 b_ieGroup :: Int -> Code -> Builder HIE
 b_ieGroup n form@(LForm (L l body))
   | List [_, doc_code] <- body
-  , Atom (AString doc) <- unCode doc_code
+  , Atom (AString _ doc) <- unCode doc_code
   = return $! L l (IEGroup NOEXT (fromIntegral n) (hsDocString doc))
   | otherwise
   = setLastToken form >> failB "Invalid group documentation"
@@ -88,7 +88,7 @@ b_ieGroup n form@(LForm (L l body))
 
 b_ieDoc :: Code -> Builder HIE
 b_ieDoc (LForm (L l form))
-  | Atom (AString str) <- form =
+  | Atom (AString _ str) <- form =
     return $! L l (IEDoc NOEXT (hsDocString str))
   | otherwise = builderError
 {-# INLINE b_ieDoc #-}

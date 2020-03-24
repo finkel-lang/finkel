@@ -10,47 +10,39 @@ import Data.Maybe                      (fromMaybe)
 
 -- ghc
 import BasicTypes                      (Activation (..), Fixity (..),
-                                        FixityDirection (..),
-                                        InlineSpec (..),
-                                        LexicalFixity (..),
-                                        OverlapMode (..), PhaseNum,
-                                        RuleMatchInfo (..),
+                                        FixityDirection (..), InlineSpec (..),
+                                        LexicalFixity (..), OverlapMode (..),
+                                        PhaseNum, RuleMatchInfo (..),
                                         SourceText (..))
 import DataCon                         (SrcStrictness (..))
 import FastString                      (FastString, unpackFS)
 import ForeignCall                     (CCallConv (..), CExportSpec (..),
                                         Safety (..))
-import HsBinds                         (FixitySig (..), HsBind,
-                                        HsBindLR (..), Sig (..))
+import HsBinds                         (FixitySig (..), HsBind, HsBindLR (..),
+                                        Sig (..))
 import HsDecls                         (ClsInstDecl (..), ConDecl (..),
-                                        DataFamInstDecl (..),
-                                        DefaultDecl (..), DocDecl (..),
-                                        FamilyDecl (..), FamilyInfo (..),
-                                        FamilyResultSig (..),
-                                        ForeignDecl (..),
-                                        ForeignExport (..),
+                                        DataFamInstDecl (..), DefaultDecl (..),
+                                        DocDecl (..), FamilyDecl (..),
+                                        FamilyInfo (..), FamilyResultSig (..),
+                                        ForeignDecl (..), ForeignExport (..),
                                         HsDataDefn (..), HsDecl (..),
-                                        HsDerivingClause (..),
-                                        InstDecl (..), LTyFamDefltEqn,
-                                        LTyFamInstDecl, NewOrData (..),
-                                        TyClDecl (..), TyFamInstDecl (..),
-                                        TyFamInstEqn)
+                                        HsDerivingClause (..), InstDecl (..),
+                                        LTyFamDefltEqn, LTyFamInstDecl,
+                                        NewOrData (..), TyClDecl (..),
+                                        TyFamInstDecl (..), TyFamInstEqn)
 import HsDoc                           (LHsDocString)
 import HsExpr                          (HsMatchContext (..), Match (..))
 import HsPat                           (Pat (..))
-import HsTypes                         (ConDeclField (..),
-                                        HsConDetails (..),
+import HsTypes                         (ConDeclField (..), HsConDetails (..),
                                         HsTyVarBndr (..), HsType (..),
-                                        mkFieldOcc, mkHsImplicitBndrs,
-                                        mkHsQTvs)
-import HsUtils                         (mkClassOpSigs, mkFunBind,
-                                        mkLHsSigType, mkLHsSigWcType)
+                                        mkFieldOcc, mkHsImplicitBndrs, mkHsQTvs)
+import HsUtils                         (mkClassOpSigs, mkFunBind, mkLHsSigType,
+                                        mkLHsSigWcType)
 import OccName                         (dataName, tcName)
 import OrdList                         (toOL)
 import Outputable                      (SDoc, showSDocUnsafe)
-import RdrHsSyn                        (mkATDefault, mkConDeclH98,
-                                        mkGadtDecl, mkInlinePragma,
-                                        parseCImport)
+import RdrHsSyn                        (mkATDefault, mkConDeclH98, mkGadtDecl,
+                                        mkInlinePragma, parseCImport)
 import RdrName                         (RdrName, mkUnqual)
 import SrcLoc                          (GenLocated (..), Located, SrcSpan,
                                         getLoc, noLoc, unLoc)
@@ -501,7 +493,7 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty) =
       lname = L ln (mkRdrName name)
       LForm (L ln (Atom (ASymbol name))) = nm
       tsig = mkLHsSigType ty
-      LForm (L _ls (Atom (AString ename'_fs))) = ename
+      LForm (L _ls (Atom (AString _ ename'_fs))) = ename
       ename' = unpackFS ename'_fs
       source =
          case ename' of
@@ -660,14 +652,14 @@ specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig) = do
 
 b_docnextD :: Code -> Builder HDecl
 b_docnextD (LForm (L l form))
-  | Atom (AString str) <- form =
+  | Atom (AString _ str) <- form =
     return $! L l (DocD NOEXT (docCommentNext str))
   | otherwise                  = builderError
 {-# INLINE b_docnextD #-}
 
 b_docprevD :: Code -> Builder HDecl
 b_docprevD (LForm (L l form))
-  | Atom (AString str) <- form =
+  | Atom (AString _ str) <- form =
     return $! L l (DocD NOEXT (DocCommentPrev (hsDocString str)))
   | otherwise                  = builderError
 {-# INLINE b_docprevD #-}
@@ -675,7 +667,7 @@ b_docprevD (LForm (L l form))
 b_docGroupD :: Int -> Code -> Builder HDecl
 b_docGroupD n form@(LForm (L l _))
   | List [_,doc_code] <- unCode form
-  , Atom (AString doc) <- unCode doc_code
+  , Atom (AString _ doc) <- unCode doc_code
   = return $! L l (DocD NOEXT (DocGroup (fromIntegral n)
                                         (hsDocString doc)))
   | otherwise = setLastToken form >> failB "Invalid group doc"
@@ -685,7 +677,7 @@ b_docNamed :: Code -> Builder HDecl
 b_docNamed form@(LForm (L l body))
   | List [_,name_code,doc_code] <- body
   , Atom (ASymbol name) <- unCode name_code
-  , Atom (AString doc) <- unCode doc_code
+  , Atom (AString _ doc) <- unCode doc_code
   = let name' = unpackFS name
         doc' = hsDocString doc
     in return $! L l (DocD NOEXT (DocCommentNamed name' doc'))

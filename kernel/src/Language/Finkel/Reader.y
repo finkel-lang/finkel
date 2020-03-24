@@ -19,6 +19,7 @@ import           Data.Char              (toLower)
 import           Data.List              (foldl')
 
 -- ghc
+import           BasicTypes             (SourceText(..))
 import           FastString             (FastString, fsLit, unpackFS)
 import           HsImpExp               (ideclName)
 import           Module                 (moduleNameString)
@@ -61,7 +62,7 @@ import           Language.Finkel.Syntax
 
 'symbol'  { L _ (TSymbol _) }
 'char'    { L _ (TChar _ _) }
-'string'  { L _ (TString _) }
+'string'  { L _ (TString _ _) }
 'integer' { L _ (TInteger _) }
 'frac'    { L _ (TFractional _) }
 
@@ -163,7 +164,7 @@ mkAChar (L l (TChar st x)) = atom l $ AChar st x
 {-# INLINE mkAChar #-}
 
 mkAString :: Located Token -> Code
-mkAString (L l (TString x)) = atom l $ aString x
+mkAString (L l (TString st x)) = atom l $ aString st x
 {-# INLINE mkAString #-}
 
 mkAInteger :: Located Token -> Code
@@ -183,28 +184,31 @@ mkCcSymbol (L l _) = sym l "}"
 {-# INLINE mkCcSymbol #-}
 
 mkDoc :: Located Token -> Code
-mkDoc (L l (TDocNext str)) = li l [sym l ":doc", atom l (AString str)]
+mkDoc (L l (TDocNext str)) =
+  li l [sym l ":doc", atom l (AString (SourceText (unpackFS str)) str)]
 {-# INLINE mkDoc #-}
 
 mkDocp :: Located Token -> Code
-mkDocp (L l (TDocPrev str)) = li l [sym l ":doc^", atom l (AString str)]
+mkDocp (L l (TDocPrev str)) =
+  li l [sym l ":doc^", atom l (AString (SourceText (unpackFS str)) str)]
 {-# INLINE mkDocp #-}
 
 mkDoch :: Located Token -> Code
-mkDoch (L l (TDocGroup n s)) = li l [sym l dh, atom l (AString s)]
+mkDoch (L l (TDocGroup n s)) = li l [sym l dh, atom l (AString st s)]
   where
     dh = case n of
            1 -> ":dh1"
            2 -> ":dh2"
            3 -> ":dh3"
            _ -> ":dh4"
+    st = SourceText (unpackFS s)
 {-# INLINE mkDoch #-}
 
 mkDock :: Located Token -> Code
 mkDock (L l (TDocNamed k mb_doc)) =
   case mb_doc of
     Nothing -> li l pre
-    Just d  -> li l (pre ++ [atom l (AString d)])
+    Just d  -> li l (pre ++ [atom l (AString (SourceText (unpackFS d)) d)])
   where
     pre = [sym l ":doc$", atom l (ASymbol k)]
 {-# INLINE mkDock #-}
