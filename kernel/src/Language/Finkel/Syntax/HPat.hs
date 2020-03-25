@@ -5,7 +5,7 @@
 module Language.Finkel.Syntax.HPat where
 
 -- base
-import Data.List                       (foldl1')
+import Data.List                       (foldl')
 
 -- ghc
 import BasicTypes                      (Boxity (..), SourceText (..))
@@ -25,6 +25,7 @@ import SrcLoc                          (getLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
 import HsExtension                     (noExt)
+import HsUtils                         (nlConPat)
 #else
 import PlaceHolder                     (placeHolderType)
 #endif
@@ -187,12 +188,22 @@ b_conP forms is_paren rest =
       | isLexConId name -> prefixPat
       | isLexConSym name -> infixPat
       where
-       lrname = L l (mkVarRdrName name)
-       prefixPat =
-         return (mkParPat' (cL l (ConPatIn lrname (PrefixCon rest))))
-       infixPat =
-         let f lhp rhp = cL l (ConPatIn lrname (InfixCon lhp rhp))
-         in  return (mkParPat' (foldl1' f rest))
+        rname = mkVarRdrName name
+        lrname = L l rname
+#if MIN_VERSION_ghc(8,6,0)
+        prefixPat =
+          case dL (nlConPat rname rest) of
+            L _ pat -> return (cL l pat)
+#else
+        prefixPat =
+          return (mkParPat' (cL l (ConPatIn lrname (PrefixCon rest))))
+#endif
+        infixPat =
+          case rest of
+            (hd:rest') ->
+              let f lh rh = cL l (ConPatIn lrname (InfixCon lh rh))
+              in  return (mkParPat' (foldl' f hd rest'))
+            _ -> builderError
     _ -> builderError
 {-# INLINE b_conP #-}
 
