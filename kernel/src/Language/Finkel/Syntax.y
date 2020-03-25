@@ -501,8 +501,9 @@ finsthd :: { (Located FastString, [HType]) }
     : 'list' {% parse p_lfinsthd $1 }
 
 lfinsthd :: { (Located FastString, [HType]) }
-    : conid types {% do {n <- getConId $1
-                        ;case $1 of LForm (L l _) -> return (L l n,$2)} }
+    : conid types {% do { n <- getConId $1
+                        ; case $1 of
+                           LForm (L l _) -> return (L l n, map parTyApp $2) }}
 
 fameqs :: { [(Located FastString, [HType], HType)] }
     : rfameqs { reverse $1 }
@@ -767,9 +768,9 @@ app :: { ([HExpr], [HType]) }
 
 rapp :: { ([HExpr], [HType]) }
     : expr          { ([$1], []) }
-    | '@' type      { ([], [$2]) }
+    | '@' type      { ([], [parTyApp $2]) }
     | rapp expr     { case $1 of (es,ts) -> ($2:es,ts) }
-    | rapp '@' type { case $1 of (es,ts) -> (es,$3:ts) }
+    | rapp '@' type { case $1 of (es,ts) -> (es,parTyApp $3:ts) }
 
 matches :: { [HMatch] }
     : rmatches { reverse $1 }

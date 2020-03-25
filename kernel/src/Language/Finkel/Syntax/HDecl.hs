@@ -69,6 +69,7 @@ import HsDecls                         (TyFamEqn (..))
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Form
+import Language.Finkel.Syntax.HType
 import Language.Finkel.Syntax.SynUtils
 
 #include "Syntax.h"
@@ -197,7 +198,7 @@ b_conOnlyD name = b_conD name (PrefixCon [])
 
 -- XXX: Infix data constructor not supported.
 b_conDeclDetails :: [HType] -> HConDeclDetails
-b_conDeclDetails = PrefixCon
+b_conDeclDetails = PrefixCon . map parTyApp
 {-# INLINE b_conDeclDetails #-}
 
 b_recFieldsD :: [HConDeclField] -> HConDeclDetails

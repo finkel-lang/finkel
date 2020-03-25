@@ -5,6 +5,9 @@
 -- | Syntax for type.
 module Language.Finkel.Syntax.HType where
 
+-- base
+import Data.List                       (foldl')
+
 -- ghc
 import BasicTypes                      (Boxity (..), SourceText (..))
 import FastString                      (headFS, lengthFS, nullFS, tailFS)
@@ -13,12 +16,13 @@ import HsTypes                         (HsSrcBang (..), HsTupleSort (..),
                                         HsTyLit (..), HsType (..), LHsTyVarBndr,
                                         SrcStrictness (..),
                                         SrcUnpackedness (..), mkAnonWildCardTy,
-                                        mkHsAppTy, mkHsAppTys, mkHsOpTy)
+                                        mkHsAppTy, mkHsOpTy)
 import Lexeme                          (isLexCon, isLexConSym, isLexVarSym)
 import OccName                         (NameSpace, dataName, tcName, tvName)
 import RdrHsSyn                        (setRdrNameSpace)
 import RdrName                         (getRdrName, mkQual, mkUnqual)
-import SrcLoc                          (GenLocated (..), Located, getLoc)
+import SrcLoc                          (GenLocated (..), Located, addCLoc,
+                                        getLoc)
 import TysPrim                         (funTyCon)
 import TysWiredIn                      (consDataCon, listTyCon_RDR, tupleTyCon)
 
@@ -155,7 +159,7 @@ b_funT (LForm (L l _)) ts =
 #endif
     _            -> return (foldr1 f ts)
   where
-    f a@(L l1 _) b = L l1 (hsFunTy (parenthesizeHsType' funPrec a) b)
+    f a b = addCLoc a b (hsFunTy (parenthesizeHsType' funPrec a) b)
     hsFunTy = HsFunTy NOEXT
     funty = L l (hsTyVar NotPromoted (L l (getRdrName funTyCon)))
 {-# INLINE b_funT #-}
@@ -180,7 +184,7 @@ b_opOrAppT form@(LForm (L l ty)) typs
   , isLexConSym name =
     let lrname = L l (mkUnqual tcName name)
         f lhs rhs = L l (mkHsOpTy lhs lrname rhs)
-    in  return (L l (hsParTy (foldr1 f typs)))
+    in  return (foldr1 f (map (parenthesizeHsType' opPrec) typs))
   -- Var type application
   | otherwise =
     do op <- b_symT form
@@ -215,13 +219,12 @@ isQSymbol aform
 {-# INLINE isQSymbol #-}
 
 b_appT :: [HType] -> Builder HType
-b_appT []           = builderError
-b_appT whole@(x:xs) =
+b_appT []     = builderError
+b_appT (x:xs) =
   case xs of
     [] -> return x
-    _  -> return (L l0 (hsParTy (mkHsAppTys x xs)))
-  where
-    l0 = getLoc (mkLocatedList whole)
+    _  -> let f t1 t2 = addCLoc t1 t2 (HsAppTy NOEXT t1 (parTyApp t2))
+          in  return (foldl' f x xs)
 {-# INLINE b_appT #-}
 
 b_listT :: HType -> HType
@@ -243,7 +246,7 @@ b_tupT (LForm (L l _)) ts =
 {-# INLINE b_tupT #-}
 
 b_bangT :: Code -> HType -> HType
-b_bangT (LForm (L l _)) t = L l (hsBangTy srcBang t)
+b_bangT (LForm (L l _)) t = L l (hsBangTy srcBang (parTyApp t))
   where
     srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
 {-# INLINE b_bangT #-}
@@ -369,13 +372,17 @@ hsExplicitTupleTy tys =
 --
 -- ---------------------------------------------------------------------
 
-#if MIN_VERSION_ghc(8,6,0)
-
 -- Unlike "HsTypes.parenthesizeHsType" in ghc 8.6.x, does not
 -- parenthesize "HsBangTy" constructor, because
 -- "HsTypes.parenthesizeHsType" is used for parenthesizing argument in
 -- HsFunTy.
 
+-- | Parenthesize given 'HType' with 'appPrec'.
+parTyApp :: HType -> HType
+parTyApp = parenthesizeHsType' appPrec
+{-# INLINE parTyApp #-}
+
+#if MIN_VERSION_ghc(8,6,0)
 parenthesizeHsType' :: PprPrec -> HType -> HType
 parenthesizeHsType' p lty@(L _ ty)
   | HsBangTy {} <- ty = lty
