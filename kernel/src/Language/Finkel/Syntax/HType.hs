@@ -35,7 +35,6 @@ import PrelNames                       (eqTyCon_RDR)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import BasicTypes                      (PprPrec, funPrec)
 import HsTypes                         (parenthesizeHsType)
 #endif
 
@@ -394,15 +393,6 @@ parenthesizeHsType' :: PprPrec -> HType -> HType
 parenthesizeHsType' p lty@(L loc ty)
   | hsTypeNeedsParens p ty = L loc (HsParTy NOEXT lty)
   | otherwise              = lty
-
-newtype PprPrec = PprPrec Int deriving (Eq, Ord, Show)
-
-topPrec, sigPrec, funPrec, opPrec, appPrec :: PprPrec
-topPrec = PprPrec 0
-sigPrec = PprPrec 1
-funPrec = PprPrec 2
-opPrec  = PprPrec 2
-appPrec = PprPrec 3
 
 hsTypeNeedsParens :: PprPrec -> HsType pass -> Bool
 hsTypeNeedsParens p = go

@@ -33,9 +33,11 @@ import SrcLoc                          (GenLocated (..), Located, getLoc, noLoc)
 import TysWiredIn                      (tupleDataCon)
 
 #if MIN_VERSION_ghc(8,6,0)
+import HsExpr                          (parenthesizeHsExpr)
 import HsExtension                     (noExt)
 #else
-import HsExpr                          (noPostTcExpr)
+import HsExpr                          (isListCompExpr, noPostTcExpr)
+import HsLit                           (OverLitVal (..))
 import PlaceHolder                     (placeHolderType)
 #endif
 
@@ -165,14 +167,18 @@ b_opOrAppE :: Code -> ([HExpr], [HType]) -> Builder HExpr
 b_opOrAppE code (args, tys) = do
   fn <- b_varE code
   let fn' = mkAppTypes fn tys
-      mkOp loc lhs rhs = L loc (mkOpApp fn' lhs rhs)
+      mkOp loc lhs rhs = L loc (mkOpApp fn' lhs (mkLHsParOp rhs))
   case code of
     LForm (L l (Atom (ASymbol name)))
       | isLexSym name
-      , _:_:_ <- args
-      -> pure (mkLHsPar (foldl1' (mkOp l) args))
+      , hd:rest@(_:_) <- args
+      -> pure (foldl' (mkOp l) (mkLHsParOp hd) rest)
     _ -> pure (b_appE (fn':args, tys))
 {-# INLINE b_opOrAppE #-}
+
+mkLHsParOp :: HExpr -> HExpr
+mkLHsParOp = parenthesizeHsExpr opPrec
+{-# INLINE mkLHsParOp #-}
 
 mkOpApp :: HExpr -> HExpr -> HExpr -> HsExpr PARSED
 mkOpApp op l r =
@@ -222,13 +228,9 @@ b_stringE (LForm (L l form))
 b_integerE :: Code -> Builder HExpr
 b_integerE (LForm (L l form))
   | Atom (AInteger x) <- form
-#if MIN_VERSION_ghc(8,4,0)
-  = return $! expr x
-#else
   = if il_value x < 0
        then return (L l (hsPar (expr x)))
        else return (expr x)
-#endif
   | otherwise = builderError
   where
     expr x = L l (hsOverLit $! mkHsIntegral_compat x)
@@ -237,13 +239,9 @@ b_integerE (LForm (L l form))
 b_fracE :: Code -> Builder HExpr
 b_fracE (LForm (L l form))
   | Atom (AFractional x) <- form
-#if MIN_VERSION_ghc(8,4,0)
-  = return (expr x)
-#else
   = if fl_value x < 0
        then return (L l (hsPar (expr x)))
        else return (expr x)
-#endif
   | otherwise
   = builderError
   where
@@ -311,6 +309,10 @@ b_arithSeqE fromE thenE toE =
     l = getLoc fromE
 {-# INLINE b_arithSeqE #-}
 
+b_parE :: HExpr -> HExpr
+b_parE (dL->expr@(L l _)) = cL l (hsPar expr)
+{-# INLINE b_parE #-}
+
 #if MIN_VERSION_ghc(8,4,0)
 hsLit :: HsLit PARSED -> HsExpr PARSED
 #else
@@ -360,3 +362,132 @@ b_letS (LForm (L l _)) decls = do
 b_bodyS :: HExpr -> HStmt
 b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
 {-# INLINE b_bodyS #-}
+
+-- ------------------------------------------------------------------------
+--
+-- Parenthesizing
+--
+-- ------------------------------------------------------------------------
+
+#if !MIN_VERSION_ghc(8,6,0)
+-- Following 'parenthesizeHsExpre' and 'hsExprNeedsParens' are backported from
+-- "compiler/hsSyn/HsExpr.hs" in ghc source code.
+
+-- | @'parenthesizeHsExpr' p e@ checks if @'hsExprNeedsParens' p e@ is true,
+-- and if so, surrounds @e@ with an 'HsPar'. Otherwise, it simply returns @e@.
+parenthesizeHsExpr :: PprPrec -> HExpr -> HExpr
+parenthesizeHsExpr p le@(dL->L loc e)
+  | hsExprNeedsParens p e = L loc (HsPar NOEXT le)
+  | otherwise             = le
+
+-- | @'hsExprNeedsParens' p e@ returns 'True' if the expression @e@ needs
+-- parentheses under precedence @p@.
+hsExprNeedsParens :: PprPrec -> HsExpr p -> Bool
+hsExprNeedsParens p = go
+  where
+    go (HsVar{})                         = False
+    go (HsUnboundVar{})                  = False
+    go (HsConLikeOut{})                  = False
+    go (HsIPVar{})                       = False
+    go (HsOverLabel{})                   = False
+    go (HsLit _EXT l)                    = hsLitNeedsParens p l
+    go (HsOverLit _EXT ol)               = hsOverLitNeedsParens p ol
+    go (HsPar{})                         = False
+    go (HsCoreAnn _EXT _ _ (L _ e))      = go e
+    go (HsApp{})                         = p >= appPrec
+    go (HsAppType {})                    = p >= appPrec
+    go (OpApp{})                         = p >= opPrec
+    go (NegApp{})                        = p > topPrec
+    go (SectionL{})                      = True
+    go (SectionR{})                      = True
+    go (ExplicitTuple{})                 = False
+    go (ExplicitSum{})                   = False
+    go (HsLam{})                         = p > topPrec
+    go (HsLamCase{})                     = p > topPrec
+    go (HsCase{})                        = p > topPrec
+    go (HsIf{})                          = p > topPrec
+    go (HsMultiIf{})                     = p > topPrec
+    go (HsLet{})                         = p > topPrec
+    go (HsDo sc _ _)
+      | isListCompExpr sc                = False
+      | otherwise                        = p > topPrec
+    go (ExplicitList{})                  = False
+    go (RecordUpd{})                     = False
+    go (ExprWithTySig{})                 = p > topPrec
+    go (ArithSeq{})                      = False
+    go (EWildPat{})                      = False
+    go (ELazyPat{})                      = False
+    go (EAsPat{})                        = False
+    go (EViewPat{})                      = True
+    go (HsSCC{})                         = p >= appPrec
+    go (HsWrap _ e)                    = go e
+    go (HsSpliceE{})                     = False
+    go (HsBracket{})                     = False
+    go (HsRnBracketOut{})                = False
+    go (HsTcBracketOut{})                = False
+    go (HsProc{})                        = p > topPrec
+    go (HsStatic{})                      = p >= appPrec
+    go (HsTick _EXT _ (L _ e))           = go e
+    go (HsBinTick _EXT _ _ (L _ e))      = go e
+    go (HsTickPragma _EXT _ _ _ (L _ e)) = go e
+    go (HsArrApp{})                      = True
+    go (HsArrForm{})                     = True
+    go (RecordCon{})                     = False
+    go (HsRecFld{})                      = False
+    go _                                 = False
+
+-- Following 'hsLitNeedsParens' and 'hsOverLitNeedsParens' are backported from
+-- "compiler/hsSyn/HsLit.hs" in ghc source code. Using CPP macros for ghc 8.2.x
+-- and 8.4.x compatibility.
+--
+-- + 'HsLit' type takes argument in ghc 8.4.x but not in 8.2.x.
+--
+-- + Field types and arity of constructors changed.
+
+fl_neg' :: FractionalLit -> Bool
+
+#if MIN_VERSION_ghc(8,4,0)
+#define _XH  _
+#define _ST {- st -}
+fl_neg' = fl_neg
+il_neg' :: IntegralLit -> Bool
+il_neg' = il_neg
+type HSLIT x = HsLit x
+#else
+#define _XH  {- xh -}
+#define _ST _
+fl_neg' fl = fl_value fl < 0
+il_neg' :: Integer -> Bool
+il_neg' n = n < 0
+type HSLIT x = HsLit
+#endif
+
+-- | @'hsLitNeedsParens' p l@ returns 'True' if a literal @l@ needs
+-- to be parenthesized under precedence @p@.
+hsLitNeedsParens :: PprPrec -> HSLIT x -> Bool
+hsLitNeedsParens p = go
+  where
+    go (HsChar {})          = False
+    go (HsCharPrim {})      = False
+    go (HsString {})        = False
+    go (HsStringPrim {})    = False
+    go (HsInt _ x)          = p > topPrec && il_neg' x
+    go (HsIntPrim _ x)      = p > topPrec && x < 0
+    go (HsWordPrim {})      = False
+    go (HsInt64Prim _ x)    = p > topPrec && x < 0
+    go (HsWord64Prim {})    = False
+    go (HsInteger _ x _)    = p > topPrec && x < 0
+    go (HsRat _XH x _)      = p > topPrec && fl_neg' x
+    go (HsFloatPrim _XH x)  = p > topPrec && fl_neg' x
+    go (HsDoublePrim _XH x) = p > topPrec && fl_neg' x
+
+-- | @'hsOverLitNeedsParens' p ol@ returns 'True' if an overloaded literal
+-- @ol@ needs to be parenthesized under precedence @p@.
+hsOverLitNeedsParens :: PprPrec -> HsOverLit x -> Bool
+hsOverLitNeedsParens p (OverLit { ol_val = olv }) = go olv
+  where
+    go :: OverLitVal -> Bool
+    go (HsIntegral _ST x) = p > topPrec && il_neg' x
+    go (HsFractional x)   = p > topPrec && fl_neg' x
+    go (HsIsString {})    = False
+#endif

@@ -1,6 +1,14 @@
 {-# LANGUAGE CPP #-}
 -- | Utility codes for syntax.
-module Language.Finkel.Syntax.SynUtils where
+module Language.Finkel.Syntax.SynUtils
+  ( -- * This module
+    module Language.Finkel.Syntax.SynUtils
+
+#if MIN_VERSION_ghc(8,6,0)
+     -- * Re-export for ghc version compatibility
+  , PprPrec(..), topPrec, sigPrec, opPrec, funPrec, appPrec
+#endif
+  ) where
 
 -- base
 import           Data.Char               (isUpper)
@@ -44,6 +52,8 @@ import qualified SrcLoc
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
+import           BasicTypes              (PprPrec (..), appPrec, funPrec,
+                                          opPrec, sigPrec, topPrec)
 import           FastString              (fastStringToByteString)
 import           HsDoc                   (HsDocString,
                                           mkHsDocStringUtf8ByteString)
@@ -363,9 +373,8 @@ addConDoc'' :: LHsDocString -> LConDecl a -> LConDecl a
 addConDoc'' = flip addConDoc . Just
 {-# INLINE addConDoc'' #-}
 
---
+
 -- For 8.8.0 compatibility in source code location management
---
 
 #if MIN_VERSION_ghc(8,8,0)
 dL :: SrcLoc.HasSrcSpan a => a -> Located (SrcLoc.SrcSpanLess a)
@@ -383,3 +392,24 @@ cL = L
 
 {-# INLINE cL #-}
 {-# INLINE dL #-}
+
+-- For parenthesizing
+--
+-- Until ghc 8.6.0, 'PprPrec' did not exist. Following 'PprPrec' and its
+-- predefined values are taken from 'compiler/basicTypes/BasicTypes.hs' in ghc
+-- source code. Re-exporting from this module.
+
+#if !MIN_VERSION_ghc(8,6,0)
+-- | A general-purpose pretty-printing precedence type.
+newtype PprPrec = PprPrec Int deriving (Eq, Ord, Show)
+-- See Note [Precedence in types] in ghc source.
+
+topPrec, sigPrec, funPrec, opPrec, appPrec :: PprPrec
+topPrec = PprPrec 0 -- No parens
+sigPrec = PprPrec 1 -- Explicit type signatures
+funPrec = PprPrec 2 -- Function args; no parens for constructor apps
+                    -- See [Type operator precedence] for why both
+                    -- funPrec and opPrec exist.
+opPrec  = PprPrec 2 -- Infix operator
+appPrec = PprPrec 3 -- Constructor args; no parens for atomic
+#endif
