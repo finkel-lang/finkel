@@ -332,8 +332,7 @@ mkHsIntegral_compat il =
 #elif MIN_VERSION_ghc(8,4,0)
     mkHsIntegral il placeHolderType
 #else
-    mkHsIntegral (SourceText (show n)) n placeHolderType
-      where n = il_value il
+    mkHsIntegral (il_text il) (il_value il) placeHolderType
 #endif
 {-# INLINE mkHsIntegral_compat #-}
 
