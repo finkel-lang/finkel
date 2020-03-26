@@ -737,7 +737,7 @@ exprs :: { HExpr }
     | 'list' '{' fbinds '}' {% b_recUpdE (parse p_exprs $1) $3 }
     | idsym app             {% b_opOrAppE $1 $2 }
     | expr_no_idsym app     { case $2 of (es,ts) -> b_appE ($1:es,ts) }
-    | expr                  { b_parE $1 }
+    | expr                  { $1 }
 
 lambda :: { (HExpr,[HPat]) }
      : expr       { ($1,[]) }
