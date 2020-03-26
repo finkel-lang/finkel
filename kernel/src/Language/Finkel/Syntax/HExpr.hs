@@ -11,7 +11,8 @@ import Data.List                       (foldl', foldl1')
 -- ghc
 import BasicTypes                      (Arity, Boxity (..), FractionalLit (..),
                                         Origin (..))
-import FastString                      (FastString, lengthFS, unpackFS)
+import FastString                      (FastString, headFS, lengthFS, nullFS,
+                                        tailFS, unpackFS)
 import HsDoc                           (HsDocString)
 import HsExpr                          (ArithSeqInfo (..), GRHS (..),
                                         HsExpr (..), HsMatchContext (..),
@@ -27,7 +28,8 @@ import HsUtils                         (mkBindStmt, mkBodyStmt, mkHsApp,
                                         mkMatchGroup)
 import Lexeme                          (isLexCon, isLexSym)
 import OrdList                         (toOL)
-import RdrHsSyn                        (mkRdrRecordCon, mkRdrRecordUpd)
+import RdrHsSyn                        (bang_RDR, mkRdrRecordCon,
+                                        mkRdrRecordUpd)
 import RdrName                         (RdrName, getRdrName)
 import SrcLoc                          (GenLocated (..), Located, getLoc, noLoc)
 import TysWiredIn                      (tupleDataCon)
@@ -177,7 +179,7 @@ b_opOrAppE code (args, tys) = do
 {-# INLINE b_opOrAppE #-}
 
 mkLHsParOp :: HExpr -> HExpr
-mkLHsParOp = parenthesizeHsExpr opPrec
+mkLHsParOp = parenthesizeHsExpr' opPrec
 {-# INLINE mkLHsParOp #-}
 
 mkOpApp :: HExpr -> HExpr -> HExpr -> HsExpr PARSED
@@ -250,16 +252,29 @@ b_fracE (LForm (L l form))
 
 b_varE :: Code -> Builder HExpr
 b_varE (LForm (L l form))
-  | Atom (ASymbol x) <- form =
-    -- Tuple constructor function with more than two elements are
-    -- written as symbol with sequence of commas, handling such case in
-    -- this function.
-    let rname | all (== ',') (unpackFS x) =
-                tupConName Boxed (lengthFS x + 1)
-              | otherwise = mkVarRdrName x
-        hsVar = HsVar NOEXT
-    in  return (L l (hsVar (L l rname)))
+  | Atom (ASymbol x) <- form
+  , not (nullFS x)
+  , let hdchr = headFS x
+  , let tlchrs = tailFS x
+  = case hdchr of
+      '~' | nullFS tlchrs -> failB "invalid use of `~'"
+          | not (isLexSym tlchrs) ->
+            -- Lazy pattern
+            return (b_lazyPatE (hsVar (mkVarRdrName tlchrs)))
+      '!' | not (nullFS tlchrs), not (isLexSym tlchrs) ->
+            -- Bang pattern
+            let bang = hsVar bang_RDR
+                vname = (mkVarRdrName tlchrs)
+            in  return (cL l (SectionR NOEXT bang (hsVar vname)))
+      _   | hdchr == ',', all (== ',') (unpackFS tlchrs) ->
+            -- Tuple constructor function with more than two elements are
+            -- written as symbol with sequence of commas, handling such case in
+            -- this function.
+            return (hsVar (tupConName Boxed (lengthFS x + 1)))
+          | otherwise -> return (hsVar (mkVarRdrName x))
   | otherwise = builderError
+  where
+    hsVar name = cL l (HsVar NOEXT (cL l name))
 {-# INLINE b_varE #-}
 
 b_unitE :: Code -> HExpr
@@ -313,6 +328,43 @@ b_parE :: HExpr -> HExpr
 b_parE (dL->expr@(L l _)) = cL l (hsPar expr)
 {-# INLINE b_parE #-}
 
+
+-- ------------------------------------------------------------------------
+--
+-- Internal expressions for patterns
+--
+-- ------------------------------------------------------------------------
+
+b_wildPatE :: Code -> HExpr
+b_wildPatE (LForm (L l _)) = cL l (EWildPat NOEXT)
+{-# INLINE b_wildPatE #-}
+
+b_asPatE :: Code -> HExpr -> Builder HExpr
+b_asPatE (LForm (dL->L l form)) expr
+  | Atom (ASymbol name) <- form
+  = return (cL l (EAsPat NOEXT (L l (mkRdrName name))
+                               (parenthesizeHsExpr' appPrec expr)))
+  | otherwise
+  = builderError
+{-# INLINE b_asPatE #-}
+
+b_asPatLazyE :: Code -> HExpr -> Builder HExpr
+b_asPatLazyE name expr =
+  b_asPatE name (parenthesizeHsExpr' appPrec (b_lazyPatE expr))
+{-# INLINE b_asPatLazyE #-}
+
+b_lazyPatE :: HExpr -> HExpr
+b_lazyPatE e@(dL->L l _) = cL l (ELazyPat NOEXT e')
+  where e' = parenthesizeHsExpr' appPrec e
+{-# INLINE b_lazyPatE #-}
+
+
+-- ------------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- ------------------------------------------------------------------------
+
 #if MIN_VERSION_ghc(8,4,0)
 hsLit :: HsLit PARSED -> HsExpr PARSED
 #else
@@ -363,20 +415,46 @@ b_bodyS :: HExpr -> HStmt
 b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
 {-# INLINE b_bodyS #-}
 
+
 -- ------------------------------------------------------------------------
 --
 -- Parenthesizing
 --
 -- ------------------------------------------------------------------------
 
-#if !MIN_VERSION_ghc(8,6,0)
+-- Note: [Parenthesizing HsExpr for patterns]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Following "parenthesizeHsExpr'" is almost same as 'parenthesizeHsExpr' found
+-- in the source code of ghc 8.6.x and above, but will add parentheses for
+-- ELazyPat when given 'PprPrec' is equal or greater than 'appPrec'. This is to
+-- support lazy constructor patterns (e.g.: ~(Just n)) inside 'as' pattern.
+--
+-- For instance, below codes:
+--
+--   (@ foo (~(Just n))) ;  Finkel
+--
+--   foo@(~(Just n))     -- Haskell
+--
+-- will fail to parse in Haskell when the "~(Just n)" is not surrounded by
+-- parentheses.
+
+#if MIN_VERSION_ghc(8,6,0)
+
+parenthesizeHsExpr' :: PprPrec -> HExpr -> HExpr
+parenthesizeHsExpr' p le@(dL->L loc e)
+  | ELazyPat {} <- e, p >= appPrec = L loc (HsPar NOEXT le)
+  | otherwise                      = parenthesizeHsExpr p le
+
+#else
+
 -- Following 'parenthesizeHsExpre' and 'hsExprNeedsParens' are backported from
 -- "compiler/hsSyn/HsExpr.hs" in ghc source code.
 
 -- | @'parenthesizeHsExpr' p e@ checks if @'hsExprNeedsParens' p e@ is true,
 -- and if so, surrounds @e@ with an 'HsPar'. Otherwise, it simply returns @e@.
-parenthesizeHsExpr :: PprPrec -> HExpr -> HExpr
-parenthesizeHsExpr p le@(dL->L loc e)
+parenthesizeHsExpr' :: PprPrec -> HExpr -> HExpr
+parenthesizeHsExpr' p le@(dL->L loc e)
   | hsExprNeedsParens p e = L loc (HsPar NOEXT le)
   | otherwise             = le
 
@@ -416,7 +494,9 @@ hsExprNeedsParens p = go
     go (ExprWithTySig{})                 = p > topPrec
     go (ArithSeq{})                      = False
     go (EWildPat{})                      = False
-    go (ELazyPat{})                      = False
+    -- Adding parentheses to ELazyPatt when p >= appPrec
+    -- go (ELazyPat{})                      = False
+    go (ELazyPat {})                     = p >= appPrec
     go (EAsPat{})                        = False
     go (EViewPat{})                      = True
     go (HsSCC{})                         = p >= appPrec

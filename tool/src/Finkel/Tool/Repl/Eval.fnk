@@ -22,7 +22,8 @@
    (System.IO ((Handle)))
 
    ;; ghc
-   (DynFlags ((DynFlags ..) (GeneralFlag ..) (GhcLink ..) (HscTarget ..)
+   (DynFlags ((DynFlags ..) (GeneralFlag ..) (GhcLink ..) (HasDynFlags ..)
+              (HscTarget ..)
               gopt-set gopt-unset interpWays targetPlatform updateWays
               xopt-unset wayGeneralFlags wayUnsetGeneralFlags))
    (ErrUtils (pprErrMsgBagWithLoc))
@@ -149,7 +150,8 @@
           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
               (<- ret (withErrorHandler
                        (do (<- expanded (expands [form]))
-                           (eval-form hdl wrapper itype expanded))))
+                           (<- dflags getDynFlags)
+                           (eval-form hdl dflags wrapper itype expanded))))
               (liftIO (putMVar out-mv ret))))
         (= loop wrapper
           (withAsyncHandler wrapper
@@ -169,17 +171,18 @@ context."
                                                      f)})))
         _ (failS "set-print-name: parse error"))))
 
-(defn (:: eval-form (-> Handle ForeignHValue InSource [Code] (Fnk Result)))
-  [hdl wrapper itype forms]
+(defn (:: eval-form
+        (-> Handle DynFlags ForeignHValue InSource [Code] (Fnk Result)))
+  [hdl dflags wrapper itype forms]
   (| ((null forms)
       (return (Right "")))
-     ((<- (Right decls) (evalBuilder parseTopDecls forms))
+     ((<- (Right decls) (evalBuilder dflags parseTopDecls forms))
       (eval-decls decls))
-     ((<- (Right stmt) (evalBuilder parseStmt forms))
+     ((<- (Right stmt) (evalBuilder dflags parseStmt forms))
       (eval-statement hdl wrapper itype stmt))
      (otherwise
-      (case (evalBuilder parseImports forms)
-        (Right idecl) (eval-imports idecl)
+      (case (evalBuilder dflags parseImports forms)
+        (Right idecl) (eval-imports dflags idecl)
         (Left se) (finkelSrcError (syntaxErrCode se) (syntaxErrMsg se))))))
 
 (defn (:: eval-statement
@@ -192,10 +195,9 @@ context."
                                           is h f)
         Nothing (return (Left "eval-statement: no result")))))
 
-(defn (:: eval-imports (-> [HImportDecl] (Fnk Result)))
-  [imports]
-  (do (<- dflags getSessionDynFlags)
-      (<- ctx0 getContext)
+(defn (:: eval-imports (-> DynFlags [HImportDecl] (Fnk Result)))
+  [dflags imports]
+  (do (<- ctx0 getContext)
       (let ((= mkIIDecl (L _ idecl)
               (IIDecl idecl))
             (= mdls
@@ -286,16 +288,17 @@ context."
 
 (defn (:: make-eval-wrapper (-> [String] (Fnk ForeignHValue)))
   [args]
-  (let ((= form
-          `(\ m (System.Environment.withArgs ,args m)))
-        (= no-rb-hsc hsc-env
-          (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
-                                           RebindableSyntax)})))
-    (case (evalBuilder parseExpr [form])
-      (Right expr) (withTempSession no-rb-hsc
-                                    (compileParsedExprRemote expr))
-      (Left err) (finkelSrcError (syntaxErrCode err)
-                                 (syntaxErrMsg err)))))
+  (do (let ((= form
+              `(\ m (System.Environment.withArgs ,args m)))
+            (= no-rb-hsc hsc-env
+              (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
+                                               RebindableSyntax)}))))
+      (<- dflags getDynFlags)
+      (case (evalBuilder dflags parseExpr [form])
+        (Right expr) (withTempSession no-rb-hsc
+                                      (compileParsedExprRemote expr))
+        (Left err) (finkelSrcError (syntaxErrCode err)
+                                   (syntaxErrMsg err)))))
 
 (defn (:: var-name-and-type (-> DynFlags Name Var String))
   [dflags name var]

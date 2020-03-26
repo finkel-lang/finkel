@@ -40,25 +40,23 @@ import GhcMonad              (GhcMonad (..), getSessionDynFlags)
 import HsBinds               (LHsBinds, LSig, Sig (..), pprDeclList)
 import HsDecls               (ConDecl (..), DocDecl (..), FamilyDecl (..),
                               FamilyInfo (..), FamilyResultSig (..),
-                              HsDataDefn (..), HsDecl (..),
-                              InjectivityAnn (..), LConDecl, LDocDecl,
-                              LFamilyDecl, LTyFamDefltEqn, TyClDecl (..),
-                              TyFamInstEqn)
+                              HsDataDefn (..), HsDecl (..), InjectivityAnn (..),
+                              LConDecl, LDocDecl, LFamilyDecl, LTyFamDefltEqn,
+                              TyClDecl (..), TyFamInstEqn)
 import HsDoc                 (LHsDocString)
 import HsImpExp              (IE (..), LIE)
 import HsSyn                 (HsModule (..))
-import HsTypes               (ConDeclField (..), HsConDetails (..),
-                              HsContext, HsImplicitBndrs (..), HsType (..),
+import HsTypes               (ConDeclField (..), HsConDetails (..), HsContext,
+                              HsImplicitBndrs (..), HsType (..),
                               HsWildCardBndrs (..), LConDeclField,
                               LHsQTyVars (..), LHsTyVarBndr, LHsType,
                               pprHsForAll)
 import Outputable            (Outputable (..), OutputableBndr (..), SDoc,
-                              braces, char, comma, darrow, dcolon, dot,
-                              empty, equals, forAllLit, fsep, hang, hsep,
-                              interpp'SP, interppSP, lparen, nest, parens,
-                              pprWithCommas, punctuate, sep,
-                              showSDocForUser, text, vbar, vcat, ($$),
-                              ($+$), (<+>), (<>))
+                              braces, char, comma, darrow, dcolon, dot, empty,
+                              equals, forAllLit, fsep, hang, hsep, interpp'SP,
+                              interppSP, lparen, nest, parens, pprWithCommas,
+                              punctuate, sep, showSDocForUser, text, vbar, vcat,
+                              ($$), ($+$), (<+>), (<>))
 import RdrName               (RdrName)
 import SrcLoc                (GenLocated (..), Located, noLoc, unLoc)
 
@@ -257,9 +255,9 @@ newtype Hsrc a = Hsrc {unHsrc :: a}
 -- | Generate textual source code from given data.
 genHsSrc :: (GhcMonad m, HsSrc a) => SPState -> a -> m String
 genHsSrc st0 x = do
-  flags <- getSessionDynFlags
+  dflags <- getSessionDynFlags
   unqual <- getPrintUnqual
-  return (showSDocForUser flags unqual (toHsSrc st0 x))
+  return (showSDocForUser dflags unqual (toHsSrc st0 x))
 
 
 -- ---------------------------------------------------------------------

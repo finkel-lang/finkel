@@ -12,8 +12,8 @@ module Language.Finkel.Make
 import           Control.Monad                (unless, when)
 import           Control.Monad.IO.Class       (MonadIO (..))
 import           Data.List                    (find, foldl')
-import           Data.Maybe                   (catMaybes, fromMaybe,
-                                               isJust, maybeToList)
+import           Data.Maybe                   (catMaybes, fromMaybe, isJust,
+                                               maybeToList)
 
 -- container
 import           Data.Graph                   (flattenSCCs)
@@ -23,8 +23,7 @@ import qualified Data.Map                     as Map
 import           System.Directory             (createDirectoryIfMissing)
 
 -- filepath
-import           System.FilePath              (dropExtension,
-                                               splitExtension,
+import           System.FilePath              (dropExtension, splitExtension,
                                                takeBaseName, takeDirectory,
                                                takeExtension, (<.>), (</>))
 
@@ -33,12 +32,10 @@ import           BasicTypes                   (SuccessFlag (..))
 import           DriverPhases                 (HscSource (..), Phase (..))
 import           DriverPipeline               (compileOne', link, oneShot,
                                                preprocess)
-import           DynFlags                     (DumpFlag (..),
-                                               DynFlags (..),
-                                               GeneralFlag (..),
-                                               GhcLink (..), GhcMode (..),
-                                               getDynFlags, gopt, gopt_set,
-                                               gopt_unset, interpWays,
+import           DynFlags                     (DumpFlag (..), DynFlags (..),
+                                               GeneralFlag (..), GhcLink (..),
+                                               GhcMode (..), getDynFlags, gopt,
+                                               gopt_set, gopt_unset, interpWays,
                                                isObjectTarget,
                                                parseDynamicFilePragma,
                                                thisPackage)
@@ -52,45 +49,35 @@ import           Finder                       (addHomeModuleToFinder,
                                                mkHomeModLocation)
 import           GHC                          (setSessionDynFlags)
 import           GhcMake                      (topSortModuleGraph)
-import           GhcMonad                     (GhcMonad (..),
-                                               modifySession,
+import           GhcMonad                     (GhcMonad (..), modifySession,
                                                withTempSession)
 import           HeaderInfo                   (getOptionsFromFile)
 import           HscStats                     (ppSourceStats)
 import           HscTypes                     (FindResult (..),
                                                HomeModInfo (..),
                                                HomePackageTable,
-                                               HsParsedModule (..),
-                                               HscEnv (..),
+                                               HsParsedModule (..), HscEnv (..),
                                                InteractiveContext (..),
-                                               ModIface (..),
-                                               ModSummary (..),
-                                               ModuleGraph,
-                                               SourceModified (..),
-                                               addToHpt, eltsHpt,
-                                               isBootSummary,
-                                               isObjectLinkable,
-                                               linkableTime, lookupHpt,
-                                               mi_boot, ms_mod_name,
+                                               ModIface (..), ModSummary (..),
+                                               ModuleGraph, SourceModified (..),
+                                               addToHpt, eltsHpt, isBootSummary,
+                                               isObjectLinkable, linkableTime,
+                                               lookupHpt, mi_boot, ms_mod_name,
                                                throwOneError)
-import           HsDumpAst                    (BlankSrcSpan (..),
-                                               showAstData)
+import           HsDumpAst                    (BlankSrcSpan (..), showAstData)
 import           HsImpExp                     (ImportDecl (..))
 import           HsSyn                        (HsModule (..))
-import           Module                       (ModLocation (..),
-                                               ModuleName,
+import           Module                       (ModLocation (..), ModuleName,
                                                installedUnitIdEq, mkModule,
                                                mkModuleName, moduleName,
                                                moduleNameSlashes,
-                                               moduleNameString,
-                                               moduleUnitId)
-import           Outputable                   (neverQualify, ppr, showPpr,
-                                               text)
+                                               moduleNameString, moduleUnitId)
+import           Outputable                   (neverQualify, ppr, showPpr, text)
 import           Panic                        (GhcException (..),
                                                throwGhcException)
-import           SrcLoc                       (GenLocated (..), Located,
-                                               getLoc, mkRealSrcLoc,
-                                               mkSrcLoc, mkSrcSpan, unLoc)
+import           SrcLoc                       (GenLocated (..), Located, getLoc,
+                                               mkRealSrcLoc, mkSrcLoc,
+                                               mkSrcSpan, unLoc)
 import           StringBuffer                 (stringToStringBuffer)
 import           Util                         (getModificationUTCTime,
                                                looksLikeModuleName,
@@ -248,9 +235,10 @@ buildHsSyn :: Builder a -- ^ Builder to use.
            -> [Code]    -- ^ Input codes.
            -> Fnk a
 buildHsSyn bldr forms =
-  case evalBuilder bldr forms of
-    Right a                     -> return a
-    Left (SyntaxError code msg) -> finkelSrcError code msg
+  do dflags <- getDynFlags
+     case evalBuilder dflags bldr forms of
+       Right a                     -> return a
+       Left (SyntaxError code msg) -> finkelSrcError code msg
 
 
 -- ---------------------------------------------------------------------
@@ -1066,7 +1054,7 @@ guessOutputFile !mod_graph = modifySession $ \env ->
             else Just name'
      in
      case outputFile dflags of
-         Just _ -> env
+         Just _  -> env
          Nothing -> env { hsc_dflags = dflags { outputFile = name_exe } }
 
 -- | GHC version compatibility helper function for creating

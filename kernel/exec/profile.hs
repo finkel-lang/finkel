@@ -13,8 +13,8 @@ import           System.IO               (stdout)
 import qualified System.FilePath         as FilePath
 
 -- ghc
-import           DynFlags                (GeneralFlag (..),
-                                          HasDynFlags (..), gopt_set)
+import           DynFlags                (GeneralFlag (..), HasDynFlags (..),
+                                          gopt_set)
 import           ErrUtils                (printBagOfErrors)
 import qualified GHC                     as GHC
 import           Outputable              (Outputable (..), neverQualify,
@@ -65,7 +65,6 @@ printExpandedForms path = Fnk.runFnk go Make.defaultFnkEnv
   where
     go = do
       Make.initSessionForMake
-      -- contents <- liftIO (BL.readFile path)
       contents <- liftIO (hGetStringBuffer path)
       (forms, _) <- Reader.parseSexprs (Just path) contents
       forms' <- Expand.withExpanderSettings (Expand.expands forms)
@@ -73,8 +72,7 @@ printExpandedForms path = Fnk.runFnk go Make.defaultFnkEnv
 
 printForms :: FilePath -> IO ()
 printForms path =
-  do -- contents <- BL.readFile path
-     contents <- hGetStringBuffer path
+  do contents <- hGetStringBuffer path
      case Lexer.evalSP Reader.sexprs (Just path) contents of
        Right forms -> mapM_ print forms
        Left err    -> putStrLn err
@@ -128,12 +126,12 @@ parseFnkModuleWith act path = Fnk.runFnk go Make.defaultFnkEnv
   where
     go =
      do Make.initSessionForMake
-        -- contents <- liftIO (BL.readFile path)
         contents <- liftIO (hGetStringBuffer path)
         case Lexer.runSP Reader.sexprs (Just path) contents of
           Right (forms, sp) -> do
             forms' <- Expand.withExpanderSettings (Expand.expands forms)
-            case Builder.evalBuilder Syntax.parseModule forms' of
+            dflags <- getDynFlags
+            case Builder.evalBuilder dflags Syntax.parseModule forms' of
               Right mdl -> act mdl sp
               Left  err -> liftIO (putStrLn ("error: " ++
                                              Builder.syntaxErrMsg err))
@@ -142,7 +140,6 @@ parseFnkModuleWith act path = Fnk.runFnk go Make.defaultFnkEnv
 printTokens :: FilePath -> IO ()
 printTokens path = do
   contents <- hGetStringBuffer path
-  -- contents <- BL.readFile path
   case Lexer.lexTokens (Just path) contents of
     Right toks -> mapM_ (print . GHC.unLoc) toks
     Left err   -> putStrLn err

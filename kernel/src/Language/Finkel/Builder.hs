@@ -57,16 +57,16 @@ module Language.Finkel.Builder
 
 -- ghc
 import Bag                  (Bag)
+import DynFlags             (DynFlags)
 import ForeignCall          (CCallConv (..))
 import HsBinds              (HsLocalBinds, LHsBind, LSig)
-import HsDecls              (HsConDeclDetails, HsDeriving, LConDecl,
-                             LHsDecl)
+import HsDecls              (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
 import HsExpr               (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
 import HsImpExp             (LIE, LIEWrappedName, LImportDecl)
 import HsPat                (LPat)
 import HsSyn                (HsModule)
-import HsTypes              (LConDeclField, LHsSigWcType, LHsTyVarBndr,
-                             LHsType)
+import HsTypes              (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
+import Lexer                (PState (..), mkPState)
 import SrcLoc               (GenLocated (..), Located, noLoc)
 
 #if MIN_VERSION_ghc(8,4,0)
@@ -89,6 +89,8 @@ import Language.Finkel.Form
 data BState = BState
     { -- | Input tokens to parse.
       inputs    :: [Code]
+      -- | The 'PState' used for parser from GHC.
+    , ghcPState :: PState
       -- | Last token, for error message.
     , lastToken :: Maybe Code
     }
@@ -128,17 +130,21 @@ instance Monad Builder where
   {-# INLINE (>>=) #-}
 
 -- | Run given 'Builder' with using given list of 'Code' as input.
-runBuilder :: Builder a
+runBuilder :: DynFlags
+           -> Builder a
            -> [Code]
            -> Either SyntaxError (a, [Code])
-runBuilder bld toks =
-  case unBuilder bld (BState toks Nothing) of
-    Right (a, st) -> Right (a, inputs st)
-    Left err      -> Left err
+runBuilder dflags bld toks =
+  let buf = error "PState StringBuffer is empty"
+      rl  = error "PState RealSrcLoc is empty"
+      ps  = mkPState dflags buf rl
+  in  case unBuilder bld (BState toks ps Nothing) of
+        Right (a, st) -> Right (a, inputs st)
+        Left err      -> Left err
 
 -- | Like 'runBuilder', but discards left over 'Code's.
-evalBuilder :: Builder a -> [Code] -> Either SyntaxError a
-evalBuilder bld toks = fmap fst (runBuilder bld toks)
+evalBuilder :: DynFlags -> Builder a -> [Code] -> Either SyntaxError a
+evalBuilder dflags bld toks = fmap fst (runBuilder dflags bld toks)
 
 -- | Fail builder computation with given message.
 failB :: String -> Builder a
@@ -178,9 +184,10 @@ setLastToken code = do
 -- parse.
 parse :: Builder a -> [Code] -> Builder a
 parse bld toks =
-  case runBuilder bld toks of
-    Right (a, _) -> return a
-    Left err     -> Builder (const (Left err))
+  do pstate <- ghcPState <$> getBState
+     case unBuilder bld (BState toks pstate Nothing) of
+       Right (a, _) -> return a
+       Left err     -> Builder (const (Left err))
 
 -- | Simple lexer to parse forms.
 formLexer :: (Code -> Builder a) -> Builder a

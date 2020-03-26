@@ -179,9 +179,10 @@ unquoteSplice form =
 coerceMacro :: Code -> Fnk Macro
 coerceMacro name
   | LForm (L _ (Atom (ASymbol _))) <- name =
-    case evalBuilder parseExpr [name] of
-      Right hexpr -> fmap unsafeCoerce# (evalExpr hexpr)
-      Left err    -> failS (syntaxErrMsg err)
+    do dflags <- getDynFlags
+       case evalBuilder dflags parseExpr [name] of
+         Right hexpr -> fmap unsafeCoerce# (evalExpr hexpr)
+         Left err    -> failS (syntaxErrMsg err)
   | otherwise = failS ("coerceMacro: expecting name")
 
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Fnk [TyThing]
@@ -280,15 +281,16 @@ m_withMacro form =
       expanded <- expand decl
       case unCode expanded of
         List (_ : fname@(LForm (L _ (Atom (ASymbol name)))) : _) ->
-          case evalBuilder parseDecls [expanded] of
-            Right hdecls -> do
-              (tythings, _ic) <- evalDecls hdecls
-              case tythings of
-                tything : _ | isMacro tything -> do
-                  macro <- coerceMacro fname
-                  return (name, macro)
-                _ -> finkelSrcError fname "with-macro: not a macro"
-            Left err -> failS (syntaxErrMsg err)
+          do dflags <- getDynFlags
+             case evalBuilder dflags parseDecls [expanded] of
+               Right hdecls -> do
+                 (tythings, _ic) <- evalDecls hdecls
+                 case tythings of
+                   tything : _ | isMacro tything -> do
+                     macro <- coerceMacro fname
+                     return (name, macro)
+                   _ -> finkelSrcError fname "with-macro: not a macro"
+               Left err -> failS (syntaxErrMsg err)
         _ -> finkelSrcError decl "with-macro: malformed args"
 
 m_require :: MacroFunction
@@ -306,60 +308,61 @@ m_require form =
   --
   case form of
     LForm (L _ (List (_:code))) ->
-      case evalBuilder parseLImport code of
-        Right lidecl@(L loc idecl) -> do
-          hsc_env <- getSession
-          fnkc_env <- getFnkEnv
+      do dflags0 <- getDynFlags
+         case evalBuilder dflags0 parseLImport code of
+           Right lidecl@(L loc idecl) -> do
+             hsc_env <- getSession
+             fnkc_env <- getFnkEnv
 
-          let dflags = hsc_dflags hsc_env
-              recomp = gopt Opt_ForceRecomp dflags
-              mname = unLoc (ideclName idecl)
-              mname' = moduleNameString mname
-              lmname' = L loc mname'
+             let dflags = hsc_dflags hsc_env
+                 recomp = gopt Opt_ForceRecomp dflags
+                 mname = unLoc (ideclName idecl)
+                 mname' = moduleNameString mname
+                 lmname' = L loc mname'
 
-          debugFnk (";;; require: " ++ showPpr dflags idecl)
+             debugFnk (";;; require: " ++ showPpr dflags idecl)
 
-          -- Try finding the required module. Delegate the work to
-          -- 'envMake' function stored in FnkEnv when the file is found
-          -- in import paths.
-          --
-          -- N.B. 'findImportedModule' does not know ".fnk" file
-          -- extension, so it will not return Finkel source files for
-          -- home package modules.
+             -- Try finding the required module. Delegate the work to
+             -- 'envMake' function stored in FnkEnv when the file is found
+             -- in import paths.
+             --
+             -- N.B. 'findImportedModule' does not know ".fnk" file
+             -- extension, so it will not return Finkel source files for
+             -- home package modules.
 
-          fresult <- liftIO (findImportedModule hsc_env mname Nothing)
-          compiled <-
-            case fresult of
-              Found {} -> return []
-              _        ->
-                case envMake fnkc_env of
-                  Just mk -> withRequiredSettings (mk recomp lmname')
-                  Nothing -> failS "require: no make function"
+             fresult <- liftIO (findImportedModule hsc_env mname Nothing)
+             compiled <-
+               case fresult of
+                 Found {} -> return []
+                 _        ->
+                   case envMake fnkc_env of
+                     Just mk -> withRequiredSettings (mk recomp lmname')
+                     Nothing -> failS "require: no make function"
 
-          -- Add the module to current compilation context.
-          contexts <- getContext
-          setContext (IIDecl idecl : contexts)
+             -- Add the module to current compilation context.
+             contexts <- getContext
+             setContext (IIDecl idecl : contexts)
 
-          -- Update required module names and compiled home modules to
-          -- FnkEnv. These are used by the callee module (i.e. the module
-          -- containing this 'require' form).
-          let reqs = lmname':envRequiredModuleNames fnkc_env
-              fnkc_env' = fnkc_env {envRequiredModuleNames = reqs
-                                   ,envCompiledInRequire = compiled}
-          putFnkEnv fnkc_env'
+             -- Update required module names and compiled home modules to
+             -- FnkEnv. These are used by the callee module (i.e. the module
+             -- containing this 'require' form).
+             let reqs = lmname':envRequiredModuleNames fnkc_env
+                 fnkc_env' = fnkc_env {envRequiredModuleNames = reqs
+                                      ,envCompiledInRequire = compiled}
+             putFnkEnv fnkc_env'
 
-          -- Look up Macros in parsed module, add to FnkEnv when found.
-          mdl <- lookupModule mname Nothing
-          mb_minfo <- getModuleInfo mdl
-          case mb_minfo of
-            Just minfo -> do
-              things <- getTyThingsFromIDecl lidecl minfo
-              mapM_ addImportedMacro things
-              return emptyForm
-            Nothing ->
-              finkelSrcError form ("require: module " ++ mname' ++
-                               " not found.")
-        Left err -> finkelSrcError form ("require: " ++ syntaxErrMsg err)
+             -- Look up Macros in parsed module, add to FnkEnv when found.
+             mdl <- lookupModule mname Nothing
+             mb_minfo <- getModuleInfo mdl
+             case mb_minfo of
+               Just minfo -> do
+                 things <- getTyThingsFromIDecl lidecl minfo
+                 mapM_ addImportedMacro things
+                 return emptyForm
+               Nothing ->
+                 finkelSrcError form ("require: module " ++ mname' ++
+                                  " not found.")
+           Left err -> finkelSrcError form ("require: " ++ syntaxErrMsg err)
     _ -> finkelSrcError form "require: malformed body"
 
 m_evalWhenCompile :: MacroFunction
@@ -367,7 +370,8 @@ m_evalWhenCompile form =
   case unLForm form of
     L l (List (_ : body)) -> do
       expanded <- expands body
-      case evalBuilder parseModule expanded of
+      dflags <- getDynFlags
+      case evalBuilder dflags parseModule expanded of
         Right (HsModule {hsmodDecls = decls}) -> do
           (tythings, _ic) <- evalDecls decls
           mapM_ addImportedMacro tythings

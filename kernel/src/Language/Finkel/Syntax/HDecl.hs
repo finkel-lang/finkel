@@ -72,6 +72,10 @@ import Language.Finkel.Form
 import Language.Finkel.Syntax.HType
 import Language.Finkel.Syntax.SynUtils
 
+#if !MIN_VERSION_ghc(8,6,0)
+import Language.Finkel.Syntax.HPat
+#endif
+
 #include "Syntax.h"
 
 -- ---------------------------------------------------------------------
@@ -557,9 +561,11 @@ b_funBindD lname@(L l _) args grhss decls = do
 #if MIN_VERSION_ghc(8,6,0)
       match = L l (Match noExt ctxt args body)
 #elif MIN_VERSION_ghc(8,4,0)
-      match = L l (Match ctxt args body)
+      match = L l (Match ctxt args' body)
+      args' = map (parenthesizePat' appPrec) args
 #else
-      match = L l (Match ctxt args Nothing body)
+      match = L l (Match ctxt args' Nothing body)
+      args' = map (parenthesizePat' appPrec) args
 #endif
       ctxt = FunRhs { mc_fun = lname
                     , mc_fixity = Prefix
