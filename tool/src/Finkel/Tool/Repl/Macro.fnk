@@ -523,22 +523,21 @@ object code."
 (defn (:: help-cmd ReplAction)
   [_form]
   (return
-   `(System.IO.putStrLn ,(++ "DESCRIPTION:
-
-  REPL meta macro, ARGS varies per COMMAND.
-
-COMMANDS:
-
-" (unlines
-   (map (\ rc
-          (let ((= pre
-                  (++ (rc-name rc)
-                      (maybe ""
-                             (. (++ " ") unwords)
-                             (rc-args rc)))))
-            (concat
-             ["  ," (printf "%-14s" pre) " - " (rc-help rc)])))
-        commands))))))
+   `(System.IO.putStrLn ,(++ "DESCRIPTION: \n\
+\\n\
+\  REPL meta macro, ARGS varies per COMMAND.\n\
+\\n\
+\COMMANDS:\n\
+\\n" (unlines
+      (map (\ rc
+             (let ((= pre
+                     (++ (rc-name rc)
+                         (maybe ""
+                                (. (++ " ") unwords)
+                                (rc-args rc)))))
+               (concat
+                ["  ," (printf "%-14s" pre) " - " (rc-help rc)])))
+           commands))))))
 
 (defn (:: system-cmd ReplAction)
   "Invoke system command."

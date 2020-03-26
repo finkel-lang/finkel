@@ -90,7 +90,7 @@
   [dflags parser path]
   (do (<- buf (hGetStringBuffer path))
       (<- (, forms _sp) (parseSexprs (Just path) buf))
-      (case (evalBuilder (fnk-parser parser) forms)
+      (case (evalBuilder dflags (fnk-parser parser) forms)
         (Right fexp) (return (showPpr dflags fexp))
         (Left err) (return (show err)))))
 

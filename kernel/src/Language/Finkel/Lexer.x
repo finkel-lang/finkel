@@ -52,6 +52,7 @@ import qualified Data.Map                   as Map
 -- ghc
 import           ApiAnnotation              (AnnotationComment(..))
 import           BasicTypes                 (FractionalLit(..), SourceText(..))
+import           Ctype                      (is_space)
 import           Encoding                   (utf8DecodeByteString)
 import           FastString                 (FastString,
                                              fastStringToByteString,
@@ -584,9 +585,9 @@ tok_char inp0 _ = do
 
 tok_string :: Action
 tok_string inp@(AlexInput _ buf) _l =
-  -- Currently String tokenizer does not update alex input per
-  -- character. This makes the code a bit more effiicient, but getting
-  -- unhelpful error message on illegal escape sequence.
+  -- Currently String tokenizer does not update alex input per character. This
+  -- makes the code a bit more effiicient, but getting unhelpful error message
+  -- on illegal escape sequence.
   case alexGetChar inp of
     Just ('"', inp1)
       | Just (TString _ str, inp2@(AlexInput _ buf2)) <- go inp1 "" ->
@@ -595,8 +596,7 @@ tok_string inp@(AlexInput _ buf) _l =
         do alexSetInput inp2
            let src = lexemeToString buf (cur buf2 - cur buf)
            return $! TString (SourceText src) str
-    _ -> alexError ("lexical error in string: " ++
-                    show (currentChar buf))
+    _ -> lexErrorSP
   where
     go inp0 acc =
       case alexGetChar inp0 of
@@ -610,10 +610,23 @@ tok_string inp@(AlexInput _ buf) _l =
               Just (_st, c1, inp2) -> go inp2 $! (c1:acc)
               _                    ->
                 case alexGetChar inp1 of
-                  Just (c2, inp2) | c2 == '&' -> go inp2 $! acc
+                  Just (c2, inp2)
+                    | c2 == '&'    -> go inp2 $! acc
+                    | is_space' c2 -> string_gap inp2 acc
                   _                           -> Nothing
           | otherwise  -> go inp1 $! (c1:acc)
+    string_gap inp0 acc =
+      case alexGetChar inp0 of
+        Just (c, inp1)
+          | c == '\\'   -> go inp1 acc
+          | is_space' c -> string_gap inp1 acc
+        _ -> Nothing
 {-# INLINE tok_string #-}
+
+-- See "lex_stringgap" in "compiler/parser/Lexer.x".
+is_space' :: Char -> Bool
+is_space' c = c <= '\x7f' && is_space c
+{-# INLINE is_space' #-}
 
 escapeChar :: AlexInput -> Maybe (SourceText, Char, AlexInput)
 escapeChar inp0

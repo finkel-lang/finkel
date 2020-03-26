@@ -598,18 +598,18 @@ type_without_doc :: { HType }
     | type_no_symbol { $1 }
 
 type_no_symbol :: { HType }
-    : special_id_no_bang {% b_symT $1 }
-    | 'unpack' type      { b_unpackT $1 $2 }
-    | '!' type           { b_bangT $1 $2 }
-    | '_'                { b_anonWildT $1 }
-    | 'unit'             { b_unitT $1 }
-    | '~'                { b_tildeT $1 }
-    | 'string'           {% b_tyLitT $1 }
-    | 'integer'          {% b_tyLitT $1 }
-    | 'hslist'           {% case toListL $1 of
-                              LForm (L _ (List [])) -> return (b_nilT $1)
-                              xs -> b_listT `fmap` parse p_type [xs] }
-    | 'list'             {% parse p_types0 $1 }
+    : special_id_no_bg_fa {% b_symT $1 }
+    | 'unpack' type       { b_unpackT $1 $2 }
+    | '!' type            { b_bangT $1 $2 }
+    | '_'                 { b_anonWildT $1 }
+    | 'unit'              { b_unitT $1 }
+    | '~'                 { b_tildeT $1 }
+    | 'string'            {% b_tyLitT $1 }
+    | 'integer'           {% b_tyLitT $1 }
+    | 'hslist'            {% case toListL $1 of
+                               LForm (L _ (List [])) -> return (b_nilT $1)
+                               xs -> fmap b_listT (parse p_type [xs]) }
+    | 'list'              {% parse p_types0 $1 }
 
 types0 :: { HType }
     : '=>' qtypes     { b_qualT $1 $2 }
@@ -858,9 +858,13 @@ special_id :: { Code }
     | special_id_no_bang { $1 }
 
 special_id_no_bang :: { Code }
+    : 'forall'            { $1 }
+    | special_id_no_bg_fa { $1 }
+
+-- special id, no bang, no forall
+special_id_no_bg_fa :: { Code }
     : 'as'          { $1 }
     | 'family'      { $1 }
-    | 'forall'      { $1 }
     | 'hiding'      { $1 }
     | 'qualified'   { $1 }
     | 'qSymbol'     { $1 }
