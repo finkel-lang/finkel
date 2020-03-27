@@ -15,6 +15,7 @@ packages:
 
 tests: True
 benchmarks: True
+library-profiling: True
 
 package finkel-kernel
   flags: +dev
