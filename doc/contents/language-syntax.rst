@@ -119,17 +119,14 @@ and hexadecimal:
    :language: haskell
 
 String literals are written between double-quotes. Special characters are
-escaped with ``\``.
+escaped with ``\``. Finkel also supports the **gap** feature, to ignore the
+string contents between two backslashes.
 
 .. literalinclude:: ../include/language-syntax/expr/string.fnk
    :language: finkel
 
 .. literalinclude:: ../include/language-syntax/expr/string.hs
    :language: haskell
-
-At the time of writing, Finkel does not support the **gap** feature,
-which is available in Haskell 2010 to ignore the string contents
-between two backslashes.
 
 
 Expressions
