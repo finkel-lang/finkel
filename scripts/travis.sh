@@ -19,7 +19,7 @@ travis_init () {
             case "$EXEC" in
                 stack)
                     export PATH="$HOME/.local/bin:$PATH"
-                    export STACK="stack --resolver=$RESOLVER"
+                    export STACK="stack --no-terminal --resolver=$RESOLVER"
                     ;;
                 cabal)
                     export PATH=$"HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
@@ -27,7 +27,9 @@ travis_init () {
             esac
             ;;
         windows)
-            export STACK="./stack.exe --resolver=$RESOLVER"
+            export LOCALBIN=$HOME/AppData/Roaming/stack/local/bin
+            export PATH="$PATH:$LOCALBIN"
+            export STACK="stack.exe --no-terminal --resolver=$RESOLVER"
             ;;
     esac
 }
@@ -65,16 +67,12 @@ travis_install_linux () {
 travis_script_linux () {
     case "$EXEC" in
         stack)
-            $STACK --no-terminal --install-ghc test --only-dependencies
-            $STACK --no-terminal build --fast --test --coverage \
-                   --no-run-tests \
-                   finkel-kernel fkc finkel-setup \
-                   finkel-lang finkel-tool finkel
-            $STACK --no-terminal build --fast --test --coverage \
-                   finkel-kernel fkc finkel-setup \
-                   finkel-lang finkel-tool finkel
+            $STACK --install-ghc test --only-dependencies
+            $STACK build --fast --test --coverage --no-run-tests
+            $STACK build --fast --test --coverage
             ;;
         cabal)
+            cabal v2-configure --disable-optimization
             cabal v2-build all
             cabal v2-test all
             cabal v2-haddock all
@@ -88,12 +86,17 @@ travis_after_success_linux () {
             $STACK install hpc-codecov
             HPCROOT=$($STACK path --local-hpc-root)
             DISTDIR=$($STACK path --dist-dir)
+            DOCPKG=doc/include/building-package
             TIX=$(find $HPCROOT -name 'all.tix')
             hpc-codecov \
                 --src=kernel --mix=kernel/$DISTDIR/hpc \
                 --src=setup --mix=setup/$DISTDIR/hpc \
                 --src=lang --mix=lang/$DISTDIR/hpc \
                 --src=tool --mix=tool/$DISTDIR/hpc \
+                --src=$DOCPKG/my-second-package \
+                --mix=$DOCPKG/my-second-package/$DISTDIR/hpc \
+                --src=$DOCPKG/my-new-package \
+                --mix=$DOCPKG/my-new-package/$DISTDIR/hpc \
                 --out=codecov.json --verbose $TIX
             curl -s https://codecov.io/bash | bash -s
             ;;
@@ -113,13 +116,9 @@ travis_install_osx () {
 }
 
 travis_script_osx () {
-    $STACK --no-terminal --install-ghc test --only-dependencies
-    $STACK --no-terminal build --fast --test finkel-kernel
-    $STACK --no-terminal build --fast --test fkc
-    $STACK --no-terminal build --fast --test finkel-setup
-    $STACK --no-terminal build --fast --test finkel-lang
-    $STACK --no-terminal build --fast --test finkel-tool
-    $STACK --no-terminal build --fast --test finkel
+    $STACK --install-ghc test --only-dependencies
+    $STACK build --fast --test --no-run-tests
+    $STACK build --fast --test
 }
 
 travis_after_success_osx () {
@@ -136,6 +135,8 @@ travis_install_windows () {
     url=https://get.haskellstack.org/stable/windows-x86_64.zip
     travis_retry curl --silent --output stack.zip --location $url
     7z x stack.zip stack.exe
+    mkdir -p $LOCALBIN
+    mv stack.exe $LOCALBIN
     echo STACK=$STACK
     $STACK --version || echo "no stack"
 }
@@ -165,4 +166,5 @@ travis_after_success () {
 }
 
 
+set -e
 travis_init

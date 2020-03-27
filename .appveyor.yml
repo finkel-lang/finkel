@@ -1,0 +1,28 @@
+branches:
+  only:
+    - /appveyor-*/
+
+environment:
+  global:
+    CABOPTS: --http-transport=plain-http
+    GHCVER: 8.8.3
+
+install:
+  - choco source add -n mistuke -s  https://www.myget.org/F/mistuke/api/v2
+  - choco install -y cabal --version 3.0.0.0
+  - choco install -y ghc --version %GHCVER%
+  - refreshenv
+
+before_build:
+  - cabal --version
+  - ghc --version
+  - cabal %CABOPTS% v2-update
+
+clone_folder: "c:\\WORK"
+
+cache:
+  - C:\Users\appveyor\AppData\Roaming\cabal
+
+build_script:
+  - cabal %CABOPTS% v2-configure --disable-optimization --disable-tests
+  - cabal %CABOPTS% v2-build all

@@ -41,6 +41,7 @@ jobs:
 
     env:
       STACK: stack --resolver=${{ matrix.plan.resolver }}
+      RESOLVER: ${{ matrix.plan.resolver }}
 
     runs-on:
       - ${{ matrix.os }}
@@ -91,7 +92,8 @@ jobs:
           url=https://get.haskellstack.org/stable/windows-x86_64.zip
           curl --silent --output stack.zip --location $url
           7z x stack.zip stack.exe
-          echo "::add-path::."
+          mkdir -p C:/Users/runneradmin/AppData/Roaming/local/bin
+          mv stack.exe C:/Users/runneradmin/AppData/Roaming/local/bin
           echo "::add-path::C:/Users/runneradmin/AppData/Roaming/local/bin"
 
       - name: Show stack version
@@ -110,9 +112,13 @@ jobs:
         shell: bash
         run: $STACK build --fast --test --coverage --no-run-tests
 
+      - name: Show resolver
+        shell: bash
+        run: echo $RESOLVER
+
       - name: Run tests
         shell: bash
-        run: $STACK build --fast --test --coverage
+        run: RESOLVER=${{ matrix.plan.resolver }} $STACK --jobs 1 build --fast --test --coverage
 
       - name: Generate coverge report
         shell: bash
@@ -120,12 +126,17 @@ jobs:
           $STACK install hpc-codecov
           HPCROOT=$($STACK path --local-hpc-root)
           DISTDIR=$($STACK path --dist-dir)
+          DOCPKG=doc/include/building-package
           TIX=$(find $HPCROOT -name 'all.tix')
           hpc-codecov \
             --src=kernel --mix=kernel/$DISTDIR/hpc \
             --src=setup --mix=setup/$DISTDIR/hpc \
             --src=lang --mix=lang/$DISTDIR/hpc \
             --src=tool --mix=tool/$DISTDIR/hpc \
+            --src=$DOCPKG/my-second-package \
+            --mix=$DOCPKG/my-second-package/$DISTDIR/hpc \
+            --src=$DOCPKG/my-new-package \
+            --mix=$DOCPKG/my-new-package/$DISTDIR/hpc \
             --out=codecov.json --verbose $TIX
 
       - name: Send coverage report
@@ -139,8 +150,9 @@ jobs:
           # setup-haskell@v1 action does not support windows and macos.
           # See: https://github.com/actions/setup-haskell/issues/1
           - ubuntu-latest
+          # - windows-latest
         plan:
-          - ghc: "8.8.1"
+          - ghc: "8.8.3"
             cabal: "3.0"
 
     runs-on:
@@ -150,6 +162,13 @@ jobs:
       - name: Checkout project repository
         uses: actions/checkout@v2
 
+      - name: Cache ~/.ghcup
+        id: home-dot-ghcup
+        uses: actions/cache@v1
+        with:
+          path: ~/.ghcup
+          key: ${{ runner.os }}-ghcup-${{ matrix.plan.ghc }}
+
       - name: Cache cabal package database
         id: home-dot-cabal
         uses: actions/cache@v1
@@ -157,23 +176,62 @@ jobs:
           path: ~/.cabal
           key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}
 
-      - name: Install ghc and cabal-install
-        uses: actions/setup-haskell@v1
-        with:
-          ghc-version: ${{ matrix.plan.ghc }}
-          cabal-version: ${{ matrix.plan.cabal }}
+      - name: Install ghcup (non-windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+          url=https://gitlab.haskell.org/haskell/ghcup/raw/master/ghcup
+          mkdir -p ~/.ghcup/bin
+          curl -sL $url > ~/.ghcup/bin/ghcup
+          chmod +x ~/.ghcup/bin/ghcup
+          echo "::add-path::$HOME/.ghcup/bin"
+
+      - name: Install ghc and cabal-install (non-window)
+        if: matrix.os != 'windows-latest'
+        run: |
+          ghcup -c install-cabal
+          ghcup -c install $ghc
+          ghcup -c set $ghc
+          which cabal
+          which ghc
+          cabal --version
+          ghc --version
+
+      - name: Install ghc and cabal-install (windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco source add -n mistuke -s https://www.myget.org/F/mistuke/api/v2
+          choco install -y cabal --version 3.0.0.0
+          choco install -y ghc --version 8.8.3
+          refreshenv
+          echo "::add-path::C:/Users/runneradmin/AppData/Roaming/cabal/bin"
+          echo "::add-path::C:/ProgramData/chocolatey/lib/ghc/tools/ghc-8.8.3/bin"
+
+      - name: Show version and paths
+        shell: bash
+        run: |
+          ghc --version
+          cabal --version
 
       - name: Update cabal package list
+        shell: bash
         run: cabal v2-update
 
+      - name: Write cabal.project.local with v2-configure
+        shell: bash
+        run: cabal v2-configure --disable-optimization
+
       - name: Build dependency packages
+        shell: bash
         run: cabal v2-build all --only-dependencies
 
       - name: Build package
+        shell: bash
         run: cabal v2-build all
 
       - name: Run tests
+        shell: bash
         run: cabal v2-test all
 
       - name: Run haddock
+        shell: bash
         run: cabal v2-haddock all

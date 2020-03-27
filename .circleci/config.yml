@@ -5,7 +5,7 @@ version: 2.1
 jobs:
   build-linux:
     docker:
-      - image: fpco/stack-build:lts
+      - image: fpco/stack-build:lts-15.4
     steps:
       - checkout
       - restore_cache:
@@ -23,14 +23,10 @@ jobs:
           command: stack --no-terminal setup
       - run:
           name: Build Packages
-          command: |
-            stack --no-terminal build --test --no-run-tests \
-              finkel-kernel fkc finkel-setup finkel-lang finkel-tool finkel
+          command: stack --no-terminal build --test --no-run-tests
       - run:
           name: Run tests
-          command: |
-            stack --no-terminal build --test \
-              finkel-kernel fkc finkel-setup finkel-lang finkel-tool finkel
+          command: RESOLVER=lts-15.4 stack --no-terminal build --test
       - save_cache:
           name: Cache dependencies
           key: stack-{{ checksum "stack.yaml" }}
@@ -41,4 +37,8 @@ jobs:
 workflows:
   build:
     jobs:
-      - build-linux
+      - build-linux:
+          filters:
+            branches:
+              only:
+                - /circleci-.*/

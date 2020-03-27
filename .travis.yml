@@ -1,5 +1,8 @@
 language: c
 
+git:
+  depth: 3
+
 cache:
   directories:
     - $HOME/.stack
@@ -31,7 +34,7 @@ jobs:
     - os: linux
       env: EXEC=stack RESOLVER=lts-15
     - os: linux
-      env: EXEC=cabal GHC_VERSION=8.8.2
+      env: EXEC=cabal GHC_VERSION=8.8.3
     - os: osx
       env: EXEC=stack RESOLVER=lts-15
     - os: windows
@@ -51,3 +54,6 @@ script:
 
 after_success:
   - travis_after_success
+
+notification:
+  email: false
