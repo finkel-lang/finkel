@@ -2,6 +2,7 @@ cabal-version:       2.0
 name:                doc
 version:             0.1.0.0
 synopsis:            Internal test for Finkel documentation
+license:             BSD3
 license-file:        LICENSE
 author:              8c6794b6
 maintainer:          8c6794b6@gmail.com

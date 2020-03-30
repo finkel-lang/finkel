@@ -2,6 +2,7 @@ cabal-version:       2.0
 name:                finkel
 version:             0.1.0.0
 synopsis:            Haskell in S-expression
+license:             BSD3
 license-file:        LICENSE
 author:              8c6794b6
 maintainer:          8c6794b6@gmail.com
