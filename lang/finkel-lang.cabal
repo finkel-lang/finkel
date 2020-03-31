@@ -27,7 +27,7 @@ tested-with:           GHC == 8.2.2
 
 custom-setup
   setup-depends:       base         >= 4.10 && < 5
-                     , Cabal        >= 2.0  && < 3.1
+                     , Cabal        >= 2.0  && < 3.3
                      , finkel-setup >= 0.1  && < 1
 
 library
@@ -38,9 +38,9 @@ library
                        Finkel.Core
                        Finkel.Prelude
   autogen-modules:     Paths_finkel_lang
-  reexported-modules:  Language.Finkel
+  -- reexported-modules:  Language.Finkel
   build-depends:       base          >= 4.7    && < 5
-                     , ghc           >= 8.2.0  && < 8.10.0
+                     , ghc           >= 8.2.0  && < 8.11.0
                      , finkel-kernel >= 0.28.0 && < 1
   build-tool-depends:  fkc:fkc >= 0.1 && < 1
   default-language:    Haskell2010

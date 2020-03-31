@@ -46,6 +46,8 @@ module Language.Finkel.Fnk
   , gensym'
   ) where
 
+#include "Syntax.h"
+
 -- base
 import           Control.Exception      (Exception (..), throwIO)
 import           Control.Monad          (when)
@@ -55,8 +57,8 @@ import           Control.Monad.Fail     (MonadFail (..))
 #endif
 
 import           Control.Monad.IO.Class (MonadIO (..))
-import           Data.IORef             (IORef, atomicModifyIORef',
-                                         newIORef, readIORef, writeIORef)
+import           Data.IORef             (IORef, atomicModifyIORef', newIORef,
+                                         readIORef, writeIORef)
 import           System.Environment     (lookupEnv)
 import           System.IO              (hPutStrLn, stderr)
 
@@ -66,8 +68,7 @@ import qualified Data.Map               as Map
 -- ghc
 import           Bag                    (unitBag)
 import           DynFlags               (DynFlags (..), HasDynFlags (..),
-                                         Language (..),
-                                         unsafeGlobalDynFlags)
+                                         Language (..), unsafeGlobalDynFlags)
 import           ErrUtils               (mkErrMsg)
 import           Exception              (ExceptionMonad (..), ghandle)
 import           FastString             (FastString, fsLit, unpackFS)
@@ -77,9 +78,8 @@ import           GhcMonad               (Ghc (..), GhcMonad (..),
 import           HscMain                (Messager, batchMsg)
 import           HscTypes               (HomeModInfo, HscEnv (..),
                                          InteractiveContext (..),
-                                         InteractiveImport (..),
-                                         TyThing (..), mkSrcErr)
-import           HsImpExp               (simpleImportDecl)
+                                         InteractiveImport (..), TyThing (..),
+                                         mkSrcErr)
 import           InteractiveEval        (setContext)
 import           Module                 (ModuleName, mkModuleName)
 import           Outputable             (alwaysQualify, neverQualify, ppr,
@@ -87,6 +87,8 @@ import           Outputable             (alwaysQualify, neverQualify, ppr,
 import           SrcLoc                 (GenLocated (..), Located)
 import           UniqSupply             (mkSplitUniqSupply, uniqFromSupply)
 import           Var                    (varType)
+
+import           GHC_Hs_ImpExp          (simpleImportDecl)
 
 -- Import for FlagSet
 #if MIN_VERSION_ghc(8,4,0)

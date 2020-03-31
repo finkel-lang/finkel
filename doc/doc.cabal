@@ -22,7 +22,7 @@ flag dynamic
 
 custom-setup
   setup-depends:       base         >= 4.7 && < 5
-                     , Cabal        >= 2.0 && < 3.1
+                     , Cabal        >= 2.0 && < 3.3
                      , finkel-setup >= 0.1
 
 test-suite test
@@ -31,7 +31,7 @@ test-suite test
   main-is:             Spec.hs
   build-depends:       base          >= 4.7    && < 5
                      , directory     >= 1.3.0  && < 1.4
-                     , ghc           >= 8.2.0  && < 8.10.0
+                     , ghc           >= 8.2.0  && < 8.11.0
                      , process       >= 1.6.1  && < 1.7
                      , hspec         >= 2.4.8  && < 2.8
                      , QuickCheck    >= 2.10.1 && < 2.14

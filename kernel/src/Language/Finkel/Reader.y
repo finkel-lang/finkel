@@ -1,5 +1,6 @@
 -- -*- mode: haskell; -*-
 {
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | S-expression reader.
 --
@@ -13,6 +14,8 @@ module Language.Finkel.Reader
   , psexpr
   ) where
 
+#include "Syntax.h"
+
 -- base
 import           Control.Monad.Fail     (MonadFail(..))
 import           Data.Char              (toLower)
@@ -21,7 +24,7 @@ import           Data.List              (foldl')
 -- ghc
 import           BasicTypes             (SourceText(..))
 import           FastString             (FastString, fsLit, unpackFS)
-import           HsImpExp               (ideclName)
+import           GHC_Hs_ImpExp          (ideclName)
 import           Module                 (moduleNameString)
 import           SrcLoc                 (GenLocated(..), Located, SrcSpan)
 import           StringBuffer           (StringBuffer)

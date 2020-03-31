@@ -3,14 +3,16 @@
 -- | Syntax for module header, import and export entities.
 module Language.Finkel.Syntax.HIE where
 
+#include "Syntax.h"
+
 -- ghc
 import FastString                      (unpackFS)
 import FieldLabel                      (FieldLbl (..))
-import HsDoc                           (LHsDocString)
-import HsImpExp                        (IE (..), IEWildcard (..),
+import GHC_Hs                          (HsModule (..))
+import GHC_Hs_Doc                      (LHsDocString)
+import GHC_Hs_ImpExp                   (IE (..), IEWildcard (..),
                                         IEWrappedName (..), ImportDecl (..),
                                         simpleImportDecl)
-import HsSyn                           (HsModule (..))
 import Lexeme                          (isLexCon)
 import Module                          (mkModuleNameFS)
 import OccName                         (tcName)
@@ -19,16 +21,17 @@ import RdrHsSyn                        (cvTopDecls)
 import RdrName                         (mkQual, mkUnqual)
 import SrcLoc                          (GenLocated (..), noLoc)
 
-#if MIN_VERSION_ghc(8,6,0)
-import HsExtension                     (noExt)
+#if MIN_VERSION_ghc(8,10,0)
+import GHC_Hs_Extension                (noExtField)
+import GHC_Hs_ImpExp                   (ImportDeclQualifiedStyle (..))
+#elif MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Extension                (noExt)
 #endif
 
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Form
 import Language.Finkel.Syntax.SynUtils
-
-#include "Syntax.h"
 
 -- ---------------------------------------------------------------------
 --
@@ -157,9 +160,15 @@ b_importD :: (Code, Bool, Maybe Code) -> (Bool, Maybe [HIE])
 b_importD (name, qualified, mb_as) (hiding, mb_entities)
   | LForm (L l (Atom (ASymbol m))) <- name =
     let decl = simpleImportDecl (mkModuleNameFS m)
-        decl' = decl { ideclQualified = qualified
+        decl' = decl { ideclQualified = qualified'
                      , ideclAs = fmap asModName mb_as
                      , ideclHiding = hiding' }
+#if MIN_VERSION_ghc(8,10,0)
+        qualified' | qualified = QualifiedPre -- importDeclQualifiedStyle (L l qualified)
+                   | otherwise = NotQualified
+#else
+        qualified' = qualified
+#endif
         asModName (LForm (L l' (Atom (ASymbol x)))) =
           L l' (mkModuleNameFS x)
         asModName _ = error "b_importD.asModName"
@@ -167,6 +176,6 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities)
           case mb_entities of
             Nothing       -> Nothing
             Just entities -> Just (hiding, L l entities)
-    in  return (L l decl')
+          in  return (L l decl')
   | otherwise                              = builderError
 {-# INLINE b_importD #-}

@@ -23,6 +23,8 @@ module Language.Finkel.Emit
   , genHsSrc
   ) where
 
+#include "Syntax.h"
+
 -- base
 #if MIN_VERSION_base(4,11,0)
 import Prelude               hiding ((<>))
@@ -36,21 +38,21 @@ import Bag                   (bagToList, isEmptyBag)
 import BasicTypes            (LexicalFixity (..), TopLevelFlag (..))
 import Class                 (pprFundeps)
 import GHC                   (OutputableBndrId, getPrintUnqual)
-import GhcMonad              (GhcMonad (..), getSessionDynFlags)
-import HsBinds               (LHsBinds, LSig, Sig (..), pprDeclList)
-import HsDecls               (ConDecl (..), DocDecl (..), FamilyDecl (..),
+import GHC_Hs                (HsModule (..))
+import GHC_Hs_Binds          (LHsBinds, LSig, Sig (..), pprDeclList)
+import GHC_Hs_Decls          (ConDecl (..), DocDecl (..), FamilyDecl (..),
                               FamilyInfo (..), FamilyResultSig (..),
                               HsDataDefn (..), HsDecl (..), InjectivityAnn (..),
-                              LConDecl, LDocDecl, LFamilyDecl, LTyFamDefltEqn,
-                              TyClDecl (..), TyFamInstEqn)
-import HsDoc                 (LHsDocString)
-import HsImpExp              (IE (..), LIE)
-import HsSyn                 (HsModule (..))
-import HsTypes               (ConDeclField (..), HsConDetails (..), HsContext,
+                              LConDecl, LDocDecl, LFamilyDecl, TyClDecl (..),
+                              TyFamInstEqn)
+import GHC_Hs_Doc            (LHsDocString)
+import GHC_Hs_ImpExp         (IE (..), LIE)
+import GHC_Hs_Types          (ConDeclField (..), HsConDetails (..), HsContext,
                               HsImplicitBndrs (..), HsType (..),
-                              HsWildCardBndrs (..), LConDeclField,
+                              HsWildCardBndrs (..), LConDeclField, LHsContext,
                               LHsQTyVars (..), LHsTyVarBndr, LHsType,
                               pprHsForAll)
+import GhcMonad              (GhcMonad (..), getSessionDynFlags)
 import Outputable            (Outputable (..), OutputableBndr (..), SDoc,
                               braces, char, comma, darrow, dcolon, dot, empty,
                               equals, forAllLit, fsep, hang, hsep, interpp'SP,
@@ -60,22 +62,29 @@ import Outputable            (Outputable (..), OutputableBndr (..), SDoc,
 import RdrName               (RdrName)
 import SrcLoc                (GenLocated (..), Located, noLoc, unLoc)
 
+#if MIN_VERSION_ghc (8,10,0)
+import GHC_Hs_Decls          (LTyFamDefltDecl, pprTyFamInstDecl)
+import Var                   (ForallVisFlag (..))
+#else
+import GHC_Hs_Decls          (LTyFamDefltEqn)
+#endif
+
 #if MIN_VERSION_ghc(8,8,0)
-import HsDecls               (pprHsFamInstLHS)
+import GHC_Hs_Decls          (pprHsFamInstLHS)
 #elif MIN_VERSION_ghc(8,4,0)
-import HsDecls               (pprFamInstLHS)
+import GHC_Hs_Decls          (pprFamInstLHS)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import HsDecls               (FamEqn (..))
+import GHC_Hs_Decls          (FamEqn (..))
 #else
-import HsDecls               (HsTyPats, TyFamEqn (..))
+import GHC_Hs_Decls          (HsTyPats, TyFamEqn (..))
 #endif
 
 #if MIN_VERSION_ghc(8,8,0)
-import HsTypes               (noLHsContext, pprLHsContext)
+import GHC_Hs_Types          (noLHsContext, pprLHsContext)
 #else
-import HsTypes               (pprHsContext)
+import GHC_Hs_Types          (pprHsContext)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -83,23 +92,23 @@ import Outputable            (arrow, pprPanic)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import HsExtension           (IdP)
+import GHC_Hs_Extension      (IdP)
 #else
 #define IdP {- empty -}
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import HsDoc                 (HsDocString, unpackHDS)
+import GHC_Hs_Doc            (HsDocString, unpackHDS)
 #else
 import FastString            (unpackFS)
-import HsDoc                 (HsDocString (..))
+import GHC_Hs_Doc            (HsDocString (..))
 #endif
 
 -- For SourceTextX, transitional type used in ghc 8.4.x.
 #if MIN_VERSION_ghc(8,6,0)
-import HsExtension           (GhcPass)
+import GHC_Hs_Extension      (GhcPass)
 #elif MIN_VERSION_ghc(8,4,0)
-import HsExtension           (SourceTextX)
+import GHC_Hs_Extension      (SourceTextX)
 #endif
 
 -- For ghc < 8.4
@@ -120,7 +129,9 @@ import Language.Finkel.Lexer
 --
 -- ---------------------------------------------------------------------
 
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(8,10,0)
+type OUTPUTABLE a pr = (OutputableBndrId pr, a ~ GhcPass pr)
+#elif MIN_VERSION_ghc(8,6,0)
 type OUTPUTABLE a pr = (OutputableBndrId a, a ~ GhcPass pr)
 #elif MIN_VERSION_ghc(8,4,0)
 type OUTPUTABLE a pr = (OutputableBndrId a, SourceTextX a)
@@ -482,7 +493,7 @@ pp_condecls st cs =
 -- constructor argument and the docstring for constructor itself.
 pprConDecl :: OUTPUTABLE n pr => SPState -> ConDecl n -> SDoc
 pprConDecl st condecl@(ConDeclH98 {}) =
-  pp_mbdocn doc $+$ sep [pprHsForAll tvs cxt, ppr_details details]
+  pp_mbdocn doc $+$ sep [pprHsForAll' tvs cxt, ppr_details details]
   where
 #if MIN_VERSION_ghc(8,6,0)
     ConDeclH98 { con_name = L _ con
@@ -516,7 +527,7 @@ pprConDecl st (ConDeclGADT { con_names = cons
                            , con_res_ty = res_ty
                            , con_doc = doc })
   = pp_mbdocn doc $+$ ppr_con_names cons <+> dcolon
-    <+> (sep [pprHsForAll (hsq_explicit qvars) cxt
+    <+> (sep [pprHsForAll' (hsq_explicit qvars) cxt
              ,ppr_arrow_chain (get_args args ++ [hsrc res_ty])])
   where
     get_args (PrefixCon as)  = map hsrc as
@@ -593,7 +604,11 @@ pp_vanilla_decl_head _ (XLHsQTyVars x) _ _ = ppr x
 ppr_cdecl_body :: OUTPUTABLE n pr
                => SPState
                -> [LFamilyDecl n]
+#if MIN_VERSION_ghc(8,10,1)
+               -> [LTyFamDefltDecl n]
+#else
                -> [LTyFamDefltEqn n]
+#endif
                -> LHsBinds n
                -> [LSig n]
                -> [LDocDecl]
@@ -707,6 +722,10 @@ pp_fam_inst_lhs thing (HsIB { hsib_body = typats }) fixity context
 #endif
 
 -- From 'HsDecls.ppr_fam_deflt_eqn'
+#if MIN_VERSION_ghc(8,10,0)
+ppr_fam_deflt_eqn :: OUTPUTABLE n pr => LTyFamDefltDecl n -> SDoc
+ppr_fam_deflt_eqn (L _ tfdd) = pprTyFamInstDecl NotTopLevel tfdd
+#else
 ppr_fam_deflt_eqn :: OUTPUTABLE n pr => LTyFamDefltEqn n -> SDoc
 #if MIN_VERSION_ghc(8,4,0)
 ppr_fam_deflt_eqn (L _ (FamEqn { feqn_tycon  = tycon
@@ -718,12 +737,13 @@ ppr_fam_deflt_eqn (L _ (TyFamEqn { tfe_tycon = tycon
                                  , tfe_pats = tvs
                                  , tfe_fixity = fixity
                                  , tfe_rhs = rhs }))
-#endif
+#endif /* MIN_VERSION_ghc(8,4,0) */
   = text "type" <+> pp_vanilla_decl_head tycon tvs fixity []
                 <+> equals <+> ppr rhs
 #if MIN_VERSION_ghc(8,6,0)
 ppr_fam_deflt_eqn (L _ (XFamEqn x)) = ppr x
-#endif
+#endif /* MIN_VERSION_ghc(8,6,0) */
+#endif /* MIN_VERSION_ghc(8,10,0) */
 
 -- ---------------------------------------------------------------------
 --
@@ -824,4 +844,14 @@ unpackHDS' (HsDocString fs) = unpackFS fs
 -- | GHC version compatible function for pretty printing 'HsContext'.
 pprHsContext :: OUTPUTABLE n a => HsContext (GhcPass a) -> SDoc
 pprHsContext = pprLHsContext . noLoc
+#endif
+
+pprHsForAll' :: OUTPUTABLE a pr
+             => [LHsTyVarBndr a]
+             -> LHsContext a
+             -> SDoc
+#if MIN_VERSION_ghc(8,10,0)
+pprHsForAll' = pprHsForAll ForallInvis
+#else
+pprHsForAll' = pprHsForAll
 #endif

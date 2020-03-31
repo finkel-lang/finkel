@@ -1,5 +1,4 @@
 -- | Module for source code file path look up.
-
 module Language.Finkel.TargetSource
   ( -- * Target source
     TargetSource(..)

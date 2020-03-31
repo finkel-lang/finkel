@@ -55,22 +55,26 @@ module Language.Finkel.Builder
   , HType
   ) where
 
+#include "Syntax.h"
+
 -- ghc
 import Bag                  (Bag)
 import DynFlags             (DynFlags)
 import ForeignCall          (CCallConv (..))
-import HsBinds              (HsLocalBinds, LHsBind, LSig)
-import HsDecls              (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
-import HsExpr               (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
-import HsImpExp             (LIE, LIEWrappedName, LImportDecl)
-import HsPat                (LPat)
-import HsSyn                (HsModule)
-import HsTypes              (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
+
+import GHC_Hs               (HsModule)
+import GHC_Hs_Binds         (HsLocalBinds, LHsBind, LSig)
+import GHC_Hs_Decls         (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
+import GHC_Hs_Expr          (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
+import GHC_Hs_ImpExp        (LIE, LIEWrappedName, LImportDecl)
+import GHC_Hs_Pat           (LPat)
+import GHC_Hs_Types         (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
+
 import Lexer                (PState (..), mkPState)
 import SrcLoc               (GenLocated (..), Located, noLoc)
 
 #if MIN_VERSION_ghc(8,4,0)
-import HsExtension          (GhcPs)
+import GHC_Hs_Extension     (GhcPs)
 #else
 import RdrName              (RdrName)
 #endif

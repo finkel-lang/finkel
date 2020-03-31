@@ -5,6 +5,8 @@
 -- | Syntax for expression.
 module Language.Finkel.Syntax.HExpr where
 
+#include "Syntax.h"
+
 -- base
 import Data.List                       (foldl', foldl1')
 
@@ -13,33 +15,43 @@ import BasicTypes                      (Arity, Boxity (..), FractionalLit (..),
                                         Origin (..))
 import FastString                      (FastString, headFS, lengthFS, nullFS,
                                         tailFS, unpackFS)
-import HsDoc                           (HsDocString)
-import HsExpr                          (ArithSeqInfo (..), GRHS (..),
+import GHC_Hs_Doc                      (HsDocString)
+import GHC_Hs_Expr                     (ArithSeqInfo (..), GRHS (..),
                                         HsExpr (..), HsMatchContext (..),
                                         HsStmtContext (..), HsTupArg (..),
                                         Match (..), StmtLR (..))
-import HsLit                           (HsLit (..), HsOverLit (..))
-import HsPat                           (HsRecFields (..))
-import HsTypes                         (mkHsWildCardBndrs)
-import HsUtils                         (mkBindStmt, mkBodyStmt, mkHsApp,
+import GHC_Hs_Lit                      (HsLit (..), HsOverLit (..))
+import GHC_Hs_Pat                      (HsRecFields (..))
+import GHC_Hs_Types                    (mkHsWildCardBndrs)
+import GHC_Hs_Utils                    (mkBindStmt, mkBodyStmt, mkHsApp,
                                         mkHsComp, mkHsDo, mkHsFractional,
                                         mkHsIf, mkHsLam, mkLHsPar,
                                         mkLHsSigWcType, mkLHsTupleExpr,
                                         mkMatchGroup)
 import Lexeme                          (isLexCon, isLexSym)
 import OrdList                         (toOL)
-import RdrHsSyn                        (bang_RDR, mkRdrRecordCon,
-                                        mkRdrRecordUpd)
+import RdrHsSyn                        (mkRdrRecordCon, mkRdrRecordUpd)
 import RdrName                         (RdrName, getRdrName)
 import SrcLoc                          (GenLocated (..), Located, getLoc, noLoc)
 import TysWiredIn                      (tupleDataCon)
 
-#if MIN_VERSION_ghc(8,6,0)
-import HsExpr                          (parenthesizeHsExpr)
-import HsExtension                     (noExt)
+#if MIN_VERSION_ghc(8,10,0)
+import FastString                      (fsLit)
+import OccName                         (varName)
+import RdrName                         (mkUnqual)
 #else
-import HsExpr                          (isListCompExpr, noPostTcExpr)
-import HsLit                           (OverLitVal (..))
+import RdrHsSyn                        (bang_RDR)
+#endif
+
+#if MIN_VERSION_ghc(8,10,0)
+import GHC_Hs_Expr                     (parenthesizeHsExpr)
+import GHC_Hs_Extension                (noExtField)
+#elif MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Expr                     (parenthesizeHsExpr)
+import GHC_Hs_Extension                (noExt)
+#else
+import GHC_Hs_Expr                     (isListCompExpr, noPostTcExpr)
+import GHC_Hs_Lit                      (OverLitVal (..))
 import PlaceHolder                     (placeHolderType)
 #endif
 
@@ -97,7 +109,7 @@ b_caseE (LForm (L l _)) expr matches = L l (hsCase expr mg)
 b_match :: HPat -> ([HGRHS],[HDecl]) -> HMatch
 b_match pat (grhss,decls) =
 #if MIN_VERSION_ghc(8,6,0)
-    L l (Match noExt ctxt [pat] grhss')
+    L l (Match NOEXT ctxt [pat] grhss')
 #elif MIN_VERSION_ghc(8,4,0)
     L l (Match ctxt [pat] grhss')
 #else
@@ -127,18 +139,18 @@ b_doE (LForm (L l _)) exprs = L l (mkHsDo DoExpr exprs)
 {-# INLINE b_doE #-}
 
 b_tsigE :: Code -> HExpr -> ([HType], HType) -> HExpr
-b_tsigE (LForm (L l _)) e (ctxt,t) =
+b_tsigE (LForm (L l _)) e0 (ctxt,t) =
   let t' = case ctxt of
              [] -> t
              _  -> L l (mkHsQualTy_compat (mkLocatedList ctxt) t)
 #if MIN_VERSION_ghc(8,8,0)
-      e' = ExprWithTySig noExt e (mkLHsSigWcType t')
+      e1 = ExprWithTySig NOEXT e0 (mkLHsSigWcType t')
 #elif MIN_VERSION_ghc(8,6,0)
-      e' = ExprWithTySig (mkLHsSigWcType t') e
+      e1 = ExprWithTySig (mkLHsSigWcType t') e0
 #else
-      e' = ExprWithTySig e (mkLHsSigWcType t')
+      e1 = ExprWithTySig e0 (mkLHsSigWcType t')
 #endif
-  in  mkLHsPar (L l e')
+  in  mkLHsPar (L l e1)
 {-# INLINE b_tsigE #-}
 
 b_recConOrUpdE :: Code -> [(Located FastString,HExpr)] -> Builder HExpr
@@ -263,8 +275,8 @@ b_varE (LForm (L l form))
             return (b_lazyPatE (hsVar (mkVarRdrName tlchrs)))
       '!' | not (nullFS tlchrs), not (isLexSym tlchrs) ->
             -- Bang pattern
-            let bang = hsVar bang_RDR
-                vname = (mkVarRdrName tlchrs)
+            let vname = mkVarRdrName tlchrs
+                bang = hsVar bang_RDR
             in  return (cL l (SectionR NOEXT bang (hsVar vname)))
       _   | hdchr == ',', all (== ',') (unpackFS tlchrs) ->
             -- Tuple constructor function with more than two elements are
@@ -275,6 +287,9 @@ b_varE (LForm (L l form))
   | otherwise = builderError
   where
     hsVar name = cL l (HsVar NOEXT (cL l name))
+#if MIN_VERSION_ghc(8,10,0)
+    bang_RDR = mkUnqual varName (fsLit "!")
+#endif
 {-# INLINE b_varE #-}
 
 b_unitE :: Code -> HExpr
@@ -294,7 +309,7 @@ b_hsListE expr =
       where
         l = getLoc (mkLocatedList exprs)
 #if MIN_VERSION_ghc(8,6,0)
-        xEXPLICITLIST = noExt
+        xEXPLICITLIST = NOEXT
 #else
         xEXPLICITLIST = placeHolderType
 #endif
@@ -309,7 +324,7 @@ b_lcompE ret stmts = L l (mkHsComp ListComp stmts ret)
 b_arithSeqE :: HExpr -> Maybe HExpr -> Maybe HExpr -> HExpr
 b_arithSeqE fromE thenE toE =
 #if MIN_VERSION_ghc(8,6,0)
-  L l (ArithSeq noExt Nothing info)
+  L l (ArithSeq NOEXT Nothing info)
 #else
   L l (ArithSeq noPostTcExpr Nothing info)
 #endif
@@ -335,6 +350,30 @@ b_parE (dL->expr@(L l _)) = cL l (hsPar expr)
 --
 -- ------------------------------------------------------------------------
 
+-- Note: [Pattern from expression]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Until ghc-8.8.x, parser in GHC had intermediate constructors in HsExpr data
+-- type, to make HsPat values from HsExpr. In ghc-8.10.1, the intermediate
+-- constructors were removed and RdrHsSyn.PatBuilder and related data types and
+-- functions were introduced.
+
+#if MIN_VERSION_ghc(8,10,0)
+
+b_wildPatE :: Code -> HExpr
+b_wildPatE = error "b_wildPatE: NYI"
+
+b_asPatE :: Code -> HExpr -> Builder HExpr
+b_asPatE = error "b_asPatE: NYI"
+
+b_asPatLazyE :: Code -> HExpr -> Builder HExpr
+b_asPatLazyE = error "b_asPatLazyE: NYI"
+
+b_lazyPatE :: HExpr -> HExpr
+b_lazyPatE = error "b_lazyPatE: NYI"
+
+#else
+
 b_wildPatE :: Code -> HExpr
 b_wildPatE (LForm (L l _)) = cL l (EWildPat NOEXT)
 {-# INLINE b_wildPatE #-}
@@ -358,6 +397,7 @@ b_lazyPatE e@(dL->L l _) = cL l (ELazyPat NOEXT e')
   where e' = parenthesizeHsExpr' appPrec e
 {-# INLINE b_lazyPatE #-}
 
+#endif
 
 -- ------------------------------------------------------------------------
 --
@@ -439,7 +479,12 @@ b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
 -- will fail to parse in Haskell when the "~(Just n)" is not surrounded by
 -- parentheses.
 
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(8,10,0)
+
+parenthesizeHsExpr' :: PprPrec -> HExpr -> HExpr
+parenthesizeHsExpr' = parenthesizeHsExpr
+
+#elif MIN_VERSION_ghc(8,6,0)
 
 parenthesizeHsExpr' :: PprPrec -> HExpr -> HExpr
 parenthesizeHsExpr' p le@(dL->L loc e)

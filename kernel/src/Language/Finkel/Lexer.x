@@ -2,6 +2,7 @@
 {
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UnboxedTuples #-}
 -- | Lexical analyser of S-expression tokens.
 --
@@ -55,7 +56,6 @@ import           BasicTypes                 (FractionalLit(..), SourceText(..))
 import           Ctype                      (is_space)
 import           Encoding                   (utf8DecodeByteString)
 import           FastString                 (FastString,
-                                             fastStringToByteString,
                                              fsLit, headFS, nullFS,
                                              mkFastStringByteString,
                                              unpackFS)
@@ -73,6 +73,12 @@ import           StringBuffer               (StringBuffer, atEnd,
                                              prevChar, stepOn)
 import qualified StringBuffer               as SB
 import           Util                       (readRational)
+
+#if MIN_VERSION_ghc (8,10,0)
+import           FastString                 (bytesFS)
+#else
+import           FastString                 (fastStringToByteString)
+#endif
 
 -- ghc-boot
 import qualified GHC.LanguageExtensions     as LangExt
@@ -432,7 +438,7 @@ tok_quasiquote _ _ = return TQuasiquote
 tok_pcommas :: Action
 tok_pcommas (AlexInput _ buf) l =
   do let commas0 = lexemeToFastString buf (fromIntegral l)
-         commas1 = fastStringToByteString commas0
+         commas1 = bytesFS commas0
          commas2 = C8.filter (not . isSpace) commas1
      return $! TPcommas (fromIntegral (C8.length commas1 - 2))
 {-# INLINE tok_pcommas #-}
@@ -499,7 +505,7 @@ tok_doc_next = tok_doc_with TDocNext '|'
 tok_doc_with :: (FastString -> Token) -> Char -> Action
 tok_doc_with constr char (AlexInput _ s) l = do
   let fs0 = takeUtf8FS l s
-      bs0 = fastStringToByteString fs0
+      bs0 = bytesFS fs0
       line0:bss = C8.lines bs0
       line1 = C8.tail (C8.dropWhile (/= char) line0)
       bs1 = C8.unlines (line1 : map (C8.dropWhile (== ';')) bss)
@@ -510,7 +516,7 @@ tok_doc_with constr char (AlexInput _ s) l = do
 tok_doc_named :: Action
 tok_doc_named (AlexInput _ s) l =
   let fs0 = takeUtf8FS l s
-      bs0 = fastStringToByteString fs0
+      bs0 = bytesFS fs0
       line1:bss = C8.lines bs0
       line2 = C8.dropWhile isSpace (C8.dropWhile (== ';') line1)
       line3 = C8.tail line2
@@ -525,7 +531,7 @@ tok_doc_named (AlexInput _ s) l =
 
 tok_doc_group :: Action
 tok_doc_group (AlexInput _ s) l =
-  let bs0 = fastStringToByteString (takeUtf8FS l s)
+  let bs0 = bytesFS (takeUtf8FS l s)
       bs1 = C8.dropWhile isSpace (C8.dropWhile (== ';') bs0)
       (stars, bs2) = C8.span (== '*') bs1
       level = C8.length stars
@@ -552,7 +558,7 @@ replaceHyphens :: FastString -> FastString
 replaceHyphens =
   mkFastStringByteString .
   C8.map (\c -> if c == '-' then '_' else c) .
-  fastStringToByteString
+  bytesFS
 {-# INLINE replaceHyphens #-}
 
 tok_char :: Action
@@ -849,4 +855,11 @@ adjustChar c = fromIntegral $ ord adj_c
                   Space                 -> space
                   _other                -> non_graphic
 {-# INLINE adjustChar #-}
+
+#if !MIN_VERSION_ghc(8,10,0)
+-- | 'fastStringToByteString' is deprecated in ghc-8.10.x.
+bytesFS :: FastString -> W8.ByteString
+bytesFS = fastStringToByteString
+#endif
+
 }

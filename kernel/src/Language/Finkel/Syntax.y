@@ -1,5 +1,6 @@
 -- -*- mode: haskell; -*-
 {
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Module for parsing form data.
 --
@@ -24,13 +25,15 @@ module Language.Finkel.Syntax
   , parseType
   ) where
 
+#include "Syntax.h"
+
 -- ghc
 import BasicTypes ( Activation(..), FixityDirection(..), InlineSpec(..)
                   , OverlapMode(..), SourceText(..) )
 import FastString (FastString)
 import ForeignCall (Safety)
-import HsDoc (LHsDocString)
-import HsExpr (GRHS(..))
+import GHC_Hs_Doc (LHsDocString)
+import GHC_Hs_Expr (GRHS(..))
 import SrcLoc (GenLocated(..), Located, getLoc, noLoc)
 
 -- Internal

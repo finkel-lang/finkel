@@ -8,6 +8,8 @@ module Language.Finkel.Make
   , buildHsSyn
   ) where
 
+#include "Syntax.h"
+
 -- base
 import           Control.Monad                (unless, when)
 import           Control.Monad.IO.Class       (MonadIO (..))
@@ -39,8 +41,7 @@ import           DynFlags                     (DumpFlag (..), DynFlags (..),
                                                isObjectTarget,
                                                parseDynamicFilePragma,
                                                thisPackage)
-import           ErrUtils                     (dumpIfSet_dyn, mkErrMsg,
-                                               withTiming)
+import           ErrUtils                     (dumpIfSet_dyn, mkErrMsg)
 import           FastString                   (fsLit)
 import           Finder                       (addHomeModuleToFinder,
                                                cannotFindModule,
@@ -48,6 +49,9 @@ import           Finder                       (addHomeModuleToFinder,
                                                findObjectLinkableMaybe,
                                                mkHomeModLocation)
 import           GHC                          (setSessionDynFlags)
+import           GHC_Hs                       (HsModule (..))
+import           GHC_Hs_Dump                  (BlankSrcSpan (..), showAstData)
+import           GHC_Hs_ImpExp                (ImportDecl (..))
 import           GhcMake                      (topSortModuleGraph)
 import           GhcMonad                     (GhcMonad (..), modifySession,
                                                withTempSession)
@@ -58,15 +62,12 @@ import           HscTypes                     (FindResult (..),
                                                HomePackageTable,
                                                HsParsedModule (..), HscEnv (..),
                                                InteractiveContext (..),
-                                               ModIface (..), ModSummary (..),
-                                               ModuleGraph, SourceModified (..),
-                                               addToHpt, eltsHpt, isBootSummary,
+                                               ModSummary (..), ModuleGraph,
+                                               SourceModified (..), addToHpt,
+                                               eltsHpt, isBootSummary,
                                                isObjectLinkable, linkableTime,
                                                lookupHpt, mi_boot, ms_mod_name,
                                                throwOneError)
-import           HsDumpAst                    (BlankSrcSpan (..), showAstData)
-import           HsImpExp                     (ImportDecl (..))
-import           HsSyn                        (HsModule (..))
 import           Module                       (ModLocation (..), ModuleName,
                                                installedUnitIdEq, mkModule,
                                                mkModuleName, moduleName,
@@ -85,6 +86,18 @@ import           Util                         (getModificationUTCTime,
 
 import qualified Lexer                        as GHCLexer
 import qualified Parser                       as GHCParser
+
+#if MIN_VERSION_ghc(8,10,0)
+import           HscTypes                     (mi_module)
+#else
+import           HscTypes                     (ModIface (..))
+#endif
+
+#if MIN_VERSION_ghc (8,10,0)
+import           ErrUtils                     (withTimingD)
+#else
+import           ErrUtils                     (withTiming)
+#endif
 
 #if MIN_VERSION_ghc(8,8,0)
 import           HscTypes                     (throwErrors)
@@ -1010,7 +1023,11 @@ sortTargets summaries targets = foldr f [] summaries
 
 -- | Label and wrap the given action with 'withTiming'.
 timeIt :: String -> Fnk a -> Fnk a
+#if MIN_VERSION_ghc(8,10,0)
+timeIt label = withTimingD (text label) (const ())
+#else
 timeIt label = withTiming getDynFlags (text label) (const ())
+#endif
 
 -- | Get module name from import declaration.
 import_name :: HImportDecl -> String

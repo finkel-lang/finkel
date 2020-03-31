@@ -14,6 +14,8 @@ module Language.Finkel.Expand
   , unquoteSplice
   ) where
 
+#include "Syntax.h"
+
 -- base
 import           Control.Exception               (throw)
 import           Control.Monad                   (foldM, when)
@@ -41,6 +43,8 @@ import           Finder                          (findImportedModule)
 import           GHC                             (ModuleInfo, getModuleInfo,
                                                   lookupModule, lookupName,
                                                   modInfoExports, setContext)
+import           GHC_Hs                          (HsModule (..))
+import           GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
 import           GhcMonad                        (GhcMonad (..))
 import           HscMain                         (Messager,
                                                   hscTcRnLookupRdrName,
@@ -48,8 +52,6 @@ import           HscMain                         (Messager,
 import           HscTypes                        (FindResult (..), HscEnv (..),
                                                   InteractiveImport (..),
                                                   showModMsg)
-import           HsImpExp                        (ImportDecl (..), ieName)
-import           HsSyn                           (HsModule (..))
 import           InteractiveEval                 (getContext)
 import           MkIface                         (RecompileRequired (..),
                                                   recompileRequired)

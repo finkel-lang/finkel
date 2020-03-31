@@ -19,12 +19,10 @@ import Distribution.Simple.Build             (build)
 import Distribution.Simple.BuildPaths        (autogenComponentModulesDir)
 import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.PreProcess        (knownSuffixHandlers)
-import Distribution.Simple.Program           (getDbProgramOutput,
-                                              ghcProgram)
+import Distribution.Simple.Program           (getDbProgramOutput, ghcProgram)
 import Distribution.Simple.Program.Db        (lookupProgram, updateProgram)
 import Distribution.Simple.Program.Types     (ConfiguredProgram (..),
-                                              ProgramLocation (..),
-                                              programPath,
+                                              ProgramLocation (..), programPath,
                                               simpleConfiguredProgram)
 import Distribution.Simple.Setup             (ConfigFlags (..), fromFlag)
 import Distribution.Simple.Utils             (createDirectoryIfMissingVerbose)

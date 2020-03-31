@@ -4,21 +4,30 @@
 -- | Syntax for patterns.
 module Language.Finkel.Syntax.HPat where
 
+#include "Syntax.h"
+
 -- ghc
-import HsPat                           (Pat (..))
-import Lexer                           (P (..), ParseResult (..))
-import Outputable                      (text)
+import GHC_Hs_Pat                      (Pat (..))
+import Lexer                           (P (..), PState, ParseResult (..))
 import RdrHsSyn                        (checkPattern)
 import SrcLoc                          (GenLocated (..))
 
-#if MIN_VERSION_ghc(8,6,0)
-import HsExtension                     (noExt)
+#if MIN_VERSION_ghc(8,10,0)
+import RdrHsSyn                        (ecpFromExp, runECP_P)
+#else
+import Outputable                      (text)
+#endif
+
+#if MIN_VERSION_ghc(8,10,0)
+import GHC_Hs_Extension                (noExtField)
+#elif MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Extension                (noExt)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import HsPat                           (parenthesizePat)
+import GHC_Hs_Pat                      (parenthesizePat)
 #else
-import HsTypes                         (HsConDetails (..))
+import GHC_Hs_Types                    (HsConDetails (..))
 import SrcLoc                          (unLoc)
 #endif
 
@@ -30,8 +39,6 @@ import Language.Finkel.Syntax.SynUtils
 import Language.Finkel.Syntax.HExpr
 #endif
 
-#include "Syntax.h"
-
 -- ---------------------------------------------------------------------
 --
 -- Pattern
@@ -41,10 +48,17 @@ import Language.Finkel.Syntax.HExpr
 b_exprToP :: HExpr -> Builder HPat
 b_exprToP expr =
   do pstate <- ghcPState <$> getBState
-     case unP (checkPattern (text "b_exprToP") expr) pstate of
+     case checkPattern' expr pstate of
        POk _ a -> return a
        _       -> builderError
 {-# INLINE b_exprToP #-}
+
+checkPattern' :: HExpr -> PState -> ParseResult HPat
+#if MIN_VERSION_ghc(8,10,0)
+checkPattern' expr = unP (runECP_P (ecpFromExp expr) >>= checkPattern)
+#else
+checkPattern' expr = unP (checkPattern (text "checkPattern'") expr)
+#endif
 
 b_lazyP :: HPat -> HPat
 b_lazyP (dL->L l pat) = cL l (LazyPat NOEXT (cL l pat))

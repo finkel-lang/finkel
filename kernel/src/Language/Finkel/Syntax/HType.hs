@@ -5,14 +5,17 @@
 -- | Syntax for type.
 module Language.Finkel.Syntax.HType where
 
+#include "Syntax.h"
+
+
 -- base
 import Data.List                       (foldl')
 
 -- ghc
 import BasicTypes                      (Boxity (..), SourceText (..))
 import FastString                      (headFS, lengthFS, nullFS, tailFS)
-import HsDoc                           (LHsDocString)
-import HsTypes                         (HsSrcBang (..), HsTupleSort (..),
+import GHC_Hs_Doc                      (LHsDocString)
+import GHC_Hs_Types                    (HsSrcBang (..), HsTupleSort (..),
                                         HsTyLit (..), HsType (..), LHsTyVarBndr,
                                         SrcStrictness (..),
                                         SrcUnpackedness (..), mkAnonWildCardTy,
@@ -26,10 +29,14 @@ import SrcLoc                          (GenLocated (..), Located, addCLoc,
 import TysPrim                         (funTyCon)
 import TysWiredIn                      (consDataCon, listTyCon_RDR, tupleTyCon)
 
+#if MIN_VERSION_ghc(8,10,0)
+import Var                             (ForallVisFlag (..))
+#endif
+
 #if MIN_VERSION_ghc(8,8,0)
 import BasicTypes                      (PromotionFlag (..))
 #else
-import HsTypes                         (Promoted (..))
+import GHC_Hs_Types                    (Promoted (..))
 #endif
 
 #if MIN_VERSION_ghc(8,8,0)
@@ -39,11 +46,13 @@ import PrelNames                       (eqTyCon_RDR)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import HsTypes                         (parenthesizeHsType)
+import GHC_Hs_Types                    (parenthesizeHsType)
 #endif
 
-#if MIN_VERSION_ghc(8,6,0)
-import HsExtension                     (noExt)
+#if MIN_VERSION_ghc(8,10,0)
+import GHC_Hs_Extension                (noExtField)
+#elif MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Extension                (noExt)
 #else
 import PlaceHolder                     (placeHolderKind)
 #endif
@@ -53,7 +62,7 @@ import TysWiredIn                      (starKindTyCon)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import HsExtension                     (IdP)
+import GHC_Hs_Extension                (IdP)
 #else
 #define IdP {- empty -}
 #endif
@@ -62,8 +71,6 @@ import HsExtension                     (IdP)
 import Language.Finkel.Builder
 import Language.Finkel.Form
 import Language.Finkel.Syntax.SynUtils
-
-#include "Syntax.h"
 
 -- ---------------------------------------------------------------------
 --
@@ -336,8 +343,11 @@ hsBangTy = HsBangTy NOEXT
 forAllTy :: [LHsTyVarBndr PARSED] -> HType -> HsType PARSED
 forAllTy bndrs body =
   HsForAllTy { hst_bndrs = bndrs
+#if MIN_VERSION_ghc(8,10,0)
+             , hst_fvf = ForallInvis
+#endif
 #if MIN_VERSION_ghc(8,6,0)
-             , hst_xforall = noExt
+             , hst_xforall = NOEXT
 #endif
              , hst_body = body }
 {-# INLINE forAllTy #-}

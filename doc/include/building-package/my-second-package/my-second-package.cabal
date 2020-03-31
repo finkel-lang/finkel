@@ -1,3 +1,4 @@
+cabal-version:       2.0
 name:                my-second-package
 version:             0.1.0.0
 -- synopsis:
@@ -12,10 +13,9 @@ category:            Data
 build-type:          Custom
 extra-source-files:  README.md
                      src/*.fnk
-cabal-version:       >=2.0
 
 custom-setup
-  setup-depends:       base >= 4.7 && < 5
+  setup-depends:       base >= 4.7
                      , Cabal >= 2.0
                      , finkel-setup >= 0.1 && < 1
 

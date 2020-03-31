@@ -41,9 +41,16 @@ import TcRnDriver              (TcRnExprMode (..), tcRnDeclsi, tcRnExpr,
 import TcRnTypes               (TcGblEnv (..))
 import TidyPgm                 (tidyProgram)
 import TyCon                   (TyCon, isDataTyCon, isImplicitTyCon)
-import TyCoRep                 (Kind, Type (..), tidyType)
+import TyCoRep                 (Kind, Type (..))
 import Util                    (filterOut)
 import VarEnv                  (emptyTidyEnv)
+
+#if MIN_VERSION_ghc(8,10,0)
+import TcHsSyn                 (ZonkFlexi (..))
+import TyCoTidy                (tidyType)
+#else
+import TyCoRep                 (tidyType)
+#endif
 
 -- ghci
 import GHCi.RemoteTypes        (HValue, localRef, withForeignRef)
@@ -90,7 +97,7 @@ evalTypeKind ty = do
   -- `True' in below code.
   --
   hsc_env <- getSession
-  ioMsgMaybe $ tcRnType hsc_env True ty
+  ioMsgMaybe $ tcRnType' hsc_env True ty
 
 -- | Evaluate given declarations. The returned value is resulting
 -- 'TyThing's of declarations and updated interactive context.
@@ -148,6 +155,7 @@ evalDecls decls = do
   setSession (hsc_env {hsc_IC = new_ictxt})
   return (new_tythings, new_ictxt)
 
+
 -- ---------------------------------------------------------------------
 --
 -- Auxiliary
@@ -190,11 +198,19 @@ hscSimplify' hsc_env modguts _tc_gblenv =
 
 -- | GHC version compatibility helper for 'corePrepPgm'.
 corePrepPgm' :: HscEnv -> Module -> ModLocation -> CoreProgram
-                    -> [TyCon] -> IO CoreProgram
+             -> [TyCon] -> IO CoreProgram
 #if MIN_VERSION_ghc(8,4,0)
 corePrepPgm' hsc_env this_mod mod_loc binds data_tycons =
   fmap fst (corePrepPgm hsc_env this_mod mod_loc binds data_tycons)
 #else
 corePrepPgm' hsc_env this_mod mod_loc binds data_tycons =
   corePrepPgm hsc_env this_mod mod_loc binds data_tycons
+#endif
+
+-- | GHC version compatibility helper for 'tcRnType'.
+tcRnType' :: HscEnv -> Bool -> HType -> IO (Messages, Maybe (Type, Kind))
+#if MIN_VERSION_ghc(8,10,0)
+tcRnType' hsc_env tidy typ = tcRnType hsc_env DefaultFlexi tidy typ
+#else
+tcRnType' = tcRnType
 #endif

@@ -10,42 +10,51 @@ module Language.Finkel.Syntax.SynUtils
 #endif
   ) where
 
+#include "Syntax.h"
+
 -- base
 import           Data.Char               (isUpper)
 
 -- ghc
-import           Bag                     (consBag, emptyBag, listToBag)
+import           Bag                     (listToBag)
 import           BasicTypes              (SourceText (..))
 import           FastString              (FastString, fsLit, headFS, unpackFS)
 import           HaddockUtils            (addConDoc)
-import           HsBinds                 (HsBindLR (..), HsLocalBindsLR (..),
+
+import           GHC_Hs_Binds            (HsLocalBindsLR (..),
                                           HsValBindsLR (..), emptyLocalBinds)
-import           HsDecls                 (HsDecl (..), InstDecl (..), LConDecl,
+import           GHC_Hs_Decls            (HsDecl (..), LConDecl,
                                           LDataFamInstDecl, LDocDecl,
-                                          LFamilyDecl, LTyFamInstDecl,
-                                          TyClDecl (..))
-import           HsDoc                   (LHsDocString)
-import           HsExpr                  (GRHSs (..), LGRHS, LHsExpr, LMatch,
-                                          Match (..), MatchGroup (..))
-import           HsLit                   (HsOverLit (..))
-import           HsPat                   (HsRecField' (..), LHsRecField,
+                                          LFamilyDecl, LTyFamInstDecl)
+import           GHC_Hs_Doc              (LHsDocString)
+import           GHC_Hs_Expr             (GRHSs (..), LGRHS)
+import           GHC_Hs_Lit              (HsOverLit (..))
+import           GHC_Hs_Pat              (HsRecField' (..), LHsRecField,
                                           LHsRecUpdField)
-import           HsTypes                 (AmbiguousFieldOcc (..), FieldOcc (..),
+import           GHC_Hs_Types            (AmbiguousFieldOcc (..), FieldOcc (..),
                                           HsTyVarBndr (..), HsType (..),
                                           LHsContext, mkFieldOcc)
-import           HsUtils                 (mkFunBind, mkHsIntegral)
+import           GHC_Hs_Utils            (mkHsIntegral)
+
 import           Lexeme                  (isLexCon, isLexConSym, isLexVar,
                                           isLexVarSym)
+import           Lexer                   (P (..), ParseResult (..))
 import           OccName                 (NameSpace, srcDataName, tcName,
                                           tvName, varName)
-import           OrdList                 (OrdList, fromOL, toOL)
+import           OrdList                 (OrdList, toOL)
 import           RdrHsSyn                (cvTopDecls)
+import qualified RdrHsSyn
 import           RdrName                 (RdrName, mkQual, mkUnqual,
                                           mkVarUnqual, nameRdrName)
 import           SrcLoc                  (GenLocated (..), Located, SrcSpan,
-                                          combineLocs, combineSrcSpans, noLoc,
-                                          unLoc)
+                                          combineLocs, noLoc, unLoc)
 import           TysWiredIn              (consDataConName)
+
+#if MIN_VERSION_ghc(8,10,0)
+import           FastString              (bytesFS)
+#elif MIN_VERSION_ghc(8,6,0)
+import           FastString              (fastStringToByteString)
+#endif
 
 #if MIN_VERSION_ghc(8,8,0)
 import qualified SrcLoc
@@ -54,15 +63,16 @@ import qualified SrcLoc
 #if MIN_VERSION_ghc(8,6,0)
 import           BasicTypes              (PprPrec (..), appPrec, funPrec,
                                           opPrec, sigPrec, topPrec)
-import           FastString              (fastStringToByteString)
-import           HsDoc                   (HsDocString,
+import           GHC_Hs_Doc              (HsDocString,
                                           mkHsDocStringUtf8ByteString)
 #else
-import           HsDoc                   (HsDocString (..))
+import           GHC_Hs_Doc              (HsDocString (..))
 #endif
 
-#if MIN_VERSION_ghc(8,6,0)
-import           HsExtension             (noExt)
+#if MIN_VERSION_ghc(8,10,0)
+import           GHC_Hs_Extension        (noExtField)
+#elif MIN_VERSION_ghc(8,6,0)
+import           GHC_Hs_Extension        (noExt)
 #else
 import           PlaceHolder             (PlaceHolder (..), placeHolderType)
 #endif
@@ -70,9 +80,6 @@ import           PlaceHolder             (PlaceHolder (..), placeHolderType)
 -- Internal
 import           Language.Finkel.Builder
 import           Language.Finkel.Form
-
-#include "Syntax.h"
-
 
 mkRdrName :: FastString -> RdrName
 mkRdrName = mkRdrName' tcName
@@ -164,7 +171,7 @@ declsToBinds l decls = L l binds'
     -- Using 'RdrHsSyn.cvTopDecls' to group same names in where
     -- clause. Perhaps better to do similar things done in
     -- 'RdrHsSyn.cvBindGroup', which is dedicated for 'P' monad ...
-    decls' = cvTopDecls (toOL decls)
+    decls' = RdrHsSyn.cvTopDecls (toOL decls)
     (binds, sigs) = go ([],[]) decls'
     go (bs,ss) ds =
       case ds of
@@ -190,7 +197,7 @@ cfld2ufld :: LHsRecField PARSED HExpr
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
   where
-    unambiguous = Unambiguous noExt rdr
+    unambiguous = Unambiguous NOEXT rdr
 cfld2ufld _ = error "Language.Finkel.Syntax.SynUtils:cfld2ufld"
 #else
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
@@ -247,56 +254,62 @@ toCategorizedDecls (binds, sigs, fds, tfis, dfis, docs) =
                    , cd_docs = docs }
 
 cvBindsAndSigs :: OrdList HDecl -> Builder CategorizedDecls
-cvBindsAndSigs fb = fmap toCategorizedDecls (go (fromOL fb))
-  where
-    go [] = return (emptyBag, [], [], [], [], [])
-    go (L l (ValD _EXT d) : ds) = do
-      let (b', ds') = getMonoBind (L l d) ds
-      (bs, ss, fs, tfis, dfis, docs) <- go ds'
-      return (b' `consBag` bs, ss, fs, tfis, dfis, docs)
-    go (L l decl : ds) = do
-      (bs, ss, fs, tfis, dfis, docs) <- go ds
-      case decl of
-        SigD _EXT s ->
-          return (bs, L l s:ss, fs, tfis, dfis, docs)
-        TyClD _EXT (FamDecl _EXT f) ->
-          return (bs, ss, L l f:fs, tfis, dfis, docs)
-        InstD _EXT (TyFamInstD {tfid_inst = tfi}) ->
-          return (bs, ss, fs, L l tfi:tfis, dfis, docs)
-        InstD _EXT (DataFamInstD {dfid_inst=dfi}) ->
-          return (bs, ss, fs, tfis, L l dfi:dfis, docs)
-        DocD _EXT doc ->
-          return (bs, ss, fs, tfis, dfis, L l doc:docs)
+cvBindsAndSigs fb =
+  do ps <- fmap ghcPState getBState
+     case unP (fmap toCategorizedDecls (RdrHsSyn.cvBindsAndSigs fb)) ps of
+       POk _ cd -> return cd
+       _        -> builderError
 
-        -- XXX: Ignoring other constructors.
-        _ -> return (bs, ss, fs, tfis, dfis, docs)
+-- cvBindsAndSigs fb = fmap toCategorizedDecls (go (fromOL fb))
+--   where
+--     go [] = return (emptyBag, [], [], [], [], [])
+--     go (L l (ValD _EXT d) : ds) = do
+--       let (b', ds') = getMonoBind (L l d) ds
+--       (bs, ss, fs, tfis, dfis, docs) <- go ds'
+--       return (b' `consBag` bs, ss, fs, tfis, dfis, docs)
+--     go (L l decl : ds) = do
+--       (bs, ss, fs, tfis, dfis, docs) <- go ds
+--       case decl of
+--         SigD _EXT s ->
+--           return (bs, L l s:ss, fs, tfis, dfis, docs)
+--         TyClD _EXT (FamDecl _EXT f) ->
+--           return (bs, ss, L l f:fs, tfis, dfis, docs)
+--         InstD _EXT (TyFamInstD {tfid_inst = tfi}) ->
+--           return (bs, ss, fs, L l tfi:tfis, dfis, docs)
+--         InstD _EXT (DataFamInstD {dfid_inst=dfi}) ->
+--           return (bs, ss, fs, tfis, L l dfi:dfis, docs)
+--         DocD _EXT doc ->
+--           return (bs, ss, fs, tfis, dfis, L l doc:docs)
 
-getMonoBind :: HBind -> [HDecl] -> (HBind, [HDecl])
-getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),
-                               fun_matches
-                                 = MG { mg_alts = L _ mtchs1 }}))
-            binds
-  | has_args mtchs1 = go mtchs1 loc1 binds
-  where
-    go mtchs loc
-       (L loc2 (ValD _EXT (FunBind { fun_id = L _ f2,
-                                     fun_matches
-                                       = MG { mg_alts = L _ mtchs2 }}))
-                : binds2)
-      | f1 == f2 = go (mtchs2 ++ mtchs)
-                      (combineSrcSpans loc loc2) binds2
-    go mtchs loc binds2
-      = (L loc (mkFunBind fun_id1 (reverse mtchs)), binds2)
-      -- Reverse the final matches, to get it back in the right order
+--         -- XXX: Ignoring other constructors.
+--         _ -> return (bs, ss, fs, tfis, dfis, docs)
 
-getMonoBind bind binds = (bind, binds)
+-- getMonoBind :: HBind -> [HDecl] -> (HBind, [HDecl])
+-- getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),
+--                                fun_matches
+--                                  = MG { mg_alts = L _ mtchs1 }}))
+--             binds
+--   | has_args mtchs1 = go mtchs1 loc1 binds
+--   where
+--     go mtchs loc
+--        (L loc2 (ValD _EXT (FunBind { fun_id = L _ f2,
+--                                      fun_matches
+--                                        = MG { mg_alts = L _ mtchs2 }}))
+--                 : binds2)
+--       | f1 == f2 = go (mtchs2 ++ mtchs)
+--                       (combineSrcSpans loc loc2) binds2
+--     go mtchs loc binds2
+--       = (L loc (mkFunBind fun_id1 (reverse mtchs)), binds2)
+--       -- Reverse the final matches, to get it back in the right order
 
--- Don't group together FunBinds if they have no arguments.  This is
--- necessary that variable bindings with no arguments are now treated as
--- FunBinds rather than pattern bindings.
-has_args :: [LMatch PARSED (LHsExpr PARSED)] -> Bool
-has_args (L _ mtch:_) = not (null (m_pats mtch))
-has_args []           = error "Language.Finkel.Syntax.SynUtils:has_args"
+-- getMonoBind bind binds = (bind, binds)
+
+-- -- Don't group together FunBinds if they have no arguments.  This is
+-- -- necessary that variable bindings with no arguments are now treated as
+-- -- FunBinds rather than pattern bindings.
+-- has_args :: [LMatch PARSED (LHsExpr PARSED)] -> Bool
+-- has_args (L _ mtch:_) = not (null (m_pats mtch))
+-- has_args []           = error "Language.Finkel.Syntax.SynUtils:has_args"
 
 kindedTyVar :: Code -> Code -> HType -> Builder HTyVarBndr
 kindedTyVar (LForm (L l _dc)) name kind
@@ -316,7 +329,9 @@ codeToUserTyVar code =
 
 -- | Auxiliary function to make 'HsDocString'.
 hsDocString :: FastString -> HsDocString
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(8,10,0)
+hsDocString = mkHsDocStringUtf8ByteString . bytesFS
+#elif MIN_VERSION_ghc(8,6,0)
 hsDocString = mkHsDocStringUtf8ByteString . fastStringToByteString
 #else
 hsDocString = HsDocString
@@ -343,7 +358,7 @@ mkGRHSs grhss decls l = GRHSs NOEXT grhss (declsToBinds l decls)
 mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
 mkHsValBinds_compat binds sigs =
 #if MIN_VERSION_ghc(8,6,0)
-  HsValBinds noExt (ValBinds noExt binds sigs)
+  HsValBinds NOEXT (ValBinds NOEXT binds sigs)
 #else
   HsValBinds (ValBindsIn binds sigs)
 #endif
@@ -355,7 +370,7 @@ mkHsQualTy_compat ctxt body
   | otherwise =
     HsQualTy { hst_ctxt = ctxt
 #if MIN_VERSION_ghc(8,6,0)
-             , hst_xqual = noExt
+             , hst_xqual = NOEXT
 #endif
              , hst_body = body }
 {-# INLINE mkHsQualTy_compat #-}
