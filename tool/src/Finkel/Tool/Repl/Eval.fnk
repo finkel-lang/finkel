@@ -36,10 +36,9 @@
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (FixityEnv) extendInteractiveContextWithIds
               setInteractivePrintName srcErrorMessages))
-   (HsImpExp ((ImportDecl ..)))
    (InteractiveEval
     (compileParsedExprRemote getContext parseName setContext))
-   (Linker (extendLinkEnv))
+   (Linker (extendLinkEnv initDynLinker))
    (Name ((Name) getName nameOccName occNameString))
    (OrdList (toOL))
    (Outputable (ppr mkErrStyle renderWithStyle setStyleColoured
@@ -71,7 +70,34 @@
    (Finkel.Tool.Repl.IO)
    (Finkel.Tool.Repl.Types)))
 
+(with-ghc-version-cond v
+  ((<= 810 v)
+   ;; ghc
+   (import GHC.Hs.ImpExp
+           ((ImportDecl ..)
+            (ImportDeclQualifiedStyle)
+            isImportDeclQualified)))
+  (otherwise
+   ;; ghc
+   (import HsImpExp ((ImportDecl ..)))))
+
 ;;; Version compatibility function
+
+(with-ghc-version-cond ghc
+  ((<= 810 ghc)
+   (:begin
+     (defn (:: extend-link-env (-> HscEnv [(, Name ForeignHValue)] (Fnk ())))
+       [hsc-env names-vals]
+       (liftIO (extendLinkEnv (hsc-dynLinker hsc-env) names-vals)))
+     (defn (:: is-import-decl-qualified (-> ImportDeclQualifiedStyle Bool))
+       isImportDeclQualified)))
+  (otherwise
+   (:begin
+     (defn (:: extend-link-env (-> a [(, Name ForeignHValue)] (Fnk ())))
+       [_ names-vals]
+       (liftIO (extendLinkEnv names-vals)))
+     (defn (:: is-import-decl-qualified (-> Bool Bool))
+       id))))
 
 (defn (:: optional-dynflags [GeneralFlag])
   "Optional 'GeneralFlag' set for REPL."
@@ -113,11 +139,13 @@
                                        (wayUnsetGeneralFlags platform)
                                        interpWays)))))
               (void (setSessionDynFlags dflags5))
+              (liftIO (initDynLinker hsc-env))
 
               ;; XXX: Currently the printer function and the arguments
               ;; returned from "System.Environment.getArgs" are defined
               ;; here and cannot be changed.
               (set-print-name "Prelude.print")
+
               (make-eval-wrapper [])))
         (= withAsyncHandler wrapper
           (ghandle
@@ -240,7 +268,7 @@ context."
                     (= names (map getName ids))
                     (= hsc-env-2 (hsc-env {hsc-IC ic3}))))
               (<- dflags getSessionDynFlags)
-              (liftIO (extendLinkEnv (zip names fhvals)))
+              (extend-link-env hsc-env (zip names fhvals))
 
               ;; InteractiveEval does not export `rttiEnvironment'.
               ;;
@@ -327,13 +355,14 @@ context."
 (defn (:: subsume-ii (-> InteractiveImport InteractiveImport Bool))
   ;; See `GHCi.UI.iiSubsumes'.
   [(IIModule x) (IIModule y)] (== x y)
-  [(IIDecl x) (IIDecl y)] (and [(== (unLoc (ideclName x))
-                                    (unLoc (ideclName y)))
-                                (== (ideclAs x) (ideclAs y))
-                                (|| (not (ideclQualified x))
-                                    (ideclQualified y))
-                                (hiding-subsumes (ideclHiding x)
-                                                 (ideclHiding y))])
+  [(IIDecl x) (IIDecl y)] (&& (== (unLoc (ideclName x)) (unLoc (ideclName y)))
+                              (== (ideclAs x) (ideclAs y))
+                              (|| (not (is-import-decl-qualified
+                                        (ideclQualified x)))
+                                  (is-import-decl-qualified
+                                   (ideclQualified y)))
+                              (hiding-subsumes (ideclHiding x)
+                                               (ideclHiding y)))
 
   [_ _] False)
 

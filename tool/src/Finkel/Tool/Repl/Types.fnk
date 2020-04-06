@@ -35,15 +35,21 @@
    (StringBuffer ((StringBuffer) appendStringBuffers))
    (FastFunctions (inlinePerformIO))
 
-   ;; haskeline
-   (System.Console.Haskeline.MonadException
-    ((MonadException ..) (RunIO ..)))
-
    ;; transformers
    (Control.Monad.Trans.Class ((MonadTrans ..)))
 
    ;; finkel-kernel
    (Language.Finkel ((Code)))))
+
+(with-ghc-version-cond v
+  ((<= 810 v)
+   (:begin
+     ;; exceptions
+     (import Control.Monad.Catch
+             ((MonadThrow ..) (MonadCatch ..) (MonadMask ..)))))
+  (otherwise
+   ;; haskeline
+   (import System.Console.Haskeline ((MonadException ..) (RunIO ..)))))
 
 ;;; REPL, REPL state, input, and result types
 
@@ -106,16 +112,64 @@
   (= liftIO io (Repl (\ _ io)))
   #p(INLINE liftIO))
 
-(instance (MonadException Repl)
-  (= controlIO f
-    (Repl (\ ref
-            (controlIO
-             (\ (RunIO run)
-               (let ((= run'
-                       (RunIO (. (fmap (. Repl const))
-                                 (. run (flip unRepl ref))))))
-                 (fmap (flip unRepl ref) (f run'))))))))
-  #p(INLINE controlIO))
+;;; In ghc-8.10.1, `haskeline' switched to use `MonadThrow', `MonadCatch', and
+;;; `MonadMask' type classes from the `exceptions' package instead of the
+;;; internally defined `MonadException' type class. Since the `Repl' data type
+;;; is used with codes for the `InputT' from `haskeline' package, defining
+;;; instances of type classes from `exceptions'.
+(with-ghc-version-cond v
+  ((<= 810 v)
+   (:begin
+     (instance (MonadThrow Repl)
+       (= throwM (. liftIO throwM))
+       #p(INLINE throwM))
+
+     (instance (MonadCatch Repl)
+       (= catch (Repl repl) f
+         (Repl (\ ref
+                 (catch (repl ref)
+                   (\ e (unRepl (f e) ref)))) ))
+       #p(INLINE catch))
+
+     (instance (MonadMask Repl)
+       (= mask a
+         (let ((:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
+               (= q unmask (Repl repl)
+                 (Repl (. unmask repl))))
+           (Repl (\ ref
+                   (mask
+                    (\ unmask (unRepl (a (q unmask)) ref)))))))
+       #p(INLINE mask)
+       (= uninterruptibleMask a
+         (let ((:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
+               (= q unmask (Repl repl)
+                 (Repl (. unmask repl))))
+           (Repl (\ ref
+                   (uninterruptibleMask
+                    (\ unmask
+                      (unRepl (a (q unmask)) ref)))))))
+       #p(INLINE uninterruptibleMask)
+       (= generalBracket acquire release use
+         (Repl (\ ref
+                 (generalBracket
+                  (unRepl acquire ref)
+                  (\ resource exit-case
+                    (unRepl (release resource exit-case) ref))
+                  (\ resource
+                    (unRepl (use resource) ref))))))
+       #p(INLINE generalBracket))))
+
+  (otherwise
+   (instance (MonadException Repl)
+     (= controlIO f
+       (Repl (\ ref
+               (controlIO
+                (\ (RunIO run)
+                  (let ((= run'
+                          (RunIO (. (fmap (. Repl const))
+                                    (. run (flip unRepl ref))))))
+                    (fmap (flip unRepl ref) (f run'))))))))
+     #p(INLINE controlIO))))
 
 (defn (:: run-repl (-> (Repl a) ReplState (IO a)))
   [(Repl repl) st]

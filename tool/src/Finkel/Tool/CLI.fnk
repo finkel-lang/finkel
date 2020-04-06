@@ -5,17 +5,31 @@
 (defmodule Finkel.Tool.CLI
   (export (CLI ..)
           (ExitCode ..))
+  (require
+   ;; finkel-lang
+   (Finkel.Prelude)
+
+   ;; Internal
+   (Finkel.Tool.Compat))
   (import
    ;; base
-   (Control.Exception (catch throwIO))
+   (Control.Exception (throwIO))
+   (qualified Control.Exception)
    (Control.Monad.IO.Class ((MonadIO ..)))
    (System.Exit ((ExitCode ..)))
    (System.IO.Error (isEOFError))
    (qualified System.Exit as Exit)
 
    ;; haskeline
-   (System.Console.Haskeline ((InputT) (MonadException ..)))
+   (System.Console.Haskeline ((InputT)))
    (qualified System.Console.Haskeline as Haskeline)))
+
+(with-ghc-version-cond v
+  ((<= 810 v)
+   (import Control.Monad.Catch
+           ((MonadThrow ..) (MonadCatch ..) (MonadMask ..))))
+  (otherwise
+   (import System.Console.Haskeline ((MonadException ..)))))
 
 ;;; Type class for command line interface, ... actually, for 'InputT'
 ;;; from haskeline package.
@@ -38,19 +52,30 @@
 
 (instance (CLI IO)
   (= getString prompt
-    (catch (>> (putStr prompt) (fmap Just getLine))
-      (\ e (if (isEOFError e)
-               (return Nothing)
-               (throwIO e)))))
+    (Control.Exception.catch
+     (>> (putStr prompt) (fmap Just getLine))
+     (\ e (if (isEOFError e)
+              (return Nothing)
+              (throwIO e)))))
   (= putString putStrLn)
   (= handleInterrupt _handler act act)
   (= withInterrupt act act)
   (= exitWith Exit.exitWith))
 
-(instance (=> (MonadIO m) (MonadException m)
-              (CLI (InputT m)))
-  (= getString Haskeline.getInputLine)
-  (= putString Haskeline.outputStrLn)
-  (= handleInterrupt Haskeline.handleInterrupt)
-  (= withInterrupt Haskeline.withInterrupt)
-  (= exitWith (. liftIO Exit.exitWith)))
+(with-ghc-version-cond v
+  ((<= 810 v)
+   (instance (=> (MonadIO m) (MonadCatch m) (MonadMask m) (MonadThrow m)
+                 (CLI (InputT m)))
+     (= getString Haskeline.getInputLine)
+     (= putString Haskeline.outputStrLn)
+     (= handleInterrupt Haskeline.handleInterrupt)
+     (= withInterrupt Haskeline.withInterrupt)
+     (= exitWith (. liftIO Exit.exitWith))))
+  (otherwise
+   (instance (=> (MonadIO m) (MonadException m)
+                 (CLI (InputT m)))
+     (= getString Haskeline.getInputLine)
+     (= putString Haskeline.outputStrLn)
+     (= handleInterrupt Haskeline.handleInterrupt)
+     (= withInterrupt Haskeline.withInterrupt)
+     (= exitWith (. liftIO Exit.exitWith)))))

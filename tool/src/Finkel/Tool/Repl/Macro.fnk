@@ -51,7 +51,6 @@
               (ModSummary ..) (ModuleGraph) (Target ..) (TargetId ..)
               emptyInteractiveContext handleFlagWarnings ms_mod_name
               pprHPT pprTarget srcErrorMessages tyThingParent_maybe))
-   (HsImpExp ((ImportDecl ..) simpleImportDecl))
    (IfaceSyn (showToHeader))
    (InstEnv (pprInstance))
    (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
@@ -91,6 +90,15 @@
    (Finkel.Core.List)))
 
 ;;; Extra imports
+
+(with-ghc-version-cond ver
+  ((<= 810 ver)
+   (:begin
+     (import GHC.Hs.ImpExp ((ImportDecl ..) simpleImportDecl))
+     (import DynFlags (settings))))
+  (otherwise
+   (import HsImpExp ((ImportDecl ..) simpleImportDecl))))
+
 (with-ghc-version-cond ver
   ((<= 804 ver)
    (:begin
@@ -117,10 +125,11 @@
 (define-ghc-version-macro gen-default-dflags version
   [flg]
   (cond
+    ((<= 810 version)
+     `(defaultDynFlags (settings ,flg) (llvmConfig ,flg)))
     ((<= 806 version)
-     `(defaultDynFlags
-          (settings ,flg)
-          (, (llvmTargets ,flg) (llvmPasses ,flg))))
+     `(defaultDynFlags (settings ,flg) (, (llvmTargets ,flg)
+                                          (llvmPasses ,flg))))
     ((<= 804 version)
      `(defaultDynFlags (settings ,flg) (llvmTargets ,flg)))
     (otherwise
@@ -138,6 +147,14 @@
      HscTypes.mgModSummaries)
     (otherwise
      id)))
+
+(defn (:: show-linker-state (-> HscEnv (IO ())))
+  [hsc-env]
+  (with-ghc-version-cond ver
+    ((<= 810 ver)
+     (showLinkerState (hsc-dynLinker hsc-env) (hsc-dflags hsc-env)))
+    (otherwise
+     (showLinkerState (hsc-dflags hsc-env)))))
 
 
 ;;; Auxiliary
@@ -425,7 +442,7 @@ object code."
   ;; to stdout.
   (do (<- hsc-env getSession)
       (liftIO (do (initDynLinker hsc-env)
-                  (showLinkerState (hsc_dflags hsc-env))))
+                  (show-linker-state hsc-env)))
       (return '(:begin))))
 
 (defn (:: show-macros (Fnk Code))

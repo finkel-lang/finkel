@@ -65,6 +65,8 @@ library
                      , finkel-kernel >= 0.28   && < 1
                      , finkel-lang   >= 0.15   && < 1
                      , finkel-setup  >= 0.1    && < 1
+  if impl(ghc >= 8.10.0)
+    build-depends:     exceptions    >= 0.10   && < 0.11
   build-tool-depends:  fkc:fkc >= 0.1 && < 1
   default-language:    Haskell2010
   ghc-options:       -Wall
