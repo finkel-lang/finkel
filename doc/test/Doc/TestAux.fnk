@@ -49,7 +49,7 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
   (let ((= go0 exe
           (mapM go1 [exe
                      (<.> exe "o")
-                     (<.> exe ".hi")
+                     (<.> exe "hi")
                      (<.> exe "dyn_o")
                      (<.> exe "dyn_hi")]))
         (= go1 file

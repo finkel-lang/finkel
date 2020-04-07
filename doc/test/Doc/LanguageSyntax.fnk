@@ -2,6 +2,11 @@
 
 (defmodule Doc.LanguageSyntax
   (export spec)
+  (require
+   ;; finkel-lang
+   (Finkel.Prelude)
+   ;; finkel-tool
+   (Finkel.Tool.Compat))
   (import
    ;; base
    (Data.List (sort))
@@ -34,14 +39,26 @@
    ;; Internal
    (Doc.TestAux)))
 
+(with-ghc-version-cond ghc
+  ((<= 810 ghc)
+   ;; ghc
+   (import RdrHsSyn (runECP_P)))
+  (otherwise
+   (:begin)))
+
 (defn (:: spec Spec)
   (beforeAll_
    ;; Running `runGhc' to set the `unsafeGlobalDynFlags' with `initGhcMonad'.
    (do (<- mb-ghc-lib get-ghc-lib)
        (runGhc mb-ghc-lib (return ())))
    (describe "language syntax"
-     (do (describe "expression"
-           (parser-tests "expr" (Parsers GhcParser.parseExpression
+     (do (let ((= expFromECP
+                 (with-ghc-version-cond ghc
+                   ((<= 810 ghc) runECP_P)
+                   (otherwise return)))))
+         (describe "expression"
+           (parser-tests "expr" (Parsers (>>= GhcParser.parseExpression
+                                              expFromECP)
                                          FnkParser.parseExpr)))
          (describe "declaration"
            (parser-tests "decl" (Parsers (fmap pure GhcParser.parseDeclaration)
