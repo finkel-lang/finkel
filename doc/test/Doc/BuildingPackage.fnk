@@ -93,7 +93,7 @@
   ;; version.
   (do (<- template get-template-path)
       (run (Just dir)
-           "stack" ["--resolver" "lts-15" "--silent" "new" pkgname
+           "stack" ["--resolver" "lts-15.7" "--silent" "new" pkgname
                     "--omit-packages" template])))
 
 (defn (:: get-template-path (IO FilePath))

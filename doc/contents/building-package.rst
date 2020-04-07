@@ -113,7 +113,7 @@ template:
 
       Selecting the best among 17 snapshots...
 
-      * Partially matches lts-15.2
+      * Partially matches lts-15.7
           finkel-setup not found
               - my-second-pkg requires -any
 
@@ -123,8 +123,8 @@ template:
 
       ...
 
-      Selected resolver: lts-15.2
-      Resolver 'lts-15.2' does not have all the packages to match your requirements.
+      Selected resolver: lts-15.7
+      Resolver 'lts-15.7' does not have all the packages to match your requirements.
           finkel-setup not found
               - my-second-pkg requires -any
 
