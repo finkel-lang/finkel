@@ -19,12 +19,10 @@ module Distribution.Simple.Finkel
 
 -- base
 import           Control.Exception                  (bracket_)
-import           Control.Monad                      (foldM, mapAndUnzipM,
-                                                     when)
+import           Control.Monad                      (foldM, mapAndUnzipM, when)
 import           Data.Foldable                      (toList)
 import           Data.Function                      (on)
-import           Data.List                          (isSubsequenceOf,
-                                                     unionBy)
+import           Data.List                          (isSubsequenceOf, unionBy)
 
 #if !MIN_VERSION_base(4,13,0)
 import           Data.Monoid                        (Monoid (..))
@@ -60,8 +58,8 @@ import           Distribution.InstalledPackageInfo
 #endif
 
 -- directory
-import           System.Directory                   (doesFileExist,
-                                                     findFile, removeFile)
+import           System.Directory                   (doesFileExist, findFile,
+                                                     removeFile)
 
 import qualified Distribution.Simple.Setup          as Setup
 import qualified Distribution.Verbosity             as Verbosity
@@ -96,10 +94,10 @@ fnkInternalMain :: IO ()
 fnkInternalMain =
  do me <- getProgName
     if me == "Setup.hs"
-       -- Directly invoked the "Setup.hs" of cabal package perhaps
-       -- with 'runhaskell'.  Use the 'fkc' installed somewhere in
-       -- current 'PATH'.
-       then rawFnkMain "fkc" [] False
+       -- Directly invoked the "Setup.hs" of cabal package perhaps with
+       -- 'runhaskell'.  Use the 'fkc' installed somewhere in current 'PATH'.
+       then do putStrLn "Running `Setup.hs' script, using raw `fkc'"
+               rawFnkMain "fkc" [] False
        else makeFnkMain "v2-run" "fkc" []
 
 -- | Main function with given executable name and arguments passed to
@@ -307,7 +305,9 @@ fnkHaddockHooks pd lbi hooks flags = do
               _                                -> return ()
           clean path = do
             exist <- doesFileExist path
-            when exist (removeFile path)
+            when exist (do when (Verbosity.normal < verbosity)
+                                (putStrLn ("Removing: " ++ path))
+                           removeFile path)
           cleanup = mapM_ clean gen_files
 
       return (acquire, cleanup)

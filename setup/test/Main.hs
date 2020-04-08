@@ -2,27 +2,29 @@
 module Main where
 
 -- base
-import Control.Exception          (SomeException (..), catch)
-import Data.List                  (isSubsequenceOf)
-import System.Environment         (getEnv, getExecutablePath, lookupEnv,
-                                   setEnv, unsetEnv, withArgs)
+import Control.Exception                 (SomeException (..), catch, throw)
+import Data.List                         (isSubsequenceOf)
+import System.Environment                (getEnv, getExecutablePath, lookupEnv,
+                                          setEnv, unsetEnv, withArgs)
 
 -- ghc
-import Config
+import Config                            (cProjectVersion)
 
 -- directory
-import System.Directory           (getCurrentDirectory,
-                                   setCurrentDirectory)
+import System.Directory                  (getCurrentDirectory,
+                                          removeDirectoryRecursive,
+                                          setCurrentDirectory)
+import System.Directory.Internal.Prelude (isDoesNotExistError)
 
 -- filepath
-import System.FilePath            (isSearchPathSeparator, joinPath,
-                                   splitDirectories, (</>))
+import System.FilePath                   (isSearchPathSeparator, joinPath,
+                                          splitDirectories, (</>))
 
 -- hspec
 import Test.Hspec
 
 -- process
-import System.Process             (readProcess)
+import System.Process                    (readProcess)
 
 -- Internal
 import Distribution.Simple.Finkel
@@ -51,7 +53,8 @@ main = do
 #endif
 
   hspec (afterAll_ (setCurrentDirectory cwd)
-                   (buildPackage cwd pkgdbs "p01"))
+                   (beforeAll_ (remove_dist_if_exist cwd)
+                               (buildPackage cwd pkgdbs "p01")))
 
 buildPackage :: String -> [String] -> String -> Spec
 buildPackage cwd pkgdbs name =
@@ -63,7 +66,7 @@ buildPackage cwd pkgdbs name =
             , "--package-db=global"
             ] ++ fmap ("--package-db=" ++) pkgdbs
           configure_args =
-            "configure" : pkgdb_flags ++ ["--enable-tests"]
+            "configure" : pkgdb_flags ++ ["--enable-tests", "-v2"]
           run act = act `shouldReturn` ()
       mapM_ run
             [ setCurrentDirectory pkgdir
@@ -73,7 +76,6 @@ buildPackage cwd pkgdbs name =
             , setup ["test"]
 #endif
             , setup ["haddock"]
-            , setup ["clean"]
             ]
 
 setup :: [String] -> IO ()
@@ -114,3 +116,11 @@ getCabalPackageDbs executable_path = do
                 joinPath ["dist-newstyle", "packagedb", ghc_ver]
       storedb = joinPath [home, ".cabal", "store", ghc_ver, "package.db"]
   return [storedb, localdb]
+
+remove_dist_if_exist :: FilePath -> IO ()
+remove_dist_if_exist cwd =
+  catch (let dir = cwd </> "test" </> "data" </> "p01" </> "dist"
+         in  removeDirectoryRecursive dir)
+        (\e -> if isDoesNotExistError e
+                  then return ()
+                  else throw e)
