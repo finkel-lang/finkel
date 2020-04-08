@@ -12,7 +12,7 @@
    ;; base
    (Control.Exception (catch throw))
    (Control.Monad (when))
-   (Data.List (isSubsequenceOf sort))
+   (Data.List (isSubsequenceOf isPrefixOf sort))
    (Data.Maybe (fromMaybe))
    (Data.Version ((Version ..) parseVersion))
    (System.Environment (getExecutablePath lookupEnv))
@@ -164,12 +164,19 @@ be skipped.")
                  Nothing (return "")))
       (when (not (null errs))
         (putStrLn (++ "stderr: " errs)))
-      (<- outs (case mbout
+      (<- outs0 (case mbout
                  (Just out) (fmap lines (hGetContents out))
                  Nothing (return [])))
+      (let ((= outs1 (remove-loaded-package-env outs0))))
       (case ec
-        ExitSuccess (shouldBe (unlines outs) (unlines expected))
+        ExitSuccess (shouldBe (unlines outs1) (unlines expected))
         _ (expectationFailure (++ "Got exit code " (show ec))))))
+
+(defn (:: remove-loaded-package-env (-> [String] [String]))
+  "In ghc-8.10.1, the `Loaded package environment from ...' message has changd
+  its output from stderr to stdout. Removing the message line from command
+  outputs."
+  (filter (. not (isPrefixOf "Loaded package environment from"))))
 
 (defn (:: parse-console (-> String [ConsoleTest]))
   "Parse the contents of console file."
