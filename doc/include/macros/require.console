@@ -1,5 +1,5 @@
-$ finkel make -dynamic-too RequireMe.fnk require.fnk
-[1 of 2] Compiling RequireMe        ( RequireMe.fnk, RequireMe.o )
+$ finkel make -no-link -fbyte-code RequireMe.fnk require.fnk
+[1 of 2] Compiling RequireMe        ( RequireMe.fnk, interpreted )
 
 ==================== Parser ====================
 module Main where
@@ -10,5 +10,4 @@ main
        putStrLn "Goodbye."
 
 
-[2 of 2] Compiling Main             ( require.fnk, require.o )
-Linking require ...
+[2 of 2] Compiling Main             ( require.fnk, interpreted )
