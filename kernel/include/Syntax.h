@@ -7,7 +7,10 @@
 
 /*
 From ghc 8.10.1, modules for AST were moved under 'GHC.Hs.*'. Defining aliases
-for import declarations.
+for import declarations. For more info about module renaming, see:
+
+  https://gitlab.haskell.org/ghc/ghc/issues/13009
+
 */
 
 #if __GLASGOW_HASKELL__ >= 810
