@@ -14,21 +14,17 @@ import           Control.Monad                (unless)
 import           Control.Monad.IO.Class       (MonadIO (..))
 import           Data.List                    (isPrefixOf, partition)
 import           Data.Version                 (showVersion)
-import           System.Console.GetOpt        (ArgDescr (..),
-                                               ArgOrder (..),
-                                               OptDescr (..), getOpt,
-                                               usageInfo)
+import           System.Console.GetOpt        (ArgDescr (..), ArgOrder (..),
+                                               OptDescr (..), getOpt, usageInfo)
 import           System.Environment           (getArgs, getProgName)
 import           System.Exit                  (exitFailure, exitWith)
 import           System.FilePath              (normalise)
-import           System.IO                    (BufferMode (..),
-                                               hSetBuffering, stderr,
-                                               stdout)
+import           System.IO                    (BufferMode (..), hSetBuffering,
+                                               stderr, stdout)
 import           System.Process               (rawSystem)
 
 -- ghc
-import           DynFlags                     (DynFlags (..),
-                                               GeneralFlag (..),
+import           DynFlags                     (DynFlags (..), GeneralFlag (..),
                                                HasDynFlags (..),
                                                defaultFatalMessager,
                                                defaultFlushOut, gopt,
@@ -42,6 +38,10 @@ import           Panic                        (GhcException (..),
 import           SrcLoc                       (mkGeneralLocated, unLoc)
 import           UniqSupply                   (initUniqSupply)
 import           Util                         (looksLikeModuleName)
+
+#if MIN_VERSION_ghc(8,10,0)
+import           DynFlags                     (HscTarget (..), gopt_set)
+#endif
 
 -- ghc-boot
 #if MIN_VERSION_ghc(8,6,0)
@@ -119,7 +119,7 @@ defaultMainWith macros = do
        next
 
 main' :: FnkEnv -> [String] -> [String] -> IO ()
-main' fnkc_env orig_args args = do
+main' fnkc_env orig_args ghc_args = do
   initGCStatistics
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
@@ -132,16 +132,28 @@ main' fnkc_env orig_args args = do
                                                    exitFailure))
               (handleSourceError (\se -> do printException se
                                             liftIO exitFailure)
-                                 (main'' orig_args args)))
+                                 (main'' orig_args ghc_args)))
              fnkc_env)
 
 main'' :: [String] -> [String] -> Fnk ()
-main'' orig_args args = do
+main'' orig_args ghc_args = do
   dflags0 <- getDynFlags
-  let largs = map onTheCmdLine args
-      onTheCmdLine = mkGeneralLocated "on the commandline"
+  let largs = map on_the_cmdline ghc_args
+      on_the_cmdline = mkGeneralLocated "on the commandline"
       dflags1 = dflags0 {verbosity = 1}
-  (dflags2, lfileish, warnings) <- parseDynamicFlagsCmdLine dflags1 largs
+#if MIN_VERSION_ghc(8,10,0)
+      -- Workaround for "-fbyte-code" command line option handling in ghc
+      -- 8.10.1.  The use of `noArgM' and `pure $ gopt_set ...' for
+      -- "-fbyte-code" option in "compiler/main/DynFlags.hs" is ignoring the
+      -- updated hscTarget ...
+      dflags1b | "-fbyte-code" `elem` ghc_args
+               = gopt_set (dflags1 {hscTarget=HscInterpreted}) Opt_ByteCode
+               | otherwise = dflags1
+#else
+      dflags1b = dflags1
+#endif
+
+  (dflags2, lfileish, warnings) <- parseDynamicFlagsCmdLine dflags1b largs
 
   let fileish = map unLoc lfileish
 
@@ -175,7 +187,7 @@ main'' orig_args args = do
        -- At the moment, compiling with phase specification are not
        -- supported, phase is always set to 'Nothing'.
        let phased_srcs = map phase_it srcs
-           phase_it path = (onTheCmdLine (normalise path), Nothing)
+           phase_it path = (on_the_cmdline (normalise path), Nothing)
            force_recomp = gopt Opt_ForceRecomp dflags2
 
        -- Do the `make' work.
