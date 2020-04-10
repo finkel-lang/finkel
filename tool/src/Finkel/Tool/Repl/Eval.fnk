@@ -126,8 +126,7 @@
                     (= dflags1 (dflags0 {hscTarget HscInterpreted
                                          ghcLink LinkInMemory
                                          verbosity 1}))
-                    (= dflags2 (foldl gopt-set dflags1
-                                      optional-dynflags))
+                    (= dflags2 (foldl gopt-set dflags1 optional-dynflags))
                     (= dflags3 (updateWays (dflags2 {ways interpWays})))
                     (= platform (targetPlatform dflags3))
                     (= dflags4 (foldl gopt-set dflags3

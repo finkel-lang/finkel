@@ -262,7 +262,7 @@ m_withMacro form =
     L l1 (List (_:LForm (L _ (List forms)):rest)) -> do
       fnkc_env0 <- getFnkEnv
 
-      -- Expand body of `let-macro' with temporary macros.
+      -- Expand body of `with-macro' with temporary macros.
       macros <- Map.fromList <$> mapM evalMacroDef forms
       let tmpMacros0 = envTmpMacros fnkc_env0
       putFnkEnv (fnkc_env0 {envTmpMacros = macros : tmpMacros0})
@@ -565,11 +565,11 @@ expand form =
       binds' <- expand binds
       let bounded = boundedNames binds'
       body' <- withShadowing bounded (expands body)
-      return (LForm (L l (List (kw:binds':body'))))
+      return $! LForm (L l (List (kw:binds':body')))
 
     expandDo l kw body = do
       (_, body') <- foldM expandInDo ([], []) body
-      return (LForm (L l (List (kw:reverse body'))))
+      return $! LForm (L l (List (kw:reverse body')))
 
     expandFunBind l kw rest = do
       let args = init rest
@@ -577,7 +577,7 @@ expand form =
           bounded = concatMap boundedNameOne args
       args' <- expands args
       body' <- withShadowing bounded (expand body)
-      return (LForm (L l (List (kw:args'++[body']))))
+      return $! LForm (L l (List (kw:args'++[body'])))
 
     expandCase l kw expr rest = do
       let go acc xs =
@@ -598,13 +598,13 @@ expand form =
           tilde = LForm (L l (Atom (ASymbol "~")))
       expr' <- expand expr
       rest' <- go [] rest
-      return (LForm (L l (List (kw:expr':reverse rest'))))
+      return $! LForm (L l (List (kw:expr':reverse rest')))
 
     expandWhere l kw expr rest = do
       rest' <- expands rest
       let bounded = concatMap boundedName rest'
       expr' <- withShadowing bounded (expand expr)
-      return (LForm (L l (List (kw:expr':rest'))))
+      return $! LForm (L l (List (kw:expr':rest')))
 
     expandList l forms =
       case forms of
@@ -615,10 +615,10 @@ expand form =
             Just (SpecialForm f) -> f form >>= expand
             Nothing              -> do
               rest' <- expands rest
-              return (LForm (L l (List (sym:rest'))))
+              return $! LForm (L l (List (sym:rest')))
         _ -> do
           forms' <- expands forms
-          return (LForm (L l (List forms')))
+          return $! LForm (L l (List forms'))
 
 expandInDo ::
    ([FastString], [Code]) -> Code -> Fnk ([FastString], [Code])

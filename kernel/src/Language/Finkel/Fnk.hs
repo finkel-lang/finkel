@@ -236,7 +236,7 @@ data FnkEnv = FnkEnv
 newtype Fnk a = Fnk {unFnk :: FnkEnvRef -> Ghc a}
 
 -- | Reference to 'FnkEnv'.
-data FnkEnvRef = FnkEnvRef !(IORef FnkEnv)
+newtype FnkEnvRef = FnkEnvRef (IORef FnkEnv)
 
 instance Functor Fnk where
   fmap f (Fnk m) = Fnk (fmap f . m)
@@ -359,9 +359,8 @@ emptyFnkEnv = FnkEnv
 -- modifies 'DynFlags' in interactive context.
 setDynFlags :: DynFlags -> Fnk ()
 setDynFlags dflags =
-  fromGhc (modifySession
-            (\h -> h { hsc_dflags = dflags
-                     , hsc_IC = (hsc_IC h) {ic_dflags = dflags}}))
+  modifySession (\h -> h { hsc_dflags = dflags
+                         , hsc_IC = (hsc_IC h) {ic_dflags = dflags}})
 {-# INLINE setDynFlags #-}
 
 -- | Set context modules in current session to given modules.
@@ -445,9 +444,9 @@ gensym = gensym' "g"
 
 -- | Generate unique symbol with given prefix.
 --
--- Note that although this function does not generate same symbol twice,
--- generated symbols have a chance to have same name from symbols
--- entered from codes written by arbitrary users.
+-- Note that although this function does not generate same symbol
+-- twice, generated symbol has a chance to have a same name from
+-- symbols entered from codes written by arbitrary users.
 gensym' :: String -> Fnk Code
 gensym' prefix = do
   s <- liftIO (mkSplitUniqSupply '_')
