@@ -20,21 +20,23 @@
   [name version args body]
   `(:eval-when-compile
      (defmacro ,name ,args
-       (let ((= ,version ,(:: (read cProjectVersionInt) Int)))
+       (let ((:: ,version Int)
+             (= ,version ,(:: (read cProjectVersionInt) Int)))
          ,body))))
 
 (defmacro with-ghc-version-cond
   "Macro to generate code with ghc version variable."
   forms
-  (let ((= ver-name (car forms))
-        (= ver-value (:: (read cProjectVersionInt) Int))
+  (let ((= var-name (car forms))
+        (= var-value (:: (read cProjectVersionInt) Int))
         (= bodies (cdr forms))
         (= f test-and-body
           (let ((= test (car test-and-body))
                 (= body (cadr test-and-body)))
             `(,test ',body))))
-    `(macrolet (($tmp ()
-                  (let ((= ,ver-name ,ver-value))
+    `(macrolet (($tmp []
+                  (let ((:: ,var-name Int)
+                        (= ,var-name ,var-value))
                     (cond
                       ,@(mapcar f bodies)))))
        ($tmp))))
@@ -52,7 +54,8 @@ The name of os is taken from `System.Info.os'."
                 (= body (cadr test-and-body)))
             `(,test ',body))))
     `(macrolet (($tmp []
-                  (let ((= ,var-name ,os-name))
+                  (let ((:: ,var-name String)
+                        (= ,var-name ,os-name))
                     (cond
                       ,@(mapcar f bodies)))))
        ($tmp))))
