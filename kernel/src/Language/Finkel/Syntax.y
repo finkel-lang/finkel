@@ -83,7 +83,7 @@ import Language.Finkel.Syntax.SynUtils
 %name p_pat pat
 %name p_pats pats
 %name p_pats0 pats0
--- %name p_pats1 pats1
+%name p_pats1 pats1
 
 %name p_expr expr
 %name p_exprs exprs
@@ -675,7 +675,30 @@ pat :: { HPat }
     | pat_     { $1 }
 
 pat_ :: { HPat }
-    : expr_no_bang {% b_exprToP $1 }
+    : 'integer'          {% b_intP $1 }
+    | 'string'           {% b_stringP $1 }
+    | 'char'             {% b_charP $1 }
+    | 'unit'             {% b_unitP $1 }
+    | '_'                { b_wildP $1 }
+    | special_id_no_bang {% b_symP $1 }
+    | 'symbol'           {% b_symP $1 }
+    | 'hslist'           {% b_hsListP `fmap` parse p_pats0 (unListL $1) }
+    | 'list'             {% parse p_pats1 $1 }
+
+pats1 :: { HPat }
+    : ',' pats0            { b_tupP $1 $2 }
+    | '@' idsym pat        {% b_asP $2 $3 }
+    | conid '{' labelp '}' {% b_labeledP $1 $3 }
+    | conid pats0          {% b_conP [$1] False $2 }
+    | 'list' pats0         {% b_conP $1 True $2 }
+    | '::' pat type        { b_sigP $1 $2 $3 }
+
+labelp :: { [(Code, HPat)] }
+    : rlabelp { reverse $1 }
+
+rlabelp :: { [(Code, HPat)] }
+    : {- empty -}       { [] }
+    | rlabelp idsym pat { ($2, $3):$1 }
 
 
 -- ---------------------------------------------------------------------
@@ -710,7 +733,6 @@ atom_no_idsym :: { HExpr }
     | 'integer' {% b_integerE $1 }
     | 'frac'    {% b_fracE $1 }
     | 'unit'    { b_unitE $1 }
-    | '_'       { b_wildPatE $1 }
     | 'hslist'  {% b_hsListE `fmap` parse p_hlist (unListL $1) }
 
 exprs :: { HExpr }
@@ -726,9 +748,6 @@ exprs :: { HExpr }
     | 'list' '{' fbinds '}' {% b_recUpdE (parse p_exprs $1) $3 }
     | idsym app             {% b_opOrAppE $1 $2 }
     | expr_no_idsym app     { case $2 of (es,ts) -> b_appE ($1:es,ts) }
-    | '~' expr              { b_lazyPatE $2 }
-    | '@' idsym expr        {% b_asPatE $2 $3 }
-    | '@' idsym '~' expr    {% b_asPatLazyE $2 $4 }
     | expr                  { $1 }
 
 lambda :: { (HExpr,[HPat]) }
@@ -760,10 +779,8 @@ app :: { ([HExpr], [HType]) }
 
 rapp :: { ([HExpr], [HType]) }
     : expr          { ([$1], []) }
-    | '~' expr      { ([b_lazyPatE $2], []) }
     | '@' type      { ([], [parTyApp $2]) }
     | rapp expr     { case $1 of (es,ts) -> ($2:es,ts) }
-    | rapp '~' expr { case $1 of (es,ts) -> (b_lazyPatE $3:es, ts) }
     | rapp '@' type { case $1 of (es,ts) -> (es,parTyApp $3:ts) }
 
 matches :: { [HMatch] }

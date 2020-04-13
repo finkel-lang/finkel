@@ -36,14 +36,6 @@ import SrcLoc                          (GenLocated (..), Located, getLoc, noLoc)
 import TysWiredIn                      (tupleDataCon)
 
 #if MIN_VERSION_ghc(8,10,0)
-import FastString                      (fsLit)
-import OccName                         (varName)
-import RdrName                         (mkUnqual)
-#else
-import RdrHsSyn                        (bang_RDR)
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
 import GHC_Hs_Expr                     (parenthesizeHsExpr)
 import GHC_Hs_Extension                (noExtField)
 #elif MIN_VERSION_ghc(8,6,0)
@@ -268,28 +260,14 @@ b_varE (LForm (L l form))
   , not (nullFS x)
   , let hdchr = headFS x
   , let tlchrs = tailFS x
-  = case hdchr of
-      '~' | nullFS tlchrs -> failB "invalid use of `~'"
-          | not (isLexSym tlchrs) ->
-            -- Lazy pattern
-            return (b_lazyPatE (hsVar (mkVarRdrName tlchrs)))
-      '!' | not (nullFS tlchrs), not (isLexSym tlchrs) ->
-            -- Bang pattern
-            let vname = mkVarRdrName tlchrs
-                bang = hsVar bang_RDR
-            in  return (cL l (SectionR NOEXT bang (hsVar vname)))
-      _   | hdchr == ',', all (== ',') (unpackFS tlchrs) ->
-            -- Tuple constructor function with more than two elements are
-            -- written as symbol with sequence of commas, handling such case in
-            -- this function.
-            return (hsVar (tupConName Boxed (lengthFS x + 1)))
-          | otherwise -> return (hsVar (mkVarRdrName x))
+  = let rname | hdchr == ',', all (== ',') (unpackFS tlchrs)
+              -- Tuple constructor function with more than two elements are
+              -- written as symbol with sequence of commas, handling such case
+              -- in this function.
+              = tupConName Boxed (lengthFS x + 1)
+              | otherwise = mkVarRdrName x
+    in  return (cL l (HsVar NOEXT (cL l rname)))
   | otherwise = builderError
-  where
-    hsVar name = cL l (HsVar NOEXT (cL l name))
-#if MIN_VERSION_ghc(8,10,0)
-    bang_RDR = mkUnqual varName (fsLit "!")
-#endif
 {-# INLINE b_varE #-}
 
 b_unitE :: Code -> HExpr
@@ -343,61 +321,6 @@ b_parE :: HExpr -> HExpr
 b_parE (dL->expr@(L l _)) = cL l (hsPar expr)
 {-# INLINE b_parE #-}
 
-
--- ------------------------------------------------------------------------
---
--- Internal expressions for patterns
---
--- ------------------------------------------------------------------------
-
--- Note: [Pattern from expression]
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
---
--- Until ghc-8.8.x, parser in GHC had intermediate constructors in HsExpr data
--- type, to make HsPat values from HsExpr. In ghc-8.10.1, the intermediate
--- constructors were removed and RdrHsSyn.PatBuilder and related data types and
--- functions were introduced.
-
-#if MIN_VERSION_ghc(8,10,0)
-
-b_wildPatE :: Code -> HExpr
-b_wildPatE = error "b_wildPatE: NYI"
-
-b_asPatE :: Code -> HExpr -> Builder HExpr
-b_asPatE = error "b_asPatE: NYI"
-
-b_asPatLazyE :: Code -> HExpr -> Builder HExpr
-b_asPatLazyE = error "b_asPatLazyE: NYI"
-
-b_lazyPatE :: HExpr -> HExpr
-b_lazyPatE = error "b_lazyPatE: NYI"
-
-#else
-
-b_wildPatE :: Code -> HExpr
-b_wildPatE (LForm (L l _)) = cL l (EWildPat NOEXT)
-{-# INLINE b_wildPatE #-}
-
-b_asPatE :: Code -> HExpr -> Builder HExpr
-b_asPatE (LForm (dL->L l form)) expr
-  | Atom (ASymbol name) <- form
-  = return (cL l (EAsPat NOEXT (L l (mkRdrName name))
-                               (parenthesizeHsExpr' appPrec expr)))
-  | otherwise
-  = builderError
-{-# INLINE b_asPatE #-}
-
-b_asPatLazyE :: Code -> HExpr -> Builder HExpr
-b_asPatLazyE name expr =
-  b_asPatE name (parenthesizeHsExpr' appPrec (b_lazyPatE expr))
-{-# INLINE b_asPatLazyE #-}
-
-b_lazyPatE :: HExpr -> HExpr
-b_lazyPatE e@(dL->L l _) = cL l (ELazyPat NOEXT e')
-  where e' = parenthesizeHsExpr' appPrec e
-{-# INLINE b_lazyPatE #-}
-
-#endif
 
 -- ------------------------------------------------------------------------
 --
