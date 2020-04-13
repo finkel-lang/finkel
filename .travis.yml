@@ -35,6 +35,8 @@ jobs:
       env: EXEC=stack RESOLVER=lts-15
     - os: linux
       env: EXEC=cabal GHC_VERSION=8.8.3
+    - os: linux
+      env: EXEC=cabal GHC_VERSION=8.10.1
     - os: osx
       env: EXEC=stack RESOLVER=lts-15
     - os: windows

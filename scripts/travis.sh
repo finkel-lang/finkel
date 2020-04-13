@@ -49,7 +49,7 @@ travis_install_linux () {
             ;;
         cabal)
             mkdir -p ~/.ghcup/bin
-            url=https://gitlab.haskell.org/haskell/ghcup/raw/master/ghcup
+            url='https://downloads.haskell.org/~ghcup/x86_64-linux-ghcup'
             travis_retry curl -L $url > ~/.ghcup/bin/ghcup
             chmod +x ~/.ghcup/bin/ghcup
             ghcup -c install-cabal
@@ -69,7 +69,7 @@ travis_script_linux () {
         stack)
             $STACK --install-ghc test --only-dependencies
             $STACK build --fast --test --coverage --no-run-tests
-            $STACK build --fast --test --coverage
+            $STACK -j 1 build --fast --test --coverage
             ;;
         cabal)
             cabal v2-configure --disable-optimization
