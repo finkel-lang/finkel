@@ -6,9 +6,11 @@ module MakeTest
 -- base
 import Control.Monad                (void)
 import Data.List                    (isPrefixOf, tails)
-import System.FilePath              ((</>))
+import System.FilePath              (takeBaseName, (</>))
+
 
 -- ghc
+import Config                       (cProjectVersionInt)
 import DynFlags                     (DynFlags (..), GhcLink (..), Way (..),
                                      interpWays, parseDynamicFlagsCmdLine)
 import FastString                   (fsLit)
@@ -63,17 +65,22 @@ buildC = buildFile
 buildFile :: Fnk () -> FilePath -> Spec
 buildFile pre path =
   describe ("file " ++ path) $
-    it "should compile successfully" $ do
-      ret <- runFnk
-               (do pre
-                   -- Use dflags setttings for profile when running test
-                   -- executable with "+RTS -p" option.
-                   if WayProf `elem` interpWays
-                      then make_profile targets Nothing
-                      else make_simple targets Nothing)
-                    (defaultFnkEnv { envSilent = True })
-      ret `shouldBe` ()
+    it "should compile successfully" work
   where
+    work
+      | cProjectVersionInt == "810", takeBaseName path `elem` skipped
+      = pendingWith "Not yet supported"
+      | otherwise
+      = do ret <- runFnk
+                    (do pre
+                        -- Use dflags setttings for profile when running test
+                        -- executable with "+RTS -p" option.
+                        if WayProf `elem` interpWays
+                           then make_profile targets Nothing
+                           else make_simple targets Nothing)
+                         (defaultFnkEnv { envSilent = True })
+           ret `shouldBe` ()
+    skipped = ["main4"]
     targets = [(noLoc path, Nothing)]
     make' flags sources out = do
       dflags0 <- getSessionDynFlags

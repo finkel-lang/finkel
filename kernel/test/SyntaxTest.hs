@@ -20,6 +20,7 @@ import System.Directory     (createDirectoryIfMissing, doesFileExist,
 import System.FilePath      (takeBaseName, (<.>), (</>))
 
 -- ghc
+import Config               (cProjectVersionInt)
 import SrcLoc               (noLoc)
 
 -- hspec
@@ -36,15 +37,18 @@ import Language.Finkel.Make
 import TestAux
 
 mkTest :: FilePath -> Spec
-mkTest path =
-  if os == "mingw32" && or (let b = takeBaseName path
-                            in  [ b == "0002-lexical"
-                                , b == "0004-decls"
-                                , b == "1001-quote" ])
-     then describe path
-                   (it "is pending under Windows"
+mkTest path
+  | os == "mingw32"
+  , let b = takeBaseName path
+  , b `elem` ["0002-lexical", "0004-decls", "1001-quote"]
+  = describe path (it "is pending under Windows"
                        (pendingWith "Unicode not supported yet"))
-     else mkTest' path
+  | cProjectVersionInt == "810"
+  , let b = takeBaseName path
+  , b `elem` ["1002-macro", "1003-eval-when-compile"]
+  = describe path (it "is pending with ghc-8.10.1"
+                      (pendingWith "Not yet supported"))
+  | otherwise = mkTest' path
 
 mkTest' :: FilePath -> Spec
 mkTest' path = do
@@ -56,7 +60,7 @@ mkTest' path = do
   fnkORef <- mkRef "fnkORef"
   hsORef <- mkRef "hsORef"
   let fnkEnv = defaultFnkEnv { envSilent = True
-                           , envHsDir = Just odir }
+                             , envHsDir = Just odir }
       odir = tmpdir </> "fnk_mk_test"
       aDotOut = odir </> "a.out"
       dotHs = odir </> takeBaseName path <.> "hs"
@@ -97,7 +101,7 @@ mkTest' path = do
 #endif
       case skipThisTest path of
         (True, reason) -> pendingWith reason
-        _ -> runFnk task fnkEnv >>= \ret -> ret `shouldBe` ()
+        _              -> runFnk task fnkEnv >>= \ret -> ret `shouldBe` ()
 
     it "should run executable compiled from Haskell code" $ do
       removeWhenExist dotTix

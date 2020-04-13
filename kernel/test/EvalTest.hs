@@ -1,9 +1,15 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE MagicHash    #-}
 module EvalTest (evalTests) where
 
 -- base
-import Unsafe.Coerce
+import GHC.Exts                (unsafeCoerce#)
+
+-- filepath
+import System.FilePath         (takeBaseName)
 
 -- ghc
+import Config                  (cProjectVersionInt)
 import DynFlags                (HasDynFlags (..))
 import GHC                     (getPrintUnqual)
 import Outputable              (showSDocForUser)
@@ -18,7 +24,7 @@ import Test.Hspec
 import Language.Finkel.Builder (Builder)
 import Language.Finkel.Eval    (evalExpr, evalExprType, evalTypeKind)
 import Language.Finkel.Expand  (expands, withExpanderSettings)
-import Language.Finkel.Fnk     (Fnk, FnkEnv (..), failS, runFnk)
+import Language.Finkel.Fnk     (Fnk, FnkEnv (..), debugFnk, failS, runFnk)
 import Language.Finkel.Lexer   (evalSP)
 import Language.Finkel.Make    (buildHsSyn, defaultFnkEnv)
 import Language.Finkel.Reader  (sexprs)
@@ -36,16 +42,20 @@ evalTests exprFiles = do
 exprTest :: FilePath -> Spec
 exprTest file =
   describe file $
-    it "should evaluate to True" $ do
-      contents <- hGetStringBuffer file
-      ret <- evalContents contents
-      ret `shouldBe` True
+    it "should evaluate to True" work
   where
-    evalContents buf =
+    work
+      | cProjectVersionInt == "810", takeBaseName file `elem` skipped
+      = pendingWith "Not yet supported"
+      | otherwise
+      = do contents <- hGetStringBuffer file
+           ret <- runEvalExpr contents
+           ret `shouldBe` True
+    skipped = [ "0002-shadowing-macro"
+              , "0004-unquote-unquote-splice" ]
+    runEvalExpr !buf =
       runFnk (doEval "<exprTypeTest>" parseExpr act buf) evalFnkEnv
-    act expr = do
-      hval <- evalExpr expr
-      return (unsafeCoerce hval)
+    act !expr = unsafeCoerce# $! evalExpr expr
 
 exprTypeTest :: Spec
 exprTypeTest =
@@ -55,9 +65,8 @@ exprTypeTest =
       ret `shouldBe` "Bool"
   where
     runEvalType str =
-      let str' = stringToStringBuffer str
-      in runFnk (doEval "<exprTypeTest>" parseExpr act str')
-                evalFnkEnv
+      let buf = stringToStringBuffer str
+      in  runFnk (doEval "<exprTypeTest>" parseExpr act buf) evalFnkEnv
     act expr  = do
       ty <- evalExprType expr
       dflags <- getDynFlags
@@ -72,23 +81,22 @@ typeKindTest = do
       ret `shouldBe` "* -> *"
   where
     runTypeKind str =
-      let str' = stringToStringBuffer str
-      in  runFnk (doEval "<typeKindTest>" parseType act str')
-                 evalFnkEnv
+      let buf = stringToStringBuffer str
+      in  runFnk (doEval "<typeKindTest>" parseType act buf) evalFnkEnv
     act expr = do
       (_, kind) <- evalTypeKind expr
       dflags <- getDynFlags
       unqual <- getPrintUnqual
       return (showSDocForUser dflags unqual (pprTypeForUser kind))
 
-doEval ::
-  String -> Builder a -> (a -> Fnk b) -> StringBuffer -> Fnk b
-doEval label parser act input = do
+doEval :: String -> Builder a -> (a -> Fnk b) -> StringBuffer -> Fnk b
+doEval !label !parser !act !input = do
   initSessionForTest
   case evalSP sexprs (Just label) input of
     Right form0 -> do
-      form1 <- withExpanderSettings (expands form0)
-      hthing <- buildHsSyn parser form1
+      !form1 <- withExpanderSettings (expands form0)
+      debugFnk ("form1: " ++ show form1)
+      !hthing <- buildHsSyn parser form1
       act hthing
     Left err -> failS err
 

@@ -8,26 +8,32 @@ module TestAux
   ) where
 
 -- base
-import Control.Monad          (when)
-import Control.Monad.IO.Class (MonadIO (..))
-import System.Environment     (lookupEnv)
+import           Control.Monad          (when)
+import           Control.Monad.IO.Class (MonadIO (..))
+import           Data.Version           (showVersion)
+import           System.Environment     (lookupEnv)
 
 -- directory
-import System.Directory       (getDirectoryContents, getHomeDirectory,
-                               removeFile)
+import           System.Directory       (getDirectoryContents, getHomeDirectory,
+                                         removeFile)
 
 -- filepath
-import System.FilePath        (joinPath, takeExtension, (</>))
+import           System.FilePath        (joinPath, takeExtension, (</>))
 
 -- ghc
-import Config                 (cProjectVersion)
-import DynFlags               (DynFlags (..), HasDynFlags (..),
-                               parseDynamicFlagsCmdLine)
-import SrcLoc                 (noLoc)
+import           Config                 (cProjectVersion)
+import           DynFlags               (DynFlags (..), GhcLink (..),
+                                         GhcMode (..), HasDynFlags (..),
+                                         HscTarget (..),
+                                         parseDynamicFlagsCmdLine)
+import           GhcMonad               (GhcMonad (..))
+import           HscTypes               (HscEnv (..), InteractiveContext (..))
+import           SrcLoc                 (noLoc)
 
 -- fnk-kernel
-import Language.Finkel.Fnk    (Fnk, setDynFlags)
-import Language.Finkel.Make   (initSessionForMake)
+import           Language.Finkel.Fnk    (Fnk, setDynFlags)
+import           Language.Finkel.Make   (initSessionForMake)
+import qualified Paths_finkel_kernel
 
 
 -- -----------------------------------------------------------------------
@@ -106,9 +112,14 @@ resetPackageEnvForCabal_3_0_0 = do
       -- fail if "v2-build" subcommand were not invoked in advance.
       --
       inplacedb = joinPath [distpref, "package.conf.inplace"]
+      fkv = showVersion Paths_finkel_kernel.version
+      inplacepkg = "finkel-kernel-" ++ fkv ++ "-inplace"
       dflags1 = clearPackageEnv dflags0
-      args = map noLoc ["-package-db", storedb
-                       ,"-package-db", inplacedb]
+      args = map noLoc [ "-clear-package-db"
+                       , "-global-package-db"
+                       , "-package-db", storedb
+                       , "-package-db", inplacedb
+                       , "-package-id", inplacepkg ]
   (dflags2, _, _) <- parseDynamicFlagsCmdLine dflags1 args
   setDynFlags dflags2
 

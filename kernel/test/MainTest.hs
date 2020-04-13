@@ -28,7 +28,7 @@ mainTests :: Spec
 mainTests =
   beforeAll_ (removeArtifacts odir) $ do
     packageEnvFlag <- runIO getPackageEnvFlag
-    let common_flags = "-v0" : packageEnvFlag
+    let common_flags = "-v0" : "-fno-code" : packageEnvFlag
     compileFile common_flags "m001.fnk"
     compileFile common_flags "m002.hs"
     compileFile ("-c" : common_flags) "m003.c"
@@ -65,8 +65,8 @@ trivialTest desc label flags = describe desc $
 
 runDefaultMain :: [String] -> IO ()
 runDefaultMain args =
-  -- "defaultMain" uses "rawSystem" to delegate non-finkel related
-  -- works to ghc, which throws "ExitSuccess" when successfully done.
+  -- "defaultMain" uses "System.Process.rawSystem" to delegate non-finkel
+  -- related works to ghc, which throws "ExitSuccess" when successfully done.
   catch (withArgs args defaultMain)
         (\e -> case e of
                  ExitSuccess -> return ()
