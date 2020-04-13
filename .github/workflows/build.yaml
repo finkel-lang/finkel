@@ -106,9 +106,9 @@ jobs:
 
       - name: Install dependency packages
         shell: bash
-        run: $STACK build --test --only-dependencies
+        run: $STACK build -j 2 --test --only-dependencies
 
-      - name: Build package
+      - name: Build packages
         shell: bash
         run: $STACK build --fast --test --coverage --no-run-tests
 
@@ -150,10 +150,21 @@ jobs:
           # setup-haskell@v1 action does not support windows and macos.
           # See: https://github.com/actions/setup-haskell/issues/1
           - ubuntu-latest
-          # - windows-latest
+          - windows-latest
         plan:
           - ghc: "8.8.3"
-            cabal: "3.0"
+            cabal: "3.0.0.0"
+          - ghc: "8.10.1"
+            cabal: "3.2.0.0"
+        exclude:
+          - os: windows-latest
+            plan:
+              ghc: "8.8.3"
+              cabal: "3.0.0.0"
+          - os: windows-latest
+            plan:
+              ghc: "8.10.1"
+              cabal: "3.2.0.0"
 
     runs-on:
       - ${{ matrix.os }}
@@ -176,21 +187,30 @@ jobs:
           path: ~/.cabal
           key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}
 
-      - name: Install ghcup (non-windows)
-        if: matrix.os != 'windows-latest'
+      - name: Install ghcup (linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          url=https://gitlab.haskell.org/haskell/ghcup/raw/master/ghcup
+          url='https://downloads.haskell.org/~ghcup/x86_64-linux-ghcup'
           mkdir -p ~/.ghcup/bin
           curl -sL $url > ~/.ghcup/bin/ghcup
           chmod +x ~/.ghcup/bin/ghcup
           echo "::add-path::$HOME/.ghcup/bin"
 
-      - name: Install ghc and cabal-install (non-window)
+      - name: Install ghcup (osx)
+        if: matrix.os == 'macos-latest'
+        run: |
+          url='https://downloads.haskell.org/~ghcup/x86_64-apple-darwin-ghcup'
+          mkdir -p ~/.ghcup/bin
+          curl -sL $url > ~/.ghcup/bin/ghcup
+          chmod +x ~/.ghcup/bin/ghcup
+          echo "::add-path::$HOME/.ghcup/bin"
+
+      - name: Install ghc and cabal-install (linux and osx)
         if: matrix.os != 'windows-latest'
         run: |
-          ghcup -c install-cabal
-          ghcup -c install $ghc
-          ghcup -c set $ghc
+          ghcup -c install-cabal ${{ matrix.plan.cabal }}
+          ghcup -c install ${{ matrix.plan.ghc }}
+          ghcup set ${{ matrix.plan.ghc }}
           which cabal
           which ghc
           cabal --version
@@ -200,11 +220,11 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           choco source add -n mistuke -s https://www.myget.org/F/mistuke/api/v2
-          choco install -y cabal --version 3.0.0.0
-          choco install -y ghc --version 8.8.3
+          choco install -y cabal --version ${{ matrix.plan.cabal }}
+          choco install -y ghc --version ${{ matrix.plan.ghc }}
           refreshenv
           echo "::add-path::C:/Users/runneradmin/AppData/Roaming/cabal/bin"
-          echo "::add-path::C:/ProgramData/chocolatey/lib/ghc/tools/ghc-8.8.3/bin"
+          echo "::add-path::C:/ProgramData/chocolatey/lib/ghc/tools/ghc-${{ matrix.plan.ghc }}/bin"
 
       - name: Show version and paths
         shell: bash
@@ -222,9 +242,9 @@ jobs:
 
       - name: Build dependency packages
         shell: bash
-        run: cabal v2-build all --only-dependencies
+        run: cabal v2-build all -j --only-dependencies
 
-      - name: Build package
+      - name: Build packages
         shell: bash
         run: cabal v2-build all
 
