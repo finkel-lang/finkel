@@ -43,7 +43,6 @@ import           Data.Word                  (Word8)
 import qualified GHC.Char                   as Char
 
 -- bytestring
-import           Data.ByteString.Internal   (w2c, fromForeignPtr)
 import qualified Data.ByteString            as W8
 import qualified Data.ByteString.Char8      as C8
 

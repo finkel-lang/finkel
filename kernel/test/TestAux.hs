@@ -22,12 +22,8 @@ import           System.FilePath        (joinPath, takeExtension, (</>))
 
 -- ghc
 import           Config                 (cProjectVersion)
-import           DynFlags               (DynFlags (..), GhcLink (..),
-                                         GhcMode (..), HasDynFlags (..),
-                                         HscTarget (..),
+import           DynFlags               (DynFlags (..), HasDynFlags (..),
                                          parseDynamicFlagsCmdLine)
-import           GhcMonad               (GhcMonad (..))
-import           HscTypes               (HscEnv (..), InteractiveContext (..))
 import           SrcLoc                 (noLoc)
 
 -- fnk-kernel
