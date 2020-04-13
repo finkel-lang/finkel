@@ -36,8 +36,7 @@
       (print (:: (return 42) (Id.Identity Int)))
       (case (return 42) (Id.Identity n) (print n))
       (print (case EQ
-               Prelude.EQ True
-               _ False))
+               Prelude.EQ True))
       (print (case (Id.Identity 42)
                (Id.Identity n) n))
       (let ((= i1 (Id.Identity 100))

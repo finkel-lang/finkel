@@ -4,10 +4,11 @@
 ;;; to macro with `with-macro' and locally declared function with `let'.
 
 (:with-macro ((= foo
-               (Macro (\ form
-                        (case form
-                          (LForm (L _ (List [_ body])))
-                          (return `(++ "with-macro: " ,body)))))))
+                (Macro (\ form
+                         (case form
+                           (LForm (L _ (List [_ body])))
+                           (return `(++ "with-macro: " ,body))
+                           _ (error (++ "foo: got `" (show form) "'")))))))
   (all id [(== (foo "bar")
                "with-macro: bar")
 
@@ -68,14 +69,12 @@
 
            ;; Pattern match in `case' expression
            (== (case (Just (++ "let: "))
-                 (Just foo) (foo "bar")
-                 _          "blahblah")
+                 (Just foo) (foo "bar"))
                "let: bar")
 
            (== (case (Just (++ "let: "))
                  (Just foo) (where bar
-                              (= bar (foo "bar")))
-                 _          "")
+                              (= bar (foo "bar"))))
                "let: bar")
 
            ;; Shadowing with `where'
