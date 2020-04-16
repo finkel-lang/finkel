@@ -404,7 +404,6 @@ homoiconicTests = do
   t (Semigroup.WrapMonoid True)
   t (42 :: Natural)
   t (Atom (aIntegral (42 :: Int)))
-  t (parseE "(foo bar buzz)")
   t [True, False]
   t [EQ, LT, GT]
   t (Just (42 :: Int))
@@ -486,41 +485,41 @@ instance Data a => FromCode (D4 a)
 dataToCodeTest :: Spec
 dataToCodeTest = do
   let s = toCode . aSymbol
-  describe "D1 to Code" $ do
-    let e1 = toCode (HsList (map s ["D1a", "D1b", "D1c"]))
-    it ("should match `" ++ show e1 ++ "'") $
+  describe "D1 to Code" $
+    it "should match D1 values" $ do
+      let e1 = toCode (HsList (map s ["D1a", "D1b", "D1c"]))
       toCode [D1a, D1b, D1c] `shouldBe` e1
-  describe "D2 to Code" $ do
-    let e2 = toCode
-               (HsList
-                  [ toCode (List [s "D2a", toCode 'x'])
-                  , toCode (List [s "D2b", toCode 'y', toCode 'z'])])
-    it ("should match `" ++ show e2 ++ "'") $
-      toCode [D2a 'x', D2b 'y' 'z'] `shouldBe` e2
-  describe "D2 with D1 to Code" $ do
-    let e2b = toCode (List [s "D2b", s "D1a", s "D1b"])
-    it ("should match `" ++ show e2b ++ "'") $
-      toCode (D2b D1a D1b) `shouldBe` e2b
-  describe "D2 with Double to Code" $ do
-    let e2c = toCode (List [s "D2a", toCode (1.23 :: Double)])
-    it ("should match `" ++ show e2c ++ "'") $
-      toCode (D2a (1.23 :: Double)) `shouldBe` e2c
-  describe "D3 to Code" $ do
-    let e3 = toCode (List [ s "D3a"
-                          , toCode (42 :: Int)
-                          , toCode False
-                          , toCode 'a' ])
-    it ("should match `" ++ show e3 ++ "'") $
-      toCode (D3a 42 False 'a') `shouldBe` e3
-  describe "D4 to Code" $ do
-    let e4 = toCode (List [ s "D4a"
-                          , toCode (List [ s ","
-                                         , toCode 'w'
-                                         , toCode 'x'
-                                         , toCode 'y'
-                                         , toCode 'z'])])
-    it ("should match `" ++ show e4 ++ "'") $
-       toCode (D4a ('w', 'x', 'y', 'z')) `shouldBe` e4
+  describe "D2 to Code" $
+   it "should match `D2 Char' values"$ do
+     let e2 = toCode
+                (HsList
+                   [ toCode (List [s "D2a", toCode 'x'])
+                   , toCode (List [s "D2b", toCode 'y', toCode 'z'])])
+     toCode [D2a 'x', D2b 'y' 'z'] `shouldBe` e2
+  describe "D2 with D1 to Code" $
+   it "should match `D2 D1' values" $ do
+     let e2b = toCode (List [s "D2b", s "D1a", s "D1b"])
+     toCode (D2b D1a D1b) `shouldBe` e2b
+  describe "D2 with Double to Code" $
+   it "should match `D2 Double' values" $ do
+     let e2c = toCode (List [s "D2a", toCode (1.23 :: Double)])
+     toCode (D2a (1.23 :: Double)) `shouldBe` e2c
+  describe "D3 to Code" $
+   it "should match `D3' value" $ do
+     let e3 = toCode (List [ s "D3a"
+                           , toCode (42 :: Int)
+                           , toCode False
+                           , toCode 'a' ])
+     toCode (D3a 42 False 'a') `shouldBe` e3
+  describe "D4 to Code" $
+   it "should match `D4' value" $ do
+      let e4 = toCode (List [ s "D4a"
+                            , toCode (List [ s ","
+                                           , toCode 'w'
+                                           , toCode 'x'
+                                           , toCode 'y'
+                                           , toCode 'z'])])
+      toCode (D4a ('w', 'x', 'y', 'z')) `shouldBe` e4
 
 unquoteSpliceTest :: Spec
 unquoteSpliceTest =
