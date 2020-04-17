@@ -94,7 +94,7 @@ writeFinkelKernelConfig pkg_descr lbi flags = do
         ]
       gen comp clbi =
         let autogen_dir = autogenComponentModulesDir lbi clbi
-            dest_path = autogen_dir </> finkel_kernel_config_h
+            dest_path = autogen_dir </> "finkel_kernel_config.h"
             work =
               do createDirectoryIfMissingVerbose verbosity True
                                                  autogen_dir
@@ -105,10 +105,6 @@ writeFinkelKernelConfig pkg_descr lbi flags = do
              _       -> return ()
 
   withAllComponentsInBuildOrder pkg_descr lbi gen
-
--- | File name of the C header to write CPP macros.
-finkel_kernel_config_h :: String
-finkel_kernel_config_h = "finkel_kernel_config.h"
 
 -- | Function to get GHC library directory path.
 getLibDir :: Verbosity -> LocalBuildInfo -> IO FilePath
