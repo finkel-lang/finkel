@@ -9,6 +9,7 @@ module Language.Finkel.Syntax.HExpr where
 
 -- base
 import Data.List                       (foldl', foldl1')
+import Data.Maybe                      (fromMaybe)
 
 -- ghc
 import BasicTypes                      (Arity, Boxity (..), FractionalLit (..),
@@ -175,8 +176,11 @@ b_opOrAppE code (args, tys) = do
   let fn' = mkAppTypes fn tys
       mkOp loc lhs rhs = L loc (mkOpApp fn' lhs (mkLHsParOp rhs))
   case code of
+    -- Perform operator expansion, or delegate to `b_appE' if the head of the
+    -- form was non-operator.
     LForm (L l (Atom (ASymbol name)))
-      | isLexSym name
+      | let name' = fromMaybe name (snd <$> splitQualName name)
+      , isLexSym name'
       , hd:rest@(_:_) <- args
       -> pure (foldl' (mkOp l) (mkLHsParOp hd) rest)
     _ -> pure (b_appE (fn':args, tys))

@@ -44,7 +44,7 @@
 ;;; Partial application is supported for left hand side argument only.
 (= op1
   (do (print (+ 1 2 3 4 5))
-      (print (* 1 2 3 4 5))
+      (print (Prelude.* 1 2 3 4 5))
       (let ((= f (. putStrLn show (+ 3) (* 13)))))
       (f (:: 3 Int))
       ($ putStrLn show not False)))
