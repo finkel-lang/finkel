@@ -6,7 +6,7 @@
    ;; base
    (Control.Exception (bracket))
    (Control.Monad (zipWithM_))
-   (Data.List (sort))
+   (Data.List (isPrefixOf sort))
    (System.Exit ((ExitCode ..)))
    (System.Process ((CreateProcess ..) createProcess proc waitForProcess))
 
@@ -51,12 +51,13 @@
 
 (defn (:: compare-package-dirs (-> (, FilePath String) (IO ())))
   [(, tmpdir pkgname)]
-  (do (<- ec (stack-new tmpdir pkgname))
-      (case ec
-        ExitSuccess (compare-directory-contents
-                     (</> "include" "building-package" pkgname)
-                     (</> tmpdir pkgname))
-        _ (expectationFailure "stack new failed"))))
+  (do (<- et-ec (stack-new tmpdir pkgname))
+      (case et-ec
+        (Right ExitSuccess) (compare-directory-contents
+                             (</> "include" "building-package" pkgname)
+                             (</> tmpdir pkgname))
+        (Right ec) (expectationFailure (++ "stack new failed with " (show ec)))
+        (Left msg) (expectationFailure msg))))
 
 (defn (:: compare-directory-contents (-> FilePath FilePath (IO ())))
   "Recursively compare directory contents."
@@ -85,16 +86,18 @@
               (/= ".tix" (takeExtension path)))))
     (. (fmap (. sort (filter ignored))) listDirectory)))
 
-(defn (:: stack-new (-> FilePath String (IO ExitCode)))
+(defn (:: stack-new (-> FilePath String (IO (Either String ExitCode))))
   "Run stack new command to generate new package."
   [dir pkgname]
-  ;; Temporary new package for comparison is always generated with "lts-15"
-  ;; resolver, since the prepared package contents is generated with that
-  ;; version.
   (do (<- template get-template-path)
-      (run (Just dir)
-           "stack" ["--resolver" "lts-15.7" "--silent" "new" pkgname
-                    "--omit-packages" template])))
+      (<- mb-resolver (get-resolver-version pkgname))
+      (case mb-resolver
+        (Just resolver) (fmap Right
+                              (run (Just dir)
+                                   "stack" ["--resolver" resolver "--silent"
+                                            "new" pkgname
+                                            "--omit-packages" template]))
+        Nothing (return (Left "Failed to get the resolver version")))))
 
 (defn (:: get-template-path (IO FilePath))
   "Get canonicalized template path."
@@ -104,6 +107,20 @@
   ;; See: https://docs.haskellstack.org/en/stable/GUIDE/#templates
   ;;
   (canonicalizePath (</> ".." "tool" "finkel.hsfiles")))
+
+(defn (:: get-resolver-version (-> String (IO (Maybe String))))
+  "Get stack resolver version from YAML file used in `my-new-package'."
+  [pkgname]
+  (do (let ((= yaml-path
+              (</> "include" "building-package" pkgname "stack.yaml"))
+            (= resolver-line
+              (. (concatMap words)
+                 (filter (isPrefixOf "resolver:"))
+                 lines))))
+      (<- contents (readFile yaml-path))
+      (case (resolver-line contents)
+        [_ version] (return (Just version))
+        _ (return Nothing))))
 
 (defn (:: run (-> (Maybe String) String [String] (IO ExitCode)))
   "Run command and wait."
