@@ -151,6 +151,7 @@ form. The ``,@`` can unquote-splice a quoted list and a Haskell list.
 Observing parsed Haskell code:
 
 .. literalinclude:: ../include/macros/unquote-splice.console
+   :language: console
 
 
 Getting Macro Arguments As A List
