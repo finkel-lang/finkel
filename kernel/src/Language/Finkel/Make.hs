@@ -171,16 +171,8 @@ make infiles no_link force_recomp mb_output = do
   setDynFlags dflags2
   dflags3 <- getDynFlags
 
-  debugFnk
-    (concat
-       [ ";;; make:\n"
-       , ";;;   ghcLink=", show (ghcLink dflags3), "\n"
-       , ";;;   ghcMode=", showPpr dflags3 (ghcMode dflags3), "\n"
-       , ";;;   hscTarget=", show (hscTarget dflags3), "\n"
-       , ";;;   ways=", show (ways dflags3), "\n"
-       , ";;;   forceRecomp=", show (gopt Opt_ForceRecomp dflags3), "\n"
-       , ";;;   interpWays=", show interpWays, "\n"
-       , ";;;   importPaths=", show (importPaths dflags3)])
+  debugFnk ";;; [Language.Finkel.Make.make] DynFlags:"
+  dumpDynFlags dflags3
 
   -- Preserve the language extension values in initial dynflags to
   -- FnkEnv, to reset the language extension later, to keep fresh set of
@@ -209,7 +201,7 @@ make infiles no_link force_recomp mb_output = do
 initSessionForMake :: Fnk ()
 initSessionForMake = do
   -- Returned list of 'InstalledUnitId's are ignored.
-  _ <- getDynFlags >>= setSessionDynFlags
+  _preload <- getDynFlags >>= setSessionDynFlags
 
   -- Load modules names in FnkEnv to current interactive context.
   fnkc_env <- getFnkEnv
@@ -429,14 +421,15 @@ makeOne i total mb_sp summary required_summaries = timeIt label go
     mname = moduleNameString (ms_mod_name summary)
     go = do
       -- Keep current DynFlags.
-      dflags <- getDynFlags
+      dflags0 <- getDynFlags
 
       -- Use cached dynflags from ModSummary before type check. Note
       -- that the cached dynflags is always used, no matter whether the
       -- module is updated or not. This is to support loading already
       -- compiled module objects with language extensions not set in
       -- current dynflags.
-      setDynFlags (ms_hspp_opts summary)
+      let dflags1 = ms_hspp_opts summary
+      setDynFlags dflags1
 
       up_to_date <- checkUpToDate summary required_summaries
       debugFnk (";;; makeOne: up_to_date=" ++ show up_to_date)
@@ -447,8 +440,8 @@ makeOne i total mb_sp summary required_summaries = timeIt label go
 
       -- Restore the original DynFlags.
       modifySession
-        (\e -> e { hsc_dflags = dflags
-                 , hsc_IC = (hsc_IC e) {ic_dflags = dflags}})
+        (\e -> e { hsc_dflags = dflags0
+                 , hsc_IC = (hsc_IC e) {ic_dflags = dflags0}})
 
       return summary'
 
@@ -487,14 +480,14 @@ doMakeOne i total mb_sp ms src_modified = do
   -- Dump the parsed AST.
   dumpParsedAST dflags ms
 
-  -- Lookup reusable old linkable. Reuse strategy for object codes and
-  -- byte codes differs to support reloading modules from REPL, and to
-  -- support rebuilding cabal package without unnecessary recompilation.
+  -- Lookup reusable old linkable. Strategy for reusing object codes and byte
+  -- codes differs to support reloading modules from REPL, and to support
+  -- rebuilding cabal package without unnecessary recompilation.
   --
-  -- For object codes, use the one found with 'findObjectLinkableMaybe',
-  -- which is written as file, or the oen found from home package
-  -- table. For byte code, reuse the one found in home package table if
-  -- the linkable was not an object code.
+  -- For object codes, use the one found with 'findObjectLinkableMaybe', which
+  -- is written as file, or the oen found from home package table. For byte
+  -- code, reuse the one found in home package table if the linkable was not an
+  -- object code.
   --
   mb_old_linkable <- do
     let mb_linkable = mb_hm_info >>= hm_linkable
@@ -1093,3 +1086,16 @@ preprocess' hsc_env (path, mb_phase) =
 #else
 preprocess' = preprocess
 #endif
+
+-- | Show some fields in 'DynFlags'.
+dumpDynFlags :: DynFlags -> Fnk ()
+dumpDynFlags dflags =
+  debugFnk
+    (concat
+       [ ";;; ghcLink=", show (ghcLink dflags), "\n"
+       , ";;; ghcMode=", showPpr dflags (ghcMode dflags), "\n"
+       , ";;; hscTarget=", show (hscTarget dflags), "\n"
+       , ";;; ways=", show (ways dflags), "\n"
+       , ";;; forceRecomp=", show (gopt Opt_ForceRecomp dflags), "\n"
+       , ";;; interpWays=", show interpWays, "\n"
+       , ";;; importPaths=", show (importPaths dflags)])
