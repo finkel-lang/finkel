@@ -239,8 +239,9 @@ context."
 (defn (:: eval-decls (-> [HDecl] (Fnk Result)))
   [decls]
   (do (let ((= decls' (cvTopDecls (toOL decls)))))
-      (<- (, tythings _ic) (evalDecls decls'))
+      (<- (, tythings ic) (evalDecls decls'))
       (<- hsc-env getSession)
+      (setSession (hsc-env {hsc-IC ic}))
       (let ((= dflags (hsc-dflags hsc-env))
             (= pr tt
               (case tt
