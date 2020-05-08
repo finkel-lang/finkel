@@ -4,27 +4,20 @@ module MakeTest
   ) where
 
 -- base
-import Control.Monad                (void)
 import Data.List                    (isPrefixOf, tails)
 import System.FilePath              (takeBaseName, (</>))
-
+import System.Info                  (os)
 
 -- ghc
 import Config                       (cProjectVersionInt)
-import DynFlags                     (DynFlags (..), GhcLink (..), Way (..),
-                                     interpWays, parseDynamicFlagsCmdLine)
+import DynFlags                     (Way (..), interpWays)
 import FastString                   (fsLit)
-import GHC                          (setSessionDynFlags)
-import GhcMonad                     (getSessionDynFlags)
-import SrcLoc                       (noLoc)
 
 -- hspec
 import Test.Hspec
 
 -- finkel-kernel
-import Language.Finkel.Fnk
 import Language.Finkel.Lexer
-import Language.Finkel.Make
 import Language.Finkel.TargetSource
 
 -- Internal
@@ -38,7 +31,7 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildFnk "main3.fnk"
   buildFnk "main4.fnk"
   buildFnk "main5.fnk"
-  buildC "cbits1.c"
+  buildC (odir </> "cbits1.c")
 
 showTargetTest :: Spec
 showTargetTest = do
@@ -54,44 +47,36 @@ showTargetTest = do
       show otsrc `shouldSatisfy` subseq "path3"
 
 buildFnk :: FilePath -> Spec
-buildFnk = buildFile initSessionForTest
+buildFnk = buildFile []
 
 buildC :: FilePath -> Spec
-buildC = buildFile
-           (do initSessionForTest
-               dflags <- getSessionDynFlags
-               void (setSessionDynFlags (dflags {ghcLink=NoLink})))
+buildC = buildFile ["-no-link"]
 
-buildFile :: Fnk () -> FilePath -> Spec
+buildFile :: [String] -> FilePath -> Spec
 buildFile pre path =
   describe ("file " ++ path) $
     it "should compile successfully" work
   where
     work
-      | cProjectVersionInt == "810", takeBaseName path `elem` skipped
+      | cProjectVersionInt == "810"
+      , os == "mingw32"
+      , takeBaseName path `elem` skipped
       = pendingWith "Not yet supported"
       | otherwise
-      = do ret <- runFnk
-                    (do pre
-                        -- Use dflags setttings for profile when running test
-                        -- executable with "+RTS -p" option.
-                        if WayProf `elem` interpWays
-                           then make_profile targets Nothing
-                           else make_simple targets Nothing)
-                         (defaultFnkEnv { envSilent = True })
-           ret `shouldBe` ()
+      = do_work
     skipped = ["main4"]
-    targets = [(noLoc path, Nothing)]
-    make' flags sources out = do
-      dflags0 <- getSessionDynFlags
-      let dflags1 = dflags0 {importPaths = [".", odir]}
-          flags' = map noLoc flags
-      (dflags2,_,_) <- parseDynamicFlagsCmdLine dflags1 flags'
-      _ <- setSessionDynFlags dflags2
-      make sources False False out
-    make_simple = make' []
-    make_profile = make' ["-prof", "-fprof-auto", "-fprof-cafs"
-                         , "-hisuf", "p_hi", "-osuf", "p_o"]
+    do_work
+      | WayProf `elem` interpWays = do_prof_work
+      | otherwise = do_work_with []
+    -- Use dflags setttings for profile when running test executable with "+RTS
+    -- -p" option.
+    do_prof_work =
+      do_work_with [ "-prof", "-fprof-auto", "-fprof-cafs"
+                   , "-hisuf", "p_hi", "-osuf", "p_o" ]
+    do_work_with extra =
+      runDefaultMain (extra ++ common_args ++ pre)
+    common_args =
+      ["-no-link", "-fbyte-code", "-i.", "-i" ++ odir, "-v0", path]
 
 odir :: FilePath
 odir = "test" </> "data" </> "make"

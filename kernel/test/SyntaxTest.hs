@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- | Tests for syntax.
 --
 -- All files under "test/data" directory with '.fnk' extension (i.e.:
@@ -7,31 +8,26 @@
 module SyntaxTest (syntaxTests) where
 
 -- base
-import Control.Monad        (when)
-import Data.IORef           (newIORef, readIORef, writeIORef)
-import System.Exit          (ExitCode (..))
-import System.Info          (os)
+import Control.Monad    (when)
+import Data.IORef       (newIORef, readIORef, writeIORef)
+import System.Exit      (ExitCode (..))
+import System.Info      (os)
 
 -- directory
-import System.Directory     (createDirectoryIfMissing, doesFileExist,
-                             getTemporaryDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist,
+                         getTemporaryDirectory, removeFile)
 
 -- filepath
-import System.FilePath      (takeBaseName, (<.>), (</>))
+import System.FilePath  (takeBaseName, (<.>), (</>))
 
 -- ghc
-import Config               (cProjectVersionInt)
-import SrcLoc               (noLoc)
+import Config           (cProjectVersionInt)
 
 -- hspec
 import Test.Hspec
 
 -- process
-import System.Process       (readProcessWithExitCode)
-
--- finkel-kernel
-import Language.Finkel.Fnk
-import Language.Finkel.Make
+import System.Process   (readProcessWithExitCode)
 
 -- Internal
 import TestAux
@@ -39,16 +35,17 @@ import TestAux
 mkTest :: FilePath -> Spec
 mkTest path
   | os == "mingw32"
-  , let b = takeBaseName path
-  , b `elem` ["0002-lexical", "0004-decls", "1001-quote"]
+  , base_name `elem` ["0002-lexical", "0004-decls", "1001-quote"]
   = describe path (it "is pending under Windows"
                        (pendingWith "Unicode not supported yet"))
   | cProjectVersionInt == "810"
-  , let b = takeBaseName path
-  , b `elem` ["1002-macro", "1003-eval-when-compile"]
-  = describe path (it "is pending with ghc-8.10.1"
-                      (pendingWith "Not yet supported"))
+  , os == "mingw32"
+  , base_name `elem` ["1002-macro", "1003-eval-when-compile"]
+  = describe path (it "is pending with ghc-8.10.1 under Windows"
+                      (pendingWith "Macro expansion not yet supported"))
   | otherwise = mkTest' path
+  where
+    base_name = takeBaseName path
 
 mkTest' :: FilePath -> Spec
 mkTest' path = do
@@ -59,21 +56,20 @@ mkTest' path = do
   tmpdir <- runIO getTemporaryDirectory
   fnkORef <- mkRef "fnkORef"
   hsORef <- mkRef "hsORef"
-  let fnkEnv = defaultFnkEnv { envSilent = True
-                             , envHsDir = Just odir }
-      odir = tmpdir </> "fnk_mk_test"
+  let odir = tmpdir </> "fnk_mk_test"
       aDotOut = odir </> "a.out"
       dotHs = odir </> takeBaseName path <.> "hs"
       dotTix = "a.out.tix"
       syndir = "test" </> "data" </> "syntax"
       runDotO = readProcessWithExitCode aDotOut [] ""
+      prepare =
+        do removeArtifacts syndir
+           mapM_ removeWhenExist [dotTix, aDotOut, dotHs]
   runIO (createDirectoryIfMissing True odir)
-  beforeAll_ (removeArtifacts syndir) $ describe path $ do
-    it "should compile with Fnk" $ do
-      let task = do
-            initSessionForTest
-            make [(noLoc path, Nothing)] False True (Just aDotOut)
-      ret <- runFnk task fnkEnv
+  beforeAll_ prepare $ describe path $ do
+    it "should compile .fnk file" $ do
+      let args = [ "--fnk-hsdir=" ++ odir, "-o", aDotOut, "-v0" , path]
+      ret <- runDefaultMain args
       ret `shouldBe` ()
 
     it "should run executable compiled with Fnk" $ do
@@ -86,10 +82,10 @@ mkTest' path = do
       exist <- doesFileExist dotHs
       exist `shouldBe` True
 
-    it "should compile resulting Haskell code" $ do
+    it "should compile dumped Haskell code" $ do
       let task = do
-            initSessionForTest
-            make [(noLoc dotHs, Nothing)] False True (Just aDotOut)
+            ret <- runDefaultMain ["-o", aDotOut, "-v0", dotHs]
+            ret `shouldBe` ()
 #if MIN_VERSION_ghc(8,4,0)
           skipThisTest _ = (False, "")
 #else
@@ -101,7 +97,7 @@ mkTest' path = do
 #endif
       case skipThisTest path of
         (True, reason) -> pendingWith reason
-        _              -> runFnk task fnkEnv >>= \ret -> ret `shouldBe` ()
+        _              -> task
 
     it "should run executable compiled from Haskell code" $ do
       removeWhenExist dotTix

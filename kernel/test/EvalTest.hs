@@ -3,7 +3,10 @@
 module EvalTest (evalTests) where
 
 -- base
+import Control.Exception       (throwIO)
+import Control.Monad.IO.Class  (MonadIO (..))
 import GHC.Exts                (unsafeCoerce#)
+import System.Info             (os)
 
 -- filepath
 import System.FilePath         (takeBaseName)
@@ -12,10 +15,13 @@ import System.FilePath         (takeBaseName)
 import Config                  (cProjectVersionInt)
 import DynFlags                (HasDynFlags (..))
 import GHC                     (getPrintUnqual)
+import GhcMonad                (printException)
+import HscTypes                (handleSourceError)
 import Outputable              (showSDocForUser)
 import PprTyThing              (pprTypeForUser)
 import StringBuffer            (StringBuffer, hGetStringBuffer,
                                 stringToStringBuffer)
+
 
 -- hspec
 import Test.Hspec
@@ -45,7 +51,9 @@ exprTest file =
     it "should evaluate to True" work
   where
     work
-      | cProjectVersionInt == "810", takeBaseName file `elem` skipped
+      | cProjectVersionInt == "810"
+      , os == "mingw32"
+      , takeBaseName file `elem` skipped
       = pendingWith "Not yet supported"
       | otherwise
       = do contents <- hGetStringBuffer file
@@ -54,7 +62,10 @@ exprTest file =
     skipped = [ "0002-shadowing-macro"
               , "0004-unquote-unquote-splice" ]
     runEvalExpr !buf =
-      runFnk (doEval "<exprTypeTest>" parseExpr act buf) evalFnkEnv
+      runFnk (handleSourceError
+                (\se -> printException se >> liftIO (throwIO se))
+                (doEval "<exprTypeTest>" parseExpr act buf))
+             evalFnkEnv
     act !expr = unsafeCoerce# $! evalExpr expr
 
 exprTypeTest :: Spec

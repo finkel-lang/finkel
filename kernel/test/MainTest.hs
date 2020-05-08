@@ -4,22 +4,11 @@ module MainTest
   ( mainTests
   ) where
 
--- base
-import Control.Exception    (catch, throw)
-import System.Environment   (withArgs)
-import System.Exit          (ExitCode (..))
-
 -- filepath
-import System.FilePath      ((</>))
+import System.FilePath ((</>))
 
 -- hspec
 import Test.Hspec
-
--- process
--- import System.Process (readProcess)
-
--- finkel-kernel
-import Language.Finkel.Main
 
 -- Internal
 import TestAux
@@ -62,15 +51,6 @@ finkelVersionTest =
 trivialTest :: String -> String -> [String] -> Spec
 trivialTest desc label flags = describe desc $
   it label (runDefaultMain flags `shouldReturn` ())
-
-runDefaultMain :: [String] -> IO ()
-runDefaultMain args =
-  -- "defaultMain" uses "System.Process.rawSystem" to delegate non-finkel
-  -- related works to ghc, which throws "ExitSuccess" when successfully done.
-  catch (withArgs args defaultMain)
-        (\e -> case e of
-                 ExitSuccess -> return ()
-                 _           -> throw e)
 
 odir :: FilePath
 odir = "test" </> "data" </> "main"

@@ -5,13 +5,18 @@ module TestAux
   , initSessionForTest
   , whenUsingStack
   , removeArtifacts
+  , runDefaultMain
   ) where
 
 -- base
+import           Control.Exception      (catch, throw)
 import           Control.Monad          (when)
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Version           (showVersion)
 import           System.Environment     (lookupEnv)
+import           System.Environment     (withArgs)
+import           System.Exit            (ExitCode (..))
+
 
 -- directory
 import           System.Directory       (getDirectoryContents, getHomeDirectory,
@@ -28,6 +33,7 @@ import           SrcLoc                 (noLoc)
 
 -- fnk-kernel
 import           Language.Finkel.Fnk    (Fnk, setDynFlags)
+import           Language.Finkel.Main   (defaultMain)
 import           Language.Finkel.Make   (initSessionForMake)
 import qualified Paths_finkel_kernel
 
@@ -75,48 +81,60 @@ whenUsingStack act = ifUsingStack act (return ())
 resetPackageEnvForStack :: Fnk ()
 resetPackageEnvForStack = do
   dflags0 <- getDynFlags
+  args <- map noLoc <$> liftIO getPackageArgsForStack
+  (dflags1, _, _) <- parseDynamicFlagsCmdLine dflags0 args
+  setDynFlags (clearPackageEnv dflags1)
+
+getPackageArgsForStack :: IO [String]
+getPackageArgsForStack =
 #if MIN_VERSION_ghc(8,4,4)
-  setDynFlags (clearPackageEnv dflags0)
+  return []
 #else
-  -- Seems like package environment does not work well with stack
-  -- version 2.1. Manually adding packages used in test codes.
-  let dflags1 = clearPackageEnv dflags0
-      flagstrs = map noLoc ["-package", "finkel-kernel"
-                           ,"-package", "ghc-prim"
-                           ,"-package", "array"
-                           ,"-package", "containers"]
-  (dflags2, _, _) <- parseDynamicFlagsCmdLine dflags1 flagstrs
-  setDynFlags dflags2
+  return [ "-package", "finkel-kernel"
+         , "-package", "ghc-prim"
+         , "-package", "array"
+         , "-package", "containers"]
 #endif
 
+getPackageArgsForCabal :: IO [String]
+getPackageArgsForCabal =
+  do home <- getHomeDirectory
+     let storedb = joinPath [home, ".cabal", "store", ghc_ver, "package.db"]
+         ghc_ver = "ghc-" ++ cProjectVersion
+
+         -- To support running the test without building the package, using the
+         -- package db found in "package.conf.inplace" directory for inplace
+         -- package db.
+         --
+         -- There is a "dist-newstyle/packagedb" directory for holding package
+         -- data of project local packages, but the package db file will be
+         -- written only after running the "cabal v2-build" command once, which
+         -- means that running "cabal v2-test" will fail if "v2-build" were not
+         -- invoked in advance.
+         inplacedb = joinPath [distpref, "package.conf.inplace"]
+         fkv = showVersion Paths_finkel_kernel.version
+         inplacepkg = "finkel-kernel-" ++ fkv ++ "-inplace"
+
+         args = [ "-clear-package-db"
+                , "-global-package-db"
+                , "-package-db", storedb
+                , "-package-db", inplacedb
+                , "-package-id", inplacepkg ]
+     return args
+
+-- | Get package related command line arguments for 'DynFlags'.
+getPackageArgs :: IO [String]
+getPackageArgs = ifUsingStack getPackageArgsForStack  getPackageArgsForCabal
+
 -- | Reset package environment to support running the test with
--- cabal-install 3.0.0.
-resetPackageEnvForCabal_3_0_0 :: Fnk ()
-resetPackageEnvForCabal_3_0_0 = do
+-- cabal-install.
+resetPackageEnvForCabal :: Fnk ()
+resetPackageEnvForCabal = do
   dflags0 <- getDynFlags
-  home <- liftIO getHomeDirectory
-  let storedb = joinPath [home, ".cabal", "store", ghc_ver, "package.db"]
-      ghc_ver = "ghc-" ++ cProjectVersion
-      -- To support running the test without building the package
-      -- first, using the package db found in "package.conf.inplace"
-      -- directory as for inplace package db.
-      --
-      -- There is a "dist-newstyle/packagedb" directory for holding
-      -- package data of project local packages, but the package db
-      -- file will be written only after running the "cabal v2-build"
-      -- command once, which means that running "cabal v2-test" will
-      -- fail if "v2-build" subcommand were not invoked in advance.
-      --
-      inplacedb = joinPath [distpref, "package.conf.inplace"]
-      fkv = showVersion Paths_finkel_kernel.version
-      inplacepkg = "finkel-kernel-" ++ fkv ++ "-inplace"
+  args <- liftIO getPackageArgsForCabal
+  let largs = map noLoc args
       dflags1 = clearPackageEnv dflags0
-      args = map noLoc [ "-clear-package-db"
-                       , "-global-package-db"
-                       , "-package-db", storedb
-                       , "-package-db", inplacedb
-                       , "-package-id", inplacepkg ]
-  (dflags2, _, _) <- parseDynamicFlagsCmdLine dflags1 args
+  (dflags2, _, _) <- parseDynamicFlagsCmdLine dflags1 largs
   setDynFlags dflags2
 
 -- | Clear 'packageEnv' field in 'DynFlags'.
@@ -132,9 +150,10 @@ clearPackageEnv dflags = dflags {packageEnv = Nothing}
 -- env when invoked from stack.
 initSessionForTest :: Fnk ()
 initSessionForTest = do
-  ifUsingStack resetPackageEnvForStack resetPackageEnvForCabal_3_0_0
+  ifUsingStack resetPackageEnvForStack resetPackageEnvForCabal
   initSessionForMake
 
+-- | Remove compiled artifacts, such as @.o@ and @.hi@ files.
 removeArtifacts :: FilePath -> IO ()
 removeArtifacts dir = do
   contents <- getDirectoryContents dir
@@ -143,3 +162,17 @@ removeArtifacts dir = do
     removeObjAndHi file =
       when (takeExtension file `elem` [".o", ".hi", ".p_o", ".p_hi"])
            (removeFile (dir </> file))
+
+-- | Wrapper function to run 'Language.Finkel.Main.defaultMain'.
+runDefaultMain
+  :: [String]
+  -- ^ Command line arguments.
+  -> IO ()
+runDefaultMain args =
+  -- "defaultMain" uses "System.Process.rawSystem" to delegate non-finkel
+  -- related works to ghc, which throws "ExitSuccess" when successfully done.
+  do pkgargs <- getPackageArgs
+     catch (withArgs (pkgargs ++ args) defaultMain)
+           (\e -> case e of
+                    ExitSuccess -> return ()
+                    _           -> throw e)
