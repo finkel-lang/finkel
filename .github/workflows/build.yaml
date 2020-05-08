@@ -79,22 +79,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}
 
-      - name: Install stack (non-windows)
-        if: matrix.os != 'windows-latest'
-        uses: mstksg/setup-stack@v1
+      - name: Install stack
+        uses: actions/setup-haskell@v1.1
+        with:
+          enable-stack: true
+          stack-version: 'latest'
 
-      # setup-stack@v1 action does not support windows, installing manually.
-      # See: https://github.com/mstksg/setup-stack/issues/5
-      - name: Install stack (windows)
+      - name: Add PATH for executable installed with stack (linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: echo "::add-path::/home/runner/.local/bin"
+
+      - name: Add PATH for executable installed with stack (osx)
+        if: matrix.os == 'macos-latest'
+        run: echo "::add-path::/Users/runner/.local/bin"
+
+      - name: Add PATH for executable installed with stack (windows)
         if: matrix.os == 'windows-latest'
         shell: bash
-        run: |
-          url=https://get.haskellstack.org/stable/windows-x86_64.zip
-          curl --silent --output stack.zip --location $url
-          7z x stack.zip stack.exe
-          mkdir -p C:/Users/runneradmin/AppData/Roaming/local/bin
-          mv stack.exe C:/Users/runneradmin/AppData/Roaming/local/bin
-          echo "::add-path::C:/Users/runneradmin/AppData/Roaming/local/bin"
+        run: echo "::add-path::C:/Users/runneradmin/AppData/Roaming/local/bin"
 
       - name: Show stack version
         shell: bash
@@ -186,6 +188,12 @@ jobs:
         with:
           path: ~/.cabal
           key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}
+
+      # Manually installing ghc and bundled packages with "ghcup" for Linux and
+      # OSX, because the setup-haskell action may reuse the preinstalled GHC in
+      # runner, and the preinstalled GHC does not contain profiling library for
+      # the "base" package. Without profiling libraries, one of the tests in the
+      # "doc" package will fail.
 
       - name: Install ghcup (linux)
         if: matrix.os == 'ubuntu-latest'
