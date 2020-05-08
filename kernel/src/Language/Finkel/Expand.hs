@@ -45,7 +45,7 @@ import           GHC                             (ModuleInfo, getModuleInfo,
                                                   modInfoExports, setContext)
 import           GHC_Hs                          (HsModule (..))
 import           GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
-import           GhcMonad                        (GhcMonad (..))
+import           GhcMonad                        (GhcMonad (..), modifySession)
 import           HscMain                         (Messager,
                                                   hscTcRnLookupRdrName,
                                                   showModuleIndex)
@@ -78,6 +78,7 @@ import           Language.Finkel.Syntax          (parseDecls, parseExpr,
                                                   parseLImport, parseModule)
 import           Language.Finkel.Syntax.SynUtils (cL, dL)
 
+import qualified Data.Map
 
 -- ---------------------------------------------------------------------
 --
@@ -178,13 +179,12 @@ unquoteSplice form =
 --
 -- ---------------------------------------------------------------------
 
-coerceMacro :: Code -> Fnk Macro
-coerceMacro name
+coerceMacro :: DynFlags -> Code -> Fnk Macro
+coerceMacro dflags name
   | LForm (L _ (Atom (ASymbol _))) <- name =
-    do dflags <- getDynFlags
-       case evalBuilder dflags parseExpr [name] of
-         Right hexpr -> fmap unsafeCoerce# (evalExpr hexpr)
-         Left err    -> failS (syntaxErrMsg err)
+    case evalBuilder dflags parseExpr [name] of
+      Right hexpr -> unsafeCoerce# <$> evalExpr hexpr
+      Left err    -> failS (syntaxErrMsg err)
   | otherwise = failS ("coerceMacro: expecting name")
 
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Fnk [TyThing]
@@ -196,11 +196,11 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
       toImportList (h, dL->L _ loc) = (h, map ieName' loc)
       getNames =
         case fmap toImportList (ideclHiding idecl) of
-          -- Import with `hiding' entities. Comparing 'Name' and
-          -- 'RdrName' via OccName'.
+          -- Import with `hiding' entities. Comparing 'Name' and 'RdrName' via
+          -- OccName'.
           Just (True, ns)  -> do
             let f n acc | nameOccName n `elem` ns' = acc
-                        | otherwise             = n : acc
+                        | otherwise                = n : acc
                 ns' = map (rdrNameOcc . unLoc) ns
             return (foldr f [] exportedNames)
 
@@ -221,14 +221,13 @@ addImportedMacro thing = when (isMacro thing) go
       dflags <- getDynFlags
       case thing of
         AnId var -> do
-          debugFnk (";;; adding macro `" ++
+          debugFnk (";;; Adding macro `" ++
                     showPpr dflags (varName var) ++
-                    "' to current compiler session.")
+                    "' to current compiler session")
           hsc_env <- getSession
           let name_str = showPpr (hsc_dflags hsc_env) (varName var)
               name_sym = toCode (aSymbol name_str)
-          macro <- coerceMacro name_sym
-          insertMacro (fsLit name_str) macro
+          coerceMacro dflags name_sym >>= insertMacro (fsLit name_str)
         _ -> error "addImportedmacro"
 
 
@@ -268,9 +267,9 @@ m_withMacro form =
       putFnkEnv (fnkc_env0 {envTmpMacros = macros : tmpMacros0})
       expanded <- expands rest
 
-      -- Getting 'FnkEnv' again, so that persistent macros defined inside
-      -- the `let-macro' body could be used hereafter. Restoring
-      -- tmporary macros to preserved value.
+      -- Getting 'FnkEnv' again, so that persistent macros defined inside the
+      -- `with-macro' body could be used hereafter. Restoring tmporary macros to
+      -- preserved value.
       fnkc_env1 <- getFnkEnv
       putFnkEnv (fnkc_env1 {envTmpMacros = tmpMacros0})
 
@@ -286,10 +285,11 @@ m_withMacro form =
           do dflags <- getDynFlags
              case evalBuilder dflags parseDecls [expanded] of
                Right hdecls -> do
-                 (tythings, _ic) <- evalDecls hdecls
+                 (tythings, ic) <- evalDecls hdecls
                  case tythings of
                    tything : _ | isMacro tything -> do
-                     macro <- coerceMacro fname
+                     modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
+                     macro <- coerceMacro dflags fname
                      return (name, macro)
                    _ -> finkelSrcError fname "with-macro: not a macro"
                Left err -> failS (syntaxErrMsg err)
@@ -375,13 +375,14 @@ m_evalWhenCompile form =
       dflags <- getDynFlags
       case evalBuilder dflags parseModule expanded of
         Right (HsModule {hsmodDecls = decls}) -> do
-          (tythings, _ic) <- evalDecls decls
+          (tythings, ic) <- evalDecls decls
+          modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
           mapM_ addImportedMacro tythings
           return emptyForm
         Left err -> finkelSrcError (LForm (L l (List body)))
-                               (syntaxErrMsg err)
+                                   (syntaxErrMsg err)
     _ -> finkelSrcError form ("eval-when-compile: malformed body: " ++
-                          show form)
+                              show form)
 
 -- | The special forms.  The macros listed in 'specialForms' are used
 -- in default 'FnkEnv'.
@@ -410,7 +411,7 @@ setExpanderSettings = do
   flags0 <- getDynFlags
 
   -- Setup DynFlags for interactive evaluation.
-  let flags1 = flags0 { hscTarget = HscInterpreted }
+  let flags1 = flags0 {hscTarget=HscInterpreted}
       flags2 = gopt_unset flags1 Opt_Hpc
       flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
       flags4 = updOptLevel 0 flags3
@@ -424,9 +425,8 @@ setExpanderSettings = do
 
   setDynFlags flags4
 
--- | Perform given action with 'DynFlags' updated to perform
--- macroexpansion with interactive evaluation, then reset to preserved
--- original DynFlags.
+-- | Perform given action with 'DynFlags' updated for macroexpansion with
+-- interactive evaluation, then reset to the preserved original DynFlags.
 withExpanderSettings :: Fnk a -> Fnk a
 withExpanderSettings act =
   gbracket getDynFlags
@@ -521,7 +521,22 @@ withShadowing toShadow fnkc = do
 
 -- | Expand forms, with taking care of @begin@ special form.
 expands :: [Code] -> Fnk [Code]
-expands forms = fmap concat (mapM expand' forms)
+expands forms = do
+  fnk_env <- getFnkEnv
+  let macro_names me
+        | null me   = "None"
+        | otherwise =  "\n;;;     " ++ unwords (map unpackFS (Data.Map.keys me))
+      tmp_macros = Data.Map.unions (envTmpMacros fnk_env)
+  debugFnk
+    (";;; Entering expands:\n" ++
+     ";;;   macros: " ++ macro_names (envMacros fnk_env) ++ "\n" ++
+     ";;;   tmp macros: " ++ macro_names tmp_macros)
+  expands' forms
+
+-- | Internal works for 'expands'.
+expands' :: [Code] -> Fnk [Code]
+expands' forms = fmap concat (mapM expand' forms)
+{-# INLINE expands' #-}
 
 -- | Expand form to list of 'Code', supports special form /begin/.
 expand' :: Code -> Fnk [Code]
@@ -531,7 +546,7 @@ expand' form = do
     List (LForm (L _ (Atom (ASymbol ":begin"))):rest) ->
       case rest of
         [] -> return []
-        _  -> expands rest
+        _  -> expands' rest
     _ -> return [form']
 {-# INLINE expand' #-}
 
@@ -556,7 +571,7 @@ expand form =
     L l (HsList forms) ->
       -- Without recursively calling 'expand' on the result, cannot
       -- expand macro-generating macros.
-      LForm . L l . HsList <$> expands forms
+      LForm . L l . HsList <$> expands' forms
 
     -- Non-list forms are untouched.
     _ -> return form
@@ -564,7 +579,7 @@ expand form =
     expandLet l kw binds body = do
       binds' <- expand binds
       let bounded = boundedNames binds'
-      body' <- withShadowing bounded (expands body)
+      body' <- withShadowing bounded (expands' body)
       return $! LForm (L l (List (kw:binds':body')))
 
     expandDo l kw body = do
@@ -575,7 +590,7 @@ expand form =
       let args = init rest
           body = last rest
           bounded = concatMap boundedNameOne args
-      args' <- expands args
+      args' <- expands' args
       body' <- withShadowing bounded (expand body)
       return $! LForm (L l (List (kw:args'++[body'])))
 
@@ -601,7 +616,7 @@ expand form =
       return $! LForm (L l (List (kw:expr':reverse rest')))
 
     expandWhere l kw expr rest = do
-      rest' <- expands rest
+      rest' <- expands' rest
       let bounded = concatMap boundedName rest'
       expr' <- withShadowing bounded (expand expr)
       return $! LForm (L l (List (kw:expr':rest')))
@@ -611,14 +626,20 @@ expand form =
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
           fnkc_env <- getFnkEnv
           case lookupMacro k fnkc_env of
-            Just (Macro f)       -> f form >>= expand
-            Just (SpecialForm f) -> f form >>= expand
+            Just (Macro f)       -> do_expand k f >>= expand
+            Just (SpecialForm f) -> do_expand k f >>= expand
             Nothing              -> do
-              rest' <- expands rest
+              rest' <- expands' rest
               return $! LForm (L l (List (sym:rest')))
         _ -> do
-          forms' <- expands forms
+          forms' <- expands' forms
           return $! LForm (L l (List forms'))
+
+    do_expand k f =
+      do debugFnk (";;; Expanding (" ++ unpackFS k ++ " ...)")
+         ret0 <- f form
+         debugFnk (";;; Expanded (" ++ unpackFS k ++ " ...) => " ++ show ret0)
+         return ret0
 
 expandInDo ::
    ([FastString], [Code]) -> Code -> Fnk ([FastString], [Code])
