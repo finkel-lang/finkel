@@ -10,7 +10,6 @@ module Language.Finkel.Fnk
   , MakeFunction
   , EnvMacros
   , runFnk
-  , debugFnk
   , toGhc
   , fromGhc
   , failS
@@ -21,11 +20,14 @@ module Language.Finkel.Fnk
   , modifyFnkEnv
   , setDynFlags
   , setContextModules
-  , getFnkDebug
 
   -- * Exception
   , FinkelException(..)
   , handleFinkelException
+
+  -- * Debugging
+  , debugFnk
+  , getFnkDebug
 
   -- * FlagSet
   , FlagSet
@@ -42,15 +44,18 @@ module Language.Finkel.Fnk
   , macroNames
   , isMacro
   , macroFunction
+
+  -- * Gensym and UniqSupply
   , gensym
   , gensym'
+  , initUniqSupply'
   ) where
 
 #include "Syntax.h"
 
 -- base
 import           Control.Exception      (Exception (..), throwIO)
-import           Control.Monad          (when)
+import           Control.Monad          (unless, when)
 
 #if !MIN_VERSION_ghc(8,8,0)
 import           Control.Monad.Fail     (MonadFail (..))
@@ -61,6 +66,7 @@ import           Data.IORef             (IORef, atomicModifyIORef', newIORef,
                                          readIORef, writeIORef)
 import           System.Environment     (lookupEnv)
 import           System.IO              (hPutStrLn, stderr)
+import           System.IO.Unsafe       (unsafePerformIO)
 
 -- containers
 import qualified Data.Map               as Map
@@ -85,7 +91,8 @@ import           Module                 (ModuleName, mkModuleName)
 import           Outputable             (alwaysQualify, neverQualify, ppr,
                                          showSDocForUser, text)
 import           SrcLoc                 (GenLocated (..), Located)
-import           UniqSupply             (mkSplitUniqSupply, uniqFromSupply)
+import           UniqSupply             (initUniqSupply, mkSplitUniqSupply,
+                                         uniqFromSupply)
 import           Var                    (varType)
 
 import           GHC_Hs_ImpExp          (simpleImportDecl)
@@ -365,18 +372,8 @@ setDynFlags dflags =
 
 -- | Set context modules in current session to given modules.
 setContextModules :: [String] -> Fnk ()
-setContextModules names = do
-  let ii = IIDecl . simpleImportDecl . mkModuleName
-  setContext (map ii names)
-
--- | Get finkel debug setting from environment variable /FNKC_DEBUG/.
-getFnkDebug :: MonadIO m => m Bool
-getFnkDebug =
-  do mb_debug <- liftIO (lookupEnv "FNKC_DEBUG")
-     case mb_debug of
-       Nothing -> return False
-       Just _  -> return True
-{-# INLINE getFnkDebug #-}
+setContextModules names =
+  setContext (map (IIDecl . simpleImportDecl . mkModuleName) names)
 
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Fnk ()
@@ -452,3 +449,34 @@ gensym' prefix = do
   s <- liftIO (mkSplitUniqSupply '_')
   let u = uniqFromSupply s
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))
+
+-- | Get finkel debug setting from environment variable /FNKC_DEBUG/.
+getFnkDebug :: MonadIO m => m Bool
+getFnkDebug =
+  do mb_debug <- liftIO (lookupEnv "FNKC_DEBUG")
+     case mb_debug of
+       Nothing -> return False
+       Just _  -> return True
+{-# INLINE getFnkDebug #-}
+
+-- Note: Initialization of UniqSupply
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Test codes in finkel-kernel packages uses the 'defaultMain'
+-- function multiple times. To avoid initialization of UniqSupply
+-- multiple time, using top-level IORef to detect whether the
+-- initializatio has been done or not.
+
+-- | Variant of 'initUniqSupply' which does initialization only once.
+initUniqSupply' :: Int -> Int -> IO ()
+initUniqSupply' ini incr = do
+  is_initialized <- readIORef uniqSupplyInitialized
+  unless is_initialized
+         (do initUniqSupply ini incr
+             atomicModifyIORef' uniqSupplyInitialized (\_ -> (True, ())))
+
+-- | Top level 'IORef' for book keeping 'UniqSupply' initialization,
+-- obtained with 'unsafePerformIO'.
+uniqSupplyInitialized :: IORef Bool
+uniqSupplyInitialized = unsafePerformIO (newIORef False)
+{-# NOINLINE uniqSupplyInitialized #-}

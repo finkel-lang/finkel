@@ -36,7 +36,6 @@ import           HscTypes                     (handleFlagWarnings,
 import           Panic                        (GhcException (..),
                                                throwGhcException)
 import           SrcLoc                       (mkGeneralLocated, unLoc)
-import           UniqSupply                   (initUniqSupply)
 import           Util                         (looksLikeModuleName)
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -170,10 +169,11 @@ main'' orig_args ghc_args = do
        -- below.
        setDynFlags dflags2
 
-       -- Some IO works. Check unknown flags, update uniq supply ...
+       -- Some IO works. Check unknown flags, and update uniq supply. See Note
+       -- [Initialization of UniqSupply] in 'Language.Finkel.Fnk'.
        liftIO (do checkUnknownFlags fileish
-                  initUniqSupply (initialUnique dflags2)
-                                 (uniqueIncrement dflags2))
+                  initUniqSupply' (initialUnique dflags2)
+                                  (uniqueIncrement dflags2))
 
        -- Show DynFlags warnings.
        handleSourceError
