@@ -17,9 +17,6 @@ addons:
     packages:
       - libgmp-dev
   homebrew:
-    packages:
-      - haskell-stack
-
     # Workaround for "Unknown command: bundle", see: https://bit.ly/32d3V2d
     update: true
 

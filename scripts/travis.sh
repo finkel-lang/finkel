@@ -111,6 +111,10 @@ travis_after_success_linux () {
 # ---
 
 travis_install_osx () {
+    mkdir -p ~/.local/bin
+    url=https://get.haskellstack.org/stable/osx-x86_64.tar.gz
+    travis_retry curl -L $url | \
+        tar xz -f- --strip-components=1 -C ~/.local/bin
     which stack
     stack --version
 }
@@ -118,7 +122,7 @@ travis_install_osx () {
 travis_script_osx () {
     $STACK --install-ghc test --only-dependencies
     $STACK build --fast --test --no-run-tests
-    $STACK build --fast --test
+    $STACK -j 1 build --fast --test
 }
 
 travis_after_success_osx () {
