@@ -34,6 +34,7 @@ import TyCoRep                 (tidyType)
 #endif
 
 #if MIN_VERSION_ghc(8,8,0)
+import GhcMonad                (withSession)
 import HscMain                 (hscParsedDecls)
 #else
 import ByteCodeGen             (byteCodeGen)
@@ -109,11 +110,8 @@ evalTypeKind ty = do
 -- 'TyThing's of declarations and updated interactive context.
 evalDecls :: [HDecl] -> Fnk ([TyThing], InteractiveContext)
 #if MIN_VERSION_ghc(8,8,0)
-evalDecls decls = do
-  hsc_env <- getSession
-  ret@(_tythings, ic) <- liftIO (hscParsedDecls hsc_env decls)
-  setSession (hsc_env {hsc_IC=ic})
-  return ret
+evalDecls decls =
+  withSession (\hsc_env -> liftIO (hscParsedDecls hsc_env decls))
 #else
 evalDecls decls = do
   -- Mostly doing similar works done in `HscMain.hscDeclsWithLocation',
@@ -126,10 +124,7 @@ evalDecls decls = do
       interactive_loc =
          ModLocation { ml_hs_file = Nothing
                      , ml_hi_file = error "ewc:ml_hi_file"
-#if MIN_VERSION_ghc(8,8,0)
-                     , ml_hie_file = error "ewc:ml_hie_file"
-#endif
-                     , ml_obj_file = error "ewc:ml_obj_file"}
+                     , ml_obj_file = error "ewc:ml_obj_file" }
   ds_result <- fnkcDesugar' interactive_loc tc_gblenv
   simpl_mg <- liftIO (hscSimplify' hsc_env ds_result tc_gblenv)
   (tidy_cg, mod_details) <- liftIO (tidyProgram hsc_env simpl_mg)
@@ -165,9 +160,6 @@ evalDecls decls = do
       new_ictxt = extendInteractiveContext ictxt new_tythings
                                            cls_insts fam_insts
                                            defaults fix_env
-
-  -- Updating session, which is not done in hscDecls function in ghc source.
-  setSession (hsc_env {hsc_IC = new_ictxt})
 
   return (new_tythings, new_ictxt)
 
