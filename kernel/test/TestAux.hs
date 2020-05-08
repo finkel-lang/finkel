@@ -87,14 +87,11 @@ resetPackageEnvForStack = do
 
 getPackageArgsForStack :: IO [String]
 getPackageArgsForStack =
-#if MIN_VERSION_ghc(8,4,4)
-  return []
-#else
   return [ "-package", "finkel-kernel"
          , "-package", "ghc-prim"
          , "-package", "array"
-         , "-package", "containers"]
-#endif
+         , "-package", "bytestring"
+         , "-package", "containers" ]
 
 getPackageArgsForCabal :: IO [String]
 getPackageArgsForCabal =
