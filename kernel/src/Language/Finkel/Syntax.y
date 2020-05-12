@@ -715,14 +715,6 @@ expr_no_idsym :: { HExpr }
     : atom_no_idsym { $1 }
     | 'list'        {% parse p_exprs $1 }
 
-expr_no_bang :: { HExpr }
-    : atom_no_bang { $1 }
-    | 'list'       {% parse p_exprs $1 }
-
-atom_no_bang :: { HExpr }
-    : idsym_no_bang {% b_varE $1 }
-    | atom_no_idsym { $1 }
-
 atom :: { HExpr }
     : idsym         {% b_varE $1 }
     | atom_no_idsym { $1 }
@@ -868,10 +860,6 @@ stmt1 :: { HStmt }
 idsym :: { Code }
     : 'symbol'   { $1 }
     | special_id { $1 }
-
-idsym_no_bang :: { Code }
-    : 'symbol'           { $1 }
-    | special_id_no_bang { $1 }
 
 special_id :: { Code }
     : '!'                { $1 }
