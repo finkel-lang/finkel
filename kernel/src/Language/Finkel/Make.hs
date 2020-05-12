@@ -870,16 +870,17 @@ compileToHsModule :: TargetUnit
                   -> Fnk (Maybe (HModule, DynFlags, [Located String]))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
-    FnkSource _ mn form sp -> Just <$> compileSkModuleForm' sp mn form
+    FnkSource _ mn form sp -> Just <$> compileFnkModuleForm sp mn form
     HsSource path          -> Just <$> compileHsFile path mbphase
     OtherSource path       -> compileOtherFile path >> return Nothing
 
--- | Wrapper for 'compileSkModuleForm', to use fresh set of modules,
--- language extensions, and macros in 'FnkEnv'. Returns tuple of compiled
--- module and 'Dynflags' to update 'ModSummary'.
-compileSkModuleForm' :: SPState -> String -> [Code]
+-- | Compile Finkel module form, to use fresh set of modules, language
+-- extensions, and macros in 'FnkEnv'. Returns tuple of compiled module,
+-- potentially modified 'Dynflags' to update 'ModSummary', and required module
+-- names.
+compileFnkModuleForm :: SPState -> String -> [Code]
                      -> Fnk (HModule, DynFlags, [Located String])
-compileSkModuleForm' sp modname forms = do
+compileFnkModuleForm sp modname forms = do
   dflags0 <- getDynFlagsFromSPState sp
   hsc_env <- getSession
 
@@ -905,15 +906,15 @@ compileSkModuleForm' sp modname forms = do
       -- wrapped by 'withTempSession' above.
       resetFnkEnv
 
-      mdl <- compileSkModuleForm forms
+      mdl <- compileFnkModuleForm' forms
       fnkc_env <- getFnkEnv
       let required = envRequiredModuleNames fnkc_env
           compiled = envCompiledInRequire fnkc_env
       return (mdl, required, compiled)
 
--- | Compile 'HModule' from given list of codes.
-compileSkModuleForm :: [Code] -> Fnk HModule
-compileSkModuleForm form = do
+-- -- | Compile 'HModule' from given list of codes.
+compileFnkModuleForm' :: [Code] -> Fnk HModule
+compileFnkModuleForm' form = do
   expanded <- withExpanderSettings (expands form)
   buildHsSyn parseModule expanded
 
@@ -985,7 +986,7 @@ doLink mgraph = do
   linkResult <-
     liftIO (link (ghcLink dflags1) dflags1 doLinking (hsc_HPT hsc_env))
   case linkResult of
-    Failed    -> failS "Error during linking"
+    Failed    -> failS "Language.Finkel.Make.doLink: link failed"
     Succeeded -> return ()
 
 -- | Set 'dumpPrefix' from file path.
