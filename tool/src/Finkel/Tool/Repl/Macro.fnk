@@ -79,7 +79,7 @@
    ;; finkel-kernel
    (Language.Finkel)
    (Language.Finkel.Eval (evalExprType evalTypeKind))
-   (Language.Finkel.Form (mkLocatedForm symbolName))
+   (Language.Finkel.Form (mkLocatedForm))
    (Language.Finkel.Make (buildHsSyn make))
    (Language.Finkel.Fnk
     ((FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv setDynFlags))
@@ -728,7 +728,11 @@ paths from import directories."
       ;; Always using `setSessionDynFlags' for `set' REPL command to
       ;; support `-package' flag.
       (do (<- dflags0 getSessionDynFlags)
-          (let ((= flags (map (. noLoc symbolName) forms))))
+          (let ((= flags (foldr (\ form acc
+                                  (case (mb-symbol-name form)
+                                    (Just name) (: (noLoc name) acc)
+                                    _ acc))
+                                [] forms))))
           (<- (, dflags1 leftovers warns)
             (parseDynamicFlagsCmdLine dflags0 flags))
           (liftIO
@@ -747,8 +751,9 @@ paths from import directories."
   (where go
     (defn go
       (case forms
-        [form] (| ((is-symbol form) (work (symbolName form))))
-        _      show-cmd-error))
+        [form] (| ((<- (Just name) (mb-symbol-name form))
+                   (work name)))
+        _ show-cmd-error))
     (defn work [thing]
       (maybe show-cmd-error id (lookup thing things)))
     (defn show-cmd-error

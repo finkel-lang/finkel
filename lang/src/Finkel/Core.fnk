@@ -66,8 +66,6 @@ module.")
 
 ;; finkel-kernel
 (import Language.Finkel)
-(import Language.Finkel.Form (symbolName))
-(import Language.Finkel.Fnk (isMacro))
 
 ;; Internal
 (import Finkel.Core.Error)
@@ -970,18 +968,15 @@ Listing exported macros in \"Finkel.Core\" module:
                 (Just mi) (do (<- mb-things
                                 (mapM lookupName (modInfoExports mi)))
                               (<- dflags getDynFlags)
-                              (return
-                               (foldr (f dflags) [] mb-things))))))
+                              (return (foldr (f dflags) [] mb-things))))))
         (= invalid-err
           (++ "exported-macros: got non-module name symbol `"
-              (show name) "'")))
-    (case (unCode name)
-      (Atom (ASymbol _))
-      (do (<- names0 (get-exported-names (symbolName name)))
-          (let ((= names1 (toCode (map toCode names0)))))
-          (return `(:: ,names1 [String])))
-
-      _ (finkelSrcError name invalid-err))))
+              (show name) "'"))
+        (= toCodes (. toCode (map toCode))))
+    (case (mb-symbol-name name)
+      (Just name-str) (do (<- names (get-exported-names name-str))
+                          (return `(:: ,(toCodes names) [String])))
+      Nothing (finkelSrcError name invalid-err))))
 
 
 ;;; Module header

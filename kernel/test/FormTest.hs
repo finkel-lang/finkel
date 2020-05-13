@@ -3,7 +3,6 @@
 module FormTest where
 
 -- base
-import           Control.Exception
 import           Data.Complex
 import           Data.Data
 import qualified Data.Fixed                   as Fixed
@@ -78,9 +77,6 @@ formTests = do
   foldableTest
   traversableTest
 
-  nameTest "foo" "foo"
-  nameTest "bar-buzz-quux" "bar_buzz_quux"
-
   eqTest "(a \"bcd\" \\e [f g] (h i))"
   eqPropTest
 
@@ -96,7 +92,6 @@ formTests = do
   homoiconicTests
   rnfTest
   listTest
-  symbolNameTest
 
   fromCodeTest Foo
 
@@ -307,12 +302,6 @@ traversableTest = do
     it "should be Just TEnd" $
       mapM f TEnd `shouldBe` Just TEnd
 
-nameTest :: String -> String -> Spec
-nameTest str0 str1 =
-  describe ("name of symbol `" ++ str0 ++ "'") $
-    it ("should be `" ++ str1 ++ "'") $
-       symbolName (parseE str0) `shouldBe` str1
-
 eqTest :: String -> Spec
 eqTest str =
   describe "parsing same string twice" $
@@ -431,19 +420,6 @@ listTest =
       let f :: (Code -> Code) -> Code -> Bool
           f g form = isListL (toListL (g form))
       property f
-
-symbolNameTest :: Spec
-symbolNameTest =
-  describe "symbolName" $ do
-    let isSym (LForm (L _ (Atom (ASymbol _)))) = True
-        isSym _                                = False
-    it "should return name of symbol" $
-      property (\form ->
-                  not (isSym form) || length (symbolName form) >= 1)
-    it "should throw error when applied to non-symbol" $ do
-      let p :: ErrorCall -> Bool
-          p _ = True
-      print (symbolName nil) `shouldThrow` p
 
 data Foo = Foo deriving (Eq, Show)
 

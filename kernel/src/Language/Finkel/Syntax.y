@@ -762,8 +762,9 @@ fbinds :: { [(Located FastString, HExpr)] }
 rfbinds :: { [(Located FastString, HExpr)] }
     : {- empty -}           { [] }
     | rfbinds 'symbol' expr { case $2 of
-                                LForm (L l _) ->
-                                    (L l (symbolNameFS $2), $3):$1 }
+                                LForm (L l (Atom (ASymbol name))) ->
+                                    (L l name, $3):$1
+                                _ -> error "rfbinds: panic" }
 
 app :: { ([HExpr], [HType]) }
     : rapp { case $1 of (es,ts) -> (reverse es, reverse ts) }

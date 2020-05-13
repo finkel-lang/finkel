@@ -10,12 +10,13 @@ module Language.Finkel
     Atom(..)
   , Form(..)
   , LForm(..)
-  , ToCode(..)
-  , FromCode(..)
+
   , Code
   , unCode
-  , nil
+  , ToCode(..)
+  , FromCode(..)
 
+  , nil
   , qSymbol
   , qChar
   , qString
@@ -32,6 +33,7 @@ module Language.Finkel
 
   -- * Macro
   , Macro(Macro)
+  , isMacro
   , expand
   , expand1
   , gensym

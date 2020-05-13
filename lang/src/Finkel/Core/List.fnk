@@ -14,8 +14,14 @@ functions defined in this modules are used in macro defined in
   is-atom is-pair is-list is-hslist
   is-symbol is-string is-char is-integer is-fractional is-unit
 
+  (:dh1 "Atom constructors")
+  make-symbol
+
+  (:dh1 "Atom extractors")
+  mb-symbol-name mb-symbol-name-fs
+
   (:dh1 "Code constructors")
-  cons list (ListableType ..) append make-symbol
+  cons list (ListableType ..) append
 
   (:dh1 "CXrs")
   (:dh2 "Basic cXrs")
@@ -54,6 +60,7 @@ functions defined in this modules are used in macro defined in
 (import Control.Exception ((Exception ..) throw))
 
 ;; ghc
+(import FastString ((FastString) unpackFS))
 (import SrcLoc (getLoc))
 
 ;; finkel-kernel
@@ -190,6 +197,24 @@ Examples:
 (:: make-symbol (-> String Code))
 (= make-symbol qSymbol)
 #p(INLINABLE make-symbol)
+
+(:doc "Extract string from given symbol.
+
+Get `Just' `String' when the argument code was an `ASymbol', otherwise
+`Nothing'.")
+(:: mb-symbol-name (-> Code (Maybe String)))
+(= mb-symbol-name (. (fmap unpackFS) mb-symbol-name-fs))
+#p(INLINABLE mb-symbol-name)
+
+(:doc "Extract `FastString' from given symbol.
+
+Like `mb-symbol-name', but returns `FastString'")
+(:: mb-symbol-name-fs (-> Code (Maybe FastString)))
+(= mb-symbol-name-fs form
+  (case form
+    (LForm (L _ (Atom (ASymbol name)))) (Just name)
+    _ Nothing))
+#p(INLINABLE mb-symbol-name-fs)
 
 (:doc "Type class for constructing 'List' with polyvariadic function.")
 (class (ListableType l)

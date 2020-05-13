@@ -29,8 +29,6 @@ module Language.Finkel.Form
   , genSrc
   , mkLocatedForm
   , showLoc
-  , symbolName
-  , symbolNameFS
   , toListL
   , unCode
 
@@ -306,16 +304,6 @@ showLoc (LForm (L l _)) =
       show (srcSpanStartLine r) ++ ":" ++
       show (srcSpanStartCol r) ++ ": "
     UnhelpfulSpan fs -> unpackFS fs ++ ": "
-
--- | Extract string from given atom when the atom was 'ASymbol',
--- otherwise error.
-symbolName :: Code -> String
-symbolName = unpackFS . symbolNameFS
-
--- | Like 'symbolName', but returns 'FastString'.
-symbolNameFS :: Code -> FastString
-symbolNameFS (LForm (L _ (Atom (ASymbol name)))) = name
-symbolNameFS x = error ("symbolName: got " ++ show x)
 
 -- | Make 'List' from given code. When the given argument was already a 'List',
 -- the given 'List' is returned. If the argument was 'HsList', converted to
