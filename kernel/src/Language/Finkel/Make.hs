@@ -3,8 +3,8 @@
 -- | Make mode for Finkel compiler.
 module Language.Finkel.Make
   ( make
+  , simpleMake
   , initSessionForMake
-  , defaultFnkEnv
   , buildHsSyn
   ) where
 
@@ -221,18 +221,6 @@ simpleMake force_recomp lname = do
   hsc_env <- getSession
   let as_pair hmi = (moduleName (mi_module (hm_iface hmi)), hmi)
   return (map as_pair (eltsHpt (hsc_HPT hsc_env)))
-
--- | Default 'FnkEnv'.
-defaultFnkEnv :: FnkEnv
-defaultFnkEnv = emptyFnkEnv
-  { envMacros         = specialForms
-  , envDefaultMacros  = specialForms
-  , envMake           = Just simpleMake
-  , envLibDir         = Just libdir }
- where
-   -- CPP macro defined in "finkel_kernel_config.h", see "Setup.hs"
-   -- for detail.
-   libdir = FINKEL_KERNEL_LIBDIR
 
 -- | Run given builder.
 buildHsSyn :: Builder a -- ^ Builder to use.

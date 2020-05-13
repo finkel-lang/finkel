@@ -50,6 +50,7 @@ import           GHC.HandleEncoding           (configureHandleEncoding)
 -- internal
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make
+import           Language.Finkel.SpecialForms (defaultFnkEnv)
 import           Language.Finkel.TargetSource
 import qualified Paths_finkel_kernel
 

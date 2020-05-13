@@ -17,7 +17,7 @@
    (FastString (headFS nullFS))
 
    ;; finkel-kernel
-   (Language.Finkel.Make)
+   (Language.Finkel.SpecialForms)
    (Language.Finkel.Fnk))
   (require
    ;; base

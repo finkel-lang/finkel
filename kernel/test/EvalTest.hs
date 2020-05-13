@@ -3,38 +3,39 @@
 module EvalTest (evalTests) where
 
 -- base
-import Control.Exception       (throwIO)
-import Control.Monad.IO.Class  (MonadIO (..))
-import GHC.Exts                (unsafeCoerce#)
-import System.Info             (os)
+import Control.Exception            (throwIO)
+import Control.Monad.IO.Class       (MonadIO (..))
+import GHC.Exts                     (unsafeCoerce#)
+import System.Info                  (os)
 
 -- filepath
-import System.FilePath         (takeBaseName)
+import System.FilePath              (takeBaseName)
 
 -- ghc
-import Config                  (cProjectVersionInt)
-import DynFlags                (HasDynFlags (..))
-import GHC                     (getPrintUnqual)
-import GhcMonad                (printException)
-import HscTypes                (handleSourceError)
-import Outputable              (showSDocForUser)
-import PprTyThing              (pprTypeForUser)
-import StringBuffer            (StringBuffer, hGetStringBuffer,
-                                stringToStringBuffer)
+import Config                       (cProjectVersionInt)
+import DynFlags                     (HasDynFlags (..))
+import GHC                          (getPrintUnqual)
+import GhcMonad                     (printException)
+import HscTypes                     (handleSourceError)
+import Outputable                   (showSDocForUser)
+import PprTyThing                   (pprTypeForUser)
+import StringBuffer                 (StringBuffer, hGetStringBuffer,
+                                     stringToStringBuffer)
 
 
 -- hspec
 import Test.Hspec
 
 -- finkel-kernel
-import Language.Finkel.Builder (Builder)
-import Language.Finkel.Eval    (evalExpr, evalExprType, evalTypeKind)
-import Language.Finkel.Expand  (expands, withExpanderSettings)
-import Language.Finkel.Fnk     (Fnk, FnkEnv (..), debugFnk, failS, runFnk)
-import Language.Finkel.Lexer   (evalSP)
-import Language.Finkel.Make    (buildHsSyn, defaultFnkEnv)
-import Language.Finkel.Reader  (sexprs)
-import Language.Finkel.Syntax  (parseExpr, parseType)
+import Language.Finkel.Builder      (Builder)
+import Language.Finkel.Eval         (evalExpr, evalExprType, evalTypeKind)
+import Language.Finkel.Expand       (expands, withExpanderSettings)
+import Language.Finkel.Fnk          (Fnk, FnkEnv (..), debugFnk, failS, runFnk)
+import Language.Finkel.Lexer        (evalSP)
+import Language.Finkel.Make         (buildHsSyn)
+import Language.Finkel.Reader       (sexprs)
+import Language.Finkel.SpecialForms (defaultFnkEnv)
+import Language.Finkel.Syntax       (parseExpr, parseType)
 
 -- Test internal
 import TestAux

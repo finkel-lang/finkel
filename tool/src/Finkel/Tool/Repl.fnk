@@ -25,10 +25,8 @@
    (System.Environment (getProgName))
 
    ;; finkel-kernel
-   (Language.Finkel.Expand (specialForms))
-   (Language.Finkel.Make (defaultFnkEnv))
-   (Language.Finkel.Fnk
-    ((FnkEnv ..) (EnvMacros) makeEnvMacros mergeMacros))
+   (Language.Finkel.Fnk ((FnkEnv ..) (EnvMacros) makeEnvMacros mergeMacros))
+   (Language.Finkel.SpecialForms (defaultFnkEnv specialForms))
 
    ;; finkel-lang
    (Finkel.Core)

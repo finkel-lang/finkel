@@ -5,32 +5,33 @@
 module Main where
 
 -- base
-import           Control.Monad.IO.Class  (MonadIO (..))
-import           System.Environment      (getArgs)
-import           System.IO               (stdout)
+import           Control.Monad.IO.Class       (MonadIO (..))
+import           System.Environment           (getArgs)
+import           System.IO                    (stdout)
 
 -- filepath
-import qualified System.FilePath         as FilePath
+import qualified System.FilePath              as FilePath
 
 -- ghc
-import           DynFlags                (GeneralFlag (..), HasDynFlags (..),
-                                          gopt_set)
-import           ErrUtils                (printBagOfErrors)
-import qualified GHC                     as GHC
-import           Outputable              (Outputable (..), neverQualify,
-                                          printForUser)
-import           SrcLoc                  (mkGeneralLocated)
-import           StringBuffer            (hGetStringBuffer)
+import           DynFlags                     (GeneralFlag (..),
+                                               HasDynFlags (..), gopt_set)
+import           ErrUtils                     (printBagOfErrors)
+import qualified GHC                          as GHC
+import           Outputable                   (Outputable (..), neverQualify,
+                                               printForUser)
+import           SrcLoc                       (mkGeneralLocated)
+import           StringBuffer                 (hGetStringBuffer)
 
 -- finkel-kernel
-import qualified Language.Finkel.Builder as Builder
-import qualified Language.Finkel.Emit    as Emit
-import qualified Language.Finkel.Expand  as Expand
-import qualified Language.Finkel.Fnk     as Fnk
-import qualified Language.Finkel.Lexer   as Lexer
-import qualified Language.Finkel.Make    as Make
-import qualified Language.Finkel.Reader  as Reader
-import qualified Language.Finkel.Syntax  as Syntax
+import qualified Language.Finkel.Builder      as Builder
+import qualified Language.Finkel.Emit         as Emit
+import qualified Language.Finkel.Expand       as Expand
+import qualified Language.Finkel.Fnk          as Fnk
+import qualified Language.Finkel.Lexer        as Lexer
+import qualified Language.Finkel.Make         as Make
+import qualified Language.Finkel.Reader       as Reader
+import qualified Language.Finkel.SpecialForms as SpecialForms
+import qualified Language.Finkel.Syntax       as Syntax
 
 main :: IO ()
 main =
@@ -61,7 +62,7 @@ usage =
        ,"  make   - compile given files to object code"])
 
 printExpandedForms :: FilePath -> IO ()
-printExpandedForms path = Fnk.runFnk go Make.defaultFnkEnv
+printExpandedForms path = Fnk.runFnk go SpecialForms.defaultFnkEnv
   where
     go = do
       Make.initSessionForMake
@@ -93,7 +94,7 @@ pprFnkModule =
           liftIO (printForUser dflags stdout neverQualify (ppr m)))
 
 pprHsModule :: FilePath -> IO ()
-pprHsModule path = Fnk.runFnk go Make.defaultFnkEnv
+pprHsModule path = Fnk.runFnk go SpecialForms.defaultFnkEnv
   where
     go =
       do Make.initSessionForMake
@@ -122,7 +123,7 @@ printHsrc =
 
 parseFnkModuleWith ::
   (Builder.HModule -> Lexer.SPState -> Fnk.Fnk ()) -> FilePath -> IO ()
-parseFnkModuleWith act path = Fnk.runFnk go Make.defaultFnkEnv
+parseFnkModuleWith act path = Fnk.runFnk go SpecialForms.defaultFnkEnv
   where
     go =
      do Make.initSessionForMake
@@ -162,4 +163,4 @@ doMake files =
            Make.make (zipWith f files (repeat Nothing))
                      False False Nothing
          f file phase = (mkGeneralLocated "commandline" file, phase)
-     Fnk.runFnk act Make.defaultFnkEnv
+     Fnk.runFnk act SpecialForms.defaultFnkEnv

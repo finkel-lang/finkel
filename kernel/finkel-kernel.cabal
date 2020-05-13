@@ -61,6 +61,7 @@ library
                        Language.Finkel.Main
                        Language.Finkel.Reader
                        Language.Finkel.Fnk
+                       Language.Finkel.SpecialForms
                        Language.Finkel.Syntax
                        Language.Finkel.TargetSource
   other-modules:       Language.Finkel.Syntax.SynUtils

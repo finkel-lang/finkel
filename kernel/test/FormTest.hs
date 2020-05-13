@@ -6,32 +6,32 @@ module FormTest where
 import           Control.Exception
 import           Data.Complex
 import           Data.Data
-import qualified Data.Fixed                 as Fixed
+import qualified Data.Fixed                   as Fixed
 import           Data.Functor.Compose
 import           Data.Functor.Const
 import           Data.Functor.Identity
-import qualified Data.Functor.Product       as Product
-import qualified Data.Functor.Sum           as Sum
+import qualified Data.Functor.Product         as Product
+import qualified Data.Functor.Sum             as Sum
 import           Data.Int
-import           Data.List                  (isPrefixOf, isSubsequenceOf)
-import           Data.List.NonEmpty         (NonEmpty (..))
+import           Data.List                    (isPrefixOf, isSubsequenceOf)
+import           Data.List.NonEmpty           (NonEmpty (..))
 import           Data.Monoid
 import           Data.Ratio
-import qualified Data.Semigroup             as Semigroup
+import qualified Data.Semigroup               as Semigroup
 import           Data.Version
 import           Data.Word
 import           Numeric.Natural
-import           Text.Show.Functions        ()
+import           Text.Show.Functions          ()
 
 -- deepseq
 import           Control.DeepSeq
 
 -- ghc
-import           BasicTypes                 (SourceText (..), fl_value)
-import           FastString                 (fsLit, unpackFS)
-import           SrcLoc                     (GenLocated (..), SrcSpan (..),
-                                             noSrcSpan)
-import           StringBuffer               (stringToStringBuffer)
+import           BasicTypes                   (SourceText (..), fl_value)
+import           FastString                   (fsLit, unpackFS)
+import           SrcLoc                       (GenLocated (..), SrcSpan (..),
+                                               noSrcSpan)
+import           StringBuffer                 (stringToStringBuffer)
 
 -- transformers
 import           Control.Monad.Trans.State
@@ -43,14 +43,14 @@ import           Test.Hspec
 import           Test.QuickCheck
 
 -- finkel-kernel
-import           Language.Finkel.Expand
 import           Language.Finkel.Form
 import           Language.Finkel.Homoiconic
 import           Language.Finkel.Lexer
 import           Language.Finkel.Reader
+import           Language.Finkel.SpecialForms
 
 -- Internal
-import           Orphan                     ()
+import           Orphan                       ()
 
 formTests :: Spec
 formTests = do

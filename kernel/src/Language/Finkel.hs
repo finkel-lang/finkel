@@ -25,14 +25,19 @@ module Language.Finkel
   , qList
   , qHsList
 
+  -- * Fnk
+  , Fnk
+  , runFnk
+  , defaultFnkEnv
+
   -- * Macro
   , Macro(Macro)
-  , Fnk
   , expand
   , expand1
   , gensym
   , gensym'
   , unquoteSplice
+  , macroFunction
   , finkelSrcError
 
   -- * Re-export from ghc
@@ -40,10 +45,11 @@ module Language.Finkel
   ) where
 
 -- ghc
-import SrcLoc                     (GenLocated (..))
+import SrcLoc                       (GenLocated (..))
 
 -- Internal
 import Language.Finkel.Expand
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
+import Language.Finkel.SpecialForms

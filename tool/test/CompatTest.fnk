@@ -19,8 +19,7 @@
    (Test.Hspec)
 
    ;; finkel-kernel
-   (Language.Finkel.Make)
-   (Language.Finkel.Fnk)
+   (Language.Finkel)
 
    ;; finkel-lang
    (Finkel.Prelude)

@@ -11,8 +11,6 @@ functions.")
 
 ;; finkel-kernel
 (import Language.Finkel)
-(import Language.Finkel.Make (defaultFnkEnv))
-(import Language.Finkel.Fnk (runFnk))
 
 (:doc "Throw exception with 'finkelSrcError', with given code and
 message. This function uses 'unsafePerformIO'.")

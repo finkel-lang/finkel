@@ -1,9 +1,9 @@
 module EmitTest where
 
 -- ghc
-import FastString            (fsLit)
-import RdrName               (mkVarUnqual)
-import SrcLoc                (GenLocated (..), noSrcSpan)
+import FastString                   (fsLit)
+import RdrName                      (mkVarUnqual)
+import SrcLoc                       (GenLocated (..), noSrcSpan)
 
 -- hspec
 import Test.Hspec
@@ -12,7 +12,7 @@ import Test.Hspec
 import Language.Finkel.Emit
 import Language.Finkel.Fnk
 import Language.Finkel.Lexer
-import Language.Finkel.Make
+import Language.Finkel.SpecialForms
 
 emitTests :: Spec
 emitTests = do

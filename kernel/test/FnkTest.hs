@@ -2,17 +2,17 @@ module FnkTest where
 
 -- base
 import           Control.Exception
-import qualified Control.Monad.Fail         as MonadFail
+import qualified Control.Monad.Fail           as MonadFail
 import           Control.Monad.IO.Class
-import           Data.Maybe                 (fromMaybe, isNothing)
+import           Data.Maybe                   (fromMaybe, isNothing)
 
 -- ghc
-import           BasicTypes                 (SourceText (..))
-import           Exception                  (gbracket)
-import           FastString                 (fsLit)
-import           HscTypes                   (SourceError)
-import           SrcLoc                     (GenLocated (..), unLoc)
-import           StringBuffer               (stringToStringBuffer)
+import           BasicTypes                   (SourceText (..))
+import           Exception                    (gbracket)
+import           FastString                   (fsLit)
+import           HscTypes                     (SourceError)
+import           SrcLoc                       (GenLocated (..), unLoc)
+import           StringBuffer                 (stringToStringBuffer)
 
 -- hspec
 import           Test.Hspec
@@ -26,6 +26,7 @@ import           Language.Finkel.Form
 import           Language.Finkel.Homoiconic
 import           Language.Finkel.Make
 import           Language.Finkel.Reader
+import           Language.Finkel.SpecialForms
 import           Language.Finkel.Syntax
 
 fnkTests :: Spec
