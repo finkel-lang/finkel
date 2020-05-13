@@ -73,7 +73,7 @@ import qualified Data.Map               as Map
 -- ghc
 import           Bag                    (unitBag)
 import           DynFlags               (DynFlags (..), HasDynFlags (..),
-                                         Language (..), unsafeGlobalDynFlags)
+                                         Language (..))
 import           ErrUtils               (mkErrMsg)
 import           Exception              (ExceptionMonad (..), ghandle)
 import           FastString             (FastString, fsLit, unpackFS)
@@ -321,13 +321,22 @@ finkelSrcError (LForm (L l _)) msg = do
   let em = mkErrMsg dflags l neverQualify (text msg)
   liftIO (throwIO (mkSrcErr (unitBag em)))
 
--- | Perform given IO action iff debug flag is turned on.
+-- | Print given message to 'stderr' iff debug flag is turned on.
 debugFnk :: String -> Fnk ()
 debugFnk str = do
   fnkc_env <- getFnkEnv
   when (envDebug fnkc_env)
        (liftIO (hPutStrLn stderr str))
 {-# INLINE debugFnk #-}
+
+-- | Get finkel debug setting from environment variable /FNKC_DEBUG/.
+getFnkDebug :: MonadIO m => m Bool
+getFnkDebug =
+  do mb_debug <- liftIO (lookupEnv "FNKC_DEBUG")
+     case mb_debug of
+       Nothing -> return False
+       Just _  -> return True
+{-# INLINE getFnkDebug #-}
 
 -- | Empty 'FnkEnv' for performing computation with 'Fnk'.
 emptyFnkEnv :: FnkEnv
@@ -404,11 +413,10 @@ macroNames = Map.foldrWithKey f []
                   _       -> acc
 
 -- | 'True' when given 'TyThing' is a 'Macro'.
-isMacro :: TyThing -> Bool
-isMacro thing =
+isMacro :: DynFlags -> TyThing -> Bool
+isMacro dflags thing =
   case thing of
-    AnId var -> showSDocForUser unsafeGlobalDynFlags alwaysQualify
-                                (ppr (varType var))
+    AnId var -> showSDocForUser dflags alwaysQualify (ppr (varType var))
                 == "Language.Finkel.Fnk.Macro"
     _        -> False
 
@@ -435,15 +443,6 @@ gensym' prefix = do
   s <- liftIO (mkSplitUniqSupply '_')
   let u = uniqFromSupply s
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))
-
--- | Get finkel debug setting from environment variable /FNKC_DEBUG/.
-getFnkDebug :: MonadIO m => m Bool
-getFnkDebug =
-  do mb_debug <- liftIO (lookupEnv "FNKC_DEBUG")
-     case mb_debug of
-       Nothing -> return False
-       Just _  -> return True
-{-# INLINE getFnkDebug #-}
 
 -- Note: Initialization of UniqSupply
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

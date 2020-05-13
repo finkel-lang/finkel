@@ -200,10 +200,11 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
   catMaybes <$> (getNames >>= mapM lookupName)
 
 addImportedMacro :: TyThing -> Fnk ()
-addImportedMacro thing = when (isMacro thing) go
+addImportedMacro thing =
+  do dflags <- getDynFlags
+     when (isMacro dflags thing) (go dflags)
   where
-    go = do
-      dflags <- getDynFlags
+    go dflags =
       case thing of
         AnId var -> do
           debugFnk (";;; Adding macro `" ++
@@ -312,7 +313,7 @@ m_withMacro form =
                Right hdecls -> do
                  (tythings, ic) <- evalDecls hdecls
                  case tythings of
-                   tything : _ | isMacro tything -> do
+                   tything : _ | isMacro dflags tything -> do
                      modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
                      macro <- coerceMacro dflags fname
                      return (name, macro)

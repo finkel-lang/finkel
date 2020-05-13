@@ -959,7 +959,7 @@ Listing exported macros in \"Finkel.Core\" module:
   (let ((= f dflags mb-thing acc
           (case mb-thing
             (Just (@ thing (AnId var)))
-            (| ((isMacro thing)
+            (| ((isMacro dflags thing)
                 (: (showSDoc dflags (ppr (varName var))) acc)))
             _ acc))
         (= get-exported-names name-str
