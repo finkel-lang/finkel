@@ -1,8 +1,8 @@
 {-# LANGUAGE CPP #-}
 -- | Main function for Finkel compiler.
 --
--- This module contains 'main' function, which does similar and
--- simplified works done in @"ghc/Main.hs"@ found in ghc source.
+-- This module contains 'main' function, which does similar and simplified works
+-- done in @"ghc/Main.hs"@ found in ghc source.
 --
 module Language.Finkel.Main
   ( defaultMain
@@ -65,15 +65,15 @@ import qualified Paths_finkel_kernel
 -- [Main entry point]
 -- ~~~~~~~~~~~~~~~~~~
 --
--- Formerly, the Finkel compiler executable was written as ghc
--- frontend plugin. However, passing conflicting options used in ghc's
--- "--make" to the Finkel compiler executable was cumbersome, since
--- frontend option cannot be used when ghc is invoked in /make/ mode.
+-- Formerly, the Finkel compiler executable was written as ghc frontend
+-- plugin. However, passing conflicting options used in ghc's "--make" to the
+-- Finkel compiler executable was cumbersome, since frontend option cannot be
+-- used when ghc is invoked in /make/ mode.
 --
--- Functions exported from this module is doing almost the same work
--- done in the "Main" module of the ghc executable, but command line
--- argument handling works are more simple, since Finkel compiler
--- delegates works done in non-make mode to the ghc executable.
+-- Functions exported from this module is doing almost the same work done in the
+-- "Main" module of the ghc executable, but command line argument handling works
+-- are simplified, since Finkel compiler delegates works done in non-make mode
+-- to the ghc executable.
 
 -- | Function used by the Finkel kernel compiler.
 defaultMain :: IO ()
@@ -81,30 +81,28 @@ defaultMain = defaultMainWith []
 
 -- | Make a main compiler function from given list of macros.
 --
--- This functions does simplified command line argument parsing done in
--- default @ghc@ mode (i.e., @make@ mode).
---
+-- This functions does simplified command line argument parsing done in default
+-- @ghc@ mode (i.e., @make@ mode).
 defaultMainWith :: [(String, Macro)]
-                -- ^ List of pairs of macro name and 'Macro' value loaded
-                -- to macro expander.
+                -- ^ List of pairs of macro name and 'Macro' value loaded to
+                -- macro expander.
                 -> IO ()
 defaultMainWith macros = do
   args0 <- getArgs
   if any (`elem` rawGhcOptions) args0
      then rawGhc args0
      else do
-       -- Filter out Finkel flags and `--make' flag when exist,
-       -- otherwise make flag would be treated as input file, and
-       -- Finkel flags as unknown flags from this point.
+       -- Filter out Finkel flags and `--make' flag when exist, otherwise make
+       -- flag would be treated as input file, and Finkel flags as unknown flags
+       -- from this point.
        let (finkelopts, args1) = partitionFinkelOptions args0
            args2 = filter (/= "--make") args1
            fnk_opts = parseFinkelOption finkelopts
            fnkc_env0 = opt2env fnk_opts
 
-           -- Using macros from argument as first argument to
-           -- 'mergeMacros', so that the caller of this function can
-           -- have a chance to override the behaviour of specialforms in
-           -- 'defaultFnkEnv'.
+           -- Using macros from argument as first argument to 'mergeMacros', so
+           -- that the caller of this function can have a chance to override the
+           -- behaviour of specialforms in 'defaultFnkEnv'.
            macros' = mergeMacros (makeEnvMacros macros)
                                  (envMacros defaultFnkEnv)
 
@@ -156,17 +154,16 @@ main'' orig_args ghc_args = do
 
   let fileish = map unLoc lfileish
 
-      -- Partition objects and source codes in args. Delegate to raw ghc
-      -- when source codes were null. Don't bother with ldInput,
-      -- delegate the linking work to raw ghc.
+      -- Partition objects and source codes in args. Delegate to raw ghc when
+      -- source codes were null. Don't bother with ldInput, delegate the linking
+      -- work to raw ghc.
       (srcs, _non_srcs) = partition isSourceTarget fileish
 
   case srcs of
      [] -> liftIO (rawGhc orig_args)
      _  -> do
        -- Using 'setDynFlags' instead of 'setSessionDynFlags', since
-       -- 'setSessionDynFlags' will be called from 'initSessionForMake'
-       -- below.
+       -- 'setSessionDynFlags' will be called from 'initSessionForMake' below.
        setDynFlags dflags2
 
        -- Some IO works. Check unknown flags, and update uniq supply. See Note
@@ -184,8 +181,8 @@ main'' orig_args ghc_args = do
        -- Initialization works for Finkel.
        initSessionForMake
 
-       -- At the moment, compiling with phase specification are not
-       -- supported, phase is always set to 'Nothing'.
+       -- At the moment, compiling with phase specification are not supported,
+       -- phase is always set to 'Nothing'.
        let phased_srcs = map phase_it srcs
            phase_it path = (on_the_cmdline (normalise path), Nothing)
            force_recomp = gopt Opt_ForceRecomp dflags2
@@ -281,14 +278,12 @@ printFinkelVersion = putStrLn v
 rawGhc :: [String] -> IO ()
 rawGhc args = rawSystem ghc args >>= exitWith
   where
-    -- CPP macro defined in "finkel_kernel_config.h", see "Setup.hs"
-    -- for detail.
+    -- CPP macro defined in "finkel_kernel_config.h", see "Setup.hs" for detail.
     ghc = FINKEL_KERNEL_GHC
 
--- | When any of options listed here were found, invoke raw @ghc@
--- without using Finkel compiler. Otherwise @ghc@ will complain with
--- error message. These options are listed in "ghc/Main.hs" as
--- `mode_flags'.
+-- | When any of options listed here were found, invoke raw @ghc@ without using
+-- Finkel compiler. Otherwise @ghc@ will complain with error message. These
+-- options are listed in "ghc/Main.hs" as `mode_flags'.
 rawGhcOptions :: [String]
 rawGhcOptions =
   [ "-?"

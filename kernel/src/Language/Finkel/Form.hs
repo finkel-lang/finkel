@@ -211,14 +211,13 @@ instance NFData a => NFData (LForm a) where
 
 -- | Type synonym for code data.
 --
--- The 'Code' data is the fundamental data type used in the entire
--- compilation work.  The 'Code' is used to represed data from parsed
--- source file, and used for input and output of macros transformer
--- functions. List of 'Code' data are converted to Haskell AST via
--- syntax parser.
+-- The 'Code' data is the fundamental data type used in the entire compilation
+-- work.  The 'Code' is used to represed data from parsed source file, and used
+-- for input and output of macros transformer functions. List of 'Code' data are
+-- converted to Haskell AST via syntax parser.
 --
--- Since 'Code' is returned from parsed source file, source code
--- location information is attached to 'Code'.
+-- Since 'Code' is returned from parsed source file, source code location
+-- information is attached to 'Code'.
 --
 type Code = LForm Atom
 
@@ -318,9 +317,9 @@ symbolNameFS :: Code -> FastString
 symbolNameFS (LForm (L _ (Atom (ASymbol name)))) = name
 symbolNameFS x = error ("symbolName: got " ++ show x)
 
--- | Make 'List' from given code. When the given argument was already a
--- 'List', the given 'List' is returned. If the argument was 'HsList',
--- converted to 'List'. Otherwise, 'List' with single element.
+-- | Make 'List' from given code. When the given argument was already a 'List',
+-- the given 'List' is returned. If the argument was 'HsList', converted to
+-- 'List'. Otherwise, 'List' with single element.
 toListL :: Code -> Code
 toListL orig@(LForm (L l form)) =
   case form of
@@ -341,8 +340,8 @@ genSrc = L (UnhelpfulSpan (fsLit "<finkel generated code>"))
 
 -- | Make located list from list of located elements.
 --
--- When the argument is not null, the resulting list has a combined
--- location of locations in the argument list elements.
+-- When the argument is not null, the resulting list has a combined location of
+-- locations in the argument list elements.
 mkLocatedForm :: [LForm a] -> Located [LForm a]
 mkLocatedForm [] = genSrc []
 mkLocatedForm ms = L (combineLocs (unLForm (head ms))

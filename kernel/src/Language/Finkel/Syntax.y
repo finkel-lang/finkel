@@ -4,10 +4,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | Module for parsing form data.
 --
--- This module contains Happy parser for S-expression forms. Unlike the
--- lexer for reading source code, parser defined in this module takes a
--- list of 'Code' data as input, and converts to internal abstract
--- syntax tree data defined in GHC.
+-- This module contains Happy parser for S-expression forms. Unlike the lexer
+-- for reading source code, parser defined in this module takes a list of 'Code'
+-- data as input, and converts to internal abstract syntax tree data defined in
+-- GHC.
 --
 module Language.Finkel.Syntax
   (
@@ -188,9 +188,8 @@ import Language.Finkel.Syntax.SynUtils
 
 -- Finkel specific
 --
--- Following keywords are used in promoted list constructors. The
--- `qSymbol' is for module file compilatoin, and `qualQSymbol' is for
--- REPL, and so on.
+-- Following keywords are used in promoted list constructors. The `qSymbol' is
+-- for module file compilatoin, and `qualQSymbol' is for REPL, and so on.
 
 'qSymbol'     { LForm (L _ (Atom (ASymbol "qSymbol"))) }
 'qualQSymbol' { LForm (L _ (Atom (ASymbol "Language.Finkel.qSymbol"))) }
@@ -801,10 +800,9 @@ hlist0 :: { [HExpr] }
 -- Parsing form for guards
 -- ~~~~~~~~~~~~~~~~~~~~~~~
 --
--- Separating the rule for 'where', 'list' and atom, so that the
--- 'guards0' rule can try matching the symbol '|' before 'expr' rule, to
--- differentiate the entire form from function application of reserved
--- symbol '|'.
+-- Separating the rule for 'where', 'list' and atom, so that the 'guards0' rule
+-- can try matching the symbol '|' before 'expr' rule, to differentiate the
+-- entire form from function application of reserved symbol '|'.
 
 guards :: { ([HGRHS],[HDecl]) }
     : 'where' {% parse p_where $1 }
@@ -944,25 +942,24 @@ unListL (LForm (L _ form)) =
 --
 -- There are four kinds of forms for documentation comments.
 --
--- [@:doc@]: The @(:doc "comment")@ form is for writing
--- documentation with @comment@ for the next element. It can appear in
--- export entities list, or in top level declarations. It is analogous
--- to Haskell comments starting with @|@.
+-- [@:doc@]: The @(:doc "comment")@ form is for writing documentation with
+-- @comment@ for the next element. It can appear in export entities list, or in
+-- top level declarations. It is analogous to Haskell comments starting with
+-- @|@.
 --
--- [@:doc^@]: The @(:doc^ "comment")@ form is like /:doc/, but for
--- previous form. Unlike /:doc/, it cannot appear in export entities
--- list. It is analogous to Haskell comments starting with @^@.
+-- [@:doc^@]: The @(:doc^ "comment")@ form is like /:doc/, but for previous
+-- form. Unlike /:doc/, it cannot appear in export entities list. It is
+-- analogous to Haskell comments starting with @^@.
 --
--- [@:doc$@]: The @(:doc$ name)@ and @(:doc$ name "comment")@ form is
--- for referencing documentation. @(:doc$ name)@ is used in export
--- entities list to refer other documentation comment, and @(:doc$ name
--- "comment")@ is for top level to contain the documentation contents.
--- It is analogous to Haskell comment starting with @$name@.
+-- [@:doc$@]: The @(:doc$ name)@ and @(:doc$ name "comment")@ form is for
+-- referencing documentation. @(:doc$ name)@ is used in export entities list to
+-- refer other documentation comment, and @(:doc$ name "comment")@ is for top
+-- level to contain the documentation contents.  It is analogous to Haskell
+-- comment starting with @$name@.
 --
--- [@:dh1, :dh2, :dh3, and :dh4@]: The @(:dh1 "comment")@ is for level
--- 1 documentation section header. There are four levels of section
--- headers: @:dh1@, @:dh2@, @:dh3@, and @:dh4@. It could be used in
--- export entities list, or in top level declaration when the module
--- does not contain explicit export entities. It is analogous to Haskell
--- comments starting with @*@s.
+-- [@:dh1, :dh2, :dh3, and :dh4@]: The @(:dh1 "comment")@ is for level 1
+-- documentation section header. There are four levels of section headers:
+-- @:dh1@, @:dh2@, @:dh3@, and @:dh4@. It could be used in export entities list,
+-- or in top level declaration when the module does not contain explicit export
+-- entities. It is analogous to Haskell comments starting with @*@s.
 }

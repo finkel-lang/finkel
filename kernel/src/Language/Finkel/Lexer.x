@@ -6,9 +6,8 @@
 {-# LANGUAGE UnboxedTuples #-}
 -- | Lexical analyser of S-expression tokens.
 --
--- This file contains Alex lexical analyser for tokeninzing
--- S-expression.  Lexcial analyser is used by Happy parser in
--- S-expression reader.
+-- This file contains Alex lexical analyser for tokeninzing S-expression.
+-- Lexcial analyser is used by Happy parser in S-expression reader.
 module Language.Finkel.Lexer
   ( -- * Token data type
     Token(..)
@@ -221,11 +220,10 @@ instance Monad SP where
 
 data AlexInput = AlexInput RealSrcLoc StringBuffer
 
--- | Perform given 'SP' computation with target file name and input
--- contents.
+-- | Perform given 'SP' computation with target file name and input contents.
 runSP :: SP a           -- ^ Computation to perform.
-      -> Maybe FilePath -- ^ File name of target. If 'Nothing', assumed
-                        -- as anonymous target.
+      -> Maybe FilePath -- ^ File name of target. If 'Nothing', assumed as
+                        -- anonymous target.
       -> StringBuffer   -- ^ Input contents.
       -> Either String (a, SPState)
 runSP sp target input =
@@ -394,12 +392,11 @@ type Action = AlexInput -> Int -> SP Token
 -- Tokenizer actions for documentation
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
--- Currently, documentation comment starting with `;'s are converted
--- to 'Token' data during lexical analysis. Once the documentation
--- string were converted to 'Token' data type, it cannot distinguish
--- between block documentation comment and line documentation
--- comment. From this reason, the documentation comments generated
--- with "Language.Finkel.Emit" are always using single-line comment
+-- Currently, documentation comment starting with `;'s are converted to 'Token'
+-- data during lexical analysis. Once the documentation string were converted to
+-- 'Token' data type, it cannot distinguish between block documentation comment
+-- and line documentation comment. From this reason, the documentation comments
+-- generated with "Language.Finkel.Emit" are always using single-line comment
 -- syntax.
 
 tok_oparen :: Action
@@ -542,8 +539,8 @@ tok_lambda :: Action
 tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
 {-# INLINE tok_lambda #-}
 
--- | Make token symbol.  When the given symbol starts with
--- non-operatator character, replace hyphens with underscores.
+-- | Make token symbol.  When the given symbol starts with non-operatator
+-- character, replace hyphens with underscores.
 tok_symbol :: Action
 tok_symbol (AlexInput _ buf) l =
   let fs0 = takeUtf8FS l buf
@@ -725,9 +722,8 @@ tok_fractional (AlexInput _ buf) l =
 --
 -- ---------------------------------------------------------------------
 
--- | Lexical analyzer for S-expression. Intended to be used with a
--- parser made from Happy. This functions will not pass comment tokens
--- to continuation.
+-- | Lexical analyzer for S-expression. Intended to be used with a parser made
+-- from Happy. This functions will not pass comment tokens to continuation.
 tokenLexer :: (Located Token -> SP a) -> SP a
 tokenLexer cont = do
   ltok@(L _span tok) <- scanToken
@@ -821,13 +817,13 @@ adjustChar c = fromIntegral $ ord adj_c
         adj_c
           | c <= '\x07' = non_graphic
           | c <= '\x7f' = c
-          -- Alex doesn't handle Unicode, so when Unicode
-          -- character is encountered we output these values
-          -- with the actual character value hidden in the state.
+          -- Alex doesn't handle Unicode, so when Unicode character is
+          -- encountered we output these values with the actual character value
+          -- hidden in the state.
           | otherwise =
-                -- NB: The logic behind these definitions is also reflected
-                -- in basicTypes/Lexeme.hs
-                -- Any changes here should likely be reflected there.
+                -- NB: The logic behind these definitions is also reflected in
+                -- basicTypes/Lexeme.hs Any changes here should likely be
+                -- reflected there.
                 case generalCategory c of
                   UppercaseLetter       -> upper
                   LowercaseLetter       -> lower

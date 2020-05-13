@@ -1,11 +1,10 @@
 -- | Builder functions for Haskell syntax data type.
 --
--- This module contains 'Builder' data type and Haskell AST type
--- synonyms. The 'Builder' data type is used by Happy parser for
--- building various AST types.
+-- This module contains 'Builder' data type and Haskell AST type synonyms. The
+-- 'Builder' data type is used by Happy parser for building various AST types.
 --
--- The main purpose of AST type synonyms defined in this module are
--- for managing ghc version compatibility.
+-- The main purpose of AST type synonyms defined in this module are for managing
+-- ghc version compatibility.
 --
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -105,8 +104,8 @@ data SyntaxError = SyntaxError Code String
 
 -- | Newtype wrapper for parsing list of 'Code' with Happy.
 --
--- Implements simple state monad with result value wrapped with
--- 'Either', to terminate parsing computation with 'SyntaxError'.
+-- Implements simple state monad with result value wrapped with 'Either', to
+-- terminate parsing computation with 'SyntaxError'.
 newtype Builder a =
   Builder { unBuilder :: BState -> Either SyntaxError (a, BState) }
 
@@ -184,8 +183,7 @@ setLastToken code = do
   putBState (st {lastToken = Just code})
 {-# INLINE setLastToken #-}
 
--- | Parse with builder using given tokens, continue on successful
--- parse.
+-- | Parse with builder using given tokens, continue on successful parse.
 parse :: Builder a -> [Code] -> Builder a
 parse bld toks =
   do pstate <- ghcPState <$> getBState
@@ -223,12 +221,11 @@ builderError = do
 --
 -- Type synonyms for managing GHC version compatibility.
 --
--- This 'PARSED' type synonym is wrapped with CPP macro detecting the
--- ghc package version at compilation time.  At the time of initial
--- development of finkel-kernel package, ghc source codes were not under the
--- /Trees that Grow/ modifications.  When updating from ghc 8.2.x to
--- 8.4.x, 'PARSED' were added to handle the AST argument type
--- modification.
+-- This 'PARSED' type synonym is wrapped with CPP macro detecting the ghc
+-- package version at compilation time.  At the time of initial development of
+-- finkel-kernel package, ghc source codes were not under the /Trees that Grow/
+-- modifications.  When updating from ghc 8.2.x to 8.4.x, 'PARSED' were added to
+-- handle the AST argument type modification.
 --
 -- See
 -- <https://gitlab.haskell.org/ghc/ghc/wikis/implementing-trees-that-grow>

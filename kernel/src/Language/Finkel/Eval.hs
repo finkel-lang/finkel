@@ -83,12 +83,12 @@ evalExpr expr = do
 -- | Evaluate the type of given expression.
 evalExprType :: HExpr -> Fnk Type
 evalExprType expr = do
-  -- See `InteractiveEval.exprType' and `HscMain.hscTcExpr'. As in
-  -- `evalDecls', taking HExpr instead of Haskell source code String.
+  -- See `InteractiveEval.exprType' and `HscMain.hscTcExpr'. As in `evalDecls',
+  -- taking HExpr instead of Haskell source code String.
   --
-  -- XXX: Currently, `TcRnExprMode' is hard coded as `TM_Inst' in below
-  -- call to `tcRnExpr'. In ghci, user can type in and specify the mode
-  -- from REPL session.
+  -- XXX: Currently, `TcRnExprMode' is hard coded as `TM_Inst' in below call to
+  -- `tcRnExpr'. In ghci, user can type in and specify the mode from REPL
+  -- session.
   --
   hsc_env <- getSession
   ty <- ioMsgMaybe $ tcRnExpr hsc_env TM_Inst expr
@@ -106,18 +106,17 @@ evalTypeKind ty = do
   hsc_env <- getSession
   ioMsgMaybe $ tcRnType' hsc_env True ty
 
--- | Evaluate given declarations. The returned value is resulting
--- 'TyThing's of declarations and updated interactive context.
+-- | Evaluate given declarations. The returned value is resulting 'TyThing's of
+-- declarations and updated interactive context.
 evalDecls :: [HDecl] -> Fnk ([TyThing], InteractiveContext)
 #if MIN_VERSION_ghc(8,8,0)
 evalDecls decls =
   withSession (\hsc_env -> liftIO (hscParsedDecls hsc_env decls))
 #else
 evalDecls decls = do
-  -- Mostly doing similar works done in `HscMain.hscDeclsWithLocation',
-  -- but this function is wrapped with 'Fnk' instead of 'Hsc'. And takes
-  -- list of 'HDecl' instead of 'String' of declarations codes as
-  -- argument.
+  -- Mostly doing similar works done in `HscMain.hscDeclsWithLocation', but this
+  -- function is wrapped with 'Fnk' instead of 'Hsc'. And takes list of 'HDecl'
+  -- instead of 'String' of declarations codes as argument.
   hsc_env <- getSession
   tc_gblenv <- ioMsgMaybe (tcRnDeclsi hsc_env decls)
   let defaults = tcg_default tc_gblenv
@@ -169,8 +168,8 @@ fnkcDesugar' mod_location tc_result = do
   hsc_env <- getSession
   r <- ioMsgMaybe (deSugar hsc_env mod_location tc_result)
 
-  -- In `Hsc', `handleWarning' is called at this point. But currently
-  -- Fnk does not keep tracks of warning messages, so does nothing ...
+  -- In `Hsc', `handleWarning' is called at this point. But currently Fnk does
+  -- not keep tracks of warning messages, so does nothing ...
   --
   -- handleWarnings
 

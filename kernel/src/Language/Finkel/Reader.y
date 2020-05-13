@@ -4,8 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | S-expression reader.
 --
--- Parser functions in this module are written with Happy parser
--- generator.
+-- Parser functions in this module are written with Happy parser generator.
 --
 module Language.Finkel.Reader
   ( parseSexprs
@@ -79,9 +78,9 @@ import           Language.Finkel.Syntax
 -- Unit and List
 -- ~~~~~~~~~~~~~
 --
--- Empty list will parsed as a unit (i.e. '()' in Haskell), non-empty
--- lists are pased as 'List' value of 'Code'. Empty 'List' value of
--- 'Code' could be referred with 'Language.Finkel.Form.nil'.
+-- Empty list will parsed as a unit (i.e. '()' in Haskell), non-empty lists are
+-- pased as 'List' value of 'Code'. Empty 'List' value of 'Code' could be
+-- referred with 'Language.Finkel.Form.nil'.
 
 sexp :: { Code }
     : atom                    { $1 }
@@ -228,15 +227,15 @@ rmac h expr =
 
 -- Module from ghc package with codes related to language pragma:
 --
--- + libraries/ghc-boot-th/GHC/LanguageExtensions/Type.hs: The file
---   containing definition of language extensions.
+-- + libraries/ghc-boot-th/GHC/LanguageExtensions/Type.hs: The file containing
+--   definition of language extensions.
 --
 -- + compiler/main/HeaderInfo.hs: Parses header information.
 --
--- + compiler/main/DynFlags.hs: Contains 'supportedExtensions ::
---   [String]'. This is a list of language extension names, and the
---   names with "No" prefix. 'xFlagsDeps' contains list of pair language
---   extension and deprecation messages.
+-- + compiler/main/DynFlags.hs: Contains 'supportedExtensions :: [String]'. This
+--   is a list of language extension names, and the names with "No"
+--   prefix. 'xFlagsDeps' contains list of pair language extension and
+--   deprecation messages.
 --
 
 pragma :: Code -> SP Code
@@ -244,8 +243,8 @@ pragma orig@(LForm (L l form)) =
   case form of
     -- Pragma with no arguments.
     List [LForm (L _ (Atom (ASymbol sym)))]
-      -- Return the UNPACK form as is. This pragma is handled by
-      -- syntax parser of data constructor field.
+      -- Return the UNPACK form as is. This pragma is handled by syntax parser
+      -- of data constructor field.
       | normalize sym `elem` noArgPragmas -> return orig
 
     -- Pragma with arguments.
@@ -321,10 +320,9 @@ supportedLangExts =
       , TypeSynonymInstances
       , UndecidableInstances ]
   where
-    -- Adding `"No"' prefix, as done in `DynFlags.supportedExtensions'.
-    -- Might worth looking up `DynFlags.xFlags' to get string
-    -- representation of language extension instead of applying `show'
-    -- function.
+    -- Adding `"No"' prefix, as done in `DynFlags.supportedExtensions'.  Might
+    -- worth looking up `DynFlags.xFlags' to get string representation of
+    -- language extension instead of applying `show' function.
     f = concatMap g
     g ext = [(fsLit name, name), (fsLit noname, noname)]
       where

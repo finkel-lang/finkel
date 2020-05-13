@@ -169,13 +169,11 @@ emptyFlagSet = IntSet.empty
 
 -- | Macro transformer function.
 --
--- A macro in Finkel is implemented as a function. The function takes
--- a located code data argument, and returns a located code data
--- wrapped in 'Fnk'.
+-- A macro in Finkel is implemented as a function. The function takes a located
+-- code data argument, and returns a located code data wrapped in 'Fnk'.
 type MacroFunction = Code -> Fnk Code
 
--- | Data type to distinguish user defined macros from built-in special
--- forms.
+-- | Data type to distinguish user defined macros from built-in special forms.
 data Macro
   = Macro MacroFunction
   | SpecialForm MacroFunction
@@ -212,10 +210,9 @@ data FnkEnv = FnkEnv
      -- | Flag for controling informative output.
    , envSilent                 :: Bool
 
-     -- | Function to compile required modules, when
-     -- necessary. Arguments are force recompilation flag and module
-     -- name. Returned values are list of pair of name and info of the
-     -- compiled home module.
+     -- | Function to compile required modules, when necessary. Arguments are
+     -- force recompilation flag and module name. Returned values are list of
+     -- pair of name and info of the compiled home module.
    , envMake                   :: Maybe MakeFunction
      -- | 'DynFlags' used by function in 'envMake' field.
    , envMakeDynFlags           :: Maybe DynFlags
@@ -234,8 +231,8 @@ data FnkEnv = FnkEnv
      -- | Lib directory passed to 'runGhc'.
    , envLibDir                 :: Maybe FilePath
 
-     -- | Whether to use qualified name for primitive functions used in
-     -- quoting codes.
+     -- | Whether to use qualified name for primitive functions used in quoting
+     -- codes.
    , envQualifyQuotePrimitives :: Bool
    }
 
@@ -362,8 +359,8 @@ emptyFnkEnv = FnkEnv
   , envLibDir                 = Nothing
   , envQualifyQuotePrimitives = False }
 
--- | Set current 'DynFlags' to given argument. This function also
--- modifies 'DynFlags' in interactive context.
+-- | Set current 'DynFlags' to given argument. This function also modifies
+-- 'DynFlags' in interactive context.
 setDynFlags :: DynFlags -> Fnk ()
 setDynFlags dflags =
   modifySession (\h -> h { hsc_dflags = dflags
@@ -426,8 +423,8 @@ isMacro thing =
                 == "Language.Finkel.Fnk.Macro"
     _        -> False
 
--- | Extract function from macro and apply to given code. Uses
--- 'emptyFnkEnv' with 'specialForms' to unwrap the macro from 'Fnk'.
+-- | Extract function from macro and apply to given code. Uses 'emptyFnkEnv'
+-- with 'specialForms' to unwrap the macro from 'Fnk'.
 macroFunction :: Macro -> Code -> Fnk Code
 macroFunction mac form =
   let fn = case mac of
@@ -441,9 +438,9 @@ gensym = gensym' "g"
 
 -- | Generate unique symbol with given prefix.
 --
--- Note that although this function does not generate same symbol
--- twice, generated symbol has a chance to have a same name from
--- symbols entered from codes written by arbitrary users.
+-- Note that although this function does not generate same symbol twice,
+-- generated symbol has a chance to have a same name from symbols entered from
+-- codes written by arbitrary users.
 gensym' :: String -> Fnk Code
 gensym' prefix = do
   s <- liftIO (mkSplitUniqSupply '_')
@@ -462,10 +459,9 @@ getFnkDebug =
 -- Note: Initialization of UniqSupply
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
--- Test codes in finkel-kernel packages uses the 'defaultMain'
--- function multiple times. To avoid initialization of UniqSupply
--- multiple time, using top-level IORef to detect whether the
--- initializatio has been done or not.
+-- Test codes in finkel-kernel packages uses the 'defaultMain' function multiple
+-- times. To avoid initialization of UniqSupply multiple time, using top-level
+-- IORef to detect whether the initializatio has been done or not.
 
 -- | Variant of 'initUniqSupply' which does initialization only once.
 initUniqSupply' :: Int -> Int -> IO ()
@@ -475,8 +471,8 @@ initUniqSupply' ini incr = do
          (do initUniqSupply ini incr
              atomicModifyIORef' uniqSupplyInitialized (\_ -> (True, ())))
 
--- | Top level 'IORef' for book keeping 'UniqSupply' initialization,
--- obtained with 'unsafePerformIO'.
+-- | Top level 'IORef' for book keeping 'UniqSupply' initialization, obtained
+-- with 'unsafePerformIO'.
 uniqSupplyInitialized :: IORef Bool
 uniqSupplyInitialized = unsafePerformIO (newIORef False)
 {-# NOINLINE uniqSupplyInitialized #-}

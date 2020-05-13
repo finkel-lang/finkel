@@ -60,8 +60,8 @@ distpref = error "FINKEL_KERNEL_CONFIG_DISTPREF not defined"
 --
 -- -----------------------------------------------------------------------
 
--- | Perform the first action when invoked from @stack@, other wise
--- perform the second.
+-- | Perform the first action when invoked from @stack@, other wise perform the
+-- second.
 ifUsingStack :: MonadIO m => m a -> m a -> m a
 ifUsingStack stackAct otherAct = do
   mb_ghc_pkg_path <- liftIO (lookupEnv "GHC_PACKAGE_PATH")
@@ -75,9 +75,9 @@ whenUsingStack act = ifUsingStack act (return ())
 
 -- | Reset package env in DynFlags by setting with \"-\".
 --
--- When running tests with stack, explicitly specify "-" as package env
--- to avoid using ".ghc.environment.xxx" files for preserving package
--- environment. This need to be done before 'initSessionForMake'.
+-- When running tests with stack, explicitly specify "-" as package env to avoid
+-- using ".ghc.environment.xxx" files for preserving package environment. This
+-- need to be done before 'initSessionForMake'.
 resetPackageEnvForStack :: Fnk ()
 resetPackageEnvForStack = do
   dflags0 <- getDynFlags
@@ -123,8 +123,7 @@ getPackageArgsForCabal =
 getPackageArgs :: IO [String]
 getPackageArgs = ifUsingStack getPackageArgsForStack  getPackageArgsForCabal
 
--- | Reset package environment to support running the test with
--- cabal-install.
+-- | Reset package environment to support running the test with cabal-install.
 resetPackageEnvForCabal :: Fnk ()
 resetPackageEnvForCabal = do
   dflags0 <- getDynFlags
@@ -143,8 +142,8 @@ clearPackageEnv dflags = dflags {packageEnv = Just "-"}
 clearPackageEnv dflags = dflags {packageEnv = Nothing}
 #endif
 
--- | Initialize session with 'initSessionForMake', then reset package
--- env when invoked from stack.
+-- | Initialize session with 'initSessionForMake', then reset package env when
+-- invoked from stack.
 initSessionForTest :: Fnk ()
 initSessionForTest = do
   ifUsingStack resetPackageEnvForStack resetPackageEnvForCabal

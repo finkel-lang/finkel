@@ -1,8 +1,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
--- | Module containing 'Homoiconic' type class and its instances
--- declarations.
+-- | Module containing 'Homoiconic' type class and its instances declarations.
 module Language.Finkel.Homoiconic
   ( ToCode(..)
   , FromCode(..)
@@ -46,9 +45,9 @@ import           Language.Finkel.Form
 
 -- | Class for handling Haskell value as code.
 --
--- The function 'listToCode' is used when handling Haskell values
--- specially (e.g., 'Char'). This function have default implementation
--- which simply applies 'toCode' to elements of the argument list.
+-- The function 'listToCode' is used when handling Haskell values specially
+-- (e.g., 'Char'). This function have default implementation which simply
+-- applies 'toCode' to elements of the argument list.
 --
 class ToCode a where
   -- | Convert Haskell value to 'Code'.
@@ -68,19 +67,19 @@ class ToCode a where
 -- | Class for handling code as Haskell value.
 --
 -- The function 'listFromCode' is used when handling list of code
--- specially. This function have default implementation which simply
--- applies 'fromCode' to elements of the elements of the 'HsList'.
+-- specially. This function have default implementation which simply applies
+-- 'fromCode' to elements of the elements of the 'HsList'.
 --
 class FromCode a where
 
-  -- | Convert 'Code' to 'Just' Haskell value, or 'Nothing' if the code
-  -- could not be converted.
+  -- | Convert 'Code' to 'Just' Haskell value, or 'Nothing' if the code could
+  -- not be converted.
   fromCode :: Code -> Maybe a
   fromCode _ = Nothing
   {-# INLINE fromCode #-}
 
-  -- | Convert 'Code' to 'Just' list of Haskell values, or 'Nothing' if
-  -- the code could not be converted.
+  -- | Convert 'Code' to 'Just' list of Haskell values, or 'Nothing' if the code
+  -- could not be converted.
   listFromCode :: Code -> Maybe [a]
   listFromCode xs =
     case unCode xs of

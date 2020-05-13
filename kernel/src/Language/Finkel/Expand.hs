@@ -110,10 +110,10 @@ quoteAtom qual l form =
     li = tList l
 {-# INLINE quoteAtom #-}
 
--- Quasiquote is implemented as special form in Haskell. Though it could
--- be implemented in Finkel code later. If done in Finkel code, lexer and reader
--- still need to handle the special case for backtick, comma, and
--- comma-at, because currently there's no way to define read macro.
+-- Quasiquote is implemented as special form in Haskell. Though it could be
+-- implemented in Finkel code later. If done in Finkel code, lexer and reader
+-- still need to handle the special case for backtick, comma, and comma-at,
+-- because currently there's no way to define read macro.
 
 quasiquote :: Bool -> Code -> Code
 quasiquote qual orig@(LForm (L l form)) =
@@ -298,15 +298,14 @@ m_withMacro form =
 m_require :: MacroFunction
 m_require form =
   -- The special form `require' modifies the HscEnv at the time of macro
-  -- expansion, to update the context in compile time session.  The
-  -- `require' is implemented as special form, to support dependency
-  -- analysis during compilation of multiple modules with `--make'
-  -- command.
+  -- expansion, to update the context in compile time session.  The `require' is
+  -- implemented as special form, to support dependency analysis during
+  -- compilation of multiple modules with `--make' command.
   --
-  -- Note that the form body of `require' is parsed twice, once
-  -- in Reader, and again in this module. Parsing twice because the
-  -- first parse is done before expanding macro, to analyse the module
-  -- dependency graph of home package module.
+  -- Note that the form body of `require' is parsed twice, once in Reader, and
+  -- again in this module. Parsing twice because the first parse is done before
+  -- expanding macro, to analyse the module dependency graph of home package
+  -- module.
   --
   case form of
     LForm (L _ (List (_:code))) ->
@@ -324,14 +323,13 @@ m_require form =
 
              debugFnk (";;; require: " ++ showPpr dflags idecl)
 
-             -- Try finding the required module. Delegate the work to
-             -- 'envMake' function stored in FnkEnv when the file is found
-             -- in import paths.
+             -- Try finding the required module. Delegate the work to 'envMake'
+             -- function stored in FnkEnv when the file is found in import
+             -- paths.
              --
-             -- N.B. 'findImportedModule' does not know ".fnk" file
-             -- extension, so it will not return Finkel source files for
-             -- home package modules.
-
+             -- N.B. 'findImportedModule' does not know ".fnk" file extension,
+             -- so it will not return Finkel source files for home package
+             -- modules.
              fresult <- liftIO (findImportedModule hsc_env mname Nothing)
              compiled <-
                case fresult of
@@ -339,7 +337,7 @@ m_require form =
                  _        ->
                    case envMake fnkc_env of
                      Just mk -> withRequiredSettings (mk recomp lmname')
-                     Nothing -> failS "require: no make function"
+                     Nothing -> failS "require: envMake not initialized"
 
              -- Add the module to current compilation context.
              contexts <- getContext
@@ -416,8 +414,8 @@ setExpanderSettings = do
       flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
       flags4 = updOptLevel 0 flags3
 
-  -- Save the original DynFlags for compiling required modules when not
-  -- yet saved.
+  -- Save the original DynFlags for compiling required modules when not yet
+  -- saved.
   fnkc_env <- getFnkEnv
   case envMakeDynFlags fnkc_env of
     Nothing -> putFnkEnv (fnkc_env {envMakeDynFlags = Just flags0})
@@ -556,10 +554,9 @@ expand form =
   case unLForm form of
     L l (List forms) ->
       case forms of
-        -- Expand `let' expression, `do' expression, `case' expression,
-        -- lambda expression and function binding with shadowing the
-        -- lexically bounded names. Expansion of other forms are done
-        -- without name shadowing.
+        -- Expand `let' expression, `do' expression, `case' expression, lambda
+        -- expression and function binding with shadowing the lexically bounded
+        -- names. Expansion of other forms are done without name shadowing.
         kw@(LForm (L _ (Atom (ASymbol x)))):y:rest
           | x == "let"            -> expandLet l kw y rest
           | x == "do"             -> expandDo l kw (y:rest)
@@ -569,8 +566,8 @@ expand form =
         _                         -> expandList l forms
 
     L l (HsList forms) ->
-      -- Without recursively calling 'expand' on the result, cannot
-      -- expand macro-generating macros.
+      -- Without recursively calling 'expand' on the result, cannot expand
+      -- macro-generating macros.
       LForm . L l . HsList <$> expands' forms
 
     -- Non-list forms are untouched.
@@ -709,10 +706,10 @@ emptyForm =
 -- Note: Qualified names for quoting functions
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
--- Quoting functions can use qualified name after expansion, to
--- support quote in REPL without importing the "Language.Finkel"
--- module.  See how "Opt_ImplicitImportQualified" flag is set in
--- initialization code of Finkel REPL in "finkel-tool" package.
+-- Quoting functions can use qualified name after expansion, to support quote in
+-- REPL without importing the "Language.Finkel" module.  See how
+-- "Opt_ImplicitImportQualified" flag is set in initialization code of Finkel
+-- REPL in "finkel-tool" package.
 
 type Quote = Bool -> FastString
 

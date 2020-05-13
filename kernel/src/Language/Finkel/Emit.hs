@@ -7,15 +7,14 @@
 {-# LANGUAGE UndecidableInstances #-}
 -- | Emit Haskell source code from Haskell syntax data type.
 --
--- This module contains types and functions for generating Haskell
--- source code from AST data types defined in ghc package.
+-- This module contains types and functions for generating Haskell source code
+-- from AST data types defined in ghc package.
 --
--- The main purpose is to emit Haskell source code annotated with
--- documentation comments understood by hadddock, so the generated
--- result could be messy.
+-- The main purpose is to emit Haskell source code annotated with documentation
+-- comments understood by hadddock, so the generated result could be messy.
 --
--- Most of the implementations are defined with 'ppr' function from
--- 'Outputable' type class.
+-- Most of the implementations are defined with 'ppr' function from 'Outputable'
+-- type class.
 --
 module Language.Finkel.Emit
   ( HsSrc(..)
@@ -483,14 +482,14 @@ pp_condecls st cs@(L _ ConDeclGADT {} : _) =
 pp_condecls st cs =
   equals <+> sep (punctuate (text " |") (map (pprConDecl st . unLoc) cs))
 
--- Modified version of 'HsDecls.pprConDecl'. This function does the
--- pretty printing of documentation for constructors.
+-- Modified version of 'HsDecls.pprConDecl'. This function does the pretty
+-- printing of documentation for constructors.
 --
--- Although the syntax parser for constructor documentation accepts
--- ":docp" form, this function emit documentation before the constructor
--- declaration, to support documentation for constructor argument. This
--- is because haddock may concatenate the docstring for the last
--- constructor argument and the docstring for constructor itself.
+-- Although the syntax parser for constructor documentation accepts ":doc^"
+-- form, this function emit documentation before the constructor declaration, to
+-- support documentation for constructor argument. This is because haddock may
+-- concatenate the docstring for the last constructor argument and the docstring
+-- for constructor itself.
 pprConDecl :: OUTPUTABLE n pr => SPState -> ConDecl n -> SDoc
 pprConDecl st condecl@(ConDeclH98 {}) =
   pp_mbdocn doc $+$ sep [pprHsForAll' tvs cxt, ppr_details details]
@@ -623,8 +622,8 @@ ppr_cdecl_body st ats at_defs methods sigs docs = map snd body
       map (\(L l bind) -> (l, ppr bind)) (bagToList methods) ++
       map (\(L l doc) -> (l, toHsSrc st doc)) docs
 
--- From 'HsDecls.pprFamilyDecl'. Used during pretty printing type class
--- body contents, with first argument set to 'NonTopLevel'.
+-- From 'HsDecls.pprFamilyDecl'. Used during pretty printing type class body
+-- contents, with first argument set to 'NonTopLevel'.
 pprFamilyDecl :: (OUTPUTABLE n pr)
               => TopLevelFlag -> FamilyDecl n -> SDoc
 pprFamilyDecl top_level (FamilyDecl { fdInfo = info, fdLName = ltycon
@@ -744,6 +743,7 @@ ppr_fam_deflt_eqn (L _ (TyFamEqn { tfe_tycon = tycon
 ppr_fam_deflt_eqn (L _ (XFamEqn x)) = ppr x
 #endif /* MIN_VERSION_ghc(8,6,0) */
 #endif /* MIN_VERSION_ghc(8,10,0) */
+
 
 -- ---------------------------------------------------------------------
 --

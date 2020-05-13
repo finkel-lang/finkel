@@ -57,8 +57,8 @@ import Language.Finkel.Reader
 -- | Data type to represent target source.
 data TargetSource
   = FnkSource FilePath String [Code] SPState
-  -- ^ Finkel source. Holds file path of the source code, original
-  -- string input, parsed form data, and required module names.
+  -- ^ Finkel source. Holds file path of the source code, original string input,
+  -- parsed form data, and required module names.
   | HsSource FilePath
   -- ^ Haskell source with file path of the source code.
   | OtherSource FilePath
@@ -108,12 +108,11 @@ asModuleName name
 
 -- | Find source code file path by module name.
 --
--- Current approach for source code lookup is search for file with
--- @*.fnk@ suffix first. Return it if found, otherwise search file with
--- @*.hs@ suffix.
+-- Current approach for source code lookup is search for file with @*.fnk@
+-- suffix first. Return it if found, otherwise search file with @*.hs@ suffix.
 --
--- This searching strategy can used when compiling cabal package
--- containing mixed codes with '*.fnk' and '*.hs' suffixes.
+-- This searching strategy can used when compiling cabal package containing
+-- mixed codes with '*.fnk' and '*.hs' suffixes.
 --
 findFileInImportPaths :: MonadIO m
                       => [FilePath] -- ^ Directories to look for.
@@ -130,8 +129,8 @@ findFileInImportPaths dirs modName = do
         case ds of
           []    -> return mb_hs
           d:ds' -> do
-            -- Extension not yet sure for `aPath', so searching both of
-            -- '.fnk' and '.hs' files.
+            -- Extension not yet sure for `aPath', so searching both of '.fnk'
+            -- and '.hs' files.
             let aPath = normalise (d </> moduleFileName')
                 hsPath = replaceExtension aPath ".hs"
             exists <- liftIO (doesFileExist aPath)
@@ -147,8 +146,8 @@ findFileInImportPaths dirs modName = do
   mb_found <- search Nothing dirs'
   return mb_found
 
--- | Find 'TargetSource' from command line argument. This function
--- throws 'FinkelException' when the target source was not found.
+-- | Find 'TargetSource' from command line argument. This function throws
+-- 'FinkelException' when the target source was not found.
 findTargetSource :: Located String -> Fnk TargetSource
 findTargetSource (L l modNameOrFilePath)= do
   dflags <- getDynFlags

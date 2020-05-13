@@ -132,20 +132,19 @@ import           Language.Finkel.TargetSource
 -- [Requiring home package module]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
--- The problem in dependency resolution when requiring home package
--- module is, we need module imports list to make ModSummary, but
--- modules imports could not be obtained unless the source code is macro
--- expanded. However, macro-expansion may use macros from other home
--- package modules, which are not loaded to GHC session yet.
+-- The problem in dependency resolution when requiring home package module is,
+-- we need module imports list to make ModSummary, but modules imports could not
+-- be obtained unless the source code is macro expanded. However,
+-- macro-expansion may use macros from other home package modules, which are not
+-- loaded to GHC session yet.
 --
--- Currently, compilation is done with recursively calling 'make'
--- function from 'require' macro, during macro-expansion.
+-- Currently, compilation is done with recursively calling 'make' function from
+-- 'require' macro, during macro-expansion.
 --
--- Once these dependency resolution works were tried with custom user
--- hooks in cabal setup script. However, as of Cabal version 1.24.2,
--- building part of some modules from contents of cabal configuration
--- file were not so easy. Though when cabal support multiple libraraies,
--- situation might change.
+-- Once these dependency resolution works were tried with custom user hooks in
+-- cabal setup script. However, as of Cabal version 1.24.2, building part of
+-- some modules from contents of cabal configuration file were not so
+-- easy. Though when cabal support multiple libraraies, situation might change.
 
 -- | Finkel variant of @"ghc --make"@.
 make :: [(Located FilePath, Maybe Phase)]
@@ -158,10 +157,10 @@ make infiles no_link force_recomp mb_output = do
 
   -- Setting ghcMode as done in ghc's "Main.hs".
   --
-  -- Also setting force recompilation field from argument, since ghc
-  -- running in OneShot mode instead of CompManager mode until this
-  -- point. Some of the dump flags will turn force recompilation flag
-  -- on. Ghc does this switching off of recompilation checker in
+  -- Also setting force recompilation field from the argument, since the current
+  -- ghc running in OneShot mode instead of CompManager mode until this
+  -- point. Some of the dump flags will turn the force recompilation flag
+  -- on. Ghc does this switching of recompilation checker in
   -- DynFlags.{setDumpFlag',forceRecompile}.
   dflags0 <- getDynFlags
   let dflags1 = dflags0 { ghcMode = CompManager
@@ -174,23 +173,23 @@ make infiles no_link force_recomp mb_output = do
   debugFnk ";;; [Language.Finkel.Make.make] DynFlags:"
   dumpDynFlags dflags3
 
-  -- Preserve the language extension values in initial dynflags to
-  -- FnkEnv, to reset the language extension later, to keep fresh set of
-  -- language extensios per module.
+  -- Preserve the language extension values in initial dynflags to FnkEnv, to
+  -- reset the language extension later, to keep fresh set of language extensios
+  -- per module.
   let lexts = (language dflags3, extensionFlags dflags3)
       findIt (lpath, mb_phase) =
         fmap (\ts -> (ts, mb_phase)) (findTargetSource lpath)
   modifyFnkEnv (\e -> e {envDefaultLangExts = lexts})
 
-  -- Decide the kind of sources of the inputs, inputs arguments could be
-  -- file paths, or module names.
+  -- Decide the kind of sources of the inputs, inputs arguments could be file
+  -- paths, or module names.
   sources <- mapM findIt infiles
 
   -- Do the compilation work.
   mod_summaries <- make' sources
 
-  -- Update current module graph and link. Linking work is delegated to
-  -- deriver pipelin's `link' function.
+  -- Update current module graph and link. Linking work is delegated to deriver
+  -- pipelin's `link' function.
   let mgraph = mkModuleGraph' mod_summaries
       mgraph_flattened =
         flattenSCCs (topSortModuleGraph True mgraph Nothing)
@@ -208,8 +207,8 @@ initSessionForMake = do
   let ctx_modules = envContextModules fnkc_env
   unless (null ctx_modules) (setContextModules ctx_modules)
 
-  -- Debug information could be specified from environment variable and
-  -- command line option.
+  -- Debug information could be specified from environment variable and command
+  -- line option.
   debug0 <- getFnkDebug
   let debug1 = envDebug fnkc_env
   putFnkEnv (fnkc_env {envDebug = debug0 || debug1})
@@ -289,18 +288,17 @@ make' pendings0 = do
     go acc i _  _  _ | i <= 0 = return acc
     go acc _ _ [] [] = return acc
 
-    -- Target modules are empty, ready to compile pending modules to
-    -- read time ModSummary.  Partition the modules, make read time
-    -- ModSummaries, then sort via topSortModuleGraph, and recurse.
+    -- Target modules are empty, ready to compile pending modules to read time
+    -- ModSummary.  Partition the modules, make read time ModSummaries, then
+    -- sort via topSortModuleGraph, and recurse.
     go acc i k [] pendings
       | all (isOtherSource . fst) pendings =
         -- All targets are other source, no need to worry about module
         -- dependency analysis.
         go acc i k pendings []
       | otherwise = do
-        -- Mixed target sources in pending modules. Make
-        -- read-time-mod-summaries from pending modules, make new
-        -- graph, sort it, then recurse.
+        -- Mixed target sources in pending modules. Make read-time-mod-summaries
+        -- from pending modules, make new graph, sort it, then recurse.
         let (readies', pendings') = (pendings, [])
         rt_mss <- mkReadTimeModSummaries readies'
         let pre_graph = mkModuleGraph' rt_mss
@@ -308,15 +306,15 @@ make' pendings0 = do
             readies'' = sortTargets (flattenSCCs graph) readies'
         go acc i k readies'' pendings'
 
-    -- Compile ready-to-compile targets to ModSummary and
-    -- HsModule. Input could be Finkel source code, Haskell source
-    -- code, or something else. If Finkel source code or Haskell
-    -- source code, get ModSummary to resolve the dependencies.
+    -- Compile ready-to-compile targets to ModSummary and HsModule. Input could
+    -- be Finkel source code, Haskell source code, or something else. If Finkel
+    -- source code or Haskell source code, get ModSummary to resolve the
+    -- dependencies.
     go acc i k (target@(tsr,_mbp):summarised) pendings = do
       debugFnk (";;; make'.go: target=" ++ show target)
 
-      -- Since Finkel make is not using 'DriverPipeline.runPipeline',
-      -- setting 'DynFlags.dumpPrefix' manually.
+      -- Since Finkel make is not using 'DriverPipeline.runPipeline', setting
+      -- 'DynFlags.dumpPrefix' manually.
       setDumpPrefix (targetSourcePath tsr)
 
       case tsr of
@@ -338,12 +336,12 @@ make' pendings0 = do
 
               debugFnk (";;; make'.go: imports=" ++ show import_names)
 
-              -- Test whether imported modules are in pendings. If
-              -- found, skip the compilation and add this module to the
-              -- list of pending modules.
+              -- Test whether imported modules are in pendings. If found, skip
+              -- the compilation and add this module to the list of pending
+              -- modules.
               --
-              -- N.B. For Finkel source target, dependency modules
-              -- passed to 'makeOne' are required modules.
+              -- N.B. For Finkel source target, dependency modules passed to
+              -- 'makeOne' are required modules.
               --
               if not_yet_ready
                  then go acc i k summarised (target:pendings)
@@ -380,21 +378,19 @@ make' pendings0 = do
             debugFnk (";;; filtered imports = " ++ show is')
             if not (null is')
                then do
-                 -- Imported modules are not fully compiled yet. Move
-                 -- this module to the end of summarised modules and
-                 -- recurse.
+                 -- Imported modules are not fully compiled yet. Move this
+                 -- module to the end of summarised modules and recurse.
                  let summarised' = is' ++ summarised ++ [target]
                      i' = i + length is'
                      k' = k + length is'
                  go acc i' k' summarised' pendings
                else do
-                 -- Ready to compile this target unit. Compile it, add
-                 -- the returned ModSummary to accumulator, and
-                 -- continue.
+                 -- Ready to compile this target unit. Compile it, add the
+                 -- returned ModSummary to accumulator, and continue.
                  reqs <- getReqs
                  summary' <- makeOne i k mb_sp summary reqs
-                 -- Alternative: use required modules and module from
-                 -- graph up to this.
+                 -- Alternative: use required modules and module from graph up
+                 -- to this.
                  --
                  -- let graph_upto_this =
                  --       topSortModuleGraph True mgraph (Just mn)
@@ -423,11 +419,10 @@ makeOne i total mb_sp summary required_summaries = timeIt label go
       -- Keep current DynFlags.
       dflags0 <- getDynFlags
 
-      -- Use cached dynflags from ModSummary before type check. Note
-      -- that the cached dynflags is always used, no matter whether the
-      -- module is updated or not. This is to support loading already
-      -- compiled module objects with language extensions not set in
-      -- current dynflags.
+      -- Use cached dynflags from ModSummary before type check. Note that the
+      -- cached dynflags is always used, no matter whether the module is updated
+      -- or not. This is to support loading already compiled module objects with
+      -- language extensions not set in current dynflags.
       let dflags1 = ms_hspp_opts summary
       setDynFlags dflags1
 
@@ -504,17 +499,15 @@ doMakeOne i total mb_sp ms src_modified = do
                            return mb_obj
                   _ -> return Nothing
 
-  -- Adjust 'SourceModified'. Using the 'src_modified' as-is only when
-  -- compiling object code and reusable old interface and old linkable
-  -- were found.
+  -- Adjust 'SourceModified'. Using the 'src_modified' as-is only when compiling
+  -- object code and reusable old interface and old linkable were found.
   let src_modified'
         | is_bco, Nothing <- mb_old_iface = SourceModified
         | is_bco, Nothing <- mb_old_linkable = SourceModified
         | otherwise = src_modified
         where is_bco = not obj_allowed
 
-  -- Compile and add the returned module to finder and home package
-  -- table.
+  -- Compile and add the returned module to finder and home package table.
   home_mod_info <-
     liftIO
       (do home_mod_info <-
@@ -525,8 +518,8 @@ doMakeOne i total mb_sp ms src_modified = do
   modifySession
     (\e -> e {hsc_HPT = addToHpt hpt0 mod_name home_mod_info})
 
-  -- Dump the module contents as haskell source when dump option were
-  -- set and this is the first time for compiling the target Module.
+  -- Dump the module contents as haskell source when dump option were set and
+  -- this is the first time for compiling the target Module.
   when (envDumpHs fnkc_env || isJust (envHsDir fnkc_env))
        (case lookupHpt hpt0 mod_name of
           Nothing -> dumpModSummary mb_sp ms
@@ -548,12 +541,11 @@ doMakeOne i total mb_sp ms src_modified = do
 --   https://gitlab.haskell.org/ghc/ghc/wikis/commentary/compiler/recompilation-avoidance
 --
 -- The logic used in below function `checkUpToDate' is almost same as in
--- 'GhcMake.checkStability', but for object codes only, and the
--- arguments are different.
+-- 'GhcMake.checkStability', but for object codes only, and the arguments are
+-- different.
 --
 -- Other than this, most recompilation checks are done in
--- "DriverPipeLine.compileOne'" function, which is called in
--- "doMakeOne".
+-- "DriverPipeLine.compileOne'" function, which is called in "doMakeOne".
 
 -- XXX: Won't detect recompilation with 'require'd modules.
 checkUpToDate :: ModSummary -> [ModSummary] -> Fnk Bool
@@ -631,16 +623,15 @@ findRequiredModSummary :: HscEnv
                        -> Located String
                        -> Fnk (Maybe ModSummary)
 findRequiredModSummary hsc_env lmname = do
-  -- Searching in reachable source paths before imported modules,
-  -- because we want to use the source modified time from home package
-  -- modules, to support recompilation of a module which requiring other
-  -- home package modules.
+  -- Searching in reachable source paths before imported modules, because we
+  -- want to use the source modified time from home package modules, to support
+  -- recompilation of a module which requiring other home package modules.
   mb_ts <- findTargetSourceMaybe lmname
   case mb_ts of
     Just ts -> mkReadTimeModSummary (emptyTargetUnit ts)
     Nothing -> do
-      -- The module name should be found somewhere else than current
-      -- target sources. If not, complain what's missing.
+      -- The module name should be found somewhere else than current target
+      -- sources. If not, complain what's missing.
       let mname' = mkModuleName mname
           mname = unLoc lmname
       fresult <- liftIO (findImportedModule hsc_env mname' Nothing)
@@ -660,10 +651,9 @@ findNotCompiledImport hsc_env acc idecl = do
   dflags <- getDynFlags
   let myInstalledUnitId = thisInstalledUnitId dflags
   case findResult of
-    -- Haskell module returned by `Finder.findImportedModule' may not
-    -- compiled yet. If the source code has Haskell file extension,
-    -- checking whether the module is listed in accumulator containing
-    -- compiled modules.
+    -- Haskell module returned by `Finder.findImportedModule' may not compiled
+    -- yet. If the source code has Haskell file extension, checking whether the
+    -- module is listed in accumulator containing compiled modules.
     Found mloc mdl -> do
       debugFnk
         (concat [";;; Found " ++ show mloc ++ ", " ++
@@ -680,23 +670,21 @@ findNotCompiledImport hsc_env acc idecl = do
                          ts <- findTargetSource (L (getLoc idecl) name)
                          return (Just (ts, Nothing))
         _ | inSameUnit && notInAcc -> do
-            -- Workaround for loading home package modules when
-            -- working with cabal package from REPL.
-            -- 'Finder.findImportedModule' uses hard coded source file
-            -- extensions in `Finder.findInstalledHomeModule' to find
-            -- Haskell source codes of home package module, which will
-            -- not find Finkel source files. When looking up modules
-            -- in home package as dependency, looking up in
-            -- accumurated ModSummary list to avoid using the modules
-            -- found in already compiled linkable package. The
-            -- `linkable' mentioned here are those 'libXXX.{a,dll,so}'
-            -- artifact files for library package components.
+            -- Workaround for loading home package modules when working with
+            -- cabal package from REPL.  'Finder.findImportedModule' uses hard
+            -- coded source file extensions in `Finder.findInstalledHomeModule'
+            -- to find Haskell source codes of home package module, which will
+            -- not find Finkel source files. When looking up modules in home
+            -- package as dependency, looking up in accumurated ModSummary list
+            -- to avoid using the modules found in already compiled linkable
+            -- package. The `linkable' mentioned here are those
+            -- 'libXXX.{a,dll,so}' artifact files for library package
+            -- components.
             --
-            -- This workaround needs the 'UnitId' from REPL session to
-            -- be set via "-this-unit-id" DynFlag option, to avoid
-            -- loading modules from linkable. The 'UnitId' been set
-            -- from REPL need to be exactly same as the 'UnitId' of
-            -- package, including the hash part.
+            -- This workaround needs the 'UnitId' from REPL session to be set
+            -- via "-this-unit-id" DynFlag option, to avoid loading modules from
+            -- linkable. The 'UnitId' been set from REPL need to be exactly same
+            -- as the 'UnitId' of package, including the hash part.
             --
             -- mb_ts <- findTargetSourceMaybe name
             -- return (fmap emptyTargetUnit mb_ts)
@@ -730,15 +718,15 @@ mkReadTimeModSummaries =
 
 -- | Make 'ModSummary' for read time dependency analysis.
 --
--- The 'ms_textual_imps' field of 'ModSummary' made with this function
--- contains modules reffered by `require' keyword, not the modules
--- referred by Haskell's `import'. Purpose of this function is to
--- resolve dependency of home package modules for macro expansion.
+-- The 'ms_textual_imps' field of 'ModSummary' made with this function contains
+-- modules reffered by `require' keyword, not the modules referred by Haskell's
+-- `import'. Purpose of this function is to resolve dependency of home package
+-- modules for macro expansion.
 mkReadTimeModSummary :: TargetUnit -> Fnk (Maybe ModSummary)
 mkReadTimeModSummary (target, mbphase) =
-  -- GHC.getModSummary is not ready at this point, since the module
-  -- dependency graph is not yet created. Making possibly temporary
-  -- ModSummary from target source.
+  -- GHC.getModSummary is not ready at this point, since the module dependency
+  -- graph is not yet created. Making possibly temporary ModSummary from target
+  -- source.
   case target of
     HsSource file -> do
       mb_mdl <- compileToHsModule (target, mbphase)
@@ -884,14 +872,14 @@ compileFnkModuleForm sp modname forms = do
   dflags0 <- getDynFlagsFromSPState sp
   hsc_env <- getSession
 
-  -- Compile the form with file specific DynFlags and temporary session,
-  -- to preserve modules imported in current context.
+  -- Compile the form with file specific DynFlags and temporary session, to
+  -- preserve modules imported in current context.
   let use_my_dflags e = e {hsc_dflags = dflags0}
   (mdl, reqs, compiled) <- withTempSession use_my_dflags act
 
-  -- Add the compiled home modules to current session, if any. This fill
-  -- avoid recompilation of required modules with "-fforce-recomp"
-  -- option, which is required more than once.
+  -- Add the compiled home modules to current session, if any. This fill avoid
+  -- recompilation of required modules with "-fforce-recomp" option, which is
+  -- required more than once.
   let hpt0 = hsc_HPT hsc_env
       hpt1 = addHomeModInfoIfMissing hpt0 compiled
   setSession (hsc_env {hsc_HPT = hpt1})
@@ -901,9 +889,9 @@ compileFnkModuleForm sp modname forms = do
   where
     act = timeIt ("FinkelModule [" ++ modname ++ "]") $ do
 
-      -- Reset current FnkEnv. No need to worry about managing
-      -- interactive context and DynFlags, because this action is
-      -- wrapped by 'withTempSession' above.
+      -- Reset current FnkEnv. No need to worry about managing interactive
+      -- context and DynFlags, because this action is wrapped by
+      -- 'withTempSession' above.
       resetFnkEnv
 
       mdl <- compileFnkModuleForm' forms
@@ -922,8 +910,8 @@ compileFnkModuleForm' form = do
 getDynFlagsFromSPState :: SPState -> Fnk DynFlags
 getDynFlagsFromSPState sp = do
   dflags0 <- getDynFlags
-  -- Adding "-X" to 'String' representation of 'LangExt' data type, as
-  -- done in 'HeaderInfo.checkExtension'.
+  -- Adding "-X" to 'String' representation of 'LangExt' data type, as done in
+  -- 'HeaderInfo.checkExtension'.
   let mkx = fmap ("-X" ++)
       exts = map mkx (langExts sp)
   (dflags1,_,_) <- parseDynamicFilePragma dflags0 exts
@@ -1029,9 +1017,9 @@ import_name = moduleNameString . unLoc . ideclName . unLoc
 
 -- [guessOutputFile]
 --
--- Following 'guessOutputFile' is mostly copied from "GhcMake.hs", it
--- was not exported. Modified to take [ModSummary] argument instead of
--- getting the module graph from session.
+-- Following 'guessOutputFile' is mostly copied from "GhcMake.hs", it was not
+-- exported. Modified to take [ModSummary] argument instead of getting the
+-- module graph from session.
 
 -- | If there is no -o option, guess the name of target executable
 -- by using top-level source file name as a base.
