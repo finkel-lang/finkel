@@ -34,7 +34,7 @@ output of that command in `debug` mode.  If the output is larger than
 a page please paste the output in a [Gist](https://gist.github.com/).
 
 ```
-$ FNKC_DEBUG=1 finkel <your command here> <args>
+$ FNK_DEBUG=1 finkel <your command here> <args>
 <output>
 ```
 

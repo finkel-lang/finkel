@@ -329,10 +329,10 @@ debugFnk str = do
        (liftIO (hPutStrLn stderr str))
 {-# INLINE debugFnk #-}
 
--- | Get finkel debug setting from environment variable /FNKC_DEBUG/.
+-- | Get finkel debug setting from environment variable /FNK_DEBUG/.
 getFnkDebug :: MonadIO m => m Bool
 getFnkDebug =
-  do mb_debug <- liftIO (lookupEnv "FNKC_DEBUG")
+  do mb_debug <- liftIO (lookupEnv "FNK_DEBUG")
      case mb_debug of
        Nothing -> return False
        Just _  -> return True
