@@ -213,14 +213,13 @@ initSessionForMake = do
   let debug1 = envDebug fnkc_env
   putFnkEnv (fnkc_env {envDebug = debug0 || debug1})
 
--- | Simple make function returning compiled home module
--- information. Intended to be used for 'envMake' field in 'FnkEnv'.
-simpleMake :: MakeFunction
+-- | Simple make function returning compiled home module information. Intended
+-- to be used in 'require' macro.
+simpleMake :: Bool -> Located String -> Fnk [(ModuleName, HomeModInfo)]
 simpleMake force_recomp lname = do
   make [(lname, Nothing)] False force_recomp Nothing
-  hsc_env <- getSession
   let as_pair hmi = (moduleName (mi_module (hm_iface hmi)), hmi)
-  return (map as_pair (eltsHpt (hsc_HPT hsc_env)))
+  fmap (map as_pair . eltsHpt . hsc_HPT) getSession
 
 -- | Run given builder.
 buildHsSyn :: Builder a -- ^ Builder to use.

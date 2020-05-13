@@ -359,10 +359,7 @@ m_require form =
              compiled <-
                case fresult of
                  Found {} -> return []
-                 _        ->
-                   case envMake fnkc_env of
-                     Just mk -> withRequiredSettings (mk recomp lmname')
-                     Nothing -> failS "require: envMake not initialized"
+                 _        -> withRequiredSettings (simpleMake recomp lmname')
 
              -- Add the module to current compilation context.
              contexts <- getContext
@@ -423,7 +420,6 @@ defaultFnkEnv :: FnkEnv
 defaultFnkEnv = emptyFnkEnv
   { envMacros         = specialForms
   , envDefaultMacros  = specialForms
-  , envMake           = Just simpleMake
   , envLibDir         = Just libdir }
  where
    -- CPP macro defined in "finkel_kernel_config.h", see "Setup.hs"

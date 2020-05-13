@@ -215,8 +215,6 @@ envTest = do
      in  empties `shouldBe` True
    it "should have not set envSilent" $
      envSilent emptyFnkEnv `shouldBe` False
-   it "should not have set envMake" $
-     isNothing (envMake emptyFnkEnv) `shouldBe` True
    it "should not have required module names" $
      map unLoc (envRequiredModuleNames emptyFnkEnv) `shouldBe` []
 
@@ -226,5 +224,4 @@ emptyForm =
   in  LForm (genSrc (List [bgn]))
 
 cleanFnkEnv :: FnkEnv
-cleanFnkEnv = defaultFnkEnv {envDefaultMacros = emptyEnvMacros
-                            ,envMake = Nothing}
+cleanFnkEnv = defaultFnkEnv {envDefaultMacros = emptyEnvMacros}

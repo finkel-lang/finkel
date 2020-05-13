@@ -7,7 +7,6 @@ module Language.Finkel.Fnk
   , FnkEnvRef(..)
   , Macro(..)
   , MacroFunction
-  , MakeFunction
   , EnvMacros
   , runFnk
   , toGhc
@@ -187,11 +186,6 @@ instance Show Macro where
 -- | Type synonym to express mapping of macro name to 'Macro' data.
 type EnvMacros = Map.Map FastString Macro
 
--- | Type synonym for the function to recursively compile modules during
--- @require@.
-type MakeFunction =
-  Bool -> Located String -> Fnk [(ModuleName, HomeModInfo)]
-
 -- | Environment state in 'Fnk'.
 data FnkEnv = FnkEnv
    { -- | Macros accessible in current compilation context.
@@ -210,10 +204,6 @@ data FnkEnv = FnkEnv
      -- | Flag for controling informative output.
    , envSilent                 :: Bool
 
-     -- | Function to compile required modules, when necessary. Arguments are
-     -- force recompilation flag and module name. Returned values are list of
-     -- pair of name and info of the compiled home module.
-   , envMake                   :: Maybe MakeFunction
      -- | 'DynFlags' used by function in 'envMake' field.
    , envMakeDynFlags           :: Maybe DynFlags
      -- | Messager used in make.
@@ -349,7 +339,6 @@ emptyFnkEnv = FnkEnv
   , envContextModules         = []
   , envDefaultLangExts        = (Nothing, emptyFlagSet)
   , envSilent                 = False
-  , envMake                   = Nothing
   , envMakeDynFlags           = Nothing
   , envMessager               = batchMsg
   , envRequiredModuleNames    = []
