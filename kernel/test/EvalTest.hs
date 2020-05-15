@@ -30,7 +30,7 @@ import Test.Hspec
 import Language.Finkel.Builder      (Builder)
 import Language.Finkel.Eval         (evalExpr, evalExprType, evalTypeKind)
 import Language.Finkel.Expand       (expands, withExpanderSettings)
-import Language.Finkel.Fnk          (Fnk, FnkEnv (..), debugFnk, failS, runFnk)
+import Language.Finkel.Fnk          (Fnk, FnkEnv (..), failS, runFnk)
 import Language.Finkel.Lexer        (evalSP)
 import Language.Finkel.Make         (buildHsSyn)
 import Language.Finkel.Reader       (sexprs)
@@ -107,7 +107,6 @@ doEval !label !parser !act !input = do
   case evalSP sexprs (Just label) input of
     Right form0 -> do
       !form1 <- withExpanderSettings (expands form0)
-      debugFnk ("form1: " ++ show form1)
       !hthing <- buildHsSyn parser form1
       act hthing
     Left err -> failS err

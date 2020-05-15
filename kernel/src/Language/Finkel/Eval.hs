@@ -134,8 +134,6 @@ evalDecls decls = do
       !ModDetails { md_insts = cls_insts
                   , md_fam_insts = fam_insts } = mod_details
       data_tycons = filter isDataTyCon tycons
-  debugFnk ("[Language.Finkel.Eval.envDecls] this_mod=" ++
-            moduleNameString (moduleName this_mod))
   prepd_binds <-
     liftIO (corePrepPgm' hsc_env this_mod interactive_loc
                          core_binds data_tycons)

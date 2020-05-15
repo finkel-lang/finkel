@@ -57,8 +57,10 @@ import Language.Finkel.Reader
 -- | Data type to represent target source.
 data TargetSource
   = FnkSource FilePath String [Code] SPState
-  -- ^ Finkel source. Holds file path of the source code, original string input,
-  -- parsed form data, and required module names.
+  -- ^ Finkel source.
+  --
+  -- Holds file path of the source code, original string input, parsed form
+  -- data, and 'SPState' including required module names.
   | HsSource FilePath
   -- ^ Haskell source with file path of the source code.
   | OtherSource FilePath

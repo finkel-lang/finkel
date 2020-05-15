@@ -26,7 +26,7 @@ import Data.Map                        (fromList)
 import BasicTypes                      (FractionalLit (..), SourceText (..))
 import DynFlags                        (DynFlags (..), GeneralFlag (..),
                                         GhcLink (..), getDynFlags, gopt)
-import ErrUtils                        (compilationProgressMsg)
+import ErrUtils                        (MsgDoc, compilationProgressMsg)
 import Exception                       (gbracket)
 import FastString                      (FastString, appendFS, fsLit, unpackFS)
 import Finder                          (findImportedModule)
@@ -44,7 +44,7 @@ import MkIface                         (RecompileRequired (..),
                                         recompileRequired)
 import Module                          (moduleNameString)
 import Name                            (nameOccName)
-import Outputable                      (showPpr)
+import Outputable                      (hcat, ppr, showPpr, (<+>))
 import RdrName                         (rdrNameOcc)
 import SrcLoc                          (GenLocated (..), SrcSpan, unLoc)
 import TyCoRep                         (TyThing (..))
@@ -207,9 +207,10 @@ addImportedMacro thing =
     go dflags =
       case thing of
         AnId var -> do
-          debugFnk (";;; Adding macro `" ++
-                    showPpr dflags (varName var) ++
-                    "' to current compiler session")
+          debug "addImportedMacro"
+                [ "Adding macro " <+>
+                  ppr (varName var) <+>
+                  "to current compiler session" ]
           hsc_env <- getSession
           let name_str = showPpr (hsc_dflags hsc_env) (varName var)
               name_sym = toCode (aSymbol name_str)
@@ -347,7 +348,7 @@ m_require form =
                  mname' = moduleNameString mname
                  lmname' = L loc mname'
 
-             debugFnk (";;; require: " ++ showPpr dflags idecl)
+             debug "m_require" [ppr idecl]
 
              -- Try finding the required module. Delegate the work to 'envMake'
              -- function stored in FnkEnv when the file is found in import
@@ -530,3 +531,8 @@ concatS qual =
      then "Data.Foldable.concat"
      else "concat"
 {-# INLINE concatS #-}
+
+-- | Debug function for this module
+debug :: MsgDoc -> [MsgDoc] -> Fnk ()
+debug fn msgs =
+  debugFnk (hcat [";;; [Language.Finkel.SpecialForms.", fn, "]:"] : msgs)

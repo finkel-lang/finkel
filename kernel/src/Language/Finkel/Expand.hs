@@ -21,8 +21,11 @@ import qualified Data.Map               as Map
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
                                          HscTarget (..), getDynFlags,
                                          gopt_unset, updOptLevel, xopt_unset)
+import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
-import           FastString             (FastString, headFS, unpackFS)
+import           FastString             (FastString, headFS)
+import           Outputable             (Outputable (..), cat, fsep, hcat, nest,
+                                         text, (<+>))
 import           SrcLoc                 (GenLocated (..))
 
 -- ghc-boot
@@ -123,13 +126,12 @@ expands :: [Code] -> Fnk [Code]
 expands forms = do
   fnk_env <- getFnkEnv
   let macro_names me
-        | null me   = "None"
-        | otherwise =  "\n;;;     " ++ unwords (map unpackFS (Data.Map.keys me))
+        | null me   = nest 2 "None"
+        | otherwise =  nest 2 (fsep (map ppr (Data.Map.keys me)))
       tmp_macros = Data.Map.unions (envTmpMacros fnk_env)
-  debugFnk
-    (";;; Entering expands:\n" ++
-     ";;;   macros: " ++ macro_names (envMacros fnk_env) ++ "\n" ++
-     ";;;   tmp macros: " ++ macro_names tmp_macros)
+  debug "expands"
+        [ "global macros:",  macro_names (envMacros fnk_env)
+        , "tmporary macros:", macro_names tmp_macros ]
   expands' forms
 
 -- | Internal works for 'expands'.
@@ -234,9 +236,9 @@ expand form =
           return $! LForm (L l (List forms'))
 
     do_expand k f =
-      do debugFnk (";;; Expanding (" ++ unpackFS k ++ " ...)")
+      do debug "expand" [cat ["Expanding (", ppr k, " ...)"]]
          ret0 <- f form
-         debugFnk (";;; Expanded (" ++ unpackFS k ++ " ...) => " ++ show ret0)
+         debugFnk ["=>" <+> nest 3 (text (show ret0))]
          return ret0
 
 expandInDo ::
@@ -263,3 +265,8 @@ expand1 form =
         Just (SpecialForm f) -> f form
         Nothing              -> return form
     _ -> return form
+
+-- | Debug function fot this module.
+debug :: MsgDoc -> [MsgDoc] -> Fnk ()
+debug fname msgs =
+  debugFnk (hcat [";;; [Language.Finkel.Expand.", fname, "]:"] : msgs)

@@ -64,7 +64,7 @@ import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.IORef             (IORef, atomicModifyIORef', newIORef,
                                          readIORef, writeIORef)
 import           System.Environment     (lookupEnv)
-import           System.IO              (hPutStrLn, stderr)
+import           System.IO              (stderr)
 import           System.IO.Unsafe       (unsafePerformIO)
 
 -- containers
@@ -74,7 +74,7 @@ import qualified Data.Map               as Map
 import           Bag                    (unitBag)
 import           DynFlags               (DynFlags (..), HasDynFlags (..),
                                          Language (..))
-import           ErrUtils               (mkErrMsg)
+import           ErrUtils               (MsgDoc, mkErrMsg)
 import           Exception              (ExceptionMonad (..), ghandle)
 import           FastString             (FastString, fsLit, unpackFS)
 import           GHC                    (runGhc)
@@ -87,8 +87,10 @@ import           HscTypes               (HomeModInfo, HscEnv (..),
                                          mkSrcErr)
 import           InteractiveEval        (setContext)
 import           Module                 (ModuleName, mkModuleName)
-import           Outputable             (alwaysQualify, neverQualify, ppr,
-                                         showSDocForUser, text)
+import           Outputable             (alwaysQualify, defaultErrStyle,
+                                         neverQualify, ppr, printSDocLn,
+                                         showSDocForUser, text, vcat)
+import qualified Pretty
 import           SrcLoc                 (GenLocated (..), Located)
 import           UniqSupply             (initUniqSupply, mkSplitUniqSupply,
                                          uniqFromSupply)
@@ -321,12 +323,17 @@ finkelSrcError (LForm (L l _)) msg = do
   let em = mkErrMsg dflags l neverQualify (text msg)
   liftIO (throwIO (mkSrcErr (unitBag em)))
 
--- | Print given message to 'stderr' iff debug flag is turned on.
-debugFnk :: String -> Fnk ()
-debugFnk str = do
-  fnkc_env <- getFnkEnv
-  when (envDebug fnkc_env)
-       (liftIO (hPutStrLn stderr str))
+-- | Print given 'MsgDoc's to 'stderr' when degbug flag is on.
+debugFnk :: [MsgDoc] -> Fnk ()
+debugFnk mdocs = do
+  fnk_env <- getFnkEnv
+  when (envDebug fnk_env)
+       (do dflags <- getDynFlags
+           liftIO (printSDocLn Pretty.PageMode
+                               dflags
+                               stderr
+                               (defaultErrStyle dflags)
+                               (vcat mdocs)))
 {-# INLINE debugFnk #-}
 
 -- | Get finkel debug setting from environment variable /FNK_DEBUG/.

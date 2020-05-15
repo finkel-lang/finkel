@@ -1,5 +1,6 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP          #-}
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- | Make mode for Finkel compiler.
 module Language.Finkel.Make
   ( make
@@ -41,7 +42,7 @@ import           DynFlags                     (DumpFlag (..), DynFlags (..),
                                                isObjectTarget,
                                                parseDynamicFilePragma,
                                                thisPackage)
-import           ErrUtils                     (dumpIfSet_dyn, mkErrMsg)
+import           ErrUtils                     (MsgDoc, dumpIfSet_dyn, mkErrMsg)
 import           FastString                   (fsLit)
 import           Finder                       (addHomeModuleToFinder,
                                                cannotFindModule,
@@ -73,7 +74,8 @@ import           Module                       (ModLocation (..), ModuleName,
                                                mkModuleName, moduleName,
                                                moduleNameSlashes,
                                                moduleNameString, moduleUnitId)
-import           Outputable                   (neverQualify, ppr, showPpr, text)
+import           Outputable                   (cat, hcat, neverQualify, ppr,
+                                               text, (<+>))
 import           Panic                        (GhcException (..),
                                                throwGhcException)
 import           SrcLoc                       (GenLocated (..), Located, getLoc,
@@ -169,9 +171,7 @@ make infiles no_link force_recomp mb_output = do
               | otherwise    = gopt_unset dflags1 Opt_ForceRecomp
   setDynFlags dflags2
   dflags3 <- getDynFlags
-
-  debugFnk ";;; [Language.Finkel.Make.make] DynFlags:"
-  dumpDynFlags dflags3
+  dumpDynFlags "make" dflags3
 
   -- Preserve the language extension values in initial dynflags to FnkEnv, to
   -- reset the language extension later, to keep fresh set of language extensios
@@ -258,10 +258,9 @@ emptyTargetUnit ts = (ts, Nothing)
 --
 make' :: [TargetUnit] -> Fnk [ModSummary]
 make' pendings0 = do
-  debugFnk
-    (concat [ ";;; make'\n"
-            , ";;;   total: " ++ show total ++ "\n"
-            , ";;;   pendings0: " ++ show pendings0])
+  debugMake "make'"
+    [ "total:" <+> text (show total)
+    , "pendings0:" <+> text (show pendings0) ]
   timeIt "make' [Finkel]" (go [] total total [] pendings0)
   where
     go :: [ModSummary] -- ^ Accumulator.
@@ -298,7 +297,7 @@ make' pendings0 = do
     -- source code or Haskell source code, get ModSummary to resolve the
     -- dependencies.
     go acc i k (target@(tsr,_mbp):summarised) pendings = do
-      debugFnk (";;; make'.go: target=" ++ show target)
+      debugMake "make'.go" ["target:" <+> text (show target)]
 
       -- Since Finkel make is not using 'DriverPipeline.runPipeline', setting
       -- 'DynFlags.dumpPrefix' manually.
@@ -321,7 +320,11 @@ make' pendings0 = do
                                m `elem` summarised_names)
                         import_names
 
-              debugFnk (";;; make'.go: imports=" ++ show import_names)
+              debugMake "make'.go"
+                        ["imports:" <+>
+                          if null import_names
+                             then text "none"
+                             else cat (map (text . show) import_names)]
 
               -- Test whether imported modules are in pendings. If found, skip
               -- the compilation and add this module to the list of pending
@@ -362,7 +365,8 @@ make' pendings0 = do
             hsc_env <- getSession
             is <- mapM (findNotCompiledImport hsc_env acc) imports
             let is' = catMaybes is
-            debugFnk (";;; filtered imports = " ++ show is')
+            debugMake "make'.go.compileIfReqdy"
+                      ["filtered imports:" <+> text (show is')]
             if not (null is')
                then do
                  -- Imported modules are not fully compiled yet. Move this
@@ -414,7 +418,7 @@ makeOne i total mb_sp summary required_summaries = timeIt label go
       setDynFlags dflags1
 
       up_to_date <- checkUpToDate summary required_summaries
-      debugFnk (";;; makeOne: up_to_date=" ++ show up_to_date)
+      debugMake "makeOne" ["up_to_date:" <+> ppr up_to_date]
       let midx = total - i + 1
           src_modified | up_to_date = SourceUnmodified
                        | otherwise  = SourceModified
@@ -435,8 +439,6 @@ doMakeOne :: Int -- ^ Module index number.
           -> SourceModified -- ^ Source modified?
           -> Fnk ModSummary -- ^ Updated summary.
 doMakeOne i total mb_sp ms src_modified = do
-  debugFnk ";;; Entering doMakeOne"
-
   hsc_env <- getSession
   fnkc_env <- getFnkEnv
 
@@ -458,6 +460,8 @@ doMakeOne i total mb_sp ms src_modified = do
                        where
                         iface = hm_iface hm_info
       obj_allowed = isObjectTarget (hscTarget dflags)
+
+  debugMake "doMakeOne" ["Module:" <+> ppr mod_name]
 
   -- Dump the parsed AST.
   dumpParsedAST dflags ms
@@ -516,7 +520,6 @@ doMakeOne i total mb_sp ms src_modified = do
   mb_obj_date <- tryGetTimeStamp (ml_obj_file loc)
   mb_iface_date <- tryGetTimeStamp (ml_hi_file loc)
 
-  debugFnk ";;; Finished doMakeOne"
   return ms { ms_obj_date = mb_obj_date
             , ms_iface_date = mb_iface_date }
 
@@ -642,13 +645,11 @@ findNotCompiledImport hsc_env acc idecl = do
     -- yet. If the source code has Haskell file extension, checking whether the
     -- module is listed in accumulator containing compiled modules.
     Found mloc mdl -> do
-      debugFnk
-        (concat [";;; Found " ++ show mloc ++ ", " ++
-                  moduleNameString (moduleName mdl) ++ "\n"
-                , ";;;   moduleUnitId=" ++
-                  show (moduleUnitId mdl) ++ "\n"
-                , ";;;   myInstalledUnitId=" ++
-                  showPpr dflags myInstalledUnitId])
+      debugMake
+        "findNotCompiledImport"
+        [ "Found" <+> ppr mloc
+        , "moduleUnitId:" <+>  ppr (moduleUnitId mdl)
+        , "myInstalledUnitId:" <+> ppr myInstalledUnitId ]
       case ml_hs_file mloc of
         Just path | takeExtension path `elem` [".hs"] ->
                     if moduleName mdl `elem` map ms_mod_name acc
@@ -811,7 +812,7 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
              | otherwise                 = bname
            out_path = dir </> file_name <.> "hs"
            out_dir = takeDirectory out_path
-       debugFnk (";;; Writing to " ++ out_path)
+       debugMake "dumpModSummary" ["Writing to" <+> text out_path]
        liftIO (do createDirectoryIfMissing True out_dir
                   writeFile out_path contents)
     gen pm = genHsSrc sp (Hsrc (unLoc (hpm_module pm)))
@@ -867,11 +868,10 @@ compileFnkModuleForm sp modname forms = do
   -- Add the compiled home modules to current session, if any. This fill avoid
   -- recompilation of required modules with "-fforce-recomp" option, which is
   -- required more than once.
-  let hpt0 = hsc_HPT hsc_env
-      hpt1 = addHomeModInfoIfMissing hpt0 compiled
-  setSession (hsc_env {hsc_HPT = hpt1})
+  let hpt1 he = addHomeModInfoIfMissing (hsc_HPT he) compiled
+  setSession (hsc_env {hsc_HPT = hpt1 hsc_env})
+  debugMake "compileFnkModuleForm" ["reqs:" <+> text (show (map unLoc reqs))]
 
-  debugFnk (";;; reqs=" ++ show (map unLoc reqs))
   return (mdl, dflags0, reverse reqs)
   where
     act = timeIt ("FinkelModule [" ++ modname ++ "]") $ do
@@ -941,7 +941,7 @@ compileHsFile source mbphase = do
 
 compileOtherFile :: FilePath -> Fnk ()
 compileOtherFile path = do
-  debugFnk (";;; Compiling other code: " ++ path)
+  debugMake "compileOtherFile" ["Compiling other code:" <+> text path]
   hsc_env <- getSession
   liftIO (oneShot hsc_env StopLn [(path, Nothing)])
 
@@ -1064,14 +1064,19 @@ preprocess' = preprocess
 #endif
 
 -- | Show some fields in 'DynFlags'.
-dumpDynFlags :: DynFlags -> Fnk ()
-dumpDynFlags dflags =
-  debugFnk
-    (concat
-       [ ";;; ghcLink=", show (ghcLink dflags), "\n"
-       , ";;; ghcMode=", showPpr dflags (ghcMode dflags), "\n"
-       , ";;; hscTarget=", show (hscTarget dflags), "\n"
-       , ";;; ways=", show (ways dflags), "\n"
-       , ";;; forceRecomp=", show (gopt Opt_ForceRecomp dflags), "\n"
-       , ";;; interpWays=", show interpWays, "\n"
-       , ";;; importPaths=", show (importPaths dflags)])
+dumpDynFlags :: MsgDoc -> DynFlags -> Fnk ()
+dumpDynFlags label dflags =
+  debugMake label
+            [ "DynFlags:"
+            , "  ghcLink:" <+> text (show (ghcLink dflags))
+            , "  ghcMode:" <+> ppr (ghcMode dflags)
+            , "  hscTarget:" <+> text (show (hscTarget dflags))
+            , "  ways:" <+> text (show (ways dflags))
+            , "  forceRecomp:" <+> text (show (gopt Opt_ForceRecomp dflags))
+            , "  interpWays:" <+> text (show interpWays)
+            , "  importPaths:" <+> text (show (importPaths dflags)) ]
+
+-- | Debug function for this module.
+debugMake :: MsgDoc -> [MsgDoc] -> Fnk ()
+debugMake fn_name msgs =
+  debugFnk (hcat [";;; [Language.Finkel.Make.", fn_name, "]:"] : msgs)
