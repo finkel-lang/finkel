@@ -2,8 +2,9 @@
 
 (module Main)
 
-(:require Prelude)
-(:require Language.Finkel)
+(:eval-when-compile
+  (import Prelude)
+  (import Language.Finkel))
 
 (import Language.Finkel)
 

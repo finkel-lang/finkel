@@ -5,7 +5,7 @@
 (defmodule Finkel.Tool.Main
   (export main
           commands)
-  (require
+  (import-when [compile]
    ;; finkel-lang
    (Finkel.Prelude))
   (import

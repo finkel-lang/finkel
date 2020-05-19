@@ -1,7 +1,8 @@
 ;;;; File: macrolet.fnk
 
 (defmodule Main
-  (require (Finkel.Prelude)))
+  (import-when [compile]
+    (Finkel.Prelude)))
 
 (macrolet ((say-hello []
              '(putStrLn "Hello macro!"))

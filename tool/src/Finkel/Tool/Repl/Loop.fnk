@@ -5,11 +5,11 @@
 (defmodule Finkel.Tool.Repl.Loop
   (export start-repl acquire-repl cleanup-repl)
   (require
-   ;; finkel-lang
-   (Finkel.Prelude)
-
    ;; Internal
    (Finkel.Tool.Compat))
+  (import-when [compile]
+   ;; finkel-lang
+   (Finkel.Prelude))
   (import
    ;; base
    (Control.Concurrent ((ThreadId) forkIO))

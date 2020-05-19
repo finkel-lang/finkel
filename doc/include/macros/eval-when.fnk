@@ -1,7 +1,8 @@
 ;;; File: eval-when.fnk
 
 (defmodule Main
-  (require (Finkel.Prelude)))
+  (import-when [compile]
+    (Finkel.Prelude)))
 
 (eval-when [compile]
   (defmacro say-hello []

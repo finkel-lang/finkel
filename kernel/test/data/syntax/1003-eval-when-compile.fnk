@@ -4,13 +4,13 @@
 
 (module Main)
 
-(:require Prelude)
-(:require Language.Finkel)
-
 ;;; Function declaration and macro definition done during compilation
 ;;; phase. Codes inside `eval-when-compile' do won't appear in resulting
 ;;; Haskell code.
 (:eval-when-compile
+  (import Prelude)
+  (import Language.Finkel)
+
   ;; Function called later from macro `m1'.
   (:: f1 (-> Int Int Int))
   (= f1 a b (+ a b))

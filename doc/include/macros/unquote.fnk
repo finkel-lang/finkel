@@ -1,7 +1,8 @@
 ;;;; File: unquote.fnk
 
 (defmodule Main
-  (require (Finkel.Prelude)))
+  (import-when [compile]
+    (Finkel.Prelude)))
 
 (eval-when [compile]
   (defmacro uq1 [arg]

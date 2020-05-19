@@ -11,11 +11,11 @@
 (defmodule Finkel.Tool.Repl.Macro
   (export repl-macro)
   (require
-   ;; finkel-lang
-   (Finkel.Prelude)
-
    ;; Internal
    (Finkel.Tool.Compat))
+  (import-when [compile]
+   ;; finkel-lang
+   (Finkel.Prelude))
   (import
    ;; base
    (Control.Exception ((Exception ..)))

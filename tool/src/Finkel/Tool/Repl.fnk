@@ -11,11 +11,11 @@
 (defmodule Finkel.Tool.Repl
   (export replMain repl-env)
   (require
-   ;; finkel-lang
-   (Finkel.Prelude)
-
-   ;; internal
+   ;; Internal
    (Finkel.Tool.Repl.Macro))
+  (import-when [compile]
+   ;; finkel-lang
+   (Finkel.Prelude))
   (import
    ;; base
    (Control.Monad (mplus))

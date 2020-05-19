@@ -19,11 +19,11 @@
    ;; re-export
    (MonadTrans ..))
   (require
-   ;; finkel-lang
-   (Finkel.Prelude)
-
    ;; Internal
    (Finkel.Tool.Compat))
+  (import-when [compile]
+   ;; finkel-lang
+   (Finkel.Prelude))
   (import
    ;; base
    (Control.Concurrent ((MVar)))

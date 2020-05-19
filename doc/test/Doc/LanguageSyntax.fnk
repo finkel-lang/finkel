@@ -3,10 +3,11 @@
 (defmodule Doc.LanguageSyntax
   (export spec)
   (require
-   ;; finkel-lang
-   (Finkel.Prelude)
    ;; finkel-tool
    (Finkel.Tool.Compat))
+  (import-when [compile]
+    ;; finkel-lang
+    (Finkel.Prelude))
   (import
    ;; base
    (Data.List (sort))

@@ -1,7 +1,8 @@
 ;;;; File: fib-macro.fnk
 
 (defmodule Main
-  (require (Finkel.Prelude)))
+  (import-when [compile]
+    (Finkel.Prelude)))
 
 (eval-when [compile]
   (defn (:: fib (-> Int Int))

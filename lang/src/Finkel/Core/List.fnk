@@ -44,15 +44,16 @@ functions defined in this modules are used in macro defined in
   (:dh1 "Exception")
   (FinkelListException ..))
 
-;;; Requires
+;;; Compile time imports
 
-;; base
-(:require Prelude)
-(:require Control.Exception (throw))
+(:eval-when-compile
+  ;; base
+  (import Prelude)
+  (import Control.Exception (throw))
 
-;; finkel-kernel
-(:require Language.Finkel)
-(:require Language.Finkel.Fnk ((FinkelException ..)))
+  ;; finkel-kernel
+  (import Language.Finkel)
+  (import Language.Finkel.Fnk ((FinkelException ..))))
 
 ;;; Imports
 

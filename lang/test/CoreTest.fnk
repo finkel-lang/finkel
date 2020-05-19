@@ -1,30 +1,31 @@
 ;;;; Module to test macros.
 
 (:require Finkel.Core)
-(:require Finkel.Core.List)
 
 (defmodule CoreTest
   (export coreTests
           macroTests
           cxrTests
           listTests)
-  (require-and-import
-   ;; base
-   (Control.Exception)
-
-   ;; ghc
-   (Exception)
-   (FastString (headFS nullFS))
-
-   ;; finkel-kernel
-   (Language.Finkel.SpecialForms)
-   (Language.Finkel.Fnk))
   (require
    ;; base
    (Prelude)
 
    ;; finkel-kernel
    (Language.Finkel))
+  (import-when [compile]
+    (Finkel.Core.List))
+  (import-when [compile load]
+    ;; base
+    (Control.Exception)
+
+    ;; ghc
+    (Exception)
+    (FastString (headFS nullFS))
+
+    ;; finkel-kernel
+    (Language.Finkel.Fnk)
+    (Language.Finkel.SpecialForms))
   (import
    ;; ghc
    (FastString (fsLit))
@@ -38,8 +39,10 @@
    ;; finkel-lang
    (Finkel.Prelude)
 
-   ;; internal
+   ;; Internal
+   (Finkel.Core)
    (Finkel.Core.List)
+
    (Orphan)))
 
 
@@ -257,54 +260,54 @@
   [x]
   `(++ "m1 " ,x))
 
-(eval-and-compile
-  ;; Using a newtype to compare 'Code's containing symbols generated
-  ;; with `gensym'.
-  (newtype GensymCode (GensymCode Code)
-    (deriving (Show)))
+;; Using a newtype to compare 'Code's containing symbols generated
+;; with `gensym'.
+(newtype GensymCode (GensymCode Code)
+  (deriving (Show)))
 
-  (instance (Eq GensymCode)
-    (= == eqGensymCode))
+(instance (Eq GensymCode)
+  (= == eqGensymCode))
 
-  (defn (:: eqGensymCode (-> GensymCode GensymCode Bool))
-    [(GensymCode a) (GensymCode b)]
-    (eqGensymCode1 a b))
+(defn (:: eqGensymCode (-> GensymCode GensymCode Bool))
+  [(GensymCode a) (GensymCode b)]
+  (eqGensymCode1 a b))
 
-  (defn (:: eqGensymCode1 (-> Code Code Bool))
-    [a b]
-    (eqGensymCode2 (unCode a) (unCode b)))
+(defn (:: eqGensymCode1 (-> Code Code Bool))
+  [a b]
+  (eqGensymCode2 (unCode a) (unCode b)))
 
-  (defn (:: eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
-    [(Atom (ASymbol a)) (Atom (ASymbol b))]
-    (| ((nullFS a) (nullFS b))
-       ((== (headFS a) #'$) True)
-       ((== (headFS b) #'$) True)
-       (otherwise (== a b)))
-    [(List as) (List bs)] (eqGensymCodes as bs)
-    [(HsList as) (HsList bs)] (eqGensymCodes as bs)
-    [a b] (== a b))
+(defn (:: eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
+  [(Atom (ASymbol a)) (Atom (ASymbol b))]
+  (| ((nullFS a) (nullFS b))
+     ((== (headFS a) #'$) True)
+     ((== (headFS b) #'$) True)
+     (otherwise (== a b)))
+  [(List as) (List bs)] (eqGensymCodes as bs)
+  [(HsList as) (HsList bs)] (eqGensymCodes as bs)
+  [a b] (== a b))
 
-  (defn (:: eqGensymCodes (-> [Code] [Code] Bool))
-    [[] []] True
-    [[]  _] False
-    [ _ []] False
-    [(: x xs) (: y ys)] (&& (eqGensymCode1 x y) (eqGensymCodes xs ys))))
+(defn (:: eqGensymCodes (-> [Code] [Code] Bool))
+  [[] []] True
+  [[]  _] False
+  [ _ []] False
+  [(: x xs) (: y ys)] (&& (eqGensymCode1 x y) (eqGensymCodes xs ys)))
 
-(defmacro' expandTo
-  [in out]
-  `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in)
-                           defaultFnkEnv)))
-       (case v
-         (Left e)  (expectationFailure (show (:: e SomeException)))
-         (Right r) (shouldBe (GensymCode r) (GensymCode ',out)))))
+(eval-when [compile]
+  (defmacro expandTo
+    [in out]
+    `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in)
+                             defaultFnkEnv)))
+         (case v
+           (Left e)  (expectationFailure (show (:: e SomeException)))
+           (Right r) (shouldBe (GensymCode r) (GensymCode ',out)))))
 
-(defmacro' expandFailure
-  [in]
-  `(let ((= act
-           (do (<- ret (runFnk (macroFunction ,(car in) ',in)
-                               defaultFnkEnv))
-               (evaluate ret))))
-     (shouldThrow act anyException)))
+  (defmacro expandFailure
+    [in]
+    `(let ((= act
+             (do (<- ret (runFnk (macroFunction ,(car in) ',in)
+                                 defaultFnkEnv))
+                 (evaluate ret))))
+       (shouldThrow act anyException))))
 
 (defn (:: macroTests Spec)
   (do (let ((= d describe)))
@@ -730,6 +733,20 @@
                 (:begin
                   (:require Data.Maybe)
                   (module Foo)
+                  (import Control.Monad))))
+             (it "should import when compile"
+               (expandTo
+                (defmodule Foo
+                  (import-when [compile]
+                   (Prelude)
+                   (Language.Finkel))
+                  (import
+                   (Control.Monad)))
+                (:begin
+                  (module Foo)
+                  (eval-when [compile]
+                    (import Prelude)
+                    (import Language.Finkel))
                   (import Control.Monad))))
              (it "should export ()"
                (expandTo

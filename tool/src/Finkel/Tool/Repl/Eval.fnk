@@ -5,11 +5,11 @@
 (defmodule Finkel.Tool.Repl.Eval
   (export eval-loop)
   (require
-   ;; finkel-lang
-   (Finkel.Prelude)
-
    ;; Internal
    (Finkel.Tool.Compat))
+  (import-when [compile]
+   ;; finkel-lang
+   (Finkel.Prelude))
   (import
    ;; base
    (Control.Concurrent.MVar ((MVar) putMVar takeMVar))

@@ -31,22 +31,23 @@ module.")
   (:dh1 "Expressions")
   cond)
 
-;;; Requires
+;;; Compile time imports
 
-;; base
-(:require Prelude)
-(:require Control.Monad (foldM))
+(:eval-when-compile
+  ;; base
+  (import Prelude)
+  (import Control.Monad (foldM))
 
-;; ghc
-(:require FastString (unpackFS))
-(:require SrcLoc ((SrcSpan ..)))
+  ;; ghc
+  (import FastString (unpackFS))
+  (import SrcLoc ((SrcSpan ..)))
 
-;; finkel-kernel
-(:require Language.Finkel)
+  ;; finkel-kernel
+  (import Language.Finkel)
 
-;; Internal
-(:require Finkel.Core.Error)
-(:require Finkel.Core.List)
+  ;; Internal
+  (import Finkel.Core.Error)
+  (import Finkel.Core.List))
 
 ;;; Imports
 
@@ -988,6 +989,9 @@ order, and starts with one of the following symbols:
 
 [@import@]: The form elements expand to @import@ declaration.
 
+[@import-when@]: Like @import@, but the form elements are wrapped with
+@eval-when@ with given phases.
+
 [@require@]: The form elements expand to @:require@ declaration.
 
 [@require-and-import@]: The form elements are expanded to both
@@ -1000,6 +1004,7 @@ order, and starts with one of the following symbols:
 > DEFMODULE ::= 'defmodule' NAME IMPEXP*
 > NAME      ::= modid
 > IMPEXP    ::= '(' 'import' form+ ')'
+>             | '(' 'import-when' phases form+ ')'
 >             | '(' 'require' form+ ')'
 >             | '(' 'require-and-import' form+ ')'
 >             | '(' 'export' form* ')'
@@ -1011,19 +1016,21 @@ Sample module header:
 @
 (defmodule Foo
   (require (Finkel.Prelude hiding (head tail)))
-  (require-and-import (Control.Monad (foldM)))
+  (import-when [compile]
+    (Control.Monad (foldM)))
   (import (Control.Monad (when))
           (qualified Data.ByteString as BS))
   (export foo bar buzz))
 @
 
-Expands to below:
+Expands to:
 
 @
 (:begin
   (:require Finkel.Prelude hiding (head tail))
-  (:require Control.Monad (foldM))
   (module Foo foo bar buzz)
+  (eval-when [compile]
+    (import Control.Monad (foldM)))
   (import Control.Monad (when))
   (import qualified Data.ByteString as BS)
   (import Control.Monad (foldM)))
@@ -1041,45 +1048,64 @@ Expands to below:
       (do (let ((= merge-sections acc lst
                   (let ((= label (car lst))
                         (= payload (cdr lst)))
-                    (cond
-                      ((== label 'export)
-                       (return
-                        (if (null (cdr lst))
-                            (: (, 'export (cons '() nil)) acc)
-                            (: (, 'export payload) acc))))
-                      ((|| (== label 'use)
-                           (== label 'import))
-                       (return
-                        (: (, 'import (mapcar (\ es `(import ,@es))
-                                              payload))
-                           acc)))
-                      ((|| (== label 'load)
-                           (== label 'require))
-                       (return
-                        (: (, ':require (mapcar (\ es `(:require ,@es))
-                                                payload))
-                           acc)))
-                      ((|| (== label 'load-use)
-                           (== label 'require-and-import))
-                       (return (: (, 'load-use payload) acc)))
-
-                      (otherwise
-                       (finkelSrcError
-                        lst
-                        "defmodule: unknown section")))))))
+                    (case ()
+                      _ (| ((== label 'export)
+                            (return
+                             (if (null (cdr lst))
+                                 (: (, 'export (cons '() nil)) acc)
+                                 (: (, 'export payload) acc))))
+                           ((|| (== label 'use)
+                                (== label 'import))
+                            (return
+                             (: (, 'import (mapcar (\ es `(import ,@es))
+                                                   payload))
+                                acc)))
+                           ((|| (== label 'load)
+                                (== label 'require))
+                            (return
+                             (: (, ':require (mapcar (\ es `(:require ,@es))
+                                                     payload))
+                                acc)))
+                           ((|| (== label 'require-and-import)
+                                (== label 'load-use))
+                            (return (: (, 'require-and-import payload) acc)))
+                           ((== label 'import-when)
+                            (let ((= phases (car payload))
+                                  (= body0 (cdr payload))
+                                  (= body1 (mapcar (\ e `(import ,@e)) body0)))
+                              (return (: (, 'eval-when (cons phases body1)) acc))))
+                           (otherwise
+                            (finkelSrcError lst
+                                            "defmodule: unknown section"))))))))
           (<- alist (foldM merge-sections [] rest1))
-          (let ((= emit add-load-use header
+          (let ((= emit add-load-too header
                   (let ((= e1 (maybe nil id (lookup header alist)))
                         (= e2 (maybe nil
                                      (mapcar (\ es `(,header ,@es)))
-                                     (lookup 'load-use alist))))
-                    (if add-load-use
+                                     (lookup 'require-and-import alist))))
+                    (if add-load-too
                         (append e1 e2)
                         e1)))))
           (return
            `(:begin
               ,@(emit True ':require)
+
+              ,@(let ((= mb-mdls (lookup ':eval-when-compile alist)))
+                  (case mb-mdls
+                    (Just mdls) `((:eval-when-compile
+                                    ,@mdls))
+                    Nothing nil))
+
               (module ,name ,@(emit False 'export))
+
+              ,@(let ((= evalwhens (filter (\ (, k _) (== k 'eval-when))
+                                           alist))
+                      (= f (, _ phases-mdls)
+                        (let ((= phases (car phases-mdls))
+                              (= mdls (cdr phases-mdls)))
+                          `(eval-when ,phases ,@mdls))))
+                  (map f evalwhens))
+
               ,@(emit True 'import))))
 
       _ (finkelSrcError form "defmodule: invalid form"))

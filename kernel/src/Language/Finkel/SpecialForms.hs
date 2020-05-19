@@ -14,7 +14,7 @@ module Language.Finkel.SpecialForms
 
 -- base
 import Control.Exception               (throw)
-import Control.Monad                   (when)
+import Control.Monad                   (unless, when)
 import Control.Monad.IO.Class          (MonadIO (..))
 import Data.Maybe                      (catMaybes)
 import GHC.Exts                        (unsafeCoerce#)
@@ -37,14 +37,15 @@ import GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
 import GhcMonad                        (GhcMonad (..), modifySession)
 import HscMain                         (Messager, hscTcRnLookupRdrName,
                                         showModuleIndex)
-import HscTypes                        (FindResult (..), HscEnv (..),
-                                        InteractiveImport (..), showModMsg)
+import HscTypes                        (FindResult (..), HomeModInfo,
+                                        HscEnv (..), InteractiveImport (..),
+                                        showModMsg)
 import InteractiveEval                 (getContext)
 import MkIface                         (RecompileRequired (..),
                                         recompileRequired)
-import Module                          (moduleNameString)
+import Module                          (ModuleName, moduleNameString)
 import Name                            (nameOccName)
-import Outputable                      (hcat, ppr, showPpr, (<+>))
+import Outputable                      (hcat, ppr, showPpr)
 import RdrName                         (rdrNameOcc)
 import SrcLoc                          (GenLocated (..), SrcSpan, unLoc)
 import TyCoRep                         (TyThing (..))
@@ -199,20 +200,17 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
 
   catMaybes <$> (getNames >>= mapM lookupName)
 
-addImportedMacro :: TyThing -> Fnk ()
-addImportedMacro thing =
-  do dflags <- getDynFlags
-     when (isMacro dflags thing) (go dflags)
+addImportedMacro :: DynFlags -> TyThing -> Fnk ()
+addImportedMacro dflags thing = when (isMacro dflags thing) go
   where
-    go dflags =
+    go =
       case thing of
         AnId var -> do
           debug "addImportedMacro"
-                [ "Adding macro " <+>
-                  ppr (varName var) <+>
-                  "to current compiler session" ]
-          hsc_env <- getSession
-          let name_str = showPpr (hsc_dflags hsc_env) (varName var)
+                [hcat [ "Adding macro `"
+                      , ppr (varName var)
+                      , "' to current compiler session" ]]
+          let name_str = showPpr dflags (varName var)
               name_sym = toCode (aSymbol name_str)
           coerceMacro dflags name_sym >>= insertMacro (fsLit name_str)
         _ -> error "addImportedmacro"
@@ -256,6 +254,30 @@ requiredMessager hsc_env mod_index recomp mod_summary =
                     (recompileRequired recomp)
                      mod_summary ++
          reason)
+
+makeMissingHomeMod :: Bool -> HImportDecl -> Fnk [(ModuleName, HomeModInfo)]
+makeMissingHomeMod force_recomp (L loc idecl) = do
+  hsc_env <- getSession
+  let mname = unLoc (ideclName idecl)
+      lmname = L loc (moduleNameString mname)
+
+  -- Try finding the required module. Delegate the work to 'simpleMake' function
+  -- defined in Language.Finkel.Make when the file is found in import paths.
+  --
+  -- N.B. 'findImportedModule' does not know ".fnk" file extension,
+  -- so it will not return Finkel source files for home package
+  -- modules.
+  fresult <- liftIO (findImportedModule hsc_env mname Nothing)
+  compiled <-
+    case fresult of
+      Found {} -> return []
+      _        -> withRequiredSettings (simpleMake force_recomp lmname)
+
+  -- -- Add the module to current compilation context.
+  -- context <- getContext
+  -- setContext (IIDecl idecl : context)
+
+  return compiled
 
 
 -- ---------------------------------------------------------------------
@@ -336,38 +358,24 @@ m_require form =
   --
   case form of
     LForm (L _ (List (_:code))) ->
-      do dflags0 <- getDynFlags
-         case evalBuilder dflags0 parseLImport code of
+      do dflags <- getDynFlags
+         case evalBuilder dflags parseLImport code of
            Right lidecl@(L loc idecl) -> do
-             hsc_env <- getSession
              fnkc_env <- getFnkEnv
 
-             let dflags = hsc_dflags hsc_env
-                 recomp = gopt Opt_ForceRecomp dflags
+             let recomp = gopt Opt_ForceRecomp dflags
                  mname = unLoc (ideclName idecl)
                  mname' = moduleNameString mname
                  lmname' = L loc mname'
 
              debug "m_require" [ppr idecl]
 
-             -- Try finding the required module. Delegate the work to 'envMake'
-             -- function stored in FnkEnv when the file is found in import
-             -- paths.
-             --
-             -- N.B. 'findImportedModule' does not know ".fnk" file extension,
-             -- so it will not return Finkel source files for home package
-             -- modules.
-             fresult <- liftIO (findImportedModule hsc_env mname Nothing)
-             compiled <-
-               case fresult of
-                 Found {} -> return []
-                 _        -> withRequiredSettings (simpleMake recomp lmname')
+             -- Handle home modules.
+             compiled <- makeMissingHomeMod recomp lidecl
+             context <- getContext
+             setContext (IIDecl idecl : context)
 
-             -- Add the module to current compilation context.
-             contexts <- getContext
-             setContext (IIDecl idecl : contexts)
-
-             -- Update required module names and compiled home modules to
+             -- Update required module names and compiled home modules in
              -- FnkEnv. These are used by the callee module (i.e. the module
              -- containing this 'require' form).
              let reqs = lmname':envRequiredModuleNames fnkc_env
@@ -381,7 +389,7 @@ m_require form =
              case mb_minfo of
                Just minfo -> do
                  things <- getTyThingsFromIDecl lidecl minfo
-                 mapM_ addImportedMacro things
+                 mapM_ (addImportedMacro dflags) things
                  return emptyForm
                Nothing ->
                  finkelSrcError form ("require: module " ++ mname' ++
@@ -396,11 +404,27 @@ m_evalWhenCompile form =
       expanded <- expands body
       dflags <- getDynFlags
       case evalBuilder dflags parseModule expanded of
-        Right (HsModule {hsmodDecls = decls}) -> do
+        Right (HsModule { hsmodDecls = decls
+                        , hsmodImports = limps }) -> do
+
+          -- If module imports were given, add to current interactive context.
+          -- Compile home modules if not found.
+          unless (null limps)
+                 (do mapM_ (makeMissingHomeMod False) limps
+                     context <- getContext
+                     setContext (map (IIDecl . unLoc) limps ++ context))
+
+          -- Then evaluate the declarations and set the interactive context with
+          -- the update `tythings'.
           (tythings, ic) <- evalDecls decls
           modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
-          mapM_ addImportedMacro tythings
+
+          -- If the compiled decls contain macros, add to current Finkel
+          -- environment.
+          mapM_ (addImportedMacro dflags) tythings
+
           return emptyForm
+
         Left err -> finkelSrcError (LForm (L l (List body)))
                                    (syntaxErrMsg err)
     _ -> finkelSrcError form ("eval-when-compile: malformed body: " ++

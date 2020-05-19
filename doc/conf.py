@@ -207,7 +207,7 @@ class FinkelLexer(RegexLexer):
 
         # Finkel core
         'eval-when', 'export', 'defn', 'defmacro', 'defmodule',
-        'macrolet', 'require'
+        'macrolet', 'require',
     )
     tokens = {
         'root': [
@@ -220,6 +220,7 @@ class FinkelLexer(RegexLexer):
             (r';.*', token.Comment.Single),
 
             # Lexemes:
+            (r'\bimport-when\b', token.Keyword.Reserved),
             (r'\bimport\b', token.Keyword.Reserved),
             (r'\bmodule\b', token.Keyword.Reserved),
 

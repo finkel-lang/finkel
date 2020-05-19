@@ -3,7 +3,8 @@
 #p(LANGUAGE DataKinds)
 
 (defmodule Main
-  (require (Finkel.Prelude))
+  (import-when [compile]
+    (Finkel.Prelude))
   (import (Data.Proxy)))
 
 (data Nat
