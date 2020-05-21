@@ -19,7 +19,7 @@ import OccName                         (tcName)
 import OrdList                         (toOL)
 import RdrHsSyn                        (cvTopDecls)
 import RdrName                         (mkQual, mkUnqual)
-import SrcLoc                          (GenLocated (..), noLoc)
+import SrcLoc                          (GenLocated (..))
 
 #if MIN_VERSION_ghc(8,10,0)
 import GHC_Hs_Extension                (noExtField)
@@ -47,16 +47,19 @@ import Language.Finkel.Syntax.SynUtils
 type ModFn =
   Maybe LHsDocString -> [HImportDecl] -> [HDecl] -> HModule
 
-b_module :: Code -> [HIE] -> Builder ModFn
-b_module (LForm (L l form)) exports
-  | Atom (ASymbol name) <- form = return (modfn name)
-  | otherwise                   = builderError
+b_module :: Maybe Code -> [HIE] -> Builder ModFn
+b_module mb_form exports =
+  case mb_form of
+    Nothing -> return (modfn Nothing)
+    Just (LForm (L l form)) | Atom (ASymbol name) <- form
+      -> return (modfn (Just (L l (mkModuleNameFS name))))
+    _ -> builderError
   where
-    modfn name mbdoc imports decls =
-      HsModule { hsmodName = Just (L l (mkModuleNameFS name))
+    modfn mb_name mbdoc imports decls =
+      HsModule { hsmodName = mb_name
                , hsmodExports = if null exports
                                    then Nothing
-                                   else Just (L l exports)
+                                   else Just (mkLocatedList  exports)
                , hsmodImports = imports
                -- Function `cvTopDecls' is used for mergeing
                -- multiple top-level FunBinds, which possibly
@@ -67,9 +70,7 @@ b_module (LForm (L l form)) exports
 {-# INLINE b_module #-}
 
 b_implicitMainModule :: Builder ([HImportDecl] -> [HDecl] -> HModule)
-b_implicitMainModule =
-  do f <- b_module (LForm (noLoc (Atom (aSymbol "Main")))) []
-     return (f Nothing)
+b_implicitMainModule = b_module Nothing [] <*> pure Nothing
 {-# INLINE b_implicitMainModule #-}
 
 b_ieSym :: Code -> Builder HIE

@@ -247,9 +247,8 @@ mhead :: { [HImportDecl] -> [HDecl] -> HModule }
     : mbdocnext          {% b_implicitMainModule }
     | mbdocnext 'module' {% parse p_mod_header $2 <*> pure $1 }
 
-mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl]
-                -> HModule }
-    : 'symbol' exports {% b_module $1 $2 }
+mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl] -> HModule }
+    : 'symbol' exports {% b_module (Just $1) $2 }
 
 exports :: { [HIE] }
     : rexports { reverse $1 }
