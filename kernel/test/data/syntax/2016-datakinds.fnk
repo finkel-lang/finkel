@@ -1,6 +1,6 @@
 ;;;; File containing codes using `DataKinds' language extension
 
-#p(LANGUAGE DataKinds
+%p(LANGUAGE DataKinds
             GADTs
             KindSignatures
             MultiParamTypeClasses
@@ -10,7 +10,7 @@
 
 ;;; Ghc <= 8.4 need `FlexibleInstances' language extension for instance
 ;;; declarations of `Has' type class.
-#p(LANGUAGE FlexibleInstances)
+%p(LANGUAGE FlexibleInstances)
 
 (module Main)
 

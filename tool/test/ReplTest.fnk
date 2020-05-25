@@ -1,6 +1,6 @@
 ;;; Tests for REPL.
 
-#p(language OverloadedStrings)
+%p(language OverloadedStrings)
 
 (:require Finkel.Core)
 

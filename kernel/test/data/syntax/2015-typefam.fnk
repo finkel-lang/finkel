@@ -1,6 +1,6 @@
 ;;;; File containing codes using `TypeFamiles' language extension
 
-#p(LANGUAGE TypeFamilies)
+%p(LANGUAGE TypeFamilies)
 
 (module Main)
 

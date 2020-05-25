@@ -1,6 +1,6 @@
 ;;;; Existential Quantification language extension
 
-#p(LANGUAGE ExistentialQuantification)
+%p(LANGUAGE ExistentialQuantification)
 
 (module Main)
 

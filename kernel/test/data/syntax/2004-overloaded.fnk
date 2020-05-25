@@ -1,6 +1,6 @@
 ;;;; OverloadedXXX language extensions
 
-#p(LANGUAGE OverloadedLists
+%p(LANGUAGE OverloadedLists
             OverloadedStrings)
 
 (module Main)

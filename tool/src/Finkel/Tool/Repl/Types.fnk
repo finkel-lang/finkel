@@ -1,4 +1,4 @@
-#p(LANGUAGE FlexibleInstances
+%p(LANGUAGE FlexibleInstances
             GeneralizedNewtypeDeriving)
 
 ;;;; Types for REPL.
@@ -93,24 +93,24 @@
 (instance (Functor Repl)
   (= fmap f (Repl repl)
     (Repl (. (fmap f) repl)))
-  #p(INLINE fmap))
+  %p(INLINE fmap))
 
 (instance (Applicative Repl)
   (= pure x (Repl (\ _ (pure x))))
-  #p(INLINE pure)
+  %p(INLINE pure)
 
   (= <*> (Repl mf) (Repl mx)
     (Repl (\ ref (<*> (mf ref) (mx ref)))))
-  #p(INLINE <*>))
+  %p(INLINE <*>))
 
 (instance (Monad Repl)
   (= >>= (Repl repl) k
     (Repl (\ ref (>>= (repl ref) (. (flip unRepl ref) k)))))
-  #p(INLINE >>=))
+  %p(INLINE >>=))
 
 (instance (MonadIO Repl)
   (= liftIO io (Repl (\ _ io)))
-  #p(INLINE liftIO))
+  %p(INLINE liftIO))
 
 ;;; In ghc-8.10.1, `haskeline' switched to use `MonadThrow', `MonadCatch', and
 ;;; `MonadMask' type classes from the `exceptions' package instead of the
@@ -122,14 +122,14 @@
    (:begin
      (instance (MonadThrow Repl)
        (= throwM (. liftIO throwM))
-       #p(INLINE throwM))
+       %p(INLINE throwM))
 
      (instance (MonadCatch Repl)
        (= catch (Repl repl) f
          (Repl (\ ref
                  (catch (repl ref)
                    (\ e (unRepl (f e) ref)))) ))
-       #p(INLINE catch))
+       %p(INLINE catch))
 
      (instance (MonadMask Repl)
        (= mask a
@@ -139,7 +139,7 @@
            (Repl (\ ref
                    (mask
                     (\ unmask (unRepl (a (q unmask)) ref)))))))
-       #p(INLINE mask)
+       %p(INLINE mask)
        (= uninterruptibleMask a
          (let ((:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
                (= q unmask (Repl repl)
@@ -148,7 +148,7 @@
                    (uninterruptibleMask
                     (\ unmask
                       (unRepl (a (q unmask)) ref)))))))
-       #p(INLINE uninterruptibleMask)
+       %p(INLINE uninterruptibleMask)
        (= generalBracket acquire release use
          (Repl (\ ref
                  (generalBracket
@@ -157,7 +157,7 @@
                     (unRepl (release resource exit-case) ref))
                   (\ resource
                     (unRepl (use resource) ref))))))
-       #p(INLINE generalBracket))))
+       %p(INLINE generalBracket))))
 
   (otherwise
    (instance (MonadException Repl)
@@ -169,7 +169,7 @@
                           (RunIO (. (fmap (. Repl const))
                                     (. run (flip unRepl ref))))))
                     (fmap (flip unRepl ref) (f run'))))))))
-     #p(INLINE controlIO))))
+     %p(INLINE controlIO))))
 
 (defn (:: run-repl (-> (Repl a) ReplState (IO a)))
   [(Repl repl) st]
@@ -189,16 +189,16 @@
 
 (instance (HasReplState Repl)
   (= getReplState get-repl-state)
-  #p(INLINE getReplState)
+  %p(INLINE getReplState)
   (= putReplState put-repl-state)
-  #p(INLINE putReplState))
+  %p(INLINE putReplState))
 
 (instance (=> (MonadTrans t) (Monad m) (HasReplState m)
               (HasReplState (t m)))
   (= getReplState (lift getReplState))
-  #p(INLINE getReplState)
+  %p(INLINE getReplState)
   (= putReplState (. lift putReplState))
-  #p(INLINE putReplState))
+  %p(INLINE putReplState))
 
 ;;; Input data type to hold form to evaluate, and MVar to receive
 ;;; result from evaluation thread.

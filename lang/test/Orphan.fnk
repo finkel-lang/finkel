@@ -5,7 +5,7 @@
 ;;; avoid adding QuickCheck package dependency without code
 ;;; duplication.
 
-#p(OPTIONS_GHC -fno-warn-orphans)
+%p(OPTIONS_GHC -fno-warn-orphans)
 
 (:require Finkel.Core)
 

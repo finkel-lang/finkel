@@ -1,6 +1,6 @@
 ;;;; File containing codes using `TypeApplications' language extension
 
-#p(LANGUAGE TypeApplications)
+%p(LANGUAGE TypeApplications)
 
 (module Main)
 

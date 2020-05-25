@@ -1,6 +1,6 @@
 ;;;; OPTIONS_GHC pragma.
 
-#p(OPTIONS_GHC -fcontext-stack=100)
+%p(OPTIONS_GHC -fcontext-stack=100)
 
 (module Main)
 

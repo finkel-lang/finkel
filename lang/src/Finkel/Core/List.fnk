@@ -1,6 +1,6 @@
 ;;; Fundamental functions for list
 
-#p(LANGUAGE FlexibleInstances
+%p(LANGUAGE FlexibleInstances
             TypeSynonymInstances)
 
 (:doc "List related functions.
@@ -176,7 +176,7 @@ Examples:
                    (List xs')   (List (: x' xs'))
                    (HsList xs') (List (: x' xs'))
                    _            (List [x' whole]))))))
-#p(INLINABLE cons)
+%p(INLINABLE cons)
 
 (:doc "Append two lists.")
 (:: append (-> Code Code Code))
@@ -192,12 +192,12 @@ Examples:
                   bs
                   (cons (car as) (go (cdr as) ys)))))
         (go xs ys)))))
-#p(INLINABLE append)
+%p(INLINABLE append)
 
 (:doc "Make `ASymbol' from given `String'.")
 (:: make-symbol (-> String Code))
 (= make-symbol qSymbol)
-#p(INLINABLE make-symbol)
+%p(INLINABLE make-symbol)
 
 (:doc "Extract string from given symbol.
 
@@ -205,7 +205,7 @@ Get `Just' `String' when the argument code was an `ASymbol', otherwise
 `Nothing'.")
 (:: mb-symbol-name (-> Code (Maybe String)))
 (= mb-symbol-name (. (fmap unpackFS) mb-symbol-name-fs))
-#p(INLINABLE mb-symbol-name)
+%p(INLINABLE mb-symbol-name)
 
 (:doc "Extract `FastString' from given symbol.
 
@@ -215,7 +215,7 @@ Like `mb-symbol-name', but returns `FastString'")
   (case form
     (LForm (L _ (Atom (ASymbol name)))) (Just name)
     _ Nothing))
-#p(INLINABLE mb-symbol-name-fs)
+%p(INLINABLE mb-symbol-name-fs)
 
 (:doc "Type class for constructing 'List' with polyvariadic function.")
 (class (ListableType l)
@@ -272,7 +272,7 @@ nil
     (HsList (: x _)) x
     (HsList [])      (LForm (L l (List [])))
     _                (error-non-list "car" whole)))
-#p(INLINABLE car)
+%p(INLINABLE car)
 
 (:doc "Get list without the first element.
 
@@ -305,7 +305,7 @@ nil
       (HsList (: _ xs)) (f xs)
       (HsList [])       (LForm (L l (List [])))
       _                 (error-non-list "cdr" whole))))
-#p(INLINABLE cdr)
+%p(INLINABLE cdr)
 
 (:doc$ cxr "Rest of /cxr/ functions are composed from 'car' and 'cdr'.
 
@@ -335,7 +335,7 @@ and definition of 'cdadr' is:
         (: hd tl) [`(:: ,name (-> Code Code))
                    `(= ,name
                       (. ,(cxr-name (return hd)) ,(cxr-name tl)))
-                   `#p(INLINABLE ,name)]
+                   `%p(INLINABLE ,name)]
         _         (throw (FinkelException (++ "cxr: invalid arg: " xs)))))))
 
 (:with-macro ((= cxrs

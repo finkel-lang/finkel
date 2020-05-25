@@ -102,7 +102,7 @@ module.")
                     (let ((:: ,tmp (-> Code (Fnk Code)))
                           (= ,tmp ,arg ,body))
                       (Macro ,tmp))))))
-   #p(INLINABLE macro-decl)
+   %p(INLINABLE macro-decl)
 
    (:doc "Body function of 'define-macro'.")
    (:: dmac (-> Code (Fnk Code)))
@@ -125,7 +125,7 @@ module.")
                             ,decl)))))
 
          _ (finkelSrcError form "invalid args in macro definition"))))
-   #p(INLINABLE dmac)
+   %p(INLINABLE dmac)
 
    (:doc "Function for body of 'let_macro'.")
    (:: lmac (-> Code (Fnk Code)))
@@ -139,7 +139,7 @@ module.")
          (do (<- ms' (mapM f ms))
              (return `(:with-macro (,@ms') ,@rest)))
          _ (finkelSrcError form "lmac: malformed args"))))
-   #p(INLINABLE lmac)))
+   %p(INLINABLE lmac)))
 
 (:eval-when-compile
   (:doc "Simple macro for defining macro. This macro is used internally
@@ -287,14 +287,14 @@ See 'eval_when'.
   (:: replace-hyphens (-> String String))
   (= replace-hyphens
     (map (\ x (if (== x #'-) #'_ x))))
-  #p(INLINABLE replace-hyphens)
+  %p(INLINABLE replace-hyphens)
 
   (:: subst-gensyms (-> [(, Atom Atom)] Code Code))
   (= subst-gensyms kvs
     (fmap (\ x (case (lookup x kvs)
                  (Just y) y
                  Nothing  x))))
-  #p(INLINABLE subst-gensyms)
+  %p(INLINABLE subst-gensyms)
 
   (:: acc-gensym-names (-> [(, Atom Atom)] Atom (Fnk [(, Atom Atom)])))
   (= acc-gensym-names acc form
@@ -308,13 +308,13 @@ See 'eval_when'.
                                       (Atom gsym) (: (, form gsym) acc)
                                       _ acc)))))
       _ (return acc)))
-  #p(INLINABLE acc-gensym-names)
+  %p(INLINABLE acc-gensym-names)
 
   (:: gensymfy (-> Code (Fnk Code)))
   (= gensymfy form
     (do (<- kvs (foldM acc-gensym-names [] form))
         (return (subst-gensyms kvs form))))
-  #p(INLINABLE gensymfy)
+  %p(INLINABLE gensymfy)
 
   ;; Function to make body of `defmacro-m' and `defmacro'.
   ;;
@@ -362,7 +362,7 @@ See 'eval_when'.
         (gensymfy (atom-arg-body name0 arg0 body0 the-macro-arg))
 
         _ (finkelSrcError whole (++ label ": invalid args")))))
-  #p(INLINABLE make-defmacro-body)
+  %p(INLINABLE make-defmacro-body)
 
   ;; Function to make body expression of `macrolet-m' and `macrolet'.
   (:: make-macrolet-body (-> String Code (-> Code Code) (Fnk Code)))
@@ -385,7 +385,7 @@ See 'eval_when'.
                      ,@(List rest))))
 
         _ (finkelSrcError whole (++ label ": invalid form")))))
-  #p(INLINABLE make-macrolet-body))
+  %p(INLINABLE make-macrolet-body))
 
 (define-macro macrolet-m
   "

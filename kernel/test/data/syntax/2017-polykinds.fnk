@@ -1,6 +1,6 @@
 ;;;; File containing codes using `PolyKinds' language extension
 
-#p(LANGUAGE DataKinds
+%p(LANGUAGE DataKinds
             GADTs
             PolyKinds
             RankNTypes
@@ -8,7 +8,7 @@
             TypeOperators)
 
 ;; ghc-8.2.x and 8.4.x requires `TypeInType' extension.
-#p(LANGUAGE TypeInType)
+%p(LANGUAGE TypeInType)
 
 (module Main)
 

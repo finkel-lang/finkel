@@ -1,6 +1,6 @@
 ;;;; Type operatos
 
-#p(LANGUAGE TypeOperators)
+%p(LANGUAGE TypeOperators)
 
 ;;; Type operators, with and without operator expansions
 

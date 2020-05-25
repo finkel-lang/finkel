@@ -701,7 +701,7 @@ Foreign export declarations start with ``foreign`` ``export``:
 Compiler Pragmas
 ----------------
 
-All pragmas use ``#p(..)`` form.
+All pragmas use ``%p(..)`` form.
 
 
 Inlining
@@ -711,7 +711,7 @@ Pragmas to control inlining of codes use ``INLINE`` and ``NOINLINE``:
 
 .. code-block:: finkel
 
-   #p(INLINE foo) ; Finkel
+   %p(INLINE foo) ; Finkel
 
 .. code-block:: haskell
 
@@ -721,8 +721,8 @@ GHC specific phase controls are also supported:
 
 .. code-block:: finkel
 
-   #p(INLINE [1] bar) ; Finkel
-   #p(NOINLINE [~2] buzz)
+   %p(INLINE [1] bar) ; Finkel
+   %p(NOINLINE [~2] buzz)
 
 .. code-block:: haskell
 
@@ -738,7 +738,7 @@ Pragmas to control specialization of overloaded function use
 
 .. code-block:: finkel
 
-   #p(SPECIALIZE (:: factorial (-> Int Int))) ; Finkel
+   %p(SPECIALIZE (:: factorial (-> Int Int))) ; Finkel
 
 .. code-block:: haskell
 
@@ -752,7 +752,7 @@ Pragma for language extensions use ``LANGUAGE``:
 
 .. code-block:: finkel
 
-   #p(LANGUAGE GADTs OverloadedStrings) ; Finkel
+   %p(LANGUAGE GADTs OverloadedStrings) ; Finkel
 
 .. code-block:: haskell
 

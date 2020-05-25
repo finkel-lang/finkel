@@ -26,7 +26,7 @@ instance Arbitrary Atom where
           , (AInteger . mkI) <$> arbitrary
           , aFractional <$> (arbitrary :: Gen Double) ]
     where
-      headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "_!$%&*+./<=>?@^~:"
+      headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "_!$&*+./<=>?@^~:"
       tailChars = headChars ++ "0123456789'_"
       symbolG = do
         x <- elements headChars

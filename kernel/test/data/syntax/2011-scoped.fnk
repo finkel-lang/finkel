@@ -1,6 +1,6 @@
 ;;;; Scoped Type Variable
 
-#p(LANGUAGE ScopedTypeVariables)
+%p(LANGUAGE ScopedTypeVariables)
 
 (data Zero)
 (data (Succ n))

@@ -1,6 +1,6 @@
 ;;;; File: begin.fnk
 
-#p(LANGUAGE DataKinds)
+%p(LANGUAGE DataKinds)
 
 (defmodule Main
   (import-when [compile]

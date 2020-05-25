@@ -123,9 +123,11 @@ $white+  ;
 \; .*    { tok_line_comment }
 \#\; .*  { tok_block_comment }
 
---- Hashes
-\# \'          { tok_char }
-\# $hsymtail2* { tok_hash }
+--- Character
+\#\'           { tok_char }
+
+--- Pragma
+\% @hsymbol    { tok_hash }
 
 --- Parenthesized commas, handled before parentheses
 \( $white* \,+ $white* \) { tok_pcommas }
@@ -160,7 +162,8 @@ $white+  ;
 @signed @frac              { tok_fractional }
 
 -- Symbols
-@hsymbol { tok_symbol }
+\# $hsymtail2* { tok_symbol }
+@hsymbol       { tok_symbol }
 
 {
 -- ---------------------------------------------------------------------

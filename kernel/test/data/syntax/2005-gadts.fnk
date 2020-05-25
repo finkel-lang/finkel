@@ -1,6 +1,6 @@
 ;;; GADTs
 
-#p(LANGUAGE GADTs KindSignatures RankNTypes)
+%p(LANGUAGE GADTs KindSignatures RankNTypes)
 
 (module Main)
 
@@ -30,9 +30,9 @@
 ;; GADTs with UNPACK pragmas.
 
 (data (G2 a)
-  (:: G2a (-> #p(UNPACK) !(Maybe a) (G2 a)))
-  (:: G2b (-> #p(UNPACK) !Int (G2 Int)))
-  (:: G2c (-> #p(UNPACK) !a #p(UNPACK) !Int (G2 a))))
+  (:: G2a (-> %p(UNPACK) !(Maybe a) (G2 a)))
+  (:: G2b (-> %p(UNPACK) !Int (G2 Int)))
+  (:: G2c (-> %p(UNPACK) !a %p(UNPACK) !Int (G2 a))))
 
 (instance (=> (Show a) (Show (G2 a)))
   (= show (G2a a) (concat ["G2a (" (show a) ")"]))

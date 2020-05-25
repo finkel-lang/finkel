@@ -1,6 +1,6 @@
 ;;;; Bang patterns
 
-#p(LANGUAGE BangPatterns)
+%p(LANGUAGE BangPatterns)
 
 (:: bp01 (-> Int Int Int))
 (= bp01 !a !b (+ a b))

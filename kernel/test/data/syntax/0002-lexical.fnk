@@ -100,4 +100,11 @@
           (= ## a (+ a 3))))
     (print ((#) 41))
     (print ((#.) 40))
-    (print ((##) 39))))
+    (print ((##) 39))
+
+    ;; Function names starting with `%'.
+    (let ((:: (%. %%) (-> Int Int))
+          (= %. a (+ a 4))
+          (= %% a (+ a 5))))
+    (print ((%.) 38))
+    (print ((%%) 37))))

@@ -215,6 +215,9 @@ class FinkelLexer(RegexLexer):
             # (r'(\n\s*|\t)', token.Whitespace),
             (r'\s+', token.Text),
 
+            # Pragma:
+            (r'%p\(.*', token.Comment),
+
             # Comment:
             (r'#\;', token.Comment.Multiline, 'multiline-comment'),
             (r';.*', token.Comment.Single),
@@ -231,6 +234,7 @@ class FinkelLexer(RegexLexer):
             # Characters
             (r"#'( |[^ ]+)", token.String.Char),
 
+            # Keywords
             ('(%s)' % '|'.join(re.escape(e) + ' ' for e in reserved),
              token.Keyword.Reserved),
 
@@ -244,19 +248,10 @@ class FinkelLexer(RegexLexer):
             # Variable identifier
             (r'[_a-z][\w\']*', token.Name),
 
+            # String literal
             (r'"[^"]*"', token.String),
 
-            # Reserved:
-            # (r'(%s)' % '|'.join(reserved),
-            #  token.Keyword.Reserved),
-
-            # ('(%s)' % '|'.join(re.escape(r) + ' ' for r in reserved),
-            #  token.Keyword),
-
             (r'\\', token.Keyword.Reserved),
-
-            # Pragma:
-            (r'#p\(.*', token.Comment),
 
             (r'(\(|\))', token.Punctuation),
             (r'(\[|\])', token.Punctuation),

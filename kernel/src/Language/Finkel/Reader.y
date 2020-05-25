@@ -222,8 +222,10 @@ mkDock (L l (TDocNamed k mb_doc)) =
 rmac :: Located Token -> Code -> SP Code
 rmac h expr =
   case h of
-    L l (THash c) | c == 'p' -> pragma expr
-    _ -> errorSP expr "mkHash: unsupported reader macro char"
+    L l (THash c) | c == 'p'  -> pragma expr
+                  | otherwise -> errorSP expr ("rmac: unsupported char " ++
+                                               show c)
+    _ -> errorSP expr "rmac: not a THash"
 
 -- Module from ghc package with codes related to language pragma:
 --

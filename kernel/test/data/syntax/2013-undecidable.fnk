@@ -1,6 +1,6 @@
 ;;;; UndecidableInstances, and some others.
 
-#p(LANGUAGE FlexibleInstances
+%p(LANGUAGE FlexibleInstances
             MonoLocalBinds
             UndecidableInstances)
 

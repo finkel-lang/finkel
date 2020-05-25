@@ -1,6 +1,6 @@
 ;;;; Kind signatues
 
-#p(LANGUAGE ExplicitForAll
+%p(LANGUAGE ExplicitForAll
             KindSignatures
             MultiParamTypeClasses)
 

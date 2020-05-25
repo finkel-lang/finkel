@@ -6,57 +6,57 @@
 
 (:: inlineMe Int)
 (= inlineMe 42)
-#p(INLINE inlineMe)
+%p(INLINE inlineMe)
 
 (:: inlineMe0 Int)
 (= inlineMe0 42)
-#p(INLINE [0] inlineMe0)
+%p(INLINE [0] inlineMe0)
 
 (:: inlineMe1 Int)
 (= inlineMe1 42)
-#p(INLINE [1] inlineMe1)
+%p(INLINE [1] inlineMe1)
 
 (:: inlineMe2 Int)
 (= inlineMe2 42)
-#p(INLINE [2] inlineMe2)
+%p(INLINE [2] inlineMe2)
 
 (:: inlineMeT0 Int)
 (= inlineMeT0 42)
-#p(INLINE [~ 0] inlineMeT0)
+%p(INLINE [~ 0] inlineMeT0)
 
 (:: inlineMeT0' Int)
 (= inlineMeT0' 42)
-#p(INLINE [~0] inlineMeT0')
+%p(INLINE [~0] inlineMeT0')
 
 (:: dontInlineMe Int)
 (= dontInlineMe 43)
-#p(NOINLINE dontInlineMe)
+%p(NOINLINE dontInlineMe)
 
 (:: dontInlineMe1 Int)
 (= dontInlineMe1 43)
-#p(NOINLINE [1] dontInlineMe1)
+%p(NOINLINE [1] dontInlineMe1)
 
 (:: dontInlineMeT2 Int)
 (= dontInlineMeT2 43)
-#p(NOINLINE [~2] dontInlineMeT2)
+%p(NOINLINE [~2] dontInlineMeT2)
 
 (:: iAmInlinable Int)
 (= iAmInlinable 44)
-#p(INLINABLE iAmInlinable)
+%p(INLINABLE iAmInlinable)
 
 (:: iAmInlinable0 Int)
 (= iAmInlinable0 44)
-#p(INLINABLE [0] iAmInlinable0)
+%p(INLINABLE [0] iAmInlinable0)
 
 (:: iAmInlinableT2 Int)
 (= iAmInlinableT2 44)
-#p(INLINABLE [~2] iAmInlinableT2)
+%p(INLINABLE [~2] iAmInlinableT2)
 
 (data (I1 a) (I1 a))
 
 (instance (=> (Show a) (Show (I1 a)))
   (= showsPrec _ (I1 a) (showString (++ "I1 " (show a))))
-  #p(INLINE showsPrec))
+  %p(INLINE showsPrec))
 
 (:: inlineprgm (IO ()))
 (= inlineprgm
@@ -70,10 +70,10 @@
 (:: specializeMe1 (=> (Num a) (Show a) (-> a String)))
 (= specializeMe1 x (show (+ x 1)))
 
-#p(SPECIALIZE (:: specializeMe1 (-> Int String)))
-#p(SPECIALIZE [0] (:: specializeMe1 (-> Integer String)))
-#p(SPECIALIZE [~1] (:: specializeMe1 (-> Float String)))
-#p(SPECIALIZE [2] (:: specializeMe1 (-> Double String)))
+%p(SPECIALIZE (:: specializeMe1 (-> Int String)))
+%p(SPECIALIZE [0] (:: specializeMe1 (-> Integer String)))
+%p(SPECIALIZE [~1] (:: specializeMe1 (-> Float String)))
+%p(SPECIALIZE [2] (:: specializeMe1 (-> Double String)))
 
 (:: specprgm (IO ()))
 (= specprgm

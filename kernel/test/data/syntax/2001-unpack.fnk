@@ -1,19 +1,19 @@
 ;;;; "UNPACK" and "SPECIALIZE INLINE" pragma
 
-#p(LANGUAGE GADTs)
+%p(LANGUAGE GADTs)
 
 (module Main)
 
 ;;; UNPACK
 
 (data D1
-  (C1 #p(UNPACK) (! Int)
-      #p(UNPACK) !Char)
+  (C1 %p(UNPACK) (! Int)
+      %p(UNPACK) !Char)
   (deriving (Eq Show)))
 
 (data D2
-  (C2 {c2field1 #p(UNPACK) !Int
-       c2field2 #p(UNPACK) (! Char)})
+  (C2 {c2field1 %p(UNPACK) !Int
+       c2field2 %p(UNPACK) (! Char)})
   (deriving (Eq Show)))
 
 (:: unpackprgm (IO ()))
@@ -31,8 +31,8 @@
 (= !: (LstInt _ xs) i (!! xs i))
 (= !: (LstPair _ l1 l2) i (, (!: l1 i) (!: l2 i)))
 
-#p(SPECIALIZE INLINE (:: !: (-> (Lst Int) Int Int)))
-#p(SPECIALIZE INLINE (:: !: (-> (Lst (, a b)) Int (, a b))))
+%p(SPECIALIZE INLINE (:: !: (-> (Lst Int) Int Int)))
+%p(SPECIALIZE INLINE (:: !: (-> (Lst (, a b)) Int (, a b))))
 
 (:: main (IO ()))
 (= main unpackprgm)

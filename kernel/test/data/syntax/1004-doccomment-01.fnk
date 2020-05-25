@@ -1,4 +1,4 @@
-#p(LANGUAGE RankNTypes
+%p(LANGUAGE RankNTypes
             TypeFamilies)
 (:doc "
 Module      : Main
@@ -105,7 +105,7 @@ containing type class constraints. This documentation comment includes
   (D1a a)
   (:doc^ "Documentation for 'D1a'.")
 
-  (D1b #p(UNPACK) !b)
+  (D1b %p(UNPACK) !b)
   (:doc^ "Documentation for 'D1b'.
 
 This comment contains empty lines.

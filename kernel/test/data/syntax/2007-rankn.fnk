@@ -1,6 +1,6 @@
 ;;;; RankNTypes
 
-#p(LANGUAGE RankNTypes)
+%p(LANGUAGE RankNTypes)
 
 (module Main)
 

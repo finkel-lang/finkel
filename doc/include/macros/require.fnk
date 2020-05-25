@@ -1,6 +1,6 @@
 ;;;; File: require.fnk
 
-#p(OPTIONS_GHC -ddump-parsed)
+%p(OPTIONS_GHC -ddump-parsed)
 
 (defmodule Main
   (require

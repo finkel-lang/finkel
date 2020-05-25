@@ -1,6 +1,6 @@
 ;;;; DeriveXXX language extensions
 
-#p(LANGUAGE DeriveDataTypeable
+%p(LANGUAGE DeriveDataTypeable
             DeriveFoldable
             DeriveGeneric
             DeriveTraversable

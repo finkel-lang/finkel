@@ -1,7 +1,7 @@
 ;;;; File containing NoImplicitPrelude.
 
-#p(LANGUAGE NoImplicitPrelude)
-#p(OPTIONS_GHC -Wall)
+%p(LANGUAGE NoImplicitPrelude)
+%p(OPTIONS_GHC -Wall)
 
 (module Main)
 
