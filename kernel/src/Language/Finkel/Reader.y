@@ -59,7 +59,8 @@ import           Language.Finkel.Syntax
 '`'       { L _ TQuasiquote }
 ','       { L _ TUnquote }
 ',@'      { L _ TUnquoteSplice }
-'#'       { L _ (THash _) }
+'%_'      { L _ (TPercent '_') }
+'%'       { L _ (TPercent $$) }
 'pcommas' { L _ (TPcommas _) }
 
 'symbol'  { L _ (TSymbol _) }
@@ -91,14 +92,15 @@ sexp :: { Code }
     | '[' sexps ']'           { mkHsList $1 $2 }
     | 'pcommas'               { mkPcommas $1 }
     | '(' sexps ')'           { mkUnitOrList $1 $2}
-    | '#' sexp                {% rmac $1 $2 }
+    | '%' sexp                {% rmac $1 $2 }
 
 sexps :: { [Code] }
     : rsexps { reverse $1 }
 
 rsexps :: { [Code] }
-    : {- empty -} { [] }
-    | rsexps sexp { $2 : $1 }
+    : {- empty -}      { [] }
+    | rsexps sexp      { $2 : $1 }
+    | rsexps '%_' sexp { $1 }
 
 atom :: { Code }
     : 'symbol'  { mkASymbol $1 }
@@ -219,13 +221,12 @@ mkDock (L l (TDocNamed k mb_doc)) =
     pre = [sym l ":doc$", atom l (ASymbol k)]
 {-# INLINE mkDock #-}
 
-rmac :: Located Token -> Code -> SP Code
-rmac h expr =
-  case h of
-    L l (THash c) | c == 'p'  -> pragma expr
-                  | otherwise -> errorSP expr ("rmac: unsupported char " ++
-                                               show c)
-    _ -> errorSP expr "rmac: not a THash"
+rmac :: Char -> Code -> SP Code
+rmac c expr =
+  case c of
+    'p' -> pragma expr
+    _   -> errorSP expr ("rmac: unsupported char " ++ show c)
+{-# INLINE rmac #-}
 
 -- Module from ghc package with codes related to language pragma:
 --

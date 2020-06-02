@@ -90,24 +90,29 @@ $nl          = [\n\r\f]
 $white       = [$nl\v\t\ ]
 $white_no_nl = $white # $nl
 
-$negative    = \-
-$octit       = [0-7]
-$digit       = [0-9]
-$hexit       = [$digit A-F a-f]
+$negative = \-
+$octit    = [0-7]
+$digit    = [0-9]
+$hexit    = [$digit A-F a-f]
 
-$hsymhead    = [^\(\)\[\]\{\}\;\'\`\,\"\#$digit$white]
-$hsymtail    = [$hsymhead\'\#$digit]
-$hsymtail2   = $hsymtail # \'
+$hsymhead       = [^\(\)\[\]\{\}\;\'\`\,\"\#\%$digit$white]
+$hsymtail       = [$hsymhead\'\#\%$digit]
+$hsymtail_no_qt = $hsymtail # \'
+$hsymtail_no_ub = $hsymtail # \_
 
-@hsymbol     = $hsymhead $hsymtail*
 @signed      = $negative?
 @octal       = $octit+
 @decimal     = $digit+
 @hexadecimal = $hexit+
-@exponent    = [eE] [\-\+]? @decimal
-@frac        = @decimal \. @decimal @exponent? | @decimal @exponent
 
-@contdoc     = $nl [\t\ ]* \;+ ~$nl+
+@exponent = [eE] [\-\+]? @decimal
+@frac     = @decimal \. @decimal @exponent?
+          | @decimal @exponent
+
+@hsymbol = $hsymhead $hsymtail*
+         | \# $hsymtail_no_qt*
+
+@contdoc = $nl [\t\ ]* \;+ ~$nl+
 
 tokens :-
 
@@ -123,11 +128,11 @@ $white+  ;
 \; .*    { tok_line_comment }
 \#\; .*  { tok_block_comment }
 
---- Character
-\#\'           { tok_char }
+--- Discard prefix
+\% \_ { tok_discard }
 
---- Pragma
-\% @hsymbol    { tok_hash }
+--- Pragma and symbols starting with '%'
+\% $hsymtail_no_ub* { tok_percent }
 
 --- Parenthesized commas, handled before parentheses
 \( $white* \,+ $white* \) { tok_pcommas }
@@ -156,14 +161,14 @@ $white+  ;
 
 --- Literal values
 \"                         { tok_string }
+\#\'                       { tok_char }
 @signed @decimal           { tok_integer }
 @signed 0[oO] @octal       { tok_integer }
 @signed 0[xX] @hexadecimal { tok_integer }
 @signed @frac              { tok_fractional }
 
 -- Symbols
-\# $hsymtail2* { tok_symbol }
-@hsymbol       { tok_symbol }
+@hsymbol  { tok_symbol }
 
 {
 -- ---------------------------------------------------------------------
@@ -374,8 +379,8 @@ data Token
   -- ^ Literal integer number.
   | TFractional FractionalLit
   -- ^ Literal fractional number.
-  | THash Char
-  -- ^ Literal @#@.
+  | TPercent Char
+  -- ^ Special prefix @%@.
   | TPcommas Int
   -- ^ Parenthesized commas with number of repeats.
   | TDocNext FastString
@@ -454,17 +459,21 @@ tok_unquote_splice :: Action
 tok_unquote_splice _ _ = return TUnquoteSplice
 {-# INLINE tok_unquote_splice #-}
 
-tok_hash :: Action
-tok_hash (AlexInput _ buf) l
+tok_percent :: Action
+tok_percent (AlexInput _ buf) l
   | l == 2
   , let c = currentChar (snd (nextChar buf))
   , not (startsVarSym c)
   , not (startsConSym c)
-  = return $! THash c
+  = return $! TPercent c
   | otherwise
   = let fs = lexemeToFastString buf l
     in  fs `seq` return $! TSymbol fs
-{-# INLINE tok_hash #-}
+{-# INLINE tok_percent #-}
+
+tok_discard :: Action
+tok_discard _ _ = return (TPercent '_')
+{-# INLINE tok_discard #-}
 
 tok_line_comment :: Action
 tok_line_comment _ _ = return TComment

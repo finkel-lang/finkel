@@ -38,6 +38,14 @@ Block style comment is supported with ``#;`` and ``;#``.
 .. literalinclude:: ../include/language-syntax/expr/block-comment.hs
    :language: haskell
 
+Form after ``%_`` is ignored:
+
+.. literalinclude:: ../include/language-syntax/expr/discard-prefix.fnk
+   :language: finkel
+
+.. literalinclude:: ../include/language-syntax/expr/discard-prefix.hs
+   :language: haskell
+
 
 Variable identifier
 ^^^^^^^^^^^^^^^^^^^

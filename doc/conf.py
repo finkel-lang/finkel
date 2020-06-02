@@ -221,6 +221,7 @@ class FinkelLexer(RegexLexer):
             # Comment:
             (r'#\;', token.Comment.Multiline, 'multiline-comment'),
             (r';.*', token.Comment.Single),
+            (r'%_', token.Comment.Single),
 
             # Lexemes:
             (r'\bimport-when\b', token.Keyword.Reserved),

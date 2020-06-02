@@ -90,5 +90,6 @@ characters:
 ;;; This comment is written on the line above type signature of buzz.
 ;;;
 (:: buzz (-> Int Int))
-(= buzz n
-  (+ n n))
+(= buzz %_(codes inside this list is ignored) n
+  %_this_symbol_is_ignored
+  (+ n %_"ignored string literal" n))

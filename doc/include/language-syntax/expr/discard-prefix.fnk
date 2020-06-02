@@ -1,0 +1,3 @@
+(do (print True) ; Finkel
+    %_(this list (is ignored))
+    (print %_ignored False %_ "ignored"))
