@@ -48,7 +48,7 @@ import HscTypes                (CgGuts (..), ModDetails (..), ModGuts (..),
                                 extendInteractiveContext)
 import Id                      (idName, isDFunId, isImplicitId)
 import Linker                  (linkDecls)
-import Module                  (ModLocation (..), Module, moduleName)
+import Module                  (ModLocation (..), Module)
 import Name                    (isExternalName)
 import SrcLoc                  (SrcLoc (..), srcLocSpan)
 import TcRnDriver              (tcRnDeclsi)
