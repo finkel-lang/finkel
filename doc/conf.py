@@ -186,8 +186,11 @@ epub_exclude_files = ['search.html']
 
 # -- Custom setup function
 
-from pygments.lexer import RegexLexer
+from pygments.lexer import RegexLexer, bygroups
 from pygments import token
+from pygments.token import Text, Comment, Number, String, Keyword, \
+    Name, Operator, Punctuation
+from pygments import unistring as uni
 from sphinx.highlighting import lexers
 
 import re
@@ -197,74 +200,160 @@ class FinkelLexer(RegexLexer):
     reserved = (
         # Haskell 2010
         'case', 'class', 'data', 'default', 'deriving', 'do',
-        'family', 'if', 'infix[lr]?', 'instance', 'let', 'newtype',
-        'type', 'where',
+        'family', 'if', 'infix', 'infixl', 'infixr', 'instance', 'let',
+        'newtype', 'type', 'where',
         '_', '=', '=>', '<-', '->', '::',
 
         # Finkel kernel special forms
         ':begin', ':eval-when-compile', ':quote', ':quasiquote',
-        ':require', ':unquote', ':unquote-splice',
+        ':unquote', ':unquote-splice',
 
         # Finkel core
-        'eval-when', 'export', 'defn', 'defmacro', 'defmodule',
-        'macrolet', 'require',
+        'eval-when', 'macrolet',
     )
+
+    ascii = ('NUL', 'SOH', '[SE]TX', 'EOT', 'ENQ', 'ACK',
+             'BEL', 'BS', 'HT', 'LF', 'VT', 'FF', 'CR', 'S[OI]', 'DLE',
+             'DC[1-4]', 'NAK', 'SYN', 'ETB', 'CAN',
+             'EM', 'SUB', 'ESC', '[FGRU]S', 'SP', 'DEL')
+
     tokens = {
         'root': [
             # Whitespace:
-            # (r'(\n\s*|\t)', token.Whitespace),
-            (r'\s+', token.Text),
+            (r'\s+', Text),
 
             # Pragma:
             (r'%p\(.*', token.Comment),
 
             # Comment:
-            (r'#\;', token.Comment.Multiline, 'multiline-comment'),
-            (r';.*', token.Comment.Single),
-            (r'%_', token.Comment.Single),
-
-            # Lexemes:
-            (r'\bimport-when\b', token.Keyword.Reserved),
-            (r'\bimport\b', token.Keyword.Reserved),
-            (r'\bmodule\b', token.Keyword.Reserved),
+            (r'#\;', Comment.Multiline, 'multiline-comment'),
+            (r';.*', Comment.Single),
+            (r'%_', Comment.Single),
 
             # Numbers
-            (r'-?\d+\.\d+', token.Number.Float),
-            (r'-?\d+', token.Number.Integer),
+            (r'-?\d+\.\d+', Number.Float),
+            (r'-?\d(_*\d)*_*[eE][+-]?\d(_*\d)*', Number.Float),
+            (r'0[oO]_*[0-7](_*[0-7])*', Number.Oct),
+            (r'0[xX]_*[\da-fA-F](_*[\da-fA-F])*', Number.Hex),
+            (r'-?\d+', Number.Integer),
 
-            # Characters
-            (r"#'( |[^ ]+)", token.String.Char),
+            # Characters:
+            (r"#'", String.Char, 'character'),
+
+            # String literal
+            (r'"', String, 'string'),
+
+            # Core macros
+            (r"(defn)(\s+\(?)(::)?(\s+)?([^\s]+)",
+             bygroups(Keyword.Reserved, Text, Keyword.Reserved,
+                      Text, Name.Function)),
+
+            (r"(defmacro)(\s+)([^\s]+)",
+             bygroups(Keyword.Reserved, Text, Name.Function)),
+
+            (r"(defmodule)(\s+)([A-Z]\w+)",
+             bygroups(Keyword.Reserved, Text, Name.Namespace),
+             'defmodule'),
+
+            # Module header
+            (r"(module)(\s+)([^\s]+)",
+             bygroups(Keyword.Reserved, Text, Name.Namespace)),
 
             # Keywords
             ('(%s)' % '|'.join(re.escape(e) + ' ' for e in reserved),
-             token.Keyword.Reserved),
+             Keyword.Reserved),
+
+            # Import
+            (r'(import|:require)(\s+)(qualified)?(\s+)?([A-Z][\w\.]+)(\s+)?(as|hiding)?',
+             bygroups(Keyword.Reserved,
+                      Text,
+                      Keyword.Reserved,
+                      Text,
+                      Name.Namespace,
+                      Text,
+                      Keyword.Reserved),
+             'funclist'),
 
             # Types
-            (r'([A-Z][0-9a-zA-Z\-_]*)', token.Keyword.Type),
+            (r'([A-Z][0-9a-zA-Z\-_]*)', Keyword.Type),
 
             # Operators
-            (r'([!@$%^&*-=+?/<>\|~]+)', token.Operator),
-            (r'(,@|,)', token.Operator),
+            (r'([!@$%^&*-=+?/<>\|~]+)', Operator),
+            (r'(,@|,)', Operator),
 
             # Variable identifier
-            (r'[_a-z][\w\']*', token.Name),
+            (r'[_a-z][\w\']*', Name),
 
-            # String literal
-            (r'"[^"]*"', token.String),
+            # Lambda
+            (r'\\', Keyword.Reserved),
 
-            (r'\\', token.Keyword.Reserved),
-
-            (r'(\(|\))', token.Punctuation),
-            (r'(\[|\])', token.Punctuation),
-            (r'(\{|\})', token.Punctuation),
-            (r'`', token.Punctuation),
-            (r"'", token.Punctuation)
+            # Puctuation
+            (r'(\(|\))', Punctuation),
+            (r'(\[|\])', Punctuation),
+            (r'(\{|\})', Punctuation),
+            (r'`', Punctuation),
+            (r"'", Punctuation)
         ],
+
+        'character': [
+            (r"[^\\]", String.Char, '#pop'),
+            (r"\\", String.Escape, 'escape'),
+            (r" ", String.Char, '#pop'),
+        ],
+
+        'string': [
+            (r'[^\\"]+', String),
+            (r"\\", String.Escape, 'escape'),
+            ('"', String, '#pop'),
+        ],
+
+        'escape': [
+            (r'[abfnrtv"\'&\\]', String.Escape, '#pop'),
+            (r'\^[][' + uni.Lu + r'@^_]', String.Escape, '#pop'),
+            ('|'.join(ascii), String.Escape, '#pop'),
+            (r'o[0-7]+', String.Escape, '#pop'),
+            (r'x[\da-fA-F]+', String.Escape, '#pop'),
+            (r'\d+', String.Escape, '#pop'),
+            (r'\s+\\', String.Escape, '#pop'),
+            (r'', String.Escape, '#pop'),
+        ],
+
+        'defmodule': [
+            (r'\s+', Text),
+            (r'export', Keyword.Reserved, 'funclist'),
+            (r'(import-when)(\s+)(\[)(compile|load)+(\])(\s+)',
+             bygroups(Keyword.Reserved, Text, Punctuation,
+                      Text, Punctuation, Text),
+             'import-body'),
+            (r'import', Keyword.Reserved, 'import-body'),
+            (r'require', Keyword.Reserved, 'import-body'),
+            (r'\(', Punctuation, '#push'),
+            (r'\)', Punctuation, '#pop'),
+            (r'', Text, '#pop'),
+        ],
+
+        'import-body': [
+            (r'\s+', Text),
+            (r'(as|hiding)', Keyword.Reserved),
+            (r'[A-Za-z_.]+', Name.Namespace, 'funclist'),
+            (r'\(', Punctuation, '#push'),
+            (r'\)', Punctuation, '#pop'),
+            (r'', Text, '#pop'),
+        ],
+
+        'funclist': [
+            (r'\s+', Text),
+            (r'(_[\w\']+|[' + uni.Ll + r'][\w\'-]*)', Name.Function),
+            (r'\(', Punctuation, '#push'),
+            (r'\)', Punctuation, '#pop'),
+            (r'', Text, '#pop'),
+        ],
+
         'multiline-comment': [
-            (r'#\;', token.Comment.Multiline, '#push'),
-            (r'\;#', token.Comment.Multiline, '#pop'),
-            (r'[^;#]+', token.Comment.Multiline),
-            (r'[;#]', token.Comment.Multiline),
+            (r'#\;', Comment.Multiline, '#push'),
+            (r'\;#', Comment.Multiline, '#pop'),
+            (r'[^;#]+', Comment.Multiline),
+            (r'[;#]', Comment.Multiline),
         ]
     }
 

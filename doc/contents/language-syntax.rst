@@ -99,8 +99,7 @@ Following code prints single lower case character ``a``:
 .. literalinclude:: ../include/language-syntax/expr/char-a.hs
    :language: haskell
 
-Finkel uses a backslash to escape special characters. Following code
-prints backslash and single quote:
+Following code prints backslash and single quote:
 
 .. literalinclude:: ../include/language-syntax/expr/char-escape.fnk
    :language: finkel
