@@ -231,7 +231,7 @@
                "]))"]))
 
          ;; Exported macros
-         (satisfy '(exported-macros Finkel.Prelude)
+         (satisfy '(exported-macros Finkel.Core)
                   (\ result
                     (case result
                       (Right str) (isSubsequenceOf "defmacro" str)

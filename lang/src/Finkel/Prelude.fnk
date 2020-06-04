@@ -10,6 +10,5 @@
 (import Language.Finkel as All)
 
 ;; Internal
-(import Finkel.Core as All)
 (import Finkel.Core.Error as All)
 (import Finkel.Core.List as All)

@@ -6,8 +6,8 @@
   (export main
           commands)
   (import-when [compile]
-   ;; finkel-lang
-   (Finkel.Prelude))
+    ;; finkel-lang
+    (Finkel.Prelude))
   (import
    ;; base
    (System.Environment (getArgs getProgName withArgs withProgName))
@@ -16,7 +16,7 @@
    (Language.Finkel.Main (defaultMainWith))
 
    ;; finkel-lang
-   (Finkel.Prelude)
+   (Finkel.Core)
 
    ;; Internal
    (Finkel.Tool.Help)
@@ -50,7 +50,7 @@
   [args]
   (macrolet ((preloaded ()
                `[,@(map (\ mac (, mac (qSymbol mac)))
-                        (exported-macros Finkel.Prelude))]))
+                        (exported-macros Finkel.Core))]))
     (do (<- name getProgName)
         (let ((= name' (++ name " make"))))
         (withArgs args (withProgName name'
