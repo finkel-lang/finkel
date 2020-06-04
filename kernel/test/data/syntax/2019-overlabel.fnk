@@ -1,25 +1,80 @@
 ;;;; File containing codes using `OverloadedLabels' language extension
 
-%p(language DataKinds
+%p(LANGUAGE OverloadedLabels)
+
+;;; ... and many other extensions too.
+%p(LANGUAGE DataKinds
+            FlexibleContexts
             FlexibleInstances
+            GADTs
             MultiParamTypeClasses
-            OverloadedLabels)
+            PolyKinds
+            ScopedTypeVariables
+            TypeApplications
+            UndecidableInstances)
 
 (module Main)
 
+(import Data.Proxy ((Proxy ..)))
 (import GHC.OverloadedLabels ((IsLabel ..)))
+(import GHC.Records ((HasField ..)))
+(import GHC.Types ((Type)))
 
-(data User (User {user-name String}))
+(data Person (Person {person-name String}))
 
-(instance (IsLabel "name" (-> User String))
-  (= fromLabel user-name))
+(instance %p(OVERLAPPABLE) (IsLabel "name" (-> Person String))
+  (= fromLabel person-name))
 
 (data Item (Item {item-name String}))
 
-(instance (IsLabel "name" (-> Item String))
+(instance %p(OVERLAPPABLE) (IsLabel "name" (-> Item String))
   (= fromLabel item-name))
+
+(:: ol01 (IO ()))
+(= ol01
+  (do (putStrLn (#name (Person "Alice")))
+      (putStrLn (#name (Item "Banana")))))
+
+(data (Record (:: xs [(, k Type)]))
+  (:: Nil (Record '[]))
+  (:: Cons (-> (Proxy x) a (Record xs) (Record (': '(, x a) xs)))))
+
+(instance
+    %p(OVERLAPPABLE) (HasField x (Record (': '(, x a) xs)) a)
+    (= getField (Cons _ v _) v))
+
+(instance
+    %p(OVERLAPPABLE) (=> (HasField x (Record xs) a)
+                         (HasField x (Record (': '(, y b) xs)) a))
+    (= getField (Cons _ _ r) (getField @ x r)))
+
+(instance %p(OVERLAPPABLE) (=> (HasField x r a) (IsLabel x (-> r a)))
+  (= fromLabel (getField @ x)))
+
+(:: r1 (Record '[(, "personId" Int) (, "name" String)]))
+(= r1 (Cons Proxy 42 (Cons Proxy "R" Nil)))
+
+(:: i1 Int)
+(= i1 (getField @ "personId" r1))
+
+(:: i2 Int)
+(= i2 (#personId r1))
+
+(:: r2 (Record '[(, True Char) (, False Char)]))
+(= r2 (Cons Proxy #'a (Cons Proxy #'b Nil)))
+
+(:: j1 Char)
+(= j1 (getField @ True r2))
+
+(:: j2 Char)
+(= j2 (getField @ False r2))
+
+(:: ol02 (IO ()))
+(= ol02
+  (putStrLn (++ "i1=" (show i1) ", i2=" (show i2) "\n"
+                "j1=" (show j1) ", j2=" (show j1))))
 
 (:: main (IO ()))
 (= main
-  (do (putStrLn (#name (User "Alice")))
-      (putStrLn (#name (Item "Banana")))))
+  (do ol01
+      ol02))

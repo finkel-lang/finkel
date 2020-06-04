@@ -86,12 +86,17 @@ mkTest' path = do
       let task = do
             ret <- runDefaultMain ["-o", aDotOut, "-v0", dotHs]
             ret `shouldBe` ()
-#if MIN_VERSION_ghc(8,4,0)
+#if MIN_VERSION_ghc(8,8,0)
           skipThisTest _ = (False, "")
+#elif MIN_VERSION_ghc(8,6,0)
+          skipThisTest p =
+            ( takeBaseName p == "2019-overlabel"
+            , "Generated Haskell code is malformed")
 #else
           skipThisTest p =
-            ( or [ b == "2012-typeop"
-                 , b == "1004-doccomment-01"]
+            ( or [ b == "1004-doccomment-01"
+                 , b == "2012-typeop"
+                 , b == "2019-overlabel"]
             , "Generated Haskell code is malformed" )
             where b = takeBaseName p
 #endif

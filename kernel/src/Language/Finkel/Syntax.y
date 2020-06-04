@@ -193,6 +193,8 @@ import Language.Finkel.Syntax.SynUtils
 
 'qSymbol'     { LForm (L _ (Atom (ASymbol "qSymbol"))) }
 'qualQSymbol' { LForm (L _ (Atom (ASymbol "Language.Finkel.qSymbol"))) }
+'qString'     { LForm (L _ (Atom (ASymbol "qString"))) }
+'qualQString' { LForm (L _ (Atom (ASymbol "Language.Finkel.qString"))) }
 'qHsList'     { LForm (L _ (Atom (ASymbol "qHsList"))) }
 'qualQHsList' { LForm (L _ (Atom (ASymbol "Language.Finkel.qHsList"))) }
 'qList'       { LForm (L _ (Atom (ASymbol "qList"))) }
@@ -623,6 +625,8 @@ types0_no_qtype :: { HType }
     | '::' type type                    { b_kindedType $1 $2 $3 }
     | 'qSymbol' 'string'                {% b_prmConT $2 }
     | 'qualQSymbol' 'string'            {% b_prmConT $2 }
+    | 'qString' 'string'                {% b_tyLitT $2 }
+    | 'qualQString' 'string'            {% b_tyLitT $2 }
     | 'qHsList' 'hslist'                {% b_prmListT (parse p_types) $2 }
     | 'qualQHsList' 'hslist'            {% b_prmListT (parse p_types) $2 }
     | 'qList' 'hslist'                  {% b_prmTupT (parse p_types) $2 }
@@ -875,6 +879,8 @@ special_id_no_bg_fa :: { Code }
     | 'qualified'   { $1 }
     | 'qSymbol'     { $1 }
     | 'qualQSymbol' { $1 }
+    | 'qString'     { $1 }
+    | 'qualQString' { $1 }
     | 'qHsList'     { $1 }
     | 'qualQHsList' { $1 }
     | 'qList'       { $1 }

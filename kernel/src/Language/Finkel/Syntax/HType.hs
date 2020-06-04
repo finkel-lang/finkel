@@ -21,8 +21,7 @@ import GHC_Hs_Types                    (HsSrcBang (..), HsTupleSort (..),
                                         SrcUnpackedness (..), mkAnonWildCardTy,
                                         mkHsAppTy, mkHsOpTy)
 import Lexeme                          (isLexCon, isLexConSym, isLexVarSym)
-import OccName                         (NameSpace, dataName, tcName, tvName)
-import RdrHsSyn                        (setRdrNameSpace)
+import OccName                         (tcName, tvName)
 import RdrName                         (getRdrName, mkQual, mkUnqual)
 import SrcLoc                          (GenLocated (..), Located, addCLoc,
                                         getLoc)
@@ -95,11 +94,12 @@ nOTPROMOTED :: PROMOTIONFLAG
 nOTPROMOTED = NotPromoted
 {-# INLINE nOTPROMOTED #-}
 
-unPromoteTyVar :: Maybe NameSpace -> HType -> HType
-unPromoteTyVar mb_ns (dL->L l (HsTyVar _EXT _ (L ln name))) =
-  let name' = maybe name (setRdrNameSpace name) mb_ns
-  in  cL l (hsTyVar nOTPROMOTED (L ln name'))
-unPromoteTyVar _     other = other
+unPromoteTyVar :: HType -> HType
+unPromoteTyVar ty =
+  case ty of
+    (dL->L l (HsTyVar _EXT _ (L ln name))) ->
+      cL l (hsTyVar nOTPROMOTED (L ln name))
+    _ -> ty
 {-# INLINE unPromoteTyVar #-}
 
 
@@ -206,11 +206,11 @@ b_prmConT (LForm (L l form))
           case name of
             ":" -> getRdrName consDataCon
             _   -> maybe (mkUnqual (namespace name) name)
-                         (mkQual dataName)
+                         (mkQual tcName)
                          (splitQualName name)
         namespace n
-          | isLexCon n    = dataName
-          | isLexVarSym n = dataName
+          | isLexCon n    = tcName
+          | isLexVarSym n = tcName
           | otherwise     = tvName
     in  return (L l (hsTyVar iSPROMOTED (cL l rname)))
   | otherwise = builderError
@@ -306,8 +306,7 @@ b_prmListT prsr typs =
       | null xs   -> return (cL l (hsExplicitListTy []))
       | otherwise -> do
           tys <- prsr xs
-          -- let tys' = map promoteHType tys
-          let tys' = map (unPromoteTyVar (Just tcName)) tys
+          let tys' = map unPromoteTyVar tys
           return (cL l (hsExplicitListTy tys'))
     _ -> builderError
 {-# INLINE b_prmListT #-}
@@ -318,8 +317,7 @@ b_prmTupT prsr typs =
     LForm (L l (HsList (hd:tl)))
       | isCommaSymbol hd -> do
         tys <- prsr tl
-        -- let tys' = map unPromoteHType tys
-        let tys' = map (unPromoteTyVar Nothing) tys
+        let tys' = map unPromoteTyVar tys
         return (cL l (hsExplicitTupleTy tys'))
     _ -> builderError
 {-# INLINE b_prmTupT #-}
