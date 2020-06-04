@@ -38,7 +38,6 @@ test-suite test
                      , QuickCheck    >= 2.10.1 && < 2.14
                        --
                      , finkel-lang   >= 0.15   && < 1
-                     , finkel-tool   >= 0.15   && < 1
                      , finkel-kernel >= 0.28   && < 1
   build-tool-depends:  finkel:finkel >= 0.1    && < 1
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N

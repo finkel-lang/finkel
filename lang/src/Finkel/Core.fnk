@@ -25,6 +25,10 @@ module.")
   (:dh1 "Expanding macros")
   macroexpand macroexpand-1 exported-macros
 
+  (:dh1 "Compilation context macros")
+  with-ghc-version-cond
+  with-os-cond
+
   (:dh1 "Error macro")
   macro-error
 
@@ -53,8 +57,10 @@ module.")
 
 ;; base
 (import Control.Monad (foldM when))
+(import qualified System.Info)
 
 ;; ghc
+(import Config (cProjectVersionInt))
 (import DynFlags ((HasDynFlags ..)))
 (import FastString ((FastString) fsLit unpackFS))
 (import GHC (getModuleInfo lookupModule lookupName modInfoExports))
@@ -76,11 +82,10 @@ module.")
 ;;; [Internally used macros]
 ;;; ~~~~~~~~~~~~~~~~~~~~~~~~
 ;;;
-;;; Defining a macro `eval-when-compile-and-load', to define functions
-;;; and macros in current compilation context and compiled result. Then
-;;; this module defines some auxiliary functions, and then a macro
-;;; `define-macro'' to define macros in compilation context and compiled
-;;; result.
+;;; First, defining `eval-when-compile-and-load' macro, to define functions and
+;;; macros in current compilation context and compiled result. Then this module
+;;; defines some auxiliary functions, and then a macro `define-macro'' to define
+;;; macros for this module itself and compiled result.
 
 (:with-macro ((= eval-when-compile-and-load
                 (Macro
@@ -874,6 +879,72 @@ Sample run:
   body
   `(case ()
      _ (| ,@body)))
+
+
+;;; Compilation context macros
+
+;;; Auxiliary function for quoting body of with-xxx-cond macros.
+(:: quote-cadr (-> Code Code))
+(= quote-cadr form `(,(car form) ',(cadr form)))
+
+(defmacro with-ghc-version-cond
+  "Macro to generate code with ghc version variable.
+
+The ghc version value is an `Int' value made from `cProjectVersionInt'.
+
+==== __Syntax__
+
+> WITH-GHC-VERSION-COND ::= 'with-ghc-version-cond' varid body
+
+==== __Example__
+
+Following code result in different `String', according to the ghc version used
+for compiling the code:
+
+@
+(with-ghc-version-cond ghc
+  ((< 810 ghc) \"Ghc version is newer than 8.10.0\")
+  ((<= 804 ghc) \"Ghc version is at least 8.4.0\")
+  (otherwise \"Old version\"))
+@
+"
+  forms
+  (let ((= var (car forms)))
+    `(macrolet (($tmp []
+                  (let ((:: ,var Int)
+                        (= ,var ,(:: (read cProjectVersionInt) Int)))
+                    (cond
+                      ,@(mapcar quote-cadr (cdr forms))))))
+       ($tmp))))
+
+(defmacro with-os-cond
+  "Macro to generate code with os name variable.
+
+The name of the os is taken from `System.Info.os'.
+
+==== __Syntax__
+
+> WITH-OS-COND ::= 'with-os-cond' varid body
+
+==== __Example__
+
+Following code result in different `String', according to the OS used for
+compiling the code:
+
+@
+(with-os-cond os
+  ((== os \"linux\") \"OS is Linux\")
+  (otherwise \"Non-linux\"))
+@
+"
+  forms
+  (let ((= var (car forms)))
+    `(macrolet (($tmp []
+                  (let ((:: ,var String)
+                        (= ,var ,System.Info.os))
+                    (cond
+                      ,@(mapcar quote-cadr (cdr forms))))))
+       ($tmp))))
 
 
 ;;; Macros for macros

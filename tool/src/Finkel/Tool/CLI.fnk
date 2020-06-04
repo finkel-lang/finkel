@@ -5,9 +5,6 @@
 (defmodule Finkel.Tool.CLI
   (export (CLI ..)
           (ExitCode ..))
-  (require
-   ;; Internal
-   (Finkel.Tool.Compat))
   (import-when [compile]
    ;; finkel-lang
    (Finkel.Prelude))

@@ -4,9 +4,6 @@
 
 (defmodule Finkel.Tool.Repl.Eval
   (export eval-loop)
-  (require
-   ;; Internal
-   (Finkel.Tool.Compat))
   (import-when [compile]
    ;; finkel-lang
    (Finkel.Prelude))

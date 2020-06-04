@@ -2,9 +2,6 @@
 
 (defmodule Doc.LanguageSyntax
   (export spec)
-  (require
-   ;; finkel-tool
-   (Finkel.Tool.Compat))
   (import-when [compile]
     ;; finkel-lang
     (Finkel.Prelude))

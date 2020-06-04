@@ -10,9 +10,6 @@
 
 (defmodule Finkel.Tool.Repl.Macro
   (export repl-macro)
-  (require
-   ;; Internal
-   (Finkel.Tool.Compat))
   (import-when [compile]
    ;; finkel-lang
    (Finkel.Prelude))
@@ -110,36 +107,39 @@
 
 ;;; GHC version compatibility compile time helper
 
-(define-ghc-version-macro ppr-info-args version
-  [thing cls fam]
-  (if (<= 804 version)
-      `(, ,thing _fixity ,cls ,fam _sd)
-      `(, ,thing _fixity ,cls ,fam)))
+(eval-when [compile]
+  (defmacro ppr-info-args [thing cls fam]
+    (with-ghc-version-cond ghc
+      ((<= 804 ghc)
+       `(, ,thing _fixity ,cls ,fam _sd))
+      (otherwise
+       `(, ,thing _fixity ,cls ,fam))))
 
-(define-ghc-version-macro ppr-tt-args version
-  [name]
-  (if (<= 804 version)
-      `(, ,name _fixity _cls-insts _fam-insts _sd)
-      `(, ,name _fixity _cls-insts _fam-insts)))
+  (defmacro ppr-tt-args [name]
+    (with-ghc-version-cond ghc
+      ((<= 804 ghc)
+       `(, ,name _fixity _cls-insts _fam-insts _sd))
+      (otherwise
+       `(, ,name _fixity _cls-insts _fam-insts))))
 
-(define-ghc-version-macro gen-default-dflags version
-  [flg]
-  (cond
-    ((<= 810 version)
-     `(defaultDynFlags (settings ,flg) (llvmConfig ,flg)))
-    ((<= 806 version)
-     `(defaultDynFlags (settings ,flg) (, (llvmTargets ,flg)
-                                          (llvmPasses ,flg))))
-    ((<= 804 version)
-     `(defaultDynFlags (settings ,flg) (llvmTargets ,flg)))
-    (otherwise
-     `(defaultDynFlags (settings ,flg)))))
+  (defmacro gen-default-dflags [flg]
+    (with-ghc-version-cond ghc
+      ((<= 810 ghc)
+       `(defaultDynFlags (settings ,flg) (llvmConfig ,flg)))
+      ((<= 806 ghc)
+       `(defaultDynFlags (settings ,flg) (, (llvmTargets ,flg)
+                                            (llvmPasses ,flg))))
+      ((<= 804 ghc)
+       `(defaultDynFlags (settings ,flg) (llvmTargets ,flg)))
+      (otherwise
+       `(defaultDynFlags (settings ,flg)))))
 
-(define-ghc-version-macro child-filter version
-  _
-  (if (<= 804 version)
-      '(\ (, t _f _ci _fi _sd) t)
-      '(\ (, t _f _ci _fi) t)))
+  (defmacro child-filter _
+    (with-ghc-version-cond ghc
+      ((<= 804 ghc)
+       '(\ (, t _f _ci _fi _sd) t))
+      (otherwise
+       '(\ (, t _f _ci _fi) t)))))
 
 (defn (:: graph-to-summaries (-> ModuleGraph [ModSummary]))
   (with-ghc-version-cond ver

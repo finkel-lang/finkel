@@ -18,9 +18,6 @@
 
    ;; re-export
    (MonadTrans ..))
-  (require
-   ;; Internal
-   (Finkel.Tool.Compat))
   (import-when [compile]
    ;; finkel-lang
    (Finkel.Prelude))
@@ -43,10 +40,9 @@
 
 (with-ghc-version-cond v
   ((<= 810 v)
-   (:begin
-     ;; exceptions
-     (import Control.Monad.Catch
-             ((MonadThrow ..) (MonadCatch ..) (MonadMask ..)))))
+   ;; exceptions
+   (import Control.Monad.Catch
+           ((MonadThrow ..) (MonadCatch ..) (MonadMask ..))))
   (otherwise
    ;; haskeline
    (import System.Console.Haskeline ((MonadException ..) (RunIO ..)))))

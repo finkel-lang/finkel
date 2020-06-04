@@ -4,11 +4,9 @@
 
 (defmodule ReplMacroTest
   (export replMacroTests)
-  (require
-   ;; finkel-lang
-   (Finkel.Prelude)
-   ;; internal
-   (Finkel.Tool.Compat))
+  (import-when [compile]
+    ;; finkel-lang
+    (Finkel.Prelude))
   (import
    ;; base
    (Control.Exception (catch throw))

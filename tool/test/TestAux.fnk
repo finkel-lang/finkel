@@ -5,9 +5,9 @@
 (defmodule TestAux
   (export (TestIO ..) (TestIOState ..) runTestIO
           (EvalTestFns ..) makeEvalTestFns)
-  (require
-   (Finkel.Prelude)
-   (Finkel.Tool.Compat))
+  (import-when [compile]
+    ;; finkel-lang
+    (Finkel.Prelude))
   (import
    ;; base
    (Control.Concurrent

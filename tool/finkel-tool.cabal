@@ -40,8 +40,7 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Finkel.Tool.Compat
-                       Finkel.Tool.CLI
+  exposed-modules:     Finkel.Tool.CLI
                        Finkel.Tool.Help
                        Finkel.Tool.Repl.Types
                        Finkel.Tool.Repl.IO
@@ -92,7 +91,6 @@ test-suite finkel-tool-test
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
   other-modules:       CLITest
-                       CompatTest
                        MainTest
                        ReplTest
                        ReplMacroTest

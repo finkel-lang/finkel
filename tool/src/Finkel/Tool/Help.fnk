@@ -11,9 +11,6 @@
    ;; Help command
    helpMain
    show-usage)
-  (require
-   ;; Internal
-   (Finkel.Tool.Compat))
   (import-when [compile]
    ;; finkel-lang
    (Finkel.Prelude))

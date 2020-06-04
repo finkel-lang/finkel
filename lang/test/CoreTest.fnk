@@ -307,13 +307,21 @@
              (do (<- ret (runFnk (macroFunction ,(car in) ',in)
                                  defaultFnkEnv))
                  (evaluate ret))))
-       (shouldThrow act anyException))))
+       (shouldThrow act anyException)))
+
+  (defmacro expandSatisfy
+    [in test]
+    `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in)
+                             defaultFnkEnv)))
+         (case v
+           (Left e) (expectationFailure (show (:: e SomeException)))
+           (Right x) (shouldSatisfy x ,test)))))
 
 (defn (:: macroTests Spec)
   (do (let ((= d describe)))
       (d "m1"
          (it "should be \"m1 foo\""
-           (shouldBe (m1 "foo") "m1 foo")))
+             (shouldBe (m1 "foo") "m1 foo")))
 
       (d "eval-when"
          (do (it "should expand to (:begin (:eval-when-compile ...) ...)"
@@ -738,8 +746,8 @@
                (expandTo
                 (defmodule Foo
                   (import-when [compile]
-                   (Prelude)
-                   (Language.Finkel))
+                    (Prelude)
+                    (Language.Finkel))
                   (import
                    (Control.Monad)))
                 (:begin
@@ -766,4 +774,20 @@
                   (bar buzz))))
              (it "should fail on too few parameters"
                (expandFailure
-                (defmodule)))))))
+                (defmodule)))))
+
+      (d "with-ghc-version-cond"
+         (it "should expand to macrolet"
+           (expandSatisfy
+            (with-ghc-version-cond v
+              ((<= 800 v) foo)
+              (otherwise bar))
+            (\ form (== (car form) 'macrolet)))))
+
+      (d "with-os-cond"
+         (it "should expand to macrolet"
+           (expandSatisfy
+            (with-os-cond os
+              ((== "linux" os) foo)
+              (otherwise bar))
+            (\ form (== (car form) 'macrolet)))))))
