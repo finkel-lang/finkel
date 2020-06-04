@@ -29,7 +29,7 @@ import GHC_Hs_Utils                    (mkBindStmt, mkBodyStmt, mkHsApp,
                                         mkHsIf, mkHsLam, mkLHsPar,
                                         mkLHsSigWcType, mkLHsTupleExpr,
                                         mkMatchGroup)
-import Lexeme                          (isLexCon, isLexSym)
+import Lexeme                          (isLexCon, isLexSym, isLexVarId)
 import OrdList                         (toOL)
 import RdrHsSyn                        (mkRdrRecordCon, mkRdrRecordUpd)
 import RdrName                         (RdrName, getRdrName)
@@ -264,14 +264,23 @@ b_varE (LForm (L l form))
   , not (nullFS x)
   , let hdchr = headFS x
   , let tlchrs = tailFS x
-  = let rname | hdchr == ',', all (== ',') (unpackFS tlchrs)
-              -- Tuple constructor function with more than two elements are
-              -- written as symbol with sequence of commas, handling such case
-              -- in this function.
-              = tupConName Boxed (lengthFS x + 1)
-              | otherwise = mkVarRdrName x
-    in  return (cL l (HsVar NOEXT (cL l rname)))
+  = case hdchr of
+      -- Overloaded label starts with `#'. Tail characters need to be a valid
+      -- variable identifier.
+      '#' | isLexVarId tlchrs
+          -> ret (HsOverLabel NOEXT Nothing tlchrs)
+
+      -- Tuple constructor function with more than two elements are written as
+      -- symbol with sequence of commas, handling such case in this function.
+      ',' | all (== ',') (unpackFS tlchrs)
+          -> ret (var (tupConName Boxed (lengthFS x + 1)))
+
+      -- Plain variable identifier.
+      _   -> ret (var (mkVarRdrName x))
   | otherwise = builderError
+  where
+    ret e = return (cL l e)
+    var n = HsVar NOEXT (cL l n)
 {-# INLINE b_varE #-}
 
 b_unitE :: Code -> HExpr
@@ -320,10 +329,6 @@ b_arithSeqE fromE thenE toE =
          | otherwise = From fromE
     l = getLoc fromE
 {-# INLINE b_arithSeqE #-}
-
-b_parE :: HExpr -> HExpr
-b_parE (dL->expr@(L l _)) = cL l (hsPar expr)
-{-# INLINE b_parE #-}
 
 
 -- ------------------------------------------------------------------------

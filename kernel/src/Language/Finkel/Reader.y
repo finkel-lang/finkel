@@ -312,6 +312,7 @@ supportedLangExts =
       , MonoLocalBinds
       , MonomorphismRestriction
       , OverloadedStrings
+      , OverloadedLabels
       , OverloadedLists
       , PolyKinds
       , RankNTypes

@@ -1,0 +1,25 @@
+;;;; File containing codes using `OverloadedLabels' language extension
+
+%p(language DataKinds
+            FlexibleInstances
+            MultiParamTypeClasses
+            OverloadedLabels)
+
+(module Main)
+
+(import GHC.OverloadedLabels ((IsLabel ..)))
+
+(data User (User {user-name String}))
+
+(instance (IsLabel "name" (-> User String))
+  (= fromLabel user-name))
+
+(data Item (Item {item-name String}))
+
+(instance (IsLabel "name" (-> Item String))
+  (= fromLabel item-name))
+
+(:: main (IO ()))
+(= main
+  (do (putStrLn (#name (User "Alice")))
+      (putStrLn (#name (Item "Banana")))))
