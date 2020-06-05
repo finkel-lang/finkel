@@ -11,7 +11,7 @@ module Language.Finkel.Expand
 #include "Syntax.h"
 
 -- base
-import           Control.Monad          (foldM)
+import           Control.Monad          (foldM, (>=>))
 import           Data.Char              (isLower)
 
 -- containers
@@ -35,8 +35,6 @@ import qualified GHC.LanguageExtensions as LangExt
 import           Language.Finkel.Fnk
 import           Language.Finkel.Form
 
-import qualified Data.Map
-
 
 -- ---------------------------------------------------------------------
 --
@@ -48,14 +46,12 @@ import qualified Data.Map
 --
 -- Add modules used during macro expansion to current context, and set
 -- some DynFlags fields.
-setExpanderSettings :: Fnk ()
-setExpanderSettings = do
-  flags0 <- getDynFlags
-
+setExpanderSettings :: DynFlags -> Fnk ()
+setExpanderSettings flags0 = do
   -- Setup DynFlags for interactive evaluation.
   let flags1 = flags0 {hscTarget=HscInterpreted}
-      flags2 = gopt_unset flags1 Opt_Hpc
-      flags3 = xopt_unset flags2 LangExt.MonomorphismRestriction
+      flags2 = xopt_unset flags1 LangExt.MonomorphismRestriction
+      flags3 = gopt_unset flags2 Opt_Hpc
       flags4 = updOptLevel 0 flags3
 
   -- Save the original DynFlags for compiling required modules when not yet
@@ -73,7 +69,7 @@ withExpanderSettings :: Fnk a -> Fnk a
 withExpanderSettings act =
   gbracket getDynFlags
            setDynFlags
-           (const (setExpanderSettings >> act))
+           (setExpanderSettings >=> const act)
 
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
@@ -127,8 +123,8 @@ expands forms = do
   fnk_env <- getFnkEnv
   let macro_names me
         | null me   = nest 2 "None"
-        | otherwise =  nest 2 (fsep (map ppr (Data.Map.keys me)))
-      tmp_macros = Data.Map.unions (envTmpMacros fnk_env)
+        | otherwise =  nest 2 (fsep (map ppr (Map.keys me)))
+      tmp_macros = Map.unions (envTmpMacros fnk_env)
   debug "expands"
         [ "global macros:",  macro_names (envMacros fnk_env)
         , "tmporary macros:", macro_names tmp_macros ]
