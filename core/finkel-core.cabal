@@ -1,13 +1,13 @@
 cabal-version:       2.0
-name:                finkel-lang
-version:             0.17.0.0
+name:                finkel-core
+version:             0.1.0.0
 synopsis:            Finkel language core
 description:
   Finkel language core macros and functions
   .
   See the <https://finkel.readthedocs.org documentation> for more info.
 
-homepage:            https://github.com/finkel-lang/finkel#readme
+homepage:            https://github.com/finkel-core/finkel#readme
 license:             BSD3
 license-file:        LICENSE
 author:              8c6794b6
@@ -32,13 +32,12 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Paths_finkel_lang
+  exposed-modules:     Paths_finkel_core
                        Finkel.Core.Error
                        Finkel.Core.List
                        Finkel.Core
                        Finkel.Prelude
-  autogen-modules:     Paths_finkel_lang
-  -- reexported-modules:  Language.Finkel
+  autogen-modules:     Paths_finkel_core
   build-depends:       base          >= 4.7    && < 5
                      , ghc           >= 8.2.0  && < 8.11.0
                      , finkel-kernel >= 0.28.0 && < 1
@@ -46,13 +45,13 @@ library
   default-language:    Haskell2010
   ghc-options:       -Wall
 
-test-suite finkel-lang-test
+test-suite finkel-core-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
                      , ghc
-                     , finkel-lang
+                     , finkel-core
                      , finkel-kernel
                      --
                      , QuickCheck >= 2.10.1 && < 2.14
@@ -65,5 +64,5 @@ test-suite finkel-lang-test
 
 source-repository head
   type:     git
-  location: https://github.com/finkel-lang/finkel.git
+  location: https://github.com/finkel-core/finkel.git
   subdir:   lang

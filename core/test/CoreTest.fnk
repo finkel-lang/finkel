@@ -36,13 +36,10 @@
    ;; quickcheck
    (Test.QuickCheck)
 
-   ;; finkel-lang
-   (Finkel.Prelude)
-
    ;; Internal
    (Finkel.Core)
    (Finkel.Core.List)
-
+   (Finkel.Prelude)
    (Orphan)))
 
 

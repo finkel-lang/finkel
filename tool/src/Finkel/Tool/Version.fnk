@@ -18,8 +18,8 @@
    ;; finkel-kernel
    (qualified Paths_finkel_kernel)
 
-   ;; finkel-lang
-   (qualified Paths_finkel_lang)
+   ;; finkel-core
+   (qualified Paths_finkel_core)
 
    ;; Internal
    (Finkel.Tool.CLI)))
@@ -42,7 +42,7 @@
   AllVersions
   GhcVersion
   KernelVersion
-  LangVersion
+  CoreVersion
   VersionHelp)
 
 (defn (:: version-descrs [OptDescr VersionMode])
@@ -55,9 +55,9 @@
    (Option [#'k] ["kernel"]
            (NoArg KernelVersion)
            "show finkel-kernel version")
-   (Option [#'l] ["lang"]
-           (NoArg LangVersion)
-           "show finkel-lang version")
+   (Option [#'c] ["core"]
+           (NoArg CoreVersion)
+           "show finkel-core version")
    (Option [#'h] ["help"]
            (NoArg VersionHelp)
            "show this help and exit")])
@@ -65,12 +65,12 @@
 (defn (:: show-version (=> (CLI m) (-> VersionMode (m ()))))
   [mode]
   (case mode
-    AllVersions (do print-lang-version
+    AllVersions (do print-core-version
                     print-kernel-version
                     print-ghc-version)
     GhcVersion print-ghc-version
     KernelVersion print-kernel-version
-    LangVersion print-lang-version
+    CoreVersion print-core-version
     VersionHelp print-version-help))
 
 (defn (:: print-ghc-version (=> (CLI m) (m ())))
@@ -79,8 +79,8 @@
 (defn (:: print-kernel-version (=> (CLI m) (m ())))
   (putString (++ "finkel-kernel " finkel-kernel-version)))
 
-(defn (:: print-lang-version (=> (CLI m) (m ())))
-  (putString (++ "finkel-lang " finkel-lang-version)))
+(defn (:: print-core-version (=> (CLI m) (m ())))
+  (putString (++ "finkel-core " finkel-core-version)))
 
 (defn (:: print-version-help (=> (CLI m) (m ())))
   (do (<- name (liftIO getProgName))
@@ -92,8 +92,8 @@
          ""
          (usageInfo "OPTIONS:\n" version-descrs)]))))
 
-(defn (:: finkel-lang-version String)
-  (showVersion Paths_finkel_lang.version))
+(defn (:: finkel-core-version String)
+  (showVersion Paths_finkel_core.version))
 
 (defn (:: finkel-kernel-version String)
   (showVersion Paths_finkel_kernel.version))

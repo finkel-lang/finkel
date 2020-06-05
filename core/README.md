@@ -1,4 +1,4 @@
-# finkel-lang
+# finkel-core
 
 Core language macro for Finkel.
 

@@ -14,7 +14,7 @@
    ;; Internal
    (Finkel.Tool.Repl.Macro))
   (import-when [compile]
-   ;; finkel-lang
+   ;; finkel-core
    (Finkel.Prelude))
   (import
    ;; base
@@ -28,7 +28,7 @@
    (Language.Finkel.Fnk ((FnkEnv ..) (EnvMacros) makeEnvMacros mergeMacros))
    (Language.Finkel.SpecialForms (defaultFnkEnv specialForms))
 
-   ;; finkel-lang
+   ;; finkel-core
    (Finkel.Core)
 
    ;; Internal

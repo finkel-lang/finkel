@@ -42,7 +42,7 @@ packages:
   - kernel/
   - fkc
   - setup/
-  - lang/
+  - core/
   - tool/
   - finkel/
 

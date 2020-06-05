@@ -5,7 +5,7 @@
 (defmodule Finkel.Tool.Repl.Loop
   (export start-repl acquire-repl cleanup-repl)
   (import-when [compile]
-   ;; finkel-lang
+   ;; finkel-core
    (Finkel.Prelude))
   (import
    ;; base

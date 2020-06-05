@@ -6,7 +6,7 @@
   (export (CLI ..)
           (ExitCode ..))
   (import-when [compile]
-   ;; finkel-lang
+   ;; finkel-core
    (Finkel.Prelude))
   (import
    ;; base

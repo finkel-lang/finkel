@@ -8,6 +8,6 @@ extra-deps:
       - kernel
       - fkc
       - setup
-      - lang
+      - core
       - tool
       - finkel

@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                finkel-tool
-version:             0.17.0.0
+version:             0.1.0.0
 synopsis:            Finkel tool
 description:
   Finkel tool
@@ -62,7 +62,7 @@ library
                      , process       >= 1.6.1  && < 1.7
                      , transformers  >= 0.5.2  && < 0.5.7
                      , finkel-kernel >= 0.28   && < 1
-                     , finkel-lang   >= 0.15   && < 1
+                     , finkel-core   >= 0.1    && < 1
                      , finkel-setup  >= 0.1    && < 1
   if impl(ghc >= 8.10.0)
     build-depends:     exceptions    >= 0.10   && < 0.11
@@ -80,7 +80,7 @@ test-suite finkel-tool-test
                      , haskeline
                      , network
                      , process
-                     , finkel-lang
+                     , finkel-core
                      , finkel-kernel
                      , finkel-tool
                      --

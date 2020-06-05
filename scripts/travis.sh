@@ -91,7 +91,7 @@ travis_after_success_linux () {
             hpc-codecov \
                 --src=kernel --mix=kernel/$DISTDIR/hpc \
                 --src=setup --mix=setup/$DISTDIR/hpc \
-                --src=lang --mix=lang/$DISTDIR/hpc \
+                --src=core --mix=core/$DISTDIR/hpc \
                 --src=tool --mix=tool/$DISTDIR/hpc \
                 --src=$DOCPKG/my-second-package \
                 --mix=$DOCPKG/my-second-package/$DISTDIR/hpc \

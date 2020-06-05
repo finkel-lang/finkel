@@ -88,14 +88,14 @@
         (it "should show \"finkel-kernel\" with \"--kernel\" option"
           (do (<- msg (version ["--kernel"]))
               (shouldContain msg "kernel")))
-        (it "should show \"finkel-lang\" with \"--lang\" option"
-          (do (<- msg (version ["--lang"]))
-              (shouldContain msg "lang")))
+        (it "should show \"finkel-core\" with \"--core\" option"
+          (do (<- msg (version ["--core"]))
+              (shouldContain msg "core")))
         (it "should show all versions with \"--all\" option"
           (do (<- msg (version ["--all"]))
               (shouldContain msg "ghc")
               (shouldContain msg "kernel")
-              (shouldContain msg "lang")))
+              (shouldContain msg "core")))
         (it "should complain unrecognized option"
           (do (<- msg (version ["--no-such-option"]))
               (shouldContain msg "--no-such-option"))))))

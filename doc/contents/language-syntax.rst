@@ -13,7 +13,7 @@ codes. Each Finkel code is compared to an equivalent Haskell code.
 
 The Finkel core keywords are implemented as macros.  Details of the
 Finkel core keywords are described in the `haddock API documentation
-<https://hackage.haskell.org>`_ of the ``finkel-lang`` package.
+<https://hackage.haskell.org>`_ of the ``finkel-core`` package.
 
 
 Literals
@@ -260,7 +260,7 @@ and boolean:
 .. literalinclude:: ../include/language-syntax/expr/guard.hs
    :language: haskell
 
-See also `cond <https://hackage.haskell.org>`_ in ``finkel-lang``.
+See also `cond <https://hackage.haskell.org>`_ in ``finkel-core``.
 
 
 Tuples
@@ -616,7 +616,7 @@ Top-level module definition does not use ``where``:
    :language: haskell
 
 See also `defmodule <https://hackage.haskell.org>`_ in
-``finkel-lang``.
+``finkel-core``.
 
 
 Export Lists

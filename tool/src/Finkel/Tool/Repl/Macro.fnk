@@ -11,7 +11,7 @@
 (defmodule Finkel.Tool.Repl.Macro
   (export repl-macro)
   (import-when [compile]
-   ;; finkel-lang
+   ;; finkel-core
    (Finkel.Prelude))
   (import
    ;; base
@@ -83,7 +83,7 @@
    (Language.Finkel.Syntax (parseExpr parseType))
    (Language.Finkel.TargetSource (asModuleName))
 
-   ;; finkel-lang
+   ;; finkel-core
    (Finkel.Core.List)))
 
 ;;; Extra imports

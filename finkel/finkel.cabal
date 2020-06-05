@@ -25,7 +25,7 @@ flag dynamic
 executable finkel
   main-is:             Main.hs
   build-depends:       base        >= 4.7  && < 5
-                     , finkel-tool >= 0.17 && < 1
+                     , finkel-tool >= 0.1  && < 1
   default-language:    Haskell2010
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   if !os(windows) && flag(dynamic)
