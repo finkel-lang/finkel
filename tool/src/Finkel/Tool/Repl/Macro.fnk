@@ -142,16 +142,16 @@
        '(\ (, t _f _ci _fi) t)))))
 
 (defn (:: graph-to-summaries (-> ModuleGraph [ModSummary]))
-  (with-ghc-version-cond ver
-    ((<= 804 ver)
+  (with-ghc-version-cond ghc
+    ((<= 804 ghc)
      HscTypes.mgModSummaries)
     (otherwise
      id)))
 
 (defn (:: show-linker-state (-> HscEnv (IO ())))
   [hsc-env]
-  (with-ghc-version-cond ver
-    ((<= 810 ver)
+  (with-ghc-version-cond ghc
+    ((<= 810 ghc)
      (showLinkerState (hsc-dynLinker hsc-env) (hsc-dflags hsc-env)))
     (otherwise
      (showLinkerState (hsc-dflags hsc-env)))))
