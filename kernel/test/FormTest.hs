@@ -27,7 +27,9 @@ import           Control.DeepSeq
 
 -- ghc
 import           BasicTypes                   (SourceText (..), fl_value)
+import           DynFlags                     (HasDynFlags (..))
 import           FastString                   (fsLit, unpackFS)
+import           Outputable                   (showPpr)
 import           SrcLoc                       (GenLocated (..), SrcSpan (..),
                                                noSrcSpan)
 import           StringBuffer                 (stringToStringBuffer)
@@ -42,6 +44,7 @@ import           Test.Hspec
 import           Test.QuickCheck
 
 -- finkel-kernel
+import           Language.Finkel.Fnk
 import           Language.Finkel.Form
 import           Language.Finkel.Homoiconic
 import           Language.Finkel.Lexer
@@ -73,6 +76,7 @@ formTests = do
   fracTest 1e-9
 
   showTest
+  pprTest
   functorTest "(a \"foo\" \\x [True False])"
   foldableTest
   traversableTest
@@ -534,6 +538,20 @@ eqForm a b =
   where
     epsilon :: Double
     epsilon = 1e-7
+
+pprTest :: Spec
+pprTest =
+  describe "ppr" $
+    it "should return expected String" $ do
+      let str0 = "(1 2.34 () #'a \"foo\" [foo bar buzz])"
+      str1 <- runPpr str0
+      str1 `shouldBe` str0
+
+runPpr :: String -> IO String
+runPpr str =
+  runFnk (do dflags <- getDynFlags
+             return (showPpr dflags (parseE str)))
+         defaultFnkEnv
 
 parseE :: String -> Code
 parseE = parseE' Nothing

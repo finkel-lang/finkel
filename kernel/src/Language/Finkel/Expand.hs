@@ -25,7 +25,7 @@ import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
 import           Outputable             (Outputable (..), cat, fsep, hcat, nest,
-                                         text, (<+>))
+                                         (<+>))
 import           SrcLoc                 (GenLocated (..))
 
 -- ghc-boot
@@ -234,7 +234,7 @@ expand form =
     do_expand k f =
       do debug "expand" [cat ["Expanding (", ppr k, " ...)"]]
          ret0 <- f form
-         debugFnk ["=>" <+> nest 3 (text (show ret0))]
+         debugFnk ["=>" <+> nest 3 (ppr ret0)]
          return ret0
 
 expandInDo ::

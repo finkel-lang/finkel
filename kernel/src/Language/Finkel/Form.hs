@@ -44,6 +44,8 @@ import GHC.Generics    (Generic)
 -- ghc
 import BasicTypes      (FractionalLit (..), SourceText (..))
 import FastString      (FastString, fsLit, unpackFS)
+import Outputable      (Outputable (..), brackets, cat, char, double,
+                        doubleQuotes, fsep, integer, parens, text)
 import SrcLoc          (GenLocated (..), Located, SrcSpan (..), combineLocs,
                         srcSpanFile, srcSpanStartCol, srcSpanStartLine)
 
@@ -111,6 +113,16 @@ instance NFData Atom where
       AString _ str -> seq str ()
       AInteger i    -> rnf (il_value i)
       AFractional y -> seq y ()
+
+instance Outputable Atom where
+  ppr form =
+    case form of
+      AUnit         -> ppr ()
+      ASymbol x     -> ppr x
+      AChar _ x     -> cat [text "#'",  char x]
+      AString _ x   -> doubleQuotes (ppr x)
+      AInteger x    -> integer (il_value x)
+      AFractional x -> double (fromRational (fl_value x))
 
 -- | Form type. Also used as token. Elements of recursive structures
 -- contain location information.
@@ -181,6 +193,14 @@ instance NFData a => NFData (Form a) where
       HsList as -> rnf as
       TEnd      -> ()
 
+instance Outputable a => Outputable (Form a) where
+  ppr x =
+    case x of
+      Atom a    -> ppr a
+      List xs   -> parens (fsep (map ppr xs))
+      HsList xs -> brackets (fsep (map ppr xs))
+      TEnd      -> text ""
+
 -- | Newtype wrapper for located 'Form'.
 newtype LForm a = LForm {unLForm :: Located (Form a)}
   deriving (Data, Typeable, Generic)
@@ -206,6 +226,9 @@ instance Traversable LForm where
 
 instance NFData a => NFData (LForm a) where
   rnf (LForm (L l a)) = rnf l `seq` rnf a
+
+instance Outputable a => Outputable (LForm a) where
+  ppr (LForm (L _ a)) = ppr a
 
 -- | Type synonym for code data.
 --
