@@ -74,8 +74,9 @@ import           Module                       (ModLocation (..), ModuleName,
                                                mkModuleName, moduleName,
                                                moduleNameSlashes,
                                                moduleNameString, moduleUnitId)
-import           Outputable                   (cat, hcat, neverQualify, ppr,
-                                               text, (<+>))
+import           Outputable                   (SDoc, braces, comma, hcat, nest,
+                                               neverQualify, ppr, punctuate,
+                                               sep, text, vcat, (<+>))
 import           Panic                        (GhcException (..),
                                                throwGhcException)
 import           SrcLoc                       (GenLocated (..), Located, getLoc,
@@ -260,7 +261,8 @@ make' :: [TargetUnit] -> Fnk [ModSummary]
 make' pendings0 = do
   debugMake "make'"
     [ "total:" <+> text (show total)
-    , "pendings0:" <+> text (show pendings0) ]
+    , "pendings0:"
+    , nest 2 (vcat (map ppr pendings0)) ]
   timeIt "make' [Finkel]" (go [] total total [] pendings0)
   where
     go :: [ModSummary] -- ^ Accumulator.
@@ -297,7 +299,7 @@ make' pendings0 = do
     -- source code or Haskell source code, get ModSummary to resolve the
     -- dependencies.
     go acc i k (target@(tsr,_mbp):summarised) pendings = do
-      debugMake "make'.go" ["target:" <+> text (show target)]
+      debugMake "make'.go" ["target:" <+> ppr target]
 
       -- Since Finkel make is not using 'DriverPipeline.runPipeline', setting
       -- 'DynFlags.dumpPrefix' manually.
@@ -324,7 +326,7 @@ make' pendings0 = do
                         ["imports:" <+>
                           if null import_names
                              then text "none"
-                             else cat (map (text . show) import_names)]
+                             else vcat (map text import_names)]
 
               -- Test whether imported modules are in pendings. If found, skip
               -- the compilation and add this module to the list of pending
@@ -365,7 +367,7 @@ make' pendings0 = do
             hsc_env <- getSession
             is <- mapM (findNotCompiledImport hsc_env acc) imports
             let is' = catMaybes is
-            debugMake "make'.go.compileIfReqdy"
+            debugMake "make'.go.compileIfReady"
                       ["filtered imports:" <+> text (show is')]
             if not (null is')
                then do
@@ -647,9 +649,9 @@ findNotCompiledImport hsc_env acc idecl = do
     Found mloc mdl -> do
       debugMake
         "findNotCompiledImport"
-        [ "Found" <+> ppr mloc
-        , "moduleUnitId:" <+>  ppr (moduleUnitId mdl)
-        , "myInstalledUnitId:" <+> ppr myInstalledUnitId ]
+        [ "Found" <+> ppr mname
+        , pprMLoc mloc
+        , "moduleUnitId:" <+>  ppr (moduleUnitId mdl) ]
       case ml_hs_file mloc of
         Just path | takeExtension path `elem` [".hs"] ->
                     if moduleName mdl `elem` map ms_mod_name acc
@@ -1074,9 +1076,27 @@ dumpDynFlags label dflags =
             , "  ways:" <+> text (show (ways dflags))
             , "  forceRecomp:" <+> text (show (gopt Opt_ForceRecomp dflags))
             , "  interpWays:" <+> text (show interpWays)
-            , "  importPaths:" <+> text (show (importPaths dflags)) ]
+            , "  importPaths:" <+> sep (map text (importPaths dflags))
+            , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)]
 
 -- | Debug function for this module.
 debugMake :: MsgDoc -> [MsgDoc] -> Fnk ()
 debugMake fn_name msgs =
   debugFnk (hcat [";;; [Language.Finkel.Make.", fn_name, "]:"] : msgs)
+
+-- | Pretty print 'ModLocation'.
+pprMLoc :: ModLocation -> SDoc
+pprMLoc mloc =
+  vcat
+    [ text "ModLocation"
+    , nest 2
+           (braces
+             (vcat
+                (punctuate
+                   comma
+                   [ text "ml_hs_file =" <+>
+                     case ml_hs_file mloc of
+                       Nothing   -> text "Nothing"
+                       Just file -> text "Just" <+> text file
+                   , text "ml_hi_file =" <+> text (ml_hi_file mloc)
+                   , text "ml_obj_file =" <+> text (ml_obj_file mloc)])))]

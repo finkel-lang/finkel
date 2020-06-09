@@ -36,7 +36,7 @@ import ErrUtils               (mkErrMsg)
 import Exception              (gtry)
 import HscTypes               (throwOneError)
 import Module                 (mkModuleName, moduleNameSlashes)
-import Outputable             (neverQualify, text)
+import Outputable             (Outputable (..), neverQualify, sep, text)
 import SrcLoc                 (GenLocated (..), Located)
 import StringBuffer           (hGetStringBuffer)
 import Util                   (looksLikeModuleName)
@@ -72,6 +72,16 @@ instance Show TargetSource where
       concat ["FnkSource ", show path, " ", mdl, " "]
     HsSource path -> "HsSource " ++ show path
     OtherSource path -> "OtherSource " ++ show path
+
+instance Outputable TargetSource where
+  ppr s =
+    case s of
+      FnkSource path mdl _ _ ->
+        sep [text "FnkSource", text path, text mdl]
+      HsSource path          ->
+        sep [text "HsSource", text path]
+      OtherSource path       ->
+        sep [text "OtherSource", text path]
 
 -- | Get the file path of given 'TargetSource'.
 targetSourcePath :: TargetSource -> FilePath

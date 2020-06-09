@@ -5,6 +5,7 @@ module Language.Finkel.Expand
   ( expand
   , expand1
   , expands
+  , expands'
   , withExpanderSettings
   ) where
 
@@ -25,7 +26,7 @@ import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
 import           Outputable             (Outputable (..), cat, fsep, hcat, nest,
-                                         (<+>))
+                                         vcat)
 import           SrcLoc                 (GenLocated (..))
 
 -- ghc-boot
@@ -232,9 +233,9 @@ expand form =
           return $! LForm (L l (List forms'))
 
     do_expand k f =
-      do debug "expand" [cat ["Expanding (", ppr k, " ...)"]]
+      do debug "expand" [vcat ["Expandning:", nest 2 (ppr form)]]
          ret0 <- f form
-         debugFnk ["=>" <+> nest 3 (ppr ret0)]
+         debugFnk [cat ["(", ppr k, " ...) ==>"], nest 2 (ppr ret0)]
          return ret0
 
 expandInDo ::
