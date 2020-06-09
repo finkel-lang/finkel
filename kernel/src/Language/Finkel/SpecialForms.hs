@@ -14,7 +14,7 @@ module Language.Finkel.SpecialForms
 
 -- base
 import Control.Exception               (throw)
-import Control.Monad                   (unless, when)
+import Control.Monad                   (foldM, unless, when)
 import Control.Monad.IO.Class          (MonadIO (..))
 import Data.Maybe                      (catMaybes)
 import GHC.Exts                        (unsafeCoerce#)
@@ -44,7 +44,8 @@ import InteractiveEval                 (getContext)
 import MkIface                         (RecompileRequired (..),
                                         recompileRequired)
 import Module                          (ModuleName, moduleNameString)
-import Name                            (nameOccName)
+import Name                            (nameOccName, occName)
+import OccName                         (occNameFS)
 import Outputable                      (hcat, ppr, showPpr)
 import RdrName                         (rdrNameOcc)
 import SrcLoc                          (GenLocated (..), SrcSpan, unLoc)
@@ -54,13 +55,12 @@ import Var                             (varName)
 -- Internal
 import Language.Finkel.Builder         (HImportDecl, evalBuilder, syntaxErrMsg)
 import Language.Finkel.Eval
-import Language.Finkel.Expand          (expand, expands)
+import Language.Finkel.Expand          (expand, expands')
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
 import Language.Finkel.Make            (simpleMake)
-import Language.Finkel.Syntax          (parseDecls, parseExpr, parseLImport,
-                                        parseModule)
+import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModule)
 import Language.Finkel.Syntax.SynUtils (cL, dL)
 
 #include "finkel_kernel_config.h"
@@ -309,12 +309,13 @@ m_withMacro form =
   case unLForm form of
     L l1 (List (_:LForm (L _ (List forms)):rest)) -> do
       fnkc_env0 <- getFnkEnv
+      dflags <- getDynFlags
 
       -- Expand body of `with-macro' with temporary macros.
-      macros <- fromList <$> mapM evalMacroDef forms
+      macros <- fromList <$> evalMacroDefs dflags forms
       let tmpMacros0 = envTmpMacros fnkc_env0
       putFnkEnv (fnkc_env0 {envTmpMacros = macros : tmpMacros0})
-      expanded <- expands rest
+      expanded <- expands' rest
 
       -- Getting 'FnkEnv' again, so that persistent macros defined inside the
       -- `with-macro' body could be used hereafter. Restoring tmporary macros to
@@ -327,22 +328,22 @@ m_withMacro form =
         _   -> return (tList l1 (tSym l1 ":begin" : expanded))
     _ -> finkelSrcError form ("with-macro: malformed args:\n" ++ show form)
   where
-    evalMacroDef decl = do
-      expanded <- expand decl
-      case unCode expanded of
-        List (_ : fname@(LForm (L _ (Atom (ASymbol name)))) : _) ->
-          do dflags <- getDynFlags
-             case evalBuilder dflags parseDecls [expanded] of
-               Right hdecls -> do
-                 (tythings, ic) <- evalDecls hdecls
-                 case tythings of
-                   tything : _ | isMacro dflags tything -> do
-                     modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
-                     macro <- coerceMacro dflags fname
-                     return (name, macro)
-                   _ -> finkelSrcError fname "with-macro: not a macro"
-               Left err -> failS (syntaxErrMsg err)
-        _ -> finkelSrcError decl "with-macro: malformed args"
+    evalMacroDefs dflags forms = do
+      forms' <- mapM expand forms
+      case evalBuilder dflags parseModule forms' of
+        Right (HsModule {hsmodDecls=decls}) -> do
+          (tythings, ic) <- evalDecls decls
+          modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
+          foldM (asMacro dflags) [] tythings
+        Left err -> finkelSrcError form (syntaxErrMsg err)
+    asMacro dflags acc tything =
+      case tything of
+        AnId var | isMacro dflags tything ->
+          do let name_fs = occNameFS (occName (varName var))
+                 name_sym = toCode (ASymbol name_fs)
+             macro <- coerceMacro dflags name_sym
+             return ((name_fs, macro):acc)
+        _ -> return acc
 
 m_require :: MacroFunction
 m_require form =
@@ -401,7 +402,7 @@ m_evalWhenCompile :: MacroFunction
 m_evalWhenCompile form =
   case unLForm form of
     L l (List (_ : body)) -> do
-      expanded <- expands body
+      expanded <- expands' body
       dflags <- getDynFlags
       case evalBuilder dflags parseModule expanded of
         Right (HsModule { hsmodDecls = decls
