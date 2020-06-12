@@ -273,10 +273,6 @@ makeMissingHomeMod force_recomp (L loc idecl) = do
       Found {} -> return []
       _        -> withRequiredSettings (simpleMake force_recomp lmname)
 
-  -- -- Add the module to current compilation context.
-  -- context <- getContext
-  -- setContext (IIDecl idecl : context)
-
   return compiled
 
 
@@ -410,19 +406,18 @@ m_evalWhenCompile form =
 
           -- If module imports were given, add to current interactive context.
           -- Compile home modules if not found.
-          unless (null limps)
-                 (do mapM_ (makeMissingHomeMod False) limps
-                     context <- getContext
-                     setContext (map (IIDecl . unLoc) limps ++ context))
+          unless (null limps) $ do
+             mapM_ (makeMissingHomeMod False) limps
+             context <- getContext
+             setContext (map (IIDecl . unLoc) limps ++ context)
 
           -- Then evaluate the declarations and set the interactive context with
-          -- the update `tythings'.
-          (tythings, ic) <- evalDecls decls
-          modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
-
-          -- If the compiled decls contain macros, add to current Finkel
-          -- environment.
-          mapM_ (addImportedMacro dflags) tythings
+          -- the update `tythings'. If the compiled decls contain macros, add
+          -- to current Finkel environment.
+          unless (null decls) $ do
+            (tythings, ic) <- evalDecls decls
+            modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
+            mapM_ (addImportedMacro dflags) tythings
 
           return emptyForm
 
