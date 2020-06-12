@@ -38,7 +38,7 @@ import           DriverPipeline               (compileOne', link, oneShot,
 import           DynFlags                     (DumpFlag (..), DynFlags (..),
                                                GeneralFlag (..), GhcLink (..),
                                                GhcMode (..), getDynFlags, gopt,
-                                               gopt_set, gopt_unset, interpWays,
+                                               gopt_set, gopt_unset,
                                                isObjectTarget,
                                                parseDynamicFilePragma,
                                                thisPackage)
@@ -76,7 +76,7 @@ import           Module                       (ModLocation (..), ModuleName,
                                                moduleNameString, moduleUnitId)
 import           Outputable                   (SDoc, braces, comma, hcat, nest,
                                                neverQualify, ppr, punctuate,
-                                               sep, text, vcat, (<+>))
+                                               text, vcat, (<+>))
 import           Panic                        (GhcException (..),
                                                throwGhcException)
 import           SrcLoc                       (GenLocated (..), Located, getLoc,
@@ -172,7 +172,7 @@ make infiles no_link force_recomp mb_output = do
               | otherwise    = gopt_unset dflags1 Opt_ForceRecomp
   setDynFlags dflags2
   dflags3 <- getDynFlags
-  dumpDynFlags "make" dflags3
+  dumpDynFlags "Language.Finkel.Make.make" dflags3
 
   -- Preserve the language extension values in initial dynflags to FnkEnv, to
   -- reset the language extension later, to keep fresh set of language extensios
@@ -249,7 +249,7 @@ emptyTargetUnit :: TargetSource -> TargetUnit
 emptyTargetUnit ts = (ts, Nothing)
 
 -- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule', then compile
--- to interface file, and object code.
+-- to interface file and object code.
 --
 -- Do macro expansion and get the Haskell `import' declarations from
 -- parsed source contents. If the macro expanded result does not
@@ -1064,20 +1064,6 @@ preprocess' hsc_env (path, mb_phase) =
 #else
 preprocess' = preprocess
 #endif
-
--- | Show some fields in 'DynFlags'.
-dumpDynFlags :: MsgDoc -> DynFlags -> Fnk ()
-dumpDynFlags label dflags =
-  debugMake label
-            [ "DynFlags:"
-            , "  ghcLink:" <+> text (show (ghcLink dflags))
-            , "  ghcMode:" <+> ppr (ghcMode dflags)
-            , "  hscTarget:" <+> text (show (hscTarget dflags))
-            , "  ways:" <+> text (show (ways dflags))
-            , "  forceRecomp:" <+> text (show (gopt Opt_ForceRecomp dflags))
-            , "  interpWays:" <+> text (show interpWays)
-            , "  importPaths:" <+> sep (map text (importPaths dflags))
-            , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)]
 
 -- | Debug function for this module.
 debugMake :: MsgDoc -> [MsgDoc] -> Fnk ()

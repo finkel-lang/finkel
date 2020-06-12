@@ -1,5 +1,6 @@
 -- | Wrapper for Finkel code compilation monad.
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Language.Finkel.Fnk
   ( -- * Finkel compiler monad
     Fnk(..)
@@ -27,6 +28,7 @@ module Language.Finkel.Fnk
   -- * Debugging
   , debugFnk
   , getFnkDebug
+  , dumpDynFlags
 
   -- * FlagSet
   , FlagSet
@@ -72,8 +74,9 @@ import qualified Data.Map               as Map
 
 -- ghc
 import           Bag                    (unitBag)
-import           DynFlags               (DynFlags (..), HasDynFlags (..),
-                                         Language (..))
+import           DynFlags               (DynFlags (..), GeneralFlag (..),
+                                         HasDynFlags (..), Language (..), gopt,
+                                         interpWays)
 import           ErrUtils               (MsgDoc, mkErrMsg)
 import           Exception              (ExceptionMonad (..), ghandle)
 import           FastString             (FastString, fsLit, unpackFS)
@@ -88,8 +91,8 @@ import           HscTypes               (HomeModInfo, HscEnv (..),
 import           InteractiveEval        (setContext)
 import           Module                 (ModuleName, mkModuleName)
 import           Outputable             (alwaysQualify, defaultErrStyle,
-                                         neverQualify, ppr, printSDocLn,
-                                         showSDocForUser, text, vcat)
+                                         neverQualify, ppr, printSDocLn, sep,
+                                         showSDocForUser, text, vcat, (<+>))
 import qualified Pretty
 import           SrcLoc                 (GenLocated (..), Located)
 import           UniqSupply             (initUniqSupply, mkSplitUniqSupply,
@@ -344,6 +347,22 @@ getFnkDebug =
        Nothing -> return False
        Just _  -> return True
 {-# INLINE getFnkDebug #-}
+
+-- | Show some fields in 'DynFlags'.
+dumpDynFlags :: MsgDoc -> DynFlags -> Fnk ()
+dumpDynFlags label dflags =
+  debugFnk
+    [ label
+    , "DynFlags:"
+    , "  ghcLink:" <+> text (show (ghcLink dflags))
+    , "  ghcMode:" <+> ppr (ghcMode dflags)
+    , "  hscTarget:" <+> text (show (hscTarget dflags))
+    , "  ways:" <+> text (show (ways dflags))
+    , "  forceRecomp:" <+> text (show (gopt Opt_ForceRecomp dflags))
+    , "  interpWays:" <+> text (show interpWays)
+    , "  importPaths:" <+> sep (map text (importPaths dflags))
+    , "  optLevel:" <+> text (show (optLevel dflags))
+    , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)]
 
 -- | Empty 'FnkEnv' for performing computation with 'Fnk'.
 emptyFnkEnv :: FnkEnv
