@@ -333,15 +333,14 @@ and definition of 'cdadr' is:
     (let ((= name (cxr-name xs)))
       (case xs
         (: hd tl) [`(:: ,name (-> Code Code))
-                   `(= ,name
-                      (. ,(cxr-name (return hd)) ,(cxr-name tl)))
+                   `(= ,name (. ,(cxr-name [hd]) ,(cxr-name tl)))
                    `%p(INLINABLE ,name)]
-        _         (throw (FinkelException (++ "cxr: invalid arg: " xs)))))))
+        _ (throw (FinkelException (++ "cxr: invalid arg: " xs))))))
 
-(:with-macro ((= cxrs
-                (Macro (\ _ (return `(:begin
-                                       ,@(concatMap cxr ads)))))))
-  (cxrs))
+  (:: cxrs Macro)
+  (= cxrs (Macro (\ _ (return `(:begin ,@(concatMap cxr ads)))))))
+
+(cxrs)
 
 
 ;;; Higher Order Functions
