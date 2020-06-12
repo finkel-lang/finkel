@@ -12,19 +12,23 @@ module Language.Finkel.Expand
 #include "Syntax.h"
 
 -- base
-import           Control.Monad          (foldM, (>=>))
+import           Control.Monad          (foldM)
+import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Char              (isLower)
+import           Data.IORef             (writeIORef)
 
 -- containers
 import qualified Data.Map               as Map
 
 -- ghc
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
-                                         HscTarget (..), getDynFlags,
-                                         gopt_unset, updOptLevel, xopt_unset)
+                                         HscTarget (..), gopt_unset,
+                                         updOptLevel, xopt_unset)
 import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
+import           GhcMonad               (getSession, setSession)
+import           HscTypes               (HscEnv (..), hscEPS)
 import           Outputable             (Outputable (..), cat, fsep, hcat, nest,
                                          vcat)
 import           SrcLoc                 (GenLocated (..))
@@ -48,29 +52,45 @@ import           Language.Finkel.Form
 -- Add modules used during macro expansion to current context, and set
 -- some DynFlags fields.
 setExpanderSettings :: DynFlags -> Fnk ()
-setExpanderSettings flags0 = do
-  -- Setup DynFlags for interactive evaluation.
-  let flags1 = flags0 {hscTarget=HscInterpreted}
-      flags2 = xopt_unset flags1 LangExt.MonomorphismRestriction
-      flags3 = gopt_unset flags2 Opt_Hpc
-      flags4 = updOptLevel 0 flags3
-
-  -- Save the original DynFlags for compiling required modules when not yet
-  -- saved.
+setExpanderSettings dflags0 = do
+  -- Save the original DynFlags for compiling required modules if not saved yet.
   fnkc_env <- getFnkEnv
   case envMakeDynFlags fnkc_env of
-    Nothing -> putFnkEnv (fnkc_env {envMakeDynFlags = Just flags0})
+    Nothing -> putFnkEnv (fnkc_env {envMakeDynFlags = Just dflags0})
     Just _  -> return ()
 
-  setDynFlags flags4
+  -- Setup DynFlags for interactive evaluation.
+  let dflags1 = dflags0 {hscTarget=HscInterpreted}
+      dflags2 = xopt_unset dflags1 LangExt.MonomorphismRestriction
+      dflags3 = gopt_unset dflags2 Opt_Hpc
+      dflags4 = updOptLevel 0 dflags3
+
+  setDynFlags dflags4
 
 -- | Perform given action with 'DynFlags' updated for macroexpansion with
 -- interactive evaluation, then reset to the preserved original DynFlags.
 withExpanderSettings :: Fnk a -> Fnk a
 withExpanderSettings act =
-  gbracket getDynFlags
-           setDynFlags
-           (setExpanderSettings >=> const act)
+  -- Workaround for reloading interface files.
+  --
+  -- Module interface files loadded during macro expansion may use different
+  -- optimization settings, since the DynFlags used while macro expansion is
+  -- modified to use "-O0". This will cause some optimization works such as RULE
+  -- rewrite to not happen.
+  --
+  -- To force the module reloadings modules after the macro expansion, updating
+  -- the ExternalPackageState IORef stored in the hsc_EPS field from restore
+  -- action below.
+  --
+  gbracket (do hsc_env <- getSession
+               eps <- liftIO (hscEPS hsc_env)
+               return (hsc_env, eps))
+           (\(hsc_env, eps) -> do
+              liftIO (writeIORef (hsc_EPS hsc_env) eps)
+              setSession hsc_env)
+           (\(hsc_env, _eps) -> do
+              setExpanderSettings (hsc_dflags hsc_env)
+              act)
 
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
