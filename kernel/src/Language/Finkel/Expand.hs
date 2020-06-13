@@ -29,6 +29,7 @@ import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
 import           GhcMonad               (getSession, setSession)
 import           HscTypes               (HscEnv (..), hscEPS)
+import           LoadIface              (initExternalPackageState)
 import           Outputable             (Outputable (..), cat, fsep, hcat, nest,
                                          vcat)
 import           SrcLoc                 (GenLocated (..))
@@ -46,6 +47,41 @@ import           Language.Finkel.Form
 -- Macro expander
 --
 -- ---------------------------------------------------------------------
+
+-- | Perform given action with 'DynFlags' updated for macroexpansion with
+-- interactive evaluation, then reset to the preserved original DynFlags.
+withExpanderSettings :: Fnk a -> Fnk a
+withExpanderSettings act = gbracket prepare restore work
+  where
+    -- XXX: Workaround for reloading *.hi files after macro expansion.
+    --
+    -- Module interface files loaded during macro expansion may use different
+    -- optimization settings, since the macro expansion always uses DynFlags
+    -- with "-O0" optimization settings. This will cause some optimization works
+    -- such as RULE rewrite not to happen when the loaded interface were left
+    -- as-is after macro expansion.
+    --
+    -- To force the interface file reloadings after the macro expansion,
+    -- updating the IORef of the ExternalPackageState value stored in the
+    -- hsc_EPS field when optiomization flag were greater than zero.
+    --
+    prepare = do
+      hsc_env <- getSession
+      mb_eps <- case optLevel (hsc_dflags hsc_env) of
+                  0 -> return Nothing
+                  _ -> do eps <- liftIO (hscEPS hsc_env)
+                          liftIO (writeIORef (hsc_EPS hsc_env)
+                                             initExternalPackageState)
+                          return (Just eps)
+      return (hsc_env, mb_eps)
+
+    restore (hsc_env, mb_eps) = do
+      mapM_ (liftIO . writeIORef (hsc_EPS hsc_env)) mb_eps
+      setSession hsc_env
+
+    work (hsc_env, _) = do
+      setExpanderSettings (hsc_dflags hsc_env)
+      act
 
 -- | Set state for macro expansion.
 --
@@ -66,31 +102,6 @@ setExpanderSettings dflags0 = do
       dflags4 = updOptLevel 0 dflags3
 
   setDynFlags dflags4
-
--- | Perform given action with 'DynFlags' updated for macroexpansion with
--- interactive evaluation, then reset to the preserved original DynFlags.
-withExpanderSettings :: Fnk a -> Fnk a
-withExpanderSettings act =
-  -- Workaround for reloading interface files.
-  --
-  -- Module interface files loadded during macro expansion may use different
-  -- optimization settings, since the DynFlags used while macro expansion is
-  -- modified to use "-O0". This will cause some optimization works such as RULE
-  -- rewrite to not happen.
-  --
-  -- To force the module reloadings modules after the macro expansion, updating
-  -- the ExternalPackageState IORef stored in the hsc_EPS field from restore
-  -- action below.
-  --
-  gbracket (do hsc_env <- getSession
-               eps <- liftIO (hscEPS hsc_env)
-               return (hsc_env, eps))
-           (\(hsc_env, eps) -> do
-              liftIO (writeIORef (hsc_EPS hsc_env) eps)
-              setSession hsc_env)
-           (\(hsc_env, _eps) -> do
-              setExpanderSettings (hsc_dflags hsc_env)
-              act)
 
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
