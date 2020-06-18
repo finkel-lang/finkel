@@ -7,14 +7,6 @@
           macroTests
           cxrTests
           listTests)
-  (require
-   ;; base
-   (Prelude)
-
-   ;; finkel-kernel
-   (Language.Finkel))
-  (import-when [compile]
-    (Finkel.Core.List))
   (import-when [compile load]
     ;; base
     (Control.Exception)
@@ -25,7 +17,10 @@
 
     ;; finkel-kernel
     (Language.Finkel.Fnk)
-    (Language.Finkel.SpecialForms))
+    (Language.Finkel.SpecialForms)
+
+    ;; Internal
+    (Finkel.Prelude))
   (import
    ;; ghc
    (FastString (fsLit))
@@ -38,8 +33,6 @@
 
    ;; Internal
    (Finkel.Core)
-   (Finkel.Core.List)
-   (Finkel.Prelude)
    (Orphan)))
 
 
@@ -292,8 +285,7 @@
 (eval-when [compile]
   (defmacro expandTo
     [in out]
-    `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in)
-                             defaultFnkEnv)))
+    `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
          (case v
            (Left e)  (expectationFailure (show (:: e SomeException)))
            (Right r) (shouldBe (GensymCode r) (GensymCode ',out)))))
@@ -308,8 +300,7 @@
 
   (defmacro expandSatisfy
     [in test]
-    `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in)
-                             defaultFnkEnv)))
+    `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
          (case v
            (Left e) (expectationFailure (show (:: e SomeException)))
            (Right x) (shouldSatisfy x ,test)))))

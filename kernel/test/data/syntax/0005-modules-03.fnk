@@ -20,7 +20,7 @@
   c1a
 
   ;; Type constructor only.
-  (D2) (C2)
+  (D2) C2
 
   ;; Type constructor and all data constructors.
   (D3 ..) (C3 ..)

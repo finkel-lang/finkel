@@ -61,7 +61,7 @@ functions defined in this modules are used in macro defined in
 (import Control.Exception ((Exception ..) throw))
 
 ;; ghc
-(import FastString ((FastString) unpackFS))
+(import FastString (FastString unpackFS))
 (import SrcLoc (getLoc))
 
 ;; finkel-kernel

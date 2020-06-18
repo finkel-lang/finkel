@@ -23,7 +23,7 @@
    (System.FilePath (</>))
 
    ;; ghc
-   (StringBuffer ((StringBuffer) stringToStringBuffer))
+   (StringBuffer (StringBuffer stringToStringBuffer))
 
    ;; haskeline
    (System.Console.Haskeline (defaultSettings runInputT))

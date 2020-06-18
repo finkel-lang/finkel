@@ -14,7 +14,7 @@
    (ReplState ..) (HasReplState ..) initial-repl-state
 
    ;; input and result
-   (Input ..) (InSource ..) (Result)
+   (Input ..) (InSource ..) Result
 
    ;; re-export
    (MonadTrans ..))
@@ -23,20 +23,20 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Concurrent ((MVar)))
+   (Control.Concurrent (MVar))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
-   (Data.IORef ((IORef) atomicWriteIORef newIORef readIORef))
+   (Data.IORef (IORef atomicWriteIORef newIORef readIORef))
 
    ;; ghc
-   (StringBuffer ((StringBuffer) appendStringBuffers))
+   (StringBuffer (StringBuffer appendStringBuffers))
    (FastFunctions (inlinePerformIO))
 
    ;; transformers
    (Control.Monad.Trans.Class ((MonadTrans ..)))
 
    ;; finkel-kernel
-   (Language.Finkel ((Code)))))
+   (Language.Finkel (Code))))
 
 (with-ghc-version-cond v
   ((<= 810 v)

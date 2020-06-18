@@ -37,7 +37,7 @@
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (gcatch gbracket))
    (FamInstEnv (pprFamInst))
-   (FastString ((FastString) fsLit unpackFS))
+   (FastString (FastString fsLit unpackFS))
    (Finder (flushFinderCaches uncacheModule))
    (GHC ((ModuleInfo) findModule getBindings getModSummary getModuleGraph
          getModuleInfo getPrintUnqual getTargets isLoaded lookupName
@@ -45,7 +45,7 @@
    (GhcMake ((LoadHowMuch ..)))
    (GhcMonad ((GhcMonad ..) getSessionDynFlags))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-              (ModSummary ..) (ModuleGraph) (Target ..) (TargetId ..)
+              (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
               emptyInteractiveContext handleFlagWarnings ms_mod_name
               pprHPT pprTarget srcErrorMessages tyThingParent_maybe))
    (IfaceSyn (showToHeader))
@@ -57,7 +57,7 @@
    (Name (getName nameIsFromExternalPackage nameModule nameOccName
                   nameSrcSpan))
    (NameSet (elemNameSet mkNameSet))
-   (Outputable ((SDoc) $$ <+> <> empty dcolon hsep nest ppr sep
+   (Outputable (SDoc $$ <+> <> empty dcolon hsep nest ppr sep
                 showPpr showSDoc showSDocForUser text vcat))
    (Module ((Module ..) mkModuleName))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))

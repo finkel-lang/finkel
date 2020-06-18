@@ -6,7 +6,7 @@ module Language.Finkel.Syntax.HIE where
 #include "Syntax.h"
 
 -- ghc
-import FastString                      (unpackFS)
+import FastString                      (FastString, unpackFS)
 import FieldLabel                      (FieldLbl (..))
 import GHC_Hs                          (HsModule (..))
 import GHC_Hs_Doc                      (LHsDocString)
@@ -15,11 +15,11 @@ import GHC_Hs_ImpExp                   (IE (..), IEWildcard (..),
                                         simpleImportDecl)
 import Lexeme                          (isLexCon)
 import Module                          (mkModuleNameFS)
-import OccName                         (tcName)
+import OccName                         (tcClsName)
 import OrdList                         (toOL)
 import RdrHsSyn                        (cvTopDecls)
 import RdrName                         (mkQual, mkUnqual)
-import SrcLoc                          (GenLocated (..))
+import SrcLoc                          (GenLocated (..), SrcSpan)
 
 #if MIN_VERSION_ghc(8,10,0)
 import GHC_Hs_Extension                (noExtField)
@@ -75,10 +75,12 @@ b_implicitMainModule = b_module Nothing [] <*> pure Nothing
 
 b_ieSym :: Code -> Builder HIE
 b_ieSym form@(LForm (L l _)) = do
-  let thing x = L l (iEVar (L l (IEName (L l (mkRdrName x)))))
-      iEVar = IEVar NOEXT
   name <- getVarOrConId form
-  return (thing name)
+  let var x = L l (IEVar NOEXT (L l (IEName (L l (mkRdrName x)))))
+      con x = iEThingAbs l x
+  if isLexCon name
+     then return (con name)
+     else return (var name)
 {-# INLINE b_ieSym #-}
 
 b_ieGroup :: Int -> Code -> Builder HIE
@@ -106,12 +108,7 @@ b_ieDocNamed (LForm (L l form))
 {-# INLINE b_ieDocNamed #-}
 
 b_ieAbs :: Code -> Builder HIE
-b_ieAbs form@(LForm (L l _)) = do
-  name <- getConId form
-  let thing = L l (iEThingAbs (L l (IEName (L l (uq name)))))
-      iEThingAbs = IEThingAbs NOEXT
-      uq = mkUnqual tcName
-  return thing
+b_ieAbs form@(LForm (L l _)) = iEThingAbs l <$> getConId form
 {-# INLINE b_ieAbs #-}
 
 b_ieAll :: Code -> Builder HIE
@@ -119,7 +116,7 @@ b_ieAll form@(LForm (L l _)) = do
   name <- getConId form
   let thing = L l (iEThingAll (L l (IEName (L l (uq name)))))
       iEThingAll = IEThingAll NOEXT
-      uq = mkUnqual tcName
+      uq = mkUnqual tcClsName
   return thing
 {-# INLINE b_ieAll #-}
 
@@ -131,13 +128,13 @@ b_ieWith (LForm (L l form)) names
     thing name = L l (iEThingWith (L l (IEName (L l name'))) wc ns fs)
       where
         name' = case splitQualName name of
-                  Just qual -> mkQual tcName qual
-                  Nothing   -> mkUnqual tcName name
+                  Just qual -> mkQual tcClsName qual
+                  Nothing   -> mkUnqual tcClsName name
     wc = NoIEWildcard
     (ns, fs) = foldr f ([],[]) names
     f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0)
       | isLexCon n0 =
-        (L l0 (IEName (L l (mkUnqual tcName n0))) : ns0, fs0)
+        (L l0 (IEName (L l (mkUnqual tcClsName n0))) : ns0, fs0)
       | otherwise   = (ns0, L l0 (fl n0) : fs0)
     f _ acc = acc
     -- Does not support DuplicateRecordFields.
@@ -165,7 +162,7 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities)
                      , ideclAs = fmap asModName mb_as
                      , ideclHiding = hiding' }
 #if MIN_VERSION_ghc(8,10,0)
-        qualified' | qualified = QualifiedPre -- importDeclQualifiedStyle (L l qualified)
+        qualified' | qualified = QualifiedPre
                    | otherwise = NotQualified
 #else
         qualified' = qualified
@@ -180,3 +177,15 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities)
           in  return (L l decl')
   | otherwise                              = builderError
 {-# INLINE b_importD #-}
+
+
+-- ------------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- ------------------------------------------------------------------------
+
+iEThingAbs :: SrcSpan -> FastString -> HIE
+iEThingAbs l name =
+  L l (IEThingAbs NOEXT (L l (IEName (L l (mkUnqual tcClsName name)))))
+{-# INLINE iEThingAbs #-}

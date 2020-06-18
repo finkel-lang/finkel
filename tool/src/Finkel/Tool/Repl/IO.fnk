@@ -7,14 +7,13 @@
   (import
    ;; base
    (Control.Concurrent
-    ((MVar) (ThreadId) killThread newEmptyMVar putMVar
-     takeMVar throwTo))
+    (MVar ThreadId killThread newEmptyMVar putMVar takeMVar throwTo))
    (Control.Exception ((AsyncException ..) bracket catch throwIO))
    (Control.Monad (when))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (inits intercalate isPrefixOf))
    (GHC.IO.Handle (hDuplicate hDuplicateTo))
-   (System.IO ((Handle) (SeekMode ..) hFlush hGetLine hSeek
+   (System.IO (Handle (SeekMode ..) hFlush hGetLine hSeek
                hSetFileSize stdout))
    (System.IO.Error (isEOFError))
 

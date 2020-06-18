@@ -62,7 +62,7 @@ module.")
 ;; ghc
 (import Config (cProjectVersionInt))
 (import DynFlags ((HasDynFlags ..)))
-(import FastString ((FastString) fsLit unpackFS))
+(import FastString (FastString fsLit unpackFS))
 (import GHC (getModuleInfo lookupModule lookupName modInfoExports))
 (import Module (mkModuleName))
 (import Lexeme (isLexCon))

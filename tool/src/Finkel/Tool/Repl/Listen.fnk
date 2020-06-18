@@ -24,10 +24,9 @@
 
    ;; network
    (Network.Socket
-    ((AddrInfo ..) (AddrInfoFlag ..) (PortNumber)
-     (Socket) (SocketOption ..) (SocketType ..)
-     accept bind defaultHints getAddrInfo listen socket socketToHandle
-     setSocketOption withSocketsDo))
+    ((AddrInfo ..) (AddrInfoFlag ..) PortNumber Socket (SocketOption ..)
+     (SocketType ..) accept bind defaultHints getAddrInfo listen socket
+     socketToHandle setSocketOption withSocketsDo))
 
    ;; finkel-kernel
    (Language.Finkel.Lexer (evalSP))

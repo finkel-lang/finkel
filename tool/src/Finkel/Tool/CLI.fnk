@@ -18,7 +18,7 @@
    (qualified System.Exit as Exit)
 
    ;; haskeline
-   (System.Console.Haskeline ((InputT)))
+   (System.Console.Haskeline (InputT))
    (qualified System.Console.Haskeline as Haskeline)))
 
 (with-ghc-version-cond v

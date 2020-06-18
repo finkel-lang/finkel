@@ -14,7 +14,7 @@
    (Control.Exception (bracket))
    (Control.Monad (replicateM))
    (GHC.IO.Handle (hDuplicate hDuplicateTo))
-   (System.IO ((Handle) (IOMode ..) hClose openFile stdin))
+   (System.IO (Handle (IOMode ..) hClose openFile stdin))
 
    ;; filepath
    (System.FilePath (</>))

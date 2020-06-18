@@ -9,14 +9,14 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Concurrent.MVar ((MVar) putMVar takeMVar))
+   (Control.Concurrent.MVar (MVar putMVar takeMVar))
    (Control.Exception ((AsyncException ..) fromException throwIO))
    (Control.Monad (void))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate))
 
    (System.Exit (exitWith))
-   (System.IO ((Handle)))
+   (System.IO (Handle))
 
    ;; ghc
    (DynFlags ((DynFlags ..) (GeneralFlag ..) (GhcLink ..) (HasDynFlags ..)
@@ -31,7 +31,7 @@
     ((GhcMonad ..) getSessionDynFlags modifySession withTempSession))
    (HscMain (hscParsedStmt))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-              (FixityEnv) extendInteractiveContextWithIds
+              FixityEnv extendInteractiveContextWithIds
               setInteractivePrintName srcErrorMessages))
    (InteractiveEval
     (compileParsedExprRemote getContext parseName setContext))
@@ -41,9 +41,9 @@
    (Outputable (ppr mkErrStyle renderWithStyle setStyleColoured
                     showPpr showSDoc vcat))
    (RdrHsSyn (cvTopDecls))
-   (SrcLoc ((Located) unLoc))
+   (SrcLoc (Located unLoc))
    (TyCoRep ((TyThing ..)))
-   (Var ((Id) (Var) varType))
+   (Var (Id Var varType))
 
    ;; ghc-boot
    (GHC.LanguageExtensions ((Extension ..)))
@@ -51,11 +51,11 @@
    ;; ghci
    (GHCi.Message ((EvalExpr ..) (EvalResult ..) (EvalStatus_ ..)
                   (SerializableException ..)))
-   (GHCi.RemoteTypes ((ForeignHValue)))
+   (GHCi.RemoteTypes (ForeignHValue))
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Builder ((HDecl) (HIE) (HImportDecl) (HStmt)
+   (Language.Finkel.Builder (HDecl HIE HImportDecl HStmt
                              syntaxErrCode syntaxErrMsg evalBuilder))
    (Language.Finkel.Eval (evalDecls))
    (Language.Finkel.Expand (expands))

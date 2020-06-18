@@ -9,12 +9,12 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Concurrent ((ThreadId) forkIO))
-   (Control.Concurrent.MVar ((MVar) newEmptyMVar))
+   (Control.Concurrent (ThreadId forkIO))
+   (Control.Concurrent.MVar (MVar newEmptyMVar))
    (Control.Exception (bracket catch throwIO))
    (Control.Monad (void))
 
-   (System.IO ((Handle) hClose openTempFile))
+   (System.IO (Handle hClose openTempFile))
    (System.IO.Error (isDoesNotExistError))
 
    ;; directory
