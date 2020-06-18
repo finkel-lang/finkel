@@ -53,8 +53,8 @@ travis_install_linux () {
             travis_retry curl -L $url > ~/.ghcup/bin/ghcup
             chmod +x ~/.ghcup/bin/ghcup
             ghcup -c install-cabal
-            ghcup -c install $GHC_VERSION
-            ghcup -c set $GHC_VERSION
+            ghcup -c install $GHC
+            ghcup -c set $GHC
             which cabal
             which ghc
             cabal --version
@@ -72,7 +72,7 @@ travis_script_linux () {
             $STACK -j 1 build --fast --test --coverage
             ;;
         cabal)
-            cabal v2-configure --disable-optimization
+            cabal v2-configure $FLAGS
             cabal v2-build all
             cabal v2-test all
             cabal v2-haddock all

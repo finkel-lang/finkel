@@ -18,7 +18,7 @@ jobs:
           - resolver: "lts-11"
           - resolver: "lts-12"
           - resolver: "lts-14"
-          - resolver: "lts-15"
+          - resolver: "lts-16"
         exclude:
           - os: macos-latest
             plan:
@@ -37,7 +37,7 @@ jobs:
               resolver: "lts-12"
           - os: windows-latest
             plan:
-              resolver: "lts-15"
+              resolver: "lts-16"
 
     env:
       STACK: stack --resolver=${{ matrix.plan.resolver }}
@@ -53,7 +53,7 @@ jobs:
       - name: Cache stack package database (non-windows)
         id: cache-stack-pkg-db-win
         if: matrix.os != 'windows-latest'
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: ~/.stack
           key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
@@ -63,7 +63,7 @@ jobs:
       - name: Cache stack (windows)
         id: cache-stack-win
         if: matrix.os == 'windows-latest'
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: C:\Users\runneradmin\AppData\Local\Programs\stack
           key: ${{ runner.os }}-stack-local-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
@@ -72,7 +72,7 @@ jobs:
 
       - name: Cache stack packages (windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: C:\Users\runneradmin\AppData\Roaming\stack
           key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
@@ -154,20 +154,23 @@ jobs:
           - ubuntu-latest
           - windows-latest
         plan:
-          - ghc: "8.8.3"
-            cabal: "3.0.0.0"
           - ghc: "8.10.1"
             cabal: "3.2.0.0"
+            flags: "-O0"
+          - ghc: "8.10.1"
+            cabal: "3.2.0.0"
+            flags: "-O2"
         exclude:
-          - os: windows-latest
-            plan:
-              ghc: "8.8.3"
-              cabal: "3.0.0.0"
           - os: windows-latest
             plan:
               ghc: "8.10.1"
               cabal: "3.2.0.0"
-
+              flags: "-O0"
+          - os: windows-latest
+            plan:
+              ghc: "8.10.1"
+              cabal: "3.2.0.0"
+              flags: "-O2"
     runs-on:
       - ${{ matrix.os }}
 
@@ -177,23 +180,23 @@ jobs:
 
       - name: Cache ~/.ghcup
         id: home-dot-ghcup
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: ~/.ghcup
           key: ${{ runner.os }}-ghcup-${{ matrix.plan.ghc }}
 
       - name: Cache cabal package database
         id: home-dot-cabal
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: ~/.cabal
           key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}
 
       # Manually installing ghc and bundled packages with "ghcup" for Linux and
       # OSX, because the setup-haskell action may reuse the preinstalled GHC in
-      # runner, and the preinstalled GHC does not contain profiling library for
-      # the "base" package. Without profiling libraries, one of the tests in the
-      # "doc" package will fail.
+      # the github runner, and the preinstalled GHC does not contain profiling
+      # library for the "base" package. Without profiling libraries, "doc"
+      # package tests will fail.
 
       - name: Install ghcup (linux)
         if: matrix.os == 'ubuntu-latest'
@@ -246,7 +249,7 @@ jobs:
 
       - name: Write cabal.project.local with v2-configure
         shell: bash
-        run: cabal v2-configure --disable-optimization
+        run: cabal v2-configure ${{ matrix.plan.flags }}
 
       - name: Build dependency packages
         shell: bash

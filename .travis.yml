@@ -29,18 +29,18 @@ jobs:
     - os: linux
       env: EXEC=stack RESOLVER=lts-14
     - os: linux
-      env: EXEC=stack RESOLVER=lts-15
+      env: EXEC=stack RESOLVER=lts-16
     - os: linux
-      env: EXEC=cabal GHC_VERSION=8.8.3
+      env: EXEC=cabal GHC=8.10.1 FLAGS="-O0"
     - os: linux
-      env: EXEC=cabal GHC_VERSION=8.10.1
+      env: EXEC=cabal GHC=8.10.1 FLAGS="-O2"
     - os: osx
-      env: EXEC=stack RESOLVER=lts-15
+      env: EXEC=stack RESOLVER=lts-16
     - os: windows
       env: EXEC=stack RESOLVER=lts-14
   allow_failures:
     - os: windows
-      env: EXEC=stack RESOLVER=lts-15
+      env: EXEC=stack RESOLVER=lts-16
 
 before_install:
   - . scripts/travis.sh
