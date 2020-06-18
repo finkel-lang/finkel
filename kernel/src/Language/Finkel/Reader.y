@@ -11,6 +11,7 @@ module Language.Finkel.Reader
   , sexpr
   , sexprs
   , psexpr
+  , supportedLangExts
   ) where
 
 #include "Syntax.h"
@@ -300,6 +301,9 @@ supportedLangExts =
       , DeriveFunctor
       , DeriveGeneric
       , DeriveTraversable
+#if MIN_VERSION_ghc(8,4,0)
+      , EmptyDataDeriving
+#endif
       , ExistentialQuantification
       , ExplicitForAll
       , FlexibleContexts

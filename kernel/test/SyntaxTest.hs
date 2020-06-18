@@ -43,7 +43,16 @@ mkTest path
   , base_name `elem` ["1002-macro", "1003-eval-when-compile"]
   = describe path (it "is pending with ghc-8.10.1 under Windows"
                       (pendingWith "Macro expansion not yet supported"))
+#if MIN_VERSION_ghc(8,4,0)
   | otherwise = mkTest' path
+#else
+  | otherwise
+  = if base_name `elem` ["2020-emptyderiv"]
+       then describe path
+                     (it "is not supported in ghc < 8.4.0"
+                         (pendingWith "Extension does not exist"))
+       else mkTest' path
+#endif
   where
     base_name = takeBaseName path
 
