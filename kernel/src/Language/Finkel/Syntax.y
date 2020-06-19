@@ -61,6 +61,7 @@ import Language.Finkel.Syntax.SynUtils
 %name p_top_decl top_decl
 %name p_decl decl
 %name p_decls decls
+%name p_decl_tsig decl_tsig
 %name p_lcdecl lcdecl
 %name p_lidecl lidecl
 %name p_lqtycl lqtycl
@@ -472,6 +473,7 @@ lcdecl :: { HDecl }
     : 'type' dconhead                { b_tyfamD [] $1 $2 }
     | 'type' 'instance' finsthd type { b_tyinstD $1 $3 $4 }
     | 'data' dconhead                { b_datafamD $1 $2 }
+    | 'default' 'list'               {% parse p_decl_tsig $2 >>= b_dfltSigD }
     | decl                           { $1 }
 
 idecls :: { [HDecl] }
@@ -547,8 +549,7 @@ fentity :: { Code }
 
 decl :: { HDecl }
     : '=' pats_and_guards    {% case $2 of (g,p) -> b_funOrPatD $1 p g }
-    | '::' idsym dtype       {% b_tsigD [$2] $3 }
-    | '::' idsyms dtype      {% b_tsigD $2 $3 }
+    | decl_tsig              { $1 }
     | 'inline' actv idsym    {% b_inlineD Inline $2 $3 }
     | 'noinline' actv idsym  {% b_inlineD NoInline $2 $3 }
     | 'inlinable' actv idsym {% b_inlineD Inlinable $2 $3 }
@@ -562,6 +563,10 @@ decl :: { HDecl }
 pats_and_guards :: { (([HGRHS],[HDecl]), [HPat]) }
     : guards              { ($1, []) }
     | pat pats_and_guards { ($1:) `fmap` $2 }
+
+decl_tsig :: { HDecl }
+    : '::' idsym dtype       {% b_tsigD [$2] $3 }
+    | '::' idsyms dtype      {% b_tsigD $2 $3 }
 
 dtype :: { ([HType], HType) }
     : 'symbol' {% (\t -> ([], t)) `fmap` b_symT $1}

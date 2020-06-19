@@ -36,7 +36,8 @@ import GHC_Hs_Expr                     (HsMatchContext (..), Match (..))
 import GHC_Hs_Pat                      (Pat (..))
 import GHC_Hs_Types                    (ConDeclField (..), HsConDetails (..),
                                         HsTyVarBndr (..), HsType (..),
-                                        mkFieldOcc, mkHsImplicitBndrs, mkHsQTvs)
+                                        HsWildCardBndrs (..), mkFieldOcc,
+                                        mkHsImplicitBndrs, mkHsQTvs)
 import GHC_Hs_Utils                    (mkClassOpSigs, mkFunBind, mkLHsSigType,
                                         mkLHsSigWcType)
 import OccName                         (dataName, tcName)
@@ -363,6 +364,13 @@ mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
                 Just lsig -> KindSig NOEXT lsig
   in  L l (TyClD NOEXT (FamDecl NOEXT fam))
 {-# INLINE mkFamilyDecl #-}
+
+b_dfltSigD :: HDecl -> Builder HDecl
+b_dfltSigD (dL->L l decl)
+  | SigD _EXT (TypeSig _EXT ids ty) <- decl
+  = return (cL l (sigD (ClassOpSig NOEXT True ids (hswc_body ty))))
+  | otherwise = builderError
+{-# INLINE b_dfltSigD #-}
 
 -- See: "Convert.cvtDec".
 b_datainstD :: Code

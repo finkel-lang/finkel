@@ -296,6 +296,7 @@ supportedLangExts :: [(FastString, String)]
 supportedLangExts =
     f [ BangPatterns
       , DataKinds
+      , DefaultSignatures
       , DeriveDataTypeable
       , DeriveFoldable
       , DeriveFunctor
