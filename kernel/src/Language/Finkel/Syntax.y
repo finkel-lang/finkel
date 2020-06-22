@@ -446,7 +446,7 @@ lh98constr :: { HConDecl }
     | conid '{' fielddecls '}' {% b_conD $1 $3 }
 
 condetails :: { HConDeclDetails }
-    : zero_or_more_types { b_conDeclDetails $1 }
+    : type_args { b_conDeclDetails $1 }
 
 fielddecls :: { HConDeclDetails }
     : fielddecls1 { b_recFieldsD $1 }
@@ -621,38 +621,37 @@ type_without_doc :: { HType }
     | type_no_symbol { $1 }
 
 type_no_symbol :: { HType }
-    : special_id_no_bg_fa {% b_symT $1 }
-    | 'unpack' type       { b_unpackT $1 $2 }
-    | '!' type            { b_bangT $1 $2 }
-    | '_'                 { b_anonWildT $1 }
-    | 'unit'              { b_unitT $1 }
-    | '~'                 { b_tildeT $1 }
-    | 'string'            {% b_tyLitT $1 }
-    | 'integer'           {% b_tyLitT $1 }
-    | 'hslist'            {% case toListL $1 of
-                               LForm (L _ (List [])) -> return (b_nilT $1)
-                               xs -> fmap b_listT (parse p_type [xs]) }
-    | 'list'              {% parse p_types0 $1 }
+    : 'unpack' type { b_unpackT $1 $2 }
+    | '!' type      { b_bangT $1 $2 }
+    | '_'           { b_anonWildT $1 }
+    | 'unit'        { b_unitT $1 }
+    | '~'           { b_tildeT $1 }
+    | 'string'      {% b_tyLitT $1 }
+    | 'integer'     {% b_tyLitT $1 }
+    | 'hslist'      {% case toListL $1 of
+                         LForm (L _ (List [])) -> return (b_nilT $1)
+                         xs -> fmap b_listT (parse p_type [xs]) }
+    | 'list'        {% parse p_types0 $1 }
 
 types0 :: { HType }
     : '=>' qtypes     { b_qualT $1 $2 }
     | types0_no_qtype { $1 }
 
 types0_no_qtype :: { HType }
-    : '->' zero_or_more_types           {% b_funT $1 $2 }
-    | ',' zero_or_more_types            { b_tupT $1 $2 }
-    | 'forall' forallty                 { b_forallT $1 $2 }
-    | '::' type type                    { b_kindedType $1 $2 $3 }
-    | 'qSymbol' 'string'                {% b_prmConT $2 }
-    | 'qualQSymbol' 'string'            {% b_prmConT $2 }
-    | 'qString' 'string'                {% b_tyLitT $2 }
-    | 'qualQString' 'string'            {% b_tyLitT $2 }
-    | 'qHsList' 'hslist'                {% b_prmListT (parse p_types) $2 }
-    | 'qualQHsList' 'hslist'            {% b_prmListT (parse p_types) $2 }
-    | 'qList' 'hslist'                  {% b_prmTupT (parse p_types) $2 }
-    | 'qualQList' 'hslist'              {% b_prmTupT (parse p_types) $2 }
-    | 'symbol' zero_or_more_types       {% b_opOrAppT $1 $2 }
-    | type_no_symbol zero_or_more_types {% b_appT ($1:$2) }
+    : '->' type_args           {% b_funT $1 $2 }
+    | ',' type_args            { b_tupT $1 $2 }
+    | 'forall' forallty        { b_forallT $1 $2 }
+    | '::' type type           { b_kindedType $1 $2 $3 }
+    | 'qSymbol' 'string'       {% b_prmConT $2 }
+    | 'qualQSymbol' 'string'   {% b_prmConT $2 }
+    | 'qString' 'string'       {% b_tyLitT $2 }
+    | 'qualQString' 'string'   {% b_tyLitT $2 }
+    | 'qHsList' 'hslist'       {% b_prmListT (parse p_types) $2 }
+    | 'qualQHsList' 'hslist'   {% b_prmListT (parse p_types) $2 }
+    | 'qList' 'hslist'         {% b_prmTupT (parse p_types) $2 }
+    | 'qualQList' 'hslist'     {% b_prmTupT (parse p_types) $2 }
+    | 'symbol' type_args       {% b_opOrAppT $1 $2 }
+    | type_no_symbol type_args {% b_appT ($1:$2) }
 
 forallty :: { ([HTyVarBndr], ([HType], HType)) }
     : qtycl           { ([], $1) }
@@ -662,12 +661,24 @@ qtypes :: { ([HType], HType) }
     : type        { ([], $1) }
     | type qtypes { case $2 of (ctxts,ty) -> ($1:ctxts,ty) }
 
+type_args :: { [HType] }
+    : {- empty -}   { [] }
+    | rtype_args    { reverse $1 }
+
+rtype_args :: { [HType] }
+    : type_arg            { [$1] }
+    | rtype_args type_arg { $2 : $1 }
+
+type_arg :: { HType }
+    : special_id_no_bang {% b_symT $1 }
+    | type               { $1 }
+
 types :: { [HType] }
     : rtypes { reverse $1 }
 
 rtypes :: { [HType] }
-    : type            { [$1] }
-    | rtypes type     { $2 : $1 }
+    : type        { [$1] }
+    | rtypes type { $2 : $1 }
 
 zero_or_more_types :: { [HType] }
     : {- empty -} { [] }
