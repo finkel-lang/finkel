@@ -2,4 +2,4 @@
   C1
   (C2 a)
   (C3 b)
-  (deriving (Eq Show)))
+  (deriving Eq Show))

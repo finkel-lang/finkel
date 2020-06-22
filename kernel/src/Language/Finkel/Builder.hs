@@ -36,6 +36,7 @@ module Language.Finkel.Builder
   , HConDeclField
   , HDecl
   , HDeriving
+  , HDerivStrategy
   , HExpr
   , HGRHS
   , HGuardLStmt
@@ -76,6 +77,12 @@ import SrcLoc               (GenLocated (..), Located, noLoc)
 import GHC_Hs_Extension     (GhcPs)
 #else
 import RdrName              (RdrName)
+#endif
+
+#if MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Decls         (LDerivStrategy)
+#else
+import BasicTypes           (DerivStrategy)
 #endif
 
 -- Internal
@@ -253,6 +260,12 @@ type HConDeclField = LConDeclField PARSED
 type HDecl = LHsDecl PARSED
 
 type HDeriving = HsDeriving PARSED
+
+#if MIN_VERSION_ghc(8,6,0)
+type HDerivStrategy = LDerivStrategy PARSED
+#else
+type HDerivStrategy = Located DerivStrategy
+#endif
 
 type HExpr = LHsExpr PARSED
 

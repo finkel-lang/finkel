@@ -297,11 +297,13 @@ supportedLangExts =
     f [ BangPatterns
       , DataKinds
       , DefaultSignatures
+      , DeriveAnyClass
       , DeriveDataTypeable
       , DeriveFoldable
       , DeriveFunctor
       , DeriveGeneric
       , DeriveTraversable
+      , DerivingStrategies
 #if MIN_VERSION_ghc(8,4,0)
       , EmptyDataDeriving
 #endif

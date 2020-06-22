@@ -266,7 +266,7 @@
 (data R1
   (Con1 {field1 Int
          field2 Bool})
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (:: mkR1 (-> Int (-> Bool R1)))
 (= mkR1 a b

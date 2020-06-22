@@ -253,7 +253,7 @@
 ;; Using a newtype to compare 'Code's containing symbols generated
 ;; with `gensym'.
 (newtype GensymCode (GensymCode Code)
-  (deriving (Show)))
+  (deriving Show))
 
 (instance (Eq GensymCode)
   (= == eqGensymCode))

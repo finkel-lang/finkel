@@ -1,13 +1,15 @@
+;;;; File containing codes using `DefaultSignatures' language extension
+
 %p(LANGUAGE DefaultSignatures)
 
 (module Main)
 
-(class (SPretty2 a)
-  (:: sPpr2 (-> a String))
-  (default (:: sPpr2 (=> (Show a) (-> a String))))
-  (= sPpr2 show))
+(class (SPretty a)
+  (:: sPpr (-> a String))
+  (default (:: sPpr (=> (Show a) (-> a String))))
+  (= sPpr show))
 
-(instance (SPretty2 Bool))
+(instance (SPretty Bool))
 
 (:: main (IO ()))
-(= main (putStrLn (sPpr2 False)))
+(= main (putStrLn (sPpr False)))

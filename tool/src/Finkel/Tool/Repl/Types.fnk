@@ -52,7 +52,7 @@
 ;;; Repl state type to hold intermediate line-wise inputs.
 (data ReplState
   (ReplState {pending-input (Maybe StringBuffer)})
-  (deriving (Show)))
+  (deriving Show))
 
 (instance (Eq ReplState)
   (= ==

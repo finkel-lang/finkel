@@ -126,7 +126,7 @@ occaecat cupidatat non proident, sunt in culpa qui officia deserunt
 mollit anim id est laborum.")
         Int (:doc^ "The 4th."))
   (:doc^ "Documentation for constructor 'D1ab'.")
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (newtype (D2 a)
   (D2 a)
@@ -152,7 +152,7 @@ mollit anim id est laborum.")
   (:doc "Documentation for 'D3b'.")
   (D3b a a)
 
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 (:doc^ "Documentation for top level 'D3' data type declaration.")
 
 (:doc "Documentation for top level `D4' data type declaration.")
@@ -164,7 +164,7 @@ mollit anim id est laborum.")
         (d4-f2 d4-f3) a})
   (:doc "Documentation for `D4b'")
   D4b
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (type (T1 a)
   (Maybe (, a a))
@@ -228,13 +228,13 @@ This method takes two __@a@__ arguments. "))
 (:doc^ "Documentation for top level data family `DF1'.")
 
 (data instance (DF1 Bool) (DF1B Int)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 (:doc^ "Documentation for top level `DF1' instance for `Bool'.")
 
 (data instance (DF1 Double)
   (DF1D1 Double)
   (DF1D2 Int)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 (:doc^ "Documentation for top level `DF1' instance for `Double'.")
 
 (newtype instance (DF1 Char)

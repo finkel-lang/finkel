@@ -5,7 +5,7 @@
 (module Main)
 
 (data Empty
-  (deriving (Eq Ord Show Read)))
+  (deriving Eq Ord Show Read))
 
 (:: main (IO ()))
 (= main (return ()))

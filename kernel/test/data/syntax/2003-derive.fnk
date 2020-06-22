@@ -15,32 +15,32 @@
 
 (data (D1 a)
   (D1 a a)
-  (deriving (Eq Show Data Typeable)))
+  (deriving Eq Show Data Typeable))
 
 ;;; DeriveFunctor
 
 (data (D2 a)
   (D2 a)
-  (deriving (Eq Show Functor)))
+  (deriving Eq Show Functor))
 
 ;;; DeriveGeneric
 
 (data (D3 a)
   (D3 a)
-  (deriving (Eq Show Generic)))
+  (deriving Eq Show Generic))
 
 ;;; DeriveFoldable, DeriveTraversable
 
 (data (Lst a)
   Nil
   (Cons a (Lst a))
-  (deriving (Eq Show Functor Foldable Traversable)))
+  (deriving Eq Show Functor Foldable Traversable))
 
 ;;; GeneralizedNewtypeDeriving
 
 (newtype (N a)
   (N a)
-  (deriving (Eq Show Num)))
+  (deriving Eq Show Num))
 
 (:: main (IO ()))
 (= main

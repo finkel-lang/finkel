@@ -72,7 +72,7 @@
 (data (Maybe1 a)
   (:: Nothing1 (Maybe1 a))
   (:: Just1 (-> a (Maybe1 a)))
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (:: gadt4 (-> Int (IO ())))
 (= gadt4 n

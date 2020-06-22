@@ -243,19 +243,21 @@ b_recFieldD names ty mb_doc = do
   return (L loc field)
 {-# INLINE b_recFieldD #-}
 
-b_derivD :: (HDeriving, [HConDecl])
-         -> [HType]
-         -> (HDeriving, [HConDecl])
-b_derivD (_, cs) tys = (L l dcs, cs)
+b_derivD :: Maybe HDerivStrategy -> [HType] -> HDeriving
+b_derivD mb_strat tys = L l dcs
   where
     l = getLoc (mkLocatedList tys)
     dcs = [L l (HsDerivingClause
-                 { deriv_clause_strategy = Nothing
+                 { deriv_clause_strategy = mb_strat
 #if MIN_VERSION_ghc(8,6,0)
                  , deriv_clause_ext = NOEXT
 #endif
                  , deriv_clause_tys = L l (map mkLHsSigType tys)})]
 {-# INLINE b_derivD #-}
+
+b_derivsD :: HDeriving -> HDeriving -> HDeriving
+b_derivsD (dL->L _ new) (dL->L _ acc) = mkLocatedList (new ++ acc)
+{-# INLINE b_derivsD #-}
 
 b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do

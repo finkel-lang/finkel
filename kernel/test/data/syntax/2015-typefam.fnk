@@ -14,14 +14,14 @@
 (data family (T1 a))
 
 (data instance (T1 Int) A1
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (newtype instance (T1 Char) (B1 Bool))
 
 (data instance (T1 Double)
   (C1 Double)
   (C2 Int)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (class (T1C a)
   (:: t1c (-> (T1 a) Int)))

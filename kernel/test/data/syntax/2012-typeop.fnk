@@ -5,7 +5,7 @@
 ;;; Type operators, with and without operator expansions
 
 (data (:.+ a b) (:.+ a b)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (infixl 6 :.+)
 
@@ -19,7 +19,7 @@
 (= to01c (:.+ a (:.+ b c)) (print (+ a b c)))
 
 (data (:+. a b) (:+. a b)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (infixr 6 :+.)
 
@@ -33,7 +33,7 @@
 (= to02c (:+. (:+. a b) c) (print (+ a b c)))
 
 (data (:++ a b c) (:++ a b c)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 ;; `:++' constructor takes three arguments, so surrounding with
 ;; parenthesis to avoid operator expansion. If no parenthesis,

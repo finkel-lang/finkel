@@ -36,6 +36,12 @@ import GHC_Hs_Doc (LHsDocString)
 import GHC_Hs_Expr (GRHS(..))
 import SrcLoc (GenLocated(..), Located, getLoc, noLoc)
 
+#if MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Decls (DerivStrategy(..))
+#else
+import BasicTypes (DerivStrategy(..))
+#endif
+
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Form
@@ -80,6 +86,7 @@ import Language.Finkel.Syntax.SynUtils
 %name p_lqtycon lqtycon
 %name p_lkindtv lkindtv
 %name p_lh98constr lh98constr
+%name p_deriving_clause deriving_clause
 
 %name p_pat pat
 %name p_pats pats
@@ -113,8 +120,7 @@ import Language.Finkel.Syntax.SynUtils
 'class'    { LForm (L _ (Atom (ASymbol "class"))) }
 'data'     { LForm (L _ (Atom (ASymbol "data"))) }
 'default'  { LForm (L _ (Atom (ASymbol "default"))) }
-'deriving' { LForm (L _ (List [LForm (L _ (Atom (ASymbol "deriving")))
-                              ,LForm (L _ (List $$))])) }
+'deriving' { LForm (L _ (List (LForm (L _ (Atom (ASymbol "deriving"))):$$))) }
 'do'       { LForm (L _ (Atom (ASymbol "do"))) }
 'foreign'  { LForm (L _ (Atom (ASymbol "foreign"))) }
 'if'       { LForm (L _ (Atom (ASymbol "if"))) }
@@ -154,8 +160,10 @@ import Language.Finkel.Syntax.SynUtils
 'qualified' { LForm (L _ (Atom (ASymbol "qualified"))) }
 
 -- GHC Extensions
+'anyclass'  { LForm (L _ (Atom (ASymbol "anyclass"))) }
 'family' { LForm (L _ (Atom (ASymbol "family"))) }
 'forall' { LForm (L _ (Atom (ASymbol "forall"))) }
+'stock'     { LForm (L _ (Atom (ASymbol "stock"))) }
 
 -- Pragmas
 'inlinable'  { LForm (L _ (Atom (ASymbol "INLINABLE"))) }
@@ -371,12 +379,11 @@ lsimpletype :: { (FastString, [HTyVarBndr], Maybe HKind) }
     | ldconhead     { $1 }
 
 constrs :: { (HDeriving, [HConDecl]) }
-    : rconstrs { let (m,d) = $1 in (m,reverse d) }
+    : rconstrs deriving { ($2,reverse $1) }
 
-rconstrs :: { (HDeriving, [HConDecl]) }
-    : {- empty -}            { (noLoc [], []) }
-    | rconstrs deriving      { b_derivD $1 $2 }
-    | rconstrs constr        { fmap ($2:) $1 }
+rconstrs :: { [HConDecl] }
+    : {- empty -}     { [] }
+    | rconstrs constr { $2 : $1 }
 
 constr :: { HConDecl }
     : conid mbdocprev  {% addConDoc' $2 `fmap` b_conOnlyD $1 }
@@ -384,8 +391,16 @@ constr :: { HConDecl }
     | docnext conid    {% addConDoc'' $1 `fmap` b_conOnlyD $2 }
     | docnext 'list'   {% addConDoc'' $1 `fmap` parse p_lconstr $2 }
 
-deriving :: { [HType] }
-    : 'deriving' {% parse p_types $1 }
+deriving :: { HDeriving }
+    : {- empty -}         { noLoc [] }
+    | 'deriving' deriving {% do { ds1 <- parse p_deriving_clause $1
+                                ; return (b_derivsD ds1 $2) } }
+
+deriving_clause :: { HDeriving }
+    : 'anyclass' types { b_derivD (Just (noLoc AnyclassStrategy)) $2 }
+    | 'newtype' types  { b_derivD (Just (noLoc NewtypeStrategy)) $2 }
+    | 'stock' types    { b_derivD (Just (noLoc StockStrategy)) $2 }
+    | types            { b_derivD Nothing $1 }
 
 lconstr :: { HConDecl }
     : '::' conid dtype   {% b_gadtD $2 $3 }
@@ -878,9 +893,11 @@ special_id_no_bang :: { Code }
 
 -- special id, no bang, no forall
 special_id_no_bg_fa :: { Code }
-    : 'as'          { $1 }
+    : 'anyclass'    { $1 }
+    | 'as'          { $1 }
     | 'family'      { $1 }
     | 'hiding'      { $1 }
+    | 'stock'       { $1 }
     | 'qualified'   { $1 }
     | 'qSymbol'     { $1 }
     | 'qualQSymbol' { $1 }

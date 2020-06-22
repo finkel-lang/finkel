@@ -9,12 +9,12 @@
 (data MyData1
   (MyD1Con1 Int Bool ())
   (MyD1Con2 [(, Int Int)] Double Char)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (data (MyData2 a b)
   (MyD2Con1 a b)
   (MyD2Con2 a a Bool)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (data (MyData3 a)
   (MyD3Con1 {d3f1 a
@@ -22,11 +22,11 @@
   (MyD3Con2 Int Int Int)
   (MyD3Con3 {(d3f1 d3f1b d3f1c) a
              d3f4 (Either Bool Char)})
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (data MyData4
   M4A M4B M4C M4D
-  (deriving (Eq Show Enum)))
+  (deriving Eq Show Enum))
 
 ;;; Empty data declaration.
 (data MyData5)
@@ -39,12 +39,12 @@
   (M6L Int)
   (M6S1 !Int)
   (M6S2 !(Maybe Int))
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (data MyData7
   (M7a {m7aF1 !Int
         m7aF2 !(Maybe String)})
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 ;; Using non-reserved special names in type variable.
 ;;
@@ -53,7 +53,7 @@
 
 (data (MyData8 as ccall forAll hiding qualified)
   (M8a as ccall forAll hiding qualified)
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (:: s4_2_1 (IO ()))
 (= s4_2_1
@@ -94,7 +94,7 @@
   (= show (N1 a)
     (++ "N1 " (show a))))
 
-(newtype (N2 a) (N2 a) (deriving (Eq Show)))
+(newtype (N2 a) (N2 a) (deriving Eq Show))
 
 (newtype (N3 a) (N3 {unN3 a}))
 
@@ -102,7 +102,7 @@
   (= show (N3 a)
     (++ "N3 " (show a))))
 
-(newtype (N4 a) (N4 {unN4 a}) (deriving (Eq Show)))
+(newtype (N4 a) (N4 {unN4 a}) (deriving Eq Show))
 
 (:: s4_2_3 (IO ()))
 (= s4_2_3
@@ -174,7 +174,7 @@
 
 (data (MyF a)
   (MyF {unMyF a})
-  (deriving (Eq Show)))
+  (deriving Eq Show))
 
 (instance (Functor MyF)
   (= fmap f (MyF a)
