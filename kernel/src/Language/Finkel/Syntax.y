@@ -87,6 +87,7 @@ import Language.Finkel.Syntax.SynUtils
 %name p_lkindtv lkindtv
 %name p_lh98constr lh98constr
 %name p_deriving_clause deriving_clause
+%name p_standalone_deriv standalone_deriv
 
 %name p_pat pat
 %name p_pats pats
@@ -335,14 +336,15 @@ rtop_decls :: { [HDecl] }
     | rtop_decls top_decl_with_doc { $2 : $1 }
 
 top_decl_with_doc :: { HDecl }
-    : 'list'    {% parse p_top_decl $1 }
-    | 'doc'     {% b_docnextD $1 }
-    | 'doc^'    {% b_docprevD $1 }
-    | 'dh1'     {% b_docGroupD 1 $1 }
-    | 'dh2'     {% b_docGroupD 2 $1 }
-    | 'dh3'     {% b_docGroupD 3 $1 }
-    | 'dh4'     {% b_docGroupD 4 $1 }
-    | 'doc$'    {% b_docNamed $1 }
+    : 'list'     {% parse p_top_decl $1 }
+    | 'deriving' {% parse p_standalone_deriv $1 }
+    | 'doc'      {% b_docnextD $1 }
+    | 'doc^'     {% b_docprevD $1 }
+    | 'dh1'      {% b_docGroupD 1 $1 }
+    | 'dh2'      {% b_docGroupD 2 $1 }
+    | 'dh3'      {% b_docGroupD 3 $1 }
+    | 'dh4'      {% b_docGroupD 4 $1 }
+    | 'doc$'     {% b_docNamed $1 }
 
 top_decl :: { HDecl }
     : 'data' simpletype constrs            { b_dataD $1 $2 $3 }
@@ -397,10 +399,20 @@ deriving :: { HDeriving }
                                 ; return (b_derivsD ds1 $2) } }
 
 deriving_clause :: { HDeriving }
-    : 'anyclass' types { b_derivD (Just (noLoc AnyclassStrategy)) $2 }
-    | 'newtype' types  { b_derivD (Just (noLoc NewtypeStrategy)) $2 }
-    | 'stock' types    { b_derivD (Just (noLoc StockStrategy)) $2 }
+    : 'anyclass' types { b_derivD (Just (uL $1 AnyclassStrategy)) $2 }
+    | 'newtype' types  { b_derivD (Just (uL $1 NewtypeStrategy)) $2 }
+    | 'stock' types    { b_derivD (Just (uL $1 StockStrategy)) $2 }
     | types            { b_derivD Nothing $1 }
+
+standalone_deriv :: { HDecl }
+    : 'anyclass' 'instance' overlap type
+      { b_standaloneD (Just (uL $1 AnyclassStrategy)) $3 $4 }
+    | 'newtype' 'instance' overlap type
+      { b_standaloneD (Just (uL $1 NewtypeStrategy)) $3 $4 }
+    | 'stock' 'instance' overlap type
+      { b_standaloneD (Just (uL $1 StockStrategy)) $3 $4}
+    | 'instance' overlap type
+      { b_standaloneD Nothing $2 $3 }
 
 lconstr :: { HConDecl }
     : '::' conid dtype   {% b_gadtD $2 $3 }
@@ -976,6 +988,10 @@ unListL (LForm (L _ form)) =
       List xs   -> xs
       HsList xs -> xs
       _         -> []
+
+uL :: Code -> a -> Located a
+uL (LForm (L l _)) a = L l a
+{-# INLINE uL #-}
 
 -- $docforms
 --

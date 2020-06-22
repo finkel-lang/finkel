@@ -324,6 +324,7 @@ supportedLangExts =
       , PolyKinds
       , RankNTypes
       , ScopedTypeVariables
+      , StandaloneDeriving
       , TypeApplications
       , TypeFamilies
       , TypeInType

@@ -24,13 +24,14 @@ import GHC_Hs_Binds                    (FixitySig (..), HsBind, HsBindLR (..),
                                         Sig (..))
 import GHC_Hs_Decls                    (ClsInstDecl (..), ConDecl (..),
                                         DataFamInstDecl (..), DefaultDecl (..),
-                                        DocDecl (..), FamilyDecl (..),
-                                        FamilyInfo (..), FamilyResultSig (..),
-                                        ForeignDecl (..), ForeignExport (..),
-                                        HsDataDefn (..), HsDecl (..),
-                                        HsDerivingClause (..), InstDecl (..),
-                                        NewOrData (..), TyClDecl (..),
-                                        TyFamInstDecl (..), TyFamInstEqn)
+                                        DerivDecl (..), DocDecl (..),
+                                        FamilyDecl (..), FamilyInfo (..),
+                                        FamilyResultSig (..), ForeignDecl (..),
+                                        ForeignExport (..), HsDataDefn (..),
+                                        HsDecl (..), HsDerivingClause (..),
+                                        InstDecl (..), NewOrData (..),
+                                        TyClDecl (..), TyFamInstDecl (..),
+                                        TyFamInstEqn)
 import GHC_Hs_Doc                      (LHsDocString)
 import GHC_Hs_Expr                     (HsMatchContext (..), Match (..))
 import GHC_Hs_Pat                      (Pat (..))
@@ -247,17 +248,26 @@ b_derivD :: Maybe HDerivStrategy -> [HType] -> HDeriving
 b_derivD mb_strat tys = L l dcs
   where
     l = getLoc (mkLocatedList tys)
-    dcs = [L l (HsDerivingClause
-                 { deriv_clause_strategy = mb_strat
-#if MIN_VERSION_ghc(8,6,0)
-                 , deriv_clause_ext = NOEXT
-#endif
-                 , deriv_clause_tys = L l (map mkLHsSigType tys)})]
+    dcs = [L l dc]
+    dc = HsDerivingClause NOEXT mb_strat (L l (map mkLHsSigType tys))
 {-# INLINE b_derivD #-}
 
 b_derivsD :: HDeriving -> HDeriving -> HDeriving
 b_derivsD (dL->L _ new) (dL->L _ acc) = mkLocatedList (new ++ acc)
 {-# INLINE b_derivsD #-}
+
+b_standaloneD :: Maybe HDerivStrategy
+              -> Maybe (Located OverlapMode)
+              -> HType -> HDecl
+b_standaloneD mb_strategy mb_overlap ty0@(dL-> L l _) = L l (DerivD NOEXT dd)
+  where
+    dd = DerivDecl NOEXT ty1 mb_strategy mb_overlap
+#if MIN_VERSION_ghc(8,6,0)
+    ty1 = mkLHsSigWcType ty0
+#else
+    ty1 = mkLHsSigType ty0
+#endif
+{-# INCLUDE b_standaloneD #-}
 
 b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do
