@@ -1,0 +1,58 @@
+;;;; File containing codes using `DerivingVia' language extension
+
+%p(LANGUAGE DerivingVia
+            DeriveFunctor
+            GeneralizedNewtypeDeriving
+            StandaloneDeriving)
+
+(module Main)
+
+(import Control.Applicative (liftA2))
+(import Numeric (showHex))
+
+(newtype (Hex a) (Hex a))
+
+(instance (=> (Integral a) (Show a) (Show (Hex a)))
+  (= show (Hex a) (++ "0x" (showHex a ""))))
+
+(newtype Unicode (U Int)
+  (deriving Num via Int)
+  (deriving Show via (Hex Int)))
+
+(:: euroSign Unicode)
+(= euroSign 0x20ac)
+
+(newtype (App f a) (App (f a))
+  (deriving newtype Functor Applicative))
+
+(instance (=> (Applicative f) (Semigroup a)
+              (Semigroup (App f a)))
+  (= <> (liftA2 <>)))
+
+(instance (=> (Applicative f) (Monoid a)
+              (Monoid (App f a)))
+  (= mempty (pure mempty)))
+
+(data (Pair a) (MkPair a a)
+  (deriving stock Functor)
+  (deriving Semigroup Monoid via (App Pair a)))
+
+(instance (Applicative Pair)
+  (= pure a (MkPair a a))
+  (= <*> (MkPair f g) (MkPair a b) (MkPair (f a) (g b))))
+
+(newtype (Kleisli m a b) (Kleisli (-> a (m b)))
+  (deriving Semigroup Monoid via (-> a (App m b))))
+
+(newtype (Kleisli2 m a b) (Klsisli2 (-> a (m b))))
+
+(deriving via (-> a (App m b)) instance
+  (=> (Applicative m) (Semigroup b)
+      (Semigroup (Kleisli2 m a b))))
+
+(deriving via (-> a (App m b)) instance
+  (=> (Applicative m) (Monoid b)
+      (Monoid (Kleisli2 m a b))))
+
+(:: main (IO ()))
+(= main (print euroSign))

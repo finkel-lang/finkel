@@ -84,6 +84,10 @@ import GHC_Hs_Decls                    (FamEqn (..), HsTyPats)
 import GHC_Hs_Decls                    (TyFamEqn (..))
 #endif
 
+#if MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Decls                    (DerivStrategy (..))
+#endif
+
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Form
@@ -255,6 +259,14 @@ b_derivD mb_strat tys = L l dcs
 b_derivsD :: HDeriving -> HDeriving -> HDeriving
 b_derivsD (dL->L _ new) (dL->L _ acc) = mkLocatedList (new ++ acc)
 {-# INLINE b_derivsD #-}
+
+b_viaD :: HType -> Builder (Maybe HDerivStrategy)
+#if MIN_VERSION_ghc(8,6,0)
+b_viaD ty@(dL-> L l _) = return (Just (L l (ViaStrategy (mkLHsSigType ty))))
+#else
+b_viaD _               = builderError
+#endif
+{-# INLINE b_viaD #-}
 
 b_standaloneD :: Maybe HDerivStrategy
               -> Maybe (Located OverlapMode)

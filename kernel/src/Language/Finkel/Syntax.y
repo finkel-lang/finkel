@@ -161,10 +161,11 @@ import Language.Finkel.Syntax.SynUtils
 'qualified' { LForm (L _ (Atom (ASymbol "qualified"))) }
 
 -- GHC Extensions
-'anyclass'  { LForm (L _ (Atom (ASymbol "anyclass"))) }
-'family' { LForm (L _ (Atom (ASymbol "family"))) }
-'forall' { LForm (L _ (Atom (ASymbol "forall"))) }
-'stock'     { LForm (L _ (Atom (ASymbol "stock"))) }
+'anyclass' { LForm (L _ (Atom (ASymbol "anyclass"))) }
+'family'   { LForm (L _ (Atom (ASymbol "family"))) }
+'forall'   { LForm (L _ (Atom (ASymbol "forall"))) }
+'stock'    { LForm (L _ (Atom (ASymbol "stock"))) }
+'via'      { LForm (L _ (Atom (ASymbol "via"))) }
 
 -- Pragmas
 'inlinable'  { LForm (L _ (Atom (ASymbol "INLINABLE"))) }
@@ -402,7 +403,11 @@ deriving_clause :: { HDeriving }
     : 'anyclass' types { b_derivD (Just (uL $1 AnyclassStrategy)) $2 }
     | 'newtype' types  { b_derivD (Just (uL $1 NewtypeStrategy)) $2 }
     | 'stock' types    { b_derivD (Just (uL $1 StockStrategy)) $2 }
-    | types            { b_derivD Nothing $1 }
+    | types mb_via     { b_derivD $2 $1 }
+
+mb_via :: { Maybe HDerivStrategy }
+    : {- empty -} { Nothing }
+    | 'via' type  {% b_viaD $2 }
 
 standalone_deriv :: { HDecl }
     : 'anyclass' 'instance' overlap type
@@ -411,8 +416,8 @@ standalone_deriv :: { HDecl }
       { b_standaloneD (Just (uL $1 NewtypeStrategy)) $3 $4 }
     | 'stock' 'instance' overlap type
       { b_standaloneD (Just (uL $1 StockStrategy)) $3 $4}
-    | 'instance' overlap type
-      { b_standaloneD Nothing $2 $3 }
+    | mb_via 'instance' overlap type
+      { b_standaloneD $1 $3 $4 }
 
 lconstr :: { HConDecl }
     : '::' conid dtype   {% b_gadtD $2 $3 }
@@ -921,6 +926,7 @@ special_id_no_bg_fa :: { Code }
     | 'family'      { $1 }
     | 'hiding'      { $1 }
     | 'stock'       { $1 }
+    | 'via'         { $1 }
     | 'qualified'   { $1 }
     | 'qSymbol'     { $1 }
     | 'qualQSymbol' { $1 }

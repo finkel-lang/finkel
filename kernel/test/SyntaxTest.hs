@@ -5,7 +5,7 @@
 -- All files under "test/data" directory with '.fnk' extension (i.e.:
 -- "test/data/*.fnk") are read and compiled, then type checked.
 --
-module SyntaxTest (syntaxTests) where
+module SyntaxTest (syntaxTests, ignored_84x, ignored_82x) where
 
 -- base
 import Control.Monad    (when)
@@ -43,18 +43,23 @@ mkTest path
   , base_name `elem` ["1002-macro", "1003-eval-when-compile"]
   = describe path (it "is pending with ghc-8.10.1 under Windows"
                       (pendingWith "Macro expansion not yet supported"))
-#if MIN_VERSION_ghc(8,4,0)
+  | base_name `elem` ignored
+  = describe path (it "is not supported in this version of ghc"
+                      (pendingWith "Not supported"))
   | otherwise = mkTest' path
-#else
-  | otherwise
-  = if base_name `elem` ["2020-emptyderiv"]
-       then describe path
-                     (it "is not supported in ghc < 8.4.0"
-                         (pendingWith "Extension does not exist"))
-       else mkTest' path
-#endif
   where
     base_name = takeBaseName path
+#if MIN_VERSION_ghc(8,6,0)
+    ignored = []
+#elif MIN_VERSION_ghc(8,4,0)
+    ignored = ignored_84x
+#else
+    ignored = ignored_82x
+#endif
+
+ignored_84x, ignored_82x :: [String]
+ignored_84x = ["2024-derivingvia"]
+ignored_82x = ["2020-emptyderiv"] ++ ignored_84x
 
 mkTest' :: FilePath -> Spec
 mkTest' path = do
