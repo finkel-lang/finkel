@@ -49,7 +49,6 @@ module Language.Finkel.Builder
   , HModule
   , HPat
   , HSig
-  , HSigWcType
   , HStmt
   , HTyVarBndr
   , HType
@@ -68,7 +67,7 @@ import GHC_Hs_Decls         (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
 import GHC_Hs_Expr          (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
 import GHC_Hs_ImpExp        (LIE, LIEWrappedName, LImportDecl)
 import GHC_Hs_Pat           (LPat)
-import GHC_Hs_Types         (LConDeclField, LHsSigWcType, LHsTyVarBndr, LHsType)
+import GHC_Hs_Types         (LConDeclField, LHsTyVarBndr, LHsType)
 
 import Lexer                (PState (..), mkPState)
 import SrcLoc               (GenLocated (..), Located, noLoc)
@@ -290,8 +289,6 @@ type HModule = HsModule PARSED
 type HPat = LPat PARSED
 
 type HSig = LSig PARSED
-
-type HSigWcType = LHsSigWcType PARSED
 
 type HStmt = ExprLStmt PARSED
 
