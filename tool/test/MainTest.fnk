@@ -4,10 +4,17 @@
 
 (defmodule MainTest
   (export mainTests)
+  (import-when [compile]
+    (Finkel.Prelude))
   (import
    ;; base
+   (Control.Exception (bracket))
    (Control.Monad.IO.Class ((MonadIO ..)))
-   (System.Environment (withArgs))
+   (Data.Version (showVersion))
+   (System.Environment (getEnvironment setEnv withArgs))
+
+   ;; finkel-core
+   (qualified Paths_finkel_core)
 
    ;; hspec
    (Test.Hspec)
@@ -18,6 +25,7 @@
    (Finkel.Tool.Main)
    (Finkel.Tool.Repl)
    (Finkel.Tool.Version)
+   (Finkel.Tool.Version.Commit)
    (TestAux)))
 
 ;;; Tests
@@ -46,7 +54,7 @@
          (it "should show help on --help"
            (shouldReturn (main' ["repl" "--help"]) ())))
       (d "main with version command"
-         (it "should show all versions by default"
+         (it "should show version message by default"
            (shouldReturn (main' ["version"]) ())))
       helpTests
       replTests
@@ -54,18 +62,16 @@
 
 (defn (:: helpTests Spec)
   (do (<- (, _ lns) (runIO (runTestIO (show-usage commands) [])))
-      (let ((= d describe)
-            (= messageShouldContain
+      (let ((= messageShouldContain
               (shouldContain (unlines (tst-outputs lns))))))
-      (d "help command"
+      (describe "help command"
          (it "should contain command names in usage message"
            (do (messageShouldContain "repl")
                (messageShouldContain "make")
                (messageShouldContain "version"))))))
 
 (defn (:: replTests Spec)
-  (describe
-      "repl command"
+  (describe "repl command"
     (do (let ((= repl args
                 (fmap (. unlines (. tst-outputs snd))
                       (liftIO (runTestIO (replMain args) []))))))
@@ -74,28 +80,37 @@
               (shouldContain msg "--no-such-option"))))))
 
 (defn (:: versionTests Spec)
-  (describe
-      "version command"
+  (describe "version command"
     (do (let ((= version args
                 (fmap (. unlines (. tst-outputs snd))
                       (liftIO (runTestIO (versionMain args) []))))))
+        (it "should not throw exceptions with git command"
+          (do (<- commit-id (liftIO get-git-commit))
+              (shouldReturn (print commit-id) ())))
+        (it "should not throw exception when git command is not found"
+          (with-os-cond os
+            ;; The use of `setEnv' may have problem under Windows ...
+            ((/= os "mingw32")
+             (do (<- mb-commit-id (liftIO (with-tmp-env [(, "PATH" ".")]
+                                            get-git-commit)))
+                 (shouldBe mb-commit-id Nothing)))
+            (otherwise
+             (pendingWith "problem with `setEnv'"))))
+        (it "should show ghc version in default message"
+          (do (<- msg (version []))
+              (shouldContain msg "ghc")))
         (it "should show \"--help\" in help message"
           (do (<- msg (version ["--help"]))
               (shouldContain msg "--help")))
-        (it "should show \"ghc\" with \"--ghc\" option"
-          (do (<- msg (version ["--ghc"]))
-              (shouldContain msg "ghc")))
-        (it "should show \"finkel-kernel\" with \"--kernel\" option"
-          (do (<- msg (version ["--kernel"]))
-              (shouldContain msg "kernel")))
-        (it "should show \"finkel-core\" with \"--core\" option"
-          (do (<- msg (version ["--core"]))
-              (shouldContain msg "core")))
-        (it "should show all versions with \"--all\" option"
-          (do (<- msg (version ["--all"]))
-              (shouldContain msg "ghc")
-              (shouldContain msg "kernel")
-              (shouldContain msg "core")))
+        (it "should show numeric version with \"--numeric\" option"
+          (do (<- msg (version ["--numeric"]))
+              (shouldContain msg (showVersion Paths_finkel_core.version))))
         (it "should complain unrecognized option"
           (do (<- msg (version ["--no-such-option"]))
               (shouldContain msg "--no-such-option"))))))
+
+(defn (:: with-tmp-env (-> [(, String String)] (IO a) (IO a)))
+  [envvars act]
+  (bracket getEnvironment
+           (mapM_ (uncurry setEnv))
+           (const (>> (mapM_ (uncurry setEnv) envvars) act))))

@@ -1,0 +1,25 @@
+;;;; Module containing function to get git commit ID
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Version.Commit
+  (export get-git-commit)
+  (import
+   (Control.Exception ((SomeException ..) handle))
+   (System.Process (readProcess readProcessWithExitCode))
+   (System.Exit ((ExitCode ..)))))
+
+(defn (:: is-dirty (IO Bool))
+  (do (<- (, ec _ _) (readProcessWithExitCode "git" ["diff" "--quiet"] []))
+      (case ec
+        ExitSuccess (return False)
+        _ (return True))))
+
+(defn (:: get-git-commit (IO (Maybe String)))
+  (handle
+   (\ (SomeException _) (return Nothing))
+   (do (<- hash-lines (readProcess "git" ["rev-parse" "--short=7" "HEAD"] []))
+       (case (lines hash-lines)
+         (: hash _) (do (<- dirty is-dirty)
+                        (return (Just (++ hash (if dirty "-dirty" "")))))
+         _ (return Nothing)))))

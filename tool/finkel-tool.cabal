@@ -50,6 +50,7 @@ library
                        Finkel.Tool.Repl.Macro
                        Finkel.Tool.Repl
                        Finkel.Tool.Version
+                       Finkel.Tool.Version.Commit
                        Finkel.Tool.Main
   build-depends:       base          >= 4.7    && < 5
                      , bytestring    >= 0.10.8 && < 0.11
