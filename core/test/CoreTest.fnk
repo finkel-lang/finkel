@@ -233,6 +233,24 @@
          (it "returns a symbol"
            (== 'foo (make-symbol "foo"))))
 
+      (d "mb-symbol-name"
+         (do (it "returns a Just String from symbol"
+               (== (Just "foo") (mb-symbol-name 'foo)))
+             (it "returns a Nothing from non-symbol"
+               (== Nothing (mb-symbol-name '(foo bar buzz))))))
+
+      (d "curve"
+         (do (it "returns list from hslist"
+               (== '(a b c) (curve '[a b c])))
+             (it "returns original value otherwise"
+               (== 'foo (curve 'foo)))))
+
+      (d "list"
+         (do (it "returns list"
+               (== '(a b c) (list 'a 'b 'c)))
+             (it "returns nil with no arguments"
+               (== nil (list)))))
+
       (d "mapcar"
          (do (it "replaces non-symbols"
                (== '(foo bar _ buzz _ _)
@@ -668,7 +686,7 @@
       (d "cond"
          (it "should expand to case"
            (expandTo
-            (cond ((even x) 0) (otherwise 1))
+            (cond [(even x) 0] [otherwise 1])
             (case () _ (| ((even x) 0) (otherwise 1))))))
 
       (d "macroexpand-1"

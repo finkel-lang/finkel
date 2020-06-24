@@ -866,9 +866,9 @@ Simple function with weird tests:
 (defn (:: c01 (-> Int Int Int))
   [a b]
   (cond
-    ((even b) b)
-    ((odd b) (> a b) b)
-    (otherwise a)))
+    [(even b) b]
+    [(odd b) (> a b) b]
+    [otherwise a]))
 @
 
 Sample run:
@@ -878,7 +878,7 @@ Sample run:
 "
   body
   `(case ()
-     _ (| ,@body)))
+     _ (| ,@(mapcar curve body))))
 
 
 ;;; Compilation context macros

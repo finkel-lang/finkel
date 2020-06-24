@@ -20,8 +20,11 @@ functions defined in this modules are used in macro defined in
   (:dh1 "Atom extractors")
   mb-symbol-name mb-symbol-name-fs
 
+  (:dh1 "Converting")
+  curve
+
   (:dh1 "Code constructors")
-  cons list (ListableType ..) append
+  cons list (Listable ..) append
 
   (:dh1 "CXrs")
   (:dh2 "Basic cXrs")
@@ -66,7 +69,7 @@ functions defined in this modules are used in macro defined in
 
 ;; finkel-kernel
 (import Language.Finkel)
-(import Language.Finkel.Form (mkLocatedForm))
+(import Language.Finkel.Form (mkLocatedForm toListL))
 
 
 ;;; Exception
@@ -217,15 +220,27 @@ Like `mb-symbol-name', but returns `FastString'")
     _ Nothing))
 %p(INLINABLE mb-symbol-name-fs)
 
+(:doc "Convert `HsList' to `List'.
+
+The original value is retained if the given argument was not a `HsList' value.")
+(:: curve (-> Code Code))
+(= curve form
+  (if (is-hslist form)
+      (toListL form)
+      form))
+%p(INLINABLE curve)
+
 (:doc "Type class for constructing 'List' with polyvariadic function.")
-(class (ListableType l)
+(class (Listable l)
   (:: list_ (-> [Code] l)))
 
-(instance (ListableType Code)
-  (= list_ (. qList reverse)))
+(instance (Listable Code)
+  (= list_ xs
+    (case (mkLocatedForm (reverse xs))
+      (L l ys) (LForm (L l (List ys))))))
 
-(instance (=> (ToCode elem) (ListableType l)
-              (ListableType (-> elem l)))
+(instance (=> (ToCode elem) (Listable l)
+              (Listable (-> elem l)))
   (= list_ acc
     (\ x (list_ (: (toCode x) acc)))))
 
@@ -241,7 +256,7 @@ Examples:
 >>> (:: (list \'a \\b \"c\" (:: 0xd Int)) Code)
 (a \\b \"c\" 13)
 ")
-(:: list (=> (ListableType lst) lst))
+(:: list (=> (Listable lst) lst))
 (= list (list_ []))
 
 
