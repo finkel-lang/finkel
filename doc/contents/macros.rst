@@ -108,9 +108,9 @@ of the ``RequireMe`` module so that the macro functions defined in
 
 .. note::
 
-   As of finkel-kernel version 0.28.0.0, one may need to add
-   ``-dynamic-too`` option to the ``finkel`` executable when compiling
-   a source code file containing ``require``.
+   As of finkel version 0.1, one may need to add ``-dynamic-too`` option to the
+   ``finkel`` executable when compiling a source code file containing
+   ``require``.
 
 
 Quasiquote, Unquote, And Unquote-Splice

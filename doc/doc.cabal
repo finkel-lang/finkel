@@ -23,7 +23,7 @@ flag dynamic
 custom-setup
   setup-depends:       base         >= 4.7 && < 5
                      , Cabal        >= 2.0 && < 3.3
-                     , finkel-setup >= 0.1 && < 1
+                     , finkel-setup == 0.1.0.0
 
 test-suite test
   type:                exitcode-stdio-1.0
@@ -37,9 +37,9 @@ test-suite test
                      , hspec         >= 2.4.8  && < 2.8
                      , QuickCheck    >= 2.10.1 && < 2.14
                        --
-                     , finkel-core   >= 0.1    && < 1
-                     , finkel-kernel >= 0.28   && < 1
-  build-tool-depends:  finkel:finkel >= 0.1    && < 1
+                     , finkel-core   == 0.1.0.0
+                     , finkel-kernel == 0.1.0.0
+  build-tool-depends:  finkel:finkel == 0.1.0.0
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
