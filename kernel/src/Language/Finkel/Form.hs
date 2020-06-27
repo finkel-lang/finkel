@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE FlexibleInstances  #-}
 -- | S-expression form data.
 module Language.Finkel.Form
   (
@@ -39,6 +40,7 @@ module Language.Finkel.Form
 
 -- base
 import Data.Data       (Data, Typeable)
+import Data.Function   (on)
 import GHC.Generics    (Generic)
 
 -- ghc
@@ -201,6 +203,19 @@ instance Outputable a => Outputable (Form a) where
       HsList xs -> brackets (fsep (map ppr xs))
       TEnd      -> text ""
 
+instance Num (Form Atom) where
+  (+) = nop2 aIntegral (+) (+)
+  (*) = nop2 aIntegral (*) (*)
+  negate = nop1 aIntegral negate negate
+  abs = nop1 aIntegral abs abs
+  signum = nop1 aIntegral signum signum
+  fromInteger = Atom . aIntegral
+
+instance Fractional (Form Atom) where
+  (/) = nop2 aDouble ((/) `on` fromIntegral) (/)
+  recip = nop1 aDouble (recip . fromInteger) recip
+  fromRational = Atom . aDouble. fromRational
+
 -- | Newtype wrapper for located 'Form'.
 newtype LForm a = LForm {unLForm :: Located (Form a)}
   deriving (Data, Typeable, Generic)
@@ -220,8 +235,7 @@ instance Foldable LForm where
   {-# INLINE foldr #-}
 
 instance Traversable LForm where
-  traverse f (LForm (L l form)) =
-    fmap (LForm . L l) (traverse f form)
+  traverse f (LForm (L l form)) = fmap (LForm . L l) (traverse f form)
   {-# INLINE traverse #-}
 
 instance NFData a => NFData (LForm a) where
@@ -242,6 +256,26 @@ instance Outputable a => Outputable (LForm a) where
 --
 type Code = LForm Atom
 
+instance Num Code where
+  (+) = liftLF2 (+)
+  (*) = liftLF2 (*)
+  negate = liftLF negate
+  abs = liftLF abs
+  signum  = liftLF signum
+  fromInteger = LForm . genSrc . fromInteger
+
+instance Fractional Code where
+  (/) = liftLF2 (/)
+  recip = liftLF recip
+  fromRational = LForm . genSrc . fromRational
+
+liftLF :: (Form Atom -> Form Atom) -> Code -> Code
+liftLF f (LForm (L l a)) = LForm (L l (f a))
+{-# INLINE liftLF #-}
+
+liftLF2 :: (Form Atom -> Form Atom -> Form Atom) -> Code -> Code -> Code
+liftLF2 f (LForm (L l1 a)) (LForm (L _l2 b)) = LForm (L l1 (f a b))
+{-# INLINE liftLF2 #-}
 
 -- -------------------------------------------------------------------
 --
@@ -297,6 +331,11 @@ aFractional :: (Real a, Show a) => a -> Atom
 aFractional x = AFractional $! mkFractionalLit x
 {-# SPECIALIZE aFractional :: Double -> Atom #-}
 {-# SPECIALIZE aFractional :: Float -> Atom #-}
+
+-- | Type fixed variant of 'aFractional'.
+aDouble :: Double -> Atom
+aDouble = aFractional
+{-# INLINE aDouble #-}
 
 aIntegral :: Integral a => a -> Atom
 aIntegral x = AInteger $! mkIntegralLit x
@@ -358,6 +397,30 @@ mkLocatedForm [] = genSrc []
 mkLocatedForm ms = L (combineLocs (unLForm (head ms))
                                   (unLForm (last ms)))
                      ms
+
+-- | Unary numeric operation helper.
+nop1 :: (a -> Atom)
+     -> (Integer -> a)
+     -> (Rational -> Rational)
+     -> Form Atom -> Form Atom
+nop1 c f _ (Atom (AInteger il))    = Atom (c (f (il_value il)))
+nop1 _ _ f (Atom (AFractional fl)) = Atom (aFractional (f (fl_value fl)))
+nop1 _ _ _ _                       = List []
+
+-- | Binary numeric operation helper.
+nop2 :: (a -> Atom)
+     -> (Integer -> Integer -> a)
+     -> (Rational -> Rational -> Rational)
+     -> Form Atom -> Form Atom -> Form Atom
+nop2 c f _ (Atom (AInteger il1)) (Atom (AInteger il2)) =
+  Atom (c (on f il_value il1 il2))
+nop2 _ _ f (Atom (AFractional fl1)) (Atom (AInteger il2)) =
+  Atom (aFractional (f (fl_value fl1) (fromIntegral (il_value il2))))
+nop2 _ _ f (Atom (AInteger il1)) (Atom (AFractional fl2)) =
+  Atom (aFractional (f (fromIntegral (il_value il1)) (fl_value fl2)))
+nop2 _ _ f (Atom (AFractional fl1)) (Atom (AFractional fl2)) =
+  Atom (aFractional (on f fl_value fl1 fl2))
+nop2 _ _ _ _ _ = List []
 
 fl_text_compat :: FractionalLit -> String
 fl_text_compat fl = str

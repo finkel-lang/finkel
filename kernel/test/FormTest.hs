@@ -96,6 +96,8 @@ formTests = do
   homoiconicTests
   rnfTest
   listTest
+  numTest
+  fractionalTest
 
   fromCodeTest Foo
 
@@ -424,6 +426,48 @@ listTest =
       let f :: (Code -> Code) -> Code -> Bool
           f g form = isListL (toListL (g form))
       property f
+
+cInt :: Int -> Code
+cInt = toCode
+
+cDouble :: Double -> Code
+cDouble = toCode
+
+numTest :: Spec
+numTest =
+  describe "Num instance for Code" $ do
+    it "should evaluate +" $ do
+      cInt 2 + cInt 40 `shouldBe` 42
+      cInt 2 + cDouble 40 `shouldBe` 42.0
+      cDouble 2 + cInt 40 `shouldBe` 42.0
+      cDouble 2.0 + cDouble 40.0 `shouldBe` 42.0
+    it "should evaluate * for AInteger" $ do
+      cInt 6 * cInt 7  `shouldBe` 42
+      cDouble 6 * cDouble 7 `shouldBe` 42.0
+    it "should evalue - for AInteger" $ do
+      cInt 50 - cInt 8 `shouldBe` 42
+      cDouble 50 - cDouble 8 `shouldBe` 42.0
+    it "should evaluate abs" $ do
+      abs (cInt (-42)) `shouldBe` 42
+      abs (cDouble (-42)) `shouldBe` 42.0
+    it "should evaluate signum" $ do
+      signum (cInt (-42)) `shouldBe` -1
+      signum (cDouble (-42)) `shouldBe` -1.0
+    it "should evaluate fromInteger" $
+      fromInteger 42 `shouldBe` cInt 42
+    it "should result to nil with invalid values" $ do
+      3 + toCode 'a' `shouldBe` nil
+      signum (toCode 'a') `shouldBe` nil
+
+fractionalTest :: Spec
+fractionalTest =
+  describe "Fractional instance for Code" $ do
+    it "should evaluate /" $ do
+      cInt 84 / cInt 2 `shouldBe` 42.0
+      cDouble 84.0 / cDouble 2.0 `shouldBe` 42.0
+    it "should evaluate recip" $ do
+      recip (cInt 4) `shouldBe` 0.25
+      recip (cDouble 4.0) `shouldBe` 0.25
 
 data Foo = Foo deriving (Eq, Show)
 
