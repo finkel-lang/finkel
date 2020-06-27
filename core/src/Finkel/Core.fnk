@@ -132,7 +132,7 @@ module.")
          _ (finkelSrcError form "invalid args in macro definition"))))
    %p(INLINABLE dmac)
 
-   (:doc "Function for body of 'let_macro'.")
+   (:doc "Function for body of `macrolet'.")
    (:: lmac (-> Code (Fnk Code)))
    (= lmac form
      (let ((= f x

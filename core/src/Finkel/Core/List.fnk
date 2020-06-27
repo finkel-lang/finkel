@@ -42,7 +42,7 @@ functions defined in this modules are used in macro defined in
   cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
 
   (:dh1 "Higher order functions")
-  mapcar
+  reduce mapcar
 
   (:dh1 "Exception")
   (FinkelListException ..))
@@ -53,6 +53,7 @@ functions defined in this modules are used in macro defined in
   ;; base
   (import Prelude)
   (import Control.Exception (throw))
+  (import Data.List (intersperse))
 
   ;; finkel-kernel
   (import Language.Finkel)
@@ -328,7 +329,7 @@ E.g., definition of 'cadr' is:
 
 > (cadr x) == (car (cdr x))
 
-and definition of 'cdadr' is:
+and the definition of 'cdadr' is:
 
 > (cdadr x) == (cdr (car (cdr x)))
 ")
@@ -343,11 +344,19 @@ and definition of 'cdadr' is:
   (= cxr-name x
     (qSymbol (concat ["c" x "r"])))
 
+  (:: doc (-> String Code))
+  (= doc xs
+    (let ((= f x (++ "`c" [x] "r'"))
+          (= g ys (unwords (intersperse "of" (map f ys)))))
+      (toCode (++ "Get the " (g xs) "."))))
+
   (:: cxr (-> String [Code]))
   (= cxr xs
-    (let ((= name (cxr-name xs)))
+    (let ((= name (cxr-name xs))
+          (= docstr (doc xs)))
       (case xs
-        (: hd tl) [`(:: ,name (-> Code Code))
+        (: hd tl) [`(:doc ,docstr)
+                   `(:: ,name (-> Code Code))
                    `(= ,name (. ,(cxr-name [hd]) ,(cxr-name tl)))
                    `%p(INLINABLE ,name)]
         _ (throw (FinkelException (++ "cxr: invalid arg: " xs))))))
@@ -369,3 +378,13 @@ converted to 'List'.")
     (List xs)   (LForm (L l (List (map f xs))))
     (HsList xs) (LForm (L l (List (map f xs))))
     _           (error-non-list "mapcar" form)))
+
+(:doc "Like `foldr1', but for `Code'.
+
+Apply given function to given `List' or `HsList'. Implementation uses `car' and
+`cdr', throws an exception if the second argument was not a list.")
+(:: reduce (-> (-> Code Code Code) Code Code))
+(= reduce f xs
+  (if (null (cdr xs))
+      (car xs)
+      (f (car xs) (reduce f (cdr xs)))))
