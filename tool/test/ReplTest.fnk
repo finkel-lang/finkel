@@ -274,12 +274,10 @@
         (= port "50322")
         (= input-file (</> "test" "data" "sleep-for-while.fnk"))
         (= resolve host port
-          (do (let ((= hints (defaultHints {addrSocketType Stream}))))
-              (<- addrs
-                (getAddrInfo (Just hints) (Just host) (Just port)))
-              (case addrs
-                (: addr _) (return addr)
-                _ (error "REPL client: address error"))))
+          (let ((= hints (defaultHints {addrSocketType Stream})))
+            (case-do (getAddrInfo (Just hints) (Just host) (Just port))
+              (: addr _) (return addr)
+              _ (error "REPL client: address error"))))
         (= work (, conn _)
           (do (<- _msg1 (recv conn 1024))
               (sendAll conn "(* 7 (+ 4 2))")

@@ -33,7 +33,7 @@ module.")
   macro-error
 
   (:dh1 "Expressions")
-  cond)
+  cond case-do)
 
 ;;; Compile time imports
 
@@ -847,7 +847,7 @@ True
 
     _ (macro-error "defdo: invalid form")))
 
-(defmacro' cond
+(defmacro cond
   "The 'cond' macro, found in many Lisp languages.
 
 The behaviour is same as wrapping the body with @case@ expression with
@@ -855,8 +855,8 @@ dummy unit, or @if@ with @MultiWayIf@ GHC language extension.
 
 ==== __Syntax__
 
-> COND    ::= 'cond' CLAUSE+
-> CLAUSE+ ::= '(' guard+ expr ')'
+> COND   ::= 'cond' CLAUSE+
+> CLAUSE ::= '(' guard+ expr ')'
 
 ==== __Examples__
 
@@ -879,6 +879,37 @@ Sample run:
   body
   `(case ()
      _ (| ,@(mapcar curve body))))
+
+(defmacro case-do
+  "Like @case@, but takes an expression with 'Monad' type.
+
+==== __Syntax__
+
+> CASE-DO  ::= 'case-do' EXPR PAT-EXPR+
+> PAT-EXPR ::= PATTERN EXPR
+
+==== __Example__
+
+Following code:
+
+@
+(case-do getLine
+  \"hello\" (putStrLn \"Hi!\")
+  line (putStrLn (++ \"Got: \" line)))
+@
+
+Is same as:
+
+@
+(do (<- tmp getLine)
+    (case tmp
+      \"hello\" (putStrLn \"Hi!\")
+      line (putStrLn (++ \"Got: \" line))))
+@
+"
+  args
+  `(do (<- $tmp ,(car args))
+       (case $tmp ,@(cdr args))))
 
 
 ;;; Compilation context macros

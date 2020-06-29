@@ -327,7 +327,7 @@
   (do (let ((= d describe)))
       (d "m1"
          (it "should be \"m1 foo\""
-             (shouldBe (m1 "foo") "m1 foo")))
+           (shouldBe (m1 "foo") "m1 foo")))
 
       (d "eval-when"
          (do (it "should expand to (:begin (:eval-when-compile ...) ...)"
@@ -688,6 +688,17 @@
            (expandTo
             (cond [(even x) 0] [otherwise 1])
             (case () _ (| ((even x) 0) (otherwise 1))))))
+
+      (d "case-do"
+         (it "should expand to do with case"
+           (expandTo
+            (case-do getLine
+              "hello" (putStrLn "hi")
+              line (putStrLn (++ "Got: " line)))
+            (do (<- $tmp getLine)
+                (case $tmp
+                  "hello" (putStrLn "hi")
+                  line (putStrLn (++ "Got: " line)))))))
 
       (d "macroexpand-1"
          (do (it "should expand to '(toCode 3)"

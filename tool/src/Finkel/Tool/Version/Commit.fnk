@@ -18,8 +18,8 @@
 (defn (:: get-git-commit (IO (Maybe String)))
   (handle
    (\ (SomeException _) (return Nothing))
-   (do (<- hash-lines (readProcess "git" ["rev-parse" "--short=7" "HEAD"] []))
-       (case (lines hash-lines)
-         (: hash _) (do (<- dirty is-dirty)
-                        (return (Just (++ hash (if dirty "-dirty" "")))))
-         _ (return Nothing)))))
+   (case-do (fmap lines (readProcess "git" ["rev-parse" "--short=7" "HEAD"]
+                                     []))
+     (: hash _) (do (<- dirty is-dirty)
+                    (return (Just (++ hash (if dirty "-dirty" "")))))
+     _ (return Nothing))))

@@ -67,10 +67,9 @@
     VersionHelp print-version-help))
 
 (macrolet-m ((get-commit-id _
-               (do (<- hash (liftIO get-git-commit))
-                   (case hash
-                     (Just str) (return (toCode (: #'- str)))
-                     Nothing (return '"")))))
+               (case-do (liftIO get-git-commit)
+                 (Just str) (return (toCode (: #'- str)))
+                 Nothing (return '""))))
   (defn (:: print-version-message (=> (CLI m) (m ())))
     (do (<- name (liftIO getProgName))
         (putString

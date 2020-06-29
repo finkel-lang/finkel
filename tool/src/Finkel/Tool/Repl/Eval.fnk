@@ -187,13 +187,12 @@
   "Set the name of function used for printing values in interactive
 context."
   [name]
-  (do (<- vals (parseName name))
-      (case vals
-        (: f _) (modifySession
-                 (\ he (he {hsc-IC
-                            (setInteractivePrintName (hsc-IC he)
-                                                     f)})))
-        _ (failS "set-print-name: parse error"))))
+  (case-do (parseName name)
+    (: f _) (modifySession
+             (\ he (he {hsc-IC
+                        (setInteractivePrintName (hsc-IC he)
+                                                 f)})))
+    _ (failS "set-print-name: parse error")))
 
 (defn (:: eval-form
         (-> Handle DynFlags ForeignHValue InSource [Code] (Fnk Result)))
@@ -213,10 +212,8 @@ context."
         (-> Handle ForeignHValue InSource HStmt (Fnk Result)))
   [hdl wrapper itype stmt0]
   (do (<- hsc-env getSession)
-      (<- stmt1 (liftIO (hscParsedStmt hsc-env stmt0)))
-      (case stmt1
-        (Just (, is h f)) (update-hsc-env hdl wrapper itype hsc-env
-                                          is h f)
+      (case-do (liftIO (hscParsedStmt hsc-env stmt0))
+        (Just (, is h f)) (update-hsc-env hdl wrapper itype hsc-env is h f)
         Nothing (return (Left "eval-statement: no result")))))
 
 (defn (:: eval-imports (-> DynFlags [HImportDecl] (Fnk Result)))

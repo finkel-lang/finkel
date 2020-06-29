@@ -154,10 +154,9 @@
   "Perform the first action when invoked from @stack@, otherwise
   perform the second."
   [stack-act other-act]
-  (do (<- mb-ghc-pkg-path (liftIO (lookupEnv "GHC_PACKAGE_PATH")))
-      (case mb-ghc-pkg-path
-        (Just _) stack-act
-        Nothing  other-act)))
+  (case-do (liftIO (lookupEnv "GHC_PACKAGE_PATH"))
+    (Just _) stack-act
+    Nothing  other-act))
 
 (defn (:: init-etf-for-cabal (Fnk ()))
   "Initialization work for running eval tests with `cabal-install' 3.0.0."

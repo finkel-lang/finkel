@@ -263,12 +263,11 @@ object code."
 ;;; Mostly taken from `GHCi.UI.guessCurrentModule'.
 (defn (:: guess-current-module (-> Code (Fnk Module)))
   [form]
-  (do (<- imports getContext)
-      (case imports
-        (: (IIModule m) _) (findModule m Nothing)
-        (: (IIDecl d) _)   (findModule (unLoc (ideclName d))
-                                       (fmap sl-fs (ideclPkgQual d)))
-        _ (finkelSrcError form "browse: no current module"))))
+  (case-do getContext
+    (: (IIModule m) _) (findModule m Nothing)
+    (: (IIDecl d) _)   (findModule (unLoc (ideclName d))
+                                   (fmap sl-fs (ideclPkgQual d)))
+    _ (finkelSrcError form "browse: no current module")))
 
 (defn (:: env-context-on-exception (-> (Fnk a) (Fnk ())))
   [action]
@@ -571,13 +570,12 @@ object code."
              (otherwise
               (>>= (guess-current-module (located-list forms)) go'))))
         (= go' mdl
-          (do (<- mb-mod-info (getModuleInfo mdl))
-              (case mb-mod-info
-                (Just mod-info) (browse-module mdl mod-info)
-                Nothing (do (let ((= mname (moduleName mdl))
-                                  (= str (moduleNameString mname))
-                                  (= msg (++ "unknown module: " str))))
-                            (return `(System.IO.putStrLn ,msg))))))
+          (case-do (getModuleInfo mdl)
+            (Just mod-info) (browse-module mdl mod-info)
+            Nothing (do (let ((= mname (moduleName mdl))
+                              (= str (moduleNameString mname))
+                              (= msg (++ "unknown module: " str))))
+                        (return `(System.IO.putStrLn ,msg)))))
         (= err
           (finkelSrcError (located-list forms)
                           (++ "browse: invalid form: " (show forms)))))
@@ -621,12 +619,11 @@ object code."
 
 (defn (:: info-cmd ReplAction)
   [forms]
-  (let ((= err (invalid-form-error "info" forms)))
-    (case (map unCode forms)
-      [(@ form (Atom (ASymbol _)))] (info-name (toCode form))
-      [(Atom AUnit)] (info-name (qSymbol "()"))
-      [(HsList [])] (info-name (qSymbol "[]"))
-      _ err)))
+  (case (map unCode forms)
+    [(@ form (Atom (ASymbol _)))] (info-name (toCode form))
+    [(Atom AUnit)] (info-name (qSymbol "()"))
+    [(HsList [])] (info-name (qSymbol "[]"))
+    _ (invalid-form-error "info" forms)))
 
 ;; From `GHCi.UI.kindOfType'
 (defn (:: kind-cmd ReplAction)
@@ -706,20 +703,19 @@ paths from import directories."
 (defn (:: reload-cmd ReplAction)
   "Function to reload previously loaded module."
   [_forms]
-  (do (<- targets getTargets)
-      (case targets
-        (: (Target (TargetFile path _) _ _) _)
-        ;; Unloading before compilation, to re-link the compiled
-        ;; modules.
-        (do (<- ctx0 getContext)
-            (<- hsc-env getSession)
-            (liftIO (unload hsc-env []))
-            (<- _ (compile-module path))
-            (<- ctx1 (adjust-current-target path ctx0))
-            (setContext ctx1)
-            (let ((= msg (++ "; reloaded " path))))
-            (return `(System.IO.putStrLn ,msg)))
-        _ (return '(System.IO.putStrLn "; reload: invalid target")))))
+  (case-do getTargets
+    (: (Target (TargetFile path _) _ _) _)
+    ;; Unloading before compilation, to re-link the compiled
+    ;; modules.
+    (do (<- ctx0 getContext)
+        (<- hsc-env getSession)
+        (liftIO (unload hsc-env []))
+        (<- _ (compile-module path))
+        (<- ctx1 (adjust-current-target path ctx0))
+        (setContext ctx1)
+        (let ((= msg (++ "; reloaded " path))))
+        (return `(System.IO.putStrLn ,msg)))
+    _ (return '(System.IO.putStrLn "; reload: invalid target"))))
 
 (defn (:: set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
@@ -827,9 +823,9 @@ paths from import directories."
 (defmacro-m repl-macro form
   (case (unCode form)
     (List (: name args)) (| ((<- (Just name') (code-to-mb-string name))
-                             (<- (Just rc)
-                               (find (. (isPrefixOf name') rc-name)
-                                     commands))
+                             (<- (Just rc) (find (. (isPrefixOf name')
+                                                    rc-name)
+                                                 commands))
                              (rc-action rc args))
                             (otherwise (help-cmd [])))
     _ (finkelSrcError form (++ "invalid args: " (show form)))))

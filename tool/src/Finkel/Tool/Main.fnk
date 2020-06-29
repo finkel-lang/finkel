@@ -28,12 +28,11 @@
 
 (defn (:: main (IO ()))
   "Main entry point function for the executable."
-  (do (<- args getArgs)
-      (case args
-        (: name rest) (maybe (show-usage commands)
-                             (flip cmd-act rest)
-                             (find-command commands name))
-        _ (show-usage commands))))
+  (case-do getArgs
+    (: name rest) (maybe (show-usage commands)
+                         (flip cmd-act rest)
+                         (find-command commands name))
+    _ (show-usage commands)))
 
 (defn (:: commands [Command])
   "Available commands in the executable."

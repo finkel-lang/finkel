@@ -30,10 +30,9 @@
 (defn (:: spec Spec)
   (describe "building cabal package"
     (it "matches package made with hsfiles template"
-      (do (<- build-tool get-build-tool)
-          (case build-tool
-            Cabal (pendingWith "not running with cabal-install")
-            Stack compare-new-package)))))
+      (case-do get-build-tool
+        Cabal (pendingWith "not running with cabal-install")
+        Stack compare-new-package))))
 
 
 ;;; Auxiliary
@@ -51,13 +50,12 @@
 
 (defn (:: compare-package-dirs (-> (, FilePath String) (IO ())))
   [(, tmpdir pkgname)]
-  (do (<- et-ec (stack-new tmpdir pkgname))
-      (case et-ec
-        (Right ExitSuccess) (compare-directory-contents
-                             (</> "include" "building-package" pkgname)
-                             (</> tmpdir pkgname))
-        (Right ec) (expectationFailure (++ "stack new failed with " (show ec)))
-        (Left msg) (expectationFailure msg))))
+  (case-do (stack-new tmpdir pkgname)
+    (Right ExitSuccess) (compare-directory-contents
+                         (</> "include" "building-package" pkgname)
+                         (</> tmpdir pkgname))
+    (Right ec) (expectationFailure (++ "stack new failed with " (show ec)))
+    (Left msg) (expectationFailure msg)))
 
 (defn (:: compare-directory-contents (-> FilePath FilePath (IO ())))
   "Recursively compare directory contents."
@@ -111,16 +109,15 @@
 (defn (:: get-resolver-version (-> String (IO (Maybe String))))
   "Get stack resolver version from YAML file used in `my-new-package'."
   [pkgname]
-  (do (let ((= yaml-path
-              (</> "include" "building-package" pkgname "stack.yaml"))
-            (= resolver-line
-              (. (concatMap words)
-                 (filter (isPrefixOf "resolver:"))
-                 lines))))
-      (<- contents (readFile yaml-path))
-      (case (resolver-line contents)
-        [_ version] (return (Just version))
-        _ (return Nothing))))
+  (let ((= yaml-path
+          (</> "include" "building-package" pkgname "stack.yaml"))
+        (= resolver-line
+          (. (concatMap words)
+             (filter (isPrefixOf "resolver:"))
+             lines)))
+    (case-do (fmap resolver-line (readFile yaml-path))
+      [_ version] (return (Just version))
+      _ (return Nothing))))
 
 (defn (:: run (-> (Maybe String) String [String] (IO ExitCode)))
   "Run command and wait."
