@@ -49,12 +49,11 @@ import FastString      (FastString, fsLit, unpackFS)
 import Outputable      (Outputable (..), brackets, cat, char, double,
                         doubleQuotes, fsep, integer, parens, text)
 import SrcLoc          (GenLocated (..), Located, SrcSpan (..), combineLocs,
-                        srcSpanFile, srcSpanStartCol, srcSpanStartLine)
+                        combineSrcSpans, srcSpanFile, srcSpanStartCol,
+                        srcSpanStartLine)
 
 #if MIN_VERSION_ghc(8,4,0)
 import BasicTypes      (IntegralLit (..), mkFractionalLit, mkIntegralLit)
-#else
-import Data.Function   (on)
 #endif
 
 -- deepseq
@@ -216,6 +215,49 @@ instance Fractional (Form Atom) where
   recip = nop1 aDouble (recip . fromInteger) recip
   fromRational = Atom . aDouble. fromRational
 
+#if MIN_VERSION_ghc(8,4,0)
+instance Semigroup (Form a) where
+  Atom a <> Atom b = List [atomForm a, atomForm b]
+  Atom a <> List bs = List (atomForm a : bs)
+  Atom a <> HsList bs = List (atomForm a : bs)
+
+  List as <> Atom b = List (as <> [atomForm b])
+  List as <> List bs = List (as <> bs)
+  List as <> HsList bs = List (as <> bs)
+
+  HsList as <> Atom b = List (as <> [atomForm b])
+  HsList as <> List bs = List (as <> bs)
+  HsList as <> HsList bs = List (as <> bs)
+
+  TEnd <> b = b
+  a <> TEnd = a
+  {-# INLINE (<>) #-}
+
+instance Monoid (Form a) where
+  mempty = List []
+  {-# INLINE mempty #-}
+#else
+instance Monoid (Form a) where
+  Atom a `mappend` Atom b = List [atomForm a, atomForm b]
+  Atom a `mappend` List bs = List (atomForm a : bs)
+  Atom a `mappend` HsList bs = List (atomForm a : bs)
+
+  List as `mappend` Atom b = List (as `mappend` [atomForm b])
+  List as `mappend` List bs = List (as `mappend` bs)
+  List as `mappend` HsList bs = List (as `mappend` bs)
+
+  HsList as `mappend` Atom b = List (as `mappend` [atomForm b])
+  HsList as `mappend` List bs = List (as `mappend` bs)
+  HsList as `mappend` HsList bs = List (as `mappend` bs)
+
+  TEnd `mappend` b = b
+  a `mappend` TEnd = a
+  {-# INLINE mappend #-}
+
+  mempty = List []
+  {-# INLINE mempty #-}
+#endif
+
 -- | Newtype wrapper for located 'Form'.
 newtype LForm a = LForm {unLForm :: Located (Form a)}
   deriving (Data, Typeable, Generic)
@@ -243,6 +285,23 @@ instance NFData a => NFData (LForm a) where
 
 instance Outputable a => Outputable (LForm a) where
   ppr (LForm (L _ a)) = ppr a
+
+#if MIN_VERSION_ghc(8,4,0)
+instance Semigroup (LForm a) where
+  LForm (L l a) <> LForm (L r b) = LForm (L (combineSrcSpans l r) (a <> b))
+  {-# INLINE (<>) #-}
+
+instance Monoid (LForm a) where
+  mempty = LForm (genSrc mempty)
+  {-# INLINE mempty #-}
+#else
+instance Monoid (LForm a) where
+  LForm (L l a) `mappend` LForm (L r b) =
+    LForm (L (combineSrcSpans l r) (a `mappend` b))
+  {-# INLINE mappend #-}
+  mempty = LForm (genSrc mempty)
+  {-# INLINE mempty #-}
+#endif
 
 -- | Type synonym for code data.
 --
@@ -397,6 +456,11 @@ mkLocatedForm [] = genSrc []
 mkLocatedForm ms = L (combineLocs (unLForm (head ms))
                                   (unLForm (last ms)))
                      ms
+
+-- | Lift given argument to 'LForm'.
+atomForm :: a -> LForm a
+atomForm = LForm . genSrc . Atom
+{-# INLINE atomForm #-}
 
 -- | Unary numeric operation helper.
 nop1 :: (a -> Atom)

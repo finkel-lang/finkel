@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 -- | Tests for forms.
 module FormTest where
@@ -21,6 +22,10 @@ import           Data.Version
 import           Data.Word
 import           Numeric.Natural
 import           Text.Show.Functions          ()
+
+#if !MIN_VERSION_ghc(8,4,0)
+import           Data.Monoid                  ((<>))
+#endif
 
 -- deepseq
 import           Control.DeepSeq
@@ -98,6 +103,7 @@ formTests = do
   listTest
   numTest
   fractionalTest
+  monoidTest
 
   fromCodeTest Foo
 
@@ -468,6 +474,44 @@ fractionalTest =
     it "should evaluate recip" $ do
       recip (cInt 4) `shouldBe` 0.25
       recip (cDouble 4.0) `shouldBe` 0.25
+
+monoidTest :: Spec
+monoidTest = do
+  let a = toCode 'a'
+      b = toCode 'b'
+      lst = toCode (List [a,b])
+      hslst = toCode (HsList [a,b])
+  describe "Atom <> XXX" $ do
+    it "should result in '(a b)" $
+      a <> b `shouldBe` lst
+    it "should result in '(a a b)" $
+      a <> lst `shouldBe` toCode (List [a,a,b])
+    it "should result in '(a a b)" $
+      a <> hslst `shouldBe` toCode (List [a,a,b])
+  describe "List <> XXX" $ do
+    it "should result in '(a b a)" $
+      lst <> a `shouldBe` toCode (List [a,b,a])
+    it "should result in '(a b a b)" $
+      lst <> lst `shouldBe` toCode (List [a,b,a,b])
+    it "should result in '(a b a b)" $
+      lst <> hslst `shouldBe` toCode (List [a,b,a,b])
+  describe "HsList <> XXX" $ do
+    it "should result in '(a b a)" $
+      hslst <> a `shouldBe` toCode (List [a,b,a])
+    it "should result in '(a b a b)" $
+      hslst <> lst `shouldBe` toCode (List [a,b,a,b])
+    it "should result in '(a b a b)" $
+      hslst <> hslst `shouldBe` toCode (List [a,b,a,b])
+  describe "TEnd" $ do
+    it "should result in non-TEnd" $ do
+      let at = Atom True
+      at <> TEnd `shouldBe` at
+      TEnd <> at `shouldBe` at
+  describe "mempty" $ do
+    it "should be empty list" $
+      mempty `shouldBe` (List [] :: Form Atom)
+    it "should be nil" $
+      mempty `shouldBe` nil
 
 data Foo = Foo deriving (Eq, Show)
 
