@@ -162,6 +162,35 @@ instance Functor Form where
       TEnd      -> TEnd
   {-# INLINE fmap #-}
 
+instance Applicative Form where
+  pure = Atom
+  {-# INLINE pure #-}
+
+  Atom f <*> Atom a = Atom (f a)
+  Atom f <*> List as = List (map (fmap f) as)
+  Atom f <*> HsList as = HsList (map (fmap f) as)
+
+  List fs <*> a@(Atom _) = List (fmap apLF fs <*> [a])
+  List fs <*> List as = List ((fmap (<*>) fs) <*> as)
+  List fs <*> HsList as = List ((fmap (<*>) fs) <*> as)
+
+  HsList fs <*> a@(Atom _) = HsList (fmap apLF fs <*> [a])
+  HsList fs <*> List as = HsList ((fmap (<*>) fs) <*> as)
+  HsList fs <*> HsList as = HsList ((fmap (<*>) fs) <*> as)
+
+  TEnd <*> _ = TEnd
+  _ <*> TEnd = TEnd
+  {-# INLINE (<*>) #-}
+
+instance Monad Form where
+  m >>= k =
+    case m of
+      Atom a    -> k a
+      List as   -> List (map (liftLF (>>= k)) as)
+      HsList as -> HsList (map (liftLF (>>= k)) as)
+      TEnd      -> TEnd
+  {-# INLINE (>>=) #-}
+
 instance Foldable Form where
   foldr f z form =
     case form of
@@ -272,6 +301,17 @@ instance Functor LForm where
   fmap f (LForm (L l a)) = LForm (L l (fmap f a))
   {-# INLINE fmap #-}
 
+instance Applicative LForm where
+  pure = LForm . genSrc . pure
+  {-# INLINE pure #-}
+
+  LForm (L l f) <*> LForm (L _ a) = LForm (L l (f <*> a))
+  {-# INLINE (<*>) #-}
+
+instance Monad LForm where
+  LForm (L l a) >>= k = LForm (L l (a >>= (unCode . k)))
+  {-# INLINE (>>=) #-}
+
 instance Foldable LForm where
   foldr f z (LForm (L _ form)) = foldr f z form
   {-# INLINE foldr #-}
@@ -328,11 +368,11 @@ instance Fractional Code where
   recip = liftLF recip
   fromRational = LForm . genSrc . fromRational
 
-liftLF :: (Form Atom -> Form Atom) -> Code -> Code
+liftLF :: (Form a -> Form b) -> LForm a -> LForm b
 liftLF f (LForm (L l a)) = LForm (L l (f a))
 {-# INLINE liftLF #-}
 
-liftLF2 :: (Form Atom -> Form Atom -> Form Atom) -> Code -> Code -> Code
+liftLF2 :: (Form a -> Form b -> Form c) -> LForm a -> LForm b -> LForm c
 liftLF2 f (LForm (L l1 a)) (LForm (L _l2 b)) = LForm (L l1 (f a b))
 {-# INLINE liftLF2 #-}
 
@@ -461,6 +501,11 @@ mkLocatedForm ms = L (combineLocs (unLForm (head ms))
 atomForm :: a -> LForm a
 atomForm = LForm . genSrc . Atom
 {-# INLINE atomForm #-}
+
+-- | Apply functoni in 'LForm' to 'Form'.
+apLF :: LForm (a -> b) -> Form a -> LForm b
+apLF (LForm (L l f)) b = LForm (L l (f <*> b))
+{-# INLINE apLF #-}
 
 -- | Unary numeric operation helper.
 nop1 :: (a -> Atom)

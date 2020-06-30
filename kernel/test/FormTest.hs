@@ -4,6 +4,7 @@
 module FormTest where
 
 -- base
+import           Data.Char                    (toUpper)
 import           Data.Complex
 import           Data.Data
 import qualified Data.Fixed                   as Fixed
@@ -83,6 +84,8 @@ formTests = do
   showTest
   pprTest
   functorTest "(a \"foo\" \\x [True False])"
+  applicativeTest
+  monadTest
   foldableTest
   traversableTest
 
@@ -279,6 +282,67 @@ functorTest str = do
           f :: Atom -> Atom
           f _ = AUnit
       fmap f te `shouldBe` te
+
+applicativeTest :: Spec
+applicativeTest = do
+  let atom_a = AChar NoSourceText 'a'
+      char_a = toCode atom_a
+      al2 = qList [char_a, char_a]
+      ahl2 = qHsList [char_a, char_a]
+      unit = toCode ()
+      f1 a b = (a,b)
+      a_pair = lf (Atom (atom_a, atom_a))
+      a_pair_ls = mk_a_pairs List 2 -- lf (List [a_pair, a_pair])
+      a_pair_hls = mk_a_pairs HsList 2 -- lf (HsList [a_pair, a_pair])
+      mk_a_pairs f n = lf (f (replicate n a_pair))
+      lf = LForm . genSrc
+      tend :: Form Atom
+      tend = TEnd
+
+  describe "pure" $
+    it "should result in atom" $
+      toCode (pure AUnit :: Form Atom) `shouldBe` unit
+
+  describe "<*>" $ do
+    it "should apply f1 to atom and atom" $
+      pure f1 <*> char_a <*> char_a `shouldBe` a_pair
+    it "should apply f1 to atom and list" $
+      pure f1 <*> char_a <*> al2 `shouldBe` a_pair_ls
+    it "should apply f1 to atom and hslist" $
+      pure f1 <*> char_a <*> ahl2 `shouldBe` a_pair_hls
+    it "should aply f1 to list and atom" $
+      pure f1 <*> al2 <*> char_a `shouldBe` a_pair_ls
+    it "should apply f1 to list and list" $
+      pure f1 <*> al2 <*> al2 `shouldBe` mk_a_pairs List 4
+    it "should apply f1 to list and hslist" $
+      pure f1 <*> al2 <*> ahl2 `shouldBe` mk_a_pairs List 4
+    it "should aply f1 to list and atom" $
+      pure f1 <*> ahl2 <*> char_a `shouldBe` a_pair_hls
+    it "should apply f1 to list and list" $
+      pure f1 <*> ahl2 <*> al2 `shouldBe` mk_a_pairs HsList 4
+    it "should apply f1 to list and list" $
+      pure f1 <*> ahl2 <*> ahl2 `shouldBe` mk_a_pairs HsList 4
+    it "should result in TEnd" $ do
+      pure f1 <*> char_a <*> lf tend `shouldBe` lf TEnd
+      pure f1 <*> lf tend <*> char_a `shouldBe` lf TEnd
+
+monadTest :: Spec
+monadTest = do
+  let f1 x = case x of
+               AChar st c -> AChar st (toUpper c)
+               _          -> x
+  describe "bind" $ do
+    it "should apply f1 to atom" $
+      do {x <- toCode 'x'; return (f1 x)} `shouldBe` toCode 'X'
+    it "should apply f1 to list" $
+      do {x <- qList [toCode 'x', toCode 'x']; return (f1 x)} `shouldBe`
+         qList [toCode 'X', toCode 'X']
+    it "should apply f1 to hslist" $
+      do {x <- qHsList [toCode 'x',toCode 'x']; return (f1 x)} `shouldBe`
+         qHsList [toCode 'X', toCode 'X']
+    it "should apply f1 to TEnd" $
+      do {x <- toCode (TEnd :: Form Atom); return (f1 x)} `shouldBe`
+         toCode (TEnd :: Form Atom)
 
 foldableTest :: Spec
 foldableTest = do
