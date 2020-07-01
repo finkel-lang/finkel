@@ -7,7 +7,8 @@ OPTIONS:
     --fnk-dump-hs    Dump Haskell source code.
     --fnk-help       Show this help.
     --fnk-hsdir=DIR  Save Haskell source code to DIR.
-    --fnk-version    Dump Finkel version and exit.
+    --fnk-languages  Show supported language extensions.
+    --fnk-version    Show Finkel version and exit.
 
   Other options are passed to ghc.
 

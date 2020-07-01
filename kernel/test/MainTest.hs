@@ -24,6 +24,7 @@ mainTests =
     rawGhcTest
     finkelHelpTest
     finkelVersionTest
+    finkelSupportedLanguagesTest
 
 compileFile :: [String] -> FilePath -> Spec
 compileFile args file = describe ("file " ++ file) $
@@ -47,6 +48,12 @@ finkelVersionTest =
   trivialTest "option --fnk-version"
               "should show finkel-kernel package version"
               ["--fnk-version"]
+
+finkelSupportedLanguagesTest :: Spec
+finkelSupportedLanguagesTest =
+  trivialTest "option --fnk-languages"
+              "should show supported language extensions"
+              ["--fnk-languages"]
 
 trivialTest :: String -> String -> [String] -> Spec
 trivialTest desc label flags = describe desc $

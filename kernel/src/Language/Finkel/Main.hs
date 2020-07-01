@@ -50,6 +50,7 @@ import           GHC.HandleEncoding           (configureHandleEncoding)
 -- internal
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make
+import           Language.Finkel.Reader       (supportedLangExts)
 import           Language.Finkel.SpecialForms (defaultFnkEnv)
 import           Language.Finkel.TargetSource
 import qualified Paths_finkel_kernel
@@ -99,7 +100,7 @@ defaultMainWith macros = do
        let (finkelopts, args1) = partitionFinkelOptions args0
            args2 = filter (/= "--make") args1
            fnk_opts = parseFinkelOption finkelopts
-           fnkc_env0 = opt2env fnk_opts
+           fnk_env0 = opt2env fnk_opts
 
            -- Using macros from argument as first argument to 'mergeMacros', so
            -- that the caller of this function can have a chance to override the
@@ -107,17 +108,16 @@ defaultMainWith macros = do
            macros' = mergeMacros (makeEnvMacros macros)
                                  (envMacros defaultFnkEnv)
 
-           fnkc_env1 = fnkc_env0 { envDefaultMacros = macros'
-                                 , envMacros = macros' }
-           next | finkelHelp fnk_opts    = printFinkelHelp
-                | finkelVersion fnk_opts = printFinkelVersion
-                | otherwise              = main' fnkc_env1 args1 args2
+           fnk_env1 = fnk_env0 { envDefaultMacros = macros'
+                               , envMacros = macros' }
+           next | Just h <- finkelHelp fnk_opts = printFinkelHelp h
+                | otherwise                     = main' fnk_env1 args1 args2
 
        -- XXX: Handle '-B' option properly.
        next
 
 main' :: FnkEnv -> [String] -> [String] -> IO ()
-main' fnkc_env orig_args ghc_args = do
+main' fnk_env orig_args ghc_args = do
   initGCStatistics
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
@@ -131,7 +131,7 @@ main' fnkc_env orig_args ghc_args = do
               (handleSourceError (\se -> do printException se
                                             liftIO exitFailure)
                                  (main'' orig_args ghc_args)))
-             fnkc_env)
+             fnk_env)
 
 main'' :: [String] -> [String] -> Fnk ()
 main'' orig_args ghc_args = do
@@ -199,20 +199,23 @@ main'' orig_args ghc_args = do
 -- ---------------------------------------------------------------------
 
 data FinkelOption = FinkelOption
-  { finkelDebug   :: Bool
-  , finkelDumpHs  :: Bool
-  , finkelHelp    :: Bool
-  , finkelHsDir   :: Maybe FilePath
-  , finkelVersion :: Bool
+  { finkelDebug  :: Bool
+  , finkelDumpHs :: Bool
+  , finkelHelp   :: Maybe FinkelHelp
+  , finkelHsDir  :: Maybe FilePath
   }
+
+data FinkelHelp
+  = Languages
+  | Usage
+  | Version
 
 defaultFinkelOption :: FinkelOption
 defaultFinkelOption = FinkelOption
   { finkelDebug = False
   , finkelDumpHs = False
-  , finkelHelp = False
+  , finkelHelp = Nothing
   , finkelHsDir = Nothing
-  , finkelVersion = False
   }
 
 partitionFinkelOptions :: [String] -> ([String], [String])
@@ -222,7 +225,7 @@ parseFinkelOption :: [String] -> FinkelOption
 parseFinkelOption args =
   case getOpt Permute finkelOptDescrs args of
     (o,_,[]) -> foldl (flip id) defaultFinkelOption o
-    (_,_,es) -> error (show es)
+    (_,_,es) -> error (concat es)
 
 finkelOptDescrs :: [OptDescr (FinkelOption -> FinkelOption)]
 finkelOptDescrs =
@@ -233,14 +236,17 @@ finkelOptDescrs =
         (NoArg (\o -> o {finkelDumpHs = True}))
         "Dump Haskell source code."
   , opt ["fnk-help"]
-        (NoArg (\o -> o {finkelHelp = True}))
+        (NoArg (\o -> o {finkelHelp = Just Usage}))
         "Show this help."
   , opt ["fnk-hsdir"]
         (ReqArg (\path o -> o {finkelHsDir = Just path}) "DIR")
         "Save Haskell source code to DIR."
+  , opt ["fnk-languages"]
+        (NoArg (\o -> o {finkelHelp = Just Languages}))
+        "Show supported language extensions."
   , opt ["fnk-version"]
-        (NoArg (\o -> o {finkelVersion = True}))
-        "Dump Finkel version and exit."
+        (NoArg (\o -> o {finkelHelp = Just Version}))
+        "Show Finkel version and exit."
   ]
   where
     opt = Option []
@@ -251,8 +257,15 @@ opt2env opt = defaultFnkEnv
   , envDumpHs = finkelDumpHs opt
   , envHsDir  = finkelHsDir opt }
 
-printFinkelHelp :: IO ()
-printFinkelHelp = do
+printFinkelHelp :: FinkelHelp -> IO ()
+printFinkelHelp fh =
+  case fh of
+    Languages -> printLanguages
+    Usage     -> printFinkelUsage
+    Version   -> printFinkelVersion
+
+printFinkelUsage :: IO ()
+printFinkelUsage = do
   name <- getProgName
   putStrLn (unlines (message name))
   where
@@ -262,10 +275,14 @@ printFinkelHelp = do
       , usageInfo "OPTIONS:\n" finkelOptDescrs
       , "  Other options are passed to ghc." ]
 
+printLanguages :: IO ()
+printLanguages =
+  mapM_ (putStrLn . snd) supportedLangExts
+
 printFinkelVersion :: IO ()
 printFinkelVersion = putStrLn v
   where
-    v = "finkel kernel version " ++
+    v = "finkel kernel compiler, version " ++
         showVersion Paths_finkel_kernel.version
 
 
