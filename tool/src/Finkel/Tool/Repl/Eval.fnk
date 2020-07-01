@@ -189,9 +189,7 @@ context."
   [name]
   (case-do (parseName name)
     (: f _) (modifySession
-             (\ he (he {hsc-IC
-                        (setInteractivePrintName (hsc-IC he)
-                                                 f)})))
+             (\ he (he {hsc-IC (setInteractivePrintName (hsc-IC he) f)})))
     _ (failS "set-print-name: parse error")))
 
 (defn (:: eval-form

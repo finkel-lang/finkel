@@ -251,6 +251,18 @@
              (it "returns nil with no arguments"
                (== nil (list)))))
 
+      (d "reduce"
+         (do (it "returns the original list"
+               (== '(a b c d e) (reduce cons nil '(a b c d e))))
+             (it "should throw exception on non-list"
+               (expectFailure (=== nil (reduce cons nil 'foo))))))
+
+      (d "reduce1"
+         (do (it "returns the original list"
+               (== '(a b c d e) (reduce1 cons '(a b c d e))))
+             (it "should throw exception on non-list"
+               (expectFailure (=== nil (reduce1 cons 'foo))))))
+
       (d "mapcar"
          (do (it "replaces non-symbols"
                (== '(foo bar _ buzz _ _)
@@ -262,7 +274,13 @@
                            '[foo bar (a b c) buzz 3 "string"])))
              (it "throws an exception on non-list arg2"
                (expectFailure
-                (=== nil (mapcar (\ x (cons x x)) 'foo))))))))
+                (=== nil (mapcar (\ x (cons x x)) 'foo))))))
+
+      (d "keep"
+         (do (it "removes non atom"
+               (== '(a d e) (keep is-atom '(a (b c) d e (f g h)))))
+             (it "throws an exception on non-list"
+               (expectFailure (=== nil (keep is-atom '"string"))))))))
 
 (defmacro' m1
   [x]

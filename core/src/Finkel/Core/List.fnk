@@ -42,7 +42,7 @@ functions defined in this modules are used in macro defined in
   cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
 
   (:dh1 "Higher order functions")
-  reduce mapcar
+  reduce reduce1 mapcar keep
 
   (:dh1 "Exception")
   (FinkelListException ..))
@@ -66,7 +66,7 @@ functions defined in this modules are used in macro defined in
 
 ;; ghc
 (import FastString (FastString unpackFS))
-(import SrcLoc (getLoc))
+(import SrcLoc (SrcSpan getLoc))
 
 ;; finkel-kernel
 (import Language.Finkel)
@@ -96,7 +96,7 @@ functions defined in this modules are used in macro defined in
 
 (:doc "True when the argument is an 'Atom' or 'nil'.
 
-Examples:
+==== __Examples__
 
 >>> (is-atom \'foo)
 True
@@ -160,7 +160,7 @@ to the tip.
 Consing to 'HsList' will result in 'List', and consing to non-list value
 will create a new 'List' instead of a /dotted-pair/.
 
-Examples:
+==== __Examples__
 
 >>> (cons 'a '(b c))
 (a b c)
@@ -173,13 +173,14 @@ Examples:
 >>> (cons 'a 'b)
 (a b)
 ")
-(:: cons (=> (ToCode a) (-> a Code Code)))
-(= cons x (@ whole (LForm (L _ xs)))
-  (let ((= (@ x' (LForm (L l0 _))) (toCode x)))
+(:: cons (=> (ToCode a) (ToCode b) (-> a b Code)))
+(= cons a b
+  (let ((= (@ hd (LForm (L l0 _))) (toCode a))
+        (= (@ whole (LForm (L _ xs))) (toCode b)))
     (LForm (L l0 (case xs
-                   (List xs')   (List (: x' xs'))
-                   (HsList xs') (List (: x' xs'))
-                   _            (List [x' whole]))))))
+                   (List xs')   (List (: hd xs'))
+                   (HsList xs') (List (: hd xs'))
+                   _            (List [hd whole]))))))
 %p(INLINABLE cons)
 
 (:doc "Append two lists.")
@@ -213,7 +214,7 @@ Get `Just' `String' when the argument code was an `ASymbol', otherwise
 
 (:doc "Extract `FastString' from given symbol.
 
-Like `mb-symbol-name', but returns `FastString'")
+Like `mb_symbol_name', but returns `FastString'")
 (:: mb-symbol-name-fs (-> Code (Maybe FastString)))
 (= mb-symbol-name-fs form
   (case form
@@ -250,12 +251,12 @@ The original value is retained if the given argument was not a `HsList' value.")
 This function can take variable number of arguments, but requires
 resulting type to be a concrete type.
 
-Examples:
+==== __Examples__
 
 >>> (:: (list \'a \'b \'c) Code)
 (a b c)
->>> (:: (list \'a \\b \"c\" (:: 0xd Int)) Code)
-(a \\b \"c\" 13)
+>>> (:: (list \'a #\'b \"c\" (:: 0xd Int)) Code)
+(a #\'b \"c\" 13)
 ")
 (:: list (=> (Listable lst) lst))
 (= list (list_ []))
@@ -269,7 +270,7 @@ The function 'car' returns the first element of 'List' and 'HsList'
 constructor, or 'nil' value when the 'List' or 'HsList' were empty.
 Throws 'FinkelListException' when the given argument was non-list value.
 
-Examples:
+==== __Examples__
 
 >>> (car '(a b c))
 a
@@ -284,7 +285,7 @@ nil
 (= car (@ whole (LForm (L l code)))
   (case code
     (List (: x _))   x
-    (List [])        (LForm (L l (List [])))
+    (List [])        whole
     (HsList (: x _)) x
     (HsList [])      (LForm (L l (List [])))
     _                (error-non-list "car" whole)))
@@ -295,9 +296,9 @@ nil
 The function 'cdr' returns list value without the first element of
 'List' or 'HsList' argument. When the argument is a 'HsList', returned
 value is converted to a 'List'. Like 'car', throws 'FinkelListException'
-then the argument were non-list value.
+when the argument were non-list value.
 
-Examples:
+==== __Examples__
 
 >>> (cdr '(a b c))
 (b c)
@@ -369,22 +370,79 @@ and the definition of 'cdadr' is:
 
 ;;; Higher Order Functions
 
-(:doc "Apply given function to immediate elements of 'List' and
-'HsList'. When the second argument was 'HsList', the resulting value
-converted to 'List'.")
-(:: mapcar (-> (-> Code Code) Code Code))
-(= mapcar f (@ form (LForm (L l lst)))
-  (case lst
-    (List xs)   (LForm (L l (List (map f xs))))
-    (HsList xs) (LForm (L l (List (map f xs))))
-    _           (error-non-list "mapcar" form)))
+(:doc "Auxiliary function for higher order function.
+
+Make a function taking `SrcSpan' and a list of `Code' from given arguments.")
+(:: make-list-fn (-> String (-> SrcSpan [Code] a) Code a))
+(= make-list-fn label f (@ orig (LForm (L l form)))
+  (case form
+    (List xs) (f l xs)
+    (HsList xs) (f l xs)
+    _ (error-non-list label orig)))
+
+(:doc "Like `foldr', but for `Code'.
+
+==== __Examples__
+
+>>> (reduce cons nil '(a b c))
+(a b c)
+>>> (reduce (\\ x acc (cons `(x is ,x) acc)) nil '(a b c))
+((x is a) (x is b) (x is c))
+>>> (reduce + 0 '(1 2 3 4 5))
+15
+>>> (reduce cons nil 'foo)
+*** Exception: Finkel.Core.List.reduce: non-list value `foo'
+")
+(:: reduce (-> (-> Code a a) a Code a))
+(= reduce f z
+  (make-list-fn "reduce" (\ _ (foldr f z))))
 
 (:doc "Like `foldr1', but for `Code'.
 
-Apply given function to given `List' or `HsList'. Implementation uses `car' and
-`cdr', throws an exception if the second argument was not a list.")
-(:: reduce (-> (-> Code Code Code) Code Code))
-(= reduce f xs
-  (if (null (cdr xs))
-      (car xs)
-      (f (car xs) (reduce f (cdr xs)))))
+Apply given function to given `List' or `HsList'. Throws an exception if the
+second argument was not a list.
+
+==== __Examples__
+
+>>> (reduce1 cons '(a b c))
+(a b c)
+>>> (reduce1 (\\ x acc (cons `(x is ,x) acc)) '(a b c))
+((x is a) (x is b) c)
+>>> (reduce1 cons 'foo)
+*** Exception: Finkel.Core.List.reduce1: non-list value `foo'
+")
+(:: reduce1 (-> (-> Code Code Code) Code Code))
+(= reduce1 f
+  (make-list-fn "reduce1" (\ _ (foldr1 f))))
+
+(:doc "Like `map', but for `Code'.
+
+Apply given function to immediate elements of `List' and
+`HsList'. When the second argument was `HsList', the resulting value
+converted to 'List'.
+
+==== __Examples__
+
+>>> (mapcar (\\ x `(x is ,x)) '(a b c))
+((x is a) (x is b) (x is c))
+>>> (mapcar (const nil) 'foo)
+*** Exception: Finkel.Core.List.mapcar: non-list value `foo'
+")
+(:: mapcar (-> (-> Code Code) Code Code))
+(= mapcar f
+  (make-list-fn "mapcar" (\ l xs (LForm (L l (List (map f xs)))))))
+
+(:doc "Like `filter', but for `Code'.
+
+Filter out immediate element of `List' if the test result is `False'.
+
+==== __Examples__
+
+>>> (keep (/= 'a) '(a b r a c a d a b r a))
+(b r c d b r)
+>>> (keep (/= 'a) 'foo)
+*** Exception: Finkel.Core.List.keep: non-list value `foo'
+")
+(:: keep (-> (-> Code Bool) Code Code))
+(= keep test
+  (make-list-fn "keep" (\ l xs (LForm (L l (List (filter test xs)))))))
