@@ -39,25 +39,27 @@ module Language.Finkel.Form
   ) where
 
 -- base
-import Data.Data       (Data, Typeable)
-import Data.Function   (on)
-import GHC.Generics    (Generic)
+import Control.Applicative (Alternative (..))
+import Control.Monad       (MonadPlus (..))
+import Data.Data           (Data, Typeable)
+import Data.Function       (on)
+import GHC.Generics        (Generic)
 
 -- ghc
-import BasicTypes      (FractionalLit (..), SourceText (..))
-import FastString      (FastString, fsLit, unpackFS)
-import Outputable      (Outputable (..), brackets, cat, char, double,
-                        doubleQuotes, fsep, integer, parens, text)
-import SrcLoc          (GenLocated (..), Located, SrcSpan (..), combineLocs,
-                        combineSrcSpans, srcSpanFile, srcSpanStartCol,
-                        srcSpanStartLine)
+import BasicTypes          (FractionalLit (..), SourceText (..))
+import FastString          (FastString, fsLit, unpackFS)
+import Outputable          (Outputable (..), brackets, cat, char, double,
+                            doubleQuotes, fsep, integer, parens, text)
+import SrcLoc              (GenLocated (..), Located, SrcSpan (..), combineLocs,
+                            combineSrcSpans, srcSpanFile, srcSpanStartCol,
+                            srcSpanStartLine)
 
 #if MIN_VERSION_ghc(8,4,0)
-import BasicTypes      (IntegralLit (..), mkFractionalLit, mkIntegralLit)
+import BasicTypes          (IntegralLit (..), mkFractionalLit, mkIntegralLit)
 #endif
 
 -- deepseq
-import Control.DeepSeq (NFData (..))
+import Control.DeepSeq     (NFData (..))
 
 
 -- -------------------------------------------------------------------
@@ -287,6 +289,14 @@ instance Monoid (Form a) where
   {-# INLINE mempty #-}
 #endif
 
+instance Alternative Form where
+  empty = mempty
+  {-# INLINE empty #-}
+  (<|>) = mappend
+  {-# INLINE (<|>) #-}
+
+instance MonadPlus Form
+
 -- | Newtype wrapper for located 'Form'.
 newtype LForm a = LForm {unLForm :: Located (Form a)}
   deriving (Data, Typeable, Generic)
@@ -342,6 +352,14 @@ instance Monoid (LForm a) where
   mempty = LForm (genSrc mempty)
   {-# INLINE mempty #-}
 #endif
+
+instance Alternative LForm where
+  empty = mempty
+  {-# INLINE empty #-}
+  (<|>) = mappend
+  {-# INLINE (<|>) #-}
+
+instance MonadPlus LForm
 
 -- | Type synonym for code data.
 --

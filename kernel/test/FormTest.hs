@@ -4,6 +4,7 @@
 module FormTest where
 
 -- base
+import           Control.Applicative          (Alternative (..))
 import           Data.Char                    (toUpper)
 import           Data.Complex
 import           Data.Data
@@ -107,6 +108,7 @@ formTests = do
   numTest
   fractionalTest
   monoidTest
+  alternativeTest
 
   fromCodeTest Foo
 
@@ -576,6 +578,27 @@ monoidTest = do
       mempty `shouldBe` (List [] :: Form Atom)
     it "should be nil" $
       mempty `shouldBe` nil
+
+alternativeTest :: Spec
+alternativeTest =
+  describe "Alternative" $ do
+    describe "empty" $ do
+      it "should be nil for Code" $
+        empty `shouldBe` nil
+      it "should be empty form for Form" $
+        empty `shouldBe` (mempty :: Form Atom)
+    describe "<|>" $ do
+      let a = toCode 'a'
+          b = toCode 'b'
+          c = toCode 'c'
+      it "should append elements for Code" $
+        let ab = toCode (List [a,b])
+            cb = toCode (List [c,b])
+        in  ab <|> cb `shouldBe` toCode (List [a,b,c,b])
+      it "should append elements for Form Atom" $
+        let ab = List [a,b]
+            cb = List [c,b]
+        in  ab <|> cb `shouldBe` List [a,b,c,b]
 
 data Foo = Foo deriving (Eq, Show)
 
