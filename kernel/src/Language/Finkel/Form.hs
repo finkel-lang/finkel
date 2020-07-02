@@ -136,6 +136,32 @@ data Form a
   | TEnd             -- ^ End of token.
   deriving (Eq, Data, Typeable, Generic)
 
+-- | Newtype wrapper for located 'Form'.
+newtype LForm a = LForm {unLForm :: Located (Form a)}
+  deriving (Data, Typeable, Generic)
+
+-- | Type synonym for code data.
+--
+-- The 'Code' data is the fundamental data type used in the entire compilation
+-- work.  The 'Code' is used to represed data from parsed source file, and used
+-- for input and output of macros transformer functions. List of 'Code' data are
+-- converted to Haskell AST via syntax parser.
+--
+-- Since 'Code' is returned from parsed source file, source code location
+-- information is attached to 'Code'.
+--
+type Code = LForm Atom
+
+
+-- ------------------------------------------------------------------------
+--
+-- Instances
+--
+-- ------------------------------------------------------------------------
+
+instance Eq a => Eq (LForm a) where
+  LForm (L _ a) == LForm (L _ b) = a == b
+
 instance Show a => Show (Form a) where
   showsPrec d form =
     case form of
@@ -155,6 +181,9 @@ instance Show a => Show (Form a) where
           []   -> close : next
           y:ys -> ' ' : shows y (showL' close ys next)
 
+instance Show a => Show (LForm a) where
+  showsPrec d (LForm (L _ a)) = showsPrec d a
+
 instance Functor Form where
   fmap f form =
     case form of
@@ -162,6 +191,10 @@ instance Functor Form where
       List xs   -> List (map (fmap f) xs)
       HsList xs -> HsList (map (fmap f) xs)
       TEnd      -> TEnd
+  {-# INLINE fmap #-}
+
+instance Functor LForm where
+  fmap f (LForm (L l a)) = LForm (L l (fmap f a))
   {-# INLINE fmap #-}
 
 instance Applicative Form where
@@ -184,6 +217,13 @@ instance Applicative Form where
   _ <*> TEnd = TEnd
   {-# INLINE (<*>) #-}
 
+instance Applicative LForm where
+  pure = LForm . genSrc . pure
+  {-# INLINE pure #-}
+
+  LForm (L l f) <*> LForm (L _ a) = LForm (L l (f <*> a))
+  {-# INLINE (<*>) #-}
+
 instance Monad Form where
   m >>= k =
     case m of
@@ -191,6 +231,10 @@ instance Monad Form where
       List as   -> List (map (liftLF (>>= k)) as)
       HsList as -> HsList (map (liftLF (>>= k)) as)
       TEnd      -> TEnd
+  {-# INLINE (>>=) #-}
+
+instance Monad LForm where
+  LForm (L l a) >>= k = LForm (L l (a >>= (unCode . k)))
   {-# INLINE (>>=) #-}
 
 instance Foldable Form where
@@ -208,6 +252,10 @@ instance Foldable Form where
           y:ys -> foldr f (foldr f z (HsList ys)) (unCode y)
   {-# INLINE foldr #-}
 
+instance Foldable LForm where
+  foldr f z (LForm (L _ form)) = foldr f z form
+  {-# INLINE foldr #-}
+
 instance Traversable Form where
   traverse f form =
     case form of
@@ -215,6 +263,10 @@ instance Traversable Form where
       List xs   -> fmap List (traverse (traverse f) xs)
       HsList xs -> fmap HsList (traverse (traverse f) xs)
       TEnd      -> pure TEnd
+  {-# INLINE traverse #-}
+
+instance Traversable LForm where
+  traverse f (LForm (L l form)) = fmap (LForm . L l) (traverse f form)
   {-# INLINE traverse #-}
 
 instance NFData a => NFData (Form a) where
@@ -225,6 +277,9 @@ instance NFData a => NFData (Form a) where
       HsList as -> rnf as
       TEnd      -> ()
 
+instance NFData a => NFData (LForm a) where
+  rnf (LForm (L l a)) = rnf l `seq` rnf a
+
 instance Outputable a => Outputable (Form a) where
   ppr x =
     case x of
@@ -233,18 +288,8 @@ instance Outputable a => Outputable (Form a) where
       HsList xs -> brackets (fsep (map ppr xs))
       TEnd      -> text ""
 
-instance Num (Form Atom) where
-  (+) = nop2 aIntegral (+) (+)
-  (*) = nop2 aIntegral (*) (*)
-  negate = nop1 aIntegral negate negate
-  abs = nop1 aIntegral abs abs
-  signum = nop1 aIntegral signum signum
-  fromInteger = Atom . aIntegral
-
-instance Fractional (Form Atom) where
-  (/) = nop2 aDouble ((/) `on` fromIntegral) (/)
-  recip = nop1 aDouble (recip . fromInteger) recip
-  fromRational = Atom . aDouble. fromRational
+instance Outputable a => Outputable (LForm a) where
+  ppr (LForm (L _ a)) = ppr a
 
 #if MIN_VERSION_ghc(8,4,0)
 instance Semigroup (Form a) where
@@ -264,8 +309,16 @@ instance Semigroup (Form a) where
   a <> TEnd = a
   {-# INLINE (<>) #-}
 
+instance Semigroup (LForm a) where
+  LForm (L l a) <> LForm (L r b) = LForm (L (combineSrcSpans l r) (a <> b))
+  {-# INLINE (<>) #-}
+
 instance Monoid (Form a) where
   mempty = List []
+  {-# INLINE mempty #-}
+
+instance Monoid (LForm a) where
+  mempty = LForm (genSrc mempty)
   {-# INLINE mempty #-}
 #else
 instance Monoid (Form a) where
@@ -287,6 +340,14 @@ instance Monoid (Form a) where
 
   mempty = List []
   {-# INLINE mempty #-}
+
+instance Monoid (LForm a) where
+  LForm (L l a) `mappend` LForm (L r b) =
+    LForm (L (combineSrcSpans l r) (a `mappend` b))
+  {-# INLINE mappend #-}
+
+  mempty = LForm (genSrc mempty)
+  {-# INLINE mempty #-}
 #endif
 
 instance Alternative Form where
@@ -295,83 +356,23 @@ instance Alternative Form where
   (<|>) = mappend
   {-# INLINE (<|>) #-}
 
-instance MonadPlus Form
-
--- | Newtype wrapper for located 'Form'.
-newtype LForm a = LForm {unLForm :: Located (Form a)}
-  deriving (Data, Typeable, Generic)
-
-instance Eq a => Eq (LForm a) where
-  LForm (L _ a) == LForm (L _ b) = a == b
-
-instance Show a => Show (LForm a) where
-  showsPrec d (LForm (L _ a)) = showsPrec d a
-
-instance Functor LForm where
-  fmap f (LForm (L l a)) = LForm (L l (fmap f a))
-  {-# INLINE fmap #-}
-
-instance Applicative LForm where
-  pure = LForm . genSrc . pure
-  {-# INLINE pure #-}
-
-  LForm (L l f) <*> LForm (L _ a) = LForm (L l (f <*> a))
-  {-# INLINE (<*>) #-}
-
-instance Monad LForm where
-  LForm (L l a) >>= k = LForm (L l (a >>= (unCode . k)))
-  {-# INLINE (>>=) #-}
-
-instance Foldable LForm where
-  foldr f z (LForm (L _ form)) = foldr f z form
-  {-# INLINE foldr #-}
-
-instance Traversable LForm where
-  traverse f (LForm (L l form)) = fmap (LForm . L l) (traverse f form)
-  {-# INLINE traverse #-}
-
-instance NFData a => NFData (LForm a) where
-  rnf (LForm (L l a)) = rnf l `seq` rnf a
-
-instance Outputable a => Outputable (LForm a) where
-  ppr (LForm (L _ a)) = ppr a
-
-#if MIN_VERSION_ghc(8,4,0)
-instance Semigroup (LForm a) where
-  LForm (L l a) <> LForm (L r b) = LForm (L (combineSrcSpans l r) (a <> b))
-  {-# INLINE (<>) #-}
-
-instance Monoid (LForm a) where
-  mempty = LForm (genSrc mempty)
-  {-# INLINE mempty #-}
-#else
-instance Monoid (LForm a) where
-  LForm (L l a) `mappend` LForm (L r b) =
-    LForm (L (combineSrcSpans l r) (a `mappend` b))
-  {-# INLINE mappend #-}
-  mempty = LForm (genSrc mempty)
-  {-# INLINE mempty #-}
-#endif
-
 instance Alternative LForm where
   empty = mempty
   {-# INLINE empty #-}
   (<|>) = mappend
   {-# INLINE (<|>) #-}
 
+instance MonadPlus Form
+
 instance MonadPlus LForm
 
--- | Type synonym for code data.
---
--- The 'Code' data is the fundamental data type used in the entire compilation
--- work.  The 'Code' is used to represed data from parsed source file, and used
--- for input and output of macros transformer functions. List of 'Code' data are
--- converted to Haskell AST via syntax parser.
---
--- Since 'Code' is returned from parsed source file, source code location
--- information is attached to 'Code'.
---
-type Code = LForm Atom
+instance Num (Form Atom) where
+  (+) = nop2 aIntegral (+) (+)
+  (*) = nop2 aIntegral (*) (*)
+  negate = nop1 aIntegral negate negate
+  abs = nop1 aIntegral abs abs
+  signum = nop1 aIntegral signum signum
+  fromInteger = Atom . aIntegral
 
 instance Num Code where
   (+) = liftLF2 (+)
@@ -381,18 +382,16 @@ instance Num Code where
   signum  = liftLF signum
   fromInteger = LForm . genSrc . fromInteger
 
+instance Fractional (Form Atom) where
+  (/) = nop2 aDouble ((/) `on` fromIntegral) (/)
+  recip = nop1 aDouble (recip . fromInteger) recip
+  fromRational = Atom . aDouble. fromRational
+
 instance Fractional Code where
   (/) = liftLF2 (/)
   recip = liftLF recip
   fromRational = LForm . genSrc . fromRational
 
-liftLF :: (Form a -> Form b) -> LForm a -> LForm b
-liftLF f (LForm (L l a)) = LForm (L l (f a))
-{-# INLINE liftLF #-}
-
-liftLF2 :: (Form a -> Form b -> Form c) -> LForm a -> LForm b -> LForm c
-liftLF2 f (LForm (L l1 a)) (LForm (L _l2 b)) = LForm (L l1 (f a b))
-{-# INLINE liftLF2 #-}
 
 -- -------------------------------------------------------------------
 --
@@ -519,6 +518,16 @@ mkLocatedForm ms = L (combineLocs (unLForm (head ms))
 atomForm :: a -> LForm a
 atomForm = LForm . genSrc . Atom
 {-# INLINE atomForm #-}
+
+-- | Apply function taking single 'Form' to 'LForm'.
+liftLF :: (Form a -> Form b) -> LForm a -> LForm b
+liftLF f (LForm (L l a)) = LForm (L l (f a))
+{-# INLINE liftLF #-}
+
+-- | Apply function taking two 'Form's to 'LForm's.
+liftLF2 :: (Form a -> Form b -> Form c) -> LForm a -> LForm b -> LForm c
+liftLF2 f (LForm (L l1 a)) (LForm (L _l2 b)) = LForm (L l1 (f a b))
+{-# INLINE liftLF2 #-}
 
 -- | Apply functoni in 'LForm' to 'Form'.
 apLF :: LForm (a -> b) -> Form a -> LForm b
