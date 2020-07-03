@@ -10,17 +10,19 @@
   (import-when [compile load]
     ;; base
     (Control.Exception)
+    (Prelude)
 
     ;; ghc
     (Exception)
     (FastString (headFS nullFS))
 
     ;; finkel-kernel
+    (Language.Finkel)
     (Language.Finkel.Fnk)
     (Language.Finkel.SpecialForms)
 
     ;; Internal
-    (Finkel.Prelude))
+    (Finkel.Core.List))
   (import
    ;; ghc
    (FastString (fsLit))
@@ -409,10 +411,12 @@
                           (= $tmp __form__
                             (case __form__
                               (LForm (L _loc (List [_ a])))
-                              (return
-                               (:quasiquote
-                                (putStrLn (++ "hello, "
-                                              (:unquote a)))))
+                              (let ((= $tmp
+                                      (return
+                                       (:quasiquote
+                                        (putStrLn
+                                         (++ "hello, " (:unquote a)))))))
+                                $tmp)
                               _ (finkelSrcError
                                  __form__
                                  (concat ["in macro `"
@@ -431,8 +435,9 @@
                           (= $tmp __form__
                             (case __form__
                               (LForm (L _loc (List [_])))
-                              (return
-                               (:quasiquote (print True)))
+                              (let ((= $tmp
+                                      (return (:quasiquote (print True)))))
+                                $tmp)
                               _ (finkelSrcError
                                  __form__
                                  (concat ["in macro `"
@@ -452,10 +457,12 @@
                             (case __form__
                               (LForm (L $loc (List (: _ __arg__))))
                               (let ((= args
-                                      (LForm (L $loc (List __arg__)))))
-                                (return
-                                 (:quasiquote
-                                  (print (:unquote-splice args)))))
+                                      (LForm (L $loc (List __arg__))))
+                                    (= $tmp (return
+                                             (:quasiquote
+                                              (print
+                                               (:unquote-splice args))))))
+                                $tmp)
                               _ (finkelSrcError
                                  __form__
                                  (concat ["in macro `"
@@ -474,7 +481,9 @@
                           (= $tmp __form__
                             (case __form__
                               (LForm (L _loc (List [_])))
-                              (return (:quasiquote (print True)))
+                              (let ((= $tmp
+                                      (return (:quasiquote (print True)))))
+                                $tmp)
                               _ (finkelSrcError
                                  __form__
                                  (concat ["in macro `"
@@ -506,11 +515,26 @@
            (expandTo
             (defmacro m1 (a)
               `(putStrLn (++ "hello, " ,a)))
-            (defmacro-m m1 (a)
-              (let ((= $m1
-                      (:quasiquote (putStrLn (++ "hello, "
-                                                 (:unquote a))))))
-                (return $m1))))))
+
+            (:begin
+              (:: m1 Macro)
+              (= m1
+                (let ((:: $tmp (-> Code (Fnk Code)))
+                      (= $tmp __form__
+                        (case __form__
+                          (LForm (L _loc (List [_ a])))
+                          (let ((= $tmp
+                                  (return
+                                   (:quasiquote
+                                    (putStrLn (++ "hello, " (:unquote a)))))))
+                            $tmp)
+                          _ (finkelSrcError
+                             __form__
+                             (concat ["in macro `"
+                                      (show (:quote m1)) "'\n"
+                                      "invalid form: `"
+                                      (show __form__) "'"])))))
+                  (Macro $tmp)))))))
 
       (d "defmacro'"
          (it "expands to (eval-and-compile (...) (defmacro ...))"
@@ -535,8 +559,8 @@
       (d "macrolet-m"
          (do (it "should expand to :with-macro"
                (expandTo
-                (macrolet-m ((m1 (a b)
-                               (return `(+ ,a ,b))))
+                (macrolet-m [(m1 [a b]
+                               (return `(+ ,a ,b)))]
                   (m1 20 22))
                 (:with-macro
                     ((= m1
@@ -544,9 +568,11 @@
                              (= $m1 __form__
                                (case __form__
                                  (LForm (L _loc (List [_ a b])))
-                                 (return
-                                  (:quasiquote
-                                   (+ (:unquote a) (:unquote b))))
+                                 (let ((= $tmp
+                                         (return
+                                          (:quasiquote
+                                           (+ (:unquote a) (:unquote b))))))
+                                   $tmp)
                                  _ (finkelSrcError
                                     __form__
                                     (concat ["in macro `"
@@ -566,8 +592,10 @@
                                       (= $m1 __form__
                                         (case __form__
                                           (LForm (L _loc (List [_])))
-                                          (return
-                                           (:quasiquote (print #'x)))
+                                          (let ((= $tmp
+                                                  (return
+                                                   (:quasiquote (print #'x)))))
+                                            $tmp)
                                           _ (finkelSrcError
                                              __form__
                                              (concat
@@ -597,9 +625,11 @@
                             (= $m __form__
                               (case __form__
                                 (LForm (L _loc (List [_ a b])))
-                                (return
-                                 (:quasiquote (+ (:unquote a)
-                                                 (:unquote b))))
+                                (let ((= $tmp
+                                        (return
+                                         (:quasiquote (+ (:unquote a)
+                                                         (:unquote b))))))
+                                  $tmp)
                                 _ (finkelSrcError
                                    __form__
                                    (concat ["in macro `"
@@ -669,6 +699,19 @@
                   (:: foo (-> Int Int Int))
                   (= foo a 0 (* a 2))
                   (= foo a b (+ a b)))))
+             (it "should expand doc without type signature"
+               (expandTo
+                (defn foo "doc" 42)
+                (:begin
+                  (= foo 42)
+                  (:doc^ "doc"))))
+             (it "should expand doc with type signature"
+               (expandTo
+                (defn (:: foo Int) "doc" 42)
+                (:begin
+                  (:: foo Int)
+                  (:doc^ "doc")
+                  (= foo 42))))
              (it "should fail on invalid signature"
                (expandFailure
                 (defn (foo (Int) (Int)) (a b)
@@ -689,23 +732,17 @@
               (defn foo (a b)
                 (+ a b))))))
 
-      (d "defdo"
-         (do (it "should expand to (defn ... (do ...))"
-               (expandTo
-                (defdo foo (a b)
-                  (print a)
-                  (print b))
-                (defn foo (a b)
-                  (do (print a)
-                      (print b)))))
-             (it "should fail on too few parameters"
-               (expandFailure (defdo foo)))))
-
       (d "cond"
          (it "should expand to case"
            (expandTo
             (cond [(even x) 0] [otherwise 1])
             (case () _ (| ((even x) 0) (otherwise 1))))))
+
+      (d "lcase"
+         (it "should expand to lambda with case"
+           (expandTo
+            (lcase (Right a) "a" (Left b) "b")
+            (\ $tmp (case $tmp (Right a) "a" (Left b) "b")))))
 
       (d "case-do"
          (it "should expand to do with case"

@@ -2,9 +2,8 @@
 
 (:doc "Core language macros.
 
-Macros defined in this module are available in @finkel make@ compiler
-by default, i.e., available without /require/-ing \"Finkel.Core\"
-module.")
+Macros exported from this module are available in the @finkel@ executable by
+default, i.e., available without /require/-ing \"Finkel.Core\" module.")
 
 (module Finkel.Core
   (:dh1 "Phase control")
@@ -20,20 +19,19 @@ module.")
   macrolet macrolet-m
 
   (:dh1 "Declaring functions")
-  defn defn' defdo
+  defn defn'
 
   (:dh1 "Expanding macros")
   macroexpand macroexpand-1 exported-macros
 
   (:dh1 "Compilation context macros")
-  with-ghc-version-cond
-  with-os-cond
+  with-ghc-version-cond with-os-cond
 
   (:dh1 "Error macro")
   macro-error
 
   (:dh1 "Expressions")
-  cond case-do)
+  cond lcase case-do)
 
 ;;; Compile time imports
 
@@ -50,13 +48,12 @@ module.")
   (import Language.Finkel)
 
   ;; Internal
-  (import Finkel.Core.Error)
   (import Finkel.Core.List))
 
 ;;; Imports
 
 ;; base
-(import Control.Monad (foldM when))
+(import Control.Monad (foldM))
 (import qualified System.Info)
 
 ;; ghc
@@ -75,7 +72,6 @@ module.")
 (import Language.Finkel)
 
 ;; Internal
-(import Finkel.Core.Error)
 (import Finkel.Core.List)
 
 
@@ -92,12 +88,9 @@ module.")
                  (\ form
                    (case (unCode form)
                      (List (: _ rest)) (return `(:begin
-                                                  (:eval-when-compile
-                                                    ,@rest)
+                                                  (:eval-when-compile ,@rest)
                                                   ,@rest))
-                     _ (finkelSrcError
-                        form
-                        "eval-when-compile-and-load: panic"))))))
+                     _ (finkelSrcError form "eval-when-compile-and-load"))))))
   (eval-when-compile-and-load
    (:doc "Code transformer function for macro declaration.")
    (:: macro-decl (-> Code Code Code (Fnk Code)))
@@ -109,7 +102,7 @@ module.")
                       (Macro ,tmp))))))
    %p(INLINABLE macro-decl)
 
-   (:doc "Body function of 'define-macro'.")
+   (:doc "Body function of /macro-defining-macro/.")
    (:: dmac (-> Code (Fnk Code)))
    (= dmac form
      (let ((:: make-tsig (-> Code Code))
@@ -122,7 +115,7 @@ module.")
                         ,decl)))
 
          (List [_ name doc arg body])
-         (| ((<- (Atom (AString _ _)) (unCode doc))
+         (| ((is-string doc)
              (do (<- decl (macro-decl name arg body))
                  (return `(:begin
                             ,(make-tsig name)
@@ -182,11 +175,10 @@ With documentation comment:
   (:: define-macro Macro)
   (= define-macro (Macro dmac)))
 
+;; Auxiliary macro to define a macro for both compile time and load time. Used
+;; only in this module until `defmacro-m'' is defined.
 (:eval-when-compile
-  (define-macro define-macro'
-    "Auxiliary macro to define a macro for both compile time and load
-time. Used only in this module until 'defmacro-m'' is defined."
-    form
+  (define-macro define-macro' form
     (do (<- body (dmac form))
         (return `(:begin
                    (:eval-when-compile
@@ -196,8 +188,7 @@ time. Used only in this module until 'defmacro-m'' is defined."
 
 ;;; Exported codes
 
-(define-macro' eval-when
-  "Macro to specify the /PHASE/s of evaluation of /BODY/ codes. Valid
+(:doc "Macro to specify the /PHASE/s of evaluation of /BODY/ codes. Valid
 phases are __@compile@__ and __@load@__. The @compile@ phase evaluates
 the body forms at the time of compilation, so that the compilation
 context can refer to the function and macros definied in the /BODY/
@@ -219,8 +210,7 @@ and temporally macro @m@ at compilation time.
 @
 (defmodule Main
   (require-and-import
-    (Prelude)
-    (Language.Finkel)))
+    (Finkel.Prelude)))
 
 (eval-when [compile load]
   (defn (:: f (-> Code Code))
@@ -237,38 +227,34 @@ and temporally macro @m@ at compilation time.
     (do (g 'foo)
         (m 'bar))))
 @
-"
-  form
+")
+(define-macro' eval-when form
   (let ((:: at-compile (-> [Code] Bool))
         (= at-compile (elem 'compile))
         (:: at-load (-> [Code] Bool))
         (= at-load (elem 'load))
-        (:: gen-eval-when (-> [Code] [Code] (Fnk Code)))
-        (= gen-eval-when phases body
+        (:: emit (-> [Code] [Code] (Fnk Code)))
+        (= emit phases body
           (| ((&& (at-compile phases) (at-load phases))
               (return
                `(:begin
-                  (:eval-when-compile
-                    ,@body)
+                  (:eval-when-compile ,@body)
                   ,@body)))
              ((at-compile phases)
-              (return `(:eval-when-compile
-                         ,@(List body))))
+              (return `(:eval-when-compile ,@body)))
              ((at-load phases)
-              (return `(:begin
-                         ,@(List body))))
+              (return `(:begin ,@body)))
              (otherwise
               (finkelSrcError form (++ "eval-when: invalid phase: "
                                        (show phases)))))))
     (case (unCode form)
       (List (: _ (LForm (L _ lst)) body))
-      (| ((<- (List phases) lst) (gen-eval-when phases body))
-         ((<- (HsList phases) lst) (gen-eval-when phases body)))
+      (| ((<- (List phases) lst) (emit phases body))
+         ((<- (HsList phases) lst) (emit phases body)))
       _ (finkelSrcError form (++ "eval-when: invalid form: "
                                  (show form))))))
 
-(define-macro' eval-and-compile
-  "Same as 'eval_when' macro with __@compile@__ and __@load@__ phases.
+(:doc "Same as 'eval_when' macro with __@compile@__ and __@load@__ phases.
 
 ==== __Syntax__
 
@@ -276,12 +262,10 @@ and temporally macro @m@ at compilation time.
 
 ==== __Example__
 
-See 'eval_when'.
-"
-  form
+See 'eval_when'.")
+(define-macro' eval-and-compile form
   (case (unCode form)
-    (List (: _ body)) (return `(eval-when [compile load]
-                                 ,@body))
+    (List (: _ body)) (return `(eval-when [compile load] ,@body))
     _ (finkelSrcError form "eval-and-compile: panic")))
 
 (eval-and-compile
@@ -308,8 +292,8 @@ See 'eval_when'.
                         (elem c [#'a .. #'z])
                         (<- Nothing (lookup form acc))
                         (do (let ((= cs' (replace-hyphens cs))))
-                            (<- x (fmap unCode (gensym' cs')))
-                            (return (case x
+                            (<- x (gensym' cs'))
+                            (return (case (unCode x)
                                       (Atom gsym) (: (, form gsym) acc)
                                       _ acc)))))
       _ (return acc)))
@@ -321,12 +305,12 @@ See 'eval_when'.
         (return (subst-gensyms kvs form))))
   %p(INLINABLE gensymfy)
 
-  ;; Function to make body of `defmacro-m' and `defmacro'.
+  ;; Function to make body of macro.
   ;;
   ;; XXX: Currently does not suuport lambda-list like pattern match in
   ;; macro argument.
-  (:: make-defmacro-body (-> String Code Code Code Code (Fnk Code)))
-  (= make-defmacro-body label whole name0 arg0 body0
+  (:: make-macro-body (-> String Code Code Code Code (Fnk Code)))
+  (= make-macro-body label whole name0 arg0 body0
     (let ((:: err (-> Code Code Code))
           (= err form-name name
             `(finkelSrcError
@@ -338,19 +322,20 @@ See 'eval_when'.
           (= atom-arg-body name arg body form-name
             `(case ,form-name
                (LForm (L $loc (List (: _ __arg__))))
-               (let ((= ,arg (LForm (L $loc (List __arg__)))))
-                 ,body)
+               (let ((= ,arg (LForm (L $loc (List __arg__))))
+                     (= $tmp ,body))
+                  $tmp)
                _ ,(err form-name name)))
 
           (:: list-arg-body (-> SrcSpan Code [Code] Code Code Code))
           (= list-arg-body l1 name args body form-name
             (let ((:: abind Code)
                   (= abind
-                    `(LForm
-                      (L _loc
-                         (List [_ ,@(LForm (L l1 (List args)))])))))
+                    `(LForm (L _loc
+                               (List [_ ,@(LForm (L l1 (List args)))])))))
               `(case ,form-name
-                 ,abind ,body
+                 ,abind (let ((= $tmp ,body))
+                          $tmp)
                  _ ,(err form-name name)))))
 
       (case (unLForm arg0)
@@ -367,6 +352,26 @@ See 'eval_when'.
         (gensymfy (atom-arg-body name0 arg0 body0 the-macro-arg))
 
         _ (finkelSrcError whole (++ label ": invalid args")))))
+  %p(INLINABLE make-macro-body)
+
+  ;; Function to make body expression of `defmacro-m' and `defmacro'.
+  (:: make-defmacro-body (-> String Code (-> Code Code) (Fnk Code)))
+  (= make-defmacro-body label whole f
+    (let ((:: emit (-> Code (Maybe Code) Code Code (Fnk Code)))
+          (= emit name mb-doc arg body0
+            (do (let ((= body1 (f body0))
+                      (= docs (maybe [] pure mb-doc))))
+                (<- body2 (make-macro-body label whole name arg body1))
+                (dmac `(_ ,name ,@docs ,the-macro-arg ,body2)))))
+      (case (unCode whole)
+        (List [_ name doc arg body])
+        (| ((is-string doc)
+            (emit name (Just doc) arg body)))
+
+        (List [_ name arg body])
+        (emit name Nothing arg body)
+
+        _ (finkelSrcError whole (++ label ": invalid form")))))
   %p(INLINABLE make-defmacro-body)
 
   ;; Function to make body expression of `macrolet-m' and `macrolet'.
@@ -377,26 +382,26 @@ See 'eval_when'.
             (case code
               (LForm (L l (List [name arg body0])))
               (do (let ((= body1 (f body0))))
-                  (<- body2
-                    (make-defmacro-body label code name arg body1))
-                  (return
-                   (LForm (L l (List [name the-macro-arg body2])))))
+                  (<- body2 (make-macro-body label code name arg body1))
+                  (return (LForm (L l (List [name the-macro-arg body2])))))
 
-              _ (finkelSrcError code (++ label ": invalid form")))))
+              _ (finkelSrcError code (++ label ": invalid form"))))
+          (:: emit (-> SrcSpan [Code] [Code] (Fnk Code)))
+          (= emit l ms body
+            (do (<- macros (mapM make-macro ms))
+                (lmac `(:with-macro ,(LForm (L l (List macros)))
+                         ,@body)))))
+
       (case (unCode whole)
-        (List (: _ (LForm (L l0 (List forms))) rest))
-        (do (<- macros (mapM make-macro forms))
-            (lmac `(:with-macro ,(LForm (L l0 (List macros)))
-                     ,@(List rest))))
+        (List (: _ (LForm (L l macs)) rest))
+        (| ((<- (List forms) macs) (emit l forms rest))
+           ((<- (HsList forms) macs) (emit l forms rest)))
 
         _ (finkelSrcError whole (++ label ": invalid form")))))
   %p(INLINABLE make-macrolet-body))
 
-(define-macro macrolet-m
-  "
-Variant of 'macrolet', the body of each macro need to be a 'Code' value
-wrapped in 'Fnk'. This macro has full access to 'Fnk' in compilation
-context.
+(:doc "Variant of 'macrolet', the body of each macro need to be a 'Code' value
+wrapped in 'Fnk'. This macro has full access to 'Fnk' in compilation context.
 
 ==== __Syntax__
 
@@ -414,13 +419,11 @@ Rewrite of the example shown in 'macrolet':
   (m2 19 20))
 ;;; ==> [20,21]
 @
-
-"
-  form
+")
+(define-macro macrolet-m form
   (make-macrolet-body "macrolet-m" form id))
 
-(define-macro macrolet
-  "Define temporary macros named /NAME/. The defined macros could be
+(:doc "Define temporary macros named /NAME/. The defined macros could be
 referred from /BODY/. Each macro takes /ARGS/ parameter, and results in
 /EXPR/. The parameter /ARGS/ works as in 'defmacro'.
 
@@ -445,14 +448,13 @@ Temporary macros can refer other temporary macros:
   (m2 19 20))
 ;;; ==> [20,21]
 @
-"
-  form
+")
+(define-macro macrolet form
   (make-macrolet-body "macrolet" form (\ body `(return ,body))))
 
-(define-macro' defmacro-m
-  "A macro similar to 'defmacro', but the body expression need to be a
-value of type 'Fnk' 'Code'. This macro has full access to the 'Fnk'
-environment in compilation context.
+(:doc "A macro similar to 'defmacro', but the body expression need to be a value
+of type 'Fnk' 'Code'. This macro has full access to the 'Fnk' environment in
+compilation context.
 
 ==== __Syntax__
 
@@ -475,27 +477,11 @@ Sample expansion:
 
 >>> (macroexpand '(m1 \"/path/to/a/file.txt\")
 (putStrLn \"... contents of the file ...\")
-"
-  form
-  (let ((:: make-def (-> Code (Maybe Code) Code Code (Fnk Code)))
-        (= make-def name mb-doc arg body0
-          (do (<- body1
-                (make-defmacro-body "defmacro-m" form name arg body0))
-              (case mb-doc
-                (Just doc) (dmac `(_ ,name ,doc ,the-macro-arg ,body1))
-                Nothing (dmac `(_ ,name ,the-macro-arg ,body1))))))
-    (case (unCode form)
-      (List [_ name doc arg body])
-      (| ((<- (Atom (AString _ _)) (unCode doc))
-          (make-def name (Just doc) arg body)))
+")
+(define-macro' defmacro-m form
+  (make-defmacro-body "defmacro-m" form id))
 
-      (List [_ name arg body])
-      (make-def name Nothing arg body)
-
-      _ (finkelSrcError form "defmacro-m: invalid form"))))
-
-(define-macro' defmacro-m'
-  "Variant of 'defmacro_m', wrapped in 'eval_and_compile'.
+(:doc "Variant of 'defmacro_m', wrapped in 'eval_and_compile'.
 
 ==== __Syntax__
 
@@ -503,15 +489,13 @@ See 'defmacro'.
 
 ==== __Examples__
 
-See 'defmacro' and 'defmacro_m'."
-  form
+See 'defmacro' and 'defmacro_m'.")
+(define-macro' defmacro-m' form
   (case (unCode form)
-    (List (: _ rest)) (return `(eval-and-compile
-                                 (defmacro-m ,@rest)))
+    (List (: _ rest)) (return `(eval-and-compile (defmacro-m ,@rest)))
     _ (finkelSrcError form "defmacro-m': impossible happened.")))
 
-(define-macro' defmacro
-  "Macro to define a macro named /NAME/, similar to the macro with same
+(:doc "Macro to define a macro named /NAME/, similar to the macro with same
 name found in other Lisps, such as Common Lisp, Clojure, LFE, Hy
 ... etc. The 'defmacro' can take an optional /DOC/ comment string in
 second parameter. Next parameter is either a list of /ARGS/, or a single
@@ -580,26 +564,9 @@ Expansions of /m3/:
 (>> (print False) (print #'x))
 >>> (macroexpand '(m3 False #'x \"bar\"))
 (do (print False) (print #'x) (print \"bar\"))
-"
-  form
-  ;; As in `dmac', binding `body' to temporay name to support `where'
-  ;; in body expression.
-  (let ((= build name mb-doc args body
-          (do (<- tmp (gensym' "tmp"))
-              (let ((:: doc [Code])
-                    (= doc (maybe [] return mb-doc))))
-              (return `(defmacro-m ,name
-                         ,@doc ,args
-                         (let ((= ,tmp ,body))
-                           (return ,tmp)))))))
-    (case (unCode form)
-      (List [_ name (@ doc (LForm (L _ (Atom (AString _ _))))) args body])
-      (build name (Just doc) args body)
-
-      (List [_ name args body])
-      (build name Nothing args body)
-
-      _ (finkelSrcError form "defmacro: invalid form."))))
+")
+(define-macro' defmacro form
+  (make-defmacro-body "defmacro" form (\ x `(return ,x))))
 
 (defmacro-m' defmacro'
   "Variant of 'defmacro', wrapped in 'eval_and_compile'.
@@ -616,7 +583,7 @@ See 'defmacro'.
   (return `(eval-and-compile
              (defmacro ,@form))))
 
-(defmacro' macro-error
+(defmacro macro-error
   "Macro for showing error in macro function. Shows an error message
 with the location of entire macro form.
 
@@ -642,12 +609,6 @@ Sample runs:
 "
   [msg]
   `(unsafeFinkelSrcError ,the-macro-arg ,msg))
-
-;;; Pattern matching macro for `LForm' of `Atom' with `AString'.
-(:eval-when-compile
-  (defmacro pAstring
-    [val]
-    `(LForm (L _ (Atom (AString _ ,val))))))
 
 (defmacro-m defn
   "Macro for defining function. Supports optional function type
@@ -675,10 +636,6 @@ Function without arguments:
 Function without arguments, with type signature:
 
 > (defn (:: v2 Int) 43)
-
-The '::' in the signature is optional:
-
-> (defn (v3 Int) 44)
 
 Function with arguments, type signature, and documentation comment:
 
@@ -714,11 +671,13 @@ The last /fib2/ example is same as below:
 @
 "
   form
-  (let ((:: build-decls (-> Code [Code] [Code]))
+  (let ((:: build-decls (-> Code [Code] (Fnk [Code])))
         (= build-decls name
           (let ((= go (: args body rest)
-                  (: `(= ,name ,@args ,body) (go rest)))
-                (= go _ []))
+                  (do (<- bodies (go rest))
+                      (return (: `(= ,name ,@args ,body) bodies))))
+                (= go [] (pure []))
+                (= go _ (finkelSrcError name "defn: wrong number of forms")))
             go))
         (:: build-doc (-> (Maybe Code) Code))
         (= build-doc mb-doc
@@ -732,57 +691,52 @@ The last /fib2/ example is same as below:
           (| ((<- (Atom (ASymbol n)) (unCode name))
               (|| (isLexCon n) (is-tuple n)))
              (otherwise False)))
-        (:: build-tysig (-> Code Code (Maybe Code) [Code] (Fnk Code)))
-        (= build-tysig name ty mb-doc bodies
-          (return `(:begin
-                     (:: ,name ,ty)
-                     ,@(build-doc mb-doc)
-                     ,@(build-decls name bodies))))
+        (:: build-sig (-> Code Code (Maybe Code) [Code] (Fnk Code)))
+        (= build-sig name ty mb-doc bodies0
+          (do (<- bodies1 (build-decls name bodies0))
+              (return `(:begin
+                         (:: ,name ,ty)
+                         ,@(build-doc mb-doc)
+                         ,@bodies1))))
         (:: build-nosig (-> Code (Maybe Code) [Code] (Fnk Code)))
-        (= build-nosig name mb-doc bodies
-          (where go
-            (= go
-              (| ((<- Nothing mb-doc)
-                  (<- [x] xs)
-                  (return x))
-                 (otherwise
-                  (return `(:begin ,@xs ,@(build-doc mb-doc))))))
-            (= xs (build-decls name bodies))))
+        (= build-nosig name mb-doc bodies0
+          (let ((= go bodies
+                  (| ((<- Nothing mb-doc)
+                      (<- [body] bodies)
+                      (return body))
+                     (otherwise
+                      (return `(:begin ,@bodies ,@(build-doc mb-doc)))))))
+            (>>= (build-decls name bodies0) go)))
         (:: build (-> Code (Maybe Code) [Code] (Fnk Code)))
         (= build sig mb-doc bodies
-          (do (when (odd (length bodies))
-                (finkelSrcError form "defn: odd number of forms"))
-              (case (unCode sig)
-                (List [name ty]) (| ((is-con name)
-                                     (build-nosig sig mb-doc bodies))
-                                    (otherwise
-                                     (build-tysig name ty mb-doc bodies)))
-                (List [dc name ty]) (| ((== dc '::)
-                                        (build-tysig name ty mb-doc
-                                                     bodies)))
-                (List (: name _)) (| ((is-con name)
-                                      (build-nosig sig mb-doc bodies)))
-                (Atom _) (build-nosig sig mb-doc bodies)
-                (HsList _) (build-nosig sig mb-doc bodies)
-                _ (finkelSrcError sig "defn: invalid signature")))))
+          (case (unCode sig)
+            (List [name ty]) (| ((is-con name)
+                                 (build-nosig sig mb-doc bodies))
+                                (otherwise
+                                 (build-sig name ty mb-doc bodies)))
+            (List [dc name ty]) (| ((== dc '::)
+                                    (build-sig name ty mb-doc bodies)))
+            (List (: name _)) (| ((is-con name)
+                                  (build-nosig sig mb-doc bodies)))
+            (Atom _) (build-nosig sig mb-doc bodies)
+            (HsList _) (build-nosig sig mb-doc bodies)
+            _ (finkelSrcError sig "defn: invalid signature"))))
     (case (unCode form)
-      ;; Declaration of string, without documentation. Need to pattern
-      ;; match this first to support defining plain string value without
-      ;; documentation.
-      (List [sig (@ body (pAstring _))])
-      (build sig Nothing [nil body])
-
-      (List [sig (@ doc (pAstring _)) body])
-      (build sig (Just doc) [nil body])
-
+      ;; Declaration of string without documentation need to pattern match
+      ;; before declarations with documentation, to support defining plain
+      ;; string value without documentation.
       (List [sig body])
       (build sig Nothing [nil body])
 
-      (List (: sig (: (@ doc (pAstring _)) rest)))
-      (build sig (Just doc) rest)
+      (List [sig doc body])
+      (| ((is-string doc)
+          (build sig (Just doc) [nil body])))
 
-      (List (: sig rest))
-      (build sig Nothing rest)
+      (List (: sig doc-or-arg rest))
+      (| ((is-string doc-or-arg)
+          (build sig (Just doc-or-arg) rest))
+         (otherwise
+          (build sig Nothing (: doc-or-arg rest))))
 
       _ (finkelSrcError form "defn: invalid form"))))
 
@@ -801,51 +755,7 @@ See 'defn'."
   `(eval-and-compile
      (defn ,@form)))
 
-(defmacro defdo
-  "
-Macro to define a function with 'defn', with wrapping the body
-expressions with /do/.
-
-==== __Syntax__
-
-> DEFDO ::= SIG [DOC] ARGS BODY*
-> SIG   ::= varid | '(' varid typesig ')'
-> DOC   ::= '\"' comment '\"'
-> ARGS  ::= '(' varid* ')' | '[' varid* ']'
-> BODY  ::= form
-
-==== __Examples__
-
-Function taking single argument:
-
-@
-(defdo (foo (=> (Show a) (-> a (IO ()))))
-  [x]
-  (print x)
-  (print x)
-  (print x))
-@
-
-Sample run:
-
->>> (foo True)
-True
-True
-True
-"
-  form
-  (case (unCode form)
-    (List (: sig (@ doc (pAstring _)) args body))
-    `(defn ,sig
-       ,doc
-       ,args
-       (do ,@body))
-
-    (List (: sig args body))
-    `(defn ,sig ,args
-       (do ,@body))
-
-    _ (macro-error "defdo: invalid form")))
+;;; Expression
 
 (defmacro cond
   "The 'cond' macro, found in many Lisp languages.
@@ -879,6 +789,22 @@ Sample run:
   body
   `(case ()
      _ (| ,@(mapcar curve body))))
+
+(defmacro' lcase
+  "Same as @\\\\case@ enabled with the @LambdaCase@ extension.
+
+==== __Syntax __
+
+> LCASE    ::= PAT-EXPR+
+> PAT-EXPR ::= PATTERN EXPR
+
+==== __Example__
+
+>>> (map (lcase 0 \"zero\" 1 \"one\" _ \"many\") [0 1 2 3]
+[\"zero\", \"one\", \"many\",\"many\"]
+"
+  args
+  `(\ $tmp (case $tmp ,@args)))
 
 (defmacro case-do
   "Like @case@, but takes an expression with 'Monad' type.
@@ -914,10 +840,6 @@ Is same as:
 
 ;;; Compilation context macros
 
-;;; Auxiliary function for quoting body of with-xxx-cond macros.
-(:: quote-cadr (-> Code Code))
-(= quote-cadr form `(,(car form) ',(cadr form)))
-
 (defmacro with-ghc-version-cond
   "Macro to generate code with ghc version variable.
 
@@ -945,7 +867,7 @@ for compiling the code:
                   (let ((:: ,var Int)
                         (= ,var ,(:: (read cProjectVersionInt) Int)))
                     (cond
-                      ,@(mapcar quote-cadr (cdr forms))))))
+                      ,@(mapcar (\ x `(,(car x) ',(cadr x))) (cdr forms))))))
        ($tmp))))
 
 (defmacro with-os-cond
@@ -974,7 +896,7 @@ compiling the code:
                   (let ((:: ,var String)
                         (= ,var ,System.Info.os))
                     (cond
-                      ,@(mapcar quote-cadr (cdr forms))))))
+                      ,@(mapcar (\ x `(,(car x) ',(cadr x))) (cdr forms))))))
        ($tmp))))
 
 
@@ -1013,22 +935,10 @@ forms.
 
 ==== __Examples__
 
->>> (macroexpand '(defmacro f1 [x] `(+ ,x 1)))
+>>> (macroexpand '(defn (:: foo (-> Int Int Int)) [a b] (+ a (* b 2))))
 (:begin
-  (:: f1 Macro)
-  (= f1 (let ((:: tmp_cnp (-> Code (Fnk Code)))
-              (= tmp_cnp __form__
-                (case __form__
-                  (LForm (L _loc (List [_ x])))
-                  (let ((= tmp_cno (:quasiquote (+ (:unquote x) 1))))
-                    (return tmp_cno))
-                  _ (finkelSrcError
-                     __form__
-                     (concat [(show (:quote f1))
-                              \"\\ninvalid args: `\"
-                              (show __form__)
-                              \"'\"])))))
-          (Macro tmp_cnp))))
+  (:: foo (-> Int Int Int))
+  (= foo a b (+ a (* b 2))))
 "
   [form]
   (case (unCode form)
@@ -1054,7 +964,7 @@ forms.
 Listing exported macros in \"Finkel.Core\" module:
 
 >>> (exported-macros Finkel.Core)
-[\"cond\",\"defdo\",\"defmacro\", ...]
+[\"eval_when\",\"eval_and_compile\", ...]
 "
   [name]
   (let ((= f dflags mb-thing acc
