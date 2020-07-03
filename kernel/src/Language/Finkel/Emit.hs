@@ -285,13 +285,13 @@ instance (HsSrc b) => HsSrc (GenLocated a b) where
 instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (HsModule a)) where
   toHsSrc st a = case unHsrc a of
     HsModule Nothing _ imports decls _ mbDoc ->
-      vcat [ pp_langExts st
+      vcat [ pp_headerPragmas st
            , pp_mbdocn mbDoc
            , pp_nonnull imports
            , hsSrc_nonnull st (map unLoc decls)
            , text "" ]
     HsModule (Just name) exports imports decls deprec mbDoc ->
-      vcat [ pp_langExts st
+      vcat [ pp_headerPragmas st
            , pp_mbdocn mbDoc
            , case exports of
                Nothing ->
@@ -782,10 +782,17 @@ pp_mbdocn = maybe empty (commentWithHeader "-- |" . unLoc)
 pp_mbdocp :: Maybe LHsDocString -> SDoc
 pp_mbdocp = maybe empty (commentWithHeader "-- ^" . unLoc)
 
-pp_langExts :: SPState -> SDoc
-pp_langExts sp = vcat (map f (langExts sp))
+pp_headerPragmas :: SPState -> SDoc
+pp_headerPragmas sp = vcat (map snd sorted_pragmas)
   where
-    f (L _ e) = text "{-# LANGUAGE" <+> text e <+> text "#-}"
+    sorted_pragmas = sortBy (compare `on` fst) pragmas
+    pragmas = map lang (langExts sp) ++
+              map ghc_opt (ghcOptions sp) ++
+              map haddock_opt (haddockOptions sp)
+    lang (L l e) = (l, gen "LANGUAGE" e)
+    ghc_opt (L l o) = (l, gen "OPTIONS_GHC" o)
+    haddock_opt (L l o) = (l, gen "OPTIONS_HADDOCK" o)
+    gen label x = text "{-#" <+> text label <+> text x <+> text "#-}"
 
 hsSrc_nonnull :: HsSrc a => SPState -> [a] -> SDoc
 hsSrc_nonnull st xs =

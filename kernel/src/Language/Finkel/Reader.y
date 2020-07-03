@@ -267,9 +267,14 @@ pragma orig@(LForm (L l form)) =
          let specialize = LForm (L l' (Atom (ASymbol "SPECIALIZE")))
          return (LForm (L l (List (specialize:rest))))
       | normalize sym == "options_ghc" -> do
-        let flags = makeOptionFlags rest
-        sp <- getSPState
-        putSPState (sp {ghcOptions = flags})
+        modifySPState
+          (\sp -> sp {ghcOptions =
+                        makeOptionFlags rest ++ ghcOptions sp})
+        return (emptyBody l)
+      | normalize sym == "options_haddock" -> do
+        modifySPState
+          (\sp -> sp {haddockOptions =
+                        makeOptionFlags rest ++ haddockOptions sp})
         return (emptyBody l)
     _ -> errorSP orig ("unknown pragma: " ++ show form)
   where

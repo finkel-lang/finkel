@@ -27,6 +27,7 @@ module Language.Finkel.Lexer
   , lexErrorSP
   , putSPState
   , getSPState
+  , modifySPState
   ) where
 
 -- base
@@ -185,6 +186,8 @@ data SPState = SPState
   , langExts :: [Located String]
     -- | @{-# GHC_OPTIONS ... #-}@ found in target file.
   , ghcOptions :: [Located String]
+    -- | @{-# OPTIONS_HADDOCK ... #-}@ found in target file.
+  , haddockOptions :: [Located String]
     -- | Buffer to hold current input.
   , buf :: StringBuffer
     -- | Current location of input stream.
@@ -197,6 +200,7 @@ initialSPState file linum colnum =
   SPState { targetFile = file
           , langExts = []
           , ghcOptions = []
+          , haddockOptions = []
           , buf = error "SPState.buf not initialized"
           , currentLoc = mkRealSrcLoc file linum colnum
           }
@@ -255,6 +259,11 @@ putSPState st = SP (\_ -> SPOK st ())
 getSPState :: SP SPState
 getSPState = SP (\st -> SPOK st st)
 {-# INLINE getSPState #-}
+
+-- | Modify current 'SPState' with given function.
+modifySPState :: (SPState -> SPState) -> SP ()
+modifySPState f = SP (\st -> SPOK (f st) ())
+{-# INLINE modifySPState #-}
 
 -- -- | Incrementally perform computation with parsed result and given
 -- -- function.
