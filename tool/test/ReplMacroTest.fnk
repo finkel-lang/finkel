@@ -175,6 +175,8 @@
              "putStrLn :: String -> IO ()")
          (ok '(repl-macro type (foldr + (:: 0 Int)))
              "(foldr + (:: 0 Int)) :: Foldable t => t Int -> Int")
+         (ok '(repl-macro type 'x)
+             "(:quote x) :: Language.Finkel.Form.Code")
 
          ;; load and reload
          (let ((= m01-dot-fnk (testdata "m01.fnk"))

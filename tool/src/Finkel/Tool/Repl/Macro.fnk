@@ -774,7 +774,8 @@ paths from import directories."
 (defn (:: type-cmd ReplAction)
   [forms]
   (case forms
-    [form] (do (<- expr (buildHsSyn parseExpr forms))
+    [form] (do (<- expanded (expand form))
+               (<- expr (buildHsSyn parseExpr [expanded]))
                (<- ty (evalExprType expr))
                (let ((= sdoc
                        (sep [(text (show form))
