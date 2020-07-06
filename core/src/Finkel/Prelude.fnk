@@ -1,5 +1,17 @@
 ;;;; Prelude module for Finkel.
 
+(:doc "Module exporting fundamental functions to work with Finkel macros.
+
+This module does not export macros, but functions to work with `Code' values for
+defining macros. Intended usage is to import during compilation:
+
+> (defmodule MyModule
+>   (import-when [compile]
+>      (Finkel.Prelude))
+>   ...)
+
+to use function like `cons', `car', `cdr' ... etc.")
+
 (module Finkel.Prelude
   (module All))
 
