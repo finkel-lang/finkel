@@ -15,8 +15,8 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Exception ((Exception ..)))
-   (Control.Monad (filterM unless void))
+   (Control.Exception ((Exception ..) (SomeException ..) try))
+   (Control.Monad (filterM unless void when))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
    (Data.List
@@ -25,7 +25,11 @@
    (Text.Printf (printf))
 
    ;; directory
-   (System.Directory (getCurrentDirectory setCurrentDirectory))
+   (System.Directory
+    (getCurrentDirectory getHomeDirectory setCurrentDirectory))
+
+   ;; filepath
+   (System.FilePath (normalise))
 
    ;; ghc
    (BasicTypes ((StringLiteral ..)))
@@ -41,14 +45,15 @@
    (Finder (flushFinderCaches uncacheModule))
    (GHC ((ModuleInfo) findModule getBindings getModSummary getModuleGraph
          getModuleInfo getPrintUnqual getTargets isLoaded lookupName
-         lookupModule modInfoExports setSessionDynFlags setTargets))
+         lookupModule modInfoExports setSessionDynFlags setTargets
+         workingDirectoryChanged))
    (GhcMake ((LoadHowMuch ..)))
    (GhcMonad ((GhcMonad ..) getSessionDynFlags modifySession))
    (HscMain (newHscEnv))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
-              emptyInteractiveContext handleFlagWarnings ms_mod_name
-              pprHPT pprTarget srcErrorMessages tyThingParent_maybe))
+              emptyInteractiveContext handleFlagWarnings ms_mod_name pprHPT
+              pprTarget srcErrorMessages tyThingParent_maybe))
    (IfaceSyn (showToHeader))
    (InstEnv (pprInstance))
    (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
@@ -60,7 +65,7 @@
                   nameSrcSpan))
    (NameSet (elemNameSet mkNameSet))
    (Outputable (SDoc $$ <+> <> empty dcolon hsep nest ppr sep
-                showPpr showSDoc showSDocForUser text vcat))
+                     showPpr showSDoc showSDocForUser text vcat))
    (Module ((Module ..) mkModuleName))
    (Packages ((PackageName ..) lookupPackageName))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
@@ -352,6 +357,10 @@ object code."
              (otherwise False))))
     (filter (. not has-parent) xs)))
 
+(defn (:: clear-all-targets (=> (GhcMonad m) (m ())))
+  (do (setTargets [])
+      (void (GhcMake.load LoadAllTargets))))
+
 
 ;;; Functions for show command
 
@@ -537,7 +546,7 @@ object code."
                      (hsc-targets hsc-env)))
       (let ((= ts (| ((null strs) "none")
                      (otherwise (unwords strs))))))
-      (return `(System.IO.putStrLn (++ ";; targets: " ,ts)))))
+      (return `(System.IO.putStrLn (++ "; targets: " ,ts)))))
 
 
 ;;; REPL commands
@@ -590,16 +599,44 @@ object code."
       [] (go Nothing)
       _ err)))
 
+(defn (:: expand-path (=> (MonadIO m) (-> FilePath (m FilePath))))
+  (let ((:: try-getHomeDirectory (IO (Either SomeException FilePath)))
+        (= try-getHomeDirectory (try getHomeDirectory))
+        (= go path
+          (case path
+            (: #'~ rest) (case-do try-getHomeDirectory
+                           (Right home) (pure (normalise
+                                               (++ home (: #'/ rest))))
+                           (Left _) (pure path))
+            _ (return path))))
+    (. liftIO go)))
+
+;;; From `GHCi.UI.changeDirectory'.
 (defn (:: cd-cmd ReplAction)
   "Function to change current directory."
   [forms]
-  (case forms
-    [arg1] (| ((<- (Just path) (code-to-mb-string arg1))
-               (do (liftIO (setCurrentDirectory path))
-                   (return '(:begin)))))
-    _ (let ((= l (located-list forms)))
-        (finkelSrcError l (++ "cd: expecting symbol or string but got "
-                              (show l))))))
+  (let ((= work dir0
+          (do (<- graph getModuleGraph)
+              (<- mods (fmap envContextModules getFnkEnv))
+              (when ($ not null graph-to-summaries graph)
+                (liftIO (putStrLn warn-unloading)))
+              clear-all-targets
+              (setContext (map mk-ii mods))
+              workingDirectoryChanged
+              (liftIO (do (<- dir1 (expand-path dir0))
+                          (setCurrentDirectory dir1)))
+              (return '(:begin))))
+        (= warn-unloading
+          (++ "Warning: "
+              "changing directory causes all loaded modules to be unloaded\n"
+              "because the search path has changed.")))
+    (case forms
+      [] (>>= (expand-path "~") work)
+      [arg1] (| ((<- (Just path) (code-to-mb-string arg1))
+                 (work path)))
+      _ (let ((= l (located-list forms)))
+          (finkelSrcError l (++ "cd: expecting symbol or string but got "
+                                (show l)))))))
 
 (defn (:: debug-cmd ReplAction)
   "Modify debug settings in REPL."

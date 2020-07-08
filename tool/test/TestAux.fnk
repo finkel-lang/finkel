@@ -24,7 +24,7 @@
 
    ;; ghc
    (Config (cProjectVersion))
-   (DynFlags ((DynFlags ..) (HasDynFlags ..) parseDynamicFlagsCmdLine))
+   (DynFlags ((HasDynFlags ..) parseDynamicFlagsCmdLine))
    (SrcLoc (noLoc))
 
    ;; hspec
@@ -32,7 +32,7 @@
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Fnk (runFnk setDynFlags))
+   (Language.Finkel.Fnk (setDynFlags))
 
    ;; Internal
    (Finkel.Tool.CLI)
@@ -167,11 +167,10 @@
             (= inplacedb
               (</> ".." "dist-newstyle" "packagedb" ghc-ver))
             (= args (map noLoc ["-package-db" storedb
-                                "-package-db" inplacedb]))
-            (= dflags1 (dflags0 {packageEnv (Just "-")}))))
-      (<- (, dflags2 _ _)
+                                "-package-db" inplacedb]))))
+      (<- (, dflags1 _ _)
         (parseDynamicFlagsCmdLine dflags0 args))
-      (setDynFlags dflags2)))
+      (setDynFlags dflags1)))
 
 (defn (:: init-etf (Fnk ()))
   "Initialization work for `EvalTestFns'."
@@ -179,7 +178,7 @@
 
 (defn (:: makeEvalTestFns (IO EvalTestFns))
   (do (<- out-mv newEmptyMVar)
-      (<- (@ resources (, tmpfile hdl in-mv)) acquire-repl)
+      (<- (@ resources (, _tmpfile hdl in-mv)) acquire-repl)
       (<- etid (forkIO (runFnk (do init-etf
                                    (eval-loop hdl in-mv))
                                repl-env)))

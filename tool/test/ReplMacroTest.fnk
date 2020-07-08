@@ -10,7 +10,6 @@
   (import
    ;; base
    (Control.Exception (catch throw))
-   (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate isSubsequenceOf))
    (System.IO.Error (isDoesNotExistError))
 
@@ -67,6 +66,9 @@
              "Unsafe.Coerce.unsafeCoerce :: a -> b")
 
          ;; cd
+         (ok `(repl-macro cd) "")
+         (ok `(repl-macro cd "~") "")
+         (ok `(repl-macro cd ,current-dir) "")
          (ok `(repl-macro cd ,(testdata "")) "")
          (ok '(repl-macro cd ../../) "")
 
@@ -177,7 +179,7 @@
                "; module import search paths:\n"
                ";    ."]))
          (ok '(repl-macro show targets)
-             ";; targets: none")
+             "; targets: none")
 
          ;; type
          (ok '(repl-macro type putStrLn)
@@ -188,8 +190,7 @@
              "(:quote x) :: Language.Finkel.Form.Code")
 
          ;; load and reload
-         (let ((= m01-dot-fnk (testdata "m01.fnk"))
-               (= dir01-m01 (testdata (</> "Dir01" "M01.fnk")))))
+         (let ((= m01-dot-fnk (testdata "m01.fnk"))))
          (ok `(:begin
                 (repl-macro load ,(qSymbol m01-dot-fnk))
                 main)
