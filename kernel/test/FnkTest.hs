@@ -209,10 +209,6 @@ envTest = do
      macroNames (envMacros emptyFnkEnv) `shouldBe` []
    it "should have empty envDefaultMacros" $
      macroNames (envDefaultMacros emptyFnkEnv) `shouldBe` []
-   it "should have no language extensions" $
-     let (ext, flagset) = envDefaultLangExts emptyFnkEnv
-         empties = isNothing ext && flagSetToIntList flagset == []
-     in  empties `shouldBe` True
    it "should have not set envSilent" $
      envSilent emptyFnkEnv `shouldBe` False
    it "should not have required module names" $

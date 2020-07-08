@@ -204,8 +204,6 @@ data FnkEnv = FnkEnv
    , envDebug                  :: Bool
      -- | Modules to import to context.
    , envContextModules         :: [String]
-     -- | Default values to reset the language extensions.
-   , envDefaultLangExts        :: (Maybe Language, FlagSet)
      -- | Flag for controling informative output.
    , envSilent                 :: Bool
 
@@ -372,7 +370,6 @@ emptyFnkEnv = FnkEnv
   , envDefaultMacros          = emptyEnvMacros
   , envDebug                  = False
   , envContextModules         = []
-  , envDefaultLangExts        = (Nothing, emptyFlagSet)
   , envSilent                 = False
   , envMakeDynFlags           = Nothing
   , envMessager               = batchMsg

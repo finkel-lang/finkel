@@ -177,10 +177,8 @@ make infiles no_link force_recomp mb_output = do
   -- Preserve the language extension values in initial dynflags to FnkEnv, to
   -- reset the language extension later, to keep fresh set of language extensios
   -- per module.
-  let lexts = (language dflags3, extensionFlags dflags3)
-      findIt (lpath, mb_phase) =
+  let findIt (lpath, mb_phase) =
         fmap (\ts -> (ts, mb_phase)) (findTargetSource lpath)
-  modifyFnkEnv (\e -> e {envDefaultLangExts = lexts})
 
   -- Decide the kind of sources of the inputs, inputs arguments could be file
   -- paths, or module names.
