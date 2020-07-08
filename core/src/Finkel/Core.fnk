@@ -13,7 +13,7 @@ default, i.e., available without /require/-ing \"Finkel.Core\" module.")
   defmodule
 
   (:dh1 "Top level macros")
-  defmacro defmacro' defmacro-m defmacro-m'
+  defmacro defmacro' defmacroM defmacroM'
 
   (:dh1 "Temporary macros")
   macrolet macrolet-m
@@ -176,7 +176,7 @@ With documentation comment:
   (= define-macro (Macro dmac)))
 
 ;; Auxiliary macro to define a macro for both compile time and load time. Used
-;; only in this module until `defmacro-m'' is defined.
+;; only in this module until `defmacroM'' is defined.
 (:eval-when-compile
   (define-macro define-macro' form
     (do (<- body (dmac form))
@@ -354,7 +354,7 @@ See 'eval_when'.")
         _ (finkelSrcError whole (++ label ": invalid args")))))
   %p(INLINABLE make-macro-body)
 
-  ;; Function to make body expression of `defmacro-m' and `defmacro'.
+  ;; Function to make body expression of `defmacroM' and `defmacro'.
   (:: make-defmacro-body (-> String Code (-> Code Code) (Fnk Code)))
   (= make-defmacro-body label whole f
     (let ((:: emit (-> Code (Maybe Code) Code Code (Fnk Code)))
@@ -465,7 +465,7 @@ See 'defmacro'.
 A macro to read a file contents during compilation:
 
 @
-(defmacro-m m1 [path]
+(defmacroM m1 [path]
   (| ((<- (Just path') (fromCode path))
       (do (<- contents (liftIO (readFile path')))
           (return `(putStrLn ,contents))))
@@ -478,8 +478,8 @@ Sample expansion:
 >>> (macroexpand '(m1 \"/path/to/a/file.txt\")
 (putStrLn \"... contents of the file ...\")
 ")
-(define-macro' defmacro-m form
-  (make-defmacro-body "defmacro-m" form id))
+(define-macro' defmacroM form
+  (make-defmacro-body "defmacroM" form id))
 
 (:doc "Variant of 'defmacro_m', wrapped in 'eval_and_compile'.
 
@@ -490,10 +490,10 @@ See 'defmacro'.
 ==== __Examples__
 
 See 'defmacro' and 'defmacro_m'.")
-(define-macro' defmacro-m' form
+(define-macro' defmacroM' form
   (case (unCode form)
-    (List (: _ rest)) (return `(eval-and-compile (defmacro-m ,@rest)))
-    _ (finkelSrcError form "defmacro-m': impossible happened.")))
+    (List (: _ rest)) (return `(eval-and-compile (defmacroM ,@rest)))
+    _ (finkelSrcError form "defmacroM': impossible happened.")))
 
 (:doc "Macro to define a macro named /NAME/, similar to the macro with same
 name found in other Lisps, such as Common Lisp, Clojure, LFE, Hy
@@ -568,7 +568,7 @@ Expansions of /m3/:
 (define-macro' defmacro form
   (make-defmacro-body "defmacro" form (\ x `(return ,x))))
 
-(defmacro-m' defmacro'
+(defmacroM' defmacro'
   "Variant of 'defmacro', wrapped in 'eval_and_compile'.
 
 ==== __Syntax__
@@ -610,7 +610,7 @@ Sample runs:
   [msg]
   `(unsafeFinkelSrcError ,the-macro-arg ,msg))
 
-(defmacro-m defn
+(defmacroM defn
   "Macro for defining function. Supports optional function type
 signature /SIG/, which could be a name symbol or a list of name symbol
 and type signature form. Parameter /ARGS/ could be enclosed in
@@ -902,7 +902,7 @@ compiling the code:
 
 ;;; Macros for macros
 
-(defmacro-m macroexpand-1
+(defmacroM macroexpand-1
   "Expand given form if the given form is a macro, otherwise return the
 given form. Note that 'macroexpand_1' and 'macroexpand' are macros, not
 functions.
@@ -925,7 +925,7 @@ functions.
                          (return `',expanded))))
     _ (return form)))
 
-(defmacro-m macroexpand
+(defmacroM macroexpand
   "Macro for expanding macro. This macro recursively expands all sub
 forms.
 
@@ -951,7 +951,7 @@ forms.
                        (go x))))
     _ (return form)))
 
-(defmacro-m exported-macros
+(defmacroM exported-macros
   "Macro to return macro names exported from given module as a list of
 'String'.
 
@@ -994,7 +994,7 @@ Listing exported macros in \"Finkel.Core\" module:
 
 ;;; Module header
 
-(defmacro-m defmodule
+(defmacroM defmodule
   "Macro to define header of module named /NAME/. The /IMPEXP/ are forms
 for imports and exports. Imports and exports forms can appear in any
 order, and starts with one of the following symbols:

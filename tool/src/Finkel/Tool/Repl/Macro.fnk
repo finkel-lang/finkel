@@ -909,7 +909,7 @@ paths from import directories."
      (c "type" (Just ["EXPR"]) type-cmd
         "show type of EXPR")]))
 
-(defmacro-m repl-macro form
+(defmacroM repl-macro form
   (case (unCode form)
     (List (: name args)) (| ((<- (Just name') (code-to-mb-string name))
                              (<- (Just rc) (find (. (isPrefixOf name')

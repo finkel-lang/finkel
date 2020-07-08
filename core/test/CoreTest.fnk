@@ -399,10 +399,10 @@
               (:: foo Int)
               (= foo 42)))))
 
-      (d "defmacro-m"
+      (d "defmacroM"
          (do (it "should expand to define-macro"
                (expandTo
-                (defmacro-m m1 (a)
+                (defmacroM m1 (a)
                   (return `(putStrLn (++ "hello, " ,a))))
                 (:begin
                   (:: m1 Macro)
@@ -426,7 +426,7 @@
                       (Macro $tmp))))))
              (it "should replace nil arg with _"
                (expandTo
-                (defmacro-m m1 ()
+                (defmacroM m1 ()
                   (return `(print True)))
                 (:begin
                   (:: m1 Macro)
@@ -447,7 +447,7 @@
                       (Macro $tmp))))))
              (it "should expand symbol arg to rest"
                (expandTo
-                (defmacro-m m1 args
+                (defmacroM m1 args
                   (return `(print ,@args)))
                 (:begin
                   (:: m1 Macro)
@@ -472,7 +472,7 @@
                       (Macro $tmp))))))
              (it "should allow names with operator symbol"
                (expandTo
-                (defmacro-m .$$$ ()
+                (defmacroM .$$$ ()
                   (return `(print True)))
                 (:begin
                   (:: .$$$ Macro)
@@ -493,25 +493,25 @@
                       (Macro $tmp))))))
              (it "should detect invalid arg"
                (expandFailure
-                (defmacro-m m1 "string"
+                (defmacroM m1 "string"
                   (return `(putChar #'x)))))
              (it "should detect invalid form"
                (expandFailure
-                (defmacro-m m1
+                (defmacroM m1
                   too many parameters
                   passed)))))
 
-      (d "defmacro-m'"
+      (d "defmacroM'"
          (it "expands to (eval-when (...) (defmacro* ...))"
            (expandTo
-            (defmacro-m' m1 (a)
+            (defmacroM' m1 (a)
               `(return (putStrLn ,a)))
             (eval-and-compile
-              (defmacro-m m1 (a)
+              (defmacroM m1 (a)
                 (:quasiquote (return (putStrLn (:unquote a)))))))))
 
       (d "defmacro"
-         (it "should expand to defmacro-m"
+         (it "should expand to defmacroM"
            (expandTo
             (defmacro m1 (a)
               `(putStrLn (++ "hello, " ,a)))
@@ -548,9 +548,9 @@
       (d "macro containing `$foo'"
          (it "should replace `$foo' with gensym"
            (do (let ((= f code
-                       (runFnk (macroFunction defmacro-m code)
+                       (runFnk (macroFunction defmacroM code)
                                defaultFnkEnv))))
-               (<- e (f '(defmacro-m m1 (a b)
+               (<- e (f '(defmacroM m1 (a b)
                           (let ((= $foo (+ ,a ,b)))
                             (return $foo)))))
                (shouldNotBe (elem (ASymbol (fsLit "$foo")) e)

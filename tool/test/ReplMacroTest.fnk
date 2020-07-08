@@ -155,7 +155,7 @@
           '(repl-macro show macros)
           (\ ret
             (case ret
-              (Right str) (elem ";  defmacro_m'" (lines str))
+              (Right str) (elem ";  defmacroM'" (lines str))
               _ False)))
          (ok '(repl-macro show modules) "")
          (satisfy
