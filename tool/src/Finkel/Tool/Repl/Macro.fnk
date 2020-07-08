@@ -43,7 +43,8 @@
          getModuleInfo getPrintUnqual getTargets isLoaded lookupName
          lookupModule modInfoExports setSessionDynFlags setTargets))
    (GhcMake ((LoadHowMuch ..)))
-   (GhcMonad ((GhcMonad ..) getSessionDynFlags))
+   (GhcMonad ((GhcMonad ..) getSessionDynFlags modifySession))
+   (HscMain (newHscEnv))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
               emptyInteractiveContext handleFlagWarnings ms_mod_name
@@ -53,13 +54,15 @@
    (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
                                 parseName setContext showModule))
    (Linker (initDynLinker showLinkerState unload))
-   (Module (mkModuleNameFS moduleNameString))
+   (Module ((InstalledUnitId ..) componentIdToInstalledUnitId
+            mainUnitId mkModuleNameFS moduleNameString toInstalledUnitId))
    (Name (getName nameIsFromExternalPackage nameModule nameOccName
                   nameSrcSpan))
    (NameSet (elemNameSet mkNameSet))
    (Outputable (SDoc $$ <+> <> empty dcolon hsep nest ppr sep
                 showPpr showSDoc showSDocForUser text vcat))
    (Module ((Module ..) mkModuleName))
+   (Packages ((PackageName ..) lookupPackageName))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
    (SrcLoc (getLoc isGoodSrcSpan mkGeneralLocated noLoc unLoc))
    (TyCoRep ((TyThing ..)))
@@ -176,10 +179,13 @@
   (. mk-ii-fs fsLit))
 
 (defn (:: code-to-mb-string (-> Code (Maybe String)))
+  (. (fmap unpackFS) code-to-mb-fs))
+
+(defn (:: code-to-mb-fs (-> Code (Maybe FastString)))
   [code]
   (case (unCode code)
-    (Atom (ASymbol sym)) (Just (unpackFS sym))
-    (Atom (AString _ str)) (Just (unpackFS str))
+    (Atom (ASymbol s)) (Just s)
+    (Atom (AString _ s)) (Just s)
     _ Nothing))
 
 (defn (:: located-list (-> [Code] Code))
@@ -625,6 +631,44 @@ object code."
     [(HsList [])] (info-name (qSymbol "[]"))
     _ (invalid-form-error "info" forms)))
 
+(defn (:: in-package-cmd ReplAction)
+  [forms]
+  ;; Entirely reset the hsc_env, then update dflags with thisInstalledUnitId,
+  ;; and then set up the context modules. The update happens only when the given
+  ;; package name exist. Using the exact `InstalledUnitId' of the already
+  ;; compiled package to specified the unit id.
+  (let ((= mb-installed-uid dflags name
+          (if (== name (fsLit "main"))
+              (return (toInstalledUnitId mainUnitId))
+              (do (<- cid (lookupPackageName dflags (PackageName name)))
+                  ($ return componentIdToInstalledUnitId cid))))
+        (= set-this-installed-uid dflags uid
+          (do (<- new-env-0 (liftIO (newHscEnv dflags)))
+              (let ((= dflags1 (dflags {thisInstalledUnitId uid}))
+                    (= ic1 ((hsc-IC new-env-0) {ic-dflags dflags1}))
+                    (= new-env-1
+                      (new-env-0 {hsc-dflags dflags1
+                                  hsc-IC ic1}))))
+              (modifySession (const new-env-1))
+              (<- mods (fmap envContextModules getFnkEnv))
+              (setContext (map mk-ii mods))
+              (setDynFlags (dflags {thisInstalledUnitId uid}))))
+        (= msg dflags name
+          (maybe (++ "; package `" (unpackFS name) "' not found")
+                 (\ iuid
+                   (++ "; current package set to `"
+                       (unpackFS (installedUnitIdFS iuid)) "'"))
+                 (mb-installed-uid dflags name)))
+        (= work name
+          (do (<- dflags getDynFlags)
+              (mapM_ (set-this-installed-uid dflags)
+                     (mb-installed-uid dflags name))
+              (pure `(putStrLn ,(msg dflags name))))))
+    (case forms
+      [form] (| ((<- (Just pkg) (code-to-mb-fs form))
+                 (work pkg)))
+      _ (invalid-form-error "in-package" forms))))
+
 ;; From `GHCi.UI.kindOfType'
 (defn (:: kind-cmd ReplAction)
   [forms]
@@ -738,6 +782,11 @@ paths from import directories."
                   (++ "Some flags have not been recognized: "
                       (intercalate ", " (map unLoc leftovers)))))))
           (<- _ (setSessionDynFlags dflags1))
+          (<- dflags2 getDynFlags)
+          (modifySession
+           (\ h (let ((= ic0 (hsc-IC h))
+                      (= ic1 (ic0 {ic-dflags dflags2})))
+                  (h {hsc-IC ic1}))))
           (return '(:begin))))
      (otherwise
       (finkelSrcError nil "set: empty-form"))))
@@ -806,6 +855,8 @@ paths from import directories."
         "show fully expanded result of FORM")
      (c "info" (Just ["NAME"]) info-cmd
         "show info of NAME")
+     (c "in-package" (Just ["PKG"]) in-package-cmd
+        "change current package to PKG")
      (c "kind" (Just ["TYPE"]) kind-cmd
         "show kind of TYPE")
      (c "load" (Just ["FILE"]) load-cmd

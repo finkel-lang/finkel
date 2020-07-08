@@ -24,8 +24,8 @@
    ;; hspec
    (Test.Hspec)
 
-   ;; finkel-kernel
-   (Language.Finkel)
+   ;; finkel-core
+   (Finkel.Prelude)
 
    ;; Internal
    (TestAux)))
@@ -88,6 +88,15 @@
          ;; info
          (ok '(repl-macro info putStr)
              "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
+
+         ;; in-package, using `make-symbol' to avoid name mangling.
+         (let ((= inpkg (make-symbol "in-package"))))
+         (ok `(repl-macro ,inpkg ghc)
+             "; current package set to `ghc'")
+         (ok `(repl-macro ,inpkg nosuchpkg)
+             "; package `nosuchpkg' not found")
+         (ok `(repl-macro ,inpkg main)
+             "; current package set to `main'")
 
          ;; kind
          (ok '(repl-macro kind Maybe)

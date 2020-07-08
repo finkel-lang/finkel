@@ -673,13 +673,11 @@ findNotCompiledImport hsc_env acc idecl = do
             --
             -- This workaround needs the 'UnitId' from REPL session to be set
             -- via "-this-unit-id" DynFlag option, to avoid loading modules from
-            -- linkable. The 'UnitId' been set from REPL need to be exactly same
-            -- as the 'UnitId' of package, including the hash part.
+            -- linkable. The 'UnitId' set from REPL need to exactly match the
+            -- 'UnitId' of package, including the hash part.
             --
-            -- mb_ts <- findTargetSourceMaybe name
-            -- return (fmap emptyTargetUnit mb_ts)
-            fmap (fmap emptyTargetUnit)
-                 (findTargetSourceMaybe (L (getLoc idecl) name))
+            mb_ts <- findTargetSourceMaybe (L (getLoc idecl) name)
+            return (fmap emptyTargetUnit mb_ts)
           | otherwise -> return Nothing
         where
           inSameUnit =
