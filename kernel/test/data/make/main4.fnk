@@ -1,4 +1,5 @@
 (:require M3 (greet))
+(:require Control.Monad)
 
 (module Main)
 

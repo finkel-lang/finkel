@@ -31,12 +31,21 @@ makeTests :: Spec
 makeTests = beforeAll_ (removeArtifacts odir) $ do
   showTargetTest
   pprTargetTest
-  buildFnk "main1.fnk"
-  buildFnk "main2.fnk"
-  buildFnk "main3.fnk"
-  buildFnk "main4.fnk"
-  buildFnk "main5.fnk"
+
+  -- Build bytecode
+  buildBytecode "main1.fnk"
+  buildBytecode "main2.fnk"
+  buildBytecode "main3.fnk"
+  buildByteCodeWith ["--fnk-dump-hs", "--fnk-debug", "-v2"] "main4.fnk"
+  buildBytecode "main5.fnk"
+
+  -- Build object codes
   buildC (odir </> "cbits1.c")
+  buildObj ["-fforce-recomp"] ["main5.fnk"]
+  buildObj [] ["cbits1.c", "cbits2.c", "cbits3.c", "main6.fnk"]
+  buildObj [] (map (odir </>) ["cbits1.o","cbits2.o","cbits3.o"] ++
+               ["main6.fnk"])
+  buildObj [] ["main6.fnk", "cbits1.c", "cbits2.c", "cbits3.c"]
 
 fnksrc1, hssrc1, othersrc1 :: TargetSource
 fnksrc1 = FnkSource "path1" "Foo" [] (initialSPState (fsLit "dummy") 1 1)
@@ -68,21 +77,28 @@ pprTargetTest =
       t hssrc1 "path2"
       t othersrc1 "path3"
 
-buildFnk :: FilePath -> Spec
-buildFnk = buildFile []
+buildBytecode :: FilePath -> Spec
+buildBytecode = buildByteCodeWith []
+
+buildByteCodeWith :: [String] -> FilePath -> Spec
+buildByteCodeWith extra file =
+  buildFiles (["-no-link", "-fbyte-code"] ++ extra) [file]
 
 buildC :: FilePath -> Spec
-buildC = buildFile ["-no-link"]
+buildC file = buildFiles ["-no-link"] [file]
 
-buildFile :: [String] -> FilePath -> Spec
-buildFile pre path =
-  describe ("file " ++ path) $
+buildObj :: [String] -> [FilePath] -> Spec
+buildObj = buildFiles
+
+buildFiles :: [String] -> [FilePath] -> Spec
+buildFiles pre paths =
+  describe ("file " ++ show paths) $
     it "should compile successfully" work
   where
     work
       | cProjectVersionInt == "810"
       , os == "mingw32"
-      , takeBaseName path `elem` skipped
+      , any (\path -> takeBaseName path `elem` skipped) paths
       = pendingWith "Not yet supported"
       | otherwise
       = do_work
@@ -98,7 +114,7 @@ buildFile pre path =
     do_work_with extra =
       runDefaultMain (extra ++ common_args ++ pre)
     common_args =
-      ["-no-link", "-fbyte-code", "-i.", "-i" ++ odir, "-v0", path]
+      ["-i.", "-i" ++ odir, "-v0"] ++ paths
 
 odir :: FilePath
 odir = "test" </> "data" </> "make"

@@ -12,7 +12,7 @@ module Language.Finkel.Make
 #include "Syntax.h"
 
 -- base
-import           Control.Monad                (unless, when)
+import           Control.Monad                (unless, void, when)
 import           Control.Monad.IO.Class       (MonadIO (..))
 import           Data.List                    (find, foldl')
 import           Data.Maybe                   (catMaybes, fromMaybe, isJust,
@@ -33,7 +33,7 @@ import           System.FilePath              (dropExtension, splitExtension,
 -- ghc
 import           BasicTypes                   (SuccessFlag (..))
 import           DriverPhases                 (HscSource (..), Phase (..))
-import           DriverPipeline               (compileOne', link, oneShot,
+import           DriverPipeline               (compileFile, compileOne', link,
                                                preprocess)
 import           DynFlags                     (DumpFlag (..), DynFlags (..),
                                                GeneralFlag (..), GhcLink (..),
@@ -108,6 +108,12 @@ import           HscTypes                     (throwErrors)
 
 #if MIN_VERSION_ghc(8,4,0)
 import           HscTypes                     (mkModuleGraph)
+#endif
+
+#if MIN_VERSION_ghc(8,10,0)
+import           CliOption                    (Option (..))
+#else
+import           DynFlags                     (Option (..))
 #endif
 
 -- time
@@ -277,20 +283,22 @@ make' pendings0 = do
     -- Target modules are empty, ready to compile pending modules to read time
     -- ModSummary.  Partition the modules, make read time ModSummaries, then
     -- sort via topSortModuleGraph, and recurse.
-    go acc i k [] pendings
-      | all (isOtherSource . fst) pendings =
-        -- All targets are other source, no need to worry about module
-        -- dependency analysis.
-        go acc i k pendings []
-      | otherwise = do
+    go acc i k [] pendings = do
         -- Mixed target sources in pending modules. Make read-time-mod-summaries
         -- from pending modules, make new graph, sort it, then recurse.
-        let (readies', pendings') = (pendings, [])
-        rt_mss <- mkReadTimeModSummaries readies'
+        let (readies0, pendings') = (pendings, [])
+
+        rt_mss <- mkReadTimeModSummaries readies0
+
         let pre_graph = mkModuleGraph' rt_mss
             graph = topSortModuleGraph True pre_graph Nothing
-            readies'' = sortTargets (flattenSCCs graph) readies'
-        go acc i k readies'' pendings'
+            readies1= sortTargets (flattenSCCs graph) readies0
+
+            -- No need to worry about module dependency analysis for OtherSource
+            -- inputs, they are ready to compile.
+            readies2 = readies1 ++ filter (isOtherSource . fst) readies0
+
+        go acc i k readies2 pendings'
 
     -- Compile ready-to-compile targets to ModSummary and HsModule. Input could
     -- be Finkel source code, Haskell source code, or something else. If Finkel
@@ -537,7 +545,7 @@ doMakeOne i total mb_sp ms src_modified = do
 -- Other than this, most recompilation checks are done in
 -- "DriverPipeLine.compileOne'" function, which is called in "doMakeOne".
 
--- XXX: Won't detect recompilation with 'require'd modules.
+-- XXX: Won't detect recompilation when 'require'd modules have changed.
 checkUpToDate :: ModSummary -> [ModSummary] -> Fnk Bool
 checkUpToDate ms dependencies =
   case ms_obj_date ms of
@@ -614,8 +622,9 @@ findRequiredModSummary :: HscEnv
                        -> Fnk (Maybe ModSummary)
 findRequiredModSummary hsc_env lmname = do
   -- Searching in reachable source paths before imported modules, because we
-  -- want to use the source modified time from home package modules, to support
-  -- recompilation of a module which requiring other home package modules.
+  -- want to use the source modified time from the current home package modules,
+  -- to support recompilation of a module which requiring other home package
+  -- modules.
   mb_ts <- findTargetSourceMaybe lmname
   case mb_ts of
     Just ts -> mkReadTimeModSummary (emptyTargetUnit ts)
@@ -717,11 +726,10 @@ mkReadTimeModSummary (target, mbphase) =
     HsSource file -> do
       mb_mdl <- compileToHsModule (target, mbphase)
       case mb_mdl of
-        Nothing          -> return Nothing
         Just (mdl, _, _) -> fmap Just (mkModSummary (Just file) mdl)
-    FnkSource file mn _form _sp -> do
-      ms <- mkModSummary' (Just file) (mkModuleName mn) [] Nothing
-      return (Just ms)
+        Nothing          -> return Nothing
+    FnkSource file mn _form _sp ->
+      Just <$> mkModSummary' (Just file) (mkModuleName mn) [] Nothing
     OtherSource _ -> return Nothing
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.
@@ -924,8 +932,7 @@ resetFnkEnv =
                             , envRequiredModuleNames = []
                             , envMakeDynFlags = Nothing})
 
-compileHsFile :: FilePath -> Maybe Phase
-               -> Fnk (HModule, DynFlags, [a])
+compileHsFile :: FilePath -> Maybe Phase -> Fnk (HModule, DynFlags, [a])
 compileHsFile source mbphase = do
   hsc_env <- getSession
   (dflags, source') <- liftIO (preprocess' hsc_env (source, mbphase))
@@ -939,25 +946,31 @@ compileHsFile source mbphase = do
 
 compileOtherFile :: FilePath -> Fnk ()
 compileOtherFile path = do
-  debugMake "compileOtherFile" ["Compiling other code:" <+> text path]
+  debugMake "compileOtherFile" ["Compiling OtherSource:" <+> text path]
   hsc_env <- getSession
-  liftIO (oneShot hsc_env StopLn [(path, Nothing)])
+  o_file <- liftIO (compileFile hsc_env StopLn (path, Nothing))
+  let dflags0 = hsc_dflags hsc_env
+      dflags1 = dflags0 {ldInputs = FileOption "" o_file : ldInputs dflags0}
+  void (setSessionDynFlags dflags1)
 
 -- | Link 'ModSummary's, when required.
 doLink :: [ModSummary] -> Fnk ()
 doLink mgraph = do
   guessOutputFile mgraph
   hsc_env <- getSession
-  let dflags1 = hsc_dflags hsc_env
-      main_mod = mainModIs dflags1
+
+  -- Following the works done in "GhcMake.load'".
+  let dflags = hsc_dflags hsc_env
+      main_mod = mainModIs dflags
       root_has_Main = any ((== main_mod) . ms_mod) mgraph
-      no_hs_main = gopt Opt_NoHsMain dflags1
-      doLinking = root_has_Main ||
-                  no_hs_main ||
-                  ghcLink dflags1 == LinkDynLib ||
-                  ghcLink dflags1 == LinkStaticLib
+      no_hs_main = gopt Opt_NoHsMain dflags
+      do_linking = root_has_Main ||
+                   no_hs_main ||
+                   ghcLink dflags == LinkDynLib ||
+                   ghcLink dflags == LinkStaticLib
   linkResult <-
-    liftIO (link (ghcLink dflags1) dflags1 doLinking (hsc_HPT hsc_env))
+    liftIO (link (ghcLink dflags) dflags do_linking (hsc_HPT hsc_env))
+
   case linkResult of
     Failed    -> failS "Language.Finkel.Make.doLink: link failed"
     Succeeded -> return ()

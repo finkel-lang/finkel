@@ -4,6 +4,9 @@ module MainTest
   ( mainTests
   ) where
 
+-- base
+import System.Exit (ExitCode(..))
+
 -- filepath
 import System.FilePath ((</>))
 
@@ -25,6 +28,7 @@ mainTests =
     finkelHelpTest
     finkelVersionTest
     finkelSupportedLanguagesTest
+    finkelUnknownFlagTest
 
 compileFile :: [String] -> FilePath -> Spec
 compileFile args file = describe ("file " ++ file) $
@@ -54,6 +58,12 @@ finkelSupportedLanguagesTest =
   trivialTest "option --fnk-languages"
               "should show supported language extensions"
               ["--fnk-languages"]
+
+finkelUnknownFlagTest :: Spec
+finkelUnknownFlagTest =
+  describe "invalid flag" $
+    it "should exit with failure with unknown flag" $
+      runDefaultMain ["--fnk-foo"] `shouldThrow` (== ExitFailure 1)
 
 trivialTest :: String -> String -> [String] -> Spec
 trivialTest desc label flags = describe desc $

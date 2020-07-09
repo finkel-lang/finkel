@@ -141,8 +141,8 @@ findFileInImportPaths dirs modName = do
         case ds of
           []    -> return mb_hs
           d:ds' -> do
-            -- Extension not yet sure for `aPath', so searching both of '.fnk'
-            -- and '.hs' files.
+            -- Extension not yet sure for `aPath', so searching both '.fnk' and
+            -- '.hs' files.
             let aPath = normalise (d </> moduleFileName')
                 hsPath = replaceExtension aPath ".hs"
             exists <- liftIO (doesFileExist aPath)

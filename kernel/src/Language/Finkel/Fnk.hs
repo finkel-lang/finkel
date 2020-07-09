@@ -23,6 +23,8 @@ module Language.Finkel.Fnk
 
   -- * Exception
   , FinkelException(..)
+  , throwFinkelException
+  , throwFinkelExceptionIO
   , handleFinkelException
 
   -- * Debugging
@@ -55,8 +57,8 @@ module Language.Finkel.Fnk
 #include "Syntax.h"
 
 -- base
-import           Control.Exception      (Exception (..), throwIO)
-import           Control.Monad          (unless, when)
+import           Control.Exception      (Exception (..), throw, throwIO)
+import           Control.Monad          (mplus, unless, when)
 
 #if !MIN_VERSION_ghc(8,8,0)
 import           Control.Monad.Fail     (MonadFail (..))
@@ -75,8 +77,7 @@ import qualified Data.Map               as Map
 -- ghc
 import           Bag                    (unitBag)
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
-                                         HasDynFlags (..), Language (..), gopt,
-                                         interpWays)
+                                         HasDynFlags (..), gopt, interpWays)
 import           ErrUtils               (MsgDoc, mkErrMsg)
 import           Exception              (ExceptionMonad (..), ghandle)
 import           FastString             (FastString, fsLit, unpackFS)
@@ -112,6 +113,13 @@ import           GHC.LanguageExtensions as LangExt
 import qualified Data.IntSet            as IntSet
 #endif
 
+-- Import for Option
+#if MIN_VERSION_ghc(8,10,0)
+import           CliOption              (showOpt)
+#else
+import           DynFlags               (showOpt)
+#endif
+
 -- Internal
 import           Language.Finkel.Form
 
@@ -127,8 +135,14 @@ newtype FinkelException = FinkelException String
 
 instance Exception FinkelException
 
+throwFinkelException :: FinkelException -> a
+throwFinkelException = throw
+
+throwFinkelExceptionIO :: FinkelException -> IO a
+throwFinkelExceptionIO = throwIO
+
 handleFinkelException :: ExceptionMonad m
-                  => (FinkelException -> m a) -> m a -> m a
+                      => (FinkelException -> m a) -> m a -> m a
 handleFinkelException = ghandle
 
 
@@ -360,7 +374,8 @@ dumpDynFlags label dflags =
     , "  interpWays:" <+> text (show interpWays)
     , "  importPaths:" <+> sep (map text (importPaths dflags))
     , "  optLevel:" <+> text (show (optLevel dflags))
-    , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)]
+    , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)
+    , "  ldInputs: " <+> sep (map (text . showOpt) (ldInputs dflags))]
 
 -- | Empty 'FnkEnv' for performing computation with 'Fnk'.
 emptyFnkEnv :: FnkEnv
@@ -405,10 +420,9 @@ insertMacro k v =
 lookupMacro :: FastString -> FnkEnv -> Maybe Macro
 lookupMacro name fnkc_env = go (envTmpMacros fnkc_env)
   where
-    go [] = Map.lookup name (envMacros fnkc_env)
-    go (t:ts)
-      | Just macro <- Map.lookup name t = Just macro
-      | otherwise = go ts
+    go []     = Map.lookup name (envMacros fnkc_env)
+    go (t:ts) = Map.lookup name t `mplus` go ts
+{-# INLINE lookupMacro #-}
 
 -- | Empty 'EnvMacros'.
 emptyEnvMacros :: EnvMacros

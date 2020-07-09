@@ -24,6 +24,8 @@ import           System.IO                    (BufferMode (..), hSetBuffering,
 import           System.Process               (rawSystem)
 
 -- ghc
+import           DriverPhases                 (isDynLibFilename,
+                                               isObjectFilename)
 import           DynFlags                     (DynFlags (..), GeneralFlag (..),
                                                HasDynFlags (..),
                                                defaultFatalMessager,
@@ -39,7 +41,11 @@ import           SrcLoc                       (mkGeneralLocated, unLoc)
 import           Util                         (looksLikeModuleName)
 
 #if MIN_VERSION_ghc(8,10,0)
+import           CliOption                    (Option (FileOption))
 import           DynFlags                     (HscTarget (..), gopt_set)
+#else
+import           DynFlags                     (Option (FileOption),
+                                               targetPlatform)
 #endif
 
 -- ghc-boot
@@ -99,8 +105,13 @@ defaultMainWith macros = do
        -- from this point.
        let (finkelopts, args1) = partitionFinkelOptions args0
            args2 = filter (/= "--make") args1
-           fnk_opts = parseFinkelOption finkelopts
-           fnk_env0 = opt2env fnk_opts
+
+       fnk_opts <- handleFinkelException
+                     (\(FinkelException msg) ->
+                         putStrLn msg >> printBriefUsage >> exitFailure)
+                     (parseFinkelOption finkelopts)
+
+       let fnk_env0 = opt2env fnk_opts
 
            -- Using macros from argument as first argument to 'mergeMacros', so
            -- that the caller of this function can have a chance to override the
@@ -110,8 +121,9 @@ defaultMainWith macros = do
 
            fnk_env1 = fnk_env0 { envDefaultMacros = macros'
                                , envMacros = macros' }
-           next | Just h <- finkelHelp fnk_opts = printFinkelHelp h
-                | otherwise                     = main' fnk_env1 args1 args2
+           next = maybe (main' fnk_env1 args1 args2)
+                        printFinkelHelp
+                        (finkelHelp fnk_opts)
 
        -- XXX: Handle '-B' option properly.
        next
@@ -144,9 +156,10 @@ main'' orig_args ghc_args = do
       -- 8.10.1.  The use of `noArgM' and `pure $ gopt_set ...' for
       -- "-fbyte-code" option in "compiler/main/DynFlags.hs" is ignoring the
       -- updated hscTarget ...
-      dflags1b | "-fbyte-code" `elem` ghc_args
-               = gopt_set (dflags1 {hscTarget=HscInterpreted}) Opt_ByteCode
-               | otherwise = dflags1
+      dflags1b =
+        if "-fbyte-code" `elem` ghc_args
+           then gopt_set (dflags1 {hscTarget=HscInterpreted}) Opt_ByteCode
+           else dflags1
 #else
       dflags1b = dflags1
 #endif
@@ -154,30 +167,39 @@ main'' orig_args ghc_args = do
   (dflags2, lfileish, warnings) <- parseDynamicFlagsCmdLine dflags1b largs
 
   let fileish = map unLoc lfileish
+      platform = targetPlatform dflags2
+      isObjeish x = isObjectFilename platform x || isDynLibFilename platform x
 
-      -- Partition objects and source codes in args. Delegate to raw ghc when
-      -- source codes were null. Don't bother with ldInput, delegate the linking
-      -- work to raw ghc.
-      (srcs, _non_srcs) = partition isSourceTarget fileish
+      -- Partition source-code-ish from object-ish in file-ish arguments.
+      (objish, srcish) = partition isObjeish fileish
+
+      -- Partition Finkel and Haskell source codes in args. Delegate to raw ghc
+      -- when source codes were null. Don't bother with ldInput, delegate the
+      -- linking work to raw ghc.
+      (srcs, non_srcs) = partition isSourceTarget srcish
 
   case srcs of
      [] -> liftIO (rawGhc orig_args)
      _  -> do
+       -- Update ld inputs with object file inputs, as done in Main.hs of ghc.
+       let ld_inputs = map (FileOption "") objish ++ ldInputs dflags2
+           dflags3 = dflags2 {ldInputs = ld_inputs}
+
        -- Using 'setDynFlags' instead of 'setSessionDynFlags', since
        -- 'setSessionDynFlags' will be called from 'initSessionForMake' below.
-       setDynFlags dflags2
+       setDynFlags dflags3
 
        -- Some IO works. Check unknown flags, and update uniq supply. See Note
        -- [Initialization of UniqSupply] in 'Language.Finkel.Fnk'.
        liftIO (do checkUnknownFlags fileish
-                  initUniqSupply' (initialUnique dflags2)
-                                  (uniqueIncrement dflags2))
+                  initUniqSupply' (initialUnique dflags3)
+                                  (uniqueIncrement dflags3))
 
        -- Show DynFlags warnings.
        handleSourceError
          (\e -> do printException e
                    liftIO exitFailure)
-         (liftIO (handleFlagWarnings dflags2 warnings))
+         (liftIO (handleFlagWarnings dflags3 warnings))
 
        -- Initialization works for Finkel.
        initSessionForMake
@@ -185,11 +207,13 @@ main'' orig_args ghc_args = do
        -- At the moment, compiling with phase specification are not supported,
        -- phase is always set to 'Nothing'.
        let phased_srcs = map phase_it srcs
+           phased_non_srcs = map phase_it non_srcs
+           phased_inputs = phased_srcs ++ phased_non_srcs
            phase_it path = (on_the_cmdline (normalise path), Nothing)
-           force_recomp = gopt Opt_ForceRecomp dflags2
+           force_recomp = gopt Opt_ForceRecomp dflags3
 
        -- Do the `make' work.
-       make phased_srcs False force_recomp (outputFile dflags2)
+       make phased_inputs False force_recomp (outputFile dflags3)
 
 
 -- ---------------------------------------------------------------------
@@ -221,11 +245,13 @@ defaultFinkelOption = FinkelOption
 partitionFinkelOptions :: [String] -> ([String], [String])
 partitionFinkelOptions = partition ("--fnk-" `isPrefixOf`)
 
-parseFinkelOption :: [String] -> FinkelOption
+parseFinkelOption :: [String] -> IO FinkelOption
 parseFinkelOption args =
   case getOpt Permute finkelOptDescrs args of
-    (o,_,[]) -> foldl (flip id) defaultFinkelOption o
-    (_,_,es) -> error (concat es)
+    (o,_,[]) -> pure $ foldl (flip id) defaultFinkelOption o
+    (_,_,es) -> do
+      me <- getProgName
+      throwFinkelExceptionIO (FinkelException (me ++ ": " ++ concat es))
 
 finkelOptDescrs :: [OptDescr (FinkelOption -> FinkelOption)]
 finkelOptDescrs =
@@ -274,6 +300,10 @@ printFinkelUsage = do
       , ""
       , usageInfo "OPTIONS:\n" finkelOptDescrs
       , "  Other options are passed to ghc." ]
+
+printBriefUsage :: IO ()
+printBriefUsage =
+  putStrLn "Usage: For basic information, try the `--fnk-help' option."
 
 printLanguages :: IO ()
 printLanguages =
@@ -333,8 +363,7 @@ checkUnknownFlags fileish = do
 -- | True if given 'String' was module name, Finkel source file, or
 -- Haskell source file.
 isSourceTarget :: String -> Bool
-isSourceTarget str =
-  looksLikeModuleName str || isFnkFile str || isHsFile str
+isSourceTarget str = looksLikeModuleName str || isFnkFile str || isHsFile str
 
 -- | Until ghc-8.6.0, 'configureHandleEncoding' did not exist.
 configureHandleEncoding' :: IO ()
