@@ -32,11 +32,6 @@ module Language.Finkel.Fnk
   , getFnkDebug
   , dumpDynFlags
 
-  -- * FlagSet
-  , FlagSet
-  , emptyFlagSet
-  , flagSetToIntList
-
   -- * Macro related functions
   , emptyEnvMacros
   , insertMacro
@@ -102,17 +97,6 @@ import           Var                    (varType)
 
 import           GHC_Hs_ImpExp          (simpleImportDecl)
 
--- Import for FlagSet
-#if MIN_VERSION_ghc(8,4,0)
--- ghc
-import qualified EnumSet
--- ghc-boot
-import           GHC.LanguageExtensions as LangExt
-#else
--- containers
-import qualified Data.IntSet            as IntSet
-#endif
-
 -- Import for Option
 #if MIN_VERSION_ghc(8,10,0)
 import           CliOption              (showOpt)
@@ -144,39 +128,6 @@ throwFinkelExceptionIO = throwIO
 handleFinkelException :: ExceptionMonad m
                       => (FinkelException -> m a) -> m a -> m a
 handleFinkelException = ghandle
-
-
--- ---------------------------------------------------------------------
---
--- FlagSet
---
--- ---------------------------------------------------------------------
-
--- | Type synonym for ghc version compatibility. Used to hold set of
--- language extension bits.
-type FlagSet =
-#if MIN_VERSION_ghc(8,4,0)
-  EnumSet.EnumSet LangExt.Extension
-#else
-  IntSet.IntSet
-#endif
-
--- | Convert 'FlagSet' to list of 'Int' representation.
-flagSetToIntList :: FlagSet -> [Int]
-flagSetToIntList =
-#if MIN_VERSION_ghc(8,4,0)
-  map fromEnum . EnumSet.toList
-#else
-  IntSet.toList
-#endif
-
--- | Auxiliary function for empty language extension flag set.
-emptyFlagSet :: FlagSet
-#if MIN_VERSION_ghc(8,4,0)
-emptyFlagSet = EnumSet.empty
-#else
-emptyFlagSet = IntSet.empty
-#endif
 
 
 -- ---------------------------------------------------------------------
