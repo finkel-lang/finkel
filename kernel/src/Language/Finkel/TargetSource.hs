@@ -68,20 +68,16 @@ data TargetSource
 
 instance Show TargetSource where
   show s = case s of
-    FnkSource path mdl _ _sp ->
-      concat ["FnkSource ", show path, " ", mdl, " "]
-    HsSource path -> "HsSource " ++ show path
-    OtherSource path -> "OtherSource " ++ show path
+    FnkSource path mdl _ _sp -> unwords ["FnkSource", show path, mdl]
+    HsSource path            -> "HsSource " ++ show path
+    OtherSource path         -> "OtherSource " ++ show path
 
 instance Outputable TargetSource where
   ppr s =
     case s of
-      FnkSource path mdl _ _ ->
-        sep [text "FnkSource", text path, text mdl]
-      HsSource path          ->
-        sep [text "HsSource", text path]
-      OtherSource path       ->
-        sep [text "OtherSource", text path]
+      FnkSource path mdl _ _ -> sep [text "FnkSource", text path, text mdl]
+      HsSource path          -> sep [text "HsSource", text path]
+      OtherSource path       -> sep [text "OtherSource", text path]
 
 -- | Get the file path of given 'TargetSource'.
 targetSourcePath :: TargetSource -> FilePath
@@ -108,15 +104,16 @@ isHsFile path = takeExtension path `elem` [".hs", ".lhs"]
 
 -- | Construct module name from given 'String'.
 asModuleName :: String -> String
-asModuleName name
-   | looksLikeModuleName name = name
-   | otherwise                = map sep_to_dot (concat names)
-   where
-     names = dropWhile (not . isUpper . head)
-                       (splitPath (dropExtension name))
-     sep_to_dot c
-       | c == pathSeparator = '.'
-       | otherwise          = c
+asModuleName name =
+  if looksLikeModuleName name
+     then name
+     else map sep_to_dot (concat names)
+  where
+    names = dropWhile (not . isUpper . head) (splitPath (dropExtension name))
+    sep_to_dot c =
+      if c == pathSeparator
+         then '.'
+         else c
 
 -- | Find source code file path by module name.
 --
@@ -134,9 +131,9 @@ findFileInImportPaths :: MonadIO m
 findFileInImportPaths dirs modName = do
   let suffix = takeExtension modName
       moduleFileName = moduleNameSlashes (mkModuleName modName)
-      moduleFileName'
-        | suffix `elem` [".fnk", ".hs", ".c"] = modName
-        | otherwise = moduleFileName <.> "fnk"
+      moduleFileName' = if suffix `elem` [".fnk", ".hs", ".c"]
+                           then modName
+                           else moduleFileName <.> "fnk"
       search mb_hs ds =
         case ds of
           []    -> return mb_hs
@@ -153,18 +150,17 @@ findFileInImportPaths dirs modName = do
                  if exists'
                     then search (mb_hs `mplus` Just hsPath) ds'
                     else search mb_hs ds'
-      dirs' | "." `elem` dirs = dirs
-            | otherwise       = dirs ++ ["."]
-  mb_found <- search Nothing dirs'
-  return mb_found
+      dirs' = if "." `elem` dirs
+                 then dirs
+                 else dirs ++ ["."]
+  search Nothing dirs'
 
 -- | Find 'TargetSource' from command line argument. This function throws
 -- 'FinkelException' when the target source was not found.
 findTargetSource :: Located String -> Fnk TargetSource
 findTargetSource (L l modNameOrFilePath)= do
   dflags <- getDynFlags
-  mb_inputPath <-
-    findFileInImportPaths (importPaths dflags) modNameOrFilePath
+  mb_inputPath <- findFileInImportPaths (importPaths dflags) modNameOrFilePath
   let detectSource path
         | isFnkFile path =
           do contents <- liftIO (hGetStringBuffer path)

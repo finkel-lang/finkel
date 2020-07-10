@@ -153,9 +153,9 @@ expandTest = do
     it "should return nil" $ do
       ret <- expand1_fn nil
       ret `shouldBe` nil
-  describe "expand-1 of (quote 42.0)" $
+  describe "expand-1 of (:quote 42.0)" $
     it "should return non-empty form" $ do
-      let form = toCode (List [toCode $ aSymbol "quote"
+      let form = toCode (List [toCode $ aSymbol ":quote"
                               ,toCode $ aFractional (42.0 :: Double)])
       ret <- expand1_fn form
       length ret `shouldSatisfy` (>= 1)

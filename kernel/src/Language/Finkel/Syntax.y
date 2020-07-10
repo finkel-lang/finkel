@@ -60,7 +60,6 @@ import Language.Finkel.Syntax.SynUtils
 %name p_entities entities
 
 %name p_imports imports
-%name p_import import
 %name p_limport limport
 
 %name p_top_decls top_decls

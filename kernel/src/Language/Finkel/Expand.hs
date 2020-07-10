@@ -141,8 +141,7 @@ withShadowing toShadow fnkc = do
   fnkc_env <- getFnkEnv
   let emacros = envMacros fnkc_env
       tmacros = envTmpMacros fnkc_env
-      f name _ | name `elem` toShadow = False
-               | otherwise            = True
+      f name _ = name `notElem` toShadow
   putFnkEnv (fnkc_env { envMacros = Map.filterWithKey f emacros
                       , envTmpMacros = map (Map.filterWithKey f) tmacros })
   result <- fnkc
@@ -153,9 +152,10 @@ withShadowing toShadow fnkc = do
 expands :: [Code] -> Fnk [Code]
 expands forms = do
   fnk_env <- getFnkEnv
-  let macro_names me
-        | null me   = nest 2 "None"
-        | otherwise =  nest 2 (fsep (map ppr (Map.keys me)))
+  let macro_names me =
+        if null me
+           then nest 2 "None"
+           else nest 2 (fsep (map ppr (Map.keys me)))
       tmp_macros = Map.unions (envTmpMacros fnk_env)
   debug "expands"
         [ "global macros:",  macro_names (envMacros fnk_env)

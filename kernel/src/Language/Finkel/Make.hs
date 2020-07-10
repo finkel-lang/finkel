@@ -174,8 +174,9 @@ make infiles no_link force_recomp mb_output = do
   dflags0 <- getDynFlags
   let dflags1 = dflags0 { ghcMode = CompManager
                         , outputFile = mb_output }
-      dflags2 | force_recomp = gopt_set dflags1 Opt_ForceRecomp
-              | otherwise    = gopt_unset dflags1 Opt_ForceRecomp
+      dflags2 = if force_recomp
+                   then gopt_set dflags1 Opt_ForceRecomp
+                   else gopt_unset dflags1 Opt_ForceRecomp
   setDynFlags dflags2
   dflags3 <- getDynFlags
   dumpDynFlags "Language.Finkel.Make.make" dflags3
@@ -428,8 +429,9 @@ makeOne i total mb_sp summary required_summaries = timeIt label go
       up_to_date <- checkUpToDate summary required_summaries
       debugMake "makeOne" ["up_to_date:" <+> ppr up_to_date]
       let midx = total - i + 1
-          src_modified | up_to_date = SourceUnmodified
-                       | otherwise  = SourceModified
+          src_modified = if up_to_date
+                            then SourceUnmodified
+                            else SourceModified
       summary' <- doMakeOne midx total mb_sp summary src_modified
 
       -- Restore the original DynFlags.
@@ -559,10 +561,10 @@ checkUpToDate ms dependencies =
       let mn = ms_mod_name ms
           sccs_without_self = filter (\m -> mn /= ms_mod_name m)
                                      dependencies
-          object_ok m
-            | Just t <- ms_obj_date m = t >= ms_hs_date ms
-                                        && same_as_prev t
-            | otherwise = False
+          object_ok m =
+            case ms_obj_date m of
+              Just t -> t >= ms_hs_date ms && same_as_prev t
+              _      -> False
           same_as_prev t =
             case lookupHpt hpt mn of
               Just hmi | Just l <- hm_linkable hmi ->
@@ -797,25 +799,21 @@ mkModSummary' mbfile modName imports mb_pm = do
 dumpModSummary :: Maybe SPState -> ModSummary -> Fnk ()
 dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
   where
-    work pm
-      | isFnkFile orig_path = do
-        contents <- gen pm
-        fnkc_env <- getFnkEnv
-        when (envDumpHs fnkc_env)
-             (liftIO
-                (do putStrLn (unwords [colons, orig_path, colons])
-                    putStrLn ""
-                    putStr contents))
-        case envHsDir fnkc_env of
-          Just dir -> doWrite dir contents
-          Nothing  -> return ()
-      | otherwise           = return ()
-    doWrite dir contents = do
+    work pm = when (isFnkFile orig_path) $ do
+      contents <- gen pm
+      fnkc_env <- getFnkEnv
+      when (envDumpHs fnkc_env)
+           (liftIO
+              (do putStrLn (unwords [colons, orig_path, colons])
+                  putStrLn ""
+                  putStr contents))
+      mapM_ (doWrite contents) (envHsDir fnkc_env)
+    doWrite contents dir = do
        let mname = moduleName (ms_mod ms)
            bname = takeBaseName orig_path
-           file_name
-             | looksLikeModuleName bname = moduleNameSlashes mname
-             | otherwise                 = bname
+           file_name = if looksLikeModuleName bname
+                          then moduleNameSlashes mname
+                          else bname
            out_path = dir </> file_name <.> "hs"
            out_dir = takeDirectory out_path
        debugMake "dumpModSummary" ["Writing to" <+> text out_path]

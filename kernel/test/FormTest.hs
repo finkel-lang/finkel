@@ -471,6 +471,7 @@ homoiconicTests = do
   t (Semigroup.WrapMonoid True)
   t (42 :: Natural)
   t (Atom (aIntegral (42 :: Int)))
+  t (LForm (genSrc (Atom (aIntegral (42 :: Int)))))
   t [True, False]
   t [EQ, LT, GT]
   t (Just (42 :: Int))

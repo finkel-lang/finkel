@@ -13,7 +13,6 @@ module Language.Finkel.SpecialForms
 #include "Syntax.h"
 
 -- base
-import Control.Exception               (throw)
 import Control.Monad                   (foldM, unless, when)
 import Control.Monad.IO.Class          (MonadIO (..))
 import Data.Maybe                      (catMaybes)
@@ -154,9 +153,9 @@ unquoteSplice form =
     HsList xs           -> xs
     Atom AUnit          -> []
     Atom (AString _ xs) -> map toCode (unpackFS xs)
-    _                   -> throw (FinkelException
-                                    ("unquote splice: got " ++
-                                     show (toCode form)))
+    _                   ->
+      throwFinkelException
+        (FinkelException ("unquote splice: got " ++ show (toCode form)))
 
 
 -- ---------------------------------------------------------------------

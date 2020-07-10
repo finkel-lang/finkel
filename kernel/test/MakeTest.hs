@@ -29,8 +29,7 @@ import TestAux
 
 makeTests :: Spec
 makeTests = beforeAll_ (removeArtifacts odir) $ do
-  showTargetTest
-  pprTargetTest
+  targetSourceTests
 
   -- Build bytecode
   buildBytecode "main1.fnk"
@@ -41,11 +40,15 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
 
   -- Build object codes
   buildC (odir </> "cbits1.c")
-  buildObj ["-fforce-recomp"] ["main5.fnk"]
+  buildObj ["-fforce-recomp", "-ddump-parsed", "-ddump-parsed-ast"
+           ,"-dsource-stats"]
+           ["main5.fnk"]
   buildObj [] ["cbits1.c", "cbits2.c", "cbits3.c", "main6.fnk"]
   buildObj [] (map (odir </>) ["cbits1.o","cbits2.o","cbits3.o"] ++
                ["main6.fnk"])
   buildObj [] ["main6.fnk", "cbits1.c", "cbits2.c", "cbits3.c"]
+  buildObj ["--fnk-dump-hs", "--fnk-hsdir=" ++ (odir </> "gen")]
+           ["M5", "M4" </> "A.fnk", "M4" </> "B.fnk", "M4", "main7.fnk"]
 
 fnksrc1, hssrc1, othersrc1 :: TargetSource
 fnksrc1 = FnkSource "path1" "Foo" [] (initialSPState (fsLit "dummy") 1 1)
@@ -55,6 +58,13 @@ othersrc1 = OtherSource "path3"
 subseq :: Eq a => [a] -> [a] -> Bool
 subseq xs ys = any (isPrefixOf xs) (tails ys)
 
+targetSourceTests :: Spec
+targetSourceTests =
+  describe "TargetSource" $ do
+    showTargetTest
+    pprTargetTest
+    asModuleNameTest
+
 showTargetTest :: Spec
 showTargetTest = do
   describe "show TargetSource" $
@@ -62,6 +72,12 @@ showTargetTest = do
       show fnksrc1 `shouldSatisfy` subseq "path1"
       show hssrc1 `shouldSatisfy` subseq "path2"
       show othersrc1 `shouldSatisfy` subseq "path3"
+
+asModuleNameTest :: Spec
+asModuleNameTest =
+  describe "asModuleName" $
+    it "should replace path separators" $
+      asModuleName ("Foo" </> "Bar" </> "Buzz.fnk") `shouldBe` "Foo.Bar.Buzz"
 
 runOutputable :: (MonadIO m, Outputable a) => a -> m String
 runOutputable obj =
