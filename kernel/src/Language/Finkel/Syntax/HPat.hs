@@ -65,19 +65,18 @@ import Language.Finkel.Syntax.HExpr
 -- parentheses in the AST seemed difficult with the ECP approach.
 
 b_intP :: Code -> Builder HPat
-b_intP (LForm (L l form))
-  | (Atom (AInteger n)) <- form
-  = return (cL l (mkNPat (L l (mkHsIntegral_compat n)) Nothing))
-  | otherwise
-  = builderError
+b_intP (LForm (L l form)) =
+  case form of
+    Atom (AInteger n) ->
+      return $! cL l (mkNPat (L l (mkHsIntegral_compat n)) Nothing)
+    _                 -> builderError
 {-# INLINE b_intP #-}
 
 b_stringP :: Code -> Builder HPat
-b_stringP (LForm (L l form))
-  | (Atom (AString _ str)) <- form
-  = return (cL l (mkNPat (L l (lit str)) Nothing))
-  | otherwise
-  = builderError
+b_stringP (LForm (L l form)) =
+  case form of
+    Atom (AString _ str) -> return $! cL l (mkNPat (L l (lit str)) Nothing)
+    _                    -> builderError
   where
     lit str = hsIsString (SourceText (show str)) str
     hsIsString s t =
@@ -89,17 +88,19 @@ b_stringP (LForm (L l form))
 {-# INLINE b_stringP #-}
 
 b_charP :: Code -> Builder HPat
-b_charP (LForm (dL->L l form))
-  | (Atom (AChar _ c)) <- form = return (cL l (LitPat NOEXT (lit c)))
-  | otherwise                  = builderError
+b_charP (LForm (dL->L l form)) =
+  case form of
+    Atom (AChar _ c) -> return $! cL l (LitPat NOEXT (lit c))
+    _                -> builderError
   where
     lit c = HsChar (SourceText (show c)) c
 {-# INLINE b_charP #-}
 
 b_unitP :: Code -> Builder HPat
-b_unitP (LForm (dL->L l form))
-  | Atom AUnit <- form = return (cL l (mkTuplePat' []))
-  | otherwise          = builderError
+b_unitP (LForm (dL->L l form)) =
+  case form of
+    Atom AUnit -> return $! cL l (mkTuplePat' [])
+    _          -> builderError
 {-# INLINE b_unitP #-}
 
 b_wildP :: Code -> HPat
@@ -188,11 +189,11 @@ b_tupP (LForm (L l _)) ps = cL l (mkTuplePat' ps)
 {-# INLINE b_tupP #-}
 
 b_asP :: Code -> HPat -> Builder HPat
-b_asP (LForm (dL->L l form)) pat
-  | (Atom (ASymbol name)) <- form
-  = return (cL l (asPat (L l (mkRdrName name)) (mkParPat' pat)))
-  | otherwise
-  = builderError
+b_asP (LForm (dL->L l form)) pat =
+  case form of
+    Atom (ASymbol name) ->
+      return $! cL l (asPat (L l (mkRdrName name)) (mkParPat' pat))
+    _ -> builderError
   where
     asPat = AsPat NOEXT
 {-# INLINE b_asP #-}

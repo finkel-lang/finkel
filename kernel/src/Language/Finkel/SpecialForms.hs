@@ -108,7 +108,7 @@ quasiquote qual orig@(LForm (L l form)) =
       | otherwise         -> tList l [tSym l (toCodeS qual), x]
     List forms'
       | [q, body] <- forms'
-      , q == tSym l ":quasiquote"   -> qq (qq body)
+      , q == tSym l ":quasiquote"  -> qq (qq body)
       | any isUnquoteSplice forms' -> splicedList qListS forms'
       | otherwise                  -> nonSplicedList qListS forms'
     HsList forms'
@@ -165,12 +165,16 @@ unquoteSplice form =
 -- ---------------------------------------------------------------------
 
 coerceMacro :: DynFlags -> Code -> Fnk Macro
-coerceMacro dflags name
-  | LForm (L _ (Atom (ASymbol _))) <- name =
-    case evalBuilder dflags parseExpr [name] of
-      Right hexpr -> unsafeCoerce# <$> evalExpr hexpr
-      Left err    -> failS (syntaxErrMsg err)
-  | otherwise = failS ("coerceMacro: expecting name")
+coerceMacro dflags name =
+  case unCode name of
+    Atom (ASymbol _) -> go
+    _                -> failS ("coerceMacro: expecting name symbol")
+  where
+    go =
+      case evalBuilder dflags parseExpr [name] of
+        Right hexpr -> unsafeCoerce# <$> evalExpr hexpr
+        Left err    -> failS (syntaxErrMsg err)
+{-# INLINE coerceMacro #-}
 
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Fnk [TyThing]
 getTyThingsFromIDecl (L _ idecl) minfo = do
@@ -184,8 +188,9 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
           -- Import with `hiding' entities. Comparing 'Name' and 'RdrName' via
           -- OccName'.
           Just (True, ns)  -> do
-            let f n acc | nameOccName n `elem` ns' = acc
-                        | otherwise                = n : acc
+            let f n acc = if nameOccName n `elem` ns'
+                             then acc
+                             else n : acc
                 ns' = map (rdrNameOcc . unLoc) ns
             return (foldr f [] exportedNames)
 
@@ -236,12 +241,9 @@ withRequiredSettings act =
 requiredMessager :: Messager
 requiredMessager hsc_env mod_index recomp mod_summary =
   case recomp of
-    MustCompile -> showMsg "Compiling " (" [required]")
-    UpToDate
-      | verbosity dflags >= 2 -> showMsg "Skipping " ""
-      | otherwise             -> return ()
-    RecompBecause why ->
-      showMsg "Compiling " (" [required, " ++ why ++ "]")
+    MustCompile       -> showMsg "Compiling " (" [required]")
+    UpToDate          -> when (verbosity dflags >= 2) (showMsg "Skipping " "")
+    RecompBecause why -> showMsg "Compiling " (" [required, " ++ why ++ "]")
   where
     dflags = hsc_dflags hsc_env
     showMsg msg reason =

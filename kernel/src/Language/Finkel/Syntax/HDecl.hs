@@ -232,11 +232,11 @@ b_recFieldsD = RecCon . mkLocatedList
 b_recFieldD :: [Code] -> HType -> Maybe LHsDocString
             -> Builder HConDeclField
 b_recFieldD names ty mb_doc = do
-  let f (LForm (L l form))
-        | Atom (ASymbol name) <- form
-        = return (L l (mkFieldOcc (L l (mkRdrName name))))
-        | otherwise
-        = builderError
+  let f (LForm (L l form)) =
+        case form of
+          Atom (ASymbol name) ->
+            return (L l (mkFieldOcc (L l (mkRdrName name))))
+          _ -> builderError
   names' <- mapM f names
   let field = ConDeclField { cd_fld_names = names'
 #if MIN_VERSION_ghc(8,6,0)
@@ -353,9 +353,10 @@ b_tyfamD :: [(Located FastString, [HType], HType)]
          -> Code
          -> (FastString, [HTyVarBndr], Maybe HType)
          -> HDecl
-b_tyfamD insts
-  | null insts = mkFamilyDecl OpenTypeFamily
-  | otherwise  = mkFamilyDecl (ClosedTypeFamily (Just tfies))
+b_tyfamD insts =
+  if null insts
+     then mkFamilyDecl OpenTypeFamily
+     else mkFamilyDecl (ClosedTypeFamily (Just tfies))
   where
     tfies = map f insts
     f (L l name, argtys, ty) =
@@ -390,10 +391,11 @@ mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
 {-# INLINE mkFamilyDecl #-}
 
 b_dfltSigD :: HDecl -> Builder HDecl
-b_dfltSigD (dL->L l decl)
-  | SigD _EXT (TypeSig _EXT ids ty) <- decl
-  = return (cL l (sigD (ClassOpSig NOEXT True ids (hswc_body ty))))
-  | otherwise = builderError
+b_dfltSigD (dL->L l decl) =
+  case decl of
+    SigD _EXT (TypeSig _EXT ids ty) ->
+     return (cL l (sigD (ClassOpSig NOEXT True ids (hswc_body ty))))
+    _                               -> builderError
 {-# INLINE b_dfltSigD #-}
 
 -- See: "Convert.cvtDec".
@@ -487,23 +489,23 @@ b_defaultD types = L l (defD (defaultDecl types))
 {-# INLINE b_defaultD #-}
 
 b_fixityD :: FixityDirection -> Code -> [Code] -> Builder HDecl
-b_fixityD dir (LForm (L l form)) syms
-  | Atom (AInteger (IL {il_value=n})) <- form = do
-    let lname (LForm (L l0 x))
-          | (Atom (ASymbol name)) <- x
-          = return (L l0 (mkRdrName name))
-          | otherwise
-          = builderError
-        fixity = Fixity dir' (fromIntegral n) dir
-        dir' = case dir of
-                 InfixL -> SourceText "infixl"
-                 InfixR -> SourceText "infixr"
-                 InfixN -> SourceText "infix"
-        fixSig = FixSig NOEXT
-        fixitySig = FixitySig NOEXT
-    names <- mapM lname syms
-    return (L l (sigD (fixSig (fixitySig names fixity))))
-  | otherwise = builderError
+b_fixityD dir (LForm (L l form)) syms =
+  case form of
+    Atom (AInteger (IL {il_value=n})) -> do
+      let lname (LForm (L l0 x)) =
+            case x of
+              Atom (ASymbol name) -> return (L l0 (mkRdrName name))
+              _                   -> builderError
+          fixity = Fixity dir' (fromIntegral n) dir
+          dir' = case dir of
+                   InfixL -> SourceText "infixl"
+                   InfixR -> SourceText "infixr"
+                   InfixN -> SourceText "infix"
+          fixSig = FixSig NOEXT
+          fixitySig = FixitySig NOEXT
+      names <- mapM lname syms
+      return (L l (sigD (fixSig (fixitySig names fixity))))
+    _ -> builderError
 {-# INLINE b_fixityD #-}
 
 b_ffiD :: Code -> Code -> HCCallConv -> Maybe (Located Safety)
@@ -552,27 +554,29 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty) =
 {-# INLINE b_ffiD #-}
 
 b_callConv :: Code -> Builder (Located CCallConv)
-b_callConv (LForm (L l form))
-  | Atom (ASymbol sym) <- form =
-    case sym of
-      "capi"       -> return (L l CApiConv)
-      "ccall"      -> return (L l CCallConv)
-      "prim"       -> return (L l PrimCallConv)
-      "javascript" -> return (L l JavaScriptCallConv)
-      "stdcall"    -> return (L l StdCallConv)
-      _            -> builderError
-  | otherwise = builderError
+b_callConv (LForm (L l form)) =
+  case form of
+    Atom (ASymbol sym)
+      | sym == "capi" -> r CApiConv
+      | sym == "ccall" -> r CCallConv
+      | sym == "prim" -> r PrimCallConv
+      | sym == "javascript" -> r JavaScriptCallConv
+      | sym == "stdcall" -> r StdCallConv
+    _ -> builderError
+  where
+    r = return . L l
 {-# INLINE b_callConv #-}
 
 b_safety :: Code -> Builder (Located Safety)
-b_safety (LForm (L l form))
-  | Atom (ASymbol sym) <- form =
-    case sym of
-      "interruptible" -> return (L l PlayInterruptible)
-      "safe"          -> return (L l PlaySafe)
-      "unsafe"        -> return (L l PlayRisky)
-      _               -> builderError
-  | otherwise = builderError
+b_safety (LForm (L l form)) =
+  case form of
+    Atom (ASymbol sym) ->
+      case sym of
+        "interruptible" -> return (L l PlayInterruptible)
+        "safe"          -> return (L l PlaySafe)
+        "unsafe"        -> return (L l PlayRisky)
+        _               -> builderError
+    _ -> builderError
 {-# INLINE b_safety #-}
 
 b_funOrPatD :: Code -> [HPat] -> ([HGRHS], [HDecl]) -> Builder HDecl
@@ -640,15 +644,14 @@ b_patBindD (grhss,decls) (dL->L l pat) =
 b_tsigD :: [Code] -> ([HType], HType) -> Builder HDecl
 b_tsigD names (ctxts,typ0) = do
   let typ' = mkLHsSigWcType qtyp
-      qtyp | null ctxts = typ1
-           | otherwise =
-             L l (mkHsQualTy_compat (mkLocatedList ctxts) typ1)
+      qtyp = if null ctxts
+                then typ1
+                else L l (mkHsQualTy_compat (mkLocatedList ctxts) typ1)
       typ1 = unParTy typ0
-      mkName form
-        | (LForm (L l1 (Atom (ASymbol name)))) <- form
-        = return (L l1 (mkRdrName name))
-        | otherwise
-        = builderError
+      mkName form =
+        case form of
+          LForm (L l1 (Atom (ASymbol name))) -> return (L l1 (mkRdrName name))
+          _ -> builderError
       l = getLoc (mkLocatedForm names)
       typeSig = TypeSig NOEXT
   names' <- mapM mkName names
@@ -656,12 +659,12 @@ b_tsigD names (ctxts,typ0) = do
 {-# INLINE b_tsigD #-}
 
 b_inlineD :: InlineSpec -> Maybe Activation -> Code -> Builder HDecl
-b_inlineD ispec mb_act (LForm (L l form))
-  | Atom (ASymbol name) <- form
-  = let inlineSig = InlineSig NOEXT
-    in  return (L l (sigD (inlineSig (L l (mkRdrName name)) ipragma)))
-  | otherwise
-  = builderError
+b_inlineD ispec mb_act (LForm (L l form)) =
+  case form of
+    Atom (ASymbol name) ->
+      let inlineSig = InlineSig NOEXT
+      in  return (L l (sigD (inlineSig (L l (mkRdrName name)) ipragma)))
+    _ -> builderError
   where
     ipragma = mkInlinePragma (SourceText source) (ispec, FunLike) mb_act
     source = case ispec of
@@ -706,17 +709,18 @@ specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig) = do
 {-# INLINE specializeBuilder #-}
 
 b_docnextD :: Code -> Builder HDecl
-b_docnextD (LForm (L l form))
-  | Atom (AString _ str) <- form =
-    return $! L l (DocD NOEXT (docCommentNext str))
-  | otherwise                  = builderError
+b_docnextD (LForm (L l form)) =
+  case form of
+    Atom (AString _ str) -> return $! L l (DocD NOEXT (docCommentNext str))
+    _                    -> builderError
 {-# INLINE b_docnextD #-}
 
 b_docprevD :: Code -> Builder HDecl
-b_docprevD (LForm (L l form))
-  | Atom (AString _ str) <- form =
-    return $! L l (DocD NOEXT (DocCommentPrev (hsDocString str)))
-  | otherwise                  = builderError
+b_docprevD (LForm (L l form)) =
+  case form of
+    Atom (AString _ str) ->
+      return $! L l (DocD NOEXT (DocCommentPrev (hsDocString str)))
+    _ -> builderError
 {-# INLINE b_docprevD #-}
 
 b_docGroupD :: Int -> Code -> Builder HDecl

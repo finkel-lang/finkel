@@ -114,36 +114,38 @@ b_anonWildT (LForm (L l _)) = L l mkAnonWildCardTy
 {-# INLINE b_anonWildT #-}
 
 b_symT :: Code -> Builder HType
-b_symT whole@(LForm (L l form))
-  | Atom (ASymbol name) <- form =
-    let ty =
-          case splitQualName name of
-            Nothing
-              | ',' == x  -> tv (getRdrName (tupleTyCon Boxed arity))
-              | '!' == x  ->
-                bang (tv (mkUnqual (namespace xs) xs))
-              -- XXX: Handle "StarIsType" language extension. Name of
-              -- the type kind could be obtained from
-              -- "TysWiredIn.liftedTypeKindTyCon".
-              | '*' == x && nullFS xs ->
+b_symT whole@(LForm (L l form)) =
+  case form of
+    Atom (ASymbol name) -> return $! ty name
+    _                   -> builderError
+  where
+    ty name =
+      case splitQualName name of
+        Nothing
+          | ',' == x  -> tv (getRdrName (tupleTyCon Boxed arity))
+          | '!' == x  ->
+            bang (tv (mkUnqual (namespace xs) xs))
+          -- XXX: Handle "StarIsType" language extension. Name of
+          -- the type kind could be obtained from
+          -- "TysWiredIn.liftedTypeKindTyCon".
+          | '*' == x && nullFS xs ->
 #if MIN_VERSION_ghc(8,6,0)
-                L l (HsStarTy NOEXT False)
+            L l (HsStarTy NOEXT False)
 #else
-                tv (getRdrName starKindTyCon)
+            tv (getRdrName starKindTyCon)
 #endif
-              | otherwise -> tv (mkUnqual (namespace name) name)
-            Just qual -> tv (mkQual (namespace name) qual)
-        namespace ns
-          -- Using "isLexVarSym" for "TypeOperator" extension.
-          | isLexCon ns || isLexVarSym ns = tcName
-          | otherwise                     = tvName
+          | otherwise -> tv (mkUnqual (namespace name) name)
+        Just qual -> tv (mkQual (namespace name) qual)
+      where
         x = headFS name
         xs = tailFS name
         arity = 1 + lengthFS name
-        tv t = L l (hsTyVar NotPromoted (L l t))
-        bang = b_bangT whole
-    in  return ty
-  | otherwise = builderError
+    namespace ns
+      -- Using "isLexVarSym" for "TypeOperator" extension.
+      | isLexCon ns || isLexVarSym ns = tcName
+      | otherwise                     = tvName
+    tv t = L l (hsTyVar NotPromoted (L l t))
+    bang = b_bangT whole
 {-# INLINE b_symT #-}
 
 b_unitT :: Code -> HType
@@ -199,30 +201,32 @@ b_opOrAppT form@(LForm (L l ty)) typs
 {-# INLINE b_opOrAppT #-}
 
 b_prmConT :: Code -> Builder HType
-b_prmConT (LForm (L l form))
-  | Atom (AString _ str) <- form =
-    let name = str
-        rname =
-          case name of
-            ":" -> getRdrName consDataCon
-            _   -> maybe (mkUnqual (namespace name) name)
-                         (mkQual tcName)
-                         (splitQualName name)
-        namespace n
-          | isLexCon n    = tcName
-          | isLexVarSym n = tcName
-          | otherwise     = tvName
-    in  return (L l (hsTyVar iSPROMOTED (cL l rname)))
-  | otherwise = builderError
+b_prmConT (LForm (L l form)) =
+  case form of
+    Atom (AString _ str) -> return $! ty str
+    _                    -> builderError
+  where
+    ty name = L l (hsTyVar iSPROMOTED (cL l (rname name)))
+    rname name =
+      case name of
+       ":" -> getRdrName consDataCon
+       _   -> maybe (mkUnqual (namespace name) name)
+                    (mkQual tcName)
+                    (splitQualName name)
+    namespace n
+      | isLexCon n    = tcName
+      | isLexVarSym n = tcName
+      | otherwise     = tvName
+{-# INLINE b_prmConT #-}
 
 -- | 'True' when given form is for qSymbol. There are two situations:
 -- "qSymbol" (when compiling files) and "Language.Finkel.qSymbol" (from
 -- REPL) are used for quoted names after macro expansion.
 isQSymbol :: Form Atom -> Bool
-isQSymbol aform
-  | Atom (ASymbol qsym) <- aform
-  = qsym == "qSymbol" || qsym == "Language.Finkel.qSymbol"
-  | otherwise = False
+isQSymbol aform =
+  case aform of
+    Atom (ASymbol q) -> q == "qSymbol" || q== "Language.Finkel.qSymbol"
+    _                -> False
 {-# INLINE isQSymbol #-}
 
 b_appT :: [HType] -> Builder HType
@@ -323,11 +327,10 @@ b_prmTupT prsr typs =
 {-# INLINE b_prmTupT #-}
 
 isCommaSymbol :: Code -> Bool
-isCommaSymbol form
- | LForm (L _ (List [LForm (L _ qsym)
-                    ,LForm (L _ (Atom (AString _ ",")))])) <- form
- = isQSymbol qsym
- | otherwise = False
+isCommaSymbol (LForm (L _ form)) =
+  case form of
+    List [LForm (L _ q), LForm (L _ (Atom (AString _ ",")))] -> isQSymbol q
+    _                                                        -> False
 {-# INLINE isCommaSymbol #-}
 
 hsTupleTy :: HsTupleSort -> [HType] -> HsType PARSED

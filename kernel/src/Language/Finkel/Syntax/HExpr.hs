@@ -147,13 +147,11 @@ b_tsigE (LForm (L l _)) e0 (ctxt,t) =
 {-# INLINE b_tsigE #-}
 
 b_recConOrUpdE :: Code -> [(Located FastString,HExpr)] -> Builder HExpr
-b_recConOrUpdE whole@(LForm (L l form)) flds
-  | Atom (ASymbol name) <- form
-  , isLexCon name
-  = return (L l (mkRdrRecordCon (L l (mkVarRdrName name)) cflds))
-  | otherwise
-  = do v <- b_varE whole
-       return (L l (mkRdrRecordUpd v uflds))
+b_recConOrUpdE whole@ (LForm (L l form)) flds =
+  case form of
+    Atom (ASymbol name) | isLexCon name
+      -> return (L l (mkRdrRecordCon (L l (mkVarRdrName name)) cflds))
+    _ -> b_varE whole >>= \v -> return (L l (mkRdrRecordUpd v uflds))
   where
     cflds = HsRecFields { rec_flds = map mkcfld flds
                         , rec_dotdot = Nothing }
@@ -220,40 +218,37 @@ mkAppType (dL->expr@(L l _)) ty =
 #endif
 
 b_charE :: Code -> Builder HExpr
-b_charE (LForm (L l form))
-  | Atom (AChar st x) <- form
-  = return (L l (hsLit (HsChar st x)))
-  | otherwise
-  = builderError
+b_charE (LForm (L l form)) =
+  case form of
+    Atom (AChar st x) -> return (L l (hsLit (HsChar st x)))
+    _                 -> builderError
 {-# INLINE b_charE #-}
 
 b_stringE :: Code -> Builder HExpr
-b_stringE (LForm (L l form))
-  | Atom (AString st x) <- form
-  = return (L l (hsLit (HsString st x)))
-  | otherwise
-  = builderError
+b_stringE (LForm (L l form)) =
+  case form of
+    Atom (AString st x) -> return (L l (hsLit (HsString st x)))
+    _                   -> builderError
 {-# INLINE b_stringE #-}
 
 b_integerE :: Code -> Builder HExpr
-b_integerE (LForm (L l form))
-  | Atom (AInteger x) <- form
-  = if il_value x < 0
-       then return (L l (hsPar (expr x)))
-       else return (expr x)
-  | otherwise = builderError
+b_integerE (LForm (L l form)) =
+  case form of
+    Atom (AInteger x)
+      | il_value x < 0 -> return (L l (hsPar (expr x)))
+      | otherwise      -> return (expr x)
+    _                  -> builderError
   where
     expr x = L l (hsOverLit $! mkHsIntegral_compat x)
 {-# INLINE b_integerE #-}
 
 b_fracE :: Code -> Builder HExpr
-b_fracE (LForm (L l form))
-  | Atom (AFractional x) <- form
-  = if fl_value x < 0
-       then return (L l (hsPar (expr x)))
-       else return (expr x)
-  | otherwise
-  = builderError
+b_fracE (LForm (L l form)) =
+  case form of
+    Atom (AFractional x)
+      | fl_value x < 0 -> return (L l (hsPar (expr x)))
+      | otherwise      -> return (expr x)
+    _                  -> builderError
   where
     expr x = L l (hsOverLit $! hsFractional x)
 {-# INLINE b_fracE #-}
@@ -288,9 +283,10 @@ b_unitE (LForm (L l _)) = case mkLHsTupleExpr [] of L _ t -> L l t
 {-# INLINE b_unitE #-}
 
 b_docString :: Code -> Builder (Located HsDocString)
-b_docString (LForm (L l form))
-  | Atom (AString _ x) <- form = return $! L l (hsDocString x)
-  | otherwise                  = builderError
+b_docString (LForm (L l form)) =
+  case form of
+    Atom (AString _ x) -> return $! L l (hsDocString x)
+    _                  -> builderError
 {-# INLINE b_docString #-}
 
 b_hsListE :: Either HExpr [HExpr] -> HExpr
@@ -419,9 +415,10 @@ parenthesizeHsExpr' = parenthesizeHsExpr
 #elif MIN_VERSION_ghc(8,6,0)
 
 parenthesizeHsExpr' :: PprPrec -> HExpr -> HExpr
-parenthesizeHsExpr' p le@(dL->L loc e)
-  | ELazyPat {} <- e, p >= appPrec = L loc (HsPar NOEXT le)
-  | otherwise                      = parenthesizeHsExpr p le
+parenthesizeHsExpr' p le@(dL->L loc e) =
+  case e of
+    ELazyPat{} | p >= appPrec -> L loc (HsPar NOEXT le)
+    _                         -> parenthesizeHsExpr p le
 
 #else
 
@@ -477,7 +474,7 @@ hsExprNeedsParens p = go
     go (EAsPat{})                        = False
     go (EViewPat{})                      = True
     go (HsSCC{})                         = p >= appPrec
-    go (HsWrap _ e)                    = go e
+    go (HsWrap _ e)                      = go e
     go (HsSpliceE{})                     = False
     go (HsBracket{})                     = False
     go (HsRnBracketOut{})                = False

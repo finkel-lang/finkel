@@ -103,9 +103,9 @@ mkRdrName' upperCaseNameSpace name
   | isUpper x =
     case splitQualName name of
       Nothing -> mkUnqual srcDataName name
-      Just q@(_, name')
-         | isLexCon name' -> mkQual upperCaseNameSpace q
-         | otherwise      -> mkQual varName q
+      Just q@(_, name') -> if isLexCon name'
+                              then mkQual upperCaseNameSpace q
+                              else mkQual varName q
 
   -- Variable.
   | otherwise = mkVarUnqual name
@@ -116,49 +116,45 @@ mkRdrName' upperCaseNameSpace name
 -- See also "compiler/parser/Lexer.x.source" in ghc source code. It has
 -- private function named "splitQualName".
 splitQualName :: FastString -> Maybe (FastString, FastString)
-splitQualName fstr
+splitQualName fstr =
   -- e.g. ":.+.", ":+:". Symbol may contain ".".
-  | isLexConSym fstr = Nothing
-  | otherwise = go (unpackFS fstr) "" []
+  if isLexConSym fstr
+     then Nothing
+     else go (unpackFS fstr) "" []
   where
-    go str0 tmp acc =
-      case str0 of
-        [] | null acc  -> Nothing
-           | otherwise ->
-             let mdl = reverse (tail (concat acc))
-                 var = (reverse tmp)
-             in  Just (fsLit mdl , fsLit var)
-        c:str1
-           | c == '.' ->
-             case str1 of
-               [] -> go str1 (c:tmp) acc
-               _  -> go str1 [] ((c:tmp) : acc)
-           | otherwise -> go str1 (c:tmp) acc
+    go []       _   []  = Nothing
+    go []       tmp acc = let mdl = reverse (tail (concat acc))
+                              var = reverse tmp
+                          in  Just (fsLit mdl, fsLit var)
+    go ('.':[]) tmp acc = go [] ('.':tmp) acc
+    go ('.':cs) tmp acc = go cs [] (('.':tmp) : acc)
+    go (c:cs)   tmp acc = go cs (c:tmp) acc
 {-# INLINE splitQualName #-}
 
 checkVarId :: Code -> FastString -> Builder ()
-checkVarId orig name
-  | isLexVar name = return ()
-  | otherwise = setLastToken orig >> failB "invalid variable identifier"
+checkVarId orig name =
+  if isLexVar name
+     then return ()
+     else setLastToken orig >> failB "invalid variable identifier"
 {-# INLINE checkVarId #-}
 
 getConId :: Code -> Builder FastString
-getConId orig@(LForm (L _ form))
-  | Atom (ASymbol sym) <- form
-  -- `isLexVarSym' is for "TypeOperators" extension.
-  , isLexCon sym || isLexVarSym sym
-  = return sym
-  | otherwise = do
-    setLastToken orig
-    failB "invalid constructor identifier"
+getConId orig@(LForm (L _ form)) =
+  case form of
+    Atom (ASymbol sym)
+       -- `isLexVarSym' is for "TypeOperators" extension.
+      | isLexCon sym    -> return sym
+      | isLexVarSym sym -> return sym
+    _ -> setLastToken orig >> failB "invalid constructor identifier"
 {-# INLINE getConId #-}
 
 getVarOrConId :: Code -> Builder FastString
-getVarOrConId orig@(LForm (L _ form))
-  | Atom (ASymbol sym) <- form, isLexCon sym || isLexVar sym = return sym
-  | otherwise = do
-    setLastToken orig
-    failB "invalid identifier"
+getVarOrConId orig@(LForm (L _ form)) =
+  case form of
+    Atom (ASymbol sym)
+      | isLexCon sym -> return sym
+      | isLexVar sym -> return sym
+    _ -> setLastToken orig >> failB "invalid identifier"
 {-# INLINE getVarOrConId #-}
 
 -- | Build 'HLocalBinds' from list of 'HDecl's.
@@ -260,63 +256,13 @@ cvBindsAndSigs fb =
        POk _ cd -> return cd
        _        -> builderError
 
--- cvBindsAndSigs fb = fmap toCategorizedDecls (go (fromOL fb))
---   where
---     go [] = return (emptyBag, [], [], [], [], [])
---     go (L l (ValD _EXT d) : ds) = do
---       let (b', ds') = getMonoBind (L l d) ds
---       (bs, ss, fs, tfis, dfis, docs) <- go ds'
---       return (b' `consBag` bs, ss, fs, tfis, dfis, docs)
---     go (L l decl : ds) = do
---       (bs, ss, fs, tfis, dfis, docs) <- go ds
---       case decl of
---         SigD _EXT s ->
---           return (bs, L l s:ss, fs, tfis, dfis, docs)
---         TyClD _EXT (FamDecl _EXT f) ->
---           return (bs, ss, L l f:fs, tfis, dfis, docs)
---         InstD _EXT (TyFamInstD {tfid_inst = tfi}) ->
---           return (bs, ss, fs, L l tfi:tfis, dfis, docs)
---         InstD _EXT (DataFamInstD {dfid_inst=dfi}) ->
---           return (bs, ss, fs, tfis, L l dfi:dfis, docs)
---         DocD _EXT doc ->
---           return (bs, ss, fs, tfis, dfis, L l doc:docs)
-
---         -- XXX: Ignoring other constructors.
---         _ -> return (bs, ss, fs, tfis, dfis, docs)
-
--- getMonoBind :: HBind -> [HDecl] -> (HBind, [HDecl])
--- getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1),
---                                fun_matches
---                                  = MG { mg_alts = L _ mtchs1 }}))
---             binds
---   | has_args mtchs1 = go mtchs1 loc1 binds
---   where
---     go mtchs loc
---        (L loc2 (ValD _EXT (FunBind { fun_id = L _ f2,
---                                      fun_matches
---                                        = MG { mg_alts = L _ mtchs2 }}))
---                 : binds2)
---       | f1 == f2 = go (mtchs2 ++ mtchs)
---                       (combineSrcSpans loc loc2) binds2
---     go mtchs loc binds2
---       = (L loc (mkFunBind fun_id1 (reverse mtchs)), binds2)
---       -- Reverse the final matches, to get it back in the right order
-
--- getMonoBind bind binds = (bind, binds)
-
--- -- Don't group together FunBinds if they have no arguments.  This is
--- -- necessary that variable bindings with no arguments are now treated as
--- -- FunBinds rather than pattern bindings.
--- has_args :: [LMatch PARSED (LHsExpr PARSED)] -> Bool
--- has_args (L _ mtch:_) = not (null (m_pats mtch))
--- has_args []           = error "Language.Finkel.Syntax.SynUtils:has_args"
-
 kindedTyVar :: Code -> Code -> HType -> Builder HTyVarBndr
-kindedTyVar (LForm (L l _dc)) name kind
-  | LForm (L ln (Atom (ASymbol name'))) <- name = do
-    let name'' = L ln (mkUnqual tvName name')
-    return (L l (KindedTyVar NOEXT name'' kind))
-  | otherwise = builderError
+kindedTyVar (LForm (L l _dc)) name kind =
+  case name of
+    LForm (L ln (Atom (ASymbol name'))) -> do
+       let name'' = L ln (mkUnqual tvName name')
+       return $! L l (KindedTyVar NOEXT name'' kind)
+    _ -> builderError
 {-# INLINE kindedTyVar #-}
 
 codeToUserTyVar :: Code -> HTyVarBndr

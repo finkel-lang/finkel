@@ -93,10 +93,10 @@ b_ieGroup n form@(LForm (L l body))
 {-# INLINE b_ieGroup #-}
 
 b_ieDoc :: Code -> Builder HIE
-b_ieDoc (LForm (L l form))
-  | Atom (AString _ str) <- form =
-    return $! L l (IEDoc NOEXT (hsDocString str))
-  | otherwise = builderError
+b_ieDoc (LForm (L l form)) =
+  case form of
+    Atom (AString _ str) -> return $! L l (IEDoc NOEXT (hsDocString str))
+    _                    -> builderError
 {-# INLINE b_ieDoc #-}
 
 b_ieDocNamed :: Code -> Builder HIE
@@ -121,9 +121,10 @@ b_ieAll form@(LForm (L l _)) = do
 {-# INLINE b_ieAll #-}
 
 b_ieWith :: Code -> [Code] -> Builder HIE
-b_ieWith (LForm (L l form)) names
-  | Atom (ASymbol name) <- form = return (thing name)
-  | otherwise                   = builderError
+b_ieWith (LForm (L l form)) names =
+  case form of
+    Atom (ASymbol name) -> return (thing name)
+    _                   -> builderError
   where
     thing name = L l (iEThingWith (L l (IEName (L l name'))) wc ns fs)
       where
@@ -132,12 +133,12 @@ b_ieWith (LForm (L l form)) names
                   Nothing   -> mkUnqual tcClsName name
     wc = NoIEWildcard
     (ns, fs) = foldr f ([],[]) names
-    f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0)
-      | isLexCon n0 =
-        (L l0 (IEName (L l (mkUnqual tcClsName n0))) : ns0, fs0)
-      | otherwise   = (ns0, L l0 (fl n0) : fs0)
+    f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0) =
+      if isLexCon n0
+         then (L l0 (IEName (L l (mkUnqual tcClsName n0))) : ns0, fs0)
+         else (ns0, L l0 (fl n0) : fs0)
     f _ acc = acc
-    -- Does not support DuplicateRecordFields.
+    -- XXX: Does not support DuplicateRecordFields.
     fl x = FieldLabel { flLabel = x
                       , flIsOverloaded = False
                       , flSelector = mkRdrName x }
@@ -145,9 +146,10 @@ b_ieWith (LForm (L l form)) names
 {-# INLINE b_ieWith #-}
 
 b_ieMdl :: [Code] -> Builder HIE
-b_ieMdl xs
-  | [LForm (L l (Atom (ASymbol name)))] <- xs = return (thing l name)
-  | otherwise                                 = builderError
+b_ieMdl xs =
+  case xs of
+    [LForm (L l (Atom (ASymbol name)))] -> return (thing l name)
+    _                                   -> builderError
   where
     thing l n = L l (iEModuleContents (L l (mkModuleNameFS n)))
     iEModuleContents = IEModuleContents NOEXT
@@ -155,27 +157,28 @@ b_ieMdl xs
 
 b_importD :: (Code, Bool, Maybe Code) -> (Bool, Maybe [HIE])
           -> Builder HImportDecl
-b_importD (name, qualified, mb_as) (hiding, mb_entities)
-  | LForm (L l (Atom (ASymbol m))) <- name =
-    let decl = simpleImportDecl (mkModuleNameFS m)
-        decl' = decl { ideclQualified = qualified'
-                     , ideclAs = fmap asModName mb_as
-                     , ideclHiding = hiding' }
+b_importD (name, qualified, mb_as) (hiding, mb_entities) =
+  case name of
+    LForm (L l (Atom (ASymbol m))) ->
+      let decl = simpleImportDecl (mkModuleNameFS m)
+          decl' = decl { ideclQualified = qualified'
+                       , ideclAs = fmap asModName mb_as
+                       , ideclHiding = hiding' }
 #if MIN_VERSION_ghc(8,10,0)
-        qualified' | qualified = QualifiedPre
-                   | otherwise = NotQualified
+          qualified' | qualified = QualifiedPre
+                     | otherwise = NotQualified
 #else
-        qualified' = qualified
+          qualified' = qualified
 #endif
-        asModName (LForm (L l' (Atom (ASymbol x)))) =
-          L l' (mkModuleNameFS x)
-        asModName _ = error "b_importD.asModName"
-        hiding' =
-          case mb_entities of
-            Nothing       -> Nothing
-            Just entities -> Just (hiding, L l entities)
-          in  return (L l decl')
-  | otherwise                              = builderError
+          asModName (LForm (L l' (Atom (ASymbol x)))) =
+            L l' (mkModuleNameFS x)
+          asModName _ = error "b_importD.asModName"
+          hiding' =
+            case mb_entities of
+              Nothing       -> Nothing
+              Just entities -> Just (hiding, L l entities)
+            in  return (L l decl')
+    _ -> builderError
 {-# INLINE b_importD #-}
 
 
