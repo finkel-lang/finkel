@@ -37,6 +37,7 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildBytecode "main3.fnk"
   buildByteCodeWith ["--fnk-dump-hs", "--fnk-debug", "-v2"] "main4.fnk"
   buildBytecode "main5.fnk"
+  buildBytecode "main9.fnk"
 
   -- Build object codes
   buildC (odir </> "cbits1.c")
@@ -47,8 +48,10 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildObj [] (map (odir </>) ["cbits1.o","cbits2.o","cbits3.o"] ++
                ["main6.fnk"])
   buildObj [] ["main6.fnk", "cbits1.c", "cbits2.c", "cbits3.c"]
+  buildObj [] ["M4.A"]
   buildObj ["--fnk-dump-hs", "--fnk-hsdir=" ++ (odir </> "gen")]
            ["M5", "M4" </> "A.fnk", "M4" </> "B.fnk", "M4", "main7.fnk"]
+  buildObj ["-O2"] ["main8.fnk"]
 
 fnksrc1, hssrc1, othersrc1 :: TargetSource
 fnksrc1 = FnkSource "path1" "Foo" [] (initialSPState (fsLit "dummy") 1 1)

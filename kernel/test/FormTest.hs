@@ -110,7 +110,7 @@ formTests = do
   monoidTest
   alternativeTest
 
-  fromCodeTest Foo
+  fromCodeTest
 
   dataToCodeTest
 
@@ -608,11 +608,44 @@ instance ToCode Foo where
 
 instance FromCode Foo
 
-fromCodeTest :: Foo -> Spec
-fromCodeTest _foo =
+fromCodeTest :: Spec
+fromCodeTest = do
   describe "default toCode implementation" $
     it "should return Nothing" $
       (fromCode nil :: Maybe Foo) `shouldBe` Nothing
+
+  describe "getting Nothing from fromCode" $ do
+    let ng title x = it title $ x `shouldBe` Nothing
+        q = qSymbol
+        foo = q "foo"
+        foo1 = qList [q "Foo", q "a"]
+        foo2 = qList [q "Foo", q "a", q "b"]
+
+    it "should result to Nothing with explicit Nothing" $ do
+      fromCode (q "Nothing") `shouldBe` (Just Nothing :: Maybe (Maybe ()))
+      toCode (Nothing :: Maybe ()) `shouldBe` q "Nothing"
+
+    ng "()" (fromCode foo :: Maybe ())
+    ng "Int" (fromCode foo :: Maybe Int)
+    ng "Char" (fromCode nil :: Maybe Char)
+    ng "[Int]" (fromCode nil :: Maybe [Int])
+    ng "[Char]" (fromCode foo :: Maybe [Char])
+    ng "Bool" (fromCode foo :: Maybe Bool)
+    ng "Ordering" (fromCode foo :: Maybe Ordering)
+    ng "Maybe ()" (fromCode foo1 :: Maybe (Maybe ()))
+    ng "Either String ()" (fromCode foo1 :: Maybe (Either String ()))
+    ng "(,)" (fromCode foo :: Maybe ((), ()))
+    ng "(,,)" (fromCode foo :: Maybe ((), (), ()))
+    ng "(,,,)" (fromCode foo :: Maybe ((), (), (), ()))
+    ng "(,,,,)" (fromCode foo :: Maybe ((), (), (), (), ()))
+    ng "(,,,,,)" (fromCode foo :: Maybe ((), (), (), (), (), ()))
+    ng "Data.Functor.Sum.Sum Maybe (Either String) ()"
+       (fromCode foo1 :: Maybe (Sum.Sum Maybe (Either String) ()))
+    ng "Data.Functor.Product.Product Maybe (Either String) ()"
+       (fromCode foo2 :: Maybe (Product.Product Maybe (Either String) ()))
+    ng "Sum ()" (fromCode foo1 :: Maybe (Sum ()))
+    ng "Proxy ()" (fromCode foo :: Maybe (Proxy ()))
+    ng "Atom" (fromCode foo1 :: Maybe Atom)
 
 data D1 = D1a | D1b | D1c
   deriving (Eq, Show, Data, Typeable)

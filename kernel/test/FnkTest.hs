@@ -159,6 +159,12 @@ expandTest = do
                               ,toCode $ aFractional (42.0 :: Double)])
       ret <- expand1_fn form
       length ret `shouldSatisfy` (>= 1)
+  describe "expand-1 of non-macro" $
+    it "should return the original form" $do
+      let form = toCode (List [toCode $ aSymbol "show"
+                              ,toCode $ aFractional (42 :: Double)])
+      ret <- expand1_fn form
+      ret `shouldBe` form
   describe "expanding with macroFunction" $
     it "should return empty form" $ do
       let mb_qt = lookupMacro (fsLit ":quote") env
