@@ -44,200 +44,262 @@
 
       (<- current-dir (runIO getCurrentDirectory))
       (<- tmp-dir (runIO getTemporaryDirectory))
-      (let ((= m02-dot-fnk (</> tmp-dir "m02.fnk"))))
       (<- (EvalTestFns ok ng satisfy cleanup) (runIO makeEvalTestFns))
-      (afterAll_
-       (do cleanup
-           (remove-if-exist m02-dot-fnk))
-       (do
-         ;; !
-         (ok '(repl-macro ! echo foo) "")
+      (let ((= with-right form test
+              (satisfy form (either (const False) test)))
+            (= with-left form test
+              (satisfy form (either test (const False))))
+            (= m02-dot-fnk (</> tmp-dir "m02.fnk"))
+            (= m02-dot-hi (</> tmp-dir "m02.hi"))
+            (= main-dot-o (</> tmp-dir "Main.o"))
+            (= clear-m02-files
+              (mapM_ remove-if-exist [m02-dot-fnk m02-dot-hi main-dot-o]))))
+      (beforeAll_
+       clear-m02-files
+       (afterAll_
+        (do cleanup
+            clear-m02-files)
+        (do
+          ;; !
+          (ok '(repl-macro ! echo foo) "")
 
-         ;; ?, help
-         (satisfy
-          '(repl-macro help)
-          (\ result
-            (case result
-              (Right str) (isSubsequenceOf ",type EXPR" str)
-              _ False)))
+          ;; ?, help
+          (with-right '(repl-macro ?)
+            (isSubsequenceOf ",type EXPR"))
+          (with-right '(repl-macro help)
+            (isSubsequenceOf "show this help"))
 
-         ;; browse
-         (ok '(repl-macro browse Unsafe.Coerce)
-             "Unsafe.Coerce.unsafeCoerce :: a -> b")
+          ;; browse
+          (ok '(repl-macro browse Unsafe.Coerce)
+              "Unsafe.Coerce.unsafeCoerce :: a -> b")
+          (ng '(repl-macro browse foo bar)
+              "<quoted code>: error: browse: invalid form `foo'")
 
-         ;; cd
-         (ok `(repl-macro cd) "")
-         (ok `(repl-macro cd "~") "")
-         (ok `(repl-macro cd ,current-dir) "")
-         (ok `(repl-macro cd ,(testdata "")) "")
-         (ok '(repl-macro cd ../../) "")
+          ;; cd
+          (ok `(repl-macro cd) "")
+          (ok `(repl-macro cd "~") "")
+          (ok `(repl-macro cd ,current-dir) "")
+          (ok `(repl-macro cd ,(testdata "")) "")
+          (ok '(repl-macro cd ../../) "")
+          (with-left `(repl-macro cd (foo bar) buzz)
+            (isSubsequenceOf "invalid form"))
 
-         ;; debug
-         (ok '(repl-macro debug) "Debug flag is False")
-         (ok '(repl-macro debug True) "Debug flag set to True")
-         (ok '(repl-macro debug False) "Debug flag set to False")
+          ;; debug
+          (ok '(repl-macro debug) "Debug flag is False")
+          (ok '(repl-macro debug True) "Debug flag set to True")
+          (ok '(repl-macro debug False) "Debug flag set to False")
 
-         ;; expand
-         (ok '(repl-macro expand
-               (defn f (where g (defn g [x] (print (++ "g: " x))))))
-             "(= f (where g (defn g [x] (print (++ \"g: \" x)))))")
+          ;; expand
+          (ok '(repl-macro expand
+                (defn f (where g (defn g [x] (print (++ "g: " x))))))
+              "(= f (where g (defn g [x] (print (++ \"g: \" x)))))")
+          (ok '(repl-macro expand) "")
+          (ng '(repl-macro expand foo bar)
+              "<quoted code>: error: expand: invalid form `foo'")
 
-         ;; expand!
-         (ok '(repl-macro expand!
-               (defn f (where g (defn g [x] (print (++ "g: " x))))))
-             "(= f (where g (= g x (print (++ \"g: \" x)))))")
+          ;; expand!
+          (ok '(repl-macro expand!
+                (defn f (where g (defn g [x] (print (++ "g: " x))))))
+              "(= f (where g (= g x (print (++ \"g: \" x)))))")
 
-         ;; info
-         (ok '(repl-macro info putStr)
-             "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
+          ;; info
+          (ok '(repl-macro info putStr)
+              "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
+          (ok '(repl-macro info ++)
+              "(++) :: [a] -> [a] -> [a] \t-- Defined in ‘GHC.Base’\n\
+             \infixr 5 ++")
+          (with-right '(repl-macro info ())
+            (isSubsequenceOf "instance Show ()"))
+          (with-right '(repl-macro info [])
+            (isSubsequenceOf "data [] a = [] | a : [a]"))
 
-         ;; in-package, using `make-symbol' to avoid name mangling.
-         (let ((= inpkg (make-symbol "in-package"))))
-         (ok `(repl-macro ,inpkg ghc)
-             "; current package set to `ghc'")
-         (ok `(repl-macro ,inpkg nosuchpkg)
-             "; package `nosuchpkg' not found")
-         (ok `(repl-macro ,inpkg main)
-             "; current package set to `main'")
+          ;; in-package, using `make-symbol' to avoid name mangling.
+          (let ((= inpkg (make-symbol "in-package"))))
+          (ok `(repl-macro ,inpkg ghc)
+              "; current package set to `ghc'")
+          (ok `(repl-macro ,inpkg nosuchpkg)
+              "; package `nosuchpkg' not found")
+          (ok `(repl-macro ,inpkg main)
+              "; current package set to `main'")
+          (with-left `(repl-macro ,inpkg (foo bar) buzz)
+            (isSubsequenceOf "in-package"))
 
-         ;; kind
-         (ok '(repl-macro kind Maybe)
-             "Maybe :: * -> *")
+          ;; kind
+          (ok '(repl-macro kind Maybe)
+              "Maybe :: * -> *")
+          (ng '(repl-macro kind (foo bar) buzz)
+              "<quoted code>: error: kind: invalid form `(foo bar)'")
 
-         ;; pwd
-         (ok '(repl-macro pwd) (show current-dir))
+          ;; pwd
+          (ok '(repl-macro pwd) (show current-dir))
 
-         ;; show
-         (ok '(defn (:: f1 (-> Int Int)) [n] (+ n 1))
-             "; f1 :: Int -> Int")
-         (satisfy
-          '(repl-macro show bindings)
-          (\ ret
-            (case ret
-              (Right str) (elem "f1 :: Int -> Int = _" (lines str))
-              _ False)))
-         (ok '(repl-macro show context)
-             (delines
-              ["; context"
-               ";  IIDecl: import Prelude"]))
-         (ok '(repl-macro show dflags)
-             (delines
-              ["; dflags:"
-               ";  ghcLink: LinkInMemory"
-               ";  ghcMode: CompManager"
-               ";  hscTarget: HscInterpreted"
-               ";  objectDir: Nothing"
-               ";  thisInstalledUnitId: main"
-               ";  forceRecomp: False"]))
+          ;; set
+          (ok '(repl-macro set -foo -bar -buzz) "")
+          (ng '(repl-macro set)
+              "<finkel generated code>: error: set: empty form")
+
+          ;; show
+          (ok '(defn (:: f1 (-> Int Int)) [n] (+ n 1))
+              "; f1 :: Int -> Int")
+          (with-right '(repl-macro show bindings)
+            (. (elem "f1 :: Int -> Int = _") lines))
+          (with-right '(class (C a) (:: cm1 (-> a Int)))
+            (. (elem "; Class ‘C’") lines))
+          (with-right '(repl-macro show bindings)
+            (. (elem "class C a") lines))
+          (ok '(repl-macro show context)
+              (delines
+               ["; context"
+                ";  IIDecl: import Prelude"]))
+          (ok '(repl-macro show dflags)
+              (delines
+               ["; dflags:"
+                ";  ghcLink: LinkInMemory"
+                ";  ghcMode: CompManager"
+                ";  hscTarget: HscInterpreted"
+                ";  objectDir: Nothing"
+                ";  thisInstalledUnitId: main"
+                ";  forceRecomp: False"]))
+          (ok '(:begin
+                (repl-macro set -odir /tmp)
+                (repl-macro show dflags))
+              (delines
+               ["; dflags:"
+                ";  ghcLink: LinkInMemory"
+                ";  ghcMode: CompManager"
+                ";  hscTarget: HscInterpreted"
+                ";  objectDir: Just \"/tmp\""
+                ";  thisInstalledUnitId: main"
+                ";  forceRecomp: False"]))
+          (ok '(repl-macro show hpt)
+              "show: no home package table found")
+          (ok '(repl-macro show language)
+              (delines
+               ["base language is: Haskell2010"
+                "with the following modifiers:"
+                "  -XNoDatatypeContexts"
+                "  -XNondecreasingIndentation"]))
+          ;; show linker command uses 'showLinkerState' from ghc package,
+          ;; which does printing action, so not returning 'String' value.
+          (ok '(repl-macro show linker) "")
+          (with-right '(repl-macro show macros)
+            (. (elem ";  defmacroM'") lines))
+          (ok '(repl-macro show modules) "")
+          (with-right '(repl-macro show options)
+            (isSubsequenceOf "-fimplicit-import-qualified"))
+          (with-right '(repl-macro show options!)
+            (isSubsequenceOf "-Wno-orphans"))
+          (with-right '(repl-macro show packages)
+            (isSubsequenceOf "; packages"))
+          (with-right '(:begin
+                        (repl-macro set -hide-package bytestring)
+                        (repl-macro show packages))
+            (isSubsequenceOf "hiding"))
+          (ok '(repl-macro show paths)
+              (concat
+               ["; current working directory:\n"
+                ";   " current-dir "\n"
+                "; module import search paths:\n"
+                ";    ."]))
+          (ok '(repl-macro show targets)
+              "; targets: none")
+          (with-left '(repl-macro show (foo bar) buzz)
+            (isSubsequenceOf "targets"))
+
+          ;; type
+          (ok '(repl-macro type putStrLn)
+              "putStrLn :: String -> IO ()")
+          (ok '(repl-macro type (foldr + (:: 0 Int)))
+              "(foldr + (:: 0 Int)) :: Foldable t => t Int -> Int")
+          (ok '(repl-macro type 'x)
+              "(:quote x) :: Language.Finkel.Form.Code")
+          (ng '(repl-macro type (foo bar) buzz)
+              "<quoted code>: error: type: invalid form `(foo bar)'")
+
+          ;; load and reload
+          (let ((= m01-dot-fnk (testdata "m01.fnk"))))
+          (ok `(:begin
+                 (repl-macro load ,(qSymbol m01-dot-fnk))
+                 main)
+              "=== m01.fnk ===")
+          (ok '(repl-macro reload)
+              "; reloaded test/data/m01.fnk")
+          (ok '(repl-macro browse)
+              (delines
+               ["main :: IO ()"
+                "foo :: String"
+                "bar :: Int -> Int"]))
+
+          (ok '(repl-macro show targets)
+              "; targets: test/data/m01.fnk")
+          (with-right '(repl-macro show context)
+            (isSubsequenceOf "IIModule: Main"))
+
+          (ok `(writeFile ,m02-dot-fnk "(defn main (print True))")
+              "")
+          (with-os-cond os
+            ((== os "darwin")
+             (describe "evaluate (repl-macro load m02.fnk)"
+               (it "should skip under darwin"
+                 (pendingWith "OSX not supported yet"))))
+            (otherwise
+             (ok `(:begin
+                    (repl-macro load ,(qSymbol m02-dot-fnk))
+                    main)
+                 "True")))
+          (ok `(writeFile ,m02-dot-fnk "(defn main (print False))")
+              "")
+
+          (with-os-cond os
+            ((== os "darwin")
+             (describe "evaluate (repl-macro reload)"
+               (it "should skip under darwin"
+                 (pendingWith "OSX not supported yet"))))
+            (otherwise
+             (ok '(repl-macro reload)
+                 (++ "; reloaded " m02-dot-fnk))))
+          (with-os-cond os
+            ((== os "darwin")
+             (describe "evaluate main"
+               (it "should skip under darwin"
+                 (pendingWith "OSX not supported yet"))))
+            (otherwise
+             (ok 'main "False")))
+
+          ;; Compiling object code
+          (with-os-cond os
+            [(== os "darwin")
+             (describe "Compiling object code"
+               (it "should be skipped under darwin"
+                 (pendingWith "OSX not supported yet")))]
+            [otherwise
+             (do
+               (ok `(writeFile ,m02-dot-fnk "(defn main (print True))") "")
+               (ok `(:begin
+                      (repl-macro set -fobject-code)
+                      (repl-macro load ,m02-dot-fnk)
+                      main)
+                   "True")
+               (ok '(repl-macro reload)
+                   (++ "; reloaded " m02-dot-fnk)))])
+
+          ;; Errors
+          (ng '(repl-macro load (foo bar))
+              "<quoted code>: error: load: not a FilePath: (foo bar)")
+          (ng '(repl-macro load (foo bar) buzz)
+              "<quoted code>: error: load: invalid form `(foo bar)'")
+
+          ;; Calling functions from Prelude after load error:
          (ok '(:begin
-               (repl-macro set -odir /tmp)
-               (repl-macro show dflags))
-             (delines
-              ["; dflags:"
-               ";  ghcLink: LinkInMemory"
-               ";  ghcMode: CompManager"
-               ";  hscTarget: HscInterpreted"
-               ";  objectDir: Just \"/tmp\""
-               ";  thisInstalledUnitId: main"
-               ";  forceRecomp: False"]))
-         (ok '(repl-macro show hpt)
-             "show: no home package table found")
-         (ok '(repl-macro show language)
-             (delines
-              ["base language is: Haskell2010"
-               "with the following modifiers:"
-               "  -XNoDatatypeContexts"
-               "  -XNondecreasingIndentation"]))
-         ;; show linker command uses 'showLinkerState' from ghc package,
-         ;; which does printing action, so not returning 'String' value.
-         (ok '(repl-macro show linker) "")
-         (satisfy
-          '(repl-macro show macros)
-          (\ ret
-            (case ret
-              (Right str) (elem ";  defmacroM'" (lines str))
-              _ False)))
-         (ok '(repl-macro show modules) "")
-         (satisfy
-          '(repl-macro show options)
-          (\ ret
-            (case ret
-              (Right str) (isSubsequenceOf
-                           "-fimplicit-import-qualified"
-                           str)
-              _ False)))
-         (satisfy
-          '(repl-macro show packages)
-          (\ ret
-            (case ret
-              (Right str) (isSubsequenceOf "; packages" str)
-              _ False)))
-         (ok '(repl-macro show paths)
-             (concat
-              ["; current working directory:\n"
-               ";   " current-dir "\n"
-               "; module import search paths:\n"
-               ";    ."]))
-         (ok '(repl-macro show targets)
-             "; targets: none")
+                (repl-macro load /no/such/file.fnk)
+                (print (not False)))
+              "True")
 
-         ;; type
-         (ok '(repl-macro type putStrLn)
-             "putStrLn :: String -> IO ()")
-         (ok '(repl-macro type (foldr + (:: 0 Int)))
-             "(foldr + (:: 0 Int)) :: Foldable t => t Int -> Int")
-         (ok '(repl-macro type 'x)
-             "(:quote x) :: Language.Finkel.Form.Code")
-
-         ;; load and reload
-         (let ((= m01-dot-fnk (testdata "m01.fnk"))))
-         (ok `(:begin
-                (repl-macro load ,(qSymbol m01-dot-fnk))
-                main)
-             "=== m01.fnk ===")
-         (ok '(repl-macro reload)
-             "; reloaded test/data/m01.fnk")
-         (ok '(repl-macro browse)
-             (delines
-              ["main :: IO ()"
-               "foo :: String"
-               "bar :: Int -> Int"]))
-
-         (ok `(writeFile ,m02-dot-fnk
-                         "(defn main (print True))")
-             "")
-         (with-os-cond os
-           ((== os "darwin")
-            (describe "evaluate (repl-macro load m02.fnk)"
-              (it "should skip under darwin"
-                (pendingWith "OSX not supported yet"))))
-           (otherwise
-            (ok `(:begin
-                   (repl-macro load ,(qSymbol m02-dot-fnk))
-                   main)
-                "True")))
-         (ok `(writeFile ,m02-dot-fnk
-                         "(defn main (print False))")
-             "")
-         (with-os-cond os
-           ((== os "darwin")
-            (describe "evaluate (repl-macro reload)"
-              (it "should skip under darwin"
-                (pendingWith "OSX not supported yet"))))
-           (otherwise
-            (ok '(repl-macro reload)
-                (++ "; reloaded " m02-dot-fnk))))
-         (with-os-cond os
-           ((== os "darwin")
-            (describe "evaluate main"
-              (it "should skip under darwin"
-                (pendingWith "OSX not supported yet"))))
-           (otherwise
-            (ok 'main "False")))
-
-         ;; Errors
-         (ng '(repl-macro info (foo bar))
-             "<quoted code>: error: info: invalid form `(foo bar)'")))))
+          ;; Errors
+          (ng '(repl-macro info (foo bar))
+              "<quoted code>: error: info: invalid form `(foo bar)'")
+          (ng '(repl-macro)
+              "<quoted code>: error: invalid args: nil"))))))
 
 (defn (:: remove-if-exist (-> FilePath (IO ())))
   [path]
