@@ -74,13 +74,14 @@
 (defn (:: with-test-stdin (-> String (IO a) (IO a)))
   [path act]
   (bracket
-   (do (<- stdin' (hDuplicate stdin))
+   (do (<- stdin2 (hDuplicate stdin))
        (<- hdl (openFile (datafile path) ReadMode))
        (hDuplicateTo hdl stdin)
-       (return (, hdl stdin')))
-   (\ (, hdl stdin')
-     (do (hClose hdl)
-         (hDuplicateTo stdin' stdin)))
+       (return (, hdl stdin2)))
+   (\ (, hdl stdin2)
+     (do (hDuplicateTo stdin2 stdin)
+         (hClose hdl)
+         (hClose stdin2)))
    (const act)))
 
 (defn (:: datafile (-> String FilePath))

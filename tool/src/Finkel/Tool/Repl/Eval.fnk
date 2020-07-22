@@ -284,7 +284,6 @@ context."
         (= eval-hvals-io
           (evalStmt hsc-env False (EvalApp (EvalThis wrapper)
                                            (EvalThis hvals-io))))
-
         (= eval-for-prompt
           (do (<- status (liftIO eval-hvals-io))
               (return (, status ""))))
