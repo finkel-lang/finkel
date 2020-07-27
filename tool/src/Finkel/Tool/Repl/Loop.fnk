@@ -12,7 +12,6 @@
    (Control.Concurrent (ThreadId forkIO))
    (Control.Concurrent.MVar (MVar newEmptyMVar))
    (Control.Exception (bracket catch throwIO))
-   (Control.Monad (void))
 
    (System.IO (Handle hClose openTempFile))
    (System.IO.Error (isDoesNotExistError))
@@ -71,13 +70,13 @@
                        (IO ())))
   "Inner work for `start-repl'."
   [mb-path mb-port fnk-env (, _ hdl in-mv)]
-  (do (maybe (return ()) (. void (start-listener in-mv)) mb-port)
+  (do (mapM- (start-listener in-mv) mb-port)
       (<- tid (forkIO (runFnk (eval-loop hdl in-mv) fnk-env)))
       (let ((= rpl (read-print-loop in-mv tid))
             (= behavior (maybe defaultBehavior useFile mb-path))
             (= run (runInputTBehavior behavior defaultSettings))))
 
-      ;; Using UTF-8 for Windows.  See "GHCi.UI.interactiveUI"
+      ;; Using UTF-8 for Windows. See "GHCi.UI.interactiveUI"
       (with-os-cond os
         ((== os "mingw32")
          (hSetEncoding stdin utf8))

@@ -146,11 +146,11 @@
         (= withAsyncHandler wrapper
           (ghandle
            (\ e
-             (do (liftIO (case e
-                           UserInterrupt (return ())
-                           ThreadKilled  (return ())
-                           _ (putStrLn (++ "eval-loop: " (show e)))))
-                 (loop wrapper)))))
+             (case e
+               UserInterrupt (loop wrapper)
+               ThreadKilled  (return ())
+               _ (do (liftIO (putStrLn (++ "eval-loop: " (show e))))
+                     (loop wrapper))))))
         (= src-err-handler src-err
           (do (<- dflags getSessionDynFlags)
               (<- unqual getPrintUnqual)

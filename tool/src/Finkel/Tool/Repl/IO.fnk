@@ -79,7 +79,6 @@ reading the input until successful parse result."
         (= go-line result-mv line
           (do (<- mb-form (read-form line))
               (maybe (go result-mv) (go-form result-mv) mb-form)))
-
         (= go-form result-mv form
           ;; Handle interrupt signals thrown while evaluation thread is
           ;; working. Give a chance to interrupt here, after parsing input and
