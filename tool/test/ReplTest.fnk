@@ -5,19 +5,21 @@
 (:require Finkel.Core)
 
 (defmodule ReplTest
-  (export replTests)
+  (export replTests listenTests)
   (import-when [compile]
     ;; finkel-core
     (Finkel.Prelude))
   (import
    ;; base
    (Control.Concurrent
-    (forkIO newEmptyMVar killThread putMVar takeMVar threadDelay))
-   (Control.Exception (evaluate bracket))
-   (Control.Monad (void))
+    (forkIO newEmptyMVar killThread putMVar takeMVar threadDelay yield))
+   (Control.Exception
+    ((IOException ..) bracket catch evaluate finally throwIO))
+   (Control.Monad (forever replicateM_ void when))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate isSubsequenceOf))
    (Data.String ((IsString ..)))
+   (GHC.Conc ((ThreadStatus ..) threadStatus))
 
    ;; filepath
    (System.FilePath (</>))
@@ -58,7 +60,8 @@
 
 ;;; Exported test
 
-(defn (:: replTests Spec)
+(defn (:: replTests (-> EvalTestFns Spec))
+  [etf]
   (do (describe "ReplState" replStateTests)
       (describe "Read" readTests)
       (describe "ReadPrint"
@@ -72,13 +75,16 @@
           ((== os "mingw32")
            (it "should skip under Windows"
              (pendingWith "Windows not supported yet")))
-          (otherwise evalTests)))
-      (describe "Listen"
-        (with-os-cond os
-          ((== os "mingw32")
-           (it "should be skipped under Windows"
-             (pendingWith "Windows not supported yet")))
-          (otherwise listenTests)))))
+          (otherwise (evalTests etf))))))
+
+(defn (:: listenTests (-> EvalTestFns Spec))
+  [etf]
+  (describe "Listen"
+    (with-os-cond os
+      ((== os "mingw32")
+       (it "should be skipped under Windows"
+         (pendingWith "Windows not supported yet")))
+      (otherwise (listenTests1 etf)))))
 
 ;;; Orphan
 
@@ -150,8 +156,7 @@
                (shouldBe form (Just '(a b c))))))))
 
 (defn (:: readPrintTests Spec)
-  (describe
-      "read and print loop"
+  (describe "read and print loop"
     (do (rptest "multi line form" ["(print" "(+" "10" "32" "))"])
         (rptest "quitting with \"(quit)\"" ["(quit)"])
         (rptest "\",t\" command" [",t False"])
@@ -160,112 +165,122 @@
 
 (defn (:: rptest (-> String [String] Spec))
   [label inputs]
-  (describe label
-    (do (let ((= run
-                (do (<- (@ resources (, _ hdl in-mv)) acquire-repl)
-                    (<- eval-tid
-                      (forkIO (runFnk (eval-loop hdl in-mv) repl-env)))
-                    (let ((= act
-                            (runTestIO (read-print-loop in-mv eval-tid)
-                                       inputs))))
-                    (return (, resources act))))))
-        (<- (, resources act) (runIO run))
-        (after_ (cleanup-repl resources)
-                (it "should evaluate successfully"
-                  (do (<- tst (fmap snd (liftIO act)))
-                      (shouldSatisfy (pending-input
-                                      (tst-replstate tst))
-                                     null)))))))
+  (let ((= run
+          (do (<- in-mv newEmptyMVar)
+              (<- tid (forkIO (forever
+                               (do (<- (Input _ _ out-mv) (takeMVar in-mv))
+                                   (putMVar out-mv (Right ""))))))
+              (return (, in-mv tid)))))
+    (describe label
+      (it "should have no pending inputs"
+        (do (<- (, in-mv tid) run)
+            (<- (, _ tst) (runTestIO (read-print-loop in-mv tid) inputs))
+            (finally
+             (shouldSatisfy (pending-input (tst-replstate tst)) null)
+             (killThread tid)))))))
 
-(defn (:: evalTests Spec)
-  (do (let ((= d describe)
-            (= delines (intercalate "\n"))))
-      (<- (EvalTestFns ok ng satisfy cleanup) (runIO makeEvalTestFns))
-      (afterAll_
-       cleanup
-       (do
-         ;; Statements and declarations
-         (ok '(+ 10 32) "42")
-         (ok '(defn (:: f1 (-> Int Int))
-               [n]
-               (+ n 1))
-             "; f1 :: Int -> Int")
-         (ok '(f1 41) "42")
-         (ok '(:begin
-               (:: (x y) Int)
-               (= x 1)
-               (= y 2))
-             "; x :: Int\n; y :: Int")
-         (ok '(<- z (return True))
-             "; z :: Bool")
-         (ok '(defn (:: f2 (-> (Maybe Int) Int))
-               [(Just n)] (* n 2)
-               [Nothing]  0)
-             "; f2 :: Maybe Int -> Int")
-         (ok '(f2 (Just 21)) "42")
-         (ok '(data Foo (Foo Int))
-             (concat ["; $tcFoo :: TyCon\n"
-                      "; $tc'Foo :: TyCon\n"
-                      "; Type constructor ‘Foo’"]))
+(defn (:: evalTests (-> EvalTestFns Spec))
+  [(EvalTestFns {etf-ok ok etf-ng ng etf-satisfy satisfy})]
+  (do
+    ;; Statements and declarations
+    (ok '(+ 10 32) "42")
+    (ok '(defn (:: f1 (-> Int Int))
+          [n]
+          (+ n 1))
+        "; f1 :: Int -> Int")
+    (ok '(f1 41) "42")
+    (ok '(:begin
+          (:: (x y) Int)
+          (= x 1)
+          (= y 2))
+        "; x :: Int\n; y :: Int")
+    (ok '(<- z (return True))
+        "; z :: Bool")
+    (ok '(defn (:: f2 (-> (Maybe Int) Int))
+          [(Just n)] (* n 2)
+          [Nothing] 0)
+        "; f2 :: Maybe Int -> Int")
+    (ok '(f2 (Just 21)) "42")
+    (ok '(data Foo (Foo Int))
+        (concat ["; $tcFoo :: TyCon\n"
+                 "; $tc'Foo :: TyCon\n"
+                 "; Type constructor ‘Foo’"]))
 
-         ;; Import
-         (ok '(import Control.Monad)
-             "; import Control.Monad")
-         (ok '(import qualified Data.Functor as DF)
-             "; import qualified Data.Functor as DF")
-         (ok '(import Control.Monad (liftM ap))
-             "; import Control.Monad ( liftM, ap )")
+    ;; Import
+    (ok '(import Control.Monad)
+        "; import Control.Monad")
+    (ok '(import qualified Data.Functor as DF)
+        "; import qualified Data.Functor as DF")
+    (ok '(import Control.Monad (liftM ap))
+        "; import Control.Monad ( liftM, ap )")
 
-         ;; Eval wrapper
-         (ok 'System.Environment.getArgs "[]")
+    ;; Eval wrapper
+    (ok 'System.Environment.getArgs "[]")
 
-         ;; Expansion quoted codes in REPL
-         (ok '(macroexpand ''foo)
-             "(Language.Finkel.qSymbol \"foo\")")
-         (ok '(macroexpand '`(a ,@(b) c))
-             (concat
-              ["(Language.Finkel.qList (Data.Foldable.concat ["
-               "[(Language.Finkel.qSymbol \"a\")] "
-               "(Language.Finkel.unquoteSplice ((b))) "
-               "[(Language.Finkel.qSymbol \"c\")]"
-               "]))"]))
+    ;; Expansion quoted codes in REPL
+    (ok '(macroexpand ''foo)
+        "(Language.Finkel.qSymbol \"foo\")")
+    (ok '(macroexpand '`(a ,@(b) c))
+        (concat
+         ["(Language.Finkel.qList (Data.Foldable.concat ["
+          "[(Language.Finkel.qSymbol \"a\")] "
+          "(Language.Finkel.unquoteSplice ((b))) "
+          "[(Language.Finkel.qSymbol \"c\")]"
+          "]))"]))
 
-         ;; Exported macros
-         (satisfy '(exported-macros Finkel.Core)
-                  (\ result
-                    (case result
-                      (Right str) (isSubsequenceOf "defmacro" str)
-                      _ False)))
+    ;; Exported macros
+    (satisfy '(exported-macros Finkel.Core)
+             (\ result
+               (case result
+                 (Right str) (isSubsequenceOf "defmacro" str)
+                 _ False)))
 
-         ;; Errors
-         (ng 'buzz
-             (concat ["<interactive>:1:1: error: "
-                      "Variable not in scope: buzz"]))
-         (ng '(= f a (+ a 1) (+ a 2))
-             (concat
-              ["<quoted code>: error:\n"
-               "    syntax error on input `(= f a (+ a 1) (+ a 2))'"]))
-         (ng '(head [])
-             "*** Exception: Prelude.head: empty list")))))
+    ;; Errors
+    (ng 'buzz
+        (concat ["<interactive>:1:1: error: "
+                 "Variable not in scope: buzz"]))
+    (ng '(= f a (+ a 1) (+ a 2))
+        (concat
+         ["<quoted code>: error:\n"
+          "    syntax error on input `(= f a (+ a 1) (+ a 2))'"]))
+    (ng '(head [])
+        "*** Exception: Prelude.head: empty list")))
 
-(defn (:: listenTests Spec)
+(defn (:: listenTests1 (-> EvalTestFns Spec))
+  [(EvalTestFns {etf-tid etid})]
   (let ((= with-repl-connection
           (bracket acquire release))
+        (= short-pause (threadDelay 50000))
+        (= wait-until-killed tid
+          (do (<- st (threadStatus tid))
+              (putStrLn (++ "listenTests1: " (show st)))
+              (when (notElem st [ThreadFinished ThreadDied])
+                (do short-pause
+                    (wait-until-killed tid)))))
         (= acquire
-          (do (<- tid (forkIO
-                       ;; Passing a file to work for, so that the REPL
-                       ;; thread will not terminate before the testing
-                       ;; client connect.
+          (do (wait-until-killed etid)
+              (<- tid (forkIO
+                       ;; Passing a file to work for, so that the REPL thread
+                       ;; will not terminate before the testing client connect.
                        (replMain [(++ "--listen=" port)
                                   (++ "--file=" input-file)])))
-              ;; Pause for a bit after forking server action.
-              (threadDelay 500000)
+              ;; Pause for a bit after forking the server action.
+              (replicateM_ 5 short-pause)
               (<- addr (resolve "127.0.0.1" port))
               (<- conn (socket (addrFamily addr)
                                (addrSocketType addr)
                                (addrProtocol addr)))
-              (connect conn (addrAddress addr))
+              (with-retry 20
+                (connect conn (addrAddress addr)))
               (return (, conn tid))))
+        (= with-retry n act
+          (catch act
+            (\ e
+              (if (< 0 n)
+                  (do yield
+                      short-pause
+                      (with-retry (- n 1) act))
+                  (throwIO (:: e IOException))))))
         (= release (, conn tid)
           (do (sendAll conn ",quit")
               (<- _msg (recv conn 1024))
@@ -281,10 +296,9 @@
         (= work (, conn _)
           (do (<- _msg1 (recv conn 1024))
               (sendAll conn "(* 7 (+ 4 2))")
-              (<- msg2 (recv conn 1024))
-              (return msg2)))
-        (= d describe))
-    (around with-repl-connection
-            (d "listener"
-               (it "evaluate form sent from connected client"
-                 (\ args (shouldReturn (work args) "42")))))))
+              (recv conn 1024)))
+        (= listener-test
+          (describe "listener"
+            (it "evaluates a form sent from connected client"
+              (\ args (shouldReturn (work args) "42"))))))
+    (before acquire (after release listener-test))))

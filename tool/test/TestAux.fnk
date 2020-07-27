@@ -11,7 +11,7 @@
   (import
    ;; base
    (Control.Concurrent
-    (forkIO newEmptyMVar killThread putMVar takeMVar))
+    (ThreadId MVar forkIO newEmptyMVar killThread putMVar takeMVar))
    (Control.Monad (mplus))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
@@ -149,7 +149,8 @@
    {etf-ok (-> Code String Spec)
     etf-ng (-> Code String Spec)
     etf-satisfy (-> Code (-> Result Bool) Spec)
-    etf-cleanup (IO ())}))
+    etf-cleanup (IO ())
+    etf-tid ThreadId}))
 
 (defn (:: if-using-stack (=> (MonadIO m) (-> (m a) (m a) (m a))))
   "Perform the first action when invoked from @stack@, otherwise
@@ -180,8 +181,7 @@
 (defn (:: makeEvalTestFns (IO EvalTestFns))
   (do (<- out-mv newEmptyMVar)
       (<- (@ resources (, _tmpfile hdl in-mv)) acquire-repl)
-      (<- etid (forkIO (runFnk (>> init-etf (eval-loop hdl in-mv))
-                               repl-env)))
+      (<- etid (forkIO (runFnk (>> init-etf (eval-loop hdl in-mv)) repl-env)))
       (let ((= eval-form right-or-left form expect
               (describe (++ "evaluate " (show form))
                 (it "evaluates to expected result"
@@ -204,4 +204,5 @@
       (return (EvalTestFns {etf-ok ok
                             etf-ng ng
                             etf-satisfy satisfy
-                            etf-cleanup cleanup}))))
+                            etf-cleanup cleanup
+                            etf-tid etid}))))

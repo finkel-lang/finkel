@@ -1,13 +1,22 @@
 module Main where
 
+-- Internal
 import CLITest
 import MainTest
 import ReplMacroTest
 import ReplTest
+import TestAux
+
+-- hspec
 import Test.Hspec
 
 main :: IO ()
-main = hspec (do cliTests
-                 mainTests
-                 replTests
-                 replMacroTests)
+main = do
+  etf <- makeEvalTestFns
+  hspec $
+    do afterAll_ (etf_cleanup etf)
+                 (do describe "CLITest" cliTests
+                     describe "MainTest" mainTests
+                     describe "ReplTest" (replTests etf)
+                     describe "ReplMacroTest" (replMacroTests etf))
+       listenTests etf

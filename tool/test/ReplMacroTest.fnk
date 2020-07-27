@@ -29,36 +29,33 @@
    ;; Internal
    (TestAux)))
 
-(defn (:: replMacroTests Spec)
-  (describe "ReplMacro"
-    (with-os-cond os
-      ((== os "mingw32")
-       (it "should skip under Windows"
-         (pendingWith "Windows not yet supported")))
-      (otherwise replMacroTests'))))
+(defn (:: replMacroTests (-> EvalTestFns Spec))
+  [etf]
+  (with-os-cond os
+    ((== os "mingw32")
+     (it "should skip under Windows"
+       (pendingWith "Windows not yet supported")))
+    (otherwise (replMacroTests-1 etf))))
 
-(defn (:: replMacroTests' Spec)
-  (do (let ((= delines (intercalate "\n"))
-            (= testdata name
-              (</> "test" (</> "data" name)))))
-
-      (<- current-dir (runIO getCurrentDirectory))
+(defn (:: replMacroTests-1 (-> EvalTestFns Spec))
+  [(EvalTestFns {etf-ok ok etf-ng ng etf-satisfy satisfy})]
+  (do (<- current-dir (runIO getCurrentDirectory))
       (<- tmp-dir (runIO getTemporaryDirectory))
-      (<- (EvalTestFns ok ng satisfy cleanup) (runIO makeEvalTestFns))
-      (let ((= with-right form test
-              (satisfy form (either (const False) test)))
-            (= with-left form test
-              (satisfy form (either test (const False))))
+      (let ((= testdata name (</> "test" "data" name))
+            (= delines (intercalate "\n"))
             (= m02-dot-fnk (</> tmp-dir "m02.fnk"))
             (= m02-dot-hi (</> tmp-dir "m02.hi"))
             (= main-dot-o (</> tmp-dir "Main.o"))
             (= clear-m02-files
-              (mapM_ remove-if-exist [m02-dot-fnk m02-dot-hi main-dot-o]))))
+              (mapM_ remove-if-exist [m02-dot-fnk m02-dot-hi main-dot-o]))
+            (= with-right form test
+              (satisfy form (either (const False) test)))
+            (= with-left form test
+              (satisfy form (either test (const False))))))
       (beforeAll_
        clear-m02-files
        (afterAll_
-        (do cleanup
-            clear-m02-files)
+        clear-m02-files
         (do
           ;; !
           (ok '(repl-macro ! echo foo) "")
@@ -290,7 +287,7 @@
               "<quoted code>: error: load: invalid form `(foo bar)'")
 
           ;; Calling functions from Prelude after load error:
-         (ok '(:begin
+          (ok '(:begin
                 (repl-macro load /no/such/file.fnk)
                 (print (not False)))
               "True")

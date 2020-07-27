@@ -61,14 +61,14 @@
       versionTests))
 
 (defn (:: helpTests Spec)
-  (do (<- (, _ lns) (runIO (runTestIO (show-usage commands) [])))
-      (let ((= messageShouldContain
-              (shouldContain (unlines (tst-outputs lns))))))
-      (describe "help command"
-         (it "should contain command names in usage message"
-           (do (messageShouldContain "repl")
-               (messageShouldContain "make")
-               (messageShouldContain "version"))))))
+  (describe "help command"
+    (it "should contain command names in usage message"
+      (do (<- (, _ lns) (runTestIO (show-usage commands) []))
+          (let ((= messageShouldContain
+                  (shouldContain (unlines (tst-outputs lns))))))
+          (messageShouldContain "repl")
+          (messageShouldContain "make")
+          (messageShouldContain "version")))))
 
 (defn (:: replTests Spec)
   (describe "repl command"
