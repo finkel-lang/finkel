@@ -2,7 +2,10 @@
 module Main where
 
 import CoreTest
+import FunctionTest
 import Test.Hspec
 
 main :: IO ()
-main = hspec coreTests
+main = hspec $ do
+  functionTests
+  coreTests

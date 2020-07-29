@@ -122,7 +122,7 @@ default, i.e., available without /require/-ing \"Finkel.Core\" module.")
                             (:doc^ ,doc)
                             ,decl)))))
 
-         _ (finkelSrcError form "invalid args in macro definition"))))
+         _ (finkelSrcError form "dmac: malformed macro"))))
    %p(INLINABLE dmac)
 
    (:doc "Function for body of `macrolet'.")
@@ -133,7 +133,7 @@ default, i.e., available without /require/-ing \"Finkel.Core\" module.")
                (List [name arg body]) (macro-decl name arg body)
                _ (finkelSrcError x "lmac: malformed macro"))))
        (case (unCode form)
-         (List (: _self (LForm (L _l (List ms))) rest))
+         (List (: _ (LForm (L _l (List ms))) rest))
          (do (<- ms' (mapM f ms))
              (return `(:with-macro (,@ms') ,@rest)))
          _ (finkelSrcError form "lmac: malformed args"))))
@@ -273,11 +273,6 @@ See 'eval_when'.")
   (:: the-macro-arg Code)
   (= the-macro-arg '__form__)
 
-  (:: replace-hyphens (-> String String))
-  (= replace-hyphens
-    (map (\ x (if (== x #'-) #'_ x))))
-  %p(INLINABLE replace-hyphens)
-
   (:: subst-gensyms (-> [(, Atom Atom)] Code Code))
   (= subst-gensyms kvs
     (fmap (\ x (case (lookup x kvs)
@@ -285,14 +280,18 @@ See 'eval_when'.")
                  Nothing  x))))
   %p(INLINABLE subst-gensyms)
 
+  (:: replace-hyphens (-> String String))
+  (= replace-hyphens
+    (map (\ x (if (== x #'-) #'_ x))))
+  %p(INLINABLE replace-hyphens)
+
   (:: acc-gensym-names (-> [(, Atom Atom)] Atom (Fnk [(, Atom Atom)])))
   (= acc-gensym-names acc form
     (case form
       (ASymbol sym) (| ((<- (: #'$ (@ cs (: c _))) (unpackFS sym))
                         (elem c [#'a .. #'z])
                         (<- Nothing (lookup form acc))
-                        (do (let ((= cs' (replace-hyphens cs))))
-                            (<- x (gensym' cs'))
+                        (do (<- x (gensym' (replace-hyphens cs)))
                             (return (case (unCode x)
                                       (Atom gsym) (: (, form gsym) acc)
                                       _ acc)))))
@@ -315,8 +314,8 @@ See 'eval_when'.")
           (= err form-name name
             `(finkelSrcError
               ,form-name
-              (concat ["in macro `" (show ',name) "'\n"
-                       "invalid form: `" (show ,the-macro-arg) "'"])))
+              (++ ,(++ "in macro `" (show name) "'\ninvalid form: `")
+                  (show ,the-macro-arg) "'")))
 
           (:: atom-arg-body (-> Code Code Code Code Code))
           (= atom-arg-body name arg body form-name
@@ -324,7 +323,7 @@ See 'eval_when'.")
                (LForm (L $loc (List (: _ __arg__))))
                (let ((= ,arg (LForm (L $loc (List __arg__))))
                      (= $tmp ,body))
-                  $tmp)
+                 $tmp)
                _ ,(err form-name name)))
 
           (:: list-arg-body (-> SrcSpan Code [Code] Code Code Code))
@@ -688,9 +687,9 @@ The last /fib2/ example is same as below:
         (= is-tuple (== (fsLit ",")))
         (:: is-con (-> Code Bool))
         (= is-con name
-          (| ((<- (Atom (ASymbol n)) (unCode name))
-              (|| (isLexCon n) (is-tuple n)))
-             (otherwise False)))
+          (case (unCode name)
+            (Atom (ASymbol n)) (|| (isLexCon n) (is-tuple n))
+            _ False))
         (:: build-sig (-> Code Code (Maybe Code) [Code] (Fnk Code)))
         (= build-sig name ty mb-doc bodies0
           (do (<- bodies1 (build-decls name bodies0))
@@ -701,19 +700,14 @@ The last /fib2/ example is same as below:
         (:: build-nosig (-> Code (Maybe Code) [Code] (Fnk Code)))
         (= build-nosig name mb-doc bodies0
           (let ((= go bodies
-                  (| ((<- Nothing mb-doc)
-                      (<- [body] bodies)
-                      (return body))
-                     (otherwise
-                      (return `(:begin ,@bodies ,@(build-doc mb-doc)))))))
+                  (case mb-doc
+                    Nothing (| ((<- [body] bodies)
+                                (return body)))
+                    _ (return `(:begin ,@bodies ,@(build-doc mb-doc))))))
             (>>= (build-decls name bodies0) go)))
         (:: build (-> Code (Maybe Code) [Code] (Fnk Code)))
         (= build sig mb-doc bodies
           (case (unCode sig)
-            (List [name ty]) (| ((is-con name)
-                                 (build-nosig sig mb-doc bodies))
-                                (otherwise
-                                 (build-sig name ty mb-doc bodies)))
             (List [dc name ty]) (| ((== dc '::)
                                     (build-sig name ty mb-doc bodies)))
             (List (: name _)) (| ((is-con name)
@@ -721,6 +715,7 @@ The last /fib2/ example is same as below:
             (Atom _) (build-nosig sig mb-doc bodies)
             (HsList _) (build-nosig sig mb-doc bodies)
             _ (finkelSrcError sig "defn: invalid signature"))))
+
     (case (unCode form)
       ;; Declaration of string without documentation need to pattern match
       ;; before declarations with documentation, to support defining plain
@@ -913,10 +908,10 @@ functions.
 
 ==== __Examples__
 
->>> (macroexpand-1 '(defmacro f1 [x] `(+ ,x 1)))
-(defmacro_m f1 [x]
-  (let ((= f1_cs2 (:quasiquote (+ (:unquote x) 1))))
-    (return f1_cs2)))
+>>> (macroexpand-1 '(defmacrom' m1 [x] `(+ ,x 1)))
+(eval_and_compile
+  (defmacro m1 [x]
+    (:quasiquote (+ (:unquote x) 1))))
 "
   [form]
   (case (unCode form)
@@ -1101,12 +1096,6 @@ Expands to:
           (return
            `(:begin
               ,@(emit True ':require)
-
-              ,@(let ((= mb-mdls (lookup ':eval-when-compile alist)))
-                  (case mb-mdls
-                    (Just mdls) `((:eval-when-compile
-                                    ,@mdls))
-                    Nothing nil))
 
               (module ,name ,@(emit False 'export))
 
