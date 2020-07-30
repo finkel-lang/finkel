@@ -17,6 +17,7 @@ category:            Language
 build-type:          Custom
 extra-source-files:  README.md
                      include/Syntax.h
+                     test/data/eval/*.fnk
                      test/data/syntax/*.fnk
                      test/data/main/*.c
                      test/data/main/*.hs
