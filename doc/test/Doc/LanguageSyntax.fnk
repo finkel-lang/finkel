@@ -37,12 +37,12 @@
    ;; Internal
    (Doc.TestAux)))
 
-(with-ghc-version-cond ghc
-  ((<= 810 ghc)
+(cond-expand
+  [(<= 810 :ghc)
    ;; ghc
-   (import RdrHsSyn (runECP_P)))
-  (otherwise
-   (:begin)))
+   (import RdrHsSyn (runECP_P))]
+  [otherwise
+   (:begin)])
 
 (defn (:: spec Spec)
   (beforeAll_
@@ -51,9 +51,9 @@
        (runGhc mb-ghc-lib (return ())))
    (describe "language syntax"
      (do (let ((= expFromECP
-                 (with-ghc-version-cond ghc
-                   ((<= 810 ghc) runECP_P)
-                   (otherwise return)))))
+                 (cond-expand
+                   ((<= 810 :ghc) runECP_P)
+                   [otherwise return]))))
          (describe "expression"
            (parser-tests "expr" (Parsers (>>= GhcParser.parseExpression
                                               expFromECP)

@@ -21,7 +21,7 @@ functions defined in this modules are used in macro defined in
   mb-symbol-name mb-symbol-name-fs
 
   (:dh1 "Converting")
-  curve
+  curve rev unsnoc
 
   (:dh1 "Code constructors")
   cons list (Listable ..) append
@@ -368,7 +368,7 @@ and the definition of 'cdadr' is:
 (cxrs)
 
 
-;;; Higher Order Functions
+;;; List and HsList functions
 
 (:doc "Auxiliary function for higher order function.
 
@@ -379,6 +379,7 @@ Make a function taking `SrcSpan' and a list of `Code' from given arguments.")
     (List xs) (f l xs)
     (HsList xs) (f l xs)
     _ (error-non-list label orig)))
+%p(INLINE make-list-fn)
 
 (:doc "Like `foldr', but for `Code'.
 
@@ -399,8 +400,7 @@ Make a function taking `SrcSpan' and a list of `Code' from given arguments.")
 
 (:doc "Like `foldr1', but for `Code'.
 
-Apply given function to given `List' or `HsList'. Throws an exception if the
-second argument was not a list.
+Throws an exception if the second argument was not a list.
 
 ==== __Examples__
 
@@ -446,3 +446,33 @@ Filter out immediate element of `List' if the test result is `False'.
 (:: keep (-> (-> Code Bool) Code Code))
 (= keep test
   (make-list-fn "keep" (\ l xs (LForm (L l (List (filter test xs)))))))
+
+(:doc "Like `reverse', but for `Code'.
+
+Reverse the given `List' or `HsList'. Other values are kept as-is.
+
+==== __Examples__
+
+>>> (rev '(a b c))
+(c b a)
+>>> (rev 'foo)
+foo
+")
+(:: rev (-> Code Code))
+(= rev (LForm (L l x))
+  (LForm (L l (case x
+                (List xs) (List (reverse xs))
+                (HsList xs) (HsList (reverse xs))
+                _ x))))
+
+(:doc "Split `List' and `HsList' to the elements but last and the last element.
+
+==== __Examples__
+
+>>> (unsnoc '(a b c d e))
+((a b c d),e)
+")
+(:: unsnoc (-> Code (, Code Code)))
+(= unsnoc form
+  (case (rev form)
+    mrof (, (rev (cdr mrof)) (car mrof))))

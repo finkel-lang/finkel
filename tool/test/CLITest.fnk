@@ -44,15 +44,15 @@
   (do (let ((= d describe)))
       (d "getString"
          (it "should end with Nothing"
-             (with-os-cond os
-               ((== os "mingw32")
-                (pendingWith "Windows CRLF handling not yet done"))
-               (otherwise
+             (cond-expand
+               [(== :os "mingw32")
+                (pendingWith "Windows CRLF handling not yet done")]
+               [otherwise
                 (shouldReturn (with-test-stdin "input01.txt"
                                 (toIO (replicateM 3 (getString ""))))
                               [(Just "First line")
                                (Just "Second line")
-                               Nothing])))))
+                               Nothing])])))
       (d "putString"
          (it "should run successfully"
              (shouldReturn (toIO (putString "foo"))

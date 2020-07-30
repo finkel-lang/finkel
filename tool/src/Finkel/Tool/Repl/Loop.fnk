@@ -33,11 +33,12 @@
    (Finkel.Tool.Repl.Types)))
 
 ;;; Extra imports
-(with-os-cond os
-  ((== os "mingw32")
-   (import System.IO (hSetEncoding stdin utf8)))
-  (otherwise
-   (:begin)))
+
+(cond-expand
+  [(== :os "mingw32")
+   (import System.IO (hSetEncoding stdin utf8))]
+  [otherwise
+   (:begin)])
 
 
 ;;; Starting the REPL
@@ -77,11 +78,11 @@
             (= run (runInputTBehavior behavior defaultSettings))))
 
       ;; Using UTF-8 for Windows. See "GHCi.UI.interactiveUI"
-      (with-os-cond os
-        ((== os "mingw32")
-         (hSetEncoding stdin utf8))
-        (otherwise
-         (return ())))
+      (cond-expand
+        [(== :os "mingw32")
+         (hSetEncoding stdin utf8)]
+        [otherwise
+         (return ())])
 
       (run-repl (run rpl) mempty)))
 

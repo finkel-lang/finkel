@@ -22,13 +22,19 @@
   (import
    ;; base
    (Data.List (isSubsequenceOf))
+   (System.Info (os arch))
 
    ;; ghc
+   (BasicTypes ((SourceText ..)))
    (FastString (fsLit))
    (HscTypes (SourceError))
+   (Config (cProjectVersionInt))
 
    ;; hspec
    (Test.Hspec)
+
+   ;; finkel-kernel
+   (Language.Finkel.Form (aString aIntegral))
 
    ;; Internal
    (Finkel.Core)))
@@ -684,18 +690,14 @@
             (expandFailure
              (defmodule)))))
 
-    (describe "with-ghc-version-cond"
-      (it "should expand to macrolet"
+    (describe "cond-expand"
+      (it "should contain compile time information"
         (expandSatisfy
-         (with-ghc-version-cond v
-           ((<= 800 v) foo)
-           (otherwise bar))
-         (\ form (== (car form) 'macrolet)))))
-
-    (describe "with-os-cond"
-      (it "should expand to macrolet"
-        (expandSatisfy
-         (with-os-cond os
-           ((== "linux" os) foo)
-           (otherwise bar))
-         (\ form (== (car form) 'macrolet)))))))
+         (cond-expand
+           [(<= 700 :ghc) (== :arch "x86_64") (== :os "linux")
+            "ghc newer than 7.0.0, x86_64-linux"]
+           [otherwise "other"])
+         (\ form
+           (&& (elem (aIntegral (:: (read cProjectVersionInt) Int)) form)
+               (elem (aString NoSourceText arch) form)
+               (elem (aString NoSourceText os) form))))))))

@@ -96,16 +96,16 @@
 
 ;;; Extra imports
 
-(with-ghc-version-cond ver
-  [(<= 810 ver)
+(cond-expand
+  [(<= 810 :ghc)
    (:begin
      (import GHC.Hs.ImpExp ((ImportDecl ..) simpleImportDecl))
      (import DynFlags (settings)))]
   [otherwise
    (import HsImpExp ((ImportDecl ..) simpleImportDecl))])
 
-(with-ghc-version-cond ver
-  [(<= 804 ver)
+(cond-expand
+  [(<= 804 :ghc)
    (:begin
      (import Prelude hiding (<>))
      (import qualified HscTypes as HscTypes))]
@@ -128,27 +128,27 @@
 
 (defn (:: gen-default-dflags (-> DynFlags DynFlags))
   [flg]
-  (with-ghc-version-cond ghc
-    [(<= 810 ghc)
+  (cond-expand
+    [(<= 810 :ghc)
      (defaultDynFlags (settings flg) (llvmConfig flg))]
-    [(<= 806 ghc)
+    [(<= 806 :ghc)
      (defaultDynFlags (settings flg) (, (llvmTargets flg) (llvmPasses flg)))]
-    [(<= 804 ghc)
+    [(<= 804 :ghc)
      (defaultDynFlags (settings flg) (llvmTargets flg))]
     [otherwise
      (defaultDynFlags (settings flg))]))
 
 (defn (:: graph-to-summaries (-> ModuleGraph [ModSummary]))
-  (with-ghc-version-cond ghc
-    [(<= 804 ghc)
+  (cond-expand
+    [(<= 804 :ghc)
       HscTypes.mgModSummaries]
     [otherwise
      id]))
 
 (defn (:: show-linker-state (-> HscEnv (IO ())))
   [hsc-env]
-  (with-ghc-version-cond ghc
-    [(<= 810 ghc)
+  (cond-expand
+    [(<= 810 :ghc)
      (showLinkerState (hsc-dynLinker hsc-env) (hsc-dflags hsc-env))]
     [otherwise
      (showLinkerState (hsc-dflags hsc-env))]))
@@ -310,8 +310,8 @@ object code."
                                 (catMaybes mb_stuffs)))))
              (return
               (vcat (intersperse (text "") (map ppr-info filtered)))))
-    (with-ghc-version-cond ghc
-      [(<= 804 ghc)
+    (cond-expand
+      [(<= 804 :ghc)
        (:begin
          (defn child-filter [(, a _ _ _ _)] a)
          (defn ppr-info [(, thing fixity cls fam _)]
@@ -360,8 +360,8 @@ object code."
         (AnId i) (pprTypeAndContents i)
         _ (do (<- mb-stuff (getInfo False (getName tt)))
               (return (maybe (text "") ppr-tt mb-stuff)))))
-    (with-ghc-version-cond ghc
-      [(<= 804 ghc)
+    (cond-expand
+      [(<= 804 :ghc)
        (defn ppr-tt [(, thing _ _ _ _)]
          (pprTyThing showToHeader thing))]
       [otherwise

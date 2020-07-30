@@ -31,11 +31,11 @@
 
 (defn (:: replMacroTests (-> EvalTestFns Spec))
   [etf]
-  (with-os-cond os
-    ((== os "mingw32")
+  (cond-expand
+    [(== :os "mingw32")
      (it "should skip under Windows"
-       (pendingWith "Windows not yet supported")))
-    (otherwise (replMacroTests-1 etf))))
+       (pendingWith "Windows not yet supported"))]
+    [otherwise (replMacroTests-1 etf)]))
 
 (defn (:: replMacroTests-1 (-> EvalTestFns Spec))
   [(EvalTestFns {etf-ok ok etf-ng ng etf-satisfy satisfy})]
@@ -234,38 +234,38 @@
 
           (ok `(writeFile ,m02-dot-fnk "(defn main (print True))")
               "")
-          (with-os-cond os
-            ((== os "darwin")
+          (cond-expand
+            [(== :os "darwin")
              (describe "evaluate (repl-macro load m02.fnk)"
                (it "should skip under darwin"
-                 (pendingWith "OSX not supported yet"))))
-            (otherwise
+                 (pendingWith "OSX not supported yet")))]
+            [otherwise
              (ok `(:begin
                     (repl-macro load ,(qSymbol m02-dot-fnk))
                     main)
-                 "True")))
+                 "True")])
           (ok `(writeFile ,m02-dot-fnk "(defn main (print False))")
               "")
 
-          (with-os-cond os
-            ((== os "darwin")
+          (cond-expand
+            [(== :os "darwin")
              (describe "evaluate (repl-macro reload)"
                (it "should skip under darwin"
-                 (pendingWith "OSX not supported yet"))))
-            (otherwise
+                 (pendingWith "OSX not supported yet")))]
+            [otherwise
              (ok '(repl-macro reload)
-                 (++ "; reloaded " m02-dot-fnk))))
-          (with-os-cond os
-            ((== os "darwin")
+                 (++ "; reloaded " m02-dot-fnk))])
+          (cond-expand
+            [(== :os "darwin")
              (describe "evaluate main"
                (it "should skip under darwin"
-                 (pendingWith "OSX not supported yet"))))
-            (otherwise
-             (ok 'main "False")))
+                 (pendingWith "OSX not supported yet")))]
+            [otherwise
+             (ok 'main "False")])
 
           ;; Compiling object code
-          (with-os-cond os
-            [(== os "darwin")
+          (cond-expand
+            [(== :os "darwin")
              (describe "Compiling object code"
                (it "should be skipped under darwin"
                  (pendingWith "OSX not supported yet")))]

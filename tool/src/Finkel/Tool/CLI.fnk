@@ -21,12 +21,12 @@
    (System.Console.Haskeline (InputT))
    (qualified System.Console.Haskeline as Haskeline)))
 
-(with-ghc-version-cond v
-  ((<= 810 v)
+(cond-expand
+  [(<= 810 :ghc)
    (import Control.Monad.Catch
-           ((MonadThrow ..) (MonadCatch ..) (MonadMask ..))))
-  (otherwise
-   (import System.Console.Haskeline ((MonadException ..)))))
+           ((MonadThrow ..) (MonadCatch ..) (MonadMask ..)))]
+  [otherwise
+   (import System.Console.Haskeline ((MonadException ..)))])
 
 ;;; Type class for command line interface, ... actually, for 'InputT'
 ;;; from haskeline package.
@@ -59,20 +59,20 @@
   (= withInterrupt act act)
   (= exitWith Exit.exitWith))
 
-(with-ghc-version-cond v
-  ((<= 810 v)
+(cond-expand
+  [(<= 810 :ghc)
    (instance (=> (MonadIO m) (MonadCatch m) (MonadMask m) (MonadThrow m)
                  (CLI (InputT m)))
      (= getString Haskeline.getInputLine)
      (= putString Haskeline.outputStrLn)
      (= handleInterrupt Haskeline.handleInterrupt)
      (= withInterrupt Haskeline.withInterrupt)
-     (= exitWith (. liftIO Exit.exitWith))))
-  (otherwise
+     (= exitWith (. liftIO Exit.exitWith)))]
+  [otherwise
    (instance (=> (MonadIO m) (MonadException m)
                  (CLI (InputT m)))
      (= getString Haskeline.getInputLine)
      (= putString Haskeline.outputStrLn)
      (= handleInterrupt Haskeline.handleInterrupt)
      (= withInterrupt Haskeline.withInterrupt)
-     (= exitWith (. liftIO Exit.exitWith)))))
+     (= exitWith (. liftIO Exit.exitWith)))])

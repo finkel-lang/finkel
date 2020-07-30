@@ -67,44 +67,44 @@
    (Finkel.Tool.Repl.IO)
    (Finkel.Tool.Repl.Types)))
 
-(with-ghc-version-cond v
-  ((<= 810 v)
+(cond-expand
+  [(<= 810 :ghc)
    ;; ghc
    (import GHC.Hs.ImpExp
            ((ImportDecl ..)
             (ImportDeclQualifiedStyle)
-            isImportDeclQualified)))
-  (otherwise
+            isImportDeclQualified))]
+  [otherwise
    ;; ghc
-   (import HsImpExp ((ImportDecl ..)))))
+   (import HsImpExp ((ImportDecl ..)))])
 
 ;;; Version compatibility function
 
-(with-ghc-version-cond ghc
-  ((<= 810 ghc)
+(cond-expand
+  [(<= 810 :ghc)
    (:begin
      (defn (:: extend-link-env (-> HscEnv [(, Name ForeignHValue)] (Fnk ())))
        [hsc-env names-vals]
        (liftIO (extendLinkEnv (hsc-dynLinker hsc-env) names-vals)))
      (defn (:: is-import-decl-qualified (-> ImportDeclQualifiedStyle Bool))
-       isImportDeclQualified)))
-  (otherwise
+       isImportDeclQualified))]
+  [otherwise
    (:begin
      (defn (:: extend-link-env (-> a [(, Name ForeignHValue)] (Fnk ())))
        [_ names-vals]
        (liftIO (extendLinkEnv names-vals)))
      (defn (:: is-import-decl-qualified (-> Bool Bool))
-       id))))
+       id))])
 
 (defn (:: optional-dynflags [GeneralFlag])
   "Optional 'GeneralFlag' set for REPL."
-  (with-ghc-version-cond v
-    ((<= 804 v)
+  (cond-expand
+    [(<= 804 :ghc)
      [Opt_ImplicitImportQualified
       Opt_IgnoreOptimChanges
-      Opt_IgnoreHpcChanges])
-    (otherwise
-     [Opt_ImplicitImportQualified])))
+      Opt_IgnoreHpcChanges]]
+    [otherwise
+     [Opt_ImplicitImportQualified]]))
 
 
 ;;; Eval loop

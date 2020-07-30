@@ -23,11 +23,11 @@
    ;; Internal
    (Finkel.Tool.CLI)))
 
-(with-ghc-version-cond v
-  ((<= 808 v)
-   (import Data.Foldable (find maximumBy)))
-  (otherwise
-   (import Data.Foldable ((Foldable ..) find maximumBy))))
+(cond-expand
+  [(<= 808 :ghc)
+   (import Data.Foldable (find maximumBy))]
+  [otherwise
+   (import Data.Foldable ((Foldable ..) find maximumBy))])
 
 ;;; Data type to wrap an IO action taking string arguments with name and
 ;;; description.

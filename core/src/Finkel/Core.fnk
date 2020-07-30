@@ -12,7 +12,7 @@ default, i.e., available without /require/-ing \"Finkel.Core\" module.")
   (:dh1 "Module header")
   defmodule
 
-  (:dh1 "Top level macros")
+  (:dh1 "Macro for macros")
   defmacro defmacro' defmacroM defmacroM'
 
   (:dh1 "Temporary macros")
@@ -25,7 +25,7 @@ default, i.e., available without /require/-ing \"Finkel.Core\" module.")
   macroexpand macroexpand-1 exported-macros
 
   (:dh1 "Compilation context macros")
-  with-ghc-version-cond with-os-cond
+  cond-expand
 
   (:dh1 "Error macro")
   macro-error
@@ -65,11 +65,13 @@ default, i.e., available without /require/-ing \"Finkel.Core\" module.")
 (import Lexeme (isLexCon))
 (import Outputable (ppr showSDoc))
 (import SrcLoc ((SrcSpan ..)))
+(import BasicTypes ((SourceText ..)))
 (import TyCoRep ((TyThing ..)))
 (import Var (varName))
 
 ;; finkel-kernel
 (import Language.Finkel)
+(import Language.Finkel.Form (aString aSymbol))
 
 ;; Internal
 (import Finkel.Core.List)
@@ -755,13 +757,13 @@ See 'defn'."
 (defmacro cond
   "The 'cond' macro, found in many Lisp languages.
 
-The behaviour is same as wrapping the body with @case@ expression with
-dummy unit, or @if@ with @MultiWayIf@ GHC language extension.
+The behaviour is same as wrapping the body with @case@ expression with dummy
+unit, or @if@ with @MultiWayIf@ GHC language extension.
 
 ==== __Syntax__
 
 > COND   ::= 'cond' CLAUSE+
-> CLAUSE ::= '(' guard+ expr ')'
+> CLAUSE ::= '(' guard+ expr ')' | '[' guard+ expr ']'
 
 ==== __Examples__
 
@@ -835,64 +837,73 @@ Is same as:
 
 ;;; Compilation context macros
 
-(defmacro with-ghc-version-cond
-  "Macro to generate code with ghc version variable.
+(:doc "Auxiliary function for `cond-expand'.")
+(:: replace-ce (-> Code Atom Atom))
+(= replace-ce ghc form
+  (case form
+    (ASymbol s)
+    (| ((== s (fsLit ":ghc"))
+        (aSymbol (show ghc)))
+       ((== s (fsLit ":os"))
+        (aString (SourceText ":os") System.Info.os))
+       ((== s (fsLit ":arch"))
+        (aString (SourceText ":arch") System.Info.arch)))
+    _ form))
 
-The ghc version value is an `Int' value made from `cProjectVersionInt'.
+(defmacroM cond-expand
+  "Macro for conditional compilation.
 
-==== __Syntax__
+The `cond-expand' macro has same syntax as the `cond' macro, but the evaluation
+of the tests are done at compilation time. To gather compilation context
+information, the tests sections in the `cond-expand' macro uses special keywords
+for getting such information. These keywords are replaced by the described
+values:
 
-> WITH-GHC-VERSION-COND ::= 'with-ghc-version-cond' varid body
+[@:ghc@]: An `Int' value of `cProjectVersionInt', which is the major and minor
+version of the @ghc@ used during the compilation.
 
-==== __Example__
+[@:arch@]: A `String' value from `System.Info.arch'.
 
-Following code result in different `String', according to the ghc version used
-for compiling the code:
-
-@
-(with-ghc-version-cond ghc
-  ((< 810 ghc) \"Ghc version is newer than 8.10.0\")
-  ((<= 804 ghc) \"Ghc version is at least 8.4.0\")
-  (otherwise \"Old version\"))
-@
-"
-  forms
-  (let ((= var (car forms)))
-    `(macrolet (($tmp []
-                  (let ((:: ,var Int)
-                        (= ,var ,(:: (read cProjectVersionInt) Int)))
-                    (cond
-                      ,@(mapcar (\ x `(,(car x) ',(cadr x))) (cdr forms))))))
-       ($tmp))))
-
-(defmacro with-os-cond
-  "Macro to generate code with os name variable.
-
-The name of the os is taken from `System.Info.os'.
+[@:os@]: A `String' value from `System.Info.os'.
 
 ==== __Syntax__
 
-> WITH-OS-COND ::= 'with-os-cond' varid body
+See `cond'.
 
-==== __Example__
+==== __Examples__
 
-Following code result in different `String', according to the OS used for
-compiling the code:
+Simple usage to show message:
 
 @
-(with-os-cond os
-  ((== os \"linux\") \"OS is Linux\")
-  (otherwise \"Non-linux\"))
+(defn (:: msg String)
+  (cond-expand
+    [(<= 810 :ghc)
+     \"ghc is newer than 8.10.0\"]
+    [(== 808 :ghc) (== :arch \"x86_64\") (== :os \"linux\")
+     \"ghc version 8.8.x, x86_64-linux\"]
+    [otherwise
+     \"unknown\"]))
+@
+
+When compiling above with ghc version @8.8.4@ on @x86_64@ machine running
+@Linux@, the second test will pass and the expanded result would be:
+
+@
+(defn (:: msg String)
+  \"ghc version 8.8.x, x86_64-linux\"
 @
 "
   forms
-  (let ((= var (car forms)))
-    `(macrolet (($tmp []
-                  (let ((:: ,var String)
-                        (= ,var ,System.Info.os))
-                    (cond
-                      ,@(mapcar (\ x `(,(car x) ',(cadr x))) (cdr forms))))))
-       ($tmp))))
+  (do (<- ghc (gensym' "_ghc"))
+      (let ((= make-quoted-last branches
+              (case (unsnoc branches)
+                (, bs b) `(,@(fmap (replace-ce ghc) bs) ',b)))))
+      (pure
+       `(macrolet (($cond-expand-tmp []
+                     (let ((:: ,ghc Int)
+                           (= ,ghc ,(:: (read cProjectVersionInt) Int)))
+                       (cond ,@(mapcar make-quoted-last forms)))))
+          ($cond-expand-tmp)))))
 
 
 ;;; Macros for macros

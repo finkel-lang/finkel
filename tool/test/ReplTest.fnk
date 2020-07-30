@@ -52,11 +52,12 @@
    (TestAux)))
 
 ;;; Extra imports
-(with-ghc-version-cond v
-  ((<= 804 v)
-   (:begin))
-  (otherwise
-   (import Data.Monoid (<>))))
+
+(cond-expand
+  [(<= 804 :ghc)
+   (:begin)]
+  [otherwise
+   (import Data.Monoid (<>))])
 
 ;;; Exported test
 
@@ -65,26 +66,26 @@
   (do (describe "ReplState" replStateTests)
       (describe "Read" readTests)
       (describe "ReadPrint"
-        (with-os-cond os
-          ((== os "mingw32")
+        (cond-expand
+          [(== :os "mingw32")
            (it "should skip under Windows"
-             (pendingWith "Windows not supported yet")))
-          (otherwise readPrintTests)))
+             (pendingWith "Windows not supported yet"))]
+          [otherwise readPrintTests]))
       (describe "Eval"
-        (with-os-cond os
-          ((== os "mingw32")
+        (cond-expand
+          [(== :os "mingw32")
            (it "should skip under Windows"
-             (pendingWith "Windows not supported yet")))
-          (otherwise (evalTests etf))))))
+             (pendingWith "Windows not supported yet"))]
+          [otherwise (evalTests etf)]))))
 
 (defn (:: listenTests (-> EvalTestFns Spec))
   [etf]
   (describe "Listen"
-    (with-os-cond os
-      ((== os "mingw32")
-       (it "should be skipped under Windows"
-         (pendingWith "Windows not supported yet")))
-      (otherwise (listenTests1 etf)))))
+    (cond-expand
+      [(== :os "mingw32")
+        (it "should be skipped under Windows"
+          (pendingWith "Windows not supported yet"))]
+      [otherwise (listenTests1 etf)])))
 
 ;;; Orphan
 

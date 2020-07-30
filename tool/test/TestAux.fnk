@@ -45,11 +45,11 @@
 
 ;;; Extra imports
 
-(with-ghc-version-cond v
-  ((<= 804 v)
-   (:begin))
-  (otherwise
-   (import Data.Monoid (<>))))
+(cond-expand
+  [(<= 804 :ghc)
+   (:begin)]
+  [otherwise
+   (import Data.Monoid (<>))])
 
 ;;; Test IO
 
@@ -69,12 +69,12 @@
       tst-exitcode (mplus (tst-exitcode s2) (tst-exitcode s1))
       tst-replstate (on mappend tst-replstate s1 s2)})))
 
-(with-ghc-version-cond v
-  ((<= 804 v)
+(cond-expand
+  [(<= 804 :ghc)
    (instance (Semigroup TestIOState)
-     (= <> mappend)))
-  (otherwise
-   (:begin)))
+     (= <> mappend))]
+  [otherwise
+   (:begin)])
 
 (defn (:: emptyTestIOState TestIOState)
   (TestIOState {tst-inputs []

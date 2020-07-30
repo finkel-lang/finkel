@@ -277,4 +277,16 @@
          (do (it "removes non atom"
                (== '(a d e) (keep is-atom '(a (b c) d e (f g h)))))
              (it "throws an exception on non-list"
-               (expectFailure (=== nil (keep is-atom '"string"))))))))
+               (expectFailure (=== nil (keep is-atom '"string"))))))
+
+      (d "rev"
+         (do (it "reverses List"
+               (== '(c b a) (rev '(a b c))))
+             (it "reverses HsList"
+               (== '[c b a] (rev '[a b c])))
+             (it "does nothing to non-list values"
+               (== 'foo (rev 'foo)))))
+
+      (d "unsnoc"
+         (it "should split the last element"
+           (== (, '(a b c d) 'e) (unsnoc '(a b c d e)))))))

@@ -38,14 +38,14 @@
    ;; finkel-kernel
    (Language.Finkel (Code))))
 
-(with-ghc-version-cond v
-  ((<= 810 v)
+(cond-expand
+  [(<= 810 :ghc)
    ;; exceptions
    (import Control.Monad.Catch
-           ((MonadThrow ..) (MonadCatch ..) (MonadMask ..))))
-  (otherwise
+           ((MonadThrow ..) (MonadCatch ..) (MonadMask ..)))]
+  [otherwise
    ;; haskeline
-   (import System.Console.Haskeline ((MonadException ..) (RunIO ..)))))
+   (import System.Console.Haskeline ((MonadException ..) (RunIO ..)))])
 
 ;;; REPL, REPL state, input, and result types
 
@@ -72,12 +72,12 @@
            ((<- (Just _) mb-s2) mb-s2)
            (otherwise Nothing))))))
 
-(with-ghc-version-cond ver
-  ((<= 804 ver)
+(cond-expand
+  [(<= 804 :ghc)
    (instance (Semigroup ReplState)
-     (= <> mappend)))
-  (otherwise
-   (:begin)))
+     (= <> mappend))]
+  [otherwise
+   (:begin)])
 
 (defn (:: initial-repl-state ReplState)
   (ReplState {pending-input Nothing}))
@@ -113,8 +113,8 @@
 ;;; internally defined `MonadException' type class. Since the `Repl' data type
 ;;; is used with codes for the `InputT' from `haskeline' package, defining
 ;;; instances of type classes from `exceptions'.
-(with-ghc-version-cond v
-  ((<= 810 v)
+(cond-expand
+  [(<= 810 :ghc)
    (:begin
      (instance (MonadThrow Repl)
        (= throwM (. liftIO throwM))
@@ -124,7 +124,7 @@
        (= catch (Repl repl) f
          (Repl (\ ref
                  (catch (repl ref)
-                   (\ e (unRepl (f e) ref)))) ))
+                   (\ e (unRepl (f e) ref))))))
        %p(INLINE catch))
 
      (instance (MonadMask Repl)
@@ -153,19 +153,19 @@
                     (unRepl (release resource exit-case) ref))
                   (\ resource
                     (unRepl (use resource) ref))))))
-       %p(INLINE generalBracket))))
+       %p(INLINE generalBracket)))]
 
-  (otherwise
-   (instance (MonadException Repl)
-     (= controlIO f
-       (Repl (\ ref
-               (controlIO
-                (\ (RunIO run)
-                  (let ((= run'
-                          (RunIO (. (fmap (. Repl const))
-                                    (. run (flip unRepl ref))))))
-                    (fmap (flip unRepl ref) (f run'))))))))
-     %p(INLINE controlIO))))
+  [otherwise
+    (instance (MonadException Repl)
+      (= controlIO f
+        (Repl (\ ref
+                (controlIO
+                 (\ (RunIO run)
+                   (let ((= run'
+                           (RunIO (. (fmap (. Repl const))
+                                     (. run (flip unRepl ref))))))
+                     (fmap (flip unRepl ref) (f run'))))))))
+      %p(INLINE controlIO))])
 
 (defn (:: run-repl (-> (Repl a) ReplState (IO a)))
   [(Repl repl) st]

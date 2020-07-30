@@ -88,14 +88,14 @@
           (do (<- commit-id (liftIO get-git-commit))
               (shouldReturn (print commit-id) ())))
         (it "should not throw exception when git command is not found"
-          (with-os-cond os
+          (cond-expand
             ;; The use of `setEnv' may have problem under Windows ...
-            ((/= os "mingw32")
+            [(/= :os "mingw32")
              (do (<- mb-commit-id (liftIO (with-tmp-env [(, "PATH" ".")]
                                             get-git-commit)))
-                 (shouldBe mb-commit-id Nothing)))
-            (otherwise
-             (pendingWith "problem with `setEnv'"))))
+                 (shouldBe mb-commit-id Nothing))]
+            [otherwise
+             (pendingWith "problem with `setEnv'")]))
         (it "should show ghc version in default message"
           (do (<- msg (version []))
               (shouldContain msg "ghc")))
