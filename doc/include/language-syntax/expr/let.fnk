@@ -1,5 +1,5 @@
 (let ((:: a Int) ; Finkel
-      (:: (b c) Int)
+      (:: b c Int)
       (= a 10)
       (= b 4)
       (= c 2))

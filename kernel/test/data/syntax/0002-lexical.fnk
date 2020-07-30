@@ -81,7 +81,7 @@
             (Left "foo")])
 
     ;; Value names not starting with but containing `quote'.
-    (let ((:: (x x' x'') Int)
+    (let ((:: x x' x'' Int)
           (= x 100)
           (= x' 200)
           (= x'' 300)))
@@ -94,7 +94,7 @@
 
 
     ;; Function names starting with `#'.
-    (let ((:: (# #. ##) (-> Int Int))
+    (let ((:: # #. ## (-> Int Int))
           (= # a (+ a 1))
           (= #. a (+ a 2))
           (= ## a (+ a 3))))
@@ -103,7 +103,7 @@
     (print ((##) 39))
 
     ;; Function names starting with `%'.
-    (let ((:: (%. %%) (-> Int Int))
+    (let ((:: %. %% (-> Int Int))
           (= %. a (+ a 4))
           (= %% a (+ a 5))))
     (print ((%.) 38))

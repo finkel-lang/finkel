@@ -596,8 +596,7 @@ pats_and_guards :: { (([HGRHS],[HDecl]), [HPat]) }
     | pat pats_and_guards { ($1:) `fmap` $2 }
 
 decl_tsig :: { HDecl }
-    : '::' idsym dtype       {% b_tsigD [$2] $3 }
-    | '::' idsyms dtype      {% b_tsigD $2 $3 }
+    : '::' idsyms_dtype {% case $2 of (ns,t) -> b_tsigD ns t }
 
 dtype :: { ([HType], HType) }
     : 'symbol' {% (\t -> ([], t)) `fmap` b_symT $1}
@@ -605,6 +604,10 @@ dtype :: { ([HType], HType) }
     | 'hslist' {% do { t <- parse p_type [toListL $1]
                      ; return ([], b_listT t) }}
     | qtycl    { $1 }
+
+idsyms_dtype :: { ([Code], ([HType], HType)) }
+    : dtype              { ([],$1) }
+    | idsym idsyms_dtype { case $2 of (ns,t) -> ($1:ns,t) }
 
 actv :: { Maybe Activation }
     : {- empty -} { Nothing }
@@ -948,7 +951,6 @@ ridsyms :: { [Code] }
 
 conid :: { Code }
     : 'symbol' { $1 }
-
 
 {
 happyError :: Builder a

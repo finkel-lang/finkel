@@ -1,6 +1,6 @@
 ;;;; -*- mode: finkel -*-
 
-(let ((:: (x y) Code)
+(let ((:: x y Code)
       (= x '(a b c))
       (= y '(foo a b c))
 

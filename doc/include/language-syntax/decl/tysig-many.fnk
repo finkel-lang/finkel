@@ -1,1 +1,1 @@
-(:: (f g h) (-> Int Int)) ; Finkel
+(:: f g h (-> Int Int)) ; Finkel

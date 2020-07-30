@@ -253,7 +253,7 @@
 (= doexpres
   (do (putStrLn "foo")
       (<- buzz (showBar "buzz"))
-      (let ((:: (buzz3 buzz4) String)
+      (let ((:: buzz3 buzz4 String)
             (= buzz3 (concat [buzz buzz buzz]))
             (= buzz4 "buzz4")))
       (putStrLn buzz3)
@@ -274,7 +274,7 @@
 
 (:: fe_01 (IO ()))
 (= fe_01
-  (do (let ((:: (r1 r2) R1)
+  (do (let ((:: r1 r2 R1)
             (= r1 (Con1 {field2 False
                          field1 42}))
             (= r2 (r1 {field1 (* (field1 r1) 2)}))
@@ -289,7 +289,7 @@
 
 (:: fe_02 (IO ()))
 (= fe_02
-  (do (let ((:: (as bs) R1)
+  (do (let ((:: as bs R1)
             (= as (Con1 {field2 True
                          field1 3}))
             (= bs (as {field1 (* (field1 as) 2)}))))
@@ -412,7 +412,7 @@
     (@ x (Just y)) (unwords [(show x) (show y)])
     Nothing        "Nothing"))
 
-(:: (ap2a ap2b ap2c) Int)
+(:: ap2a ap2b ap2c Int)
 (:: aspat2 [Int])
 (= (@ aspat2 [ap2a ap2b ap2c])
   [123 456 789])

@@ -191,7 +191,7 @@
         "; f1 :: Int -> Int")
     (ok '(f1 41) "42")
     (ok '(:begin
-          (:: (x y) Int)
+          (:: x y Int)
           (= x 1)
           (= y 2))
         "; x :: Int\n; y :: Int")
