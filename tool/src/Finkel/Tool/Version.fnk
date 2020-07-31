@@ -66,7 +66,7 @@
     VersionNumeric print-version-numeric
     VersionHelp print-version-help))
 
-(macrolet-m ((get-commit-id _
+(macroletM ((get-commit-id _
                (case-do (liftIO get-git-commit)
                  (Just str) (return (toCode (: #'- str)))
                  Nothing (return '""))))

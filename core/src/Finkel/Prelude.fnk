@@ -10,17 +10,12 @@ defining macros. Intended usage is to import during compilation:
 >      (Finkel.Prelude))
 >   ...)
 
-to use function like `cons', `car', `cdr' ... etc.")
+to use functions for `Code', such as `cons', `car', `cdr', and so on.")
 
 (module Finkel.Prelude
-  (module All))
+  (:dh1 "Re-exported modules")
+  (module Me))
 
-;; base
-(import Prelude as All)
-
-;; finkel-kernel
-(import Language.Finkel as All)
-
-;; Internal
-(import Finkel.Core.Error as All)
-(import Finkel.Core.List as All)
+(import Prelude as Me)               ; base
+(import Language.Finkel as Me)       ; finkel-kernel
+(import Finkel.Core.Functions as Me) ; Internal

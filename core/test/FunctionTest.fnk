@@ -22,9 +22,8 @@
    (Test.QuickCheck)
 
    ;; Internal
-   (Finkel.Core.Error)
-   (Finkel.Core.List)
-   (Orphan)))
+   (Finkel.Prelude)
+   (Orphan ())))
 
 (defn (:: functionTests Spec)
   (do (describe "Error" errorTests)
@@ -42,7 +41,6 @@
   (do (let ((= d describe)
             (= t 't)
             (= tt '(t t))
-            (= fs '(f f f f f f))
             (= caxr x
               (it "should be t" (== t x)))
             (= cdxr x
@@ -211,21 +209,6 @@
                (&& (== (car ret2) x)
                    (== (cdr ret2) '(b))))))
 
-      (d "append"
-         (do (it "returns itself when appending nil"
-               (let ((= xs '(a b c)))
-                 (&& (== xs (append nil xs))
-                     (== xs (append xs nil)))))
-             (it "shows sum of the length"
-               (let ((= xs '(a b c d e))
-                     (= ys '(f g h i j k l)))
-                 (== (length (append xs ys))
-                     (+ (length xs) (length ys)))))
-             (it "throws an exception with non-list arg1"
-               (expectFailure (=== nil (append 'foo nil))))
-             (it "throws an exception with non-list arg2"
-               (expectFailure (=== nil (append nil 'foo))))))
-
       (d "make-symbol"
          (it "returns a symbol"
            (== 'foo (make-symbol "foo"))))
@@ -260,18 +243,18 @@
              (it "should throw exception on non-list"
                (expectFailure (=== nil (reduce1 cons 'foo))))))
 
-      (d "mapcar"
+      (d "map1"
          (do (it "replaces non-symbols"
                (== '(foo bar _ buzz _ _)
-                   (mapcar (\ x (if (is-symbol x) x '_))
+                   (map1 (\ x (if (is-symbol x) x '_))
                            '(foo bar (a b c) buzz 3 "string"))))
              (it "replaces non-symbols in HsList"
-               (== '(foo bar _ buzz _ _)
-                   (mapcar (\ x (if (is-symbol x) x '_))
+               (== '[foo bar _ buzz _ _]
+                   (map1 (\ x (if (is-symbol x) x '_))
                            '[foo bar (a b c) buzz 3 "string"])))
              (it "throws an exception on non-list arg2"
                (expectFailure
-                (=== nil (mapcar (\ x (cons x x)) 'foo))))))
+                (=== nil (map1 (\ x (cons x x)) 'foo))))))
 
       (d "keep"
          (do (it "removes non atom"

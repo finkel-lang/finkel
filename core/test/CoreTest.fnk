@@ -5,20 +5,9 @@
 (defmodule CoreTest
   (export coreTests
           macroTests)
-  (import-when [compile load]
-    ;; base
-    (Control.Exception)
-    (Prelude)
-
-    ;; ghc
-    (Exception)
-    (FastString (headFS nullFS))
-
-    ;; finkel-kernel
-    (Language.Finkel)
-
+  (import-when [compile]
     ;; Internal
-    (Finkel.Core.List))
+    (Finkel.Prelude))
   (import
    ;; base
    (Data.List (isSubsequenceOf))
@@ -26,14 +15,16 @@
 
    ;; ghc
    (BasicTypes ((SourceText ..)))
-   (FastString (fsLit))
+   (FastString (fsLit headFS nullFS))
    (HscTypes (SourceError))
    (Config (cProjectVersionInt))
+   (Exception ((SomeException ..) gtry))
 
    ;; hspec
    (Test.Hspec)
 
    ;; finkel-kernel
+   (Language.Finkel)
    (Language.Finkel.Form (aString aIntegral))
 
    ;; Internal
@@ -41,10 +32,6 @@
 
 (defn (:: coreTests Spec)
   (describe "Macro" macroTests))
-
-(defmacro' m1
-  [x]
-  `(++ "m1 " ,x))
 
 ;; Using a newtype to compare 'Code's containing symbols generated
 ;; with `gensym'.
@@ -107,10 +94,6 @@
     (let ((:: srcSubseqErr (-> String SourceError Bool))
           (= srcSubseqErr str e
             (isSubsequenceOf str (show e)))))
-    (describe "m1"
-      (it "should be \"m1 foo\""
-        (shouldBe (m1 "foo") "m1 foo")))
-
     (describe "eval-when"
       (do
         (it "should expand to (:begin (:eval-when-compile ...) ...)"
@@ -389,11 +372,11 @@
             (shouldNotBe (elem (ASymbol (fsLit "$foo")) e)
                          True))))
 
-    (describe "macrolet-m"
+    (describe "macroletM"
       (do
         (it "should expand to :with-macro"
           (expandTo
-           (macrolet-m [(m1 [a b]
+           (macroletM [(m1 [a b]
                           (return `(+ ,a ,b)))]
              (m1 20 22))
            (:with-macro
@@ -415,7 +398,7 @@
              (m1 20 22))))
         (it "should replace () arg with _"
           (expandTo
-           (macrolet-m ((m1 ()
+           (macroletM ((m1 ()
                           (return `(print #'x))))
              (m1))
            (:with-macro ((= m1
@@ -435,11 +418,11 @@
              (m1))))
         (it "should detect invalid form"
           (expandFailureWith
-           (macrolet-m)
-           (srcSubseqErr "macrolet-m")))
+           (macroletM)
+           (srcSubseqErr "macroletM")))
         (it "should detect invalid local macro form"
           (expandFailureWith
-           (macrolet-m ((m1 ()
+           (macroletM ((m1 ()
                           foo bar buzz))
              (m1))
            (srcSubseqErr "invalid form")))))

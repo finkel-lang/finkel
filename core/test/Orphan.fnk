@@ -12,14 +12,12 @@
 (defmodule Orphan
   (import
    ;; ghc
-   (BasicTypes ((FractionalLit ..) (SourceText ..)))
-   (FastString (unpackFS))
-   (SrcLoc ((GenLocated ..)))
+   (BasicTypes ((SourceText ..)))
 
    ;; QuickCheck
    (Test.QuickCheck ((Arbitrary ..) (Gen)
                      arbitraryUnicodeChar elements getUnicodeString
-                     listOf oneof scale variant))
+                     listOf oneof scale))
 
    ;; finkel-kernel
    (Language.Finkel.Form)))

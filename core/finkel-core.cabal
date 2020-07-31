@@ -33,10 +33,12 @@ custom-setup
 library
   hs-source-dirs:      src
   exposed-modules:     Paths_finkel_core
-                       Finkel.Core.Error
-                       Finkel.Core.List
                        Finkel.Core
+                       Finkel.Core.Functions
                        Finkel.Prelude
+  other-modules:       Finkel.Core.Stage0
+                       Finkel.Core.Stage1
+                       Finkel.Core.Stage2
   autogen-modules:     Paths_finkel_core
   build-depends:       base          >= 4.7   && < 5
                      , ghc           >= 8.2.0 && < 8.11.0

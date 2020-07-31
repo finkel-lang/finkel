@@ -1,0 +1,613 @@
+;;;; Stage2 - module containing more macros and functions.
+
+%p(LANGUAGE FlexibleInstances
+            TypeSynonymInstances)
+
+(:require Finkel.Core.Stage1)
+
+(defmodule Finkel.Core.Stage2
+  (export
+   ;; Macros
+   macroexpand macroexpand-1
+   exported-macros cond-expand macro-error
+   cond lcase case-do
+
+   ;; Functions
+   is-atom is-pair is-list is-hslist is-symbol is-string is-char
+   is-integer is-fractional is-unit
+
+   make-symbol mb-symbol-name mb-symbol-name-fs
+
+   list (Listable ..)
+
+   caar cadr
+   caaar caadr cadar caddr
+   caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+
+   cdar cddr
+   cdaar cdadr cddar cdddr
+   cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+
+   reduce reduce1 keep curve rev unsnoc
+
+   unsafeFinkelSrcError)
+
+  (import-when [compile]
+    ;; base
+    (Prelude))
+
+  (import-when [compile load]
+    ;; finkel-kernel
+    (Language.Finkel))
+
+  (import
+   ;; base
+   (System.IO.Unsafe (unsafePerformIO))
+   (qualified System.Info)
+
+   ;; ghc
+   (Config (cProjectVersionInt))
+   (DynFlags ((HasDynFlags ..)))
+   (FastString (FastString fsLit unpackFS))
+   (GHC (getModuleInfo lookupModule lookupName modInfoExports))
+   (Module (mkModuleName))
+   (Outputable (ppr showSDoc))
+   (BasicTypes ((SourceText ..)))
+   (TyCoRep ((TyThing ..)))
+   (Var (varName))
+
+   ;; finkel-kernel
+   (Language.Finkel.Form (aString aSymbol mkLocatedForm))
+
+   ;; Internal
+   (Finkel.Core.Stage0)))
+
+
+;;; ------------------------------------------------------------------------
+;;;
+;;; Macros
+;;;
+;;; ------------------------------------------------------------------------
+
+(defmacro macro-error
+  "Macro for showing error in macro function. Shows an error message
+with the location of entire macro form.
+
+==== __Syntax__
+
+> MACRO-ERROR ::= 'macro-error' string
+
+==== __Example__
+
+Show error with non-integer literals:
+
+> (defmacro e1 [a]
+>   (case (fromCode a)
+>     (Just n) (toCode (:: (+ n 1) Int))
+>     _ (macro-error \"got non-integer literal\")))
+
+Sample runs:
+
+>>> (macroexpand '(e1 9))
+10
+>>> (macroexpand '(e1 foo))
+<interactive>:2:15: error: got non-integer literal: (e1 foo)
+"
+  [msg]
+  `(unsafeFinkelSrcError ,the-macro-arg ,msg))
+
+;;; Expression
+
+(defmacro cond
+  "The 'cond' macro, found in many Lisp languages.
+
+The behaviour is same as wrapping the body with @case@ expression with dummy
+unit, or @if@ with @MultiWayIf@ GHC language extension.
+
+==== __Syntax__
+
+> COND   ::= 'cond' CLAUSE+
+> CLAUSE ::= '(' guard+ expr ')' | '[' guard+ expr ']'
+
+==== __Examples__
+
+Simple function with weird tests:
+
+@
+(defn (:: c01 (-> Int Int Int))
+  [a b]
+  (cond
+    [(even b) b]
+    [(odd b) (> a b) b]
+    [otherwise a]))
+@
+
+Sample run:
+
+>>> (map (c01 5) [1 .. 10])
+[1,2,3,4,5,6,5,8,5,10]
+"
+  body
+  `(case ()
+     _ (| ,@(map1 curve body))))
+
+(defmacro lcase
+  "Same as @\\\\case@ enabled with the @LambdaCase@ extension.
+
+==== __Syntax __
+
+> LCASE    ::= PAT-EXPR+
+> PAT-EXPR ::= PATTERN EXPR
+
+==== __Example__
+
+>>> (map (lcase 0 \"zero\" 1 \"one\" _ \"many\") [0 1 2 3]
+[\"zero\", \"one\", \"many\",\"many\"]
+"
+  args
+  `(\ $tmp (case $tmp ,@args)))
+
+(defmacro case-do
+  "Like @case@, but takes an expression with 'Monad' type.
+
+==== __Syntax__
+
+> CASE-DO  ::= 'case-do' EXPR PAT-EXPR+
+> PAT-EXPR ::= PATTERN EXPR
+
+==== __Example__
+
+Following code:
+
+@
+(case-do getLine
+  \"hello\" (putStrLn \"Hi!\")
+  line (putStrLn (++ \"Got: \" line)))
+@
+
+Is same as:
+
+@
+(do (<- tmp getLine)
+    (case tmp
+      \"hello\" (putStrLn \"Hi!\")
+      line (putStrLn (++ \"Got: \" line))))
+@
+"
+  args
+  `(do (<- $tmp ,(car args))
+       (case $tmp ,@(cdr args))))
+
+
+;;; Compilation context macros
+
+(defn (:: replace-ce (-> Code Atom Atom))
+  "Auxiliary function for `cond-expand'."
+  [ghc form]
+  (case form
+    (ASymbol s)
+    (| ((== s (fsLit ":ghc"))
+        (aSymbol (show ghc)))
+       ((== s (fsLit ":os"))
+        (aString (SourceText ":os") System.Info.os))
+       ((== s (fsLit ":arch"))
+        (aString (SourceText ":arch") System.Info.arch)))
+    _ form))
+
+(defmacroM cond-expand
+  "Macro for conditional compilation.
+
+The `cond-expand' macro has same syntax as the `cond' macro, but the evaluation
+of the tests are done at compilation time. To gather compilation context
+information, the tests sections in the `cond-expand' macro uses special keywords
+for getting such information. These keywords are replaced by the described
+values:
+
+[@:ghc@]: An `Int' value of `cProjectVersionInt', which is the major and minor
+version of the @ghc@ used during the compilation.
+
+[@:arch@]: A `String' value from `System.Info.arch'.
+
+[@:os@]: A `String' value from `System.Info.os'.
+
+==== __Syntax__
+
+See `cond'.
+
+==== __Examples__
+
+Simple usage to show message:
+
+@
+(defn (:: msg String)
+  (cond-expand
+    [(<= 810 :ghc)
+     \"ghc is newer than 8.10.0\"]
+    [(== 808 :ghc) (== :arch \"x86_64\") (== :os \"linux\")
+     \"ghc version 8.8.x, x86_64-linux\"]
+    [otherwise
+     \"unknown\"]))
+@
+
+When compiling above with ghc version @8.8.4@ on @x86_64@ machine running
+@Linux@, the second test will pass and the expanded result would be:
+
+@
+(defn (:: msg String)
+  \"ghc version 8.8.x, x86_64-linux\"
+@
+"
+  forms
+  (do (<- ghc (gensym' "_ghc"))
+      (let ((= make-quoted-last branches
+              (case (unsnoc branches)
+                (, bs b) `(,@(fmap (replace-ce ghc) bs) ',b)))))
+      (pure
+       `(macrolet (($cond-expand-tmp []
+                     (let ((:: ,ghc Int)
+                           (= ,ghc ,(:: (read cProjectVersionInt) Int)))
+                       (cond ,@(map1 make-quoted-last forms)))))
+          ($cond-expand-tmp)))))
+
+
+;;; Macros for macros
+
+(defmacroM macroexpand-1
+  "Expand given form if the given form is a macro, otherwise return the
+given form. Note that 'macroexpand_1' and 'macroexpand' are macros, not
+functions.
+
+==== __Syntax__
+
+> MACROEXPAND-1 ::= 'macroexpand-1' form
+
+==== __Examples__
+
+>>> (macroexpand-1 '(defmacrom' m1 [x] `(+ ,x 1)))
+(eval_and_compile
+  (defmacro m1 [x]
+    (:quasiquote (+ (:unquote x) 1))))
+"
+  [form]
+  (case (unCode form)
+    (List [q x]) (| ((|| (== q ':quote) (== q ':quasiquote))
+                     (do (<- expanded (expand1 x))
+                         (return `',expanded))))
+    _ (return form)))
+
+(defmacroM macroexpand
+  "Macro for expanding macro. This macro recursively expands all sub
+forms.
+
+==== __Syntax__
+
+> MACROEXPAND ::= 'macroexpand' form
+
+==== __Examples__
+
+>>> (macroexpand '(defn (:: foo (-> Int Int Int)) [a b] (+ a (* b 2))))
+(:begin
+  (:: foo (-> Int Int Int))
+  (= foo a b (+ a (* b 2))))
+"
+  [form]
+  (case (unCode form)
+    (List [q x]) (| ((|| (== q ':quote) (== q ':quasiquote))
+                     (let ((= go expr
+                             (do (<- expr' (expand1 expr))
+                                 (if (== expr expr')
+                                     (return `',expr)
+                                     (go expr')))))
+                       (go x))))
+    _ (return form)))
+
+(defmacroM exported-macros
+  "Macro to return macro names exported from given module as a list of
+'String'.
+
+==== __Syntax__
+
+> EXPORTED-MACROS ::= 'exported-macros' modid
+
+==== __Examples__
+
+Listing exported macros in \"Finkel.Core\" module:
+
+>>> (exported-macros Finkel.Core)
+[\"eval_when\",\"eval_and_compile\", ...]
+"
+  [name]
+  (let ((= f dflags mb-thing acc
+          (case mb-thing
+            (Just (@ thing (AnId var)))
+            (| ((isMacro dflags thing)
+                (: (showSDoc dflags (ppr (varName var))) acc)))
+            _ acc))
+        (= get-exported-names name-str
+          (do (<- mdl (lookupModule (mkModuleName name-str) Nothing))
+              (<- mb-mod-info (getModuleInfo mdl))
+              (case mb-mod-info
+                Nothing (return [])
+                (Just mi) (do (<- mb-things
+                                (mapM lookupName (modInfoExports mi)))
+                              (<- dflags getDynFlags)
+                              (return (foldr (f dflags) [] mb-things))))))
+        (= invalid-err
+          (++ "exported-macros: got non-module name symbol `"
+              (show name) "'"))
+        (= toCodes (. toCode (map toCode))))
+    (case (mb-symbol-name name)
+      (Just name-str) (do (<- names (get-exported-names name-str))
+                          (return `(:: ,(toCodes names) [String])))
+      Nothing (finkelSrcError name invalid-err))))
+
+
+;;; ------------------------------------------------------------------------
+;;;
+;;; Functions
+;;;
+;;; ------------------------------------------------------------------------
+
+
+;;; Predicates
+
+(defn (:: is-atom (-> Code Bool))
+  "True when the argument is an 'Atom' or 'nil'.
+
+==== __Examples__
+
+>>> (is-atom \'foo)
+True
+>>> (is-atom nil)
+True
+>>> (is-atom '(a b c))
+False
+>>> (is-atom '[a b c])
+False"
+  [(LForm (L _ form))]
+  (case form
+    (Atom _)  True
+    (List []) True
+    _         False))
+
+(defn (:: is-pair (-> Code Bool))
+  "True when the argument is a non-nil 'List'."
+  [(LForm (L _ form))]
+  (case form
+    (List []) False
+    (List _)  True
+    _         False))
+
+;;; Note [`:with-macro' instead of `macrolet']
+;;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;;;
+;;; The use of `:with-macro' below is an adhoc workaround for "-O2 -prof"
+;;; compilation. The bytecode interpreter cannot find `finkelSrcerror' during
+;;; macro expansion when `macrolet' was used.
+;;;
+;;; Maybe this is happening because, when this module is compiled with "-O2",
+;;; the fkc compiler reset the package env and uses fresh packages state, and
+;;; loads the dependency packages with "-O0" option. But the "finkel-kernel"
+;;; package compiled with "-O0" does not contain "finkelSrcError_closure" in the
+;;; object code.
+
+(macrolet [(defpred [doc name pat]
+                `(:begin
+                   (:doc ,doc)
+                   (:: ,name (-> Code Bool))
+                   (= ,name (LForm (L _ form))
+                     (case form
+                       ,pat True
+                       _    False))))]
+  (defpred "True when the argument is a `List'."
+      is-list (List _))
+  (defpred "True when the argument is a `HsList'."
+      is-hslist (HsList _))
+  (defpred "True when the argument is an `Atom' of `ASymbol'."
+      is-symbol (Atom (ASymbol _)))
+  (defpred "True when the argument is an `Atom' of `AString'."
+      is-string (Atom (AString _ _)))
+  (defpred "True when the argument is an `Atom' of `AChar'."
+      is-char (Atom (AChar _ _)))
+  (defpred "True when the argument is an `Atom' of `AInteger'."
+      is-integer (Atom (AInteger _)))
+  (defpred "True when the argument is an `Atom' of `AFractional'."
+      is-fractional (Atom (AFractional _)))
+  (defpred "True when the argument is an `Atom' of `AUnit'."
+      is-unit (Atom AUnit)))
+
+(defn (:: make-symbol (-> String Code))
+  "Make an `Atom' of `ASymbol' from given `String'."
+  qSymbol)
+%p(INLINABLE make-symbol)
+
+(defn (:: mb-symbol-name (-> Code (Maybe String)))
+  "Extract string from given symbol.
+
+Get `Just' `String' when the argument code was an `ASymbol', otherwise
+`Nothing'."
+  (. (fmap unpackFS) mb-symbol-name-fs))
+%p(INLINABLE mb-symbol-name)
+
+(defn (:: mb-symbol-name-fs (-> Code (Maybe FastString)))
+  "Extract `FastString' from given symbol.
+
+Like `mb_symbol_name', but returns `FastString'"
+  [form]
+  (case form
+    (LForm (L _ (Atom (ASymbol name)))) (Just name)
+    _ Nothing))
+%p(INLINABLE mb-symbol-name-fs)
+
+(:doc "Type class for constructing 'List' with polyvariadic function.")
+(class (Listable l)
+  (:: list_ (-> [Code] l)))
+
+(instance (Listable Code)
+  (= list_ xs
+    (case (mkLocatedForm (reverse xs))
+      (L l ys) (LForm (L l (List ys))))))
+
+(instance (=> (ToCode elem) (Listable l)
+              (Listable (-> elem l)))
+  (= list_ acc
+    (\ x (list_ (: (toCode x) acc)))))
+
+(defn (:: list (=> (Listable lst) lst))
+  "Make a list from given arguments.
+
+This function can take variable number of arguments, but requires
+resulting type to be a concrete type.
+
+==== __Examples__
+
+>>> (:: (list \'a \'b \'c) Code)
+(a b c)
+>>> (:: (list \'a #\'b \"c\" (:: 0xd Int)) Code)
+(a #\'b \"c\" 13)"
+  (list_ []))
+
+
+;;; CXR
+
+(:doc$ cxr "Rest of /cxr/ functions are composed from 'car' and 'cdr'.
+
+E.g., definition of 'cadr' is:
+
+> (cadr x) == (car (cdr x))
+
+and the definition of 'cdadr' is:
+
+> (cdadr x) == (cdr (car (cdr x)))
+")
+
+(eval-when [compile]
+  (defn (:: ads [String])
+    (let ((= f (concatMap (\ x [(: #'a x) (: #'d x)]))))
+      (concat (take 3 (tail (iterate f [[#'a] [#'d]]))))))
+
+  (defn (:: cxr-name (-> String Code))
+    [x]
+    (qSymbol (concat ["c" x "r"])))
+
+  (defn (:: doc (-> String Code))
+    [xs]
+    (let ((= f x (++ "`c" x "r'"))
+          (= g ys (foldr1 (\ y acc (++ y " of " acc))
+                          (map (. f pure) ys))))
+      (toCode (++ "Get the " (g xs) "."))))
+
+  (defn (:: cxr (-> String [Code]))
+    [xs]
+    (let ((= name (cxr-name xs)))
+      (case xs
+        (: hd tl) [`(:doc ,(doc xs))
+                   `(:: ,name (-> Code Code))
+                   `(= ,name (. ,(cxr-name [hd]) ,(cxr-name tl)))
+                   `%p(INLINABLE ,name)]
+        _ (error (++ "cxr: invalid arg: " xs)))))
+
+  (defmacro cxrs []
+    `(:begin ,@(concatMap cxr ads))))
+
+(cxrs)
+
+
+;;; List and HsList functions
+
+(defn (:: reduce (-> (-> Code a a) a Code a))
+  "Like `foldr', but for `Code'.
+
+Throws an exception if the second argument was not a list.
+
+==== __Examples__
+
+>>> (reduce cons nil '(a b c))
+(a b c)
+>>> (reduce (\\ x acc (cons `(x is ,x) acc)) nil '(a b c))
+((x is a) (x is b) (x is c))
+>>> (reduce + 0 '(1 2 3 4 5))
+15
+>>> (reduce cons nil 'foo)
+*** Exception: reduce: non-list value `foo'"
+  [f z]
+  (make-list-fn "reduce" (\ _ _ (foldr f z))))
+%p(INLINABLE reduce)
+
+(defn (:: reduce1 (-> (-> Code Code Code) Code Code))
+  "Like `foldr1', but for `Code'.
+
+Throws an exception if the second argument was not a list.
+
+==== __Examples__
+
+>>> (reduce1 cons '(a b c))
+(a b c)
+>>> (reduce1 (\\ x acc (cons `(x is ,x) acc)) '(a b c))
+((x is a) (x is b) c)
+>>> (reduce1 cons 'foo)
+*** Exception: reduce1: non-list value `foo'"
+  [f]
+  (make-list-fn "reduce1" (\ _ _ (foldr1 f))))
+%p(INLINABLE reduce1)
+
+(defn (:: keep (-> (-> Code Bool) Code Code))
+  "Like `filter', but for `Code'.
+
+Filter out immediate element of `List' if the test result is `False'.
+
+==== __Examples__
+
+>>> (keep (/= 'a) '(a b r a c a d a b r a))
+(b r c d b r)
+>>> (keep (/= 'a) 'foo)
+*** Exception: keep: non-list value `foo'"
+  [test]
+  (make-list-fn "keep" (\ _ c (. c (filter test)))))
+%p(INLINABLE keep)
+
+(defn (:: curve (-> Code Code))
+  "Convert `HsList' to `List'.
+
+The original value is retained if the given argument was not a `HsList' value."
+  [(@ orig (LForm (L l form)))]
+  (case form
+    (HsList xs) (LForm (L l (List xs)))
+    _ orig))
+%p(INLINABLE curve)
+
+(defn (:: rev (-> Code Code))
+  "Like `reverse', but for `Code'.
+
+Reverse the given `List' or `HsList'. Other values are kept as-is.
+
+==== __Examples__
+
+>>> (rev '(a b c))
+(c b a)
+>>> (rev 'foo)
+foo"
+  [(LForm (L l x))]
+  (LForm (L l (case x
+                (List xs) (List (reverse xs))
+                (HsList xs) (HsList (reverse xs))
+                _ x))))
+%p(INLINABLE rev)
+
+(defn (:: unsnoc (-> Code (, Code Code)))
+  "Split `List' and `HsList' to the elements but last and the last element.
+
+==== __Examples__
+
+>>> (unsnoc '(a b c d e))
+((a b c d),e)"
+  [form]
+  (case (rev form)
+    mrof (, (rev (cdr mrof)) (car mrof))))
+%p(INLINABLE unsnoc)
+
+(defn (:: unsafeFinkelSrcError (-> Code String a))
+  "Throw exception with 'finkelSrcError', with given code and message. This
+function uses `unsafePerformIO'."
+  [code msg]
+  (unsafePerformIO (runFnk (finkelSrcError code msg) defaultFnkEnv)))
