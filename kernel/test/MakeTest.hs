@@ -4,16 +4,28 @@ module MakeTest
   ) where
 
 -- base
+import Control.Monad                (when)
 import Control.Monad.IO.Class       (MonadIO (..))
 import Data.List                    (isPrefixOf, tails)
 import System.FilePath              (takeBaseName, (</>))
 import System.Info                  (os)
 
+-- directory
+import System.Directory             (getDirectoryContents)
+
+-- filepath
+import System.FilePath              (takeExtension)
+
 -- ghc
 import Config                       (cProjectVersionInt)
-import DynFlags                     (HasDynFlags (..), Way (..), interpWays)
+import DynFlags                     (DynFlags, HasDynFlags (..), Way (..),
+                                     interpWays)
 import FastString                   (fsLit)
-import Outputable                   (Outputable (..), showPpr)
+import Module                       (componentIdToInstalledUnitId)
+import Outputable                   (Outputable (..), showPpr, showSDoc)
+import Packages                     (InstalledPackageInfo (..), PackageConfig,
+                                     PackageName (..), lookupInstalledPackage,
+                                     lookupPackageName, pprPackageConfig)
 
 -- hspec
 import Test.Hspec
@@ -52,6 +64,52 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildObj ["--fnk-dump-hs", "--fnk-hsdir=" ++ (odir </> "gen")]
            ["M5", "M4" </> "A.fnk", "M4" </> "B.fnk", "M4", "main7.fnk"]
   buildObj ["-O2"] ["main8.fnk"]
+
+  -- Recompile object codes with optimization option
+  buildObj ["-package", "finkel-kernel", "-O0", "-dynamic-too"]
+           ["P1", "P2"]
+  buildObj ["-package", "finkel-kernel", "-O1", "-dynamic-too"]
+           ["P1", "P2"]
+
+  -- Recompile object codes with profiling option
+  has_profiling_obj <- runIO hasProfilingObj
+  when has_profiling_obj $ do
+    buildObj ["-package", "finkel-kernel", "-O"
+             ,"-prof", "-osuf", "p_o", "-hisuf", "p_hi"]
+             ["P1", "P2"]
+    buildObj ["-package", "finkel-kernel", "-O"
+             ,"-prof", "-osuf", "p_o", "-hisuf", "p_hi"]
+             ["P1", "P2"]
+
+hasProfilingObj :: IO Bool
+hasProfilingObj = runFnk (hasProfilingObj' pkg_name) defaultFnkEnv
+  where
+    pkg_name = PackageName (fsLit "finkel-kernel")
+
+hasProfilingObj' :: PackageName -> Fnk Bool
+hasProfilingObj' pkg_name  =
+  do initSessionForTest
+     dflags <- getDynFlags
+     case lookupPackageConfig dflags pkg_name of
+       Nothing  -> return False
+       Just cfg -> liftIO
+                     (do putStrLn (showSDoc dflags (pprPackageConfig cfg))
+                         lookupProfObjInDirectories (libraryDirs cfg))
+
+lookupPackageConfig :: DynFlags -> PackageName -> Maybe PackageConfig
+lookupPackageConfig dflags pkg_name = do
+  cmpid <- lookupPackageName dflags pkg_name
+  lookupInstalledPackage dflags (componentIdToInstalledUnitId cmpid)
+
+lookupProfObjInDirectories :: [FilePath] -> IO Bool
+lookupProfObjInDirectories =
+  let go (dir:dirs) = do
+         files <- getDirectoryContents dir
+         if any (\file -> ".p_o" == takeExtension file) files
+            then return True
+            else go dirs
+      go [] = return False
+  in  go
 
 fnksrc1, hssrc1, othersrc1 :: TargetSource
 fnksrc1 = FnkSource "path1" "Foo" [] (initialSPState (fsLit "dummy") 1 1)
@@ -111,7 +169,10 @@ buildObj = buildFiles
 
 buildFiles :: [String] -> [FilePath] -> Spec
 buildFiles pre paths =
-  describe ("file " ++ show paths) $
+  describe ("file " ++ show paths ++
+            if null pre
+               then ""
+               else (" with " ++ unwords pre)) $
     it "should compile successfully" work
   where
     work

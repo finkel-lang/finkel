@@ -38,7 +38,7 @@ import HscMain                         (Messager, hscTcRnLookupRdrName,
                                         showModuleIndex)
 import HscTypes                        (FindResult (..), HomeModInfo,
                                         HscEnv (..), InteractiveImport (..),
-                                        showModMsg)
+                                        lookupHpt, showModMsg)
 import InteractiveEval                 (getContext)
 import MkIface                         (RecompileRequired (..),
                                         recompileRequired)
@@ -54,7 +54,7 @@ import Var                             (varName)
 -- Internal
 import Language.Finkel.Builder         (HImportDecl, evalBuilder, syntaxErrMsg)
 import Language.Finkel.Eval
-import Language.Finkel.Expand          (expand, expands')
+import Language.Finkel.Expand          (bcoDynFlags, expand, expands')
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
@@ -219,16 +219,31 @@ addImportedMacro dflags thing = when (isMacro dflags thing) go
           coerceMacro dflags name_sym >>= insertMacro (fsLit name_str)
         _ -> error "addImportedmacro"
 
-setRequiredSettings :: Fnk ()
-setRequiredSettings = do
+-- Note [Bytecode and object code for require and :eval_when_compile import]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Use of object codes are not working well for importing home package modules
+-- when optimization option were enabled.  Conservatively using bytecode by
+-- delegating further works to 'simpleMake' with 'withRequiredSettings' for such
+-- cases.
+
+useBCO :: DynFlags -> Bool
+useBCO dflags = 0 < optLevel dflags
+
+setRequiredSettings :: Bool -> Fnk ()
+setRequiredSettings use_bco = do
   fnkc_env <- getFnkEnv
+  let bco_dflags = bcoDynFlags . obj_dflags
+      obj_dflags dflags = dflags {ghcLink = LinkInMemory}
   case envMakeDynFlags fnkc_env of
-    Just dflags -> setDynFlags dflags {ghcLink = LinkInMemory}
+    Just dflags -> setDynFlags $ if use_bco
+                                    then bco_dflags dflags
+                                    else obj_dflags dflags
     Nothing     -> failS "setRequiredSettings: missing DynFlags"
   putFnkEnv fnkc_env {envMessager = requiredMessager}
 
-withRequiredSettings :: Fnk a -> Fnk a
-withRequiredSettings act =
+withRequiredSettings :: Bool -> Fnk a -> Fnk a
+withRequiredSettings use_bco act =
   gbracket
     (do dflags <- getDynFlags
         fnkc_env <- getFnkEnv
@@ -236,7 +251,7 @@ withRequiredSettings act =
     (\(dflags, fnkc_env) ->
        do setDynFlags dflags
           putFnkEnv fnkc_env)
-    (const (setRequiredSettings >> act))
+    (const (setRequiredSettings use_bco >> act))
 
 requiredMessager :: Messager
 requiredMessager hsc_env mod_index recomp mod_summary =
@@ -258,24 +273,29 @@ requiredMessager hsc_env mod_index recomp mod_summary =
 
 makeMissingHomeMod :: Bool -> HImportDecl -> Fnk [(ModuleName, HomeModInfo)]
 makeMissingHomeMod force_recomp (L loc idecl) = do
-  hsc_env <- getSession
-  let mname = unLoc (ideclName idecl)
-      lmname = L loc (moduleNameString mname)
-
   -- Try finding the required module. Delegate the work to 'simpleMake' function
   -- defined in Language.Finkel.Make when the file is found in import paths.
   --
-  -- N.B. 'findImportedModule' does not know ".fnk" file extension,
-  -- so it will not return Finkel source files for home package
-  -- modules.
-  fresult <- liftIO (findImportedModule hsc_env mname Nothing)
-  compiled <-
-    case fresult of
-      Found {} -> return []
-      _        -> withRequiredSettings (simpleMake force_recomp lmname)
+  -- N.B. 'findImportedModule' does not know ".fnk" file extension, so it will
+  -- not return Finkel source files for home package modules.
+  --
+  hsc_env <- getSession
+  fnk_env <- getFnkEnv
 
-  return compiled
+  let mname = unLoc (ideclName idecl)
+      lmname = L loc (moduleNameString mname)
+      smpl_mk = withRequiredSettings use_bco (simpleMake force_recomp lmname)
+      use_bco = maybe False useBCO (envMakeDynFlags fnk_env)
 
+  case lookupHpt (hsc_HPT hsc_env) mname of
+    Just _ -> if use_bco
+                 then smpl_mk
+                 else return []
+    Nothing -> do
+      fresult <- liftIO (findImportedModule hsc_env mname Nothing)
+      case fresult of
+        Found {} -> return []
+        _        -> smpl_mk
 
 -- ---------------------------------------------------------------------
 --

@@ -7,6 +7,7 @@ module Language.Finkel.Expand
   , expands
   , expands'
   , withExpanderSettings
+  , bcoDynFlags
   ) where
 
 #include "Syntax.h"
@@ -22,7 +23,7 @@ import qualified Data.Map               as Map
 
 -- ghc
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
-                                         HscTarget (..), gopt_unset,
+                                         HscTarget (..), unSetGeneralFlag',
                                          updOptLevel, xopt_unset)
 import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
@@ -95,13 +96,19 @@ setExpanderSettings dflags0 = do
     Nothing -> putFnkEnv (fnkc_env {envMakeDynFlags = Just dflags0})
     Just _  -> return ()
 
-  -- Setup DynFlags for interactive evaluation.
-  let dflags1 = dflags0 {hscTarget=HscInterpreted}
-      dflags2 = xopt_unset dflags1 LangExt.MonomorphismRestriction
-      dflags3 = gopt_unset dflags2 Opt_Hpc
-      dflags4 = updOptLevel 0 dflags3
+  -- Update DynFlags for interactive evaluation.
+  let dflags1 = xopt_unset dflags0 LangExt.MonomorphismRestriction
+  setDynFlags (bcoDynFlags dflags1)
 
-  setDynFlags dflags4
+-- | Setup 'DynFlags' for interactive evaluation.
+bcoDynFlags :: DynFlags -> DynFlags
+bcoDynFlags dflags0 =
+  let dflags1 = dflags0 {hscTarget = HscInterpreted}
+      dflags2 = foldr unSetGeneralFlag' dflags1 [ Opt_Hpc
+                                                , Opt_BuildDynamicToo]
+      dflags3 = updOptLevel 0 dflags2
+  in  dflags3
+{-# INLINE bcoDynFlags #-}
 
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
@@ -264,7 +271,7 @@ expand form =
           return $! LForm (L l (List forms'))
 
     do_expand k f =
-      do debug "expand" [vcat ["Expandning:", nest 2 (ppr form)]]
+      do debug "expand" [vcat ["Expanding:", nest 2 (ppr form)]]
          ret0 <- f form
          debugFnk [cat ["(", ppr k, " ...) ==>"], nest 2 (ppr ret0)]
          return ret0

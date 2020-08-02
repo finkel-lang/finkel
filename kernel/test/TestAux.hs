@@ -156,7 +156,9 @@ removeArtifacts dir = do
   mapM_ removeObjAndHi contents
   where
     removeObjAndHi file =
-      when (takeExtension file `elem` [".o", ".hi", ".p_o", ".p_hi"])
+      when (takeExtension file `elem` [ ".o", ".hi"
+                                      , ".p_o", ".p_hi"
+                                      , ".dyn_o", ".dyn_hi" ])
            (removeFile (dir </> file))
 
 -- | Wrapper function to run 'Language.Finkel.Main.defaultMain'.
