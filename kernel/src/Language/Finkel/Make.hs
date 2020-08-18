@@ -15,8 +15,7 @@ module Language.Finkel.Make
 import           Control.Monad                (unless, void, when)
 import           Control.Monad.IO.Class       (MonadIO (..))
 import           Data.List                    (find, foldl')
-import           Data.Maybe                   (catMaybes, fromMaybe, isJust,
-                                               maybeToList)
+import           Data.Maybe                   (catMaybes, fromMaybe, isJust)
 
 -- container
 import           Data.Graph                   (flattenSCCs)
@@ -116,9 +115,6 @@ import           CliOption                    (Option (..))
 import           DynFlags                     (Option (..))
 #endif
 
--- time
-import           Data.Time                    (getCurrentTime)
-
 -- internal
 import           Language.Finkel.Builder
 import           Language.Finkel.Emit
@@ -197,8 +193,7 @@ make infiles no_link force_recomp mb_output = do
   -- Update current module graph and link. Linking work is delegated to deriver
   -- pipelin's `link' function.
   let mgraph = mkModuleGraph' mod_summaries
-      mgraph_flattened =
-        flattenSCCs (topSortModuleGraph True mgraph Nothing)
+      mgraph_flattened = flattenSCCs (topSortModuleGraph True mgraph Nothing)
   modifySession (\hsc_env -> hsc_env {hsc_mod_graph=mgraph})
   unless no_link (doLink mgraph_flattened)
 
@@ -318,7 +313,7 @@ make' pendings0 = do
           case mb_result of
             Nothing                   -> failS "compileToHsModule"
             Just (hmdl, dflags, reqs) -> do
-              summary <- mkModSummary (Just path) hmdl
+              summary <- mkModSummary path hmdl
               let summary' = summary {ms_hspp_opts = dflags}
                   imports = hsmodImports hmdl
                   import_names = map import_name imports
@@ -355,7 +350,7 @@ make' pendings0 = do
           case mb_result of
             Nothing             -> failS "compileToHsModule"
             Just (hmdl, dflags, _) -> do
-              summary <- mkModSummary (Just path) hmdl
+              summary <- mkModSummary path hmdl
               let summary' = summary {ms_hspp_opts = dflags}
                   imports = hsmodImports hmdl
               compileIfReady summary' Nothing imports (return [])
@@ -728,38 +723,38 @@ mkReadTimeModSummary (target, mbphase) =
     HsSource file -> do
       mb_mdl <- compileToHsModule (target, mbphase)
       case mb_mdl of
-        Just (mdl, _, _) -> fmap Just (mkModSummary (Just file) mdl)
+        Just (mdl, _, _) -> fmap Just (mkModSummary file mdl)
         Nothing          -> return Nothing
     FnkSource file mn _form _sp ->
-      Just <$> mkModSummary' (Just file) (mkModuleName mn) [] Nothing
+      Just <$> mkModSummary' file (mkModuleName mn) [] Nothing
     OtherSource _ -> return Nothing
 
 -- | Make 'ModSummary'. 'UnitId' is main unit.
-mkModSummary :: GhcMonad m => Maybe FilePath -> HModule -> m ModSummary
-mkModSummary mbfile mdl =
+mkModSummary :: GhcMonad m => FilePath -> HModule -> m ModSummary
+mkModSummary file mdl =
   let modName = case hsmodName mdl of
                   Just name -> unLoc name
                   Nothing   -> mkModuleName "Main"
       imports = map (ideclName . unLoc) (hsmodImports mdl)
       emptyAnns = (Map.empty, Map.empty)
-      file = fromMaybe "<unknown>" mbfile
       r_s_loc = mkSrcLoc (fsLit file) 1 1
       r_s_span = mkSrcSpan r_s_loc r_s_loc
       pm = HsParsedModule
         { hpm_module = L r_s_span mdl
-        , hpm_src_files = maybeToList mbfile
+        , hpm_src_files = [file]
         , hpm_annotations = emptyAnns }
-  in  mkModSummary' mbfile modName imports (Just pm)
+  in  mkModSummary' file modName imports (Just pm)
 
 -- | Make 'ModSummary' from source file, module name, and imports.
 mkModSummary' :: GhcMonad m
-              => Maybe FilePath -> ModuleName
-              -> [Located ModuleName] -> Maybe HsParsedModule
+              => FilePath
+              -> ModuleName
+              -> [Located ModuleName]
+              -> Maybe HsParsedModule
               -> m ModSummary
-mkModSummary' mbfile modName imports mb_pm = do
+mkModSummary' file modName imports mb_pm = do
   dflags0 <- getDynFlags
-  let fn = fromMaybe "anonymous" mbfile
-      unitId = thisPackage dflags0
+  let unitId = thisPackage dflags0
       mmod = mkModule unitId modName
       imported = map (\x -> (Nothing, x)) imports
       tryGetObjectDate path =
@@ -767,14 +762,14 @@ mkModSummary' mbfile modName imports mb_pm = do
            then modificationTimeIfExists path
            else return Nothing
   liftIO
-    (do mloc <- mkHomeModLocation dflags0 modName fn
-        hs_date <- maybe getCurrentTime getModificationUTCTime mbfile
+    (do mloc <- mkHomeModLocation dflags0 modName file
+        hs_date <- getModificationUTCTime file
         obj_date <- tryGetObjectDate (ml_obj_file mloc)
         iface_date <- modificationTimeIfExists (ml_hi_file mloc)
         dflags1 <-
-          if isHsFile fn
+          if isHsFile file
              then do
-               opts <- getOptionsFromFile dflags0 fn
+               opts <- getOptionsFromFile dflags0 file
                (dflags1,_,_) <- parseDynamicFilePragma dflags0 opts
                return dflags1
              else return dflags0
@@ -791,7 +786,7 @@ mkModSummary' mbfile modName imports mb_pm = do
                           , ms_parsed_mod = mb_pm
                           , ms_srcimps = []
                           , ms_textual_imps = imported
-                          , ms_hspp_file = fn
+                          , ms_hspp_file = file
                           , ms_hspp_opts = dflags1
                           , ms_hspp_buf = Nothing })
 
