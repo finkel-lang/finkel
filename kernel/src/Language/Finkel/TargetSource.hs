@@ -109,7 +109,10 @@ asModuleName name =
      then name
      else map sep_to_dot (concat names)
   where
-    names = dropWhile (not . isUpper . head) (splitPath (dropExtension name))
+    -- Taking the directory names from last to first, to support auto generated
+    -- modules made by stack.
+    names = reverse (takeWhile (isUpper . head)
+                               (reverse (splitPath (dropExtension name))))
     sep_to_dot c =
       if c == pathSeparator
          then '.'

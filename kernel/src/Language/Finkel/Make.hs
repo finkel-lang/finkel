@@ -41,7 +41,8 @@ import           DynFlags                     (DumpFlag (..), DynFlags (..),
                                                isObjectTarget,
                                                parseDynamicFilePragma,
                                                thisPackage)
-import           ErrUtils                     (MsgDoc, dumpIfSet_dyn, mkErrMsg)
+import           ErrUtils                     (MsgDoc, dumpIfSet_dyn,
+                                               mkPlainErrMsg)
 import           FastString                   (fsLit)
 import           Finder                       (addHomeModuleToFinder,
                                                cannotFindModule,
@@ -74,8 +75,8 @@ import           Module                       (ModLocation (..), ModuleName,
                                                moduleNameSlashes,
                                                moduleNameString, moduleUnitId)
 import           Outputable                   (SDoc, braces, comma, hcat, nest,
-                                               neverQualify, ppr, punctuate,
-                                               text, vcat, (<+>))
+                                               ppr, punctuate, quotes, text,
+                                               vcat, ($$), (<+>))
 import           Panic                        (GhcException (..),
                                                throwGhcException)
 import           SrcLoc                       (GenLocated (..), Located, getLoc,
@@ -152,12 +153,13 @@ import           Language.Finkel.TargetSource
 -- easy. Though when cabal support multiple libraraies, situation might change.
 
 -- | Finkel variant of @"ghc --make"@.
-make :: [(Located FilePath, Maybe Phase)]
-        -- ^ List of pairs of input file and phase.
-     -> Bool -- ^ Skip linking when 'True'.
-     -> Bool -- ^ Force recompilation when 'True'.
-     -> Maybe FilePath -- ^ Output file, if any.
-     -> Fnk ()
+make
+  :: [(Located FilePath, Maybe Phase)]
+  -- ^ List of pairs of input file and phase.
+  -> Bool -- ^ Skip linking when 'True'.
+  -> Bool -- ^ Force recompilation when 'True'.
+  -> Maybe FilePath -- ^ Output file, if any.
+  -> Fnk ()
 make infiles no_link force_recomp mb_output = do
 
   -- Setting ghcMode as done in ghc's "Main.hs".
@@ -223,9 +225,10 @@ simpleMake force_recomp lname = do
   fmap (map as_pair . eltsHpt . hsc_HPT) getSession
 
 -- | Run given builder.
-buildHsSyn :: Builder a -- ^ Builder to use.
-           -> [Code]    -- ^ Input codes.
-           -> Fnk a
+buildHsSyn
+  :: Builder a -- ^ Builder to use.
+  -> [Code]    -- ^ Input codes.
+  -> Fnk a
 buildHsSyn bldr forms =
   do dflags <- getDynFlags
      case evalBuilder dflags bldr forms of
@@ -404,8 +407,9 @@ make' pendings0 = do
 
 -- | Check whether recompilation is required, and compile the 'HsModule'
 -- when the codes or dependency modules were updated.
-makeOne :: Int -> Int -> Maybe SPState -> ModSummary
-        -> [ModSummary] -> Fnk ModSummary
+makeOne
+  :: Int -> Int -> Maybe SPState -> ModSummary
+  -> [ModSummary] -> Fnk ModSummary
 makeOne i total mb_sp summary required_summaries = timeIt label go
   where
     label = "MakeOne [" ++ mname ++ "]"
@@ -437,12 +441,13 @@ makeOne i total mb_sp summary required_summaries = timeIt label go
       return summary'
 
 -- | Compile single module.
-doMakeOne :: Int -- ^ Module index number.
-          -> Int -- ^ Total number of modules.
-          -> Maybe SPState -- ^ State returned from parser.
-          -> ModSummary -- ^ Summary of module to compile.
-          -> SourceModified -- ^ Source modified?
-          -> Fnk ModSummary -- ^ Updated summary.
+doMakeOne
+  :: Int -- ^ Module index number.
+  -> Int -- ^ Total number of modules.
+  -> Maybe SPState -- ^ State returned from parser.
+  -> ModSummary -- ^ Summary of module to compile.
+  -> SourceModified -- ^ Source modified?
+  -> Fnk ModSummary -- ^ Updated summary.
 doMakeOne i total mb_sp ms src_modified = do
   hsc_env <- getSession
   fnkc_env <- getFnkEnv
@@ -614,9 +619,7 @@ checkUpToDate ms dependencies =
 --   return (recomp, mb_iface)
 
 -- | Search 'ModSummary' of required module.
-findRequiredModSummary :: HscEnv
-                       -> Located String
-                       -> Fnk (Maybe ModSummary)
+findRequiredModSummary :: HscEnv -> Located String -> Fnk (Maybe ModSummary)
 findRequiredModSummary hsc_env lmname = do
   -- Searching in reachable source paths before imported modules, because we
   -- want to use the source modified time from the current home package modules,
@@ -636,12 +639,11 @@ findRequiredModSummary hsc_env lmname = do
         _        -> failS ("Cannot find required module " ++ mname)
 
 -- | Find not compiled module.
-findNotCompiledImport :: HscEnv       -- ^ Current hsc environment.
-                      -> [ModSummary] -- ^ List of accumulated
-                                      -- 'ModSummary'.
-                      -> HImportDecl  -- ^ The target module name to
-                                      -- find.
-                      -> Fnk (Maybe TargetUnit)
+findNotCompiledImport
+  :: HscEnv       -- ^ Current hsc environment.
+  -> [ModSummary] -- ^ List of accumulated 'ModSummary'.
+  -> HImportDecl  -- ^ The target module name to -- find.
+  -> Fnk (Maybe TargetUnit)
 findNotCompiledImport hsc_env acc idecl = do
   findResult <- liftIO (findImportedModule hsc_env mname Nothing)
   dflags <- getDynFlags
@@ -695,7 +697,7 @@ findNotCompiledImport hsc_env acc idecl = do
         Just ts -> return (Just (emptyTargetUnit ts))
         Nothing -> do
           let doc = cannotFindModule dflags mname findResult
-              err = mkErrMsg dflags loc neverQualify doc
+              err = mkPlainErrMsg dflags loc doc
           throwOneError err
   where
     name = import_name idecl
@@ -746,14 +748,19 @@ mkModSummary file mdl =
   in  mkModSummary' file modName imports (Just pm)
 
 -- | Make 'ModSummary' from source file, module name, and imports.
-mkModSummary' :: GhcMonad m
-              => FilePath
-              -> ModuleName
-              -> [Located ModuleName]
-              -> Maybe HsParsedModule
-              -> m ModSummary
+mkModSummary'
+  :: GhcMonad m
+  => FilePath
+  -> ModuleName
+  -> [Located ModuleName]
+  -> Maybe HsParsedModule
+  -> m ModSummary
 mkModSummary' file modName imports mb_pm = do
   dflags0 <- getDynFlags
+
+  -- Throw an exception on module name mismatch.
+  assertModuleNameMatch dflags0 file mb_pm
+
   let unitId = thisPackage dflags0
       mmod = mkModule unitId modName
       imported = map (\x -> (Nothing, x)) imports
@@ -789,6 +796,23 @@ mkModSummary' file modName imports mb_pm = do
                           , ms_hspp_file = file
                           , ms_hspp_opts = dflags1
                           , ms_hspp_buf = Nothing })
+
+-- See: "GhcMake.summariseModule"
+assertModuleNameMatch
+  :: GhcMonad m => DynFlags -> FilePath -> Maybe HsParsedModule -> m ()
+assertModuleNameMatch dflags file mb_pm =
+  case mb_pm of
+    Just pm | Just lsaw <- hsmodName (unLoc (hpm_module pm))
+            , let wanted = asModuleName file
+            , let saw = moduleNameString (unLoc lsaw)
+            , saw /= "Main"
+            , saw /= wanted
+            -> let msg = text "File name does not match module"
+                         $$ text "Saw:" <+> quotes (text saw)
+                         $$ text "Expected:" <+> quotes (text wanted)
+                   loc = getLoc lsaw
+               in  throwOneError (mkPlainErrMsg dflags loc msg)
+    _ -> return ()
 
 -- | Dump the module contents of given 'ModSummary'.
 dumpModSummary :: Maybe SPState -> ModSummary -> Fnk ()
@@ -841,8 +865,8 @@ dumpParsedAST dflags ms =
     txt = text
 #endif
 
-compileToHsModule :: TargetUnit
-                  -> Fnk (Maybe (HModule, DynFlags, [Located String]))
+compileToHsModule
+  :: TargetUnit -> Fnk (Maybe (HModule, DynFlags, [Located String]))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
     FnkSource _ mn form sp -> Just <$> compileFnkModuleForm sp mn form
@@ -906,9 +930,10 @@ getDynFlagsFromSPState sp = do
 
 -- | Add pair of module name and home module to home package table only
 -- when the module is missing.
-addHomeModInfoIfMissing :: HomePackageTable
-                        -> [(ModuleName, HomeModInfo)]
-                        -> HomePackageTable
+addHomeModInfoIfMissing
+  :: HomePackageTable
+  -> [(ModuleName, HomeModInfo)]
+  -> HomePackageTable
 addHomeModInfoIfMissing = foldl' f
   where
     f hpt (name, hmi) =

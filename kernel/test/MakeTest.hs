@@ -81,6 +81,9 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
              ,"-prof", "-osuf", "p_o", "-hisuf", "p_hi"]
              ["P1", "P2"]
 
+  -- Errors
+  buildFilesNG [] ["E01"]
+
 hasProfilingObj :: IO Bool
 hasProfilingObj = runFnk (hasProfilingObj' pkg_name) defaultFnkEnv
   where
@@ -168,24 +171,36 @@ buildObj :: [String] -> [FilePath] -> Spec
 buildObj = buildFiles
 
 buildFiles :: [String] -> [FilePath] -> Spec
-buildFiles pre paths =
-  describe ("file " ++ show paths ++
-            if null pre
-               then ""
-               else (" with " ++ unwords pre)) $
-    it "should compile successfully" work
+buildFiles pre inputs =
+  describe (labelWithOptionsAndFiles pre inputs) $
+    it "should compile successfully" (buildWork pre inputs)
+
+buildFilesNG :: [String] -> [FilePath] -> Spec
+buildFilesNG pre inputs =
+  describe (labelWithOptionsAndFiles pre inputs) $
+    it "should throw an exception"
+       (buildWork pre inputs `shouldThrow` anyException)
+
+labelWithOptionsAndFiles :: [String] -> [FilePath] -> String
+labelWithOptionsAndFiles pre inputs  =
+  "file " ++ show inputs ++
+  if null pre
+     then ""
+     else " with " ++ unwords pre
+
+buildWork :: [String] -> [FilePath] -> Expectation
+buildWork pre inputs
+  | cProjectVersionInt == "810"
+  , os == "mingw32"
+  , any (\path -> takeBaseName path `elem` skipped) inputs
+  = pendingWith "Not yet supported"
+  | otherwise
+  = do_work
   where
-    work
-      | cProjectVersionInt == "810"
-      , os == "mingw32"
-      , any (\path -> takeBaseName path `elem` skipped) paths
-      = pendingWith "Not yet supported"
-      | otherwise
-      = do_work
     skipped = ["main4"]
     do_work
-      | WayProf `elem` interpWays = do_prof_work
-      | otherwise = do_work_with []
+       | WayProf `elem` interpWays = do_prof_work
+       | otherwise = do_work_with []
     -- Use dflags setttings for profile when running test executable with "+RTS
     -- -p" option.
     do_prof_work =
@@ -194,7 +209,7 @@ buildFiles pre paths =
     do_work_with extra =
       runDefaultMain (extra ++ common_args ++ pre)
     common_args =
-      ["-i.", "-i" ++ odir, "-v0"] ++ paths
+      ["-i.", "-i" ++ odir, "-v0"] ++ inputs
 
 odir :: FilePath
 odir = "test" </> "data" </> "make"
