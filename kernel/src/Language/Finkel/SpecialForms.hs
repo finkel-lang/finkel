@@ -232,15 +232,15 @@ useBCO dflags = 0 < optLevel dflags
 
 setRequiredSettings :: Bool -> Fnk ()
 setRequiredSettings use_bco = do
-  fnkc_env <- getFnkEnv
-  let bco_dflags = bcoDynFlags . obj_dflags
-      obj_dflags dflags = dflags {ghcLink = LinkInMemory}
-  case envMakeDynFlags fnkc_env of
-    Just dflags -> setDynFlags $ if use_bco
-                                    then bco_dflags dflags
-                                    else obj_dflags dflags
-    Nothing     -> failS "setRequiredSettings: missing DynFlags"
-  putFnkEnv fnkc_env {envMessager = requiredMessager}
+  -- The 'DynFlags' in current session might be updated by the file local
+  -- pragmas.  Using the 'DynFlags' from 'envDefaultDynFlags', which is
+  -- initialized when entering the 'make' function in 'initSessionForMake'.
+  fnk_env <- getFnkEnv
+  let update = if use_bco
+                  then bcoDynFlags
+                  else id
+  mapM_ (setDynFlags . update) (envDefaultDynFlags fnk_env)
+  putFnkEnv fnk_env {envMessager = requiredMessager}
 
 withRequiredSettings :: Bool -> Fnk a -> Fnk a
 withRequiredSettings use_bco act =

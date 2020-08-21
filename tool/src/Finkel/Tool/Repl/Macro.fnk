@@ -814,6 +814,9 @@ paths from import directories."
          (\ h (let ((= ic0 (hsc-IC h))
                     (= ic1 (ic0 {ic-dflags dflags2})))
                 (h {hsc-IC ic1}))))
+        ;; Updating the default `DynFlags' used to import modules during macro
+        ;; expansion.
+        (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags2)})))
         (return '(:begin)))
     _ (finkelSrcError nil "set: empty form")))
 

@@ -203,7 +203,12 @@ make infiles no_link force_recomp mb_output = do
 initSessionForMake :: Fnk ()
 initSessionForMake = do
   -- Returned list of 'InstalledUnitId's are ignored.
-  _preload <- getDynFlags >>= setSessionDynFlags
+  dflags0 <- getDynFlags
+  _preload <- setSessionDynFlags dflags0
+
+  -- Above 'setSessionDynFlags' changes the current 'DynFlags', get the updated
+  -- "DynFlags".
+  dflags1 <- getDynFlags
 
   -- Load modules names in FnkEnv to current interactive context.
   fnkc_env <- getFnkEnv
@@ -214,7 +219,11 @@ initSessionForMake = do
   -- line option.
   debug0 <- getFnkDebug
   let debug1 = envDebug fnkc_env
-  putFnkEnv (fnkc_env {envDebug = debug0 || debug1})
+
+  -- Updating the debug settings. Also setting the default 'DynFlag' at this
+  -- moment.
+  putFnkEnv (fnkc_env {envDebug = debug0 || debug1
+                      ,envDefaultDynFlags = Just dflags1})
 
 -- | Simple make function returning compiled home module information. Intended
 -- to be used in 'require' macro.

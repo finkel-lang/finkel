@@ -172,8 +172,11 @@ data FnkEnv = FnkEnv
      -- | Flag for controling informative output.
    , envSilent                 :: Bool
 
-     -- | 'DynFlags' used by function in 'envMake' field.
+     -- | The default 'DynFlags', possibly containing settings from command line.
+   , envDefaultDynFlags        :: Maybe DynFlags
+     -- | 'DynFlags' used by the 'simpleMake' function.
    , envMakeDynFlags           :: Maybe DynFlags
+
      -- | Messager used in make.
    , envMessager               :: Messager
      -- | Required modules names in current target.
@@ -338,6 +341,7 @@ emptyFnkEnv = FnkEnv
   , envContextModules         = []
   , envSilent                 = False
   , envMakeDynFlags           = Nothing
+  , envDefaultDynFlags        = Nothing
   , envMessager               = batchMsg
   , envRequiredModuleNames    = []
   , envCompiledInRequire      = []
