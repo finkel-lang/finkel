@@ -8,6 +8,7 @@ module Language.Finkel.Expand
   , expands'
   , withExpanderSettings
   , bcoDynFlags
+  , canExpandWithObj
   ) where
 
 #include "Syntax.h"
@@ -16,27 +17,28 @@ module Language.Finkel.Expand
 import           Control.Monad          (foldM)
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Char              (isLower)
-import           Data.IORef             (writeIORef)
 
 -- containers
 import qualified Data.Map               as Map
 
 -- ghc
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
+                                         GhcLink (..), HasDynFlags (..),
                                          HscTarget (..), unSetGeneralFlag',
-                                         updOptLevel, xopt_unset)
+                                         updOptLevel)
 import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
 import           GhcMonad               (getSession, setSession)
-import           HscTypes               (HscEnv (..), hscEPS)
-import           LoadIface              (initExternalPackageState)
+import           HscMain                (newHscEnv)
+import           HscTypes               (HscEnv (..))
 import           Outputable             (Outputable (..), cat, fsep, hcat, nest,
                                          vcat)
 import           SrcLoc                 (GenLocated (..))
 
--- ghc-boot
-import qualified GHC.LanguageExtensions as LangExt
+#if !defined(mingw32_HOST_OS)
+import           DynFlags               (Way (..), dynamicGhc, gopt)
+#endif
 
 -- Internal
 import           Language.Finkel.Fnk
@@ -49,63 +51,59 @@ import           Language.Finkel.Form
 --
 -- ---------------------------------------------------------------------
 
--- | Perform given action with 'DynFlags' updated for macroexpansion with
--- interactive evaluation, then reset to the preserved original DynFlags.
+-- | Perform given action with 'HscEnv' updated for macroexpansion with
+-- interactive evaluation, then reset to the preserved original 'HscEnv'.
 withExpanderSettings :: Fnk a -> Fnk a
-withExpanderSettings act = gbracket prepare restore work
+withExpanderSettings act =
+  do dflags <- getDynFlags
+     if hscTarget dflags == HscInterpreted
+        -- Already using bytecode interpreter, perhaps in the middle of macro
+        -- expansion or called from REPL. Using the given action.
+        then act
+
+        -- Current target is object code, switching to the bytecode interpreter.
+        -- Also, using the dedicated 'HscEnv' when not reusing the object codes.
+        else if canExpandWithObj dflags
+                then gbracket getSession setSession work
+                else gbracket (prepare dflags) restore work
   where
-    -- XXX: Workaround for reloading *.hi files after macro expansion.
-    --
-    -- Module interface files loaded during macro expansion may use different
-    -- optimization settings, since the macro expansion always uses DynFlags
-    -- with "-O0" optimization settings. This will cause some optimization works
-    -- such as RULE rewrite not to happen when the loaded interface were left
-    -- as-is after macro expansion.
-    --
-    -- To force the interface file reloadings after the macro expansion,
-    -- updating the IORef of the ExternalPackageState value stored in the
-    -- hsc_EPS field when optiomization flag were greater than zero.
-    --
-    prepare = do
-      hsc_env <- getSession
-      mb_eps <- case optLevel (hsc_dflags hsc_env) of
-                  0 -> return Nothing
-                  _ -> do eps <- liftIO (hscEPS hsc_env)
-                          liftIO (writeIORef (hsc_EPS hsc_env)
-                                             initExternalPackageState)
-                          return (Just eps)
-      return (hsc_env, mb_eps)
+    prepare dflags = do
+      fnk_env <- getFnkEnv
+      hsc_env_orig <- getSession
+      hsc_env_mex <- case envSessionForExpand fnk_env of
+                        Just he -> return he
+                        Nothing -> liftIO (newHscEnv dflags)
+      setSession hsc_env_mex
+      return hsc_env_orig
 
-    restore (hsc_env, mb_eps) = do
-      mapM_ (liftIO . writeIORef (hsc_EPS hsc_env)) mb_eps
-      setSession hsc_env
+    restore hsc_env_orig =
+      do hsc_env_mex <- getSession
+         modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_mex})
+         setSession hsc_env_orig
 
-    work (hsc_env, _) = do
-      setExpanderSettings (hsc_dflags hsc_env)
-      act
+    work hsc_env =
+      do setDynFlags (bcoDynFlags (hsc_dflags hsc_env))
+         act
 
--- | Set state for macro expansion.
---
--- Add modules used during macro expansion to current context, and set
--- some DynFlags fields.
-setExpanderSettings :: DynFlags -> Fnk ()
-setExpanderSettings dflags0 = do
-  -- Save the original DynFlags for compiling required modules if not saved yet.
-  fnkc_env <- getFnkEnv
-  case envMakeDynFlags fnkc_env of
-    Nothing -> putFnkEnv (fnkc_env {envMakeDynFlags = Just dflags0})
-    Just _  -> return ()
-
-  -- Update DynFlags for interactive evaluation.
-  let dflags1 = xopt_unset dflags0 LangExt.MonomorphismRestriction
-  setDynFlags (bcoDynFlags dflags1)
+canExpandWithObj :: DynFlags -> Bool
+canExpandWithObj dflags =
+  if dynamicGhc
+    then buildDynamic && noOptimization
+    -- XXX: Currently have not tested with non-dynamic GHC, conservatively not
+    -- using object code.
+    else False
+  where
+    buildDynamic = WayDyn `elem` ws || gopt Opt_BuildDynamicToo dflags
+    noOptimization = optLevel dflags == 0
+    ws = ways dflags
 
 -- | Setup 'DynFlags' for interactive evaluation.
 bcoDynFlags :: DynFlags -> DynFlags
 bcoDynFlags dflags0 =
-  let dflags1 = dflags0 {hscTarget = HscInterpreted}
+  let dflags1 = dflags0 { hscTarget = HscInterpreted
+                        , ghcLink = LinkInMemory }
       dflags2 = foldr unSetGeneralFlag' dflags1 [ Opt_Hpc
-                                                , Opt_BuildDynamicToo]
+                                                , Opt_BuildDynamicToo ]
       dflags3 = updOptLevel 0 dflags2
   in  dflags3
 {-# INLINE bcoDynFlags #-}

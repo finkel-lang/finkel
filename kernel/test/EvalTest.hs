@@ -1,6 +1,9 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE MagicHash    #-}
 module EvalTest (evalTests) where
+
+#include "Syntax.h"
 
 -- base
 import Control.Exception            (throwIO)
@@ -14,9 +17,13 @@ import System.FilePath              (takeBaseName)
 -- ghc
 import Config                       (cProjectVersionInt)
 import DynFlags                     (HasDynFlags (..))
-import GHC                          (getPrintUnqual)
+import FastString                   (fsLit)
+import GHC                          (getPrintUnqual, setContext)
+import GHC_Hs_ImpExp                (simpleImportDecl)
 import GhcMonad                     (printException)
-import HscTypes                     (handleSourceError)
+import HscTypes                     (InteractiveImport (..), handleSourceError)
+import InteractiveEval              (getContext)
+import Module                       (mkModuleNameFS)
 import Outputable                   (showSDocForUser)
 import PprTyThing                   (pprTypeForUser)
 import StringBuffer                 (StringBuffer, hGetStringBuffer,
@@ -65,7 +72,7 @@ exprTest file =
     runEvalExpr !buf =
       runFnk (handleSourceError
                 (\se -> printException se >> liftIO (throwIO se))
-                (doEval "<exprTypeTest>" parseExpr act buf))
+                (doEval "<exprTest>" parseExpr act buf))
              evalFnkEnv
     act !expr = unsafeCoerce# $! evalExpr expr
 
@@ -106,10 +113,17 @@ doEval !label !parser !act !input = do
   initSessionForTest
   case evalSP sexprs (Just label) input of
     Right form0 -> do
-      !form1 <- withExpanderSettings (expands form0)
+      !form1 <- withExpanderSettings (prepare >> expands form0)
       !hthing <- buildHsSyn parser form1
       act hthing
     Left err -> failS err
+  where
+    -- Adding 'Prelude' and 'Language.Finkel' to interactive context, since the
+    -- codes in the file does not contain ':require' forms.
+    prepare = do
+      ctxt <- getContext
+      setContext (mkII "Prelude" : mkII "Language.Finkel" : ctxt)
+    mkII = IIDecl . simpleImportDecl . mkModuleNameFS . fsLit
 
 evalFnkEnv :: FnkEnv
 evalFnkEnv = defaultFnkEnv {envContextModules = modules}

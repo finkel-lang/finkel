@@ -560,9 +560,12 @@ doMakeOne i total mb_sp ms src_modified = do
 checkUpToDate :: ModSummary -> [ModSummary] -> Fnk Bool
 checkUpToDate ms dependencies =
   case ms_obj_date ms of
-    -- No object code, return 'True' here, deletege bytecode check to
+    -- No object code, test whether the current target is object code or not.
+    -- When compiling bytecode, further up-to-date check will be done in
     -- "compileOne'".
-    Nothing -> return True
+    Nothing -> do
+      dflags <- getDynFlags
+      return (not (isObjectTarget (hscTarget dflags)))
 
     -- Found timestamp for object code.
     Just obj_date -> do

@@ -24,7 +24,7 @@ import Data.Map                        (fromList)
 -- ghc
 import BasicTypes                      (FractionalLit (..), SourceText (..))
 import DynFlags                        (DynFlags (..), GeneralFlag (..),
-                                        GhcLink (..), getDynFlags, gopt)
+                                        getDynFlags, gopt)
 import ErrUtils                        (MsgDoc, compilationProgressMsg)
 import Exception                       (gbracket)
 import FastString                      (FastString, appendFS, fsLit, unpackFS)
@@ -36,9 +36,9 @@ import GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
 import GhcMonad                        (GhcMonad (..), modifySession)
 import HscMain                         (Messager, hscTcRnLookupRdrName,
                                         showModuleIndex)
-import HscTypes                        (FindResult (..), HomeModInfo,
+import HscTypes                        (FindResult (..), HomeModInfo (..),
                                         HscEnv (..), InteractiveImport (..),
-                                        lookupHpt, showModMsg)
+                                        isObjectLinkable, lookupHpt, showModMsg)
 import InteractiveEval                 (getContext)
 import MkIface                         (RecompileRequired (..),
                                         recompileRequired)
@@ -54,7 +54,8 @@ import Var                             (varName)
 -- Internal
 import Language.Finkel.Builder         (HImportDecl, evalBuilder, syntaxErrMsg)
 import Language.Finkel.Eval
-import Language.Finkel.Expand          (bcoDynFlags, expand, expands')
+import Language.Finkel.Expand          (bcoDynFlags, canExpandWithObj, expand,
+                                        expands')
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
@@ -227,23 +228,20 @@ addImportedMacro dflags thing = when (isMacro dflags thing) go
 -- delegating further works to 'simpleMake' with 'withRequiredSettings' for such
 -- cases.
 
-useBCO :: DynFlags -> Bool
-useBCO dflags = 0 < optLevel dflags
-
 setRequiredSettings :: Bool -> Fnk ()
-setRequiredSettings use_bco = do
-  -- The 'DynFlags' in current session might be updated by the file local
+setRequiredSettings use_obj = do
+  -- 'DynFlags' in the current session might be updated by the file local
   -- pragmas.  Using the 'DynFlags' from 'envDefaultDynFlags', which is
   -- initialized when entering the 'make' function in 'initSessionForMake'.
   fnk_env <- getFnkEnv
-  let update = if use_bco
-                  then bcoDynFlags
-                  else id
+  let update = if use_obj
+                  then id
+                  else bcoDynFlags
   mapM_ (setDynFlags . update) (envDefaultDynFlags fnk_env)
   putFnkEnv fnk_env {envMessager = requiredMessager}
 
 withRequiredSettings :: Bool -> Fnk a -> Fnk a
-withRequiredSettings use_bco act =
+withRequiredSettings use_obj act =
   gbracket
     (do dflags <- getDynFlags
         fnkc_env <- getFnkEnv
@@ -251,7 +249,7 @@ withRequiredSettings use_bco act =
     (\(dflags, fnkc_env) ->
        do setDynFlags dflags
           putFnkEnv fnkc_env)
-    (const (setRequiredSettings use_bco >> act))
+    (const (setRequiredSettings use_obj >> act))
 
 requiredMessager :: Messager
 requiredMessager hsc_env mod_index recomp mod_summary =
@@ -284,18 +282,20 @@ makeMissingHomeMod force_recomp (L loc idecl) = do
 
   let mname = unLoc (ideclName idecl)
       lmname = L loc (moduleNameString mname)
-      smpl_mk = withRequiredSettings use_bco (simpleMake force_recomp lmname)
-      use_bco = maybe False useBCO (envMakeDynFlags fnk_env)
+      use_obj = maybe False canExpandWithObj (envDefaultDynFlags fnk_env)
+      has_obj = maybe False isObjectLinkable . hm_linkable
+      smpl_mk = withRequiredSettings use_obj (simpleMake force_recomp lmname)
 
   case lookupHpt (hsc_HPT hsc_env) mname of
-    Just _ -> if use_bco
-                 then smpl_mk
-                 else return []
+    Just hmi -> if use_obj && has_obj hmi
+                    then return []
+                    else smpl_mk
     Nothing -> do
       fresult <- liftIO (findImportedModule hsc_env mname Nothing)
       case fresult of
         Found {} -> return []
         _        -> smpl_mk
+
 
 -- ---------------------------------------------------------------------
 --

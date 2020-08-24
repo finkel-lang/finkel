@@ -195,6 +195,9 @@ data FnkEnv = FnkEnv
      -- | Whether to use qualified name for primitive functions used in quoting
      -- codes.
    , envQualifyQuotePrimitives :: Bool
+
+     -- | The 'HscEnv' used by the byte-code interpreter for macro expansion.
+   , envSessionForExpand       :: Maybe HscEnv
    }
 
 -- | Newtype wrapper for compiling Finkel code to Haskell AST.
@@ -348,7 +351,8 @@ emptyFnkEnv = FnkEnv
   , envDumpHs                 = False
   , envHsDir                  = Nothing
   , envLibDir                 = Nothing
-  , envQualifyQuotePrimitives = False }
+  , envQualifyQuotePrimitives = False
+  , envSessionForExpand       = Nothing }
 
 -- | Set current 'DynFlags' to given argument. This function also modifies
 -- 'DynFlags' in interactive context.
