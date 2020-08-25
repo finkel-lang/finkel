@@ -177,7 +177,7 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
             case mb_entities of
               Nothing       -> Nothing
               Just entities -> Just (hiding, L l entities)
-            in  return (L l decl')
+      in  return (L l decl')
     _ -> builderError
 {-# INLINE b_importD #-}
 
