@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | Tests for 'make'.
 module MakeTest
   ( makeTests
@@ -9,6 +10,10 @@ import Control.Monad.IO.Class       (MonadIO (..))
 import Data.List                    (isPrefixOf, tails)
 import System.FilePath              (takeBaseName, (</>))
 import System.Info                  (os)
+
+#if !MIN_VERSION_ghc(8,10,0)
+import Control.Exception            (SomeException (..), catch)
+#endif
 
 -- directory
 import System.Directory             (getDirectoryContents)
@@ -40,7 +45,7 @@ import Language.Finkel.TargetSource
 import TestAux
 
 makeTests :: Spec
-makeTests = beforeAll_ (removeArtifacts odir) $ do
+makeTests = beforeAll_ (loadDyn >> removeArtifacts odir) $ do
   targetSourceTests
 
   -- Build bytecode
@@ -65,25 +70,63 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
            ["M5", "M4" </> "A.fnk", "M4" </> "B.fnk", "M4", "main7.fnk"]
   buildObj ["-O2"] ["main8.fnk"]
 
-  -- Recompile object codes with optimization option
-  buildObj ["-package", "finkel-kernel", "-O0", "-dynamic-too"]
-           ["P1", "P2"]
-  buildObj ["-package", "finkel-kernel", "-O1", "-dynamic-too"]
-           ["P1", "P2"]
+  -- XXX: Disabled under Windows ...
+  let buildObj' flags inputs =
+#if defined(mingw32_HOST_OS)
+        describe (labelWithOptionsAndFiles flags inputs)
+                 (it "should compile successfully"
+                     (pendingWith "Not yet supported under Windows"))
+#else
+        before_ (removeArtifacts odir) (buildObj flags inputs)
+#endif
 
-  -- Recompile object codes with profiling option
+  -- Compile object codes with and without optimization option
+  buildObj' [] ["P1", "P2"]
+  buildObj' ["-O1"] ["P1", "P2"]
+
+  -- Compile object code with and without optimization, module reorderd
+  buildObj' [] ["P2", "P1"]
+  buildObj' ["-O1"] ["P2", "P1"]
+
+#if !defined(mingw32_HOST_OS)
+  -- Compile object codes with dynamic-too and optimization option
+  buildObj' ["-O0", "-dynamic-too"] ["P1", "P2"]
+  buildObj' ["-O1", "-dynamic-too"] ["P1", "P2"]
+
+  -- Compile object codes with dynamic-too and optimization option, reorderd
+  buildObj' ["-O0", "-dynamic-too"] ["P2", "P1"]
+  buildObj' ["-O1", "-dynamic-too"] ["P2", "P1"]
+#endif
+
+  -- Compile object codes with profiling option
   has_profiling_obj <- runIO hasProfilingObj
   when has_profiling_obj $ do
-    buildObj ["-package", "finkel-kernel", "-O"
-             ,"-prof", "-osuf", "p_o", "-hisuf", "p_hi"]
-             ["P1", "P2"]
-    buildObj ["-package", "finkel-kernel", "-O"
-             ,"-prof", "-osuf", "p_o", "-hisuf", "p_hi"]
-             ["P1", "P2"]
+    buildObj' ["-O","-prof", "-osuf", "p_o", "-hisuf", "p_hi"] ["P1", "P2"]
+    buildObj' ["-O","-prof", "-osuf", "p_o", "-hisuf", "p_hi"] ["P1", "P2"]
 
   -- Errors
   buildFilesNG [] ["E01"]
 
+-- Action to preload package libraries.
+--
+-- Until ghc 8.10, persistent linker state is stored in a global variable.  The
+-- loaded package libraries are shared in "HscEnv.hsc_dynLinker" in every Fnk
+-- run.  This may cause link time error with dynamic object on some platforms.
+-- To avoid such cases, compiling with dynamic library before running the tests.
+
+loadDyn :: IO ()
+loadDyn =
+#if MIN_VERSION_ghc(8,10,0) || defined(migw32_HOST_OS)
+  -- GHC 8.10.0 uses isolated persistend linker state, does nothing.  Also, not
+  -- compiling with dynamic option under Windows.
+  return ()
+#else
+  catch (runDefaultMain ["-i" ++ odir, "-v0", "-dynamic-too", "P1", "P2"])
+        (\(SomeException e) -> print e)
+#endif
+
+-- Action to decide whether profiling objects for the "finkel-kernel" package is
+-- available at runtime.
 hasProfilingObj :: IO Bool
 hasProfilingObj = runFnk (hasProfilingObj' pkg_name) defaultFnkEnv
   where
@@ -95,9 +138,8 @@ hasProfilingObj' pkg_name  =
      dflags <- getDynFlags
      case lookupPackageConfig dflags pkg_name of
        Nothing  -> return False
-       Just cfg -> liftIO
-                     (do putStrLn (showSDoc dflags (pprPackageConfig cfg))
-                         lookupProfObjInDirectories (libraryDirs cfg))
+       Just cfg -> liftIO (do putStrLn (showSDoc dflags (pprPackageConfig cfg))
+                              lookupProfObjInDirectories (libraryDirs cfg))
 
 lookupPackageConfig :: DynFlags -> PackageName -> Maybe PackageConfig
 lookupPackageConfig dflags pkg_name = do

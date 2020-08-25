@@ -85,7 +85,11 @@ withExpanderSettings act =
       do setDynFlags (bcoDynFlags (hsc_dflags hsc_env))
          act
 
+-- XXX: Constantly 'False' under Windows.
 canExpandWithObj :: DynFlags -> Bool
+#if defined(mingw32_HOST_OS)
+canExpandWithObj _ = False
+#else
 canExpandWithObj dflags =
   if dynamicGhc
     then buildDynamic && noOptimization
@@ -96,6 +100,7 @@ canExpandWithObj dflags =
     buildDynamic = WayDyn `elem` ws || gopt Opt_BuildDynamicToo dflags
     noOptimization = optLevel dflags == 0
     ws = ways dflags
+#endif
 
 -- | Setup 'DynFlags' for interactive evaluation.
 bcoDynFlags :: DynFlags -> DynFlags
