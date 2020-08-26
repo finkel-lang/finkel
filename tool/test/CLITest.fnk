@@ -6,7 +6,7 @@
 
 (defmodule CLITest
   (export cliTests)
-  (import-when [compile]
+  (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
   (import

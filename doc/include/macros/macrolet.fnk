@@ -1,7 +1,7 @@
 ;;;; File: macrolet.fnk
 
 (defmodule Main
-  (import-when [compile]
+  (import-when [:compile]
     (Finkel.Prelude)))
 
 (macrolet ((say-hello []

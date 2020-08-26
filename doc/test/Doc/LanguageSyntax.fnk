@@ -2,7 +2,7 @@
 
 (defmodule Doc.LanguageSyntax
   (export spec)
-  (import-when [compile]
+  (import-when [:compile]
     ;; finkel-lang
     (Finkel.Prelude))
   (import

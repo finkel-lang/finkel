@@ -6,7 +6,7 @@ This module does not export macros, but functions to work with `Code' values for
 defining macros. Intended usage is to import during compilation:
 
 > (defmodule MyModule
->   (import-when [compile]
+>   (import-when [:compile]
 >      (Finkel.Prelude))
 >   ...)
 

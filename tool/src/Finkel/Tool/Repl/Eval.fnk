@@ -4,7 +4,7 @@
 
 (defmodule Finkel.Tool.Repl.Eval
   (export eval-loop)
-  (import-when [compile]
+  (import-when [:compile]
    ;; finkel-core
    (Finkel.Prelude))
   (import

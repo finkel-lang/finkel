@@ -1,10 +1,10 @@
 ;;;; File: arglist.fnk
 
 (defmodule Main
-  (import-when [compile]
+  (import-when [:compile]
     (Finkel.Prelude)))
 
-(eval-when [compile]
+(eval-when [:compile]
   (defmacro puts args
     `(putStrLn (unwords [,@args]))))
 

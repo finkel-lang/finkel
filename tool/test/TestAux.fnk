@@ -5,7 +5,7 @@
 (defmodule TestAux
   (export (TestIO ..) (TestIOState ..) runTestIO
           (EvalTestFns ..) makeEvalTestFns)
-  (import-when [compile]
+  (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
   (import

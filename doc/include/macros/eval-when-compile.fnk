@@ -1,7 +1,7 @@
 ;;;; File: eval-when-compile.fnk
 
 (defmodule Main
-  (import-when [compile]
+  (import-when [:compile]
     (Finkel.Prelude)))
 
 (:eval-when-compile

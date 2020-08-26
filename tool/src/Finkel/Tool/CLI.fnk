@@ -5,7 +5,7 @@
 (defmodule Finkel.Tool.CLI
   (export (CLI ..)
           (ExitCode ..))
-  (import-when [compile]
+  (import-when [:compile]
    ;; finkel-core
    (Finkel.Prelude))
   (import

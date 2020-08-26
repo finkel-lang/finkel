@@ -5,7 +5,7 @@
 (defmodule CoreTest
   (export coreTests
           macroTests)
-  (import-when [compile]
+  (import-when [:compile]
     ;; Internal
     (Finkel.Prelude))
   (import
@@ -65,7 +65,7 @@
   [ _ []] False
   [(: x xs) (: y ys)] (&& (eqGensymCode1 x y) (eqGensymCodes xs ys)))
 
-(eval-when [compile]
+(eval-when [:compile]
   (defmacro expandTo
     [in out]
     `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
@@ -98,7 +98,7 @@
       (do
         (it "should expand to (:begin (:eval-when-compile ...) ...)"
           (expandTo
-           (eval-when (compile load)
+           (eval-when (:compile :load)
              (:: foo Int)
              (= foo 42))
            (:begin
@@ -109,7 +109,7 @@
              (= foo 42))))
         (it "should expand to (:eval-when-compile ...)"
           (expandTo
-           (eval-when (compile)
+           (eval-when (:compile)
              (:: foo Int)
              (= foo 42))
            (:eval-when-compile
@@ -117,7 +117,7 @@
              (= foo 42))))
         (it "should expand to (:begin ...)"
           (expandTo
-           (eval-when (load)
+           (eval-when (:load)
              (:: foo Int)
              (= foo 42))
            (:begin
@@ -125,7 +125,7 @@
              (= foo 42))))
         (it "should support phases in bracket"
           (expandTo
-           (eval-when [compile load]
+           (eval-when [:compile :load]
              (= foo True))
            (:begin
              (:eval-when-compile
@@ -133,14 +133,14 @@
              (= foo True))))
         (it "throws an exception with unknown phase"
           (expandFailureWith
-           (eval-when (foo bar buzz)
+           (eval-when (:foo :bar :buzz)
              (:: foo Int)
              (= foo 42))
            (srcSubseqErr "invalid phase")))
 
         (it "throws and exception on non-list phase"
           (expandFailureWith
-           (eval-when compile
+           (eval-when :compile
              (:: foo Int)
              (= foo 42))
            (srcSubseqErr "eval-when")))))
@@ -151,7 +151,7 @@
          (eval-and-compile
            (:: foo Int)
            (= foo 42))
-         (eval-when [compile load]
+         (eval-when [:compile :load]
            (:: foo Int)
            (= foo 42)))))
 
@@ -640,14 +640,14 @@
           (it "should import when compile"
             (expandTo
              (defmodule Foo
-               (import-when [compile]
+               (import-when [:compile]
                  (Prelude)
                  (Language.Finkel))
                (import
                 (Control.Monad)))
              (:begin
                (module Foo)
-               (eval-when [compile]
+               (eval-when [:compile]
                  (import Prelude)
                  (import Language.Finkel))
                (import Control.Monad))))

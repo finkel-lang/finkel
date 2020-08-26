@@ -11,7 +11,7 @@
    ;; Help command
    helpMain
    show-usage)
-  (import-when [compile]
+  (import-when [:compile]
    ;; finkel-core
    (Finkel.Prelude))
   (import

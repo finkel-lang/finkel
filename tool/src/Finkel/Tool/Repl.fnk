@@ -13,7 +13,7 @@
   (require
    ;; Internal
    (Finkel.Tool.Repl.Macro))
-  (import-when [compile]
+  (import-when [:compile]
    ;; finkel-core
    (Finkel.Prelude))
   (import

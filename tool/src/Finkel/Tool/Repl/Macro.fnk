@@ -10,7 +10,7 @@
 
 (defmodule Finkel.Tool.Repl.Macro
   (export repl-macro)
-  (import-when [compile]
+  (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
   (import

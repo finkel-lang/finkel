@@ -1,10 +1,10 @@
 ;;;; File: unquote-splice.fnk
 
 (defmodule Main
-  (import-when [compile]
+  (import-when [:compile]
     (Finkel.Prelude)))
 
-(eval-when [compile]
+(eval-when [:compile]
   (defmacro uqs [arg]
     `(putStrLn (concat [,@arg]))))
 

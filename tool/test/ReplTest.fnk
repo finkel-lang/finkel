@@ -6,7 +6,7 @@
 
 (defmodule ReplTest
   (export replTests listenTests)
-  (import-when [compile]
+  (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
   (import

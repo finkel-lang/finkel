@@ -32,11 +32,11 @@
 
    unsafeFinkelSrcError)
 
-  (import-when [compile]
+  (import-when [:compile]
     ;; base
     (Prelude))
 
-  (import-when [compile load]
+  (import-when [:compile :load]
     ;; finkel-kernel
     (Language.Finkel))
 
@@ -481,7 +481,7 @@ and the definition of 'cdadr' is:
 > (cdadr x) == (cdr (car (cdr x)))
 ")
 
-(eval-when [compile]
+(eval-when [:compile]
   (defn (:: ads [String])
     (let ((= f (concatMap (\ x [(: #'a x) (: #'d x)]))))
       (concat (take 3 (tail (iterate f [[#'a] [#'d]]))))))

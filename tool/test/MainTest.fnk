@@ -4,7 +4,7 @@
 
 (defmodule MainTest
   (export mainTests)
-  (import-when [compile]
+  (import-when [:compile]
     (Finkel.Prelude))
   (import
    ;; base

@@ -1,10 +1,10 @@
 ;;;; File: fib-macro.fnk
 
 (defmodule Main
-  (import-when [compile]
+  (import-when [:compile]
     (Finkel.Prelude)))
 
-(eval-when [compile]
+(eval-when [:compile]
   (defn (:: fib (-> Int Int))
     [n]
     (if (< n 2)

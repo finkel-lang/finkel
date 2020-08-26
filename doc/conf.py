@@ -259,6 +259,10 @@ class FinkelLexer(RegexLexer):
             (r"(module)(\s+)([^\s]+)",
              bygroups(Keyword.Reserved, Text, Name.Namespace)),
 
+            # Macro specific keywords
+            (r':compile', String),
+            (r':load', String),
+
             # Keywords
             ('(%s)' % '|'.join(re.escape(e) + ' ' for e in reserved),
              Keyword.Reserved),
@@ -292,7 +296,7 @@ class FinkelLexer(RegexLexer):
             (r'(\[|\])', Punctuation),
             (r'(\{|\})', Punctuation),
             (r'`', Punctuation),
-            (r"'", Punctuation)
+            (r"'", Punctuation),
         ],
 
         'character': [
@@ -321,9 +325,9 @@ class FinkelLexer(RegexLexer):
         'defmodule': [
             (r'\s+', Text),
             (r'export', Keyword.Reserved, 'funclist'),
-            (r'(import-when)(\s+)(\[)(compile|load)+(\])(\s+)',
+            (r'(import-when)(\s+)(\[)(:compile|:load)+(\])(\s+)',
              bygroups(Keyword.Reserved, Text, Punctuation,
-                      Text, Punctuation, Text),
+                      String, Punctuation, Text),
              'import-body'),
             (r'import', Keyword.Reserved, 'import-body'),
             (r'require', Keyword.Reserved, 'import-body'),

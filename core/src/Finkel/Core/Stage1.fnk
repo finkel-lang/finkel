@@ -150,7 +150,7 @@ forms. The @load@ phase simply emit the body forms to compiled result.
 
 > EVAL-WHEN ::= 'eval-when' PHASES BODY+
 > PHASES    ::= '[' PHASE+ ']' | '(' PHASE+ ')'
-> PHASE     ::= 'compile' | 'load'
+> PHASE     ::= ':compile' | ':load'
 > BODY      ::= form
 
 ==== __Example__
@@ -164,7 +164,7 @@ and temporally macro @m@ at compilation time.
   (require-and-import
     (Finkel.Prelude)))
 
-(eval-when [compile load]
+(eval-when [:compile :load]
   (defn (:: f (-> Code Code))
     [x]
     `(print ,x)))
@@ -182,9 +182,9 @@ and temporally macro @m@ at compilation time.
 ")
 (define-macro eval-when form
   (let ((:: at-compile (-> [Code] Bool))
-        (= at-compile (elem 'compile))
+        (= at-compile (elem ':compile))
         (:: at-load (-> [Code] Bool))
-        (= at-load (elem 'load))
+        (= at-load (elem ':load))
         (:: emit (-> [Code] [Code] (Fnk Code)))
         (= emit phases body
           (| ((&& (at-compile phases) (at-load phases))
@@ -215,7 +215,7 @@ and temporally macro @m@ at compilation time.
 
 See 'eval_when'.")
 (define-macro eval-and-compile form
-  (return `(eval-when [compile load]
+  (return `(eval-when [:compile :load]
              ,@(cdr form))))
 
 
@@ -704,7 +704,7 @@ Sample module header:
 @
 (defmodule Foo
   (require (Finkel.Prelude hiding (head tail)))
-  (import-when [compile]
+  (import-when [:compile]
     (Control.Monad (foldM)))
   (import (Control.Monad (when))
           (qualified Data.ByteString as BS))
@@ -717,7 +717,7 @@ Expands to:
 (:begin
   (:require Finkel.Prelude hiding (head tail))
   (module Foo foo bar buzz)
-  (eval-when [compile]
+  (eval-when [:compile]
     (import Control.Monad (foldM)))
   (import Control.Monad (when))
   (import qualified Data.ByteString as BS)
