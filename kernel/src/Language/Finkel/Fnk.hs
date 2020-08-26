@@ -174,8 +174,6 @@ data FnkEnv = FnkEnv
 
      -- | The default 'DynFlags', possibly containing settings from command line.
    , envDefaultDynFlags        :: Maybe DynFlags
-     -- | 'DynFlags' used by the 'simpleMake' function.
-   , envMakeDynFlags           :: Maybe DynFlags
 
      -- | Messager used in make.
    , envMessager               :: Messager
@@ -343,7 +341,6 @@ emptyFnkEnv = FnkEnv
   , envDebug                  = False
   , envContextModules         = []
   , envSilent                 = False
-  , envMakeDynFlags           = Nothing
   , envDefaultDynFlags        = Nothing
   , envMessager               = batchMsg
   , envRequiredModuleNames    = []

@@ -959,8 +959,7 @@ resetFnkEnv :: Fnk ()
 resetFnkEnv =
   modifyFnkEnv (\fnkc_env ->
                    fnkc_env { envMacros = envDefaultMacros fnkc_env
-                            , envRequiredModuleNames = []
-                            , envMakeDynFlags = Nothing})
+                            , envRequiredModuleNames = [] })
 
 compileHsFile :: FilePath -> Maybe Phase -> Fnk (HModule, DynFlags, [a])
 compileHsFile source mbphase = do
