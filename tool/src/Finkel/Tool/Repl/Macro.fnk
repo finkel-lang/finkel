@@ -680,7 +680,9 @@ object code."
               (modifySession (const new-env-1))
               (<- mods (fmap envContextModules getFnkEnv))
               (setContext (map mk-ii-str mods))
-              (setDynFlags (dflags {thisInstalledUnitId uid}))))
+              (<- _ (setSessionDynFlags dflags1))
+              (<- dflags2 getDynFlags)
+              (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags2)})))))
         (= msg dflags name
           (maybe (++ "; package `" (unpackFS name) "' not found")
                  (\ iuid
