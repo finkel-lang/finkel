@@ -31,9 +31,9 @@ jobs:
     - os: linux
       env: EXEC=stack RESOLVER=lts-16
     - os: linux
-      env: EXEC=cabal GHC=8.10.1 FLAGS="-O0"
+      env: EXEC=cabal GHC=8.10.2 FLAGS="-O0"
     - os: linux
-      env: EXEC=cabal GHC=8.10.1 FLAGS="-O2"
+      env: EXEC=cabal GHC=8.10.2 FLAGS="-O2"
     - os: osx
       env: EXEC=stack RESOLVER=lts-16
     - os: windows

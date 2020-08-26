@@ -20,11 +20,6 @@ category:            Language
 build-type:          Simple
 extra-source-files:  README.md
 
-tested-with:           GHC == 8.2.2
-                     , GHC == 8.4.4
-                     , GHC == 8.6.5
-                     , GHC == 8.8.2
-
 flag dynamic
   description:         Dynamically link executables (except Windows)
   default:             True
