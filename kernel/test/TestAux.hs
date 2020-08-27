@@ -19,8 +19,8 @@ import           System.Exit            (ExitCode (..))
 
 
 -- directory
-import           System.Directory       (getDirectoryContents, getHomeDirectory,
-                                         removeFile)
+import           System.Directory       (getAppUserDataDirectory,
+                                         getDirectoryContents, removeFile)
 
 -- filepath
 import           System.FilePath        (joinPath, takeExtension, (</>))
@@ -95,10 +95,9 @@ getPackageArgsForStack =
 
 getPackageArgsForCabal :: IO [String]
 getPackageArgsForCabal =
-  do home <- getHomeDirectory
-     let storedb = joinPath [home, ".cabal", "store", ghc_ver, "package.db"]
-         ghc_ver = "ghc-" ++ cProjectVersion
-
+  do app_data_dir <- getAppUserDataDirectory "cabal"
+     let ghc_ver = "ghc-" ++ cProjectVersion
+         storedb = joinPath [app_data_dir, "store", ghc_ver, "package.db"]
          -- To support running the test without building the package, using the
          -- package db found in "package.conf.inplace" directory for inplace
          -- package db.
