@@ -19,7 +19,6 @@
    (System.Exit ((ExitCode ..)))
    (System.IO (hGetContents hGetLine))
    (Text.ParserCombinators.ReadP (readP-to-S))
-   (qualified System.Info)
 
    ;; directory
    (System.Directory (listDirectory removeFile))
@@ -125,19 +124,17 @@ be skipped.")
                                FilePath ; ^ Console file.
                                Expectation))
   [dir file]
-  (if (== System.Info.os "mingw32")
-      (pendingWith "skipped under windows")
-      (do (<- contents (readFile (</> dir file)))
-          (<- build-tool get-build-tool)
-          (<- finkel
-            (case build-tool
-              Cabal (return (, "cabal" ["v2-exec" "-v0" "--" "finkel"]))
-              Stack (do (<- resolver get-stack-resolver)
-                        (return (, "stack" ["--resolver" resolver "--silent"
-                                            "exec" "--" "finkel"])))))
-          (let ((= tests (parse-console contents))
-                (= aliases [(, "finkel" finkel)])))
-          (mapM_ (run-console dir aliases) tests))))
+  (do (<- contents (readFile (</> dir file)))
+      (<- build-tool get-build-tool)
+      (<- finkel
+        (case build-tool
+          Cabal (return (, "cabal" ["v2-exec" "-v0" "--" "finkel"]))
+          Stack (do (<- resolver get-stack-resolver)
+                    (return (, "stack" ["--resolver" resolver "--silent"
+                                        "exec" "--" "finkel"])))))
+      (let ((= tests (parse-console contents))
+            (= aliases [(, "finkel" finkel)])))
+      (mapM_ (run-console dir aliases) tests)))
 
 (data ConsoleTest
   (ConsoleTest String           ; ^ The command.

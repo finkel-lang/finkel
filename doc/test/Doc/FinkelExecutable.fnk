@@ -17,7 +17,11 @@
 
 (defn (:: spec Spec)
   (let ((= dir (</> "include" "finkel-executable"))
-        (= skips [(, "hello.console" (const (== os "darwin")))]))
+        (= is-osx (== os "darwin"))
+        (= is-win (== os "mingw32"))
+        (= skips [(, "finkel-help-make.console" (const is-win))
+                  (, "hello.console" (const (|| is-osx is-win)))
+                  (, "hello-prof.console" (const is-win))]))
     (before_
      (remove-compiled [(</> dir "hello")])
      (describe "using the finkel executable"
