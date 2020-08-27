@@ -8,8 +8,7 @@ module MakeTest
 import Control.Monad                (when)
 import Control.Monad.IO.Class       (MonadIO (..))
 import Data.List                    (isPrefixOf, tails)
-import System.FilePath              (takeBaseName, (</>))
-import System.Info                  (os)
+import System.FilePath              ((</>))
 
 -- directory
 import System.Directory             (getDirectoryContents)
@@ -18,7 +17,6 @@ import System.Directory             (getDirectoryContents)
 import System.FilePath              (takeExtension)
 
 -- ghc
-import Config                       (cProjectVersionInt)
 import DynFlags                     (DynFlags, HasDynFlags (..), Way (..),
                                      interpWays)
 import FastString                   (fsLit)
@@ -71,7 +69,6 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
            ["M5", "M4" </> "A.fnk", "M4" </> "B.fnk", "M4", "main7.fnk"]
   buildObj ["-O2"] ["main8.fnk"]
 
-  -- XXX: Disabled under Windows ...
   let buildObj' flags inputs =
         before_ (doUnload >> removeArtifacts odir) (buildObj flags inputs)
 
@@ -226,15 +223,8 @@ labelWithOptionsAndFiles pre inputs  =
      else " with " ++ unwords pre
 
 buildWork :: [String] -> [FilePath] -> Expectation
-buildWork pre inputs
-  | cProjectVersionInt == "810"
-  , os == "mingw32"
-  , any (\path -> takeBaseName path `elem` skipped) inputs
-  = pendingWith "Not yet supported"
-  | otherwise
-  = do_work
+buildWork pre inputs = do_work
   where
-    skipped = ["main4"]
     do_work
        | WayProf `elem` interpWays = do_prof_work
        | otherwise = do_work_with []
