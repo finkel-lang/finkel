@@ -11,10 +11,6 @@ import Data.List                    (isPrefixOf, tails)
 import System.FilePath              (takeBaseName, (</>))
 import System.Info                  (os)
 
-#if !MIN_VERSION_ghc(8,10,0)
-import Control.Exception            (SomeException (..), catch)
-#endif
-
 -- directory
 import System.Directory             (getDirectoryContents)
 
@@ -32,6 +28,11 @@ import Packages                     (InstalledPackageInfo (..), PackageConfig,
                                      PackageName (..), lookupInstalledPackage,
                                      lookupPackageName, pprPackageConfig)
 
+#if !MIN_VERSION_ghc(8,10,0)
+import GhcMonad                     (GhcMonad (..))
+import Linker                       (unload)
+#endif
+
 -- hspec
 import Test.Hspec
 
@@ -45,7 +46,7 @@ import Language.Finkel.TargetSource
 import TestAux
 
 makeTests :: Spec
-makeTests = beforeAll_ (loadDyn >> removeArtifacts odir) $ do
+makeTests = beforeAll_ (removeArtifacts odir) $ do
   targetSourceTests
 
   -- Build bytecode
@@ -77,7 +78,7 @@ makeTests = beforeAll_ (loadDyn >> removeArtifacts odir) $ do
                  (it "should compile successfully"
                      (pendingWith "Not yet supported under Windows"))
 #else
-        before_ (removeArtifacts odir) (buildObj flags inputs)
+        before_ (doUnload >> removeArtifacts odir) (buildObj flags inputs)
 #endif
 
   -- Compile object codes with and without optimization option
@@ -107,22 +108,22 @@ makeTests = beforeAll_ (loadDyn >> removeArtifacts odir) $ do
   -- Errors
   buildFilesNG [] ["E01"]
 
--- Action to preload package libraries.
+-- Action to unload package libraries
 --
 -- Until ghc 8.10, persistent linker state is stored in a global variable.  The
 -- loaded package libraries are shared in "HscEnv.hsc_dynLinker" in every Fnk
--- run.  This may cause link time error with dynamic object on some platforms.
--- To avoid such cases, compiling with dynamic library before running the tests.
+-- run, which may cause link time error with dynamic object on some platforms.
+-- To avoid such link time error, invoking "Linker.unload" before running the
+-- test containing macro expansion.
 
-loadDyn :: IO ()
-loadDyn =
-#if MIN_VERSION_ghc(8,10,0) || defined(migw32_HOST_OS)
-  -- GHC 8.10.0 uses isolated persistend linker state, does nothing.  Also, not
-  -- compiling with dynamic option under Windows.
-  return ()
+-- Unload old objects.
+doUnload :: IO ()
+#if MIN_VERSION_ghc(8,10,0)
+-- Persistent linker state is isolated, does nothing.
+doUnload = return ()
 #else
-  catch (runDefaultMain ["-i" ++ odir, "-v0", "-dynamic-too", "P1", "P2"])
-        (\(SomeException e) -> print e)
+-- Persistent linker state is a global IORef.
+doUnload = runFnk (getSession >>= liftIO . flip unload []) defaultFnkEnv
 #endif
 
 -- Action to decide whether profiling objects for the "finkel-kernel" package is
