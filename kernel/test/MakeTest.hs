@@ -73,13 +73,7 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
 
   -- XXX: Disabled under Windows ...
   let buildObj' flags inputs =
-#if defined(mingw32_HOST_OS)
-        describe (labelWithOptionsAndFiles flags inputs)
-                 (it "should compile successfully"
-                     (pendingWith "Not yet supported under Windows"))
-#else
         before_ (doUnload >> removeArtifacts odir) (buildObj flags inputs)
-#endif
 
   -- Compile object codes with and without optimization option
   buildObj' [] ["P1", "P2"]
