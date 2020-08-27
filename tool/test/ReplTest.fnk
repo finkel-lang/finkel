@@ -65,12 +65,7 @@
   [etf]
   (do (describe "ReplState" replStateTests)
       (describe "Read" readTests)
-      (describe "ReadPrint"
-        (cond-expand
-          [(== :os "mingw32")
-           (it "should skip under Windows"
-             (pendingWith "Windows not supported yet"))]
-          [otherwise readPrintTests]))
+      (describe "ReadPrint" readPrintTests)
       (describe "Eval"
         (cond-expand
           [(== :os "mingw32")

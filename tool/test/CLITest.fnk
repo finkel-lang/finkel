@@ -14,7 +14,8 @@
    (Control.Exception (bracket))
    (Control.Monad (replicateM))
    (GHC.IO.Handle (hDuplicate hDuplicateTo))
-   (System.IO (Handle (IOMode ..) hClose openFile stdin))
+   (System.IO (Handle (IOMode ..) hClose hSetNewlineMode
+                      noNewlineTranslation openFile stdin))
 
    ;; filepath
    (System.FilePath (</>))
@@ -43,39 +44,40 @@
   [toIO]
   (do (let ((= d describe)))
       (d "getString"
-         (it "should end with Nothing"
-             (cond-expand
-               [(== :os "mingw32")
-                (pendingWith "Windows CRLF handling not yet done")]
-               [otherwise
-                (shouldReturn (with-test-stdin "input01.txt"
-                                (toIO (replicateM 3 (getString ""))))
-                              [(Just "First line")
-                               (Just "Second line")
-                               Nothing])])))
+         (let ((= expected
+                 (cond-expand
+                   [(== :os "mingw32")
+                    [(Just "First line\r") (Just "Second line\r") Nothing]]
+                   [otherwise
+                     [(Just "First line") (Just "Second line") Nothing]])))
+           (it "should end with Nothing"
+             (shouldReturn (with-test-stdin "input01.txt"
+                             (toIO (replicateM 3 (getString ""))))
+                           expected))))
       (d "putString"
          (it "should run successfully"
-             (shouldReturn (toIO (putString "foo"))
-                           ())))
+           (shouldReturn (toIO (putString "foo"))
+                         ())))
       (d "handleInterrupt"
          (it "should run the given action"
-             (shouldReturn (toIO (handleInterrupt (return ())
-                                                  (return ())))
-                           ())))
+           (shouldReturn (toIO (handleInterrupt (return ())
+                                                (return ())))
+                         ())))
       (d "withInterrupt"
          (it "should run the given action"
-             (shouldReturn (toIO (withInterrupt (return ())))
-                           ())))
+           (shouldReturn (toIO (withInterrupt (return ())))
+                         ())))
       (d "exitWith"
          (it "should throw exit failure"
-             (shouldThrow (toIO (exitWith (ExitFailure 1)))
-                          (== (ExitFailure 1)))))))
+           (shouldThrow (toIO (exitWith (ExitFailure 1)))
+                        (== (ExitFailure 1)))))))
 
 (defn (:: with-test-stdin (-> String (IO a) (IO a)))
   [path act]
   (bracket
    (do (<- stdin2 (hDuplicate stdin))
        (<- hdl (openFile (datafile path) ReadMode))
+       (hSetNewlineMode hdl noNewlineTranslation)
        (hDuplicateTo hdl stdin)
        (return (, hdl stdin2)))
    (\ (, hdl stdin2)
