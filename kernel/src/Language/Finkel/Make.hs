@@ -835,9 +835,11 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
       fnkc_env <- getFnkEnv
       when (envDumpHs fnkc_env)
            (liftIO
-              (do putStrLn (unwords [colons, orig_path, colons])
+              (do putStrLn ""
+                  putStrLn (unwords [colons, orig_path, colons])
                   putStrLn ""
-                  putStr contents))
+                  putStr contents
+                  putStrLn ""))
       mapM_ (doWrite contents) (envHsDir fnkc_env)
     doWrite contents dir = do
        let mname = moduleName (ms_mod ms)
