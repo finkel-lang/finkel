@@ -91,16 +91,17 @@
 
 (defn (:: replStateTests Spec)
   (do (let ((= d describe)
-            (= rs1 (ReplState {pending-input (Just "(foo")}))
-            (= rs2 (ReplState {pending-input (Just " bar)")}))))
+            (= rs1 (mempty {pending-input (Just "(foo")}))
+            (= rs2 (mempty {pending-input (Just " bar)")}))))
       (d "Show instance"
          (it "should show pending inputs"
            (shouldBe
             (show rs1)
-            "ReplState {pending_input = Just <stringbuffer(4,0)>}")))
+            "ReplState {pending_input = Just <stringbuffer(4,0)>, \
+\prompt_string = \"> \"}")))
       (d "Eq instance"
-         (do (it "should equal to itself" (shouldBe rs1 rs1))
-             (it "should not equal with different pending input"
+         (do (it "should be itself" (shouldBe rs1 rs1))
+             (it "should not be different pending input"
                (shouldNotBe rs1 rs2))))
       (d "Monoid laws for ReplState"
          (do (it "should have an identity element"
@@ -259,7 +260,8 @@
                        ;; Passing a file to work for, so that the REPL thread
                        ;; will not terminate before the testing client connect.
                        (replMain [(++ "--listen=" port)
-                                  (++ "--file=" input-file)])))
+                                  (++ "--file=" input-file)
+                                  "--prompt="])))
               ;; Pause for a bit after forking the server action.
               (replicateM_ 5 short-pause)
               (<- addr (resolve "127.0.0.1" port))

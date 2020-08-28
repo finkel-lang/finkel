@@ -46,12 +46,14 @@ reading the input until successful parse result."
   (let ((= go result-mv
           (do (<- st0 getReplState)
               (let ((= prompt
-                      (if (null (pending-input st0)) "> " ""))))
+                      (if (null (pending-input st0)) (prompt-string st0) ""))
+                    (= reset-pending st
+                      (st {pending-input Nothing}))))
               (<- mb-input
                 ;; Handle interrupt signals thrown while waiting for input, to
                 ;; handle `Ctrl-C' key presses without valid evaluation form,
                 ;; and to refresh intermediate user inputs in Repl state.
-                (handleInterrupt (do (putReplState mempty)
+                (handleInterrupt (do (putReplState (reset-pending st0))
                                      (return (Just [])))
                                  (withInterrupt (getString prompt))))
               (maybe (quit eval-tid) (go1 st0 result-mv) mb-input)))

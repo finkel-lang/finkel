@@ -34,7 +34,8 @@
    ;; Internal
    (Finkel.Tool.CLI)
    (Finkel.Tool.Repl.Macro)
-   (Finkel.Tool.Repl.Loop)))
+   (Finkel.Tool.Repl.Loop)
+   (Finkel.Tool.Repl.Types)))
 
 
 
@@ -66,12 +67,14 @@
 (data ReplOption
   (ReplOption {repl-mode ReplMode
                repl-listen-port (Maybe Int)
-               repl-input-path (Maybe FilePath)}))
+               repl-input-path (Maybe FilePath)
+               repl-prompt (Maybe String)}))
 
 (defn (:: initial-option ReplOption)
   (ReplOption {repl-mode Run
                repl-listen-port Nothing
-               repl-input-path Nothing}))
+               repl-input-path Nothing
+               repl-prompt Nothing}))
 
 (defn (:: descrs [OptDescr (-> ReplOption ReplOption)])
   [(Option [#'h] ["help"]
@@ -90,7 +93,12 @@
            (ReqArg (\ file o
                      (o {repl-input-path (Just file)}))
                    "FILE")
-           "File to get input from.")])
+           "File to get input from")
+   (Option [#'p] ["prompt"]
+           (ReqArg (\ str o
+                     (o {repl-prompt (Just str)}))
+                   "TEXT")
+           "Prompt for input (default: '> ')")])
 
 (defn (:: act (=> (CLI m) (-> ReplOption (m ()))))
   [ro]
@@ -98,7 +106,9 @@
     Help print-usage
     Run (liftIO (start-repl (repl-input-path ro)
                             (repl-listen-port ro)
-                            repl-env))))
+                            repl-env
+                            (maybe mempty (\ p (mempty {prompt-string p}))
+                                   (repl-prompt ro))))))
 
 (defn (:: print-errors (=> (CLI m) (-> [String] (m ()))))
   [errs]
