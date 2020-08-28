@@ -65,6 +65,13 @@ jobs:
           path: C:\Users\runneradmin\AppData\Roaming\stack
           key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
 
+      - name: Cache stack (windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v2
+        with:
+          path: C:\Users\runneradmin\AppData\Local\Programs\stack
+          key: ${{ runner.os }}-stack-local-${{ matrix.plan.resolver }}
+
       - name: Show stack version
         shell: bash
         run: $STACK --version
