@@ -205,13 +205,14 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
 
   catMaybes <$> (getNames >>= mapM lookupName)
 
-addImportedMacro :: DynFlags -> TyThing -> Fnk ()
-addImportedMacro dflags thing = when (isMacro dflags thing) go
+addImportedMacro :: FnkEnv -> DynFlags -> TyThing -> Fnk ()
+addImportedMacro fnk_env dflags thing = when (isMacro dflags thing) go
   where
     go =
       case thing of
         AnId var -> do
-          debug "addImportedMacro"
+          debug fnk_env
+                "addImportedMacro"
                 [hcat [ "Adding macro `"
                       , ppr (varName var)
                       , "' to current compiler session" ]]
@@ -244,11 +245,11 @@ withRequiredSettings :: Bool -> Fnk a -> Fnk a
 withRequiredSettings use_obj act =
   gbracket
     (do dflags <- getDynFlags
-        fnkc_env <- getFnkEnv
-        return (dflags, fnkc_env))
-    (\(dflags, fnkc_env) ->
+        fnk_env <- getFnkEnv
+        return (dflags, fnk_env))
+    (\(dflags, fnk_env) ->
        do setDynFlags dflags
-          putFnkEnv fnkc_env)
+          putFnkEnv fnk_env)
     (const (setRequiredSettings use_obj >> act))
 
 requiredMessager :: Messager
@@ -379,14 +380,14 @@ m_require form =
       do dflags <- getDynFlags
          case evalBuilder dflags parseLImport code of
            Right lidecl@(L loc idecl) -> do
-             fnkc_env <- getFnkEnv
+             fnk_env <- getFnkEnv
 
              let recomp = gopt Opt_ForceRecomp dflags
                  mname = unLoc (ideclName idecl)
                  mname' = moduleNameString mname
                  lmname' = L loc mname'
 
-             debug "m_require" [ppr idecl]
+             debug fnk_env "m_require" [ppr idecl]
 
              -- Handle home modules.
              compiled <- makeMissingHomeMod recomp lidecl
@@ -396,10 +397,10 @@ m_require form =
              -- Update required module names and compiled home modules in
              -- FnkEnv. These are used by the callee module (i.e. the module
              -- containing this 'require' form).
-             let reqs = lmname':envRequiredModuleNames fnkc_env
-                 fnkc_env' = fnkc_env {envRequiredModuleNames = reqs
-                                      ,envCompiledInRequire = compiled}
-             putFnkEnv fnkc_env'
+             let reqs = lmname':envRequiredModuleNames fnk_env
+                 fnk_env' = fnk_env {envRequiredModuleNames = reqs
+                                    ,envCompiledInRequire = compiled}
+             putFnkEnv fnk_env'
 
              -- Look up Macros in parsed module, add to FnkEnv when found.
              mdl <- lookupModule mname Nothing
@@ -407,7 +408,7 @@ m_require form =
              case mb_minfo of
                Just minfo -> do
                  things <- getTyThingsFromIDecl lidecl minfo
-                 mapM_ (addImportedMacro dflags) things
+                 mapM_ (addImportedMacro fnk_env dflags) things
                  return emptyForm
                Nothing ->
                  finkelSrcError form ("require: module " ++ mname' ++
@@ -438,7 +439,8 @@ m_evalWhenCompile form =
           unless (null decls) $ do
             (tythings, ic) <- evalDecls decls
             modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
-            mapM_ (addImportedMacro dflags) tythings
+            fnk_env <- getFnkEnv
+            mapM_ (addImportedMacro fnk_env dflags) tythings
 
           return emptyForm
 
@@ -574,6 +576,8 @@ concatS qual =
 {-# INLINE concatS #-}
 
 -- | Debug function for this module
-debug :: MsgDoc -> [MsgDoc] -> Fnk ()
-debug fn msgs =
-  debugFnk (hcat [";;; [Language.Finkel.SpecialForms.", fn, "]:"] : msgs)
+debug :: FnkEnv -> MsgDoc -> [MsgDoc] -> Fnk ()
+debug fnk_env fn msgs =
+  debugWhen fnk_env
+            Fnk_trace_spf
+            (hcat [";;; [Language.Finkel.SpecialForms.", fn, "]:"] : msgs)

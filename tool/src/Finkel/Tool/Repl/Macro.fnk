@@ -23,6 +23,7 @@
     (find intercalate intersperse isPrefixOf partition sortBy))
    (Data.Maybe (catMaybes))
    (Text.Printf (printf))
+   (Text.Read (readMaybe))
 
    ;; directory
    (System.Directory
@@ -87,7 +88,8 @@
    (Language.Finkel.Form (mkLocatedForm))
    (Language.Finkel.Make (buildHsSyn make))
    (Language.Finkel.Fnk
-    ((FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv setDynFlags))
+    ((FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv setDynFlags
+     setFnkVerbosity))
    (Language.Finkel.Syntax (parseExpr parseType))
    (Language.Finkel.TargetSource (asModuleName))
 
@@ -630,19 +632,6 @@ object code."
                  (work path)))
       _ (invalid-form "cd" forms))))
 
-(defn (:: debug-cmd ReplAction)
-  "Modify debug settings in REPL."
-  [forms]
-  (case forms
-    [] (do (<- bool (fmap envDebug getFnkEnv))
-           (return `(System.IO.putStrLn
-                     (++ "Debug flag is " ,(show bool)))))
-    [form] (| ((<- (Just bool) (fromCode form))
-               (do (modifyFnkEnv (\ e (e {envDebug bool})))
-                   (let ((= msg (++ "Debug flag set to " (show bool)))))
-                   (return `(System.IO.putStrLn ,msg)))))
-    _ (invalid-form "debug" forms)))
-
 (defn (:: expand-cmd ReplAction)
   "Expand given form for one layer."
   (expand-with "expand" expand1))
@@ -862,6 +851,19 @@ paths from import directories."
                (return `(System.IO.putStrLn ,str)))
     _ (invalid-form "type" forms)))
 
+(defn (:: verbose-cmd ReplAction)
+  "Modify verbosity settings in REPL."
+  [forms]
+  (case forms
+    [] (do (<- lvl (fmap envVerbosity getFnkEnv))
+           (return `(System.IO.putStrLn
+                     (++ "Verbosity level is " ,(show lvl)))))
+    [form] (| ((<- (Just n) (readMaybe (show form)))
+               (do (modifyFnkEnv (setFnkVerbosity n))
+                   (let ((= msg (++ "Verbosity level set to " (show n)))))
+                   (return `(System.IO.putStrLn ,msg)))))
+    _ (invalid-form "verbose" forms)))
+
 
 ;;; REPL command macro
 
@@ -875,8 +877,7 @@ paths from import directories."
         "browse contents of MODULE")
      (c "cd" ["DIR"] cd-cmd
         "change working directory to DIR")
-     (c "debug" ["BOOL"] debug-cmd
-        "set finkel debug to BOOL")
+
      (c "expand" ["FORM"] expand-cmd
         "show expanded result of FORM")
      (c "expand!" ["FORM"] expand-full-cmd
@@ -898,7 +899,9 @@ paths from import directories."
      (c "show" ["ARG"] show-cmd
         "show information of ARG")
      (c "type" ["EXPR"] type-cmd
-        "show type of EXPR")]))
+        "show type of EXPR")
+     (c "verbose" ["INT"] verbose-cmd
+        "set finkel verbosity to INT")]))
 
 (defmacroM repl-macro form
   (case (unCode form)

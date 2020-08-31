@@ -28,9 +28,14 @@ module Language.Finkel.Fnk
   , handleFinkelException
 
   -- * Debugging
-  , debugFnk
-  , getFnkDebug
+  , FnkDebugFlag(..)
+  , fopt
+  , fopt_set
+  , setFnkVerbosity
+  , debugWhen
   , dumpDynFlags
+  , getFnkDebug
+  , fnkDebugFlagOptions
 
   -- * Macro related functions
   , emptyEnvMacros
@@ -60,8 +65,12 @@ import           Control.Monad.Fail     (MonadFail (..))
 #endif
 
 import           Control.Monad.IO.Class (MonadIO (..))
+import           Data.Bits              (setBit, testBit, zeroBits)
+import           Data.Char              (toLower)
 import           Data.IORef             (IORef, atomicModifyIORef', newIORef,
                                          readIORef, writeIORef)
+import           Data.Word              (Word8)
+import           System.Console.GetOpt  (ArgDescr (..), OptDescr (..))
 import           System.Environment     (lookupEnv)
 import           System.IO              (stderr)
 import           System.IO.Unsafe       (unsafePerformIO)
@@ -156,6 +165,19 @@ instance Show Macro where
 -- | Type synonym to express mapping of macro name to 'Macro' data.
 type EnvMacros = Map.Map FastString Macro
 
+-- | Data type for debug information.
+data FnkDebugFlag
+  = Fnk_dump_dflags
+  | Fnk_dump_expand
+  | Fnk_dump_hs
+  | Fnk_trace_expand
+  | Fnk_trace_make
+  | Fnk_trace_spf
+  deriving (Eq, Show, Enum)
+
+-- | Type synonym for holding on/off of 'FnkDebugFlag'.
+type FlagSet = Word8 -- Word8 is enough for now.
+
 -- | Environment state in 'Fnk'.
 data FnkEnv = FnkEnv
    { -- | Macros accessible in current compilation context.
@@ -165,13 +187,9 @@ data FnkEnv = FnkEnv
      -- | Default set of macros, these macros will be used when
      -- resetting 'FnkEnv'.
    , envDefaultMacros          :: EnvMacros
-     -- | Flag to hold debug setting.
-   , envDebug                  :: Bool
+
      -- | Modules to import to context.
    , envContextModules         :: [String]
-     -- | Flag for controling informative output.
-   , envSilent                 :: Bool
-
      -- | The default 'DynFlags', possibly containing settings from command line.
    , envDefaultDynFlags        :: Maybe DynFlags
 
@@ -182,10 +200,8 @@ data FnkEnv = FnkEnv
      -- | Compile home modules during macro-expansion of /require/.
    , envCompiledInRequire      :: [(ModuleName, HomeModInfo)]
 
-     -- | Whether to dump Haskell source code or not.
-   , envDumpHs                 :: Bool
      -- | Directory to save generated Haskell source codes.
-   , envHsDir                  :: Maybe FilePath
+   , envHsOutDir               :: Maybe FilePath
 
      -- | Lib directory passed to 'runGhc'.
    , envLibDir                 :: Maybe FilePath
@@ -196,6 +212,11 @@ data FnkEnv = FnkEnv
 
      -- | The 'HscEnv' used by the byte-code interpreter for macro expansion.
    , envSessionForExpand       :: Maybe HscEnv
+
+     -- | Verbosity level for Fnk related messages.
+   , envVerbosity              :: Int
+     -- | Dump flag settings.
+   , envDumpFlags              :: FlagSet
    }
 
 -- | Newtype wrapper for compiling Finkel code to Haskell AST.
@@ -293,63 +314,24 @@ finkelSrcError (LForm (L l _)) msg = do
   let em = mkErrMsg dflags l neverQualify (text msg)
   liftIO (throwIO (mkSrcErr (unitBag em)))
 
--- | Print given 'MsgDoc's to 'stderr' when degbug flag is on.
-debugFnk :: [MsgDoc] -> Fnk ()
-debugFnk mdocs = do
-  fnk_env <- getFnkEnv
-  when (envDebug fnk_env)
-       (do dflags <- getDynFlags
-           liftIO (printSDocLn Pretty.PageMode
-                               dflags
-                               stderr
-                               (defaultErrStyle dflags)
-                               (vcat mdocs)))
-{-# INLINE debugFnk #-}
-
--- | Get finkel debug setting from environment variable /FNK_DEBUG/.
-getFnkDebug :: MonadIO m => m Bool
-getFnkDebug =
-  do mb_debug <- liftIO (lookupEnv "FNK_DEBUG")
-     case mb_debug of
-       Nothing -> return False
-       Just _  -> return True
-{-# INLINE getFnkDebug #-}
-
--- | Show some fields in 'DynFlags'.
-dumpDynFlags :: MsgDoc -> DynFlags -> Fnk ()
-dumpDynFlags label dflags =
-  debugFnk
-    [ label
-    , "DynFlags:"
-    , "  ghcLink:" <+> text (show (ghcLink dflags))
-    , "  ghcMode:" <+> ppr (ghcMode dflags)
-    , "  hscTarget:" <+> text (show (hscTarget dflags))
-    , "  ways:" <+> text (show (ways dflags))
-    , "  forceRecomp:" <+> text (show (gopt Opt_ForceRecomp dflags))
-    , "  interpWays:" <+> text (show interpWays)
-    , "  importPaths:" <+> sep (map text (importPaths dflags))
-    , "  optLevel:" <+> text (show (optLevel dflags))
-    , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)
-    , "  ldInputs: " <+> sep (map (text . showOpt) (ldInputs dflags))]
-
 -- | Empty 'FnkEnv' for performing computation with 'Fnk'.
 emptyFnkEnv :: FnkEnv
 emptyFnkEnv = FnkEnv
   { envMacros                 = emptyEnvMacros
   , envTmpMacros              = []
   , envDefaultMacros          = emptyEnvMacros
-  , envDebug                  = False
   , envContextModules         = []
-  , envSilent                 = False
   , envDefaultDynFlags        = Nothing
   , envMessager               = batchMsg
   , envRequiredModuleNames    = []
   , envCompiledInRequire      = []
-  , envDumpHs                 = False
-  , envHsDir                  = Nothing
+  , envHsOutDir               = Nothing
   , envLibDir                 = Nothing
   , envQualifyQuotePrimitives = False
-  , envSessionForExpand       = Nothing }
+  , envSessionForExpand       = Nothing
+  , envVerbosity              = 1
+  , envDumpFlags              = zeroBits
+  }
 
 -- | Set current 'DynFlags' to given argument. This function also modifies
 -- 'DynFlags' in interactive context.
@@ -457,3 +439,93 @@ initUniqSupply' ini incr = do
 uniqSupplyInitialized :: IORef Bool
 uniqSupplyInitialized = unsafePerformIO (newIORef False)
 {-# NOINLINE uniqSupplyInitialized #-}
+
+
+-- ---------------------------------------------------------------------
+--
+-- Debug related functions
+--
+-- ---------------------------------------------------------------------
+
+-- | 'True' when the given 'FnkDebugFlag' is turned on.
+fopt :: FnkDebugFlag -> FnkEnv -> Bool
+fopt flag fnk_env =
+  testBit (envDumpFlags fnk_env) (fromEnum flag)
+  || envVerbosity fnk_env >= verbosity_to_enable
+  where
+    verbosity_to_enable =
+      case flag of
+        Fnk_dump_dflags  -> 2
+        Fnk_dump_expand  -> 2
+        Fnk_dump_hs      -> 2
+        Fnk_trace_expand -> 3
+        Fnk_trace_make   -> 3
+        Fnk_trace_spf    -> 3
+{-# INLINE fopt #-}
+
+-- | Turn on the given 'FnkDebugFlag'.
+fopt_set :: FnkDebugFlag -> FnkEnv -> FnkEnv
+fopt_set flag fnk_env =
+  fnk_env {envDumpFlags = setBit (envDumpFlags fnk_env) (fromEnum flag)}
+{-# INLINE fopt_set #-}
+
+-- | Command line option handlers to update 'FnkDumpFlag' in 'FnkEnv'.
+fnkDebugFlagOptions :: [OptDescr (FnkEnv -> FnkEnv)]
+fnkDebugFlagOptions =
+  [ opt Fnk_dump_dflags "Dump DynFlags settings."
+  , opt Fnk_dump_expand "Dump expanded code."
+  , opt Fnk_dump_hs "Dump Haskell source code."
+  , opt Fnk_trace_expand "Trace macro expansion."
+  , opt Fnk_trace_make "Trace make function."
+  , opt Fnk_trace_spf "Trace builtin special forms."
+  ]
+  where
+    opt flag descr = Option [] [to_str flag] (NoArg (fopt_set flag)) descr
+    to_str = map replace . show
+    replace '_' = '-'
+    replace c   = toLower c
+
+-- | Update the 'envVerbosity' to given value.
+setFnkVerbosity :: Int -> FnkEnv -> FnkEnv
+setFnkVerbosity v fnk_env = fnk_env {envVerbosity = v}
+{-# INLINE setFnkVerbosity #-}
+
+-- | Dump 'MsgDoc's when the given 'FnkDebugFlag' is turned on.
+debugWhen :: FnkEnv -> FnkDebugFlag -> [MsgDoc] -> Fnk ()
+debugWhen fnk_env flag mdocs = when (fopt flag fnk_env) (dumpMsgDocs mdocs)
+
+dumpMsgDocs :: [MsgDoc] -> Fnk ()
+dumpMsgDocs mdocs =
+  do dflags <- getDynFlags
+     liftIO (printSDocLn Pretty.PageMode
+                         dflags
+                         stderr
+                         (defaultErrStyle dflags)
+                         (vcat mdocs))
+
+-- | Get finkel debug setting from environment variable /FNK_DEBUG/.
+getFnkDebug :: MonadIO m => m Bool
+getFnkDebug =
+  do mb_debug <- liftIO (lookupEnv "FNK_DEBUG")
+     case mb_debug of
+       Nothing -> return False
+       Just _  -> return True
+{-# INLINE getFnkDebug #-}
+
+-- | Show some fields in 'DynFlags'.
+dumpDynFlags :: FnkEnv -> MsgDoc -> DynFlags -> Fnk ()
+dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
+  where
+    msgs =
+      [ label
+      , "DynFlags:"
+      , "  ghcLink:" <+> text (show (ghcLink dflags))
+      , "  ghcMode:" <+> ppr (ghcMode dflags)
+      , "  hscTarget:" <+> text (show (hscTarget dflags))
+      , "  ways:" <+> text (show (ways dflags))
+      , "  forceRecomp:" <+> text (show (gopt Opt_ForceRecomp dflags))
+      , "  interpWays:" <+> text (show interpWays)
+      , "  importPaths:" <+> sep (map text (importPaths dflags))
+      , "  optLevel:" <+> text (show (optLevel dflags))
+      , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)
+      , "  ldInputs: " <+> sep (map (text . showOpt) (ldInputs dflags))]

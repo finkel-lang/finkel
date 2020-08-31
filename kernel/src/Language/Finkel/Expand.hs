@@ -32,8 +32,7 @@ import           FastString             (FastString, headFS)
 import           GhcMonad               (getSession, setSession)
 import           HscMain                (newHscEnv)
 import           HscTypes               (HscEnv (..))
-import           Outputable             (Outputable (..), cat, fsep, hcat, nest,
-                                         vcat)
+import           Outputable             (Outputable (..), cat, fsep, nest, vcat)
 import           SrcLoc                 (GenLocated (..))
 
 #if !defined(mingw32_HOST_OS)
@@ -167,9 +166,10 @@ expands forms = do
            then nest 2 "None"
            else nest 2 (fsep (map ppr (Map.keys me)))
       tmp_macros = Map.unions (envTmpMacros fnk_env)
-  debug "expands"
-        [ "global macros:",  macro_names (envMacros fnk_env)
-        , "tmporary macros:", macro_names tmp_macros ]
+  debug fnk_env
+        Nothing
+        [ "Global macros:",  macro_names (envMacros fnk_env)
+        , "Temporary macros:", macro_names tmp_macros ]
   expands' forms
 
 -- | Internal works for 'expands'.
@@ -274,9 +274,10 @@ expand form =
           return $! LForm (L l (List forms'))
 
     do_expand k f =
-      do debug "expand" [vcat ["Expanding:", nest 2 (ppr form)]]
+      do fnk_env <- getFnkEnv
+         debug fnk_env (Just "") [vcat ["Expanding:", nest 2 (ppr form)]]
          ret0 <- f form
-         debugFnk [cat ["(", ppr k, " ...) ==>"], nest 2 (ppr ret0)]
+         debug fnk_env Nothing [cat [ppr k, " ==>"], nest 2 (ppr ret0)]
          return ret0
 
 expandInDo ::
@@ -305,6 +306,7 @@ expand1 form =
     _ -> return form
 
 -- | Debug function fot this module.
-debug :: MsgDoc -> [MsgDoc] -> Fnk ()
-debug fname msgs =
-  debugFnk (hcat [";;; [Language.Finkel.Expand.", fname, "]:"] : msgs)
+debug :: FnkEnv -> Maybe MsgDoc -> [MsgDoc] -> Fnk ()
+debug fnk_env mb_extra msgs0 =
+  let msgs1 = maybe msgs0 (: msgs0) mb_extra
+  in  debugWhen fnk_env Fnk_trace_expand msgs1

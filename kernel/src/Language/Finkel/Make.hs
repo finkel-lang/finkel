@@ -177,7 +177,9 @@ make infiles no_link force_recomp mb_output = do
                    else gopt_unset dflags1 Opt_ForceRecomp
   setDynFlags dflags2
   dflags3 <- getDynFlags
-  dumpDynFlags "Language.Finkel.Make.make" dflags3
+
+  fnk_env <- getFnkEnv
+  dumpDynFlags fnk_env "Language.Finkel.Make.make" dflags3
 
   -- Preserve the language extension values in initial dynflags to FnkEnv, to
   -- reset the language extension later, to keep fresh set of language extensios
@@ -211,19 +213,22 @@ initSessionForMake = do
   dflags1 <- getDynFlags
 
   -- Load modules names in FnkEnv to current interactive context.
-  fnkc_env <- getFnkEnv
-  let ctx_modules = envContextModules fnkc_env
+  fnk_env <- getFnkEnv
+  let ctx_modules = envContextModules fnk_env
   unless (null ctx_modules) (setContextModules ctx_modules)
 
-  -- Debug information could be specified from environment variable and command
+  -- Verbosity level could be specified from environment variable and command
   -- line option.
   debug0 <- getFnkDebug
-  let debug1 = envDebug fnkc_env
+  let vrbs1 = envVerbosity fnk_env
+      vrbs2 = if debug0
+                then max 3 vrbs1
+                else vrbs1
 
   -- Updating the debug settings. Also setting the default 'DynFlag' at this
   -- moment.
-  putFnkEnv (fnkc_env {envDebug = debug0 || debug1
-                      ,envDefaultDynFlags = Just dflags1})
+  putFnkEnv (fnk_env { envVerbosity = vrbs2
+                     , envDefaultDynFlags = Just dflags1 })
 
 -- | Simple make function returning compiled home module information. Intended
 -- to be used in 'require' macro.
@@ -271,10 +276,12 @@ emptyTargetUnit ts = (ts, Nothing)
 --
 make' :: [TargetUnit] -> Fnk [ModSummary]
 make' pendings0 = do
-  debugMake "make'"
-    [ "total:" <+> text (show total)
-    , "pendings0:"
-    , nest 2 (vcat (map ppr pendings0)) ]
+  fnk_env <- getFnkEnv
+  traceMake fnk_env
+            "make'"
+            [ "total:" <+> text (show total)
+            , "pendings0:"
+            , nest 2 (vcat (map ppr pendings0)) ]
   timeIt "make' [Finkel]" (go [] total total [] pendings0)
   where
     go :: [ModSummary] -- ^ Accumulator.
@@ -313,7 +320,8 @@ make' pendings0 = do
     -- source code or Haskell source code, get ModSummary to resolve the
     -- dependencies.
     go acc i k (target@(tsr,_mbp):summarised) pendings = do
-      debugMake "make'.go" ["target:" <+> ppr target]
+      fnk_env <- getFnkEnv
+      traceMake fnk_env "make'.go" ["target:" <+> ppr target]
 
       -- Since Finkel make is not using 'DriverPipeline.runPipeline', setting
       -- 'DynFlags.dumpPrefix' manually.
@@ -336,7 +344,8 @@ make' pendings0 = do
                                m `elem` summarised_names)
                         import_names
 
-              debugMake "make'.go"
+              traceMake fnk_env
+                        "make'.go"
                         ["imports:" <+>
                           if null import_names
                              then text "none"
@@ -355,7 +364,7 @@ make' pendings0 = do
                    hsc_env <- getSession
                    let act = findRequiredModSummary hsc_env
                        act' = fmap catMaybes (mapM act reqs)
-                   compileIfReady summary' (Just sp) imports act'
+                   compileIfReady fnk_env summary' (Just sp) imports act'
 
         HsSource path -> do
           mb_result <- compileToHsModule target
@@ -365,23 +374,25 @@ make' pendings0 = do
               summary <- mkModSummary path hmdl
               let summary' = summary {ms_hspp_opts = dflags}
                   imports = hsmodImports hmdl
-              compileIfReady summary' Nothing imports (return [])
+              compileIfReady fnk_env summary' Nothing imports (return [])
 
         OtherSource _ -> do
           _ <- compileToHsModule target
           go acc i k summarised pendings
 
         where
-          compileIfReady :: ModSummary
+          compileIfReady :: FnkEnv
+                         -> ModSummary
                          -> Maybe SPState
                          -> [HImportDecl]
                          -> Fnk [ModSummary]
                          -> Fnk [ModSummary]
-          compileIfReady summary mb_sp imports getReqs = do
+          compileIfReady fnk_env summary mb_sp imports getReqs = do
             hsc_env <- getSession
             is <- mapM (findNotCompiledImport hsc_env acc) imports
             let is' = catMaybes is
-            debugMake "make'.go.compileIfReady"
+            traceMake fnk_env
+                      "make'.go.compileIfReady"
                       ["filtered imports:" <+> text (show is')]
             if not (null is')
                then do
@@ -435,7 +446,8 @@ makeOne i total mb_sp summary required_summaries = timeIt label go
       setDynFlags dflags1
 
       up_to_date <- checkUpToDate summary required_summaries
-      debugMake "makeOne" ["up_to_date:" <+> ppr up_to_date]
+      fnk_env <- getFnkEnv
+      traceMake fnk_env "makeOne" ["up_to_date:" <+> ppr up_to_date]
       let midx = total - i + 1
           src_modified = if up_to_date
                             then SourceUnmodified
@@ -459,14 +471,14 @@ doMakeOne
   -> Fnk ModSummary -- ^ Updated summary.
 doMakeOne i total mb_sp ms src_modified = do
   hsc_env <- getSession
-  fnkc_env <- getFnkEnv
+  fnk_env <- getFnkEnv
 
   let dflags = ms_hspp_opts ms
       hsc_env' = hsc_env {hsc_dflags = dflags}
       loc = ms_location ms
       mod_name = ms_mod_name ms
       tryGetTimeStamp = liftIO . modificationTimeIfExists
-      messager = envMessager fnkc_env
+      messager = envMessager fnk_env
       hpt0 = hsc_HPT hsc_env
       mb_hm_info = lookupHpt hpt0 mod_name
       mb_old_iface =
@@ -480,7 +492,7 @@ doMakeOne i total mb_sp ms src_modified = do
                         iface = hm_iface hm_info
       obj_allowed = isObjectTarget (hscTarget dflags)
 
-  debugMake "doMakeOne" ["Module:" <+> ppr mod_name]
+  traceMake fnk_env "doMakeOne" ["Module:" <+> ppr mod_name]
 
   -- Dump the parsed AST.
   dumpParsedAST dflags ms
@@ -530,7 +542,7 @@ doMakeOne i total mb_sp ms src_modified = do
 
   -- Dump the module contents as haskell source when dump option were set and
   -- this is the first time for compiling the target Module.
-  when (envDumpHs fnkc_env || isJust (envHsDir fnkc_env))
+  when (fopt Fnk_dump_hs fnk_env || isJust (envHsOutDir fnk_env))
        (case lookupHpt hpt0 mod_name of
           Nothing -> dumpModSummary mb_sp ms
           Just _  -> return ())
@@ -665,7 +677,9 @@ findNotCompiledImport hsc_env acc idecl = do
     -- yet. If the source code has Haskell file extension, checking whether the
     -- module is listed in accumulator containing compiled modules.
     Found mloc mdl -> do
-      debugMake
+      fnk_env <- getFnkEnv
+      traceMake
+        fnk_env
         "findNotCompiledImport"
         [ "Found" <+> ppr mname
         , pprMLoc mloc
@@ -832,16 +846,16 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
   where
     work pm = when (isFnkFile orig_path) $ do
       contents <- gen pm
-      fnkc_env <- getFnkEnv
-      when (envDumpHs fnkc_env)
+      fnk_env <- getFnkEnv
+      when (fopt Fnk_dump_hs fnk_env)
            (liftIO
               (do putStrLn ""
                   putStrLn (unwords [colons, orig_path, colons])
                   putStrLn ""
                   putStr contents
                   putStrLn ""))
-      mapM_ (doWrite contents) (envHsDir fnkc_env)
-    doWrite contents dir = do
+      mapM_ (doWrite fnk_env contents) (envHsOutDir fnk_env)
+    doWrite fnk_env contents dir = do
        let mname = moduleName (ms_mod ms)
            bname = takeBaseName orig_path
            file_name = if looksLikeModuleName bname
@@ -849,14 +863,14 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
                           else bname
            out_path = dir </> file_name <.> "hs"
            out_dir = takeDirectory out_path
-       debugMake "dumpModSummary" ["Writing to" <+> text out_path]
+       traceMake fnk_env "dumpModSummary" ["Writing to" <+> text out_path]
        liftIO (do createDirectoryIfMissing True out_dir
                   writeFile out_path contents)
     gen pm = genHsSrc sp (Hsrc (unLoc (hpm_module pm)))
     orig_path = ms_hspp_file ms
     sp = fromMaybe dummy_sp mb_sp
     dummy_sp = initialSPState (fsLit orig_path) 1 1
-    colons = replicate 12 ';'
+    colons = replicate 20 ';'
 
 -- See: "hscParse'" in main/HscMain.hs
 dumpParsedAST :: DynFlags -> ModSummary -> Fnk ()
@@ -896,6 +910,7 @@ compileFnkModuleForm :: SPState -> String -> [Code]
 compileFnkModuleForm sp modname forms = do
   dflags0 <- getDynFlagsFromSPState sp
   hsc_env <- getSession
+  fnk_env <- getFnkEnv
 
   -- Compile the form with file specific DynFlags and temporary session, to
   -- preserve modules imported in current context.
@@ -907,7 +922,9 @@ compileFnkModuleForm sp modname forms = do
   -- required more than once.
   let hpt1 he = addHomeModInfoIfMissing (hsc_HPT he) compiled
   setSession (hsc_env {hsc_HPT = hpt1 hsc_env})
-  debugMake "compileFnkModuleForm" ["reqs:" <+> text (show (map unLoc reqs))]
+  traceMake fnk_env
+            "compileFnkModuleForm"
+            ["reqs:" <+> text (show (map unLoc reqs))]
 
   return (mdl, dflags0, reverse reqs)
   where
@@ -919,15 +936,24 @@ compileFnkModuleForm sp modname forms = do
       resetFnkEnv
 
       mdl <- compileFnkModuleForm' forms
-      fnkc_env <- getFnkEnv
-      let required = envRequiredModuleNames fnkc_env
-          compiled = envCompiledInRequire fnkc_env
+      fnk_env <- getFnkEnv
+      let required = envRequiredModuleNames fnk_env
+          compiled = envCompiledInRequire fnk_env
       return (mdl, required, compiled)
 
 -- -- | Compile 'HModule' from given list of codes.
 compileFnkModuleForm' :: [Code] -> Fnk HModule
 compileFnkModuleForm' form = do
   expanded <- withExpanderSettings (expands form)
+  let colons = replicate 20 ';'
+  fnk_env <- getFnkEnv
+  debugWhen fnk_env
+            Fnk_dump_expand
+            [ text ""
+            , text colons <+> text "Expanded" <+> text colons
+            , text ""
+            , vcat (map ppr expanded)
+            , text ""]
   buildHsSyn parseModule expanded
 
 -- | Get language extensions in current 'Fnk' from given 'SPState'.
@@ -977,8 +1003,11 @@ compileHsFile source mbphase = do
 
 compileOtherFile :: FilePath -> Fnk ()
 compileOtherFile path = do
-  debugMake "compileOtherFile" ["Compiling OtherSource:" <+> text path]
   hsc_env <- getSession
+  fnk_env <- getFnkEnv
+  traceMake fnk_env
+            "compileOtherFile"
+            ["Compiling OtherSource:" <+> text path]
   o_file <- liftIO (compileFile hsc_env StopLn (path, Nothing))
   let dflags0 = hsc_dflags hsc_env
       dflags1 = dflags0 {ldInputs = FileOption "" o_file : ldInputs dflags0}
@@ -1105,11 +1134,6 @@ preprocess' hsc_env (path, mb_phase) =
 preprocess' = preprocess
 #endif
 
--- | Debug function for this module.
-debugMake :: MsgDoc -> [MsgDoc] -> Fnk ()
-debugMake fn_name msgs =
-  debugFnk (hcat [";;; [Language.Finkel.Make.", fn_name, "]:"] : msgs)
-
 -- | Pretty print 'ModLocation'.
 pprMLoc :: ModLocation -> SDoc
 pprMLoc mloc =
@@ -1126,3 +1150,9 @@ pprMLoc mloc =
                        Just file -> text "Just" <+> text file
                    , text "ml_hi_file =" <+> text (ml_hi_file mloc)
                    , text "ml_obj_file =" <+> text (ml_obj_file mloc)])))]
+
+-- | Trace function for this module.
+traceMake :: FnkEnv -> MsgDoc -> [MsgDoc] -> Fnk ()
+traceMake fnk_env fn_name msgs0 =
+  let msgs1 = (hcat [";;; [Language.Finkel.Make.", fn_name, "]:"] : msgs0)
+  in  debugWhen fnk_env Fnk_trace_make msgs1

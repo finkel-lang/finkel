@@ -48,12 +48,18 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   targetSourceTests
 
   -- Build bytecode
-  buildBytecode "main1.fnk"
-  buildBytecode "main2.fnk"
-  buildBytecode "main3.fnk"
-  buildByteCodeWith ["--fnk-dump-hs", "--fnk-debug", "-v2"] "main4.fnk"
-  buildBytecode "main5.fnk"
-  buildBytecode "main9.fnk"
+  buildByteCode "main1.fnk"
+  buildByteCode "main2.fnk"
+  buildByteCode "main3.fnk"
+  buildByteCodeWith ["--fnk-verbose=2", "-v2"] "main4.fnk"
+  buildByteCode "main5.fnk"
+  buildByteCodeWith [ "--fnk-dump-dflags"
+                    , "--fnk-dump-expand"
+                    , "--fnk-dump-hs"
+                    , "--fnk-trace-expand"
+                    , "--fnk-trace-make"
+                    , "--fnk-trace-spf" ]
+                    "main9.fnk"
 
   -- Build object codes
   buildC (odir </> "cbits1.c")
@@ -191,8 +197,8 @@ pprTargetTest =
       t hssrc1 "path2"
       t othersrc1 "path3"
 
-buildBytecode :: FilePath -> Spec
-buildBytecode = buildByteCodeWith []
+buildByteCode :: FilePath -> Spec
+buildByteCode = buildByteCodeWith []
 
 buildByteCodeWith :: [String] -> FilePath -> Spec
 buildByteCodeWith extra file =

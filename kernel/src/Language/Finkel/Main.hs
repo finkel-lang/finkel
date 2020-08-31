@@ -106,16 +106,18 @@ defaultMainWith macros = do
        let (finkelopts, args1) = partitionFinkelOptions args0
            args2 = filter (/= "--make") args1
 
-       fnk_opts <- handleFinkelException
-                     (\(FinkelException msg) ->
-                         putStrLn msg >> printBriefUsage >> exitFailure)
-                     (parseFinkelOption finkelopts)
+       (fnk_opts, fnk_env0) <-
+          handleFinkelException
+             (\(FinkelException msg) ->
+                 putStrLn msg >> printBriefUsage >> exitFailure)
+             (do fnk_opts <- parseFinkelOption finkelopts
+                 fnk_env0 <- opt2env fnk_opts
+                 return (fnk_opts, fnk_env0))
 
-       let fnk_env0 = opt2env fnk_opts
-
-           -- Using macros from argument as first argument to 'mergeMacros', so
-           -- that the caller of this function can have a chance to override the
-           -- behaviour of specialforms in 'defaultFnkEnv'.
+       let -- Using the `macros' from argument as first argument to the
+           -- 'mergeMacros' function, so that the caller of this function can
+           -- have a chance to override the behaviour of special forms in
+           -- 'defaultFnkEnv'.
            macros' = mergeMacros (makeEnvMacros macros)
                                  (envMacros defaultFnkEnv)
 
@@ -223,10 +225,10 @@ main'' orig_args ghc_args = do
 -- ---------------------------------------------------------------------
 
 data FinkelOption = FinkelOption
-  { finkelDebug  :: Bool
-  , finkelDumpHs :: Bool
-  , finkelHelp   :: Maybe FinkelHelp
-  , finkelHsDir  :: Maybe FilePath
+  { finkelVerbose  :: String
+  , finkelHelp     :: Maybe FinkelHelp
+  , finkelHsOutDir :: Maybe FilePath
+  , finkelEnv      :: FnkEnv
   }
 
 data FinkelHelp
@@ -236,10 +238,10 @@ data FinkelHelp
 
 defaultFinkelOption :: FinkelOption
 defaultFinkelOption = FinkelOption
-  { finkelDebug = False
-  , finkelDumpHs = False
+  { finkelVerbose = "1"
   , finkelHelp = Nothing
-  , finkelHsDir = Nothing
+  , finkelHsOutDir = Nothing
+  , finkelEnv = defaultFnkEnv
   }
 
 partitionFinkelOptions :: [String] -> ([String], [String])
@@ -254,22 +256,16 @@ parseFinkelOption args =
       throwFinkelExceptionIO (FinkelException (me ++ ": " ++ concat es))
 
 finkelOptDescrs :: [OptDescr (FinkelOption -> FinkelOption)]
-finkelOptDescrs =
-  [ opt ["fnk-debug"]
-        (NoArg (\o -> o {finkelDebug = True}))
-        "Show debug messages."
-  , opt ["fnk-dump-hs"]
-        (NoArg (\o -> o {finkelDumpHs = True}))
-        "Dump Haskell source code."
-  , opt ["fnk-help"]
-        (NoArg (\o -> o {finkelHelp = Just Usage}))
-        "Show this help."
-  , opt ["fnk-hsdir"]
-        (ReqArg (\path o -> o {finkelHsDir = Just path}) "DIR")
-        "Save Haskell source code to DIR."
+finkelOptDescrs = helpOptDescrs ++ debugOptDescrs
+
+helpOptDescrs :: [OptDescr (FinkelOption -> FinkelOption)]
+helpOptDescrs =
+  [ opt ["fnk-help"]
+         (NoArg (\o -> o {finkelHelp = Just Usage}))
+         "Show this help and exit."
   , opt ["fnk-languages"]
         (NoArg (\o -> o {finkelHelp = Just Languages}))
-        "Show supported language extensions."
+        "Show supported language extensions and exit."
   , opt ["fnk-version"]
         (NoArg (\o -> o {finkelHelp = Just Version}))
         "Show Finkel version and exit."
@@ -277,11 +273,38 @@ finkelOptDescrs =
   where
     opt = Option []
 
-opt2env :: FinkelOption -> FnkEnv
-opt2env opt = defaultFnkEnv
-  { envDebug  = finkelDebug opt
-  , envDumpHs = finkelDumpHs opt
-  , envHsDir  = finkelHsDir opt }
+debugOptDescrs :: [OptDescr (FinkelOption -> FinkelOption)]
+debugOptDescrs =
+  [ opt ["fnk-verbose"]
+        (ReqArg (\i o -> o {finkelVerbose = i}) "INT")
+        "Set verbosity level to INT."
+  , opt ["fnk-hsdir"]
+        (ReqArg (\path o -> o {finkelHsOutDir = Just path}) "DIR")
+        "Set Haskell code output directory to DIR."
+  ] ++ map (fmap toFinkelOpt) fnkDebugFlagOptions
+  where
+    opt = Option []
+    toFinkelOpt f = \o -> o {finkelEnv = f (finkelEnv o)}
+
+opt2env :: FinkelOption -> IO FnkEnv
+opt2env opt =
+  do fnk_verbosity <- getFinkelVerbose opt
+     return (defaultFnkEnv
+               { envVerbosity = fnk_verbosity
+               , envHsOutDir  = finkelHsOutDir opt
+               , envDumpFlags = envDumpFlags (finkelEnv opt)
+               })
+
+getFinkelVerbose :: FinkelOption -> IO Int
+getFinkelVerbose opt =
+  let v = finkelVerbose opt
+  in case reads v of
+       [(n,"")] -> return n
+       _        -> do
+         me <- getProgName
+         throwFinkelExceptionIO
+           (FinkelException
+             (me ++ ": expecting Int value for verbosity but got " ++ show v))
 
 printFinkelHelp :: FinkelHelp -> IO ()
 printFinkelHelp fh =
@@ -298,7 +321,8 @@ printFinkelUsage = do
     message name =
       [ "USAGE: " ++ name ++ " [command-line-options-and-files]"
       , ""
-      , usageInfo "OPTIONS:\n" finkelOptDescrs
+      , usageInfo "HELP OPTIONS:\n" helpOptDescrs
+      , usageInfo "DEBUG OPTIONS:\n" debugOptDescrs
       , "  Other options are passed to ghc." ]
 
 printBriefUsage :: IO ()

@@ -215,8 +215,8 @@ envTest = do
      macroNames (envMacros emptyFnkEnv) `shouldBe` []
    it "should have empty envDefaultMacros" $
      macroNames (envDefaultMacros emptyFnkEnv) `shouldBe` []
-   it "should have not set envSilent" $
-     envSilent emptyFnkEnv `shouldBe` False
+   it "should set verbosity to 1" $
+     envVerbosity emptyFnkEnv `shouldBe` 1
    it "should not have required module names" $
      map unLoc (envRequiredModuleNames emptyFnkEnv) `shouldBe` []
 

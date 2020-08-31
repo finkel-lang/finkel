@@ -5,7 +5,7 @@ module MainTest
   ) where
 
 -- base
-import System.Exit (ExitCode(..))
+import System.Exit     (ExitCode (..))
 
 -- filepath
 import System.FilePath ((</>))
@@ -61,9 +61,11 @@ finkelSupportedLanguagesTest =
 
 finkelUnknownFlagTest :: Spec
 finkelUnknownFlagTest =
-  describe "invalid flag" $
+  describe "invalid flag" $ do
     it "should exit with failure with unknown flag" $
       runDefaultMain ["--fnk-foo"] `shouldThrow` (== ExitFailure 1)
+    it "should exit with failure with invalid verbosity level" $
+      runDefaultMain ["--fnk-verbose=foo"] `shouldThrow` (== ExitFailure 1)
 
 trivialTest :: String -> String -> [String] -> Spec
 trivialTest desc label flags = describe desc $

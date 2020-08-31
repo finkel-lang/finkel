@@ -81,11 +81,6 @@
           (with-left `(repl-macro cd (foo bar) buzz)
             (isSubsequenceOf "invalid form"))
 
-          ;; debug
-          (ok '(repl-macro debug) "Debug flag is False")
-          (ok '(repl-macro debug True) "Debug flag set to True")
-          (ok '(repl-macro debug False) "Debug flag set to False")
-
           ;; expand
           (ok '(repl-macro expand
                 (defn f (where g (defn g [x] (print (++ "g: " x))))))
@@ -212,6 +207,13 @@
               "(:quote x) :: Language.Finkel.Form.Code")
           (ng '(repl-macro type (foo bar) buzz)
               "<quoted code>: error: type: invalid form `(foo bar)'")
+
+          ;; verbose
+          (ok '(repl-macro verbose) "Verbosity level is 1")
+          (ok '(repl-macro verbose 2)
+              "Verbosity level set to 2")
+          (ok '(repl-macro verbose 1)
+              "Verbosity level set to 1")
 
           ;; load and reload
           (let ((= m01-dot-fnk (testdata "m01.fnk"))))
