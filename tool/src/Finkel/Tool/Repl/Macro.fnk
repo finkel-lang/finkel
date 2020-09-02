@@ -856,8 +856,8 @@ paths from import directories."
   [forms]
   (case forms
     [] (do (<- lvl (fmap envVerbosity getFnkEnv))
-           (return `(System.IO.putStrLn
-                     (++ "Verbosity level is " ,(show lvl)))))
+           (return
+            `(System.IO.putStrLn ,(++ "Verbosity level is " (show lvl)))))
     [form] (| ((<- (Just n) (readMaybe (show form)))
                (do (modifyFnkEnv (setFnkVerbosity n))
                    (let ((= msg (++ "Verbosity level set to " (show n)))))
