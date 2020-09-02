@@ -88,7 +88,7 @@ Now one can build the ``my-first-package`` package with ``stack``:
    See the `stack documentation
    <https://docs.haskellstack.org/en/stable/yaml_configuration/#extra-deps>`_
    and the `Cabal User Guide
-   <https://www.haskell.org/cabal/users-guide/nix-local-build.html#specifying-packages-from-remote-version-control-locations>`_
+   <https://cabal.readthedocs.io/en/3.4/cabal-project.html#specifying-packages-from-remote-version-control-locations>`_
    for more information about using remote git repository for extra
    dependencies.
 
