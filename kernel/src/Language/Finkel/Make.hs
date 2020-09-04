@@ -44,6 +44,7 @@ import           DynFlags                     (DumpFlag (..), DynFlags (..),
                                                thisPackage)
 import           ErrUtils                     (MsgDoc, dumpIfSet_dyn,
                                                mkPlainErrMsg)
+import           Exception                    (gbracket)
 import           FastString                   (fsLit)
 import           Finder                       (addHomeModuleToFinder,
                                                cannotFindModule,
@@ -56,8 +57,7 @@ import           GHC_Hs                       (HsModule (..))
 import           GHC_Hs_Dump                  (BlankSrcSpan (..), showAstData)
 import           GHC_Hs_ImpExp                (ImportDecl (..))
 import           GhcMake                      (topSortModuleGraph)
-import           GhcMonad                     (GhcMonad (..), modifySession,
-                                               withTempSession)
+import           GhcMonad                     (GhcMonad (..), modifySession)
 import           HeaderInfo                   (getOptionsFromFile)
 import           HscStats                     (ppSourceStats)
 import           HscTypes                     (FindResult (..),
@@ -912,10 +912,11 @@ compileFnkModuleForm sp modname forms = do
   hsc_env <- getSession
   fnk_env <- getFnkEnv
 
-  -- Compile the form with file specific DynFlags and temporary session, to
-  -- preserve modules imported in current context.
-  let use_my_dflags e = e {hsc_dflags = dflags0}
-  (mdl, reqs, compiled) <- withTempSession use_my_dflags act
+  -- Compile the form with file specific DynFlags, to preserve modules imported
+  -- in current context.
+  let withMyDynFlags m =
+        gbracket getDynFlags setDynFlags (\_ -> setDynFlags dflags0 >> m)
+  (mdl, reqs, compiled) <- withMyDynFlags act
 
   -- Add the compiled home modules to current session, if any. This fill avoid
   -- recompilation of required modules with "-fforce-recomp" option, which is
