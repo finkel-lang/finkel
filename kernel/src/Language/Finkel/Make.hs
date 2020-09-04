@@ -16,6 +16,7 @@ import           Control.Monad                (unless, void, when)
 import           Control.Monad.IO.Class       (MonadIO (..))
 import           Data.List                    (find, foldl')
 import           Data.Maybe                   (catMaybes, fromMaybe, isJust)
+import           System.IO                    (IOMode (..), withFile)
 
 -- container
 import           Data.Graph                   (flattenSCCs)
@@ -49,7 +50,8 @@ import           Finder                       (addHomeModuleToFinder,
                                                findImportedModule,
                                                findObjectLinkableMaybe,
                                                mkHomeModLocation)
-import           GHC                          (setSessionDynFlags)
+import           GHC                          (getPrintUnqual,
+                                               setSessionDynFlags)
 import           GHC_Hs                       (HsModule (..))
 import           GHC_Hs_Dump                  (BlankSrcSpan (..), showAstData)
 import           GHC_Hs_ImpExp                (ImportDecl (..))
@@ -75,8 +77,8 @@ import           Module                       (ModLocation (..), ModuleName,
                                                moduleNameSlashes,
                                                moduleNameString, moduleUnitId)
 import           Outputable                   (SDoc, braces, comma, hcat, nest,
-                                               ppr, punctuate, quotes, text,
-                                               vcat, ($$), (<+>))
+                                               ppr, printForUser, punctuate,
+                                               quotes, text, vcat, ($$), (<+>))
 import           Panic                        (GhcException (..),
                                                throwGhcException)
 import           SrcLoc                       (GenLocated (..), Located, getLoc,
@@ -425,8 +427,8 @@ make' pendings0 = do
         _                  -> "module-name-unknown"
     total = length pendings0
 
--- | Check whether recompilation is required, and compile the 'HsModule'
--- when the codes or dependency modules were updated.
+-- | Check whether recompilation is required, and compile the 'HsModule' when
+-- the codes or dependency modules were updated.
 makeOne
   :: Int -> Int -> Maybe SPState -> ModSummary
   -> [ModSummary] -> Fnk ModSummary
@@ -845,17 +847,12 @@ dumpModSummary :: Maybe SPState -> ModSummary -> Fnk ()
 dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
   where
     work pm = when (isFnkFile orig_path) $ do
-      contents <- gen pm
       fnk_env <- getFnkEnv
-      when (fopt Fnk_dump_hs fnk_env)
-           (liftIO
-              (do putStrLn ""
-                  putStrLn (unwords [colons, orig_path, colons])
-                  putStrLn ""
-                  putStr contents
-                  putStrLn ""))
-      mapM_ (doWrite fnk_env contents) (envHsOutDir fnk_env)
-    doWrite fnk_env contents dir = do
+      let hsrc = gen pm
+          hdr = text (unwords [colons, orig_path, colons])
+      debugWhen fnk_env Fnk_dump_hs ["", hdr, "" , hsrc, ""]
+      mapM_ (doWrite fnk_env hsrc) (envHsOutDir fnk_env)
+    doWrite fnk_env hsrc dir = do
        let mname = moduleName (ms_mod ms)
            bname = takeBaseName orig_path
            file_name = if looksLikeModuleName bname
@@ -864,9 +861,12 @@ dumpModSummary mb_sp ms = maybe (return ()) work (ms_parsed_mod ms)
            out_path = dir </> file_name <.> "hs"
            out_dir = takeDirectory out_path
        traceMake fnk_env "dumpModSummary" ["Writing to" <+> text out_path]
+       dflags <- getDynFlags
+       unqual <- getPrintUnqual
+       let emit hdl = printForUser dflags hdl unqual hsrc
        liftIO (do createDirectoryIfMissing True out_dir
-                  writeFile out_path contents)
-    gen pm = genHsSrc sp (Hsrc (unLoc (hpm_module pm)))
+                  withFile out_path WriteMode emit)
+    gen pm = toHsSrc sp (Hsrc (unLoc (hpm_module pm)))
     orig_path = ms_hspp_file ms
     sp = fromMaybe dummy_sp mb_sp
     dummy_sp = initialSPState (fsLit orig_path) 1 1
