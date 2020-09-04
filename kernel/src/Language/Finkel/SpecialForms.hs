@@ -23,8 +23,7 @@ import Data.Map                        (fromList)
 
 -- ghc
 import BasicTypes                      (FractionalLit (..), SourceText (..))
-import DynFlags                        (DynFlags (..), GeneralFlag (..),
-                                        getDynFlags, gopt)
+import DynFlags                        (DynFlags (..), getDynFlags)
 import ErrUtils                        (MsgDoc, compilationProgressMsg)
 import Exception                       (gbracket)
 import FastString                      (FastString, appendFS, fsLit, unpackFS)
@@ -38,11 +37,12 @@ import HscMain                         (Messager, hscTcRnLookupRdrName,
                                         showModuleIndex)
 import HscTypes                        (FindResult (..), HomeModInfo (..),
                                         HscEnv (..), InteractiveImport (..),
+                                        ModSummary (..), ModuleGraph,
                                         isObjectLinkable, lookupHpt, showModMsg)
 import InteractiveEval                 (getContext)
 import MkIface                         (RecompileRequired (..),
                                         recompileRequired)
-import Module                          (ModuleName, moduleNameString)
+import Module                          (Module, ModuleName, moduleNameString)
 import Name                            (nameOccName, occName)
 import OccName                         (occNameFS)
 import Outputable                      (hcat, ppr, showPpr)
@@ -50,6 +50,10 @@ import RdrName                         (rdrNameOcc)
 import SrcLoc                          (GenLocated (..), SrcSpan, unLoc)
 import TyCoRep                         (TyThing (..))
 import Var                             (varName)
+
+#if MIN_VERSION_ghc(8,4,0)
+import HscTypes                        (mgLookupModule)
+#endif
 
 -- Internal
 import Language.Finkel.Builder         (HImportDecl, evalBuilder, syntaxErrMsg)
@@ -270,8 +274,8 @@ requiredMessager hsc_env mod_index recomp mod_summary =
                      mod_summary ++
          reason)
 
-makeMissingHomeMod :: Bool -> HImportDecl -> Fnk [(ModuleName, HomeModInfo)]
-makeMissingHomeMod force_recomp (L loc idecl) = do
+makeMissingHomeMod :: HImportDecl -> Fnk [(ModuleName, HomeModInfo)]
+makeMissingHomeMod (L loc idecl) = do
   -- Try finding the required module. Delegate the work to 'simpleMake' function
   -- defined in Language.Finkel.Make when the file is found in import paths.
   --
@@ -285,7 +289,7 @@ makeMissingHomeMod force_recomp (L loc idecl) = do
       lmname = L loc (moduleNameString mname)
       use_obj = maybe False canExpandWithObj (envDefaultDynFlags fnk_env)
       has_obj = maybe False isObjectLinkable . hm_linkable
-      smpl_mk = withRequiredSettings use_obj (simpleMake force_recomp lmname)
+      smpl_mk = withRequiredSettings use_obj (simpleMake lmname)
 
   case lookupHpt (hsc_HPT hsc_env) mname of
     Just hmi -> if use_obj && has_obj hmi
@@ -379,31 +383,33 @@ m_require form =
     LForm (L _ (List (_:code))) ->
       do dflags <- getDynFlags
          case evalBuilder dflags parseLImport code of
-           Right lidecl@(L loc idecl) -> do
+           Right lidecl@(L _ idecl) -> do
              fnk_env <- getFnkEnv
 
-             let recomp = gopt Opt_ForceRecomp dflags
-                 mname = unLoc (ideclName idecl)
-                 mname' = moduleNameString mname
-                 lmname' = L loc mname'
+             let mname = unLoc (ideclName idecl)
 
              debug fnk_env "m_require" [ppr idecl]
 
              -- Handle home modules.
-             compiled <- makeMissingHomeMod recomp lidecl
+             compiled <- makeMissingHomeMod lidecl
              context <- getContext
              setContext (IIDecl idecl : context)
+             mgraph <- hsc_mod_graph <$> getSession
+             mdl <- lookupModule mname Nothing
 
              -- Update required module names and compiled home modules in
              -- FnkEnv. These are used by the callee module (i.e. the module
              -- containing this 'require' form).
-             let reqs = lmname':envRequiredModuleNames fnk_env
-                 fnk_env' = fnk_env {envRequiredModuleNames = reqs
-                                    ,envCompiledInRequire = compiled}
+             let reqs0 = envRequiredHomeModules fnk_env
+                 reqs1 = case mgLookupModule' mgraph mdl of
+                           Just m -> m:reqs0
+                           _      -> reqs0
+                 compiled_mods = compiled ++ envCompiledInRequire fnk_env
+                 fnk_env' = fnk_env {envRequiredHomeModules = reqs1
+                                    ,envCompiledInRequire = compiled_mods}
              putFnkEnv fnk_env'
 
              -- Look up Macros in parsed module, add to FnkEnv when found.
-             mdl <- lookupModule mname Nothing
              mb_minfo <- getModuleInfo mdl
              case mb_minfo of
                Just minfo -> do
@@ -411,8 +417,9 @@ m_require form =
                  mapM_ (addImportedMacro fnk_env dflags) things
                  return emptyForm
                Nothing ->
-                 finkelSrcError form ("require: module " ++ mname' ++
-                                  " not found.")
+                 finkelSrcError form
+                                ("require: module " ++
+                                 moduleNameString mname ++ " not found.")
            Left err -> finkelSrcError form ("require: " ++ syntaxErrMsg err)
     _ -> finkelSrcError form "require: malformed body"
 
@@ -429,7 +436,7 @@ m_evalWhenCompile form =
           -- If module imports were given, add to current interactive context.
           -- Compile home modules if not found.
           unless (null limps) $ do
-             mapM_ (makeMissingHomeMod False) limps
+             mapM_ makeMissingHomeMod limps
              context <- getContext
              setContext (map (IIDecl . unLoc) limps ++ context)
 
@@ -581,3 +588,13 @@ debug fnk_env fn msgs =
   debugWhen fnk_env
             Fnk_trace_spf
             (hcat [";;; [Language.Finkel.SpecialForms.", fn, "]:"] : msgs)
+
+mgLookupModule' :: ModuleGraph -> Module -> Maybe ModSummary
+#if MIN_VERSION_ghc (8,4,0)
+mgLookupModule' = mgLookupModule
+#else
+mgLookupModule' mg mdl = go mg
+  where
+    go []       = Nothing
+    go (ms:mss) = if ms_mod ms == mdl then Just ms else go mss
+#endif

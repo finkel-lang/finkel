@@ -19,10 +19,8 @@
    (System.IO (Handle))
 
    ;; ghc
-   (DynFlags ((DynFlags ..) (GeneralFlag ..) (GhcLink ..) (HasDynFlags ..)
-              (HscTarget ..)
-              gopt-set gopt-unset interpWays targetPlatform updateWays
-              xopt-unset wayGeneralFlags wayUnsetGeneralFlags))
+   (DynFlags ((DynFlags ..) (GeneralFlag ..) (HasDynFlags ..)
+              gopt-set xopt-unset))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (ghandle))
    (GHC (getPrintUnqual setSessionDynFlags))
@@ -60,7 +58,7 @@
    (Language.Finkel.Eval (evalDecls))
    (Language.Finkel.Expand (expands))
    (Language.Finkel.Make (initSessionForMake))
-   (Language.Finkel.Fnk (failS))
+   (Language.Finkel.Fnk (failS prepareInterpreter))
    (Language.Finkel.Syntax (parseExpr parseImports parseStmt parseTopDecls))
 
    ;; internal
@@ -113,28 +111,12 @@
   "Loop to evaluate expressions."
   [hdl in-mvar]
   (let ((= initialize
-          ;; See the `main''' function in `ghc/Main.hs'.  Setting
-          ;; default target in interactive context as `HscInterpreted',
-          ;; updating to `HscInterpreted', and setting the default
-          ;; verbosity level in REPL to 1.
           (do initSessionForMake
+              prepareInterpreter
               (<- hsc-env getSession)
-              (let ((= dflags0 (ic-dflags (hsc-IC hsc-env)))
-                    (= dflags1 (dflags0 {hscTarget HscInterpreted
-                                         ghcLink LinkInMemory
-                                         verbosity 1}))
-                    (= dflags2 (foldl gopt-set dflags1 optional-dynflags))
-                    (= dflags3 (updateWays (dflags2 {ways interpWays})))
-                    (= platform (targetPlatform dflags3))
-                    (= dflags4 (foldl gopt-set dflags3
-                                      (concatMap
-                                       (wayGeneralFlags platform)
-                                       interpWays)))
-                    (= dflags5 (foldl gopt-unset dflags4
-                                      (concatMap
-                                       (wayUnsetGeneralFlags platform)
-                                       interpWays)))))
-              (void (setSessionDynFlags dflags5))
+              (let ((= dflags0 (hsc-dflags hsc-env))
+                    (= dflags1 (foldl gopt-set dflags0 optional-dynflags))))
+              (void (setSessionDynFlags dflags1))
               (liftIO (initDynLinker hsc-env))
 
               ;; XXX: Currently the printer function and the arguments

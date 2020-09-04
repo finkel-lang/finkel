@@ -20,6 +20,7 @@ module Language.Finkel.Fnk
   , modifyFnkEnv
   , setDynFlags
   , setContextModules
+  , prepareInterpreter
 
   -- * Exception
   , FinkelException(..)
@@ -81,7 +82,10 @@ import qualified Data.Map               as Map
 -- ghc
 import           Bag                    (unitBag)
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
-                                         HasDynFlags (..), gopt, interpWays)
+                                         GhcLink (..), HasDynFlags (..),
+                                         HscTarget (..), gopt, gopt_set,
+                                         gopt_unset, interpWays, updateWays,
+                                         wayGeneralFlags, wayUnsetGeneralFlags)
 import           ErrUtils               (MsgDoc, mkErrMsg)
 import           Exception              (ExceptionMonad (..), ghandle)
 import           FastString             (FastString, fsLit, unpackFS)
@@ -91,20 +95,24 @@ import           GhcMonad               (Ghc (..), GhcMonad (..),
 import           HscMain                (Messager, batchMsg)
 import           HscTypes               (HomeModInfo, HscEnv (..),
                                          InteractiveContext (..),
-                                         InteractiveImport (..), TyThing (..),
-                                         mkSrcErr)
+                                         InteractiveImport (..), ModSummary,
+                                         TyThing (..), mkSrcErr)
 import           InteractiveEval        (setContext)
 import           Module                 (ModuleName, mkModuleName)
 import           Outputable             (alwaysQualify, defaultErrStyle,
                                          neverQualify, ppr, printSDocLn, sep,
                                          showSDocForUser, text, vcat, (<+>))
 import qualified Pretty
-import           SrcLoc                 (GenLocated (..), Located)
+import           SrcLoc                 (GenLocated (..))
 import           UniqSupply             (initUniqSupply, mkSplitUniqSupply,
                                          uniqFromSupply)
 import           Var                    (varType)
 
 import           GHC_Hs_ImpExp          (simpleImportDecl)
+
+#if !MIN_VERSION_ghc(8,10,0)
+import           DynFlags               (targetPlatform)
+#endif
 
 -- Import for Option
 #if MIN_VERSION_ghc(8,10,0)
@@ -195,8 +203,8 @@ data FnkEnv = FnkEnv
 
      -- | Messager used in make.
    , envMessager               :: Messager
-     -- | Required modules names in current target.
-   , envRequiredModuleNames    :: [Located String]
+     -- | Required home package modules names in current target.
+   , envRequiredHomeModules    :: [ModSummary]
      -- | Compile home modules during macro-expansion of /require/.
    , envCompiledInRequire      :: [(ModuleName, HomeModInfo)]
 
@@ -323,7 +331,7 @@ emptyFnkEnv = FnkEnv
   , envContextModules         = []
   , envDefaultDynFlags        = Nothing
   , envMessager               = batchMsg
-  , envRequiredModuleNames    = []
+  , envRequiredHomeModules       = []
   , envCompiledInRequire      = []
   , envHsOutDir               = Nothing
   , envLibDir                 = Nothing
@@ -333,13 +341,30 @@ emptyFnkEnv = FnkEnv
   , envDumpFlags              = zeroBits
   }
 
--- | Set current 'DynFlags' to given argument. This function also modifies
+-- | Set current 'DynFlags' to given argument. This function also sets the
 -- 'DynFlags' in interactive context.
-setDynFlags :: DynFlags -> Fnk ()
+setDynFlags :: GhcMonad m => DynFlags -> m ()
 setDynFlags dflags =
   modifySession (\h -> h { hsc_dflags = dflags
                          , hsc_IC = (hsc_IC h) {ic_dflags = dflags}})
 {-# INLINE setDynFlags #-}
+
+-- | Prepare 'DynFlags' for interactive evaluation.
+prepareInterpreter :: GhcMonad m => m ()
+prepareInterpreter = do
+  -- See: "main''" in "ghc/Main.hs".
+  hsc_env <- getSession
+  let dflags0 = ic_dflags (hsc_IC hsc_env)
+      dflags1 = dflags0 {ghcLink = LinkInMemory
+                        ,hscTarget = HscInterpreted
+                        ,verbosity = 1}
+      dflags2 = updateWays (dflags1 {ways = interpWays})
+      platform = targetPlatform dflags2
+      dflags3 = foldl gopt_set dflags2
+                      (concatMap (wayGeneralFlags platform) interpWays)
+      dflags4 = foldl gopt_unset dflags3
+                      (concatMap (wayUnsetGeneralFlags platform) interpWays)
+  setDynFlags dflags4
 
 -- | Set context modules in current session to given modules.
 setContextModules :: [String] -> Fnk ()

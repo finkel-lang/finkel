@@ -14,7 +14,7 @@ module Language.Finkel.Make
 -- base
 import           Control.Monad                (unless, void, when)
 import           Control.Monad.IO.Class       (MonadIO (..))
-import           Data.List                    (find, foldl')
+import           Data.List                    (foldl')
 import           Data.Maybe                   (catMaybes, fromMaybe, isJust)
 import           System.IO                    (IOMode (..), withFile)
 
@@ -64,17 +64,16 @@ import           HscTypes                     (FindResult (..),
                                                HomeModInfo (..),
                                                HomePackageTable,
                                                HsParsedModule (..), HscEnv (..),
-                                               InteractiveContext (..),
                                                ModSummary (..), ModuleGraph,
                                                SourceModified (..), addToHpt,
                                                eltsHpt, isBootSummary,
                                                isObjectLinkable, linkableTime,
                                                lookupHpt, mi_boot, ms_mod_name,
                                                throwOneError)
-import           Module                       (ModLocation (..), ModuleName,
-                                               installedUnitIdEq, mkModule,
-                                               mkModuleName, moduleName,
-                                               moduleNameSlashes,
+import           Module                       (ModLocation (..), Module (..),
+                                               ModuleName, installedUnitIdEq,
+                                               mkModule, mkModuleName,
+                                               moduleName, moduleNameSlashes,
                                                moduleNameString, moduleUnitId)
 import           Outputable                   (SDoc, braces, comma, hcat, nest,
                                                ppr, printForUser, punctuate,
@@ -109,7 +108,9 @@ import           HscTypes                     (throwErrors)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import           HscTypes                     (mkModuleGraph)
+import           HscTypes                     (extendMG, mapMG, mgElemModule,
+                                               mkModuleGraph)
+
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -183,18 +184,12 @@ make infiles no_link force_recomp mb_output = do
   fnk_env <- getFnkEnv
   dumpDynFlags fnk_env "Language.Finkel.Make.make" dflags3
 
-  -- Preserve the language extension values in initial dynflags to FnkEnv, to
-  -- reset the language extension later, to keep fresh set of language extensios
-  -- per module.
-  let findIt (lpath, mb_phase) =
-        fmap (\ts -> (ts, mb_phase)) (findTargetSource lpath)
-
   -- Decide the kind of sources of the inputs, inputs arguments could be file
   -- paths, or module names.
-  sources <- mapM findIt infiles
+  sources <- mapM findTargetUnit infiles
 
   -- Do the compilation work.
-  mod_summaries <- make' sources
+  mod_summaries <- make1 sources
 
   -- Update current module graph and link. Linking work is delegated to deriver
   -- pipelin's `link' function.
@@ -234,10 +229,11 @@ initSessionForMake = do
 
 -- | Simple make function returning compiled home module information. Intended
 -- to be used in 'require' macro.
-simpleMake :: Bool -> Located String -> Fnk [(ModuleName, HomeModInfo)]
-simpleMake force_recomp lname = do
-  make [(lname, Nothing)] False force_recomp Nothing
+simpleMake :: Located String -> Fnk [(ModuleName, HomeModInfo)]
+simpleMake lname = do
   let as_pair hmi = (moduleName (mi_module (hm_iface hmi)), hmi)
+  tu <- findTargetUnit (lname, Nothing)
+  _mss <- make1 [tu]
   fmap (map as_pair . eltsHpt . hsc_HPT) getSession
 
 -- | Run given builder.
@@ -267,6 +263,11 @@ type TargetUnit = (TargetSource, Maybe Phase)
 emptyTargetUnit :: TargetSource -> TargetUnit
 emptyTargetUnit ts = (ts, Nothing)
 
+-- | Get 'TargetUnit' from pair of module name or file path, and phase.
+findTargetUnit :: (Located String, Maybe Phase) -> Fnk TargetUnit
+findTargetUnit (lpath, mb_phase) =
+  fmap (\ts -> (ts, mb_phase)) (findTargetSource lpath)
+
 -- | Compile 'TargetUnit' to 'ModSummary' and 'HsModule', then compile
 -- to interface file and object code.
 --
@@ -276,156 +277,167 @@ emptyTargetUnit ts = (ts, Nothing)
 -- '*.o'. If the HsModule contained imports of pending module, add the
 -- module to the pending modules.
 --
-make' :: [TargetUnit] -> Fnk [ModSummary]
-make' pendings0 = do
+make1 :: [TargetUnit] -> Fnk [ModSummary]
+make1 targets = do
   fnk_env <- getFnkEnv
-  traceMake fnk_env
-            "make'"
-            [ "total:" <+> text (show total)
-            , "pendings0:"
-            , nest 2 (vcat (map ppr pendings0)) ]
-  timeIt "make' [Finkel]" (go [] total total [] pendings0)
+  let tr = traceMake fnk_env "make1"
+      targets_sdoc = nest 2 (vcat (map ppr targets))
+  tr [ "total:" <+> text (show total)
+     , "targets:", targets_sdoc ]
+  summaries <- timeIt "make1 [Finkel]" (make2 [] total total [] targets)
+  tr ["done:", targets_sdoc]
+  return summaries
   where
-    go :: [ModSummary] -- ^ Accumulator.
-       -> Int          -- ^ module n ...
-       -> Int          -- ^ ... of m.
-       -> [TargetUnit] -- ^ Ready to compile targets.
-       -> [TargetUnit] -- ^ Pending targets.
-       -> Fnk [ModSummary]
+    total = length targets
 
-    -- No more modules to compile, return the accumulated ModSummary.
-    go acc i _  _  _ | i <= 0 = return acc
-    go acc _ _ [] [] = return acc
+make2 :: [ModSummary] -- ^ Accumulator.
+      -> Int          -- ^ module n ...
+      -> Int          -- ^ ... of m.
+      -> [TargetUnit] -- ^ Ready to compile targets.
+      -> [TargetUnit] -- ^ Pending targets.
+      -> Fnk [ModSummary]
 
-    -- Target modules are empty, ready to compile pending modules to read time
-    -- ModSummary.  Partition the modules, make read time ModSummaries, then
-    -- sort via topSortModuleGraph, and recurse.
-    go acc i k [] pendings = do
-        -- Mixed target sources in pending modules. Make read-time-mod-summaries
-        -- from pending modules, make new graph, sort it, then recurse.
-        let (readies0, pendings') = (pendings, [])
+-- No more modules to compile, return the accumulated ModSummary.
+make2 acc i _  _  _ | i <= 0 = return acc
+make2 acc _ _ [] [] = return acc
 
-        rt_mss <- mkReadTimeModSummaries readies0
+-- Target modules are empty, ready to compile pending modules to read time
+-- ModSummary.  Partition the modules, make read time ModSummaries, then sort
+-- via topSortModuleGraph, and recurse.
+make2 acc i k [] pendings = do
+    -- Mixed target sources in pending modules. Reorder the targets and recurse.
+    -- No need to worry about module dependency analysis for OtherSource inputs,
+    -- those sources do not have dependencies, so moving to the end.
+    let (readies0, pendings') = (pendings, [])
+        sep_by_trg tu@(trg, _) (fhs, oths) =
+            if isOtherSource trg
+               then (fhs, tu:oths)
+               else (tu:fhs, oths)
+        (fnk_and_hs, other) = foldr sep_by_trg ([],[]) readies0
+        readies1 = fnk_and_hs ++ other
+    make2 acc i k readies1 pendings'
 
-        let pre_graph = mkModuleGraph' rt_mss
-            graph = topSortModuleGraph True pre_graph Nothing
-            readies1= sortTargets (flattenSCCs graph) readies0
+-- Compile ready-to-compile targets to ModSummary and HsModule. Input could be
+-- Finkel source code, Haskell source code, or something else. If Finkel source
+-- code or Haskell source code, get ModSummary to resolve the dependencies.
+make2 acc i k (target@(tsr,_mbp):summarised) pendings = do
+  fnk_env <- getFnkEnv
+  traceMake fnk_env "make2" ["target:" <+> ppr target]
 
-            -- No need to worry about module dependency analysis for OtherSource
-            -- inputs, they are ready to compile.
-            readies2 = readies1 ++ filter (isOtherSource . fst) readies0
+  -- Since Finkel make is not using 'DriverPipeline.runPipeline', setting
+  -- 'DynFlags.dumpPrefix' manually.
+  setDumpPrefix (targetSourcePath tsr)
 
-        go acc i k readies2 pendings'
+  case tsr of
+     FnkSource path _mn _form sp -> do
+       let go_fnk mb_result = do
+             case mb_result of
+               Nothing                   -> failS "compileToHsModule"
+               Just (hmdl, dflags, reqs) -> do
+                 summary <- mkModSummary path hmdl
+                 let summary' = summary {ms_hspp_opts = dflags}
+                     imports = hsmodImports hmdl
+                     import_names = map import_name imports
+                     pending_names = map tsmn pendings
+                     summarised_names = map tsmn summarised
+                     not_yet_ready =
+                       any (\m -> m `elem` pending_names ||
+                                  m `elem` summarised_names)
+                           import_names
 
-    -- Compile ready-to-compile targets to ModSummary and HsModule. Input could
-    -- be Finkel source code, Haskell source code, or something else. If Finkel
-    -- source code or Haskell source code, get ModSummary to resolve the
-    -- dependencies.
-    go acc i k (target@(tsr,_mbp):summarised) pendings = do
-      fnk_env <- getFnkEnv
-      traceMake fnk_env "make'.go" ["target:" <+> ppr target]
+                 traceMake fnk_env
+                           "make2"
+                           ["imports:" <+>
+                             if null import_names
+                                then text "none"
+                                else vcat (map text import_names)]
 
-      -- Since Finkel make is not using 'DriverPipeline.runPipeline', setting
-      -- 'DynFlags.dumpPrefix' manually.
-      setDumpPrefix (targetSourcePath tsr)
-
-      case tsr of
-        FnkSource path _mn _form sp -> do
-          mb_result <- compileToHsModule target
-          case mb_result of
-            Nothing                   -> failS "compileToHsModule"
-            Just (hmdl, dflags, reqs) -> do
-              summary <- mkModSummary path hmdl
-              let summary' = summary {ms_hspp_opts = dflags}
-                  imports = hsmodImports hmdl
-                  import_names = map import_name imports
-                  pending_names = map tsmn pendings
-                  summarised_names = map tsmn summarised
-                  not_yet_ready =
-                    any (\m -> m `elem` pending_names ||
-                               m `elem` summarised_names)
-                        import_names
-
-              traceMake fnk_env
-                        "make'.go"
-                        ["imports:" <+>
-                          if null import_names
-                             then text "none"
-                             else vcat (map text import_names)]
-
-              -- Test whether imported modules are in pendings. If found, skip
-              -- the compilation and add this module to the list of pending
-              -- modules.
-              --
-              -- N.B. For Finkel source target, dependency modules passed to
-              -- 'makeOne' are required modules.
-              --
-              if not_yet_ready
-                 then go acc i k summarised (target:pendings)
-                 else do
-                   hsc_env <- getSession
-                   let act = findRequiredModSummary hsc_env
-                       act' = fmap catMaybes (mapM act reqs)
-                   compileIfReady fnk_env summary' (Just sp) imports act'
-
-        HsSource path -> do
-          mb_result <- compileToHsModule target
-          case mb_result of
-            Nothing             -> failS "compileToHsModule"
-            Just (hmdl, dflags, _) -> do
-              summary <- mkModSummary path hmdl
-              let summary' = summary {ms_hspp_opts = dflags}
-                  imports = hsmodImports hmdl
-              compileIfReady fnk_env summary' Nothing imports (return [])
-
-        OtherSource _ -> do
-          _ <- compileToHsModule target
-          go acc i k summarised pendings
-
-        where
-          compileIfReady :: FnkEnv
-                         -> ModSummary
-                         -> Maybe SPState
-                         -> [HImportDecl]
-                         -> Fnk [ModSummary]
-                         -> Fnk [ModSummary]
-          compileIfReady fnk_env summary mb_sp imports getReqs = do
-            hsc_env <- getSession
-            is <- mapM (findNotCompiledImport hsc_env acc) imports
-            let is' = catMaybes is
-            traceMake fnk_env
-                      "make'.go.compileIfReady"
-                      ["filtered imports:" <+> text (show is')]
-            if not (null is')
-               then do
-                 -- Imported modules are not fully compiled yet. Move this
-                 -- module to the end of summarised modules and recurse.
-                 let summarised' = is' ++ summarised ++ [target]
-                     i' = i + length is'
-                     k' = k + length is'
-                 go acc i' k' summarised' pendings
-               else do
-                 -- Ready to compile this target unit. Compile it, add the
-                 -- returned ModSummary to accumulator, and continue.
-                 reqs <- getReqs
-                 summary' <- makeOne i k mb_sp summary reqs
-                 -- Alternative: use required modules and module from graph up
-                 -- to this.
+                 -- Test whether imported modules are in pendings. If found, skip
+                 -- the compilation and add this module to the list of pending
+                 -- modules.
                  --
-                 -- let graph_upto_this =
-                 --       topSortModuleGraph True mgraph (Just mn)
-                 --     mgraph = mkModuleGraph' (summary:acc)
-                 --     mn = ms_mod_name summary
-                 --     deps = flattenSCCs graph_upto_this ++ reqs
-                 -- summary' <- makeOne i k mb_sp summary deps
-                 go (summary':acc) (i-1) k summarised pendings
+                 -- N.B. For Finkel source target, dependency modules passed to
+                 -- 'makeOne' are required modules.
+                 --
+                 if not_yet_ready
+                    then make2 acc i k summarised (target:pendings)
+                    else compileIfReady fnk_env summary' (Just sp) imports reqs
 
-    tsmn (ts, _) =
-      case ts of
-        FnkSource _ mn _ _ -> mn
-        HsSource path      -> asModuleName path
-        _                  -> "module-name-unknown"
-    total = length pendings0
+       compileToHsModule target >>= go_fnk
+
+     -- XXX: This approach will not work when required home modules from _mn
+     -- were modified. Basically, cannot use ModSummary from current module
+     -- graph. Need to parse the source code to expand with potentially updated
+     -- macros from required home package modules.
+     --
+     -- hsc_env <- getSession
+     -- fr <- liftIO (findHomeModule hsc_env (mkModuleName _mn))
+     -- case fr of
+     --   Found _mloc mdl
+     --     | Just summary <- mgLookupModule (hsc_mod_graph hsc_env) mdl
+     --     , Just hpm <- ms_parsed_mod summary -> do
+     --       -- Doing simple source code modification check to support
+     --       -- reloading from REPL.
+     --       src_modified <- checkSrcModified summary
+     --       if src_modified
+     --          then compileToHsModule target >>= go_fnk
+     --          else do
+     --            let imports = hsmodImports (unLoc (hpm_module hpm))
+     --                reqs = return []
+     --            compileIfReady fnk_env summary (Just sp) imports reqs
+     --   _ -> do
+     --     traceMake fnk_env "make2"
+     --               [text _mn <+> "not found in current session"]
+     --     compileToHsModule target >>= go_fnk
+
+     HsSource path -> do
+       mb_result <- compileToHsModule target
+       case mb_result of
+         Nothing             -> failS "compileToHsModule"
+         Just (hmdl, dflags, _) -> do
+           summary <- mkModSummary path hmdl
+           let summary' = summary {ms_hspp_opts = dflags}
+               imports = hsmodImports hmdl
+           compileIfReady fnk_env summary' Nothing imports []
+
+     OtherSource _ -> do
+       _ <- compileToHsModule target
+       make2 acc i k summarised pendings
+
+     where
+       compileIfReady :: FnkEnv
+                      -> ModSummary
+                      -> Maybe SPState
+                      -> [HImportDecl]
+                      -> [ModSummary]
+                      -> Fnk [ModSummary]
+       compileIfReady fnk_env summary mb_sp imports reqs = do
+         hsc_env <- getSession
+         is <- mapM (findNotCompiledImport hsc_env acc) imports
+         let is' = catMaybes is
+         traceMake fnk_env
+                   "make2.compileIfReady"
+                   ["filtered imports:" <+> text (show is')]
+         if not (null is')
+            then do
+              -- Imported modules are not fully compiled yet. Move this module
+              -- to the end of summarised modules and recurse.
+              let summarised' = is' ++ summarised ++ [target]
+                  i' = i + length is'
+                  k' = k + length is'
+              make2 acc i' k' summarised' pendings
+            else do
+              -- Ready to compile this target unit. Compile it, add the returned
+              -- ModSummary to accumulator, and continue.
+              summary' <- makeOne i k mb_sp summary reqs
+              make2 (summary':acc) (i-1) k summarised pendings
+
+tsmn :: (TargetSource, a) -> String
+tsmn (ts, _) =
+  case ts of
+    FnkSource _ mn _ _ -> mn
+    HsSource path      -> asModuleName path
+    _                  -> "module-name-unknown"
 
 -- | Check whether recompilation is required, and compile the 'HsModule' when
 -- the codes or dependency modules were updated.
@@ -437,31 +449,23 @@ makeOne i total mb_sp summary required_summaries = timeIt label go
     label = "MakeOne [" ++ mname ++ "]"
     mname = moduleNameString (ms_mod_name summary)
     go = do
-      -- Keep current DynFlags.
-      dflags0 <- getDynFlags
-
-      -- Use cached dynflags from ModSummary before type check. Note that the
-      -- cached dynflags is always used, no matter whether the module is updated
-      -- or not. This is to support loading already compiled module objects with
-      -- language extensions not set in current dynflags.
-      let dflags1 = ms_hspp_opts summary
-      setDynFlags dflags1
-
       up_to_date <- checkUpToDate summary required_summaries
       fnk_env <- getFnkEnv
-      traceMake fnk_env "makeOne" ["up_to_date:" <+> ppr up_to_date]
+      traceMake fnk_env "makeOne"
+                [ "required:" <+> nest 2 (vcat (map (ppr . ms_mod_name)
+                                                    required_summaries))
+                , "up_to_date:" <+> ppr up_to_date]
       let midx = total - i + 1
           src_modified = if up_to_date
                             then SourceUnmodified
                             else SourceModified
-      summary' <- doMakeOne midx total mb_sp summary src_modified
 
-      -- Restore the original DynFlags.
-      modifySession
-        (\e -> e { hsc_dflags = dflags0
-                 , hsc_IC = (hsc_IC e) {ic_dflags = dflags0}})
-
-      return summary'
+      -- Using the cached dynflags from ModSummary. Note that the cached
+      -- dynflags is always used, no matter whether the module is updated or
+      -- not. This is to support loading already compiled module objects with
+      -- language extensions not set in current dynflags.
+      withTmpDynFlags (ms_hspp_opts summary) $
+        doMakeOne midx total mb_sp summary src_modified
 
 -- | Compile single module.
 doMakeOne
@@ -476,7 +480,6 @@ doMakeOne i total mb_sp ms src_modified = do
   fnk_env <- getFnkEnv
 
   let dflags = ms_hspp_opts ms
-      hsc_env' = hsc_env {hsc_dflags = dflags}
       loc = ms_location ms
       mod_name = ms_mod_name ms
       tryGetTimeStamp = liftIO . modificationTimeIfExists
@@ -535,12 +538,28 @@ doMakeOne i total mb_sp ms src_modified = do
   home_mod_info <-
     liftIO
       (do home_mod_info <-
-            compileOne' Nothing (Just messager) hsc_env' ms i total
+            compileOne' Nothing (Just messager) hsc_env ms i total
                         mb_old_iface mb_old_linkable src_modified'
           _ <- addHomeModuleToFinder hsc_env mod_name loc
           return home_mod_info)
+
+  -- Update the time stamp of generated obj and hi files.
+  mb_obj_date <- tryGetTimeStamp (ml_obj_file loc)
+  mb_iface_date <- tryGetTimeStamp (ml_hi_file loc)
+
+  let ms1 = ms { ms_obj_date = mb_obj_date
+               , ms_iface_date = mb_iface_date }
+      mgraph0 = hsc_mod_graph hsc_env
+      mgraph1 = if mgElemModule' mgraph0 (ms_mod ms1)
+                   then mapMG' replace_ms mgraph0
+                   else extendMG' mgraph0 ms1
+      replace_ms ms0 = if ms_mod ms0 == ms_mod ms
+                          then ms1
+                          else ms0
+
   modifySession
-    (\e -> e {hsc_HPT = addToHpt hpt0 mod_name home_mod_info})
+    (\e -> e { hsc_HPT = addToHpt hpt0 mod_name home_mod_info
+             , hsc_mod_graph = mgraph1 })
 
   -- Dump the module contents as haskell source when dump option were set and
   -- this is the first time for compiling the target Module.
@@ -549,12 +568,7 @@ doMakeOne i total mb_sp ms src_modified = do
           Nothing -> dumpModSummary mb_sp ms
           Just _  -> return ())
 
-  -- Update the time stamp of generated obj and hi files.
-  mb_obj_date <- tryGetTimeStamp (ml_obj_file loc)
-  mb_iface_date <- tryGetTimeStamp (ml_hi_file loc)
-
-  return ms { ms_obj_date = mb_obj_date
-            , ms_iface_date = mb_iface_date }
+  return ms1
 
 -- [Avoiding Recompilation]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -569,14 +583,21 @@ doMakeOne i total mb_sp ms src_modified = do
 --
 -- Other than this, most recompilation checks are done in
 -- "DriverPipeLine.compileOne'" function, which is called in "doMakeOne".
+--
+-- To support recompiling the target module when the required modules were
+-- changed, comparing the object code timestamp of the target with source
+-- modification time of the dependencies.
 
--- XXX: Won't detect recompilation when 'require'd modules have changed.
 checkUpToDate :: ModSummary -> [ModSummary] -> Fnk Bool
-checkUpToDate ms dependencies =
+checkUpToDate ms required_deps =
   case ms_obj_date ms of
-    -- No object code, test whether the current target is object code or not.
+    -- No object code, test whether the current hscTarget is object code or not.
     -- When compiling bytecode, further up-to-date check will be done in
     -- "compileOne'".
+    --
+    -- XXX: Lookup home package table, use `linkableTime' of the bytecode
+    -- linkable to support recompiling on required module update for
+    -- HscInterpreted hscTarget.
     Nothing -> do
       dflags <- getDynFlags
       return (not (isObjectTarget (hscTarget dflags)))
@@ -586,10 +607,13 @@ checkUpToDate ms dependencies =
       hpt <- hsc_HPT <$> getSession
       let mn = ms_mod_name ms
           sccs_without_self = filter (\m -> mn /= ms_mod_name m)
-                                     dependencies
+                                     required_deps
           object_ok m =
             case ms_obj_date m of
               Just t -> t >= ms_hs_date ms && same_as_prev t
+                        -- XXX: Will it be better to skip this test when
+                        -- calling from 'makeOne'?
+                        && obj_date >= ms_hs_date m
               _      -> False
           same_as_prev t =
             case lookupHpt hpt mn of
@@ -601,74 +625,11 @@ checkUpToDate ms dependencies =
 
       return up_to_date
 
--- -- | 'True' if the object code and interface file were up to date,
--- -- otherwise 'False'.
--- checkUpToDate :: ModSummary -> [ModSummary] -> Fnk Bool
--- checkUpToDate _summary required_summaries = do
---   -- XXX: TODO. Currently always returning 'True'.  Want to detect the
---   -- up-to-date-ness of modules containing 'require' of home package
---   -- module, and up-to-date-ness of the required modules.
---   hsc_env <- getSession
---   compiled_in_req <- fmap envCompiledInRequire getFnkEnv
---   let f (mname, _hmi) = "\n;;;   " ++ moduleNameString mname
---   debugFnk (concat (";;; checkUpToDate.compiled_in_req:"
---                     : case compiled_in_req of
---                        [] -> [" none."]
---                        _  ->  map f compiled_in_req))
---   _ <- mapM (checkRequiredIface hsc_env) required_summaries
---   return True
---
--- checkRequiredIface
---   :: HscEnv
---   -> ModSummary
---   -> Fnk (RecompileRequired, Maybe ModIface)
--- checkRequiredIface hsc_env summary = do
---   let hpt = hsc_HPT hsc_env
---       mb_old_iface =
---         case lookupHpt hpt (ms_mod_name summary) of
---           Nothing -> Nothing
---           Just hm_info | isBootSummary summary -> Just iface
---                        | not (mi_boot iface) -> Just iface
---                        | otherwise -> Nothing
---                        where
---                          iface = hm_iface hm_info
---   (recomp, mb_iface) <- liftIO (checkOldIface hsc_env summary
---                                               SourceUnmodified
---                                               mb_old_iface)
---   debugFnk
---     (concat [ ";;; checkRequiredIface\n"
---             , ";;;   ", moduleNameString (ms_mod_name summary), ": "
---             , case recomp of
---                 UpToDate             -> "up to date"
---                 MustCompile          -> "must compile"
---                 RecompBecause reason -> reason])
---   return (recomp, mb_iface)
-
--- | Search 'ModSummary' of required module.
-findRequiredModSummary :: HscEnv -> Located String -> Fnk (Maybe ModSummary)
-findRequiredModSummary hsc_env lmname = do
-  -- Searching in reachable source paths before imported modules, because we
-  -- want to use the source modified time from the current home package modules,
-  -- to support recompilation of a module which requiring other home package
-  -- modules.
-  mb_ts <- findTargetSourceMaybe lmname
-  case mb_ts of
-    Just ts -> mkReadTimeModSummary (emptyTargetUnit ts)
-    Nothing -> do
-      -- The module name should be found somewhere else than current target
-      -- sources. If not, complain what's missing.
-      let mname' = mkModuleName mname
-          mname = unLoc lmname
-      fresult <- liftIO (findImportedModule hsc_env mname' Nothing)
-      case fresult of
-        Found {} -> return Nothing
-        _        -> failS ("Cannot find required module " ++ mname)
-
 -- | Find not compiled module.
 findNotCompiledImport
   :: HscEnv       -- ^ Current hsc environment.
   -> [ModSummary] -- ^ List of accumulated 'ModSummary'.
-  -> HImportDecl  -- ^ The target module name to -- find.
+  -> HImportDecl  -- ^ The target module name to find.
   -> Fnk (Maybe TargetUnit)
 findNotCompiledImport hsc_env acc idecl = do
   findResult <- liftIO (findImportedModule hsc_env mname Nothing)
@@ -680,18 +641,17 @@ findNotCompiledImport hsc_env acc idecl = do
     -- module is listed in accumulator containing compiled modules.
     Found mloc mdl -> do
       fnk_env <- getFnkEnv
-      traceMake
-        fnk_env
-        "findNotCompiledImport"
-        [ "Found" <+> ppr mname
-        , pprMLoc mloc
-        , "moduleUnitId:" <+>  ppr (moduleUnitId mdl) ]
+      traceMake fnk_env
+                "findNotCompiledImport"
+                [ "Found" <+> ppr mname
+                , pprMLoc mloc
+                , "moduleUnitId:" <+>  ppr (moduleUnitId mdl) ]
       case ml_hs_file mloc of
         Just path | takeExtension path `elem` [".hs"] ->
                     if moduleName mdl `elem` map ms_mod_name acc
                        then return Nothing
                        else do
-                         ts <- findTargetSource (L (getLoc idecl) name)
+                         ts <- findTargetModuleName lmname
                          return (Just (ts, Nothing))
         _ | inSameUnit && notInAcc -> do
             -- Workaround for loading home package modules when working with
@@ -710,7 +670,7 @@ findNotCompiledImport hsc_env acc idecl = do
             -- linkable. The 'UnitId' set from REPL need to exactly match the
             -- 'UnitId' of package, including the hash part.
             --
-            mb_ts <- findTargetSourceMaybe (L (getLoc idecl) name)
+            mb_ts <- findTargetModuleNameMaybe lmname
             return (fmap emptyTargetUnit mb_ts)
           | otherwise -> return Nothing
         where
@@ -720,7 +680,7 @@ findNotCompiledImport hsc_env acc idecl = do
             moduleName mdl `notElem` map ms_mod_name acc
     _              -> do
       let loc = getLoc idecl
-      mb_ts <- findTargetSourceMaybe (L loc name)
+      mb_ts <- findTargetModuleNameMaybe lmname
       case mb_ts of
         Just ts -> return (Just (emptyTargetUnit ts))
         Nothing -> do
@@ -728,38 +688,10 @@ findNotCompiledImport hsc_env acc idecl = do
               err = mkPlainErrMsg dflags loc doc
           throwOneError err
   where
-    name = import_name idecl
-    mname = mkModuleName name
+    mname = mkModuleName (import_name idecl)
+    lmname = L (getLoc idecl) mname
 
--- | Make list of 'ModSummary' for read time dependency analysis.
-mkReadTimeModSummaries :: [TargetUnit] -> Fnk [ModSummary]
-mkReadTimeModSummaries =
-  timeIt "mkReadTimeModSummaries" .
-  fmap catMaybes .
-  mapM mkReadTimeModSummary
-
--- | Make 'ModSummary' for read time dependency analysis.
---
--- The 'ms_textual_imps' field of 'ModSummary' made with this function contains
--- modules reffered by `require' keyword, not the modules referred by Haskell's
--- `import'. Purpose of this function is to resolve dependency of home package
--- modules for macro expansion.
-mkReadTimeModSummary :: TargetUnit -> Fnk (Maybe ModSummary)
-mkReadTimeModSummary (target, mbphase) =
-  -- GHC.getModSummary is not ready at this point, since the module dependency
-  -- graph is not yet created. Making possibly temporary ModSummary from target
-  -- source.
-  case target of
-    HsSource file -> do
-      mb_mdl <- compileToHsModule (target, mbphase)
-      case mb_mdl of
-        Just (mdl, _, _) -> fmap Just (mkModSummary file mdl)
-        Nothing          -> return Nothing
-    FnkSource file mn _form _sp ->
-      Just <$> mkModSummary' file (mkModuleName mn) [] Nothing
-    OtherSource _ -> return Nothing
-
--- | Make 'ModSummary'. 'UnitId' is main unit.
+-- | Make 'ModSummary'.
 mkModSummary :: GhcMonad m => FilePath -> HModule -> m ModSummary
 mkModSummary file mdl =
   let modName = case hsmodName mdl of
@@ -894,7 +826,7 @@ dumpParsedAST dflags ms =
 #endif
 
 compileToHsModule
-  :: TargetUnit -> Fnk (Maybe (HModule, DynFlags, [Located String]))
+  :: TargetUnit -> Fnk (Maybe (HModule, DynFlags, [ModSummary]))
 compileToHsModule (tsrc, mbphase) =
   case tsrc of
     FnkSource _ mn form sp -> Just <$> compileFnkModuleForm sp mn form
@@ -906,41 +838,38 @@ compileToHsModule (tsrc, mbphase) =
 -- potentially modified 'Dynflags' to update 'ModSummary', and required module
 -- names.
 compileFnkModuleForm :: SPState -> String -> [Code]
-                     -> Fnk (HModule, DynFlags, [Located String])
+                     -> Fnk (HModule, DynFlags, [ModSummary])
 compileFnkModuleForm sp modname forms = do
   dflags0 <- getDynFlagsFromSPState sp
   hsc_env <- getSession
-  fnk_env <- getFnkEnv
+  fnk_env0 <- getFnkEnv
+  let tr = traceMake fnk_env0 "compileFnkModuleForm"
 
-  -- Compile the form with file specific DynFlags, to preserve modules imported
-  -- in current context.
-  let withMyDynFlags m =
-        gbracket getDynFlags setDynFlags (\_ -> setDynFlags dflags0 >> m)
-  (mdl, reqs, compiled) <- withMyDynFlags act
+  -- Compile the form with the file specific DynFlags to support file local
+  -- pragmas.
+  (mdl, reqs, compiled) <- withTmpDynFlags dflags0 $ do
+    timeIt ("FinkelModule [" ++ modname ++ "]") $ do
+      -- Reset current FnkEnv. No need to worry about managing DynFlags, this
+      -- action is wrapped by 'withTmpDynFlags' above.
+      resetFnkEnv
+      mdl <- compileFnkModuleForm' forms
+      fnk_env1 <- getFnkEnv
+      let required = envRequiredHomeModules fnk_env1
+          compiled = envCompiledInRequire fnk_env1
+      return (mdl, required, compiled)
+
+  tr ["reqs in" <+> text (modname ++ ":") <+>
+      text (show (map (moduleNameString . ms_mod_name) reqs))
+     ,"compiled in" <+> text (modname ++ ":") <+>
+      ppr (map fst compiled)]
 
   -- Add the compiled home modules to current session, if any. This fill avoid
   -- recompilation of required modules with "-fforce-recomp" option, which is
   -- required more than once.
   let hpt1 he = addHomeModInfoIfMissing (hsc_HPT he) compiled
   setSession (hsc_env {hsc_HPT = hpt1 hsc_env})
-  traceMake fnk_env
-            "compileFnkModuleForm"
-            ["reqs:" <+> text (show (map unLoc reqs))]
 
   return (mdl, dflags0, reverse reqs)
-  where
-    act = timeIt ("FinkelModule [" ++ modname ++ "]") $ do
-
-      -- Reset current FnkEnv. No need to worry about managing interactive
-      -- context and DynFlags, because this action is wrapped by
-      -- 'withTempSession' above.
-      resetFnkEnv
-
-      mdl <- compileFnkModuleForm' forms
-      fnk_env <- getFnkEnv
-      let required = envRequiredModuleNames fnk_env
-          compiled = envCompiledInRequire fnk_env
-      return (mdl, required, compiled)
 
 -- -- | Compile 'HModule' from given list of codes.
 compileFnkModuleForm' :: [Code] -> Fnk HModule
@@ -988,7 +917,8 @@ resetFnkEnv :: Fnk ()
 resetFnkEnv =
   modifyFnkEnv (\fnkc_env ->
                    fnkc_env { envMacros = envDefaultMacros fnkc_env
-                            , envRequiredModuleNames = [] })
+                            , envRequiredHomeModules = []
+                            , envCompiledInRequire = [] })
 
 compileHsFile :: FilePath -> Maybe Phase -> Fnk (HModule, DynFlags, [a])
 compileHsFile source mbphase = do
@@ -1044,35 +974,15 @@ setDumpPrefix path = do
       dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
   setDynFlags dflags1
 
--- | Modify the order of 'TargetUnit' by referencing the order of given
--- 'ModSummary'.
-sortTargets :: [ModSummary] -- ^ Referenced list of 'ModSummary'.
-            -> [TargetUnit] -- ^ List of 'TargetUnit' to reorder.
-            -> [TargetUnit] -- ^ Reordered result.
-sortTargets summaries targets = foldr f [] summaries
-  where
-    f summary acc =
-      let mloc = ms_location summary
-          mb_path = ml_hs_file mloc
-          byPath p a = targetSourcePath (fst a) == p
-      in  case mb_path of
-            Nothing   -> error ("sortTargets: no target " ++ show mloc)
-            Just path ->
-              case find (byPath path) targets of
-                Nothing -> error ("sortTargets: no target " ++ path)
-                Just tu -> tu:acc
-
--- | Label and wrap the given action with 'withTiming'.
-timeIt :: String -> Fnk a -> Fnk a
-#if MIN_VERSION_ghc(8,10,0)
-timeIt label = withTimingD (text label) (const ())
-#else
-timeIt label = withTiming getDynFlags (text label) (const ())
-#endif
-
 -- | Get module name from import declaration.
 import_name :: HImportDecl -> String
 import_name = moduleNameString . unLoc . ideclName . unLoc
+
+-- | Run given action with temporary 'DynFlags'.
+withTmpDynFlags :: GhcMonad m => DynFlags -> m a -> m a
+withTmpDynFlags dflags act =
+  gbracket getDynFlags setDynFlags (\_ -> setDynFlags dflags >> act)
+{-# INLINE withTmpDynFlags #-}
 
 -- [guessOutputFile]
 --
@@ -1115,26 +1025,6 @@ guessOutputFile !mod_graph = modifySession $ \env ->
          Just _  -> env
          Nothing -> env { hsc_dflags = dflags { outputFile = name_exe } }
 
--- | GHC version compatibility helper function for creating
--- 'ModuleGraph' from list of 'ModSummary's.
-mkModuleGraph' :: [ModSummary] -> ModuleGraph
-#if MIN_VERSION_ghc(8,4,0)
-mkModuleGraph' = mkModuleGraph
-#else
-mkModuleGraph' = id
-#endif
-
-preprocess' :: HscEnv -> (FilePath, Maybe Phase) -> IO (DynFlags, FilePath)
-#if MIN_VERSION_ghc(8,8,0)
-preprocess' hsc_env (path, mb_phase) =
-  do et_result <- preprocess hsc_env path Nothing mb_phase
-     case et_result of
-       Left err   -> throwErrors err
-       Right pair -> return pair
-#else
-preprocess' = preprocess
-#endif
-
 -- | Pretty print 'ModLocation'.
 pprMLoc :: ModLocation -> SDoc
 pprMLoc mloc =
@@ -1157,3 +1047,51 @@ traceMake :: FnkEnv -> MsgDoc -> [MsgDoc] -> Fnk ()
 traceMake fnk_env fn_name msgs0 =
   let msgs1 = (hcat [";;; [Language.Finkel.Make.", fn_name, "]:"] : msgs0)
   in  debugWhen fnk_env Fnk_trace_make msgs1
+
+
+-- ------------------------------------------------------------------------
+--
+-- GHC version compatibility functions
+--
+-- ------------------------------------------------------------------------
+
+-- ModuleGraph was an alias of [ModSummary] in ghc < 8.4.
+
+extendMG' :: ModuleGraph -> ModSummary -> ModuleGraph
+mapMG' :: (ModSummary -> ModSummary) -> ModuleGraph -> ModuleGraph
+mgElemModule' :: ModuleGraph -> Module -> Bool
+mkModuleGraph' :: [ModSummary] -> ModuleGraph
+
+#if MIN_VERSION_ghc(8,4,0)
+extendMG' = extendMG
+mapMG' = mapMG
+mgElemModule' = mgElemModule
+mkModuleGraph' = mkModuleGraph
+#else
+extendMG' = flip (:)
+mapMG' = map
+mgElemModule' mg mdl = go mg
+  where
+    go []       = False
+    go (ms:mss) = if ms_mod ms == mdl then True else go mss
+mkModuleGraph' = id
+#endif
+
+-- | Label and wrap the given action with 'withTiming'.
+timeIt :: String -> Fnk a -> Fnk a
+#if MIN_VERSION_ghc(8,10,0)
+timeIt label = withTimingD (text label) (const ())
+#else
+timeIt label = withTiming getDynFlags (text label) (const ())
+#endif
+
+preprocess' :: HscEnv -> (FilePath, Maybe Phase) -> IO (DynFlags, FilePath)
+#if MIN_VERSION_ghc(8,8,0)
+preprocess' hsc_env (path, mb_phase) =
+  do et_result <- preprocess hsc_env path Nothing mb_phase
+     case et_result of
+       Left err   -> throwErrors err
+       Right pair -> return pair
+#else
+preprocess' = preprocess
+#endif

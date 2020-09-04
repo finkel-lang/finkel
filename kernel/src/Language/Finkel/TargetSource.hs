@@ -6,6 +6,8 @@ module Language.Finkel.TargetSource
   , isOtherSource
 
   -- * Finder functions
+  , findTargetModuleName
+  , findTargetModuleNameMaybe
   , findTargetSource
   , findTargetSourceMaybe
   , findFileInImportPaths
@@ -35,7 +37,8 @@ import DynFlags               (DynFlags (..), HasDynFlags (..))
 import ErrUtils               (mkErrMsg)
 import Exception              (gtry)
 import HscTypes               (throwOneError)
-import Module                 (mkModuleName, moduleNameSlashes)
+import Module                 (ModuleName, mkModuleName, moduleNameSlashes,
+                               moduleNameString)
 import Outputable             (Outputable (..), neverQualify, sep, text)
 import SrcLoc                 (GenLocated (..), Located)
 import StringBuffer           (hGetStringBuffer)
@@ -157,6 +160,14 @@ findFileInImportPaths dirs modName = do
                  then dirs
                  else dirs ++ ["."]
   search Nothing dirs'
+
+findTargetModuleName :: Located ModuleName -> Fnk TargetSource
+findTargetModuleName (L l mname) =
+  findTargetSource (L l (moduleNameString mname))
+
+findTargetModuleNameMaybe :: Located ModuleName -> Fnk (Maybe TargetSource)
+findTargetModuleNameMaybe (L l mname) =
+  findTargetSourceMaybe (L l (moduleNameString mname))
 
 -- | Find 'TargetSource' from command line argument. This function throws
 -- 'FinkelException' when the target source was not found.

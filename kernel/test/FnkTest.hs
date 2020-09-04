@@ -10,8 +10,9 @@ import           Data.Maybe                   (fromMaybe, isNothing)
 import           BasicTypes                   (SourceText (..))
 import           Exception                    (gbracket)
 import           FastString                   (fsLit)
-import           HscTypes                     (SourceError)
-import           SrcLoc                       (GenLocated (..), unLoc)
+import           HscTypes                     (SourceError, ms_mod_name)
+import           Module                       (moduleNameString)
+import           SrcLoc                       (GenLocated (..))
 import           StringBuffer                 (stringToStringBuffer)
 
 -- hspec
@@ -218,7 +219,8 @@ envTest = do
    it "should set verbosity to 1" $
      envVerbosity emptyFnkEnv `shouldBe` 1
    it "should not have required module names" $
-     map unLoc (envRequiredModuleNames emptyFnkEnv) `shouldBe` []
+     map (moduleNameString . ms_mod_name) (envRequiredHomeModules emptyFnkEnv)
+     `shouldBe` []
 
 emptyForm :: Code
 emptyForm =
