@@ -60,14 +60,14 @@
    (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
                                 parseName setContext showModule))
    (Linker (initDynLinker showLinkerState unload))
-   (Module ((InstalledUnitId ..) ModuleName componentIdToInstalledUnitId
-            mainUnitId mkModuleNameFS moduleNameString toInstalledUnitId))
+   (Module ((InstalledUnitId ..) (Module ..) ModuleName
+            componentIdToInstalledUnitId mainUnitId mkModuleName mkModuleNameFS
+            moduleNameString toInstalledUnitId))
    (Name (getName nameIsFromExternalPackage nameModule nameOccName nameSrcSpan
                   pprInfixName))
    (NameSet (elemNameSet mkNameSet))
    (Outputable (SDoc $$ <+> <> empty dcolon hsep nest ppr sep
                      showPpr showSDoc showSDocForUser text vcat))
-   (Module ((Module ..) mkModuleName))
    (Packages ((PackageName ..) lookupPackageName))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
    (SrcLoc (getLoc isGoodSrcSpan mkGeneralLocated noLoc unLoc))
@@ -197,16 +197,17 @@
   (where (gbracket acquire cleanup work)
     (= acquire
       (do (<- dflags getDynFlags)
-          (<- fkc-env getFnkEnv)
-          (return (, dflags fkc-env))))
-    (= cleanup (, dflags fkc-env)
+          (<- fnk-env getFnkEnv)
+          (return (, dflags fnk-env))))
+    (= cleanup (, dflags fnk-env)
       (do (setDynFlags dflags)
-          (putFnkEnv fkc-env)))
-    (= work (, dflags fkc-env)
-      (do (putFnkEnv (fkc-env {envQualifyQuotePrimitives False}))
-          (let ((= force-recomp (gopt Opt-ForceRecomp dflags))
-                (= onTheREPL (mkGeneralLocated "on the REPL"))))
-          (make [(, (onTheREPL str) Nothing)] True force-recomp Nothing)
+          (putFnkEnv fnk-env)))
+    (= work (, dflags fnk-env)
+      (do (putFnkEnv (fnk-env {envQualifyQuotePrimitives False}))
+          (let ((= onTheREPL (mkGeneralLocated "on the REPL"))
+                (= no-link True)
+                (= force-recomp (gopt Opt-ForceRecomp dflags))))
+          (make [(, (onTheREPL str) Nothing)] no-link force-recomp Nothing)
           (return '(:begin))))))
 
 (defn (:: compile-and-import (-> FilePath (Fnk Code)))
@@ -214,9 +215,9 @@
   ;; As done in ghci, adding `IIModule' if the module is interpreted as
   ;; bytecode, `IIDecl' otherwise. Safe Haskell setting in DynFlags is
   ;; ignored at the moment.
-  (do (<- finkel-env getFnkEnv)
+  (do (<- fnk-env getFnkEnv)
       (<- _ (compile-module path))
-      (let ((= mods (envContextModules finkel-env))
+      (let ((= mods (envContextModules fnk-env))
             (= mname0 (asModuleName path))
             (= mname1 (| ((null mname0) "Main")
                          (otherwise     mname0)))
@@ -347,6 +348,23 @@ object code."
 (defn (:: clear-all-targets (=> (GhcMonad m) (m ())))
   (do (setTargets [])
       (void (GhcMake.load LoadAllTargets))))
+
+;;; From `GhcMake.discardIC'.
+(defn (:: discard-ic (-> HscEnv HscEnv))
+  [hsc-env]
+  (let ((= empty-ic (emptyInteractiveContext dflags))
+        (= new-ic-monad (keep-external-name ic_monad))
+        (= old-ic (hsc_IC hsc-env))
+        (= dflags (hsc_dflags hsc-env))
+        (= keep-external-name ic-name
+          (where (| ((nameIsFromExternalPackage this-pkg old-name)
+                     old-name)
+                    (otherwise
+                     (ic-name empty-ic)))
+            (= this-pkg (thisPackage dflags))
+            (= old-name (ic-name old-ic)))))
+    (hsc-env {hsc_IC (empty-ic {ic_monad new-ic-monad})})))
+
 
 
 ;;; Functions for show command
@@ -706,21 +724,7 @@ object code."
   "Load a module source code file. Handles absolute paths and relative
 paths from import directories."
   [forms]
-  (let ((= discardIC hsc-env
-          ;; From `GhcMake.discardIC'.
-          (let ((= empty-ic (emptyInteractiveContext dflags))
-                (= new-ic-monad (keep-external-name ic_monad))
-                (= old-ic (hsc_IC hsc-env))
-                (= dflags (hsc_dflags hsc-env))
-                (= keep-external-name ic-name
-                  (where (| (external-and-old old-name)
-                            (otherwise        (ic-name empty-ic)))
-                    (= external-and-old
-                      (nameIsFromExternalPackage this-pkg old-name))
-                    (= this-pkg (thisPackage dflags))
-                    (= old-name (ic-name old-ic)))))
-            (hsc-env {hsc_IC (empty-ic {ic_monad new-ic-monad})})))
-        (= clear-all
+  (let ((= clear-all
           ;; Cleare various states: finder cache, targets, interactive
           ;; context ... etc.
           (do (<- graph0 getModuleGraph)
@@ -731,7 +735,7 @@ paths from import directories."
                     (= uncache (. (uncacheModule hsc-env) ms_mod_name))))
               (liftIO (do (mapM_ uncache graph1)
                           (flushFinderCaches hsc-env)))
-              (setSession (discardIC hsc-env))))
+              (setSession (discard-ic hsc-env))))
         (= make-target path
           (do (<- hsc-target (fmap hscTarget getDynFlags))
               (let ((= allow-obj (not (== hsc-target HscInterpreted)))
@@ -877,7 +881,6 @@ paths from import directories."
         "browse contents of MODULE")
      (c "cd" ["DIR"] cd-cmd
         "change working directory to DIR")
-
      (c "expand" ["FORM"] expand-cmd
         "show expanded result of FORM")
      (c "expand!" ["FORM"] expand-full-cmd
