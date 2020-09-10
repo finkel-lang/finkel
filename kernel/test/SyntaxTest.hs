@@ -124,7 +124,7 @@ mkTest' path = do
       writeIORef hsORef stdout
       ecode `shouldBe` ExitSuccess
 
-    it "should have same output from fnkc and ghc executables" $ do
+    it "should have same output from Finkel and Haskell executable" $ do
       fnko <- readIORef fnkORef
       hso <- readIORef hsORef
       fnko `shouldBe` hso
