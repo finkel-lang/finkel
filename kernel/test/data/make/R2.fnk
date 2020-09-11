@@ -1,0 +1,6 @@
+(module R2)
+
+(import R1)
+
+(:: foo String)
+(= foo foo-function)

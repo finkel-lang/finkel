@@ -1,0 +1,11 @@
+;;;; -*- mode: finkel -*-
+
+(module R1)
+
+(import Language.Finkel)
+
+(:: foo-function String)
+(= foo-function "foo: before")
+
+(:: foo-macro Macro)
+(= foo-macro (Macro (const (return (toCode foo-function)))))

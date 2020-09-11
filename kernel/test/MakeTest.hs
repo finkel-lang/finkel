@@ -1,43 +1,54 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP       #-}
+{-# LANGUAGE MagicHash #-}
 -- | Tests for 'make'.
 module MakeTest
   ( makeTests
   ) where
 
 -- base
-import Control.Monad                (when)
+import Control.Exception            (SomeException (..), catch)
+import Control.Monad                (unless, when)
 import Control.Monad.IO.Class       (MonadIO (..))
 import Data.List                    (isPrefixOf, tails)
-import System.FilePath              ((</>))
+import GHC.Exts                     (unsafeCoerce#)
+import System.FilePath              ((<.>), (</>))
 
 -- directory
-import System.Directory             (getDirectoryContents)
+import System.Directory             (copyFile, createDirectoryIfMissing,
+                                     doesFileExist, getDirectoryContents,
+                                     getTemporaryDirectory,
+                                     removeDirectoryRecursive)
 
 -- filepath
 import System.FilePath              (takeExtension)
 
 -- ghc
-import DynFlags                     (DynFlags, HasDynFlags (..), Way (..),
-                                     interpWays)
+import DynFlags                     (DynFlags (..), HasDynFlags (..), Way (..),
+                                     dynamicGhc, interpWays,
+                                     parseDynamicFlagsCmdLine)
 import FastString                   (fsLit)
+import GHC                          (setTargets)
+import GhcMonad                     (GhcMonad (..))
+import HscTypes                     (Target (..), TargetId (..))
+import Linker                       (unload)
 import Module                       (componentIdToInstalledUnitId)
 import Outputable                   (Outputable (..), showPpr, showSDoc)
 import Packages                     (InstalledPackageInfo (..), PackageConfig,
                                      PackageName (..), lookupInstalledPackage,
                                      lookupPackageName, pprPackageConfig)
-
-#if !MIN_VERSION_ghc(8,10,0)
-import GhcMonad                     (GhcMonad (..))
-import Linker                       (unload)
-#endif
+import SrcLoc                       (noLoc)
 
 -- hspec
 import Test.Hspec
 
 -- finkel-kernel
+import Language.Finkel.Eval
 import Language.Finkel.Fnk
+import Language.Finkel.Form
 import Language.Finkel.Lexer
+import Language.Finkel.Make
 import Language.Finkel.SpecialForms
+import Language.Finkel.Syntax
 import Language.Finkel.TargetSource
 
 -- Internal
@@ -76,15 +87,31 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildObj ["-O2"] ["main8.fnk"]
 
   let buildObj' flags inputs =
-        before_ (doUnload >> removeArtifacts odir) (buildObj flags inputs)
+        before_  prepare_obj (buildObj flags inputs)
+      buildObjAndExist' flags inputs =
+        beforeAll_ prepare_obj
+                   (let outputs = map (<.> "o") inputs
+                    in  buildObjAndExist flags inputs outputs)
+      prepare_obj = doUnload >> removeArtifacts odir
 
   -- Compile object codes with and without optimization option
-  buildObj' [] ["P1", "P2"]
-  buildObj' ["-O1"] ["P1", "P2"]
+  buildObjAndExist' [] ["P1", "P2"]
+  buildObjAndExist' ["-O1"] ["P1", "P2"]
+
+  -- Recompile P1 and P2 without deleting previous results
+  --
+  -- Seems like, the use of global persistent linker state in ghc < 8.10 have
+  -- problem when recompiling the same modules after "-O1" option, unloading the
+  -- object files.
+  before_ doUnload (buildObj [] ["P1","P2"])
 
   -- Compile object code with and without optimization, module reorderd
-  buildObj' [] ["P2", "P1"]
-  buildObj' ["-O1"] ["P2", "P1"]
+  buildObjAndExist' [] ["P2", "P1"]
+  buildObjAndExist' ["-O1"] ["P2", "P1"]
+
+  -- Compile object codes, P3 requires but does not import P1.
+  buildObjAndExist' [] ["P1", "P3"]
+  buildObjAndExist' ["-O1"] ["P1", "P3"]
 
 #if !defined(mingw32_HOST_OS)
   -- Compile object codes with dynamic-too and optimization option
@@ -105,6 +132,14 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   -- Errors
   buildFilesNG [] ["E01"]
 
+  -- Reload tests
+  buildReload "R2.fnk"
+              "foo"
+              [("R1.fnk.1", "R1.fnk"), ("R2.fnk", "R2.fnk")]
+              [("R1.fnk.2", "R1.fnk")]
+              "foo: before"
+              "foo: after"
+
 -- Action to unload package libraries
 --
 -- Until ghc 8.10, persistent linker state is stored in a global variable.  The
@@ -123,8 +158,8 @@ doUnload = return ()
 doUnload = runFnk (getSession >>= liftIO . flip unload []) defaultFnkEnv
 #endif
 
--- Action to decide whether profiling objects for the "finkel-kernel" package is
--- available at runtime.
+-- Action to decide whether profiling objects for the "finkel-kernel" package
+-- are available at runtime.
 hasProfilingObj :: IO Bool
 hasProfilingObj = runFnk (hasProfilingObj' pkg_name) defaultFnkEnv
   where
@@ -210,6 +245,16 @@ buildC file = buildFiles ["-no-link"] [file]
 buildObj :: [String] -> [FilePath] -> Spec
 buildObj = buildFiles
 
+buildObjAndExist :: [String] -> [FilePath] -> [String] -> Spec
+buildObjAndExist args inputs outputs =
+  describe (labelWithOptionsAndFiles args inputs) $
+    do it "should compile successfully" (buildWork args inputs)
+       mapM_ (\f ->
+                do let ofile = odir </> f
+                   it ("should write " ++ ofile) $
+                     doesFileExist ofile `shouldReturn` True)
+             outputs
+
 buildFiles :: [String] -> [FilePath] -> Spec
 buildFiles pre inputs =
   describe (labelWithOptionsAndFiles pre inputs) $
@@ -246,3 +291,85 @@ buildWork pre inputs = do_work
 
 odir :: FilePath
 odir = "test" </> "data" </> "make"
+
+
+-- ------------------------------------------------------------------------
+--
+-- For reload test
+--
+-- ------------------------------------------------------------------------
+
+buildReload
+  :: String -- ^ Target module name
+  -> String -- ^ Function to return 'String'
+  -> [(String, String)] -- ^ List of (input file, output file), before.
+  -> [(String, String)] -- ^ List of (input file, output file), after.
+  -> String -- ^ Expected value of before.
+  -> String -- ^ Expected value for after.
+  -> Spec
+buildReload the_file fname files1 files2 before_str after_str =
+  beforeAll (mk_tmp_dir "reload") (afterAll rmdir work)
+  where
+    work = do
+      describe (unwords ["Reload test for", the_file , "with", fname]) $ do
+        it "should get expected values (bytecode)" $ do_work False
+        it "should get expected values (objcode)" $ do_work True
+
+    do_work use_obj tmpdir = do
+       if use_obj && not dynamicGhc
+          -- XXX: Reloading with non-dynamic object code not yet working. It
+          -- does work when the test executable was compiled with "-dynamic"
+          -- option.
+          then pendingWith "non-dynamic object code not yet supported"
+          else do_work' use_obj tmpdir
+
+    do_work' use_obj tmpdir = do
+       (ret1, ret2) <- runFnk (fnk_work use_obj tmpdir) defaultFnkEnv
+       (ret1, ret2) `shouldBe` (before_str, after_str)
+
+    fnk_work use_obj tmpdir = do
+      setup_reload_env use_obj tmpdir
+      copy_files tmpdir files1
+      str1 <- make_and_eval False
+      reset_env
+      copy_files tmpdir files2
+      str2 <- make_and_eval True
+      return (str1, str2)
+
+    setup_reload_env :: Bool -> FilePath -> Fnk ()
+    setup_reload_env use_obj tmpdir = do
+      let args = "-v0" : ("-i" ++ tmpdir) : if use_obj
+                                              then ["-fobject-code"]
+                                              else []
+          tfile = TargetFile the_file Nothing
+      initSessionForTest
+      prepareInterpreter
+      dflags0 <- getDynFlags
+      (dflags1, _, _) <- parseDynamicFlagsCmdLine dflags0 (map noLoc args)
+      setDynFlags dflags1
+      setTargets [Target tfile use_obj Nothing]
+
+    make_and_eval :: Bool -> Fnk String
+    make_and_eval is_reload = do
+      make [(noLoc the_file, Nothing)] False False Nothing
+      unless is_reload $ setContextModules [asModuleName the_file]
+      hexpr <- buildHsSyn parseExpr [qSymbol fname]
+      unsafeCoerce# <$> evalExpr hexpr
+
+    copy_files tmpdir = liftIO . mapM_ (copy tmpdir)
+    copy tmp (i, o) = copyFile (odir </> i) (tmp </> o)
+
+    reset_env = do
+      hsc_env <- getSession
+      liftIO (unload hsc_env [])
+
+    rmdir my_tmpdir =
+      removeDirectoryRecursive my_tmpdir
+
+    mk_tmp_dir name =
+      do tmp <- getTemporaryDirectory
+         let my_tmpdir = tmp </> name
+         catch (removeDirectoryRecursive my_tmpdir)
+               (\(SomeException _e) -> return ())
+         createDirectoryIfMissing True my_tmpdir
+         return my_tmpdir
