@@ -114,6 +114,15 @@
   [otherwise
    (:begin)])
 
+(cond-expand
+  [(<= 810 :ghc)
+   (:begin
+     (import GHCi (iservCmd))
+     (import GHCi.Message ((Message ..))))]
+  [otherwise
+   (:begin)])
+
+
 
 ;;; Types
 
@@ -154,6 +163,22 @@
      (showLinkerState (hsc-dynLinker hsc-env) (hsc-dflags hsc-env))]
     [otherwise
      (showLinkerState (hsc-dflags hsc-env))]))
+
+(defn (:: rts-revert-cafs (Fnk ()))
+  (cond-expand
+    [(<= 810 :ghc)
+     (do (<- hsc-env getSession)
+         (liftIO (iservCmd hsc-env RtsRevertCAFs)))]
+    [(== 808 :ghc)
+     (liftIO (rts-revert-cafs-ffi))]
+    [otherwise
+     (return ())]))
+
+(cond-expand
+  [(== 808 :ghc)
+   (foreign import ccall "revertCAFs" (:: rts-revert-cafs-ffi (IO ())))]
+  [otherwise
+   (:begin)])
 
 (defn (:: mk-ii (-> ModuleName InteractiveImport))
   (. IIDecl simpleImportDecl))
@@ -208,6 +233,10 @@
                 (= no-link True)
                 (= force-recomp (gopt Opt-ForceRecomp dflags))))
           (make [(, (onTheREPL str) Nothing)] no-link force-recomp Nothing)
+
+          ;; As done in `GHCi.UI', reverting CAFs on load.
+          rts-revert-cafs
+
           (return '(:begin))))))
 
 (defn (:: compile-and-import (-> FilePath (Fnk Code)))
