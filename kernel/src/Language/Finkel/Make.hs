@@ -350,7 +350,7 @@ make2 acc i k (target@(tsr,_mbp):summarised) pendings = do
                            ["imports:" <+>
                              if null import_names
                                 then text "none"
-                                else vcat (map text import_names)]
+                                else vcat (map ppr import_names)]
 
                  -- Test whether imported modules are in pendings. If found, skip
                  -- the compilation and add this module to the list of pending
@@ -432,12 +432,12 @@ make2 acc i k (target@(tsr,_mbp):summarised) pendings = do
               summary' <- makeOne i k mb_sp summary reqs
               make2 (summary':acc) (i-1) k summarised pendings
 
-tsmn :: (TargetSource, a) -> String
+tsmn :: (TargetSource, a) -> ModuleName
 tsmn (ts, _) =
   case ts of
     FnkSource _ mn _ _ -> mn
-    HsSource path      -> asModuleName path
-    _                  -> "module-name-unknown"
+    HsSource path      -> mkModuleName (asModuleName path)
+    _                  -> mkModuleName "module-name-unknown"
 
 -- | Check whether recompilation is required, and compile the 'HsModule' when
 -- the codes or dependency modules were updated.
@@ -688,7 +688,7 @@ findNotCompiledImport hsc_env acc idecl = do
               err = mkPlainErrMsg dflags loc doc
           throwOneError err
   where
-    mname = mkModuleName (import_name idecl)
+    mname = import_name idecl
     lmname = L (getLoc idecl) mname
 
 -- | Make 'ModSummary'.
@@ -837,18 +837,19 @@ compileToHsModule (tsrc, mbphase) =
 -- extensions, and macros in 'FnkEnv'. Returns tuple of compiled module,
 -- potentially modified 'Dynflags' to update 'ModSummary', and required module
 -- names.
-compileFnkModuleForm :: SPState -> String -> [Code]
+compileFnkModuleForm :: SPState -> ModuleName -> [Code]
                      -> Fnk (HModule, DynFlags, [ModSummary])
 compileFnkModuleForm sp modname forms = do
   dflags0 <- getDynFlagsFromSPState sp
   hsc_env <- getSession
   fnk_env0 <- getFnkEnv
   let tr = traceMake fnk_env0 "compileFnkModuleForm"
+      mname_str = moduleNameString modname
 
   -- Compile the form with the file specific DynFlags to support file local
   -- pragmas.
   (mdl, reqs, compiled) <- withTmpDynFlags dflags0 $ do
-    timeIt ("FinkelModule [" ++ modname ++ "]") $ do
+    timeIt ("FinkelModule [" ++ mname_str ++ "]") $ do
       -- Reset current FnkEnv. No need to worry about managing DynFlags, this
       -- action is wrapped by 'withTmpDynFlags' above.
       resetFnkEnv
@@ -858,9 +859,9 @@ compileFnkModuleForm sp modname forms = do
           compiled = envCompiledInRequire fnk_env1
       return (mdl, required, compiled)
 
-  tr ["reqs in" <+> text (modname ++ ":") <+>
+  tr ["reqs in" <+> text (mname_str ++ ":") <+>
       text (show (map (moduleNameString . ms_mod_name) reqs))
-     ,"compiled in" <+> text (modname ++ ":") <+>
+     ,"compiled in" <+> text (mname_str ++ ":") <+>
       ppr (map fst compiled)]
 
   -- Add the compiled home modules to current session, if any. This fill avoid
@@ -975,8 +976,8 @@ setDumpPrefix path = do
   setDynFlags dflags1
 
 -- | Get module name from import declaration.
-import_name :: HImportDecl -> String
-import_name = moduleNameString . unLoc . ideclName . unLoc
+import_name :: HImportDecl -> ModuleName
+import_name = unLoc . ideclName . unLoc
 
 -- | Run given action with temporary 'DynFlags'.
 withTmpDynFlags :: GhcMonad m => DynFlags -> m a -> m a

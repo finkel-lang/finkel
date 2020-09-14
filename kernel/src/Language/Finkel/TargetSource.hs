@@ -59,11 +59,11 @@ import Language.Finkel.Reader
 
 -- | Data type to represent target source.
 data TargetSource
-  = FnkSource FilePath String [Code] SPState
+  = FnkSource FilePath ModuleName [Code] SPState
   -- ^ Finkel source.
   --
-  -- Holds file path of the source code, original string input, parsed form
-  -- data, and 'SPState' including required module names.
+  -- Holds file path of the source code, module name, parsed form data, and
+  -- 'SPState' including required module names.
   | HsSource FilePath
   -- ^ Haskell source with file path of the source code.
   | OtherSource FilePath
@@ -71,14 +71,15 @@ data TargetSource
 
 instance Show TargetSource where
   show s = case s of
-    FnkSource path mdl _ _sp -> unwords ["FnkSource", show path, mdl]
+    FnkSource path mdl _ _sp ->
+      unwords ["FnkSource", show path, moduleNameString mdl]
     HsSource path            -> "HsSource " ++ show path
     OtherSource path         -> "OtherSource " ++ show path
 
 instance Outputable TargetSource where
   ppr s =
     case s of
-      FnkSource path mdl _ _ -> sep [text "FnkSource", text path, text mdl]
+      FnkSource path mdl _ _ -> sep [text "FnkSource", text path, ppr mdl]
       HsSource path          -> sep [text "HsSource", text path]
       OtherSource path       -> sep [text "OtherSource", text path]
 
@@ -179,7 +180,7 @@ findTargetSource (L l modNameOrFilePath)= do
         | isFnkFile path =
           do contents <- liftIO (hGetStringBuffer path)
              (forms, sp) <- parseSexprs (Just path) contents
-             let modName = asModuleName modNameOrFilePath
+             let modName = mkModuleName (asModuleName modNameOrFilePath)
              return (FnkSource path modName forms sp)
         | isHsFile path = return (HsSource path)
         | otherwise = return (OtherSource path)

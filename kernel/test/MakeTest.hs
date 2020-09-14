@@ -31,7 +31,7 @@ import GHC                          (setTargets)
 import GhcMonad                     (GhcMonad (..))
 import HscTypes                     (Target (..), TargetId (..))
 import Linker                       (unload)
-import Module                       (componentIdToInstalledUnitId)
+import Module                       (componentIdToInstalledUnitId, mkModuleName)
 import Outputable                   (Outputable (..), showPpr, showSDoc)
 import Packages                     (InstalledPackageInfo (..), PackageConfig,
                                      PackageName (..), lookupInstalledPackage,
@@ -190,7 +190,10 @@ lookupProfObjInDirectories =
   in  go
 
 fnksrc1, hssrc1, othersrc1 :: TargetSource
-fnksrc1 = FnkSource "path1" "Foo" [] (initialSPState (fsLit "dummy") 1 1)
+fnksrc1 = FnkSource "path1"
+                    (mkModuleName "Foo")
+                    []
+                    (initialSPState (fsLit "dummy") 1 1)
 hssrc1 = HsSource "path2"
 othersrc1 = OtherSource "path3"
 
