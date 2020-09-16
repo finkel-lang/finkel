@@ -12,7 +12,7 @@ module Language.Finkel.Main
 -- base
 import           Control.Monad                (unless)
 import           Control.Monad.IO.Class       (MonadIO (..))
-import           Data.List                    (isPrefixOf, partition)
+import           Data.List                    (partition)
 import           Data.Version                 (showVersion)
 import           System.Console.GetOpt        (ArgDescr (..), ArgOrder (..),
                                                OptDescr (..), getOpt, usageInfo)
@@ -243,9 +243,6 @@ defaultFinkelOption = FinkelOption
   , finkelHsOutDir = Nothing
   , finkelEnv = defaultFnkEnv
   }
-
-partitionFinkelOptions :: [String] -> ([String], [String])
-partitionFinkelOptions = partition ("--fnk-" `isPrefixOf`)
 
 parseFinkelOption :: [String] -> IO FinkelOption
 parseFinkelOption args =

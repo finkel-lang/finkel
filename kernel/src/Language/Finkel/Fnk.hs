@@ -37,6 +37,7 @@ module Language.Finkel.Fnk
   , dumpDynFlags
   , getFnkDebug
   , fnkDebugFlagOptions
+  , partitionFinkelOptions
 
   -- * Macro related functions
   , emptyEnvMacros
@@ -70,6 +71,7 @@ import           Data.Bits              (setBit, testBit, zeroBits)
 import           Data.Char              (toLower)
 import           Data.IORef             (IORef, atomicModifyIORef', newIORef,
                                          readIORef, writeIORef)
+import           Data.List              (isPrefixOf, partition)
 import           Data.Word              (Word8)
 import           System.Console.GetOpt  (ArgDescr (..), OptDescr (..))
 import           System.Environment     (lookupEnv)
@@ -493,6 +495,14 @@ fopt_set :: FnkDebugFlag -> FnkEnv -> FnkEnv
 fopt_set flag fnk_env =
   fnk_env {envDumpFlags = setBit (envDumpFlags fnk_env) (fromEnum flag)}
 {-# INLINE fopt_set #-}
+
+-- | Separate Finkel debug options from others.
+partitionFinkelOptions
+   :: [String]
+   -- ^ Flag inputs, perhaps given as command line arguments.
+   -> ([String], [String])
+   -- ^ Pair of @(finkel_flags, other_flags)@.
+partitionFinkelOptions = partition ("--fnk-" `isPrefixOf`)
 
 -- | Command line option handlers to update 'FnkDumpFlag' in 'FnkEnv'.
 fnkDebugFlagOptions :: [OptDescr (FnkEnv -> FnkEnv)]

@@ -22,6 +22,7 @@
    (Data.List
     (find intercalate intersperse isPrefixOf partition sortBy))
    (Data.Maybe (catMaybes))
+   (System.Console.GetOpt ((ArgOrder ..) getOpt))
    (Text.Printf (printf))
    (Text.Read (readMaybe))
 
@@ -70,7 +71,7 @@
                      showPpr showSDoc showSDocForUser text vcat))
    (Packages ((PackageName ..) lookupPackageName))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
-   (SrcLoc (getLoc isGoodSrcSpan mkGeneralLocated noLoc unLoc))
+   (SrcLoc (Located getLoc isGoodSrcSpan mkGeneralLocated unLoc))
    (TyCoRep ((TyThing ..)))
    (Util (looksLikeModuleName))
 
@@ -88,8 +89,8 @@
    (Language.Finkel.Form (mkLocatedForm))
    (Language.Finkel.Make (buildHsSyn make))
    (Language.Finkel.Fnk
-    ((FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv setDynFlags
-     setFnkVerbosity))
+    ((FnkEnv ..) fnkDebugFlagOptions getFnkEnv macroNames modifyFnkEnv
+     partitionFinkelOptions putFnkEnv setDynFlags setFnkVerbosity))
    (Language.Finkel.Syntax (parseExpr parseType))
    (Language.Finkel.TargetSource (asModuleName))
 
@@ -217,6 +218,9 @@
         (= msg (concat [label ": invalid form `" (show form) "'"])))
     (finkelSrcError form msg)))
 
+(defn (:: onTheREPL (-> a (Located a)))
+  (mkGeneralLocated "on the REPL"))
+
 (defn (:: compile-module (-> String (Fnk Code)))
   [str]
   (where (gbracket acquire cleanup work)
@@ -229,8 +233,7 @@
           (putFnkEnv fnk-env)))
     (= work (, dflags fnk-env)
       (do (putFnkEnv (fnk-env {envQualifyQuotePrimitives False}))
-          (let ((= onTheREPL (mkGeneralLocated "on the REPL"))
-                (= no-link True)
+          (let ((= no-link True)
                 (= force-recomp (gopt Opt-ForceRecomp dflags))))
           (make [(, (onTheREPL str) Nothing)] no-link force-recomp Nothing)
 
@@ -818,14 +821,21 @@ paths from import directories."
     (: _ _)
     ;; Always using `setSessionDynFlags' for `set' REPL command to support
     ;; `-package' flag.
-    (do (<- dflags0 getSessionDynFlags)
-        (let ((= flags (foldr (\ form acc
-                                (case (mb-symbol-name form)
-                                  (Just name) (: (noLoc name) acc)
-                                  _ acc))
-                              [] forms))))
+    (do (let ((= all-flags (foldr (\ form acc
+                                    (case (mb-symbol-name form)
+                                      (Just name) (: name acc)
+                                      _ acc))
+                                  [] forms))
+              (= (, fnk-flags hs-flags) (partitionFinkelOptions all-flags))
+              (= update-fnk-opts opts fnk-env
+                (foldl (flip id) fnk-env opts))))
+        (when (not (null fnk-flags))
+          (case (getOpt Permute fnkDebugFlagOptions fnk-flags)
+            (, o _ []) (modifyFnkEnv (update-fnk-opts o))
+            (, _ _ es) (liftIO (print es))))
+        (<- dflags0 getSessionDynFlags)
         (<- (, dflags1 leftovers warns)
-          (parseDynamicFlagsCmdLine dflags0 flags))
+          (parseDynamicFlagsCmdLine dflags0 (map onTheREPL hs-flags)))
         (liftIO
          (do (handleFlagWarnings dflags1 warns)
              (unless (null leftovers)

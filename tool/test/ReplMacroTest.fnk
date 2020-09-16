@@ -127,6 +127,8 @@
 
           ;; set
           (ok '(repl-macro set -foo -bar -buzz) "")
+          (ok '(repl-macro set --fnk-verbose=3) "")
+          (ok '(repl-macro set --fnk-verbose=1) "")
           (ng '(repl-macro set)
               "<finkel generated code>: error: set: empty form")
 
