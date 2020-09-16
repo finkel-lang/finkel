@@ -34,7 +34,7 @@
    (System.FilePath (normalise))
 
    ;; ghc
-   (BasicTypes (Fixity (StringLiteral ..) defaultFixity))
+   (BasicTypes (Fixity (StringLiteral ..) (SuccessFlag ..) defaultFixity))
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..) (HscTarget ..)
               (Language ..) (PackageFlag ..) (GeneralFlag ..)
               defaultDynFlags fFlags flagSpecFlag flagSpecName gopt
@@ -50,26 +50,24 @@
          lookupModule modInfoExports setSessionDynFlags setTargets
          workingDirectoryChanged))
    (GhcMake ((LoadHowMuch ..)))
-   (GhcMonad ((GhcMonad ..) getSessionDynFlags modifySession))
-   (HscMain (newHscEnv))
+   (GhcMonad ((GhcMonad ..) getSessionDynFlags withTempSession))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
-              emptyInteractiveContext handleFlagWarnings ms_mod_name pprHPT
-              pprTarget srcErrorMessages tyThingParent_maybe))
+              emptyInteractiveContext handleFlagWarnings
+              ms_mod_name pprHPT pprTarget srcErrorMessages
+              tyThingParent_maybe))
    (IfaceSyn (showToHeader))
    (InstEnv (ClsInst pprInstance))
    (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
                                 parseName setContext showModule))
-   (Linker (initDynLinker showLinkerState unload))
-   (Module ((InstalledUnitId ..) (Module ..) ModuleName
-            componentIdToInstalledUnitId mainUnitId mkModuleName mkModuleNameFS
-            moduleNameString toInstalledUnitId))
+   (Linker (initDynLinker showLinkerState))
+   (Module ((Module ..) ModuleName mkModuleName mkModuleNameFS
+            moduleNameString))
    (Name (getName nameIsFromExternalPackage nameModule nameOccName nameSrcSpan
                   pprInfixName))
    (NameSet (elemNameSet mkNameSet))
    (Outputable (SDoc $$ <+> <> empty dcolon hsep nest ppr sep
                      showPpr showSDoc showSDocForUser text vcat))
-   (Packages ((PackageName ..) lookupPackageName))
    (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
    (SrcLoc (Located getLoc isGoodSrcSpan mkGeneralLocated unLoc))
    (TyCoRep ((TyThing ..)))
@@ -221,7 +219,7 @@
 (defn (:: onTheREPL (-> a (Located a)))
   (mkGeneralLocated "on the REPL"))
 
-(defn (:: compile-module (-> String (Fnk Code)))
+(defn (:: compile-module (-> String (Fnk SuccessFlag)))
   [str]
   (where (gbracket acquire cleanup work)
     (= acquire
@@ -230,37 +228,41 @@
           (return (, dflags fnk-env))))
     (= cleanup (, dflags fnk-env)
       (do (setDynFlags dflags)
-          (putFnkEnv fnk-env)))
+          (modifyFnkEnv (\ e (e {envQualifyQuotePrimitives
+                                 (envQualifyQuotePrimitives fnk-env)})))))
     (= work (, dflags fnk-env)
       (do (putFnkEnv (fnk-env {envQualifyQuotePrimitives False}))
-          (let ((= no-link True)
-                (= force-recomp (gopt Opt-ForceRecomp dflags))))
-          (make [(, (onTheREPL str) Nothing)] no-link force-recomp Nothing)
+          (let ((= force-recomp (gopt Opt-ForceRecomp dflags))))
+          (<- success-flag
+            (make [(, (onTheREPL str) Nothing)] force-recomp Nothing))
 
           ;; As done in `GHCi.UI', reverting CAFs on load.
           rts-revert-cafs
 
-          (return '(:begin))))))
+          (return success-flag)))))
 
-(defn (:: compile-and-import (-> FilePath (Fnk Code)))
+(defn (:: compile-and-import (-> FilePath (Fnk SuccessFlag)))
   [path]
   ;; As done in ghci, adding `IIModule' if the module is interpreted as
   ;; bytecode, `IIDecl' otherwise. Safe Haskell setting in DynFlags is
   ;; ignored at the moment.
   (do (<- fnk-env getFnkEnv)
-      (<- _ (compile-module path))
-      (let ((= mods (envContextModules fnk-env))
-            (= mname0 (asModuleName path))
-            (= mname1 (| ((null mname0) "Main")
-                         (otherwise     mname0)))
-            (= mname2 (mkModuleNameFS (fsLit mname1)))
-            (= imps0 (map mk-ii-str mods))))
-      (<- mdl (getModSummary mname2))
-      (<- is-interp (moduleIsInterpreted (ms-mod mdl)))
-      (let ((= me (| (is-interp (IIModule mname2))
-                     (otherwise (mk-ii mname2))))))
-      (setContext (: me imps0))
-      (return '(:begin))))
+      (<- success-flag (compile-module path))
+      (case success-flag
+        Succeeded (do (let ((= mods (envContextModules fnk-env))
+                            (= mname0 (asModuleName path))
+                            (= mname1 (| ((null mname0) "Main")
+                                         (otherwise mname0)))
+                            (= mname2 (mkModuleNameFS (fsLit mname1)))
+                            (= imps0 (map mk-ii-str mods))))
+                      (<- mdl (getModSummary mname2))
+                      (<- is-interp (moduleIsInterpreted (ms-mod mdl)))
+                      (let ((= me (| (is-interp (IIModule mname2))
+                                     (otherwise (mk-ii mname2))))))
+                      (setContext (: me imps0)))
+        Failed (do (<- mods (fmap envContextModules getFnkEnv))
+                   (setContext (map mk-ii-str mods))))
+      (return success-flag)))
 
 (defn (:: adjust-current-target
         (-> FilePath [InteractiveImport] (Fnk [InteractiveImport])))
@@ -285,10 +287,10 @@ object code."
                          iidecl-to-iimodule))))
       (return (map ii-fn imports))))
 
-(defn (:: env-context-on-exception (-> (Fnk a) (Fnk ())))
+(defn (:: env-context-on-exception (-> (Fnk Code) (Fnk Code)))
   [action]
   (gcatch
-   (void action)
+   action
    (\ e
      (do (let ((= print-se se
                  (do (<- dflags getSessionDynFlags)
@@ -299,7 +301,8 @@ object code."
                                      (srcErrorMessages se))))))))))
          (maybe (liftIO (print e)) print-se (fromException e))
          (<- mods (fmap envContextModules getFnkEnv))
-         (setContext (map mk-ii-str mods))))))
+         (setContext (map mk-ii-str mods))
+         (return '(:begin))))))
 
 (defn (:: browse-module (-> Module ModuleInfo (Fnk Code)))
   "Simplified version of `GHCi.UI.browseModule'."
@@ -396,7 +399,6 @@ object code."
             (= this-pkg (thisPackage dflags))
             (= old-name (ic-name old-ic)))))
     (hsc-env {hsc_IC (empty-ic {ic_monad new-ic-monad})})))
-
 
 
 ;;; Functions for show command
@@ -698,46 +700,6 @@ object code."
     [(HsList [])] (info-name (qSymbol "[]"))
     _ (invalid-form "info" forms)))
 
-(defn (:: in-package-cmd ReplAction)
-  [forms]
-  ;; Entirely reset the hsc_env, then update dflags with thisInstalledUnitId,
-  ;; and then set up the context modules. The update happens only when the given
-  ;; package name exist. Using the exact `InstalledUnitId' of the already
-  ;; compiled package to specified the unit id.
-  (let ((= mb-installed-uid dflags name
-          (if (== name (fsLit "main"))
-              (return (toInstalledUnitId mainUnitId))
-              (do (<- cid (lookupPackageName dflags (PackageName name)))
-                  ($ return componentIdToInstalledUnitId cid))))
-        (= set-this-installed-uid dflags uid
-          (do (<- new-env-0 (liftIO (newHscEnv dflags)))
-              (let ((= dflags1 (dflags {thisInstalledUnitId uid}))
-                    (= ic1 ((hsc-IC new-env-0) {ic-dflags dflags1}))
-                    (= new-env-1
-                      (new-env-0 {hsc-dflags dflags1
-                                  hsc-IC ic1}))))
-              (modifySession (const new-env-1))
-              (<- mods (fmap envContextModules getFnkEnv))
-              (setContext (map mk-ii-str mods))
-              (<- _ (setSessionDynFlags dflags1))
-              (<- dflags2 getDynFlags)
-              (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags2)})))))
-        (= msg dflags name
-          (maybe (++ "; package `" (unpackFS name) "' not found")
-                 (\ iuid
-                   (++ "; current package set to `"
-                       (unpackFS (installedUnitIdFS iuid)) "'"))
-                 (mb-installed-uid dflags name)))
-        (= work name
-          (do (<- dflags getDynFlags)
-              (mapM_ (set-this-installed-uid dflags)
-                     (mb-installed-uid dflags name))
-              (pure `(putStrLn ,(msg dflags name))))))
-    (case forms
-      [form] (| ((<- (Just pkg) (code-to-mb-fs form))
-                 (work pkg)))
-      _ (invalid-form "in-package" forms))))
-
 ;; From `GHCi.UI.kindOfType'
 (defn (:: kind-cmd ReplAction)
   [forms]
@@ -757,8 +719,21 @@ object code."
 paths from import directories."
   [forms]
   (let ((= clear-all
-          ;; Cleare various states: finder cache, targets, interactive
-          ;; context ... etc.
+          ;; Clear the main session, then clear the macro expander session.
+          (do do-clear-all
+              (case-do (fmap envSessionForExpand getFnkEnv)
+                (Just mex-env-1) (do-clear-mex mex-env-1)
+                _ (return ()))))
+        (= do-clear-mex hsc-env-1
+          (withTempSession (const hsc-env-1)
+                           (do do-clear-all
+                               (<- hsc-env-2 getSession)
+                               (modifyFnkEnv
+                                (\ e (e {envSessionForExpand
+                                         (Just hsc-env-2)}))))))
+        (= do-clear-all
+          ;; See `loadModule'' in "ghc/GHCi/UI.hs". Clearing various states:
+          ;; finder cache, targets, interactive context ... etc.
           (do (<- graph0 getModuleGraph)
               (<- _ abandonAll)
               clear-all-targets
@@ -781,13 +756,15 @@ paths from import directories."
               (\ path
                 ;; Clear current state first. Then find the source file
                 ;; path and compile, load, and link.
-                (do clear-all
-                    (env-context-on-exception
-                     (do (<- target (make-target path))
-                         (<- _ (setTargets [target]))
-                         (<- _ (compile-and-import path))
-                         (liftIO (putStrLn (++ "; loaded " path)))))
-                    (return '(:begin))))
+                (env-context-on-exception
+                 (do clear-all
+                     (<- target (make-target path))
+                     (<- _ (setTargets [target]))
+                     (<- success-flag (compile-and-import path))
+                     (case success-flag
+                       Succeeded (liftIO (putStrLn (++ "; loaded " path)))
+                       _ (return ()))
+                     (return '(:begin)))))
               (code-to-mb-string form))
       _ (invalid-form "load" forms))))
 
@@ -802,16 +779,15 @@ paths from import directories."
   [_forms]
   (case-do getTargets
     (: (Target (TargetFile path _) _ _) _)
-    ;; Unloading before compilation, to re-link the compiled
-    ;; modules.
-    (do (<- ctx0 getContext)
-        (<- hsc-env getSession)
-        (liftIO (unload hsc-env []))
-        (<- _ (compile-module path))
-        (<- ctx1 (adjust-current-target path ctx0))
-        (setContext ctx1)
-        (let ((= msg (++ "; reloaded " path))))
-        (return `(System.IO.putStrLn ,msg)))
+    (env-context-on-exception
+     (do (<- success-flag (compile-and-import path))
+         (case success-flag
+           Succeeded (do (<- ctx0 getContext)
+                         (<- ctx1 (adjust-current-target path ctx0))
+                         (setContext ctx1)
+                         (return `(System.IO.putStrLn
+                                   ,(++ "; reloaded " path))))
+           Failed (return '(:begin)))))
     _ (return '(System.IO.putStrLn "; reload: invalid target"))))
 
 (defn (:: set-cmd ReplAction)
@@ -844,13 +820,19 @@ paths from import directories."
                     (intercalate ", " (map unLoc leftovers)))))))
         (<- _ (setSessionDynFlags dflags1))
         (<- dflags2 getDynFlags)
-        (modifySession
-         (\ h (let ((= ic0 (hsc-IC h))
-                    (= ic1 (ic0 {ic-dflags dflags2})))
-                (h {hsc-IC ic1}))))
-        ;; Updating the default `DynFlags' used to import modules during macro
-        ;; expansion.
-        (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags2)})))
+        (setDynFlags dflags2)
+        ;; Updating two more `DynFlags', one is the default `DynFlags' used to
+        ;; import modules during macro expansion, and another is the `DynFlags'
+        ;; in the `HscEnv' used by the macro expander.
+        (let ((= update-session-for-expand hsc-env
+                (let ((= ic1 (hsc-IC hsc-env))
+                      (= ic2 (ic1 {ic-dflags dflags2})))
+                  (hsc-env {hsc-dflags dflags2
+                            hsc-IC ic2})))))
+        (modifyFnkEnv
+         (\ e (e {envDefaultDynFlags (Just dflags2)
+                  envSessionForExpand (fmap update-session-for-expand
+                                            (envSessionForExpand e))})))
         (return '(:begin)))
     _ (finkelSrcError nil "set: empty form")))
 
@@ -926,8 +908,6 @@ paths from import directories."
         "show fully expanded result of FORM")
      (c "info" ["NAME"] info-cmd
         "show info of NAME")
-     (c "in-package" ["PKG"] in-package-cmd
-        "change current package to PKG")
      (c "kind" ["TYPE"] kind-cmd
         "show kind of TYPE")
      (c "load" ["FILE"] load-cmd

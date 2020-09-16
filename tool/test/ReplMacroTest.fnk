@@ -105,17 +105,6 @@
           (with-right '(repl-macro info [])
             (isSubsequenceOf "data [] a = [] | a : [a]"))
 
-          ;; in-package, using `make-symbol' to avoid name mangling.
-          (let ((= inpkg (make-symbol "in-package"))))
-          (ok `(repl-macro ,inpkg ghc)
-              "; current package set to `ghc'")
-          (ok `(repl-macro ,inpkg nosuchpkg)
-              "; package `nosuchpkg' not found")
-          (ok `(repl-macro ,inpkg main)
-              "; current package set to `main'")
-          (with-left `(repl-macro ,inpkg (foo bar) buzz)
-            (isSubsequenceOf "in-package"))
-
           ;; kind
           (ok '(repl-macro kind Maybe)
               "Maybe :: * -> *")

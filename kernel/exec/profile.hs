@@ -7,12 +7,14 @@ module Main where
 -- base
 import           Control.Monad.IO.Class       (MonadIO (..))
 import           System.Environment           (getArgs)
+import           System.Exit                  (exitFailure)
 import           System.IO                    (stdout)
 
 -- filepath
 import qualified System.FilePath              as FilePath
 
 -- ghc
+import           BasicTypes                   (SuccessFlag (..))
 import           DynFlags                     (GeneralFlag (..),
                                                HasDynFlags (..), gopt_set)
 import           ErrUtils                     (printBagOfErrors)
@@ -160,7 +162,9 @@ doMake :: [FilePath] -> IO ()
 doMake files =
   do let act = do
            Make.initSessionForMake
-           Make.make (zipWith f files (repeat Nothing))
-                     False False Nothing
+           Make.make (zipWith f files (repeat Nothing)) False Nothing
          f file phase = (mkGeneralLocated "commandline" file, phase)
-     Fnk.runFnk act SpecialForms.defaultFnkEnv
+     success_flag <- Fnk.runFnk act SpecialForms.defaultFnkEnv
+     case success_flag of
+       Failed    -> exitFailure
+       Succeeded -> return ()

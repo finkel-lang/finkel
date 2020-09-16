@@ -24,6 +24,7 @@ import           System.IO                    (BufferMode (..), hSetBuffering,
 import           System.Process               (rawSystem)
 
 -- ghc
+import           BasicTypes                   (SuccessFlag (..))
 import           DriverPhases                 (isDynLibFilename,
                                                isObjectFilename)
 import           DynFlags                     (DynFlags (..), GeneralFlag (..),
@@ -215,7 +216,10 @@ main'' orig_args ghc_args = do
            force_recomp = gopt Opt_ForceRecomp dflags3
 
        -- Do the `make' work.
-       make phased_inputs False force_recomp (outputFile dflags3)
+       success_flag <- make phased_inputs force_recomp (outputFile dflags3)
+       case success_flag of
+         Succeeded -> return ()
+         Failed    -> liftIO exitFailure
 
 
 -- ---------------------------------------------------------------------

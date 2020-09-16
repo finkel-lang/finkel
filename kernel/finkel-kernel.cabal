@@ -85,6 +85,7 @@ library
                      , ghc          >= 8.2.0  && < 8.11.0
                      , ghc-boot     >= 8.2.0  && < 8.11.0
                      , ghci         >= 8.2.0  && < 8.11.0
+                     , time         >= 1.8.0  && < 1.10
                      , process      >= 1.6.1  && < 1.7
   build-tool-depends:  alex:alex    >= 3.1.7  && < 3.3
                      , happy:happy  >= 1.19.5 && < 1.20

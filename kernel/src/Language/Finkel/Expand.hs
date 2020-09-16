@@ -8,7 +8,6 @@ module Language.Finkel.Expand
   , expands'
   , withExpanderSettings
   , bcoDynFlags
-  , canExpandWithObj
   ) where
 
 #include "Syntax.h"
@@ -24,20 +23,15 @@ import qualified Data.Map               as Map
 -- ghc
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
-                                         HscTarget (..), unSetGeneralFlag',
-                                         updOptLevel)
+                                         HscTarget (..), isObjectTarget,
+                                         unSetGeneralFlag', updOptLevel)
 import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
 import           GhcMonad               (getSession, setSession)
 import           HscMain                (newHscEnv)
-import           HscTypes               (HscEnv (..))
 import           Outputable             (Outputable (..), cat, fsep, nest, vcat)
 import           SrcLoc                 (GenLocated (..))
-
-#if !defined(mingw32_HOST_OS)
-import           DynFlags               (Way (..), dynamicGhc, gopt)
-#endif
 
 -- Internal
 import           Language.Finkel.Fnk
@@ -55,54 +49,32 @@ import           Language.Finkel.Form
 withExpanderSettings :: Fnk a -> Fnk a
 withExpanderSettings act =
   do dflags <- getDynFlags
-     if hscTarget dflags == HscInterpreted
-        -- Already using bytecode interpreter, perhaps in the middle of macro
-        -- expansion or called from REPL. Using the given action.
-        then act
-
-        -- Current target is object code, switching to the bytecode interpreter.
-        -- Also, using the dedicated 'HscEnv' when not reusing the object codes.
-        else if canExpandWithObj dflags
-                then gbracket getSession setSession work
-                else gbracket (prepare dflags) restore work
+     -- Switching to the dedicated 'HscEnv' for macro expansion when compiling
+     -- object code. If not, assuming current session is using bytecode
+     -- interpreter, using the given action as it.
+     if isObjectTarget (hscTarget dflags)
+        then gbracket (prepare dflags) restore (const act)
+        else act
   where
     prepare dflags = do
       fnk_env <- getFnkEnv
-      hsc_env_orig <- getSession
-      hsc_env_mex <- case envSessionForExpand fnk_env of
+      hsc_env_old <- getSession
+      hsc_env_new <- case envSessionForExpand fnk_env of
                         Just he -> return he
-                        Nothing -> liftIO (newHscEnv dflags)
-      setSession hsc_env_mex
-      return hsc_env_orig
+                        Nothing -> do
+                          debug fnk_env Nothing ["Making new session for expand"]
+                          liftIO (newHscEnv (bcoDynFlags dflags))
+      setSession hsc_env_new
+      return hsc_env_old
 
-    restore hsc_env_orig =
-      do hsc_env_mex <- getSession
-         modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_mex})
-         setSession hsc_env_orig
-
-    work hsc_env =
-      do setDynFlags (bcoDynFlags (hsc_dflags hsc_env))
-         act
-
--- XXX: Constantly 'False' under Windows.
-canExpandWithObj :: DynFlags -> Bool
-#if defined(mingw32_HOST_OS)
-canExpandWithObj _ = False
-#else
-canExpandWithObj dflags =
-  if dynamicGhc
-    then buildDynamic && noOptimization
-    -- XXX: Currently have not tested with non-dynamic GHC, conservatively not
-    -- using object code.
-    else False
-  where
-    buildDynamic = WayDyn `elem` ws || gopt Opt_BuildDynamicToo dflags
-    noOptimization = optLevel dflags == 0
-    ws = ways dflags
-#endif
+    restore hsc_env_old =
+      do hsc_env_new <- getSession
+         modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_new})
+         setSession hsc_env_old
 
 -- | Setup 'DynFlags' for interactive evaluation.
 bcoDynFlags :: DynFlags -> DynFlags
+-- XXX: See: 'GhcMake.enableCodeGenForUnboxedTupleOrSums'.
 bcoDynFlags dflags0 =
   let dflags1 = dflags0 { hscTarget = HscInterpreted
                         , ghcLink = LinkInMemory }
@@ -146,15 +118,16 @@ boundedNameOne form =
 withShadowing :: [FastString] -- ^ Names of macro to shadow.
               -> Fnk a -- ^ Action to perform.
               -> Fnk a
-withShadowing toShadow fnkc = do
-  fnkc_env <- getFnkEnv
-  let emacros = envMacros fnkc_env
-      tmacros = envTmpMacros fnkc_env
+withShadowing toShadow act = do
+  fnk_env <- getFnkEnv
+  let emacros = envMacros fnk_env
+      tmacros = envTmpMacros fnk_env
       f name _ = name `notElem` toShadow
-  putFnkEnv (fnkc_env { envMacros = Map.filterWithKey f emacros
+  putFnkEnv (fnk_env { envMacros = Map.filterWithKey f emacros
                       , envTmpMacros = map (Map.filterWithKey f) tmacros })
-  result <- fnkc
-  putFnkEnv fnkc_env
+  result <- act
+  modifyFnkEnv (\e -> e { envMacros = emacros
+                        , envTmpMacros = tmacros })
   return result
 
 -- | Expand forms, with taking care of @begin@ special form.
@@ -262,8 +235,8 @@ expand form =
     expandList l forms =
       case forms of
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
-          fnkc_env <- getFnkEnv
-          case lookupMacro k fnkc_env of
+          fnk_env <- getFnkEnv
+          case lookupMacro k fnk_env of
             Just (Macro f)       -> do_expand k f >>= expand
             Just (SpecialForm f) -> do_expand k f >>= expand
             Nothing              -> do
@@ -298,8 +271,8 @@ expand1 :: Code -> Fnk Code
 expand1 form =
   case unLForm form of
     L _l (List ((LForm (L _ (Atom (ASymbol k)))) : _)) -> do
-      fnkc_env <- getFnkEnv
-      case lookupMacro k fnkc_env of
+      fnk_env <- getFnkEnv
+      case lookupMacro k fnk_env of
         Just (Macro f)       -> f form
         Just (SpecialForm f) -> f form
         Nothing              -> return form

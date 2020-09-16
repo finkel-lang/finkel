@@ -41,14 +41,10 @@ import Module                 (ModuleName, mkModuleName, moduleNameSlashes,
                                moduleNameString)
 import Outputable             (Outputable (..), neverQualify, sep, text)
 import SrcLoc                 (GenLocated (..), Located)
-import StringBuffer           (hGetStringBuffer)
 import Util                   (looksLikeModuleName)
 
 -- Internal
 import Language.Finkel.Fnk
-import Language.Finkel.Form
-import Language.Finkel.Lexer
-import Language.Finkel.Reader
 
 
 -- ---------------------------------------------------------------------
@@ -59,37 +55,36 @@ import Language.Finkel.Reader
 
 -- | Data type to represent target source.
 data TargetSource
-  = FnkSource FilePath ModuleName [Code] SPState
+  = FnkSource FilePath ModuleName
   -- ^ Finkel source.
   --
   -- Holds file path of the source code, module name, parsed form data, and
   -- 'SPState' including required module names.
-  | HsSource FilePath
+  | HsSource FilePath ModuleName
   -- ^ Haskell source with file path of the source code.
   | OtherSource FilePath
   -- ^ Other source with file path of other contents.
 
 instance Show TargetSource where
   show s = case s of
-    FnkSource path mdl _ _sp ->
-      unwords ["FnkSource", show path, moduleNameString mdl]
-    HsSource path            -> "HsSource " ++ show path
-    OtherSource path         -> "OtherSource " ++ show path
+    FnkSource path _ -> "FnkSource " ++ show path
+    HsSource path _  -> "HsSource " ++ show path
+    OtherSource path -> "OtherSource " ++ show path
 
 instance Outputable TargetSource where
   ppr s =
     case s of
-      FnkSource path mdl _ _ -> sep [text "FnkSource", text path, ppr mdl]
-      HsSource path          -> sep [text "HsSource", text path]
-      OtherSource path       -> sep [text "OtherSource", text path]
+      FnkSource path mdl -> sep [text "FnkSource", text path, ppr mdl]
+      HsSource path _    -> sep [text "HsSource", text path]
+      OtherSource path   -> sep [text "OtherSource", text path]
 
 -- | Get the file path of given 'TargetSource'.
 targetSourcePath :: TargetSource -> FilePath
 targetSourcePath mt =
   case mt of
-    FnkSource path _ _ _ -> path
-    HsSource path        -> path
-    OtherSource path     -> path
+    FnkSource path _ -> path
+    HsSource path _  -> path
+    OtherSource path -> path
 
 -- | 'True' is the 'TargetSource' is 'OtherSource'.
 isOtherSource :: TargetSource -> Bool
@@ -178,11 +173,10 @@ findTargetSource (L l modNameOrFilePath)= do
   mb_inputPath <- findFileInImportPaths (importPaths dflags) modNameOrFilePath
   let detectSource path
         | isFnkFile path =
-          do contents <- liftIO (hGetStringBuffer path)
-             (forms, sp) <- parseSexprs (Just path) contents
-             let modName = mkModuleName (asModuleName modNameOrFilePath)
-             return (FnkSource path modName forms sp)
-        | isHsFile path = return (HsSource path)
+          do let modName = mkModuleName (asModuleName modNameOrFilePath)
+             return (FnkSource path modName)
+        | isHsFile path =
+          return (HsSource path (mkModuleName (asModuleName path)))
         | otherwise = return (OtherSource path)
   case mb_inputPath of
     Just path -> detectSource path

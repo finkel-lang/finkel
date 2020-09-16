@@ -1,0 +1,6 @@
+(:require R1)
+
+(module R3)
+
+(:: foo String)
+(= foo (foo-macro))

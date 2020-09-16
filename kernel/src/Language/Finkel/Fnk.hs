@@ -95,19 +95,20 @@ import           GHC                    (runGhc)
 import           GhcMonad               (Ghc (..), GhcMonad (..),
                                          getSessionDynFlags, modifySession)
 import           HscMain                (Messager, batchMsg)
-import           HscTypes               (HomeModInfo, HscEnv (..),
-                                         InteractiveContext (..),
-                                         InteractiveImport (..), ModSummary,
-                                         TyThing (..), mkSrcErr)
+import           HscTypes               (HscEnv (..), InteractiveContext (..),
+                                         InteractiveImport (..),
+                                         ModSummary (..), TyThing (..),
+                                         mkSrcErr)
 import           InteractiveEval        (setContext)
-import           Module                 (ModuleName, mkModuleName)
+import           Module                 (mkModuleName)
 import           Outputable             (alwaysQualify, defaultErrStyle,
                                          neverQualify, ppr, printSDocLn, sep,
                                          showSDocForUser, text, vcat, (<+>))
 import qualified Pretty
 import           SrcLoc                 (GenLocated (..))
-import           UniqSupply             (initUniqSupply, mkSplitUniqSupply,
-                                         uniqFromSupply)
+import           UniqSupply             (MonadUnique (..), UniqSupply,
+                                         initUniqSupply, mkSplitUniqSupply,
+                                         splitUniqSupply, takeUniqFromSupply)
 import           Var                    (varType)
 
 import           GHC_Hs_ImpExp          (simpleImportDecl)
@@ -207,8 +208,6 @@ data FnkEnv = FnkEnv
    , envMessager               :: Messager
      -- | Required home package modules names in current target.
    , envRequiredHomeModules    :: [ModSummary]
-     -- | Compile home modules during macro-expansion of /require/.
-   , envCompiledInRequire      :: [(ModuleName, HomeModInfo)]
 
      -- | Directory to save generated Haskell source codes.
    , envHsOutDir               :: Maybe FilePath
@@ -222,11 +221,13 @@ data FnkEnv = FnkEnv
 
      -- | The 'HscEnv' used by the byte-code interpreter for macro expansion.
    , envSessionForExpand       :: Maybe HscEnv
+     -- | The 'UniqSupply' for 'gensym'.
+   , envUniqSupply             :: UniqSupply
 
      -- | Verbosity level for Fnk related messages.
-   , envVerbosity              :: Int
+   , envVerbosity              :: {-# UNPACK #-} !Int
      -- | Dump flag settings.
-   , envDumpFlags              :: FlagSet
+   , envDumpFlags              :: {-# UNPACK #-} !FlagSet
    }
 
 -- | Newtype wrapper for compiling Finkel code to Haskell AST.
@@ -269,6 +270,21 @@ instance ExceptionMonad Fnk where
                         in  unFnk (f r') ref))
   {-# INLINE gmask #-}
 
+instance MonadUnique Fnk where
+  getUniqueSupplyM = do
+    fnk_env <- getFnkEnv
+    let (us1, us2) = splitUniqSupply (envUniqSupply fnk_env)
+    putFnkEnv $ fnk_env { envUniqSupply = us2 }
+    return us1
+  {-# INLINE getUniqueSupplyM #-}
+
+  getUniqueM = do
+    fnk_env <- getFnkEnv
+    let (u, us1) = takeUniqFromSupply (envUniqSupply fnk_env)
+    putFnkEnv $ fnk_env { envUniqSupply = us1 }
+    return u
+  {-# INLINE getUniqueM #-}
+
 instance HasDynFlags Fnk where
   getDynFlags = Fnk (\_ -> getDynFlags)
   {-# INLINE getDynFlags #-}
@@ -281,9 +297,10 @@ instance GhcMonad Fnk where
 
 -- | Run 'Fnk' with given environment.
 runFnk :: Fnk a -> FnkEnv -> IO a
-runFnk m fnkc_env = do
-  ref <- newIORef fnkc_env
-  runGhc (envLibDir fnkc_env) (toGhc m (FnkEnvRef ref))
+runFnk m fnk_env = do
+  us <- liftIO $! mkSplitUniqSupply '_'
+  ref <- newIORef $! fnk_env {envUniqSupply=us}
+  runGhc (envLibDir fnk_env) (toGhc m (FnkEnvRef ref))
 
 -- | Extract 'Ghc' from 'Fnk'.
 toGhc :: Fnk a -> FnkEnvRef -> Ghc a
@@ -302,15 +319,15 @@ getFnkEnv = Fnk (\(FnkEnvRef ref) -> liftIO (readIORef ref))
 
 -- | Set current 'FnkEnv' to given argument.
 putFnkEnv :: FnkEnv -> Fnk ()
-putFnkEnv fnkc_env =
-  Fnk (\(FnkEnvRef ref) -> fnkc_env `seq` liftIO (writeIORef ref fnkc_env))
+putFnkEnv fnk_env =
+  Fnk (\(FnkEnvRef ref) -> fnk_env `seq` liftIO (writeIORef ref fnk_env))
 {-# INLINE putFnkEnv #-}
 
 -- | Update 'FnkEnv' with applying given function to current 'FnkEnv'.
 modifyFnkEnv :: (FnkEnv -> FnkEnv) -> Fnk ()
 modifyFnkEnv f =
   Fnk (\(FnkEnvRef ref) ->
-         liftIO (atomicModifyIORef' ref (\fnkc_env -> (f fnkc_env, ()))))
+         liftIO (atomicModifyIORef' ref (\fnk_env -> (f fnk_env, ()))))
 {-# INLINE modifyFnkEnv #-}
 
 -- | Throw 'FinkelException' with given message.
@@ -333,15 +350,20 @@ emptyFnkEnv = FnkEnv
   , envContextModules         = []
   , envDefaultDynFlags        = Nothing
   , envMessager               = batchMsg
-  , envRequiredHomeModules       = []
-  , envCompiledInRequire      = []
+  , envRequiredHomeModules    = []
   , envHsOutDir               = Nothing
   , envLibDir                 = Nothing
   , envQualifyQuotePrimitives = False
   , envSessionForExpand       = Nothing
+  , envUniqSupply             = uninitializedUniqSupply
   , envVerbosity              = 1
   , envDumpFlags              = zeroBits
   }
+  where
+    uninitializedUniqSupply :: UniqSupply
+    uninitializedUniqSupply =
+      throwFinkelException (FinkelException "UniqSupply not initialized")
+
 
 -- | Set current 'DynFlags' to given argument. This function also sets the
 -- 'DynFlags' in interactive context.
@@ -383,9 +405,9 @@ insertMacro k v =
 -- Lookup macro from persistent and temporary macros. When macros with
 -- conflicting name exist, the latest temporary macro wins.
 lookupMacro :: FastString -> FnkEnv -> Maybe Macro
-lookupMacro name fnkc_env = go (envTmpMacros fnkc_env)
+lookupMacro name fnk_env = go (envTmpMacros fnk_env)
   where
-    go []     = Map.lookup name (envMacros fnkc_env)
+    go []     = Map.lookup name (envMacros fnk_env)
     go (t:ts) = Map.lookup name t `mplus` go ts
 {-# INLINE lookupMacro #-}
 
@@ -433,7 +455,7 @@ macroFunction mac form =
 
 -- | Generate unique symbol with @gensym'@.
 gensym :: Fnk Code
-gensym = gensym' "g"
+gensym = gensym' "gensym_var"
 
 -- | Generate unique symbol with given prefix.
 --
@@ -442,16 +464,15 @@ gensym = gensym' "g"
 -- codes written by arbitrary users.
 gensym' :: String -> Fnk Code
 gensym' prefix = do
-  s <- liftIO (mkSplitUniqSupply '_')
-  let u = uniqFromSupply s
+  u <- getUniqueM
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))
 
 -- Note: Initialization of UniqSupply
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
--- Test codes in finkel-kernel packages uses the 'defaultMain' function multiple
--- times. To avoid initialization of UniqSupply multiple time, using top-level
--- IORef to detect whether the initializatio has been done or not.
+-- Test codes in finkel-kernel packages are calling the 'defaultMain' function
+-- multiple times. To avoid initialization of UniqSupply multiple times, using
+-- top-level IORef to detect whether the initializatio has been done or not.
 
 -- | Variant of 'initUniqSupply' which does initialization only once.
 initUniqSupply' :: Int -> Int -> IO ()

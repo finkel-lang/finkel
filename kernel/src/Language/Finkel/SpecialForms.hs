@@ -23,7 +23,8 @@ import Data.Map                        (fromList)
 
 -- ghc
 import BasicTypes                      (FractionalLit (..), SourceText (..))
-import DynFlags                        (DynFlags (..), getDynFlags)
+import DynFlags                        (DynFlags (..), GeneralFlag (..),
+                                        getDynFlags, unSetGeneralFlag')
 import ErrUtils                        (MsgDoc, compilationProgressMsg)
 import Exception                       (gbracket)
 import FastString                      (FastString, appendFS, fsLit, unpackFS)
@@ -35,14 +36,13 @@ import GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
 import GhcMonad                        (GhcMonad (..), modifySession)
 import HscMain                         (Messager, hscTcRnLookupRdrName,
                                         showModuleIndex)
-import HscTypes                        (FindResult (..), HomeModInfo (..),
-                                        HscEnv (..), InteractiveImport (..),
-                                        ModSummary (..), ModuleGraph,
-                                        isObjectLinkable, lookupHpt, showModMsg)
+import HscTypes                        (FindResult (..), HscEnv (..),
+                                        InteractiveImport (..), ModSummary (..),
+                                        ModuleGraph, lookupHpt, showModMsg)
 import InteractiveEval                 (getContext)
 import MkIface                         (RecompileRequired (..),
                                         recompileRequired)
-import Module                          (Module, ModuleName, moduleNameString)
+import Module                          (Module, moduleNameString)
 import Name                            (nameOccName, occName)
 import OccName                         (occNameFS)
 import Outputable                      (hcat, ppr, showPpr)
@@ -58,14 +58,14 @@ import HscTypes                        (mgLookupModule)
 -- Internal
 import Language.Finkel.Builder         (HImportDecl, evalBuilder, syntaxErrMsg)
 import Language.Finkel.Eval
-import Language.Finkel.Expand          (bcoDynFlags, canExpandWithObj, expand,
-                                        expands')
+import Language.Finkel.Expand          (bcoDynFlags, expand, expands')
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
-import Language.Finkel.Make            (simpleMake)
+import Language.Finkel.Make            (makeFromRequire)
 import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModule)
 import Language.Finkel.Syntax.SynUtils (cL, dL)
+import Language.Finkel.TargetSource    (findTargetModuleNameMaybe)
 
 #include "finkel_kernel_config.h"
 
@@ -230,23 +230,22 @@ addImportedMacro fnk_env dflags thing = when (isMacro dflags thing) go
 --
 -- Use of object codes are not working well for importing home package modules
 -- when optimization option were enabled.  Conservatively using bytecode by
--- delegating further works to 'simpleMake' with 'withRequiredSettings' for such
+-- delegating further works to 'makeFromRequire' with 'withRequiredSettings' for such
 -- cases.
 
-setRequiredSettings :: Bool -> Fnk ()
-setRequiredSettings use_obj = do
+setRequiredSettings :: Fnk ()
+setRequiredSettings = do
   -- 'DynFlags' in the current session might be updated by the file local
   -- pragmas.  Using the 'DynFlags' from 'envDefaultDynFlags', which is
   -- initialized when entering the 'make' function in 'initSessionForMake'.
   fnk_env <- getFnkEnv
-  let update = if use_obj
-                  then id
-                  else bcoDynFlags
-  mapM_ (setDynFlags . update) (envDefaultDynFlags fnk_env)
+  let no_force_recomp = unSetGeneralFlag' Opt_ForceRecomp
+      update = setDynFlags . no_force_recomp . bcoDynFlags
+  mapM_ update (envDefaultDynFlags fnk_env)
   putFnkEnv fnk_env {envMessager = requiredMessager}
 
-withRequiredSettings :: Bool -> Fnk a -> Fnk a
-withRequiredSettings use_obj act =
+withRequiredSettings :: Fnk a -> Fnk a
+withRequiredSettings act =
   gbracket
     (do dflags <- getDynFlags
         fnk_env <- getFnkEnv
@@ -254,12 +253,12 @@ withRequiredSettings use_obj act =
     (\(dflags, fnk_env) ->
        do setDynFlags dflags
           putFnkEnv fnk_env)
-    (const (setRequiredSettings use_obj >> act))
+    (const (setRequiredSettings >> act))
 
 requiredMessager :: Messager
 requiredMessager hsc_env mod_index recomp mod_summary =
   case recomp of
-    MustCompile       -> showMsg "Compiling " (" [required]")
+    MustCompile       -> showMsg "Compiling " " [required]"
     UpToDate          -> when (verbosity dflags >= 2) (showMsg "Skipping " "")
     RecompBecause why -> showMsg "Compiling " (" [required, " ++ why ++ "]")
   where
@@ -274,32 +273,34 @@ requiredMessager hsc_env mod_index recomp mod_summary =
                      mod_summary ++
          reason)
 
-makeMissingHomeMod :: HImportDecl -> Fnk [(ModuleName, HomeModInfo)]
-makeMissingHomeMod (L loc idecl) = do
-  -- Try finding the required module. Delegate the work to 'simpleMake' function
-  -- defined in Language.Finkel.Make when the file is found in import paths.
+makeMissingHomeMod :: HImportDecl -> Fnk ()
+makeMissingHomeMod (L _ idecl) = do
+  -- Try finding the required module. Delegate the work to 'makeFromRequire'
+  -- function defined in Language.Finkel.Make when the file is found in import
+  -- paths.
   --
   -- N.B. 'findImportedModule' does not know ".fnk" file extension, so it will
   -- not return Finkel source files for home package modules.
   --
   hsc_env <- getSession
-  fnk_env <- getFnkEnv
 
-  let mname = unLoc (ideclName idecl)
-      lmname = L loc (moduleNameString mname)
-      use_obj = maybe False canExpandWithObj (envDefaultDynFlags fnk_env)
-      has_obj = maybe False isObjectLinkable . hm_linkable
-      smpl_mk = withRequiredSettings use_obj (simpleMake lmname)
+  let mname = unLoc lmname
+      lmname = ideclName idecl
+      smpl_mk = withRequiredSettings (makeFromRequire lmname)
 
   case lookupHpt (hsc_HPT hsc_env) mname of
-    Just hmi -> if use_obj && has_obj hmi
-                    then return []
-                    else smpl_mk
-    Nothing -> do
-      fresult <- liftIO (findImportedModule hsc_env mname Nothing)
-      case fresult of
-        Found {} -> return []
-        _        -> smpl_mk
+    -- Avoid touching file system. Always checking up-to-date ness via
+    -- "makeFromRequire".
+    Just _ -> smpl_mk
+    _ -> do
+      mb_ts <- findTargetModuleNameMaybe lmname
+      case mb_ts of
+        Just _ -> smpl_mk
+        Nothing -> do
+          fresult <- liftIO (findImportedModule hsc_env mname Nothing)
+          case fresult of
+            Found {} -> return ()
+            _        -> smpl_mk -- XXX: Throw cannot find module error.
 
 
 -- ---------------------------------------------------------------------
@@ -385,13 +386,12 @@ m_require form =
          case evalBuilder dflags parseLImport code of
            Right lidecl@(L _ idecl) -> do
              fnk_env <- getFnkEnv
-
-             let mname = unLoc (ideclName idecl)
-
-             debug fnk_env "m_require" [ppr idecl]
+             let tr = debug fnk_env "m_require"
+                 mname = unLoc (ideclName idecl)
+             tr [ppr idecl]
 
              -- Handle home modules.
-             compiled <- makeMissingHomeMod lidecl
+             makeMissingHomeMod lidecl
              context <- getContext
              setContext (IIDecl idecl : context)
              mgraph <- hsc_mod_graph <$> getSession
@@ -404,10 +404,7 @@ m_require form =
                  reqs1 = case mgLookupModule' mgraph mdl of
                            Just m -> m:reqs0
                            _      -> reqs0
-                 compiled_mods = compiled ++ envCompiledInRequire fnk_env
-                 fnk_env' = fnk_env {envRequiredHomeModules = reqs1
-                                    ,envCompiledInRequire = compiled_mods}
-             putFnkEnv fnk_env'
+             modifyFnkEnv (\e -> e {envRequiredHomeModules = reqs1})
 
              -- Look up Macros in parsed module, add to FnkEnv when found.
              mb_minfo <- getModuleInfo mdl

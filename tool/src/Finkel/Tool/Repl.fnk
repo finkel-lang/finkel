@@ -10,12 +10,12 @@
 
 (defmodule Finkel.Tool.Repl
   (export replMain repl-env)
-  (require
-   ;; Internal
-   (Finkel.Tool.Repl.Macro))
   (import-when [:compile]
-   ;; finkel-core
-   (Finkel.Prelude))
+    ;; finkel-core
+    (Finkel.Prelude)
+
+    ;; Internal
+    (Finkel.Tool.Repl.Macro))
   (import
    ;; base
    (Control.Monad (mplus))
@@ -128,9 +128,9 @@
 
 ;;; Default macros imported in REPL. These macros always get imported
 ;;; after loading compiled modules.
-(macrolet ((the-macros ()
-             `[,@(map (\ mac `(, ,mac ,(qSymbol mac)))
-                      (++ (exported-macros Finkel.Core)
-                          (exported-macros Finkel.Tool.Repl.Macro)))]))
-  (defn (:: replMacros EnvMacros)
+(defn (:: replMacros EnvMacros)
+  (macrolet ((the-macros ()
+               `[,@(map (\ mac `(, ,mac ,(qSymbol mac)))
+                        (++ (exported-macros Finkel.Core)
+                            (exported-macros Finkel.Tool.Repl.Macro)))]))
     (makeEnvMacros (the-macros))))

@@ -7,7 +7,7 @@ module MakeTest
 
 -- base
 import Control.Exception            (SomeException (..), catch)
-import Control.Monad                (unless, when)
+import Control.Monad                (when)
 import Control.Monad.IO.Class       (MonadIO (..))
 import Data.List                    (isPrefixOf, tails)
 import GHC.Exts                     (unsafeCoerce#)
@@ -45,7 +45,6 @@ import Test.Hspec
 import Language.Finkel.Eval
 import Language.Finkel.Fnk
 import Language.Finkel.Form
-import Language.Finkel.Lexer
 import Language.Finkel.Make
 import Language.Finkel.SpecialForms
 import Language.Finkel.Syntax
@@ -133,12 +132,21 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildFilesNG [] ["E01"]
 
   -- Reload tests
-  buildReload "R2.fnk"
-              "foo"
-              [("R1.fnk.1", "R1.fnk"), ("R2.fnk", "R2.fnk")]
-              [("R1.fnk.2", "R1.fnk")]
-              "foo: before"
-              "foo: after"
+  let r1_simple t = buildReload t
+                                "foo"
+                                [("R1.fnk.1", "R1.fnk"), (t, t)]
+                                [("R1.fnk.2", "R1.fnk")]
+                                "foo: before"
+                                "foo: after"
+  r1_simple "R2.fnk"
+
+#if MIN_VERSION_ghc(8,10,0)
+  -- Reloading test for modules containing `:require' of home package modules
+  -- not working well with ghc < 8.10.
+
+  -- XXX: Disabled at the moment.
+  -- r1_simple "R3.fnk"
+#endif
 
 -- Action to unload package libraries
 --
@@ -190,11 +198,8 @@ lookupProfObjInDirectories =
   in  go
 
 fnksrc1, hssrc1, othersrc1 :: TargetSource
-fnksrc1 = FnkSource "path1"
-                    (mkModuleName "Foo")
-                    []
-                    (initialSPState (fsLit "dummy") 1 1)
-hssrc1 = HsSource "path2"
+fnksrc1 = FnkSource "path1" (mkModuleName "Foo")
+hssrc1 = HsSource "path2" (mkModuleName "Bar")
 othersrc1 = OtherSource "path3"
 
 subseq :: Eq a => [a] -> [a] -> Bool
@@ -311,7 +316,7 @@ buildReload
   -> String -- ^ Expected value for after.
   -> Spec
 buildReload the_file fname files1 files2 before_str after_str =
-  beforeAll (mk_tmp_dir "reload") (afterAll rmdir work)
+  beforeAll (mk_tmp_dir ("reload" ++ the_file)) (afterAll rmdir work)
   where
     work = do
       describe (unwords ["Reload test for", the_file , "with", fname]) $ do
@@ -333,38 +338,40 @@ buildReload the_file fname files1 files2 before_str after_str =
     fnk_work use_obj tmpdir = do
       setup_reload_env use_obj tmpdir
       copy_files tmpdir files1
-      str1 <- make_and_eval False
+      str1 <- make_and_eval
       reset_env
       copy_files tmpdir files2
-      str2 <- make_and_eval True
+      str2 <- make_and_eval
       return (str1, str2)
 
     setup_reload_env :: Bool -> FilePath -> Fnk ()
     setup_reload_env use_obj tmpdir = do
-      let args = "-v0" : ("-i" ++ tmpdir) : if use_obj
-                                              then ["-fobject-code"]
-                                              else []
+      let args0 = ("-i" ++ tmpdir) : if use_obj
+                                       then ["-fobject-code"]
+                                       else []
+          args1 = ["-v0"]
+          parseAndSet args = do
+            dflags0 <- getDynFlags
+            (dflags1,_,_) <- parseDynamicFlagsCmdLine dflags0 (map noLoc args)
+            setDynFlags dflags1
           tfile = TargetFile the_file Nothing
+      parseAndSet args0
       initSessionForTest
       prepareInterpreter
-      dflags0 <- getDynFlags
-      (dflags1, _, _) <- parseDynamicFlagsCmdLine dflags0 (map noLoc args)
-      setDynFlags dflags1
+      parseAndSet args1
       setTargets [Target tfile use_obj Nothing]
 
-    make_and_eval :: Bool -> Fnk String
-    make_and_eval is_reload = do
-      make [(noLoc the_file, Nothing)] False False Nothing
-      unless is_reload $ setContextModules [asModuleName the_file]
+    make_and_eval :: Fnk String
+    make_and_eval = do
+      _ <- make [(noLoc the_file, Nothing)] False Nothing
+      setContextModules [asModuleName the_file]
       hexpr <- buildHsSyn parseExpr [qSymbol fname]
       unsafeCoerce# <$> evalExpr hexpr
 
     copy_files tmpdir = liftIO . mapM_ (copy tmpdir)
     copy tmp (i, o) = copyFile (odir </> i) (tmp </> o)
 
-    reset_env = do
-      hsc_env <- getSession
-      liftIO (unload hsc_env [])
+    reset_env = getSession >>= liftIO . flip unload []
 
     rmdir my_tmpdir =
       removeDirectoryRecursive my_tmpdir
