@@ -58,6 +58,7 @@ test-suite p01-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
+  other-modules:       TestAll
   build-depends:       base
                      , finkel-kernel
                      , p01

@@ -1,0 +1,7 @@
+(:require P01.G1)
+
+(module TestAll)
+
+(:: expected [String])
+(= expected
+  ["p01a" "p01b" "p01c" "p01d" "p01e" "p01f" "p01h" "p01i" "p01j"])

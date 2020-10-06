@@ -49,6 +49,7 @@ import           Distribution.Simple.Program.GHC
 import           Distribution.Simple.Program.Types
 import           Distribution.Simple.Register       (internalPackageDBPath)
 import           Distribution.Simple.Setup
+import           Distribution.Simple.Utils          (installDirectoryContents)
 import           Distribution.Utils.NubList
 
 #if MIN_VERSION_Cabal(2,4,0)
@@ -57,12 +58,16 @@ import           Distribution.Types.ExposedModule
 import           Distribution.InstalledPackageInfo
 #endif
 
--- directory
-import           System.Directory                   (doesFileExist, findFile,
-                                                     removeFile)
-
 import qualified Distribution.Simple.Setup          as Setup
 import qualified Distribution.Verbosity             as Verbosity
+
+-- directory
+import           System.Directory                   (createDirectoryIfMissing,
+                                                     doesDirectoryExist,
+                                                     doesFileExist, findFile,
+                                                     getTemporaryDirectory,
+                                                     removeDirectoryRecursive,
+                                                     removeFile)
 
 
 -- --------------------------------------------------------------------
@@ -269,9 +274,9 @@ fnkHaddockHooks pd lbi hooks flags = do
              return (other_mods, [], [path])
            _ -> return (other_mods, [], [])
 
-      let opts = mempty
+      let opts dir = mempty
             { ghcOptMode             = flag GhcModeMake
-            , ghcOptExtra            = optExtras autogen_dir
+            , ghcOptExtra            = optExtras dir
             , ghcOptInputFiles       = toNubListR hs_files
             , ghcOptInputModules     = toNubListR hs_mods
             , ghcOptSourcePathClear  = flag True
@@ -295,19 +300,42 @@ fnkHaddockHooks pd lbi hooks flags = do
                 return (dest:acc)
               Nothing    -> return acc
 
+          -- Using package name as prefix of temporary directory, to support
+          -- concurrent build of packages.
+          makeTemporaryDirectory = do
+            tmpdir <- getTemporaryDirectory
+            let dir = tmpdir </> pre </> cmp_name
+                cmp_name =
+                  remove_quotes $ replace_spaces (showComponentName name)
+                replace_spaces = map space_to_underscore
+                space_to_underscore c =
+                  case c of
+                    ' ' -> '_'
+                    _   -> c
+                remove_quotes = filter (/= '\'')
+                pre = "fnk_haddock_hooks" </> pkg_name
+                pkg_name = unPackageName (pkgName (package pd))
+            createDirectoryIfMissing True dir
+            return dir
+
       gen_files <- foldM accumulateGeneratedFile [] hs_mods
+      tmpdir <- makeTemporaryDirectory
 
       let ghc = simpleProgram "ghc"
           acquire =
             case lookupProgram ghc (withPrograms lbi) of
-              Just prog | not (null gen_files) ->
-                runGHC verbosity prog cmpl platform opts
+              Just prog | not (null gen_files) -> do
+                runGHC verbosity prog cmpl platform (opts tmpdir)
+                installDirectoryContents verbosity tmpdir autogen_dir
               _                                -> return ()
           clean path = do
             exist <- doesFileExist path
             when exist (do when (Verbosity.normal < verbosity)
                                 (putStrLn ("Removing: " ++ path))
                            removeFile path)
+            exist_dir <- doesDirectoryExist tmpdir
+            when exist_dir $
+              removeDirectoryRecursive tmpdir
           cleanup = mapM_ clean gen_files
 
       return (acquire, cleanup)
