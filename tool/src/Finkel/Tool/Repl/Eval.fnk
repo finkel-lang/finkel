@@ -179,10 +179,10 @@ context."
   [hdl dflags wrapper itype forms]
   (| ((null forms)
       (return (Right "")))
-     ((<- (Right decls) (evalBuilder dflags parseTopDecls forms))
-      (eval-decls decls))
      ((<- (Right stmt) (evalBuilder dflags parseStmt forms))
       (eval-statement hdl wrapper itype stmt))
+     ((<- (Right decls) (evalBuilder dflags parseTopDecls forms))
+      (eval-decls decls))
      (otherwise
       (case (evalBuilder dflags parseImports forms)
         (Right idecl) (eval-imports dflags idecl)
