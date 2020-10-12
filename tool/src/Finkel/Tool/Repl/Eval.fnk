@@ -33,7 +33,7 @@
               setInteractivePrintName srcErrorMessages))
    (InteractiveEval
     (compileParsedExprRemote getContext parseName setContext))
-   (Linker (extendLinkEnv initDynLinker))
+   (Linker (extendLinkEnv))
    (Name ((Name) getName nameOccName occNameString))
    (OrdList (toOL))
    (Outputable (ppr mkErrStyle renderWithStyle setStyleColoured
@@ -58,12 +58,14 @@
    (Language.Finkel.Eval (evalDecls))
    (Language.Finkel.Expand (expands))
    (Language.Finkel.Make (initSessionForMake))
-   (Language.Finkel.Fnk (failS prepareInterpreter))
+   (Language.Finkel.Fnk ((FnkEnv ..) failS modifyFnkEnv prepareInterpreter))
    (Language.Finkel.Syntax (parseExpr parseImports parseStmt parseTopDecls))
 
    ;; internal
    (Finkel.Tool.Repl.IO)
    (Finkel.Tool.Repl.Types)))
+
+;;; Extra imports
 
 (cond-expand
   [(<= 810 :ghc)
@@ -75,6 +77,12 @@
   [otherwise
    ;; ghc
    (import HsImpExp ((ImportDecl ..)))])
+
+(cond-expand
+  [(<= 806 :ghc)
+   (import DynamicLoading (initializePlugins))]
+  [otherwise
+   (:begin)])
 
 ;;; Version compatibility function
 
@@ -93,6 +101,14 @@
        (liftIO (extendLinkEnv names-vals)))
      (defn (:: is-import-decl-qualified (-> Bool Bool))
        id))])
+
+(defn (:: initialize-plugins (-> HscEnv DynFlags (IO DynFlags)))
+  [_hsc-env dflags]
+  (cond-expand
+    [(<= 806 :ghc)
+     (initializePlugins _hsc-env dflags)]
+    [otherwise
+     (pure dflags)]))
 
 (defn (:: optional-dynflags [GeneralFlag])
   "Optional 'GeneralFlag' set for REPL."
@@ -113,11 +129,18 @@
   (let ((= initialize
           (do initSessionForMake
               prepareInterpreter
-              (<- hsc-env getSession)
-              (let ((= dflags0 (hsc-dflags hsc-env))
+              (<- hsc-env0 getSession)
+              (let ((= dflags0 (hsc-dflags hsc-env0))
                     (= dflags1 (foldl gopt-set dflags0 optional-dynflags))))
               (void (setSessionDynFlags dflags1))
-              (liftIO (initDynLinker hsc-env))
+
+              ;; Initializing plugins with dflags from updated session.
+              (<- hsc-env1 getSession)
+              (<- dflags2 (liftIO (initialize-plugins hsc-env1 dflags1)))
+              (void (setSessionDynFlags dflags2))
+
+              ;; Setting the default `DynFlags' for macro expansion.
+              (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags2)})))
 
               ;; XXX: Currently the printer function and the arguments
               ;; returned from "System.Environment.getArgs" are defined
