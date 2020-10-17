@@ -78,16 +78,16 @@ jobs:
 
       - name: Add PATH for executable installed with stack (linux)
         if: matrix.os == 'ubuntu-latest'
-        run: echo "::add-path::/home/runner/.local/bin"
+        run: echo "/home/runner/.local/bin" >> $GITHUB_PATH
 
       - name: Add PATH for executable installed with stack (osx)
         if: matrix.os == 'macos-latest'
-        run: echo "::add-path::/Users/runner/.local/bin"
+        run: echo "/Users/runner/.local/bin" >> $GITHUB_PATH
 
       - name: Add PATH for executable installed with stack (windows)
         if: matrix.os == 'windows-latest'
         shell: bash
-        run: echo "::add-path::C:/Users/runneradmin/AppData/Roaming/local/bin"
+        run: echo "C:/Users/runneradmin/AppData/Roaming/local/bin" >> $GITHUB_PATH
 
       - name: Setup stack
         shell: bash
@@ -186,7 +186,7 @@ jobs:
           mkdir -p ~/.ghcup/bin
           curl -sL $url > ~/.ghcup/bin/ghcup
           chmod +x ~/.ghcup/bin/ghcup
-          echo "::add-path::$HOME/.ghcup/bin"
+          echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
 
       - name: Install ghcup (osx)
         if: matrix.os == 'macos-latest'
@@ -195,14 +195,14 @@ jobs:
           mkdir -p ~/.ghcup/bin
           curl -sL $url > ~/.ghcup/bin/ghcup
           chmod +x ~/.ghcup/bin/ghcup
-          echo "::add-path::$HOME/.ghcup/bin"
+          echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
 
       - name: Install ghc and cabal-install (linux and osx)
         if: matrix.os != 'windows-latest'
         run: |
-          ghcup -c install-cabal ${{ matrix.plan.cabal }}
-          ghcup -c install ${{ matrix.plan.ghc }}
-          ghcup set ${{ matrix.plan.ghc }}
+          ghcup install cabal ${{ matrix.plan.cabal }}
+          ghcup install ghc ${{ matrix.plan.ghc }}
+          ghcup set ghc ${{ matrix.plan.ghc }}
           which cabal
           which ghc
           cabal --version
@@ -215,8 +215,8 @@ jobs:
           choco install -y cabal --version ${{ matrix.plan.cabal }}
           choco install -y ghc --version ${{ matrix.plan.ghc }}
           refreshenv
-          echo "::add-path::C:/Users/runneradmin/AppData/Roaming/cabal/bin"
-          echo "::add-path::C:/ProgramData/chocolatey/lib/ghc/tools/ghc-${{ matrix.plan.ghc }}/bin"
+          echo "C:/Users/runneradmin/AppData/Roaming/cabal/bin" >> $GITHUB_PATH
+          echo "C:/ProgramData/chocolatey/lib/ghc/tools/ghc-${{matrix.plan.ghc }}/bin" >> $GITHUB_PATH
 
       - name: Show version and paths
         shell: bash
