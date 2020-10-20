@@ -147,7 +147,7 @@ Sample run:
   args
   `(\ $tmp (case $tmp ,@args)))
 
-(defmacro case-do
+(defmacroM case-do
   "Like @case@, but takes an expression with 'Monad' type.
 
 ==== __Syntax__
@@ -175,8 +175,9 @@ Is same as:
 @
 "
   args
-  `(do (<- $tmp ,(car args))
-       (case $tmp ,@(cdr args))))
+  (do (<- tmp gensym)
+      (return `(do (<- ,tmp ,(car args))
+                   (case ,tmp ,@(cdr args))))))
 
 
 ;;; Compilation context macros

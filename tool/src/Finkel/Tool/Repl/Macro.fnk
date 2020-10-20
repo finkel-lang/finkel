@@ -780,14 +780,13 @@ paths from import directories."
   (case-do getTargets
     (: (Target (TargetFile path _) _ _) _)
     (env-context-on-exception
-     (do (<- success-flag (compile-and-import path))
-         (case success-flag
-           Succeeded (do (<- ctx0 getContext)
-                         (<- ctx1 (adjust-current-target path ctx0))
-                         (setContext ctx1)
-                         (return `(System.IO.putStrLn
-                                   ,(++ "; reloaded " path))))
-           Failed (return '(:begin)))))
+     (case-do (compile-and-import path)
+       Succeeded (do (<- ctx0 getContext)
+                     (<- ctx1 (adjust-current-target path ctx0))
+                     (setContext ctx1)
+                     (return `(System.IO.putStrLn
+                               ,(++ "; reloaded " path))))
+       Failed (return '(:begin))))
     _ (return '(System.IO.putStrLn "; reload: invalid target"))))
 
 (defn (:: set-cmd ReplAction)
