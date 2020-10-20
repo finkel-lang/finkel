@@ -10,8 +10,11 @@ import Control.Exception            (SomeException (..), catch)
 import Control.Monad                (when)
 import Control.Monad.IO.Class       (MonadIO (..))
 import Data.List                    (isPrefixOf, tails)
+import Data.Maybe                   (isJust)
 import GHC.Exts                     (unsafeCoerce#)
+import System.Environment           (lookupEnv)
 import System.FilePath              ((<.>), (</>))
+import System.Info                  (os)
 
 -- directory
 import System.Directory             (copyFile, createDirectoryIfMissing,
@@ -329,7 +332,11 @@ buildReload the_file fname files1 files2 before_str after_str =
           -- does work when the test executable was compiled with "-dynamic"
           -- option.
           then pendingWith "non-dynamic object code not yet supported"
-          else do_work' use_obj tmpdir
+          else do
+            is_travis <- lookupEnv "TRAVIS"
+            if isJust is_travis && os == "darwin"
+               then pendingWith "not yet supported under Travis OSX"
+               else do_work' use_obj tmpdir
 
     do_work' use_obj tmpdir = do
        (ret1, ret2) <- runFnk (fnk_work use_obj tmpdir) defaultFnkEnv
