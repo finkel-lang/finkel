@@ -37,7 +37,7 @@ jobs:
               resolver: "lts-12"
           - os: windows-latest
             plan:
-              resolver: "lts-16"
+              resolver: "lts-14"
 
     env:
       STACK: stack --resolver=${{ matrix.plan.resolver }}
@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.stack
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}-${{ hashFiles('.github/workflows/build.yaml') }}
 
       - name: Cache stack packages database (windows)
         if: matrix.os == 'windows-latest'
