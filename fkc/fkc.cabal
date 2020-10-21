@@ -27,7 +27,8 @@ flag dynamic
 
 executable fkc
   main-is:             Main.hs
-  ghc-options:         -Wall -threaded -rtsopts
+  c-sources:           hschooks.c
+  ghc-options:         -Wall -threaded -no-hs-main
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
   build-depends:       base > 4.10 && < 5
