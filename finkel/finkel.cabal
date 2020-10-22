@@ -17,11 +17,6 @@ description:
   .
   See the <https://finkel.readthedocs.org documentation> for more info.
 
-flag dynamic
-  description:         Dynamically link executables (except Windows)
-  default:             True
-  manual:              True
-
 executable finkel
   main-is:             Main.hs
   build-depends:       base        >= 4.7  && < 5
@@ -29,9 +24,6 @@ executable finkel
   default-language:    Haskell2010
   c-sources:           hschooks.c
   ghc-options:         -Wall -threaded -no-hs-main
-
-  if !os(windows) && flag(dynamic)
-    ghc-options:       -dynamic
 
 source-repository head
   type:     git
