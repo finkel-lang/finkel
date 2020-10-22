@@ -66,13 +66,15 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildByteCode "main3.fnk"
   buildByteCodeWith ["--fnk-verbose=2", "-v2"] "main4.fnk"
   buildByteCode "main5.fnk"
-  buildByteCodeWith [ "--fnk-dump-dflags"
-                    , "--fnk-dump-expand"
-                    , "--fnk-dump-hs"
-                    , "--fnk-trace-expand"
-                    , "--fnk-trace-make"
-                    , "--fnk-trace-spf" ]
-                    "main9.fnk"
+
+  when (os /= "mingw32") $
+    buildByteCodeWith [ "--fnk-dump-dflags"
+                      , "--fnk-dump-expand"
+                      , "--fnk-dump-hs"
+                      , "--fnk-trace-expand"
+                      , "--fnk-trace-make"
+                      , "--fnk-trace-spf" ]
+                      "main9.fnk"
 
   -- Build object codes
   buildC (odir </> "cbits1.c")
