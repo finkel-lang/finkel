@@ -23,8 +23,9 @@ import qualified Data.Map               as Map
 -- ghc
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
-                                         HscTarget (..), isObjectTarget,
-                                         unSetGeneralFlag', updOptLevel)
+                                         HscTarget (..), Way (..), interpWays,
+                                         isObjectTarget, unSetGeneralFlag',
+                                         updOptLevel)
 import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
@@ -61,9 +62,7 @@ withExpanderSettings act =
       hsc_env_old <- getSession
       hsc_env_new <- case envSessionForExpand fnk_env of
                         Just he -> return he
-                        Nothing -> do
-                          debug fnk_env Nothing ["Making new session for expand"]
-                          liftIO (newHscEnv (bcoDynFlags dflags))
+                        Nothing -> new_hsc_env fnk_env dflags
       setSession hsc_env_new
       return hsc_env_old
 
@@ -71,6 +70,16 @@ withExpanderSettings act =
       do hsc_env_new <- getSession
          modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_new})
          setSession hsc_env_old
+
+    new_hsc_env fnk_env dflags0 = do
+      debug fnk_env Nothing ["Making new session for expand"]
+      let dflags1 = bcoDynFlags dflags0
+          ways1 = ways dflags1
+          dflags2 = if WayDyn `elem` ways1 && WayDyn `notElem` interpWays
+                       then dflags1 {ways = filter (/= WayDyn) ways1}
+                       else dflags1
+      dumpDynFlags fnk_env "Language.Finkel.Expand.withExpanderSettings" dflags2
+      liftIO (newHscEnv dflags2)
 
 -- | Setup 'DynFlags' for interactive evaluation.
 bcoDynFlags :: DynFlags -> DynFlags
