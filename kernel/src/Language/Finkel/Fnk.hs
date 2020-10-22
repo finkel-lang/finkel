@@ -314,20 +314,20 @@ fromGhc m = Fnk (\_ -> m)
 
 -- | Get current 'FnkEnv'.
 getFnkEnv :: Fnk FnkEnv
-getFnkEnv = Fnk (\(FnkEnvRef ref) -> liftIO (readIORef ref))
+getFnkEnv = Fnk (\(FnkEnvRef ref) -> liftIO $! readIORef ref)
 {-# INLINE getFnkEnv #-}
 
 -- | Set current 'FnkEnv' to given argument.
 putFnkEnv :: FnkEnv -> Fnk ()
 putFnkEnv fnk_env =
-  Fnk (\(FnkEnvRef ref) -> fnk_env `seq` liftIO (writeIORef ref fnk_env))
+  Fnk (\(FnkEnvRef ref) -> fnk_env `seq` liftIO $! writeIORef ref fnk_env)
 {-# INLINE putFnkEnv #-}
 
 -- | Update 'FnkEnv' with applying given function to current 'FnkEnv'.
 modifyFnkEnv :: (FnkEnv -> FnkEnv) -> Fnk ()
 modifyFnkEnv f =
   Fnk (\(FnkEnvRef ref) ->
-         liftIO (atomicModifyIORef' ref (\fnk_env -> (f fnk_env, ()))))
+         liftIO $! atomicModifyIORef' ref (\fnk_env -> (f fnk_env, ())))
 {-# INLINE modifyFnkEnv #-}
 
 -- | Throw 'FinkelException' with given message.
@@ -363,7 +363,6 @@ emptyFnkEnv = FnkEnv
     uninitializedUniqSupply :: UniqSupply
     uninitializedUniqSupply =
       throwFinkelException (FinkelException "UniqSupply not initialized")
-
 
 -- | Set current 'DynFlags' to given argument. This function also sets the
 -- 'DynFlags' in interactive context.

@@ -522,12 +522,12 @@ maybeExpandedSummary old_summaries tu@(tsource,_) = do
                     liftIO (modificationTimeIfExists (ml_hie_file ms_loc))
 #endif
                   -- XXX: Fill in the list of required ModSummary.
-                  return $! Just (ms { ms_obj_date = obj_date
-                                     , ms_iface_date = hi_date
+                  return $ Just (ms { ms_obj_date = obj_date
+                                    , ms_iface_date = hi_date
 #if MIN_VERSION_ghc(8,8,0)
-                                     , ms_hie_date = hie_date
+                                    , ms_hie_date = hie_date
 #endif
-                                     }, [])
+                                    }, [])
   where
     make_new_summary hsc_env fnk_env = do
       mb_tup <- newExpandedSummary tu
@@ -548,7 +548,7 @@ maybeExpandedSummary old_summaries tu@(tsource,_) = do
           -- To support -ddump-parsed-ast option.
           dumpParsedAST (ms_hspp_opts ms) ms
 
-          return $! Just (ms, reqs)
+          return $ Just (ms, reqs)
     getObjTimestamp loc =
       modificationTimeIfExists (ml_obj_file loc)
 
@@ -603,7 +603,7 @@ compileFnkFile path modname = do
       mname_sdoc = text (mname_str ++ ":")
 
   -- Compile the form with local DynFlags to support file local pragmas.
-  (mdl, reqs) <- withTmpDynFlags dflags0 $ do
+  (mdl, reqs) <- withTmpDynFlags dflags0 $
     timeIt ("FinkelModule [" ++ mname_str ++ "]") $ do
       -- Reset current FnkEnv. No need to worry about managing DynFlags, this
       -- action is wrapped with 'withTmpDynFlags' above.
