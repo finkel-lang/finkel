@@ -13,7 +13,7 @@ module Language.Finkel.Expand
 #include "Syntax.h"
 
 -- base
-import           Control.Monad          (foldM)
+import           Control.Monad          (foldM, when)
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Char              (isLower)
 
@@ -23,8 +23,9 @@ import qualified Data.Map               as Map
 -- ghc
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
-                                         HscTarget (..), isObjectTarget,
-                                         unSetGeneralFlag', updOptLevel)
+                                         HscTarget (..), Way (..), interpWays,
+                                         isObjectTarget, unSetGeneralFlag',
+                                         updOptLevel)
 import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
@@ -61,9 +62,7 @@ withExpanderSettings act =
       hsc_env_old <- getSession
       hsc_env_new <- case envSessionForExpand fnk_env of
                         Just he -> return he
-                        Nothing -> do
-                          debug fnk_env Nothing ["Making new session for expand"]
-                          liftIO (newHscEnv (bcoDynFlags dflags))
+                        Nothing -> new_hsc_env fnk_env dflags
       setSession hsc_env_new
       return hsc_env_old
 
@@ -71,6 +70,24 @@ withExpanderSettings act =
       do hsc_env_new <- getSession
          modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_new})
          setSession hsc_env_old
+
+    -- Adjusting the 'DynFlags' used by the macro expansion session, to support
+    -- evaluating expressions in dynamic and non-dynamic builds of the Finkel
+    -- compiler executable.
+    new_hsc_env fnk_env dflags0 = do
+      debug fnk_env Nothing ["Making new session for expand"]
+      let dflags1 = bcoDynFlags dflags0
+          ways1 = ways dflags1
+          interp_has_no_way_dyn = WayDyn `notElem` interpWays
+          dflags2 = if interp_has_no_way_dyn
+                       then dflags1 {ways = filter (/= WayDyn) ways1}
+                       else dflags1
+
+      when interp_has_no_way_dyn $
+        debug fnk_env Nothing ["Not using WayDyn in expander session"]
+      dumpDynFlags fnk_env "Language.Finkel.Expand.new_hsc_env" dflags2
+
+      liftIO (newHscEnv dflags2)
 
 -- | Setup 'DynFlags' for interactive evaluation.
 bcoDynFlags :: DynFlags -> DynFlags
