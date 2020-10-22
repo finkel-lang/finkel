@@ -28,6 +28,7 @@ mainTests =
     finkelHelpTest
     finkelVersionTest
     finkelSupportedLanguagesTest
+    finkelInfoTest
     finkelUnknownFlagTest
 
 compileFile :: [String] -> FilePath -> Spec
@@ -59,6 +60,12 @@ finkelSupportedLanguagesTest =
               "should show supported language extensions"
               ["--fnk-languages"]
 
+finkelInfoTest :: Spec
+finkelInfoTest =
+  trivialTest "option --info"
+              "should show info of DynFlags"
+              ["--info"]
+
 finkelUnknownFlagTest :: Spec
 finkelUnknownFlagTest =
   describe "invalid flag" $ do
@@ -66,6 +73,7 @@ finkelUnknownFlagTest =
       runDefaultMain ["--fnk-foo"] `shouldThrow` (== ExitFailure 1)
     it "should exit with failure with invalid verbosity level" $
       runDefaultMain ["--fnk-verbose=foo"] `shouldThrow` (== ExitFailure 1)
+
 
 trivialTest :: String -> String -> [String] -> Spec
 trivialTest desc label flags = describe desc $

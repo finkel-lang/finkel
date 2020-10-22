@@ -12,7 +12,7 @@ module Language.Finkel.Main
 -- base
 import           Control.Monad                (unless)
 import           Control.Monad.IO.Class       (MonadIO (..))
-import           Data.List                    (partition)
+import           Data.List                    (intercalate, partition)
 import           Data.Version                 (showVersion)
 import           System.Console.GetOpt        (ArgDescr (..), ArgOrder (..),
                                                OptDescr (..), getOpt, usageInfo)
@@ -28,7 +28,7 @@ import           BasicTypes                   (SuccessFlag (..))
 import           DriverPhases                 (isDynLibFilename,
                                                isObjectFilename)
 import           DynFlags                     (DynFlags (..), GeneralFlag (..),
-                                               HasDynFlags (..),
+                                               HasDynFlags (..), compilerInfo,
                                                defaultFatalMessager,
                                                defaultFlushOut, gopt,
                                                parseDynamicFlagsCmdLine)
@@ -124,15 +124,15 @@ defaultMainWith macros = do
 
            fnk_env1 = fnk_env0 { envDefaultMacros = macros'
                                , envMacros = macros' }
-           next = maybe (main' fnk_env1 args1 args2)
+           next = maybe (main1 fnk_env1 args1 args2)
                         printFinkelHelp
                         (finkelHelp fnk_opts)
 
        -- XXX: Handle '-B' option properly.
        next
 
-main' :: FnkEnv -> [String] -> [String] -> IO ()
-main' fnk_env orig_args ghc_args = do
+main1 :: FnkEnv -> [String] -> [String] -> IO ()
+main1 fnk_env orig_args ghc_args = do
   initGCStatistics
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
@@ -145,12 +145,21 @@ main' fnk_env orig_args ghc_args = do
                                                    exitFailure))
               (handleSourceError (\se -> do printException se
                                             liftIO exitFailure)
-                                 (main'' orig_args ghc_args)))
+                                 (main2 orig_args ghc_args)))
              fnk_env)
 
-main'' :: [String] -> [String] -> Fnk ()
-main'' orig_args ghc_args = do
+main2 :: [String] -> [String] -> Fnk ()
+main2 orig_arg ghc_args =
+  if "--info" `elem` ghc_args
+     -- Show info and exit. Using the 'DynFlags' from the finkel compiler
+     -- executable, not the delegated "ghc" executable.
+     then getDynFlags >>= liftIO . showInfo
+     else main3 orig_arg ghc_args
+
+main3 :: [String] -> [String] -> Fnk ()
+main3 orig_args ghc_args = do
   dflags0 <- getDynFlags
+
   let largs = map on_the_cmdline ghc_args
       on_the_cmdline = mkGeneralLocated "on the commandline"
       dflags1 = dflags0 {verbosity = 1}
@@ -364,7 +373,6 @@ rawGhcOptions =
   , "-V"
   , "--version"
   , "--numeric-version"
-  , "--info"
   , "--show-options"
   , "--supported-languages"
   , "--supported-extensions"
@@ -389,6 +397,13 @@ checkUnknownFlags fileish = do
 -- Haskell source file.
 isSourceTarget :: String -> Bool
 isSourceTarget str = looksLikeModuleName str || isFnkFile str || isHsFile str
+
+-- | Show the information of given 'DynFlags', doing the same thing as done in
+-- the @Main.hs@ found in ghc-bin.
+showInfo :: DynFlags -> IO ()
+showInfo dflags = do
+  let sq x = " [" ++ x ++ "\n ]"
+  putStrLn (sq (intercalate "\n ," (map show (compilerInfo dflags))))
 
 -- | Until ghc-8.6.0, 'configureHandleEncoding' did not exist.
 configureHandleEncoding' :: IO ()
