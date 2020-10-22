@@ -29,7 +29,6 @@ travis_init () {
         windows)
             export LOCALBIN=$HOME/AppData/Roaming/stack/local/bin
             export PATH="$PATH:$LOCALBIN"
-            export FNK_DEBUG=1
             export STACK="stack.exe --no-terminal --resolver=$RESOLVER"
             ;;
     esac
