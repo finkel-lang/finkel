@@ -89,7 +89,7 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
 Pair of cosole filename (without the directory, with extension) and a function
 taking GHC version. If the function evaluates to `True', the console test will
 be skipped.")
-(type ConsoleSkip [(, String (-> Version Bool))])
+(type ConsoleSkip [(, String (-> Version BuildTool Bool))])
 
 (defn (:: get-console-files (-> FilePath (IO [FilePath])))
   (let ((= is-console-file
@@ -99,26 +99,29 @@ be skipped.")
 (defn (:: run-console-tests (-> FilePath ConsoleSkip Spec))
   "Run test for @*.console@ files in given directory."
   [dir skips]
-  (let ((= test file
-          (it (++ "runs " file " successfully")
-            (case (do (<- f (lookup file skips))
-                      (<- v mb-ghc-version)
-                      (return (f v)))
-              (Just True) (pendingWith "skipped")
-              _ (run-console-test dir file))))
-        (= mb-ghc-version
-          (case (filter (\ (, _ s) (null s))
-                        (readP-to-S parseVersion cProjectVersion))
-            (: (, v _) _) (Just v)
-            _ Nothing)))
-    (>>= (runIO (get-console-files dir)) (mapM_ test))))
+  (do (let ((= test build-tool file
+              (it (++ "runs " file " successfully")
+                (case (do (<- f (lookup file skips))
+                          (<- v mb-ghc-version)
+                          (return (f v build-tool)))
+                  (Just True) (pendingWith "skipped")
+                  _ (run-console-test dir file))))
+            (= mb-ghc-version
+              (case (filter (. null snd)
+                            (readP-to-S parseVersion cProjectVersion))
+                (: (, v _) _) (Just v)
+                _ Nothing))))
+      (<- console-files (runIO (get-console-files dir)))
+      (<- build-tool (runIO get-build-tool))
+      (mapM_ (test build-tool) console-files)))
 
 (data BuildTool
   ;; | This package is build with `cabal-install'.
   Cabal
 
   ;; | This package is build with `stack'.
-  Stack)
+  Stack
+  (deriving Eq))
 
 (defn (:: run-console-test (-> FilePath ; ^ Directory to run the command.
                                FilePath ; ^ Console file.

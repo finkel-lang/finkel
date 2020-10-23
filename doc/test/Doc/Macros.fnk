@@ -19,9 +19,10 @@
 (defn (:: spec Spec)
   (let ((= dir (</> "include" "macros"))
         (= skips
-          [(, "begin.console" (> (makeVersion [8 8 0])))
-           (, "quasiquote.console" (const (|| (== os "darwin")
-                                              (== os "mingw32"))))]))
+          [(, "begin.console" (\ v _
+                                (> (makeVersion [8 8 0]) v)))
+           (, "quasiquote.console" (\ _ _ (|| (== os "darwin")
+                                             (== os "mingw32"))))]))
     (beforeAll_
      (remove-compiled [(</> dir "quasiquote")
                        (</> dir "require")
