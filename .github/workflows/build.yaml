@@ -5,6 +5,8 @@ on:
   push:
     paths-ignore:
       - '**.md'
+env:
+  cache-version: v1
 
 jobs:
   stack:
@@ -56,21 +58,21 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.stack
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
 
       - name: Cache stack packages database (windows)
         if: matrix.os == 'windows-latest'
         uses: actions/cache@v2
         with:
           path: C:\Users\runneradmin\AppData\Roaming\stack
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
 
       - name: Cache stack (windows)
         if: matrix.os == 'windows-latest'
         uses: actions/cache@v2
         with:
           path: C:\Users\runneradmin\AppData\Local\Programs\stack
-          key: ${{ runner.os }}-stack-local-${{ matrix.plan.resolver }}
+          key: ${{ runner.os }}-stack-local-${{ matrix.plan.resolver }}-${{ env.cache-version }}
 
       - name: Show stack version
         shell: bash
@@ -164,14 +166,14 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.ghcup
-          key: ${{ runner.os }}-ghcup-${{ matrix.plan.ghc }}
+          key: ${{ runner.os }}-ghcup-${{ matrix.plan.ghc }}-${{ env.cache-version }}
 
       - name: Cache cabal package database
         id: home-dot-cabal
         uses: actions/cache@v2
         with:
           path: ~/.cabal
-          key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}
+          key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}-${{ env.cache-version }}
 
       # Manually installing ghc and bundled packages with "ghcup" for Linux and
       # OSX, because the setup-haskell action may reuse the preinstalled GHC in
