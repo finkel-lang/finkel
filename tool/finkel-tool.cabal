@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                finkel-tool
-version:             0.1.0.0
+version:             0.0.0
 synopsis:            Finkel tool
 description:
   Finkel tool
@@ -37,7 +37,7 @@ flag dynamic
 custom-setup
   setup-depends:       base         >= 4.7 && < 5
                      , Cabal        >= 2.0 && < 3.3
-                     , finkel-setup == 0.1.0.0
+                     , finkel-setup == 0.0.0
 
 library
   hs-source-dirs:      src
@@ -67,12 +67,12 @@ library
                      , network       >= 2.6.3  && < 3.2
                      , process       >= 1.6.1  && < 1.7
                      , transformers  >= 0.5.2  && < 0.5.7
-                     , finkel-kernel == 0.1.0.0
-                     , finkel-core   == 0.1.0.0
-                     , finkel-setup  == 0.1.0.0
+                     , finkel-kernel == 0.0.0
+                     , finkel-core   == 0.0.0
+                     , finkel-setup  == 0.0.0
   if impl(ghc >= 8.10.0)
     build-depends:     exceptions    >= 0.10   && < 0.11
-  build-tool-depends:  fkc:fkc == 0.1.0.0
+  build-tool-depends:  fkc:fkc == 0.0.0
   default-language:    Haskell2010
   ghc-options:       -Wall
 

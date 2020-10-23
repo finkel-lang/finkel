@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                finkel
-version:             0.1.0.0
+version:             0.0.0
 synopsis:            Haskell in S-expression
 license:             BSD3
 license-file:        LICENSE
@@ -20,7 +20,7 @@ description:
 executable finkel
   main-is:             Main.hs
   build-depends:       base        >= 4.7  && < 5
-                     , finkel-tool == 0.1.0.0
+                     , finkel-tool == 0.0.0
   default-language:    Haskell2010
   c-sources:           hschooks.c
   ghc-options:         -Wall -threaded -no-hs-main

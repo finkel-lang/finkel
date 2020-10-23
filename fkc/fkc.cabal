@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                fkc
-version:             0.1.0.0
+version:             0.0.0
 synopsis:            Finkel kernel compiler
 description:
   Finkel kernel compiler

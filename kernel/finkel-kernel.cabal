@@ -1,6 +1,6 @@
 cabal-version:       2.0
 name:                finkel-kernel
-version:             0.1.0.0
+version:             0.0.0
 synopsis:            Finkel kernel language and compiler
 description:
   Finkel kernel language and compiler
