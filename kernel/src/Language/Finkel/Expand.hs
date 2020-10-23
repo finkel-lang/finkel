@@ -8,6 +8,8 @@ module Language.Finkel.Expand
   , expands'
   , withExpanderSettings
   , bcoDynFlags
+  , isInterpreted
+  , discardInteractiveContext
   ) where
 
 #include "Syntax.h"
@@ -24,13 +26,16 @@ import qualified Data.Map               as Map
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
                                          HscTarget (..), Way (..), interpWays,
-                                         isObjectTarget, unSetGeneralFlag',
+                                         thisPackage, unSetGeneralFlag',
                                          updOptLevel)
 import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
 import           GhcMonad               (getSession, setSession)
 import           HscMain                (newHscEnv)
+import           HscTypes               (HscEnv (..), InteractiveContext (..),
+                                         emptyInteractiveContext)
+import           Name                   (nameIsFromExternalPackage)
 import           Outputable             (Outputable (..), cat, fsep, nest, vcat)
 import           SrcLoc                 (GenLocated (..))
 
@@ -53,23 +58,27 @@ withExpanderSettings act =
      -- Switching to the dedicated 'HscEnv' for macro expansion when compiling
      -- object code. If not, assuming current session is using bytecode
      -- interpreter, using the given action as it.
-     if isObjectTarget (hscTarget dflags)
-        then gbracket (prepare dflags) restore (const act)
-        else act
+     if isInterpreted dflags
+        then act
+        else gbracket (prepare dflags) restore (const act)
   where
     prepare dflags = do
       fnk_env <- getFnkEnv
       hsc_env_old <- getSession
-      hsc_env_new <- case envSessionForExpand fnk_env of
-                        Just he -> return he
-                        Nothing -> new_hsc_env fnk_env dflags
-      setSession hsc_env_new
+
+      -- Reusing revious 'HscEnv' for macro expansion if exist, or making a new
+      -- 'HscEnv'. When reusing, discarding the previous 'InteractiveContext',
+      -- to avoid file local compile time functions to affect other modules.
+      case envSessionForExpand fnk_env of
+        Just he -> setSession $! discardInteractiveContext he
+        Nothing -> new_hsc_env fnk_env dflags >>= setSession
+
       return hsc_env_old
 
-    restore hsc_env_old =
-      do hsc_env_new <- getSession
-         modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_new})
-         setSession hsc_env_old
+    restore hsc_env_old = do
+      hsc_env_new <- getSession
+      modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_new})
+      setSession hsc_env_old
 
     -- Adjusting the 'DynFlags' used by the macro expansion session, to support
     -- evaluating expressions in dynamic and non-dynamic builds of the Finkel
@@ -87,7 +96,23 @@ withExpanderSettings act =
         debug fnk_env Nothing ["Not using WayDyn in expander session"]
       dumpDynFlags fnk_env "Language.Finkel.Expand.new_hsc_env" dflags2
 
-      liftIO (newHscEnv dflags2)
+      liftIO $! newHscEnv dflags2
+
+-- | From `discardIC'.
+discardInteractiveContext :: HscEnv -> HscEnv
+discardInteractiveContext hsc_env =
+  let dflags = hsc_dflags hsc_env
+      empty_ic = emptyInteractiveContext dflags
+      new_ic_monad = keep_external_name ic_monad
+      old_ic = hsc_IC hsc_env
+      keep_external_name ic_name =
+        if nameIsFromExternalPackage this_pkg old_name
+           then old_name
+           else ic_name empty_ic
+        where
+         old_name = ic_name old_ic
+      this_pkg = thisPackage dflags
+  in  hsc_env {hsc_IC = empty_ic {ic_monad = new_ic_monad}}
 
 -- | Setup 'DynFlags' for interactive evaluation.
 bcoDynFlags :: DynFlags -> DynFlags
@@ -294,6 +319,11 @@ expand1 form =
         Just (SpecialForm f) -> f form
         Nothing              -> return form
     _ -> return form
+
+-- | 'True' when the 'DynFlags' is using interpreter.
+isInterpreted :: DynFlags -> Bool
+isInterpreted dflags = hscTarget dflags == HscInterpreted
+{-# INLINE isInterpreted #-}
 
 -- | Debug function fot this module.
 debug :: FnkEnv -> Maybe MsgDoc -> [MsgDoc] -> Fnk ()

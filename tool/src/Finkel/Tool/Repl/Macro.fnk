@@ -36,10 +36,9 @@
    ;; ghc
    (BasicTypes (Fixity (StringLiteral ..) (SuccessFlag ..) defaultFixity))
    (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..) (HscTarget ..)
-              (Language ..) (PackageFlag ..) (GeneralFlag ..)
-              defaultDynFlags fFlags flagSpecFlag flagSpecName gopt
-              isObjectTarget lang_set parseDynamicFlagsCmdLine thisPackage
-              xFlags xopt wopt wWarningFlags))
+              (Language ..) (PackageFlag ..) (GeneralFlag ..)  defaultDynFlags
+              fFlags flagSpecFlag flagSpecName gopt isObjectTarget lang_set
+              parseDynamicFlagsCmdLine xFlags xopt wopt wWarningFlags))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (gcatch gbracket))
    (FamInstEnv (FamInst pprFamInst))
@@ -53,8 +52,7 @@
    (GhcMonad ((GhcMonad ..) getSessionDynFlags withTempSession))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
               (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
-              emptyInteractiveContext handleFlagWarnings
-              ms_mod_name pprHPT pprTarget srcErrorMessages
+              handleFlagWarnings ms_mod_name pprHPT pprTarget srcErrorMessages
               tyThingParent_maybe))
    (IfaceSyn (showToHeader))
    (InstEnv (ClsInst pprInstance))
@@ -63,8 +61,7 @@
    (Linker (initDynLinker showLinkerState))
    (Module ((Module ..) ModuleName mkModuleName mkModuleNameFS
             moduleNameString))
-   (Name (getName nameIsFromExternalPackage nameModule nameOccName nameSrcSpan
-                  pprInfixName))
+   (Name (getName nameModule nameOccName nameSrcSpan pprInfixName))
    (NameSet (elemNameSet mkNameSet))
    (Outputable (SDoc $$ <+> <> empty dcolon hsep nest ppr sep
                      showPpr showSDoc showSDocForUser text vcat))
@@ -83,6 +80,7 @@
 
    ;; finkel-kernel
    (Language.Finkel)
+   (Language.Finkel.Expand (discardInteractiveContext))
    (Language.Finkel.Eval (evalExprType evalTypeKind))
    (Language.Finkel.Form (mkLocatedForm))
    (Language.Finkel.Make (buildHsSyn make))
@@ -383,22 +381,6 @@ object code."
 (defn (:: clear-all-targets (=> (GhcMonad m) (m ())))
   (do (setTargets [])
       (void (GhcMake.load LoadAllTargets))))
-
-;;; From `GhcMake.discardIC'.
-(defn (:: discard-ic (-> HscEnv HscEnv))
-  [hsc-env]
-  (let ((= empty-ic (emptyInteractiveContext dflags))
-        (= new-ic-monad (keep-external-name ic_monad))
-        (= old-ic (hsc_IC hsc-env))
-        (= dflags (hsc_dflags hsc-env))
-        (= keep-external-name ic-name
-          (where (| ((nameIsFromExternalPackage this-pkg old-name)
-                     old-name)
-                    (otherwise
-                     (ic-name empty-ic)))
-            (= this-pkg (thisPackage dflags))
-            (= old-name (ic-name old-ic)))))
-    (hsc-env {hsc_IC (empty-ic {ic_monad new-ic-monad})})))
 
 
 ;;; Functions for show command
@@ -742,7 +724,7 @@ paths from import directories."
                     (= uncache (. (uncacheModule hsc-env) ms_mod_name))))
               (liftIO (do (mapM_ uncache graph1)
                           (flushFinderCaches hsc-env)))
-              (setSession (discard-ic hsc-env))))
+              (setSession (discardInteractiveContext hsc-env))))
         (= make-target path
           (do (<- hsc-target (fmap hscTarget getDynFlags))
               (let ((= allow-obj (not (== hsc-target HscInterpreted)))

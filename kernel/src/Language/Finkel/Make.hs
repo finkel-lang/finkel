@@ -341,7 +341,7 @@ expandTargets old_summaries tus_to_compile = timeIt label $ do
 
                     -- Adding required ModSummary to the accumulator when using
                     -- interpreter, since it could be reused.
-                    acc1 = if not (isObjectTarget (hscTarget dflags))
+                    acc1 = if isInterpreted dflags
                              then ms:new_reqs ++ acc0
                              else ms:acc0
 

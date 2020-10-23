@@ -266,7 +266,7 @@ instance ExceptionMonad Fnk where
   {-# INLINE gcatch #-}
   gmask f =
     Fnk (\ref ->
-           gmask (\r -> let r' m = Fnk (\ref' -> r (unFnk m ref'))
+           gmask (\r -> let r' m = Fnk (r . unFnk m)
                         in  unFnk (f r') ref))
   {-# INLINE gmask #-}
 
@@ -309,7 +309,7 @@ toGhc = unFnk
 
 -- | Lift 'Ghc' to 'Fnk'.
 fromGhc :: Ghc a -> Fnk a
-fromGhc m = Fnk (\_ -> m)
+fromGhc m = Fnk (const m)
 {-# INLINE fromGhc #-}
 
 -- | Get current 'FnkEnv'.
@@ -479,7 +479,7 @@ initUniqSupply' ini incr = do
   is_initialized <- readIORef uniqSupplyInitialized
   unless is_initialized
          (do initUniqSupply ini incr
-             atomicModifyIORef' uniqSupplyInitialized (\_ -> (True, ())))
+             atomicModifyIORef' uniqSupplyInitialized (const (True, ())))
 
 -- | Top level 'IORef' for book keeping 'UniqSupply' initialization, obtained
 -- with 'unsafePerformIO'.
