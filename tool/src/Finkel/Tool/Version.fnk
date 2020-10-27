@@ -66,11 +66,11 @@
     VersionNumeric print-version-numeric
     VersionHelp print-version-help))
 
-(macroletM ((get-commit-id _
-               (case-do (liftIO get-git-commit)
-                 (Just str) (return (toCode (: #'- str)))
-                 Nothing (return '""))))
-  (defn (:: print-version-message (=> (CLI m) (m ())))
+(defn (:: print-version-message (=> (CLI m) (m ())))
+  (macroletM ((get-commit-id _
+                (case-do (liftIO get-git-commit)
+                  (Just str) (return (toCode (: #'- str)))
+                  Nothing (return '""))))
     (do (<- name (liftIO getProgName))
         (putString
          (++ name " " finkel-version (get-commit-id) " " arch "-" os "\n"

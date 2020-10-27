@@ -13,6 +13,9 @@
    (Data.Version (showVersion))
    (System.Environment (getEnvironment setEnv withArgs))
 
+   ;; filepath
+   (System.FilePath (</>))
+
    ;; finkel-core
    (qualified Paths_finkel_core)
 
@@ -31,31 +34,26 @@
 ;;; Tests
 
 (defn (:: mainTests Spec)
-  (do (let ((= d describe)
-            (= main' args
-              (withArgs args main))))
+  (do (let ((= d describe)))
       (d "main with no argument"
          (it "should show usage"
-           (shouldReturn (main' []) ())))
+           (main' [])))
       (d "main with invalid command"
          (it "should show usage"
-           (shouldReturn (main' ["no-such-command"]) ())))
+           (main' ["no-such-command"])))
       (d "main with help command"
          (do (it "should show usage"
-               (shouldReturn (main' ["help"]) ()))
+               (main' ["help"]))
              (it "should show help of repl command"
-               (shouldReturn (main' ["help" "repl"]) ()))
+               (main' ["help" "repl"]))
              (it "should show help of make command"
-               (shouldReturn (main' ["help" "make"]) ()))))
+               (main' ["help" "make"]))))
       (d "main with make command"
          (it "should show help on --fnk-help"
-           (shouldReturn (main' ["make" "--fnk-help"]) ())))
-      (d "main with repl command"
-         (it "should show help on --help"
-           (shouldReturn (main' ["repl" "--help"]) ())))
+           (main' ["make" "--fnk-help"])))
       (d "main with version command"
          (it "should show version message by default"
-           (shouldReturn (main' ["version"]) ())))
+           (main' ["version"])))
       helpTests
       replTests
       versionTests))
@@ -71,13 +69,24 @@
           (messageShouldContain "version")))))
 
 (defn (:: replTests Spec)
-  (describe "repl command"
-    (do (let ((= repl args
-                (fmap (. unlines (. tst-outputs snd))
-                      (liftIO (runTestIO (replMain args) []))))))
-        (it "should complain unrecognized option"
-          (do (<- msg (repl ["--no-such-option"]))
-              (shouldContain msg "--no-such-option"))))))
+  (let ((= td (</> "test" "data"))
+        (= print-int (</> td "print-int.fnk"))
+        (= load-me (</> td "LoadMe.fnk"))
+        (= print-load-me (</> td "print-load-me.fnk"))
+        (= err001 (</> td "Err001.fnk")))
+    (describe "repl command"
+      (do (it "should show help on --help"
+            (main' ["repl" "--help"]))
+          (it "should show warning messages"
+            (main' ["repl" (++ "--file=" print-int) "-v2" "-O"]))
+          (it "should evaluate file contents after loading module"
+            (main' ["repl" (++ "--file=" print-load-me) load-me]))
+          (it "should show compilation error when loading invalid module"
+            (main' ["repl" (++ "--file=" print-int) print-int]))
+          (it "should show load failure with type error on load"
+            (main' ["repl" (++ "--file=" print-int) err001]))
+          (it "should compilain missing argument"
+            (shouldThrow (main' ["repl" "--prompt"]) anyException))))))
 
 (defn (:: versionTests Spec)
   (describe "version command"
@@ -114,3 +123,6 @@
   (bracket getEnvironment
            (mapM_ (uncurry setEnv))
            (const (>> (mapM_ (uncurry setEnv) envvars) act))))
+
+(defn (:: main' (-> [String] (IO ())))
+  (flip withArgs main))

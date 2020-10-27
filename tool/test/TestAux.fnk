@@ -170,8 +170,7 @@
               (</> ".." "dist-newstyle" "packagedb" ghc-ver))
             (= args (map noLoc ["-package-db" storedb
                                 "-package-db" inplacedb]))))
-      (<- (, dflags1 _ _)
-        (parseDynamicFlagsCmdLine dflags0 args))
+      (<- (, dflags1 _ _) (parseDynamicFlagsCmdLine dflags0 args))
       (setDynFlags dflags1)))
 
 (defn (:: init-etf (Fnk ()))
@@ -181,7 +180,8 @@
 (defn (:: makeEvalTestFns (IO EvalTestFns))
   (do (<- out-mv newEmptyMVar)
       (<- (@ resources (, _tmpfile hdl in-mv)) acquire-repl)
-      (<- etid (forkIO (runFnk (>> init-etf (eval-loop hdl in-mv)) repl-env)))
+      (<- etid
+        (forkIO (runFnk (>> init-etf (eval-loop [] hdl in-mv)) repl-env)))
       (let ((= eval-form right-or-left form expect
               (describe (++ "evaluate " (show form))
                 (it "evaluates to expected result"

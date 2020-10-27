@@ -44,11 +44,11 @@
 ;;; Starting the REPL
 
 (defn (:: start-repl
-        (-> (Maybe FilePath) (Maybe Int) FnkEnv ReplState (IO ())))
+        (-> [String] (Maybe FilePath) (Maybe Int) FnkEnv ReplState (IO ())))
   "Start REPL, maybe listen to given port number when given."
-  [mb-path mb-port fnk-env repl-st]
+  [ghc-opts mb-path mb-port fnk-env repl-st]
   (bracket acquire-repl cleanup-repl
-           (use-repl mb-path mb-port fnk-env repl-st)))
+           (use-repl ghc-opts mb-path mb-port fnk-env repl-st)))
 
 (defn (:: acquire-repl (IO (, FilePath Handle (MVar Input))))
   "Return a file path and handle for temporary use."
@@ -66,16 +66,17 @@
              (return ())
              (throwIO e)))))
 
-(defn (:: use-repl (-> (Maybe FilePath)
+(defn (:: use-repl (-> [String]
+                       (Maybe FilePath)
                        (Maybe Int)
                        FnkEnv
                        ReplState
                        (, a Handle (MVar Input))
                        (IO ())))
   "Inner work for `start-repl'."
-  [mb-path mb-port fnk-env repl-st (, _ hdl in-mv)]
+  [ghc-opts mb-path mb-port fnk-env repl-st (, _ hdl in-mv)]
   (do (mapM- (start-listener in-mv) mb-port)
-      (<- tid (forkIO (runFnk (eval-loop hdl in-mv) fnk-env)))
+      (<- tid (forkIO (runFnk (eval-loop ghc-opts hdl in-mv) fnk-env)))
       (let ((= rpl (read-print-loop in-mv tid))
             (= behavior (maybe defaultBehavior useFile mb-path))
             (= run (runInputTBehavior behavior defaultSettings))))

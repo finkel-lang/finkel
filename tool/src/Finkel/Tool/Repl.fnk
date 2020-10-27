@@ -20,6 +20,7 @@
    ;; base
    (Control.Monad (mplus))
    (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.List (isPrefixOf))
    (System.Console.GetOpt
     ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
    (System.Environment (getProgName))
@@ -44,21 +45,39 @@
 (defn (:: replMain (=> (CLI m) (-> [String] (m ()))))
   "Main entry point function for REPL."
   [args]
-  (case (getOpt Permute descrs args)
-    (, o _ []) (act (foldl (flip id) initial-option o))
-    (, _ _ es) (print-errors es)))
+  (let ((= (, repl-opts ghc-opts) (partition-repl-args args))
+        (= initial-option (make-initial-option ghc-opts)))
+    (case (getOpt Permute descrs repl-opts)
+      (, o _other []) (act (foldl (flip id) initial-option o))
+      (, _ _ es) (print-errors es))))
 
 (defn (:: repl-env FnkEnv)
   "Environment value used by the Finkel REPL."
-  (let ((= modules ["Prelude"])
-        (= macros (mergeMacros specialForms replMacros)))
-    (defaultFnkEnv {envContextModules modules
+  (let ((= macros (mergeMacros specialForms replMacros)))
+    (defaultFnkEnv {envContextModules ["Prelude"]
                     envMacros macros
                     envDefaultMacros macros
                     envQualifyQuotePrimitives True})))
 
 
 ;;; Internal
+
+;;; Note: [REPL options, ghc options, and RTS options]
+;;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;;;
+;;; REPL sub command supporst options specific to the REPL sub command, options
+;;; to update `DynFlags' in GhcMonad, and options for RTS. To accompilish
+;;; support of these three kind of options, the command line argument handling
+;;; work starts with filtering out the REPL specific options with manually
+;;; separating the long options defined with `OptDescr' from
+;;; `System.Console.GetOpts' module. Then, the rest of the arguments are treated
+;;; as ghc options and RTS options.
+;;;
+;;; Note that, in the C source code of the `rts' package, command line arguments
+;;; after `--' are passed to the callee program (see: "rts/RtsFlags.c" in the
+;;; ghc source code for detail). Once the command line parser for REPL options
+;;; tried to separate ghc options from REPL specific options with `--', however
+;;; this approach did not work well when considering RTS options.
 
 (data ReplMode
   Help
@@ -68,19 +87,32 @@
   (ReplOption {repl-mode ReplMode
                repl-listen-port (Maybe Int)
                repl-input-path (Maybe FilePath)
-               repl-prompt (Maybe String)}))
+               repl-prompt (Maybe String)
+               repl-ghc-options [String]}))
 
-(defn (:: initial-option ReplOption)
+(defn (:: make-initial-option (-> [String] ReplOption))
+  [ghc-options]
   (ReplOption {repl-mode Run
                repl-listen-port Nothing
                repl-input-path Nothing
-               repl-prompt Nothing}))
+               repl-prompt Nothing
+               repl-ghc-options ghc-options}))
+
+(defn (:: partition-repl-args (-> [String] (, [String] [String])))
+  "Separate REPL specific options from other (ghc and RTS) options."
+  (let ((= partition-arg x (, rs gs)
+          (if (any (in-long-opt x) descrs)
+              (, (: x rs) gs)
+              (, rs (: x gs))))
+        (= in-long-opt x (Option _ ls _ _)
+          (any (. (flip isPrefixOf x) (++ "--")) ls)))
+    (foldr partition-arg (, [] []))))
 
 (defn (:: descrs [OptDescr (-> ReplOption ReplOption)])
-  [(Option [#'h] ["help"]
+  [(Option [] ["help"]
            (NoArg (\ o (o {repl-mode Help})))
            "Show this help and exit")
-   (Option [#'l] ["listen"]
+   (Option [] ["listen"]
            (OptArg (\ mb-port o
                      (let ((= port
                              (mplus (fmap read mb-port)
@@ -89,14 +121,12 @@
                            repl-listen-port port})))
                    "PORT")
            "Listen to port (default: 50321)")
-   (Option [#'f] ["file"]
-           (ReqArg (\ file o
-                     (o {repl-input-path (Just file)}))
+   (Option [] ["file"]
+           (ReqArg (\ file o (o {repl-input-path (Just file)}))
                    "FILE")
            "File to get input from")
-   (Option [#'p] ["prompt"]
-           (ReqArg (\ str o
-                     (o {repl-prompt (Just str)}))
+   (Option [] ["prompt"]
+           (ReqArg (\ str o (o {repl-prompt (Just str)}))
                    "TEXT")
            "Prompt for input (default: '> ')")])
 
@@ -104,7 +134,8 @@
   [ro]
   (case (repl-mode ro)
     Help print-usage
-    Run (liftIO (start-repl (repl-input-path ro)
+    Run (liftIO (start-repl (repl-ghc-options ro)
+                            (repl-input-path ro)
                             (repl-listen-port ro)
                             repl-env
                             (maybe mempty (\ p (mempty {prompt-string p}))
@@ -124,11 +155,12 @@
          ""
          "Start interactive REPL."
          ""
-         (usageInfo "OPTIONS:\n" descrs)]))))
+         (usageInfo "OPTIONS:\n" descrs)
+         "  Other options are passed to ghc."]))))
 
-;;; Default macros imported in REPL. These macros always get imported
-;;; after loading compiled modules.
 (defn (:: replMacros EnvMacros)
+  "Default macros imported in REPL. These macros always get imported after
+loading compiled modules."
   (macrolet ((the-macros ()
                `[,@(map (\ mac `(, ,mac ,(qSymbol mac)))
                         (++ (exported-macros Finkel.Core)

@@ -9,7 +9,8 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Repl.Macro
-  (export repl-macro)
+  (export repl-macro
+          compile-and-import)
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
@@ -217,8 +218,8 @@
 (defn (:: onTheREPL (-> a (Located a)))
   (mkGeneralLocated "on the REPL"))
 
-(defn (:: compile-module (-> String (Fnk SuccessFlag)))
-  [str]
+(defn (:: compile-module (-> [(Located String)] (Fnk SuccessFlag)))
+  [lstrs]
   (where (gbracket acquire cleanup work)
     (= acquire
       (do (<- dflags getDynFlags)
@@ -232,34 +233,37 @@
       (do (putFnkEnv (fnk-env {envQualifyQuotePrimitives False}))
           (let ((= force-recomp (gopt Opt-ForceRecomp dflags))))
           (<- success-flag
-            (make [(, (onTheREPL str) Nothing)] force-recomp Nothing))
+            (make (zip lstrs (repeat Nothing)) force-recomp Nothing))
 
           ;; As done in `GHCi.UI', reverting CAFs on load.
           rts-revert-cafs
 
           (return success-flag)))))
 
-(defn (:: compile-and-import (-> FilePath (Fnk SuccessFlag)))
-  [path]
-  ;; As done in ghci, adding `IIModule' if the module is interpreted as
-  ;; bytecode, `IIDecl' otherwise. Safe Haskell setting in DynFlags is
-  ;; ignored at the moment.
+(defn (:: compile-and-import (-> [(Located FilePath)] (Fnk SuccessFlag)))
+  [lpaths]
   (do (<- fnk-env getFnkEnv)
-      (<- success-flag (compile-module path))
+      (let ((= mods (envContextModules fnk-env))
+            (= imps0 (map mk-ii-str mods))
+            (:: adjust-module (-> (Located String) (Fnk InteractiveImport)))
+            (= adjust-module lpath
+              (do (let ((= name1 (asModuleName (unLoc lpath)))
+                        (= name2 (if (null name1) "Main" name1))
+                        (= name3 (mkModuleNameFS (fsLit name2)))))
+                  (<- mdl (getModSummary name3))
+                  (<- is-interp (moduleIsInterpreted (ms-mod mdl)))
+                  (return (if is-interp
+                              (IIModule name3)
+                              (mk-ii name3)))))))
+
+      ;; As done in ghci, adding `IIModule' if the module is interpreted as
+      ;; bytecode, adding `IIDecl' otherwise. Safe Haskell setting in DynFlags
+      ;; is ignored at the moment.
+      (<- success-flag (compile-module lpaths))
       (case success-flag
-        Succeeded (do (let ((= mods (envContextModules fnk-env))
-                            (= mname0 (asModuleName path))
-                            (= mname1 (| ((null mname0) "Main")
-                                         (otherwise mname0)))
-                            (= mname2 (mkModuleNameFS (fsLit mname1)))
-                            (= imps0 (map mk-ii-str mods))))
-                      (<- mdl (getModSummary mname2))
-                      (<- is-interp (moduleIsInterpreted (ms-mod mdl)))
-                      (let ((= me (| (is-interp (IIModule mname2))
-                                     (otherwise (mk-ii mname2))))))
-                      (setContext (: me imps0)))
-        Failed (do (<- mods (fmap envContextModules getFnkEnv))
-                   (setContext (map mk-ii-str mods))))
+        Succeeded (do (<- mdls (mapM adjust-module lpaths))
+                      (setContext (++ mdls imps0)))
+        Failed (setContext imps0))
       (return success-flag)))
 
 (defn (:: adjust-current-target
@@ -742,7 +746,8 @@ paths from import directories."
                  (do clear-all
                      (<- target (make-target path))
                      (<- _ (setTargets [target]))
-                     (<- success-flag (compile-and-import path))
+                     (<- success-flag
+                       (compile-and-import [(onTheREPL path)]))
                      (case success-flag
                        Succeeded (liftIO (putStrLn (++ "; loaded " path)))
                        _ (return ()))
@@ -760,15 +765,18 @@ paths from import directories."
   "Function to reload previously loaded module."
   [_forms]
   (case-do getTargets
-    (: (Target (TargetFile path _) _ _) _)
+    (: (Target target-id _ _) _)
     (env-context-on-exception
-     (case-do (compile-and-import path)
-       Succeeded (do (<- ctx0 getContext)
-                     (<- ctx1 (adjust-current-target path ctx0))
-                     (setContext ctx1)
-                     (return `(System.IO.putStrLn
-                               ,(++ "; reloaded " path))))
-       Failed (return '(:begin))))
+     (let ((= tstr (case target-id
+                     (TargetFile path _) path
+                     (TargetModule mdl) (moduleNameString mdl))))
+       (case-do (compile-and-import [(onTheREPL tstr)])
+         Succeeded (do (<- ctx0 getContext)
+                       (<- ctx1 (adjust-current-target tstr ctx0))
+                       (setContext ctx1)
+                       (return `(System.IO.putStrLn
+                                 ,(++ "; reloaded " tstr))))
+         Failed (return '(:begin)))))
     _ (return '(System.IO.putStrLn "; reload: invalid target"))))
 
 (defn (:: set-cmd ReplAction)

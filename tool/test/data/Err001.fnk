@@ -1,0 +1,8 @@
+(defmodule Err001)
+
+(defn (:: foo (-> Int Int))
+  [n]
+  (+ (* n 2) 2))
+
+(defn (:: err01 (IO ()))
+  (print (foo "type error")))

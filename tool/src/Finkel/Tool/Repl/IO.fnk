@@ -165,7 +165,7 @@ reading the input until successful parse result."
 
 (defn (:: init-form Code)
   "Form containing initial message for the REPL."
-  '(putStrLn "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
+  '(System.IO.putStrLn "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
 
 (defn (:: quit (=> (MonadIO m) (-> ThreadId (m ()))))
   (. liftIO killThread))

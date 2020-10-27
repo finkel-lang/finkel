@@ -11,7 +11,7 @@
    ;; base
    (Control.Concurrent.MVar (MVar putMVar takeMVar))
    (Control.Exception ((AsyncException ..) fromException throwIO))
-   (Control.Monad (void))
+   (Control.Monad (unless void))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate))
 
@@ -19,28 +19,32 @@
    (System.IO (Handle))
 
    ;; ghc
-   (DynFlags ((DynFlags ..) (GeneralFlag ..) (HasDynFlags ..)
-              gopt-set xopt-unset))
+   (BasicTypes ((SuccessFlag ..)))
+   (DynFlags ((DynFlags ..) (GeneralFlag ..) (HasDynFlags ..) (Option ..)
+              gopt-set parseDynamicFlagsCmdLine xopt-unset))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (ghandle))
-   (GHC (getPrintUnqual setSessionDynFlags))
+   (GHC ((Target ..) (TargetId ..)
+         getPrintUnqual setSessionDynFlags setTargets))
    (GHCi (evalStmt))
    (GhcMonad
     ((GhcMonad ..) getSessionDynFlags modifySession withTempSession))
    (HscMain (hscParsedStmt))
    (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-              FixityEnv extendInteractiveContextWithIds
-              setInteractivePrintName srcErrorMessages))
+              FixityEnv SourceError extendInteractiveContextWithIds
+              handleFlagWarnings setInteractivePrintName srcErrorMessages))
    (InteractiveEval
     (compileParsedExprRemote getContext parseName setContext))
    (Linker (extendLinkEnv))
+   (Module (mkModuleName))
    (Name ((Name) getName nameOccName occNameString))
    (OrdList (toOL))
    (Outputable (ppr mkErrStyle renderWithStyle setStyleColoured
                     showPpr showSDoc vcat))
    (RdrHsSyn (cvTopDecls))
-   (SrcLoc (Located unLoc))
+   (SrcLoc (Located mkGeneralLocated unLoc))
    (TyCoRep ((TyThing ..)))
+   (Util (looksLikeModuleName))
    (Var (Id Var varType))
 
    ;; ghc-boot
@@ -60,9 +64,11 @@
    (Language.Finkel.Make (initSessionForMake))
    (Language.Finkel.Fnk ((FnkEnv ..) failS modifyFnkEnv prepareInterpreter))
    (Language.Finkel.Syntax (parseExpr parseImports parseStmt parseTopDecls))
+   (Language.Finkel.TargetSource (isFnkFile isHsFile))
 
    ;; internal
    (Finkel.Tool.Repl.IO)
+   (Finkel.Tool.Repl.Macro)
    (Finkel.Tool.Repl.Types)))
 
 ;;; Extra imports
@@ -123,32 +129,61 @@
 
 ;;; Eval loop
 
-(defn (:: eval-loop (-> Handle (MVar Input) (Fnk ())))
+(defn (:: init-eval-loop (-> [String] (Fnk ForeignHValue)))
+  "Initialization works for evaluation loop."
+  [ghc-opts]
+  (do initSessionForMake
+      prepareInterpreter
+      (<- hsc-env0 getSession)
+
+      ;; Parse the ghc options from argument, assuming that the arguments are
+      ;; passed from the command line.
+      (let ((= on-the-commandline (mkGeneralLocated "on the commmandline"))
+            (= lghc-opts (map on-the-commandline ghc-opts))))
+      (<- (, dflags0 fileish warns)
+        (parseDynamicFlagsCmdLine (hsc-dflags hsc-env0) lghc-opts))
+      (liftIO (handleFlagWarnings dflags0 warns))
+
+      ;; As done in the Main.hs in "ghc-bin" package, updating the `ldInputs'
+      ;; field o the `DynFlags' with `FileOption', to support linking object
+      ;; files.
+      (let ((= dflags1 (foldl gopt-set dflags0 optional-dynflags))
+            (= (, srcs objs) (partition-args fileish))
+            (= dflags2
+              (dflags1 {ldInputs (++ (map (. (FileOption "") unLoc) objs)
+                                     (ldInputs dflags1))}))))
+
+      ;; Initializing plugins with dflags from updated session.
+      (<- dflags3 (liftIO (initialize-plugins hsc-env0 dflags2)))
+      (void (setSessionDynFlags dflags3))
+
+      ;; Setting the default `DynFlags' for macro expansion.
+      (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags3)})))
+
+      ;; Load modules specified from command line, when given.
+      (unless (null srcs)
+        (ghandle
+         (\ e
+           (case (fromException e)
+             (Just se) (>>= (src-err-handler se) (. liftIO putStrLn))
+             _ (liftIO (print e))))
+         (case-do (do (setTargets (map guessFnkTarget srcs))
+                      (compile-and-import srcs))
+           Failed (liftIO
+                   (putStrLn (++ "failed loading: "
+                                 (intercalate ", " (map unLoc fileish)))))
+           Succeeded (return ()))))
+
+      ;; XXX: Currently the printer function and the arguments returned from
+      ;; "System.Environment.getArgs" are defined here and cannot be changed.
+      (set-print-name "System.IO.print")
+
+      (make-eval-wrapper [])))
+
+(defn (:: eval-loop (-> [String] Handle (MVar Input) (Fnk ())))
   "Loop to evaluate expressions."
-  [hdl in-mvar]
-  (let ((= initialize
-          (do initSessionForMake
-              prepareInterpreter
-              (<- hsc-env0 getSession)
-              (let ((= dflags0 (hsc-dflags hsc-env0))
-                    (= dflags1 (foldl gopt-set dflags0 optional-dynflags))))
-              (void (setSessionDynFlags dflags1))
-
-              ;; Initializing plugins with dflags from updated session.
-              (<- hsc-env1 getSession)
-              (<- dflags2 (liftIO (initialize-plugins hsc-env1 dflags1)))
-              (void (setSessionDynFlags dflags2))
-
-              ;; Setting the default `DynFlags' for macro expansion.
-              (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags2)})))
-
-              ;; XXX: Currently the printer function and the arguments
-              ;; returned from "System.Environment.getArgs" are defined
-              ;; here and cannot be changed.
-              (set-print-name "Prelude.print")
-
-              (make-eval-wrapper [])))
-        (= withAsyncHandler wrapper
+  [ghc-opts hdl in-mvar]
+  (let ((= withAsyncHandler wrapper
           (ghandle
            (\ e
              (case e
@@ -156,21 +191,13 @@
                ThreadKilled  (return ())
                _ (do (liftIO (putStrLn (++ "eval-loop: " (show e))))
                      (loop wrapper))))))
-        (= src-err-handler src-err
-          (do (<- dflags getSessionDynFlags)
-              (<- unqual getPrintUnqual)
-              (let ((= sdoc (vcat (pprErrMsgBagWithLoc emsgs)))
-                    (= style0 (mkErrStyle dflags unqual))
-                    (= style1 (setStyleColoured True style0))
-                    (= emsgs (srcErrorMessages src-err))))
-              (return (Left (renderWithStyle dflags sdoc style1)))))
         (:: throw-async-io (-> AsyncException (Fnk a)))
         (= throw-async-io (. liftIO throwIO))
         (= withErrorHandler m
           (ghandle
            (\ e
              (case (fromException e)
-               (Just se) (src-err-handler se)
+               (Just se) (fmap Left (src-err-handler se))
                Nothing (case (fromException e)
                          (Just ae) (throw-async-io ae)
                          Nothing (return (Left (show e))))))
@@ -186,7 +213,7 @@
           (withAsyncHandler wrapper
                             (>> (eval-one wrapper)
                                 (loop wrapper)))))
-    (>>= initialize loop)))
+    (>>= (init-eval-loop ghc-opts) loop)))
 
 (defn (:: set-print-name (-> String (Fnk ())))
   "Set the name of function used for printing values in interactive
@@ -295,10 +322,9 @@ context."
         (= eval-for-connection
           (liftIO (with-io-redirect hdl eval-hvals-io))))
     (do (<- (, status ret)
-          ;; Switching behaviour between prompt and network
-          ;; connection. Getting printed result as `String' for
-          ;; connection by wrapping the execution of compiled result,
-          ;; which is a value of `IO [HValue]' type.
+          ;; Switching behaviour between prompt and network connection. Getting
+          ;; printed result as `String' for connection by wrapping the execution
+          ;; of compiled result, which is a value of `IO [HValue]' type.
           (case itype
             Prompt eval-for-prompt
             Connection eval-for-connection))
@@ -309,6 +335,38 @@ context."
 
 
 ;;; Auxiliary
+
+(defn (:: guessFnkTarget (-> (Located String) Target))
+  "Simple function to do similar work done in `GHC.guessTarget', to support
+source code file paths with @.fnk@ extension."
+  [lsrc]
+  (let ((= src (unLoc lsrc))
+        (= tid (if (looksLikeModuleName src)
+                   (TargetModule (mkModuleName src))
+                   (TargetFile src Nothing))))
+    (Target tid True Nothing)))
+
+(defn (:: partition-args
+        (-> [(Located String)] (, [(Located String)] [(Located String)])))
+  "Simplified version of the function with same name defined in @ghc/Main.hs@,
+to separate object files from source code files."
+  (let ((= f (L l arg) (, srcs objs)
+          (if (|| (isFnkFile arg)
+                  (isHsFile arg)
+                  (looksLikeModuleName arg))
+              (, (: (L l arg) srcs) objs)
+              (, srcs (: (L l arg) objs)))))
+    (foldr f (, [] []))))
+
+(defn (:: src-err-handler (-> SourceError (Fnk String)))
+  [src-err]
+  (do (<- dflags getSessionDynFlags)
+      (<- unqual getPrintUnqual)
+      (let ((= sdoc (vcat (pprErrMsgBagWithLoc emsgs)))
+            (= style0 (mkErrStyle dflags unqual))
+            (= style1 (setStyleColoured True style0))
+            (= emsgs (srcErrorMessages src-err))))
+      (return (renderWithStyle dflags sdoc style1))))
 
 (defn (:: make-eval-wrapper (-> [String] (Fnk ForeignHValue)))
   [args]
