@@ -171,7 +171,7 @@
     (describe label
       (it "should have no pending inputs"
         (do (<- (, in-mv tid) run)
-            (<- (, _ tst) (runTestIO (read-print-loop in-mv tid) inputs))
+            (<- (, _ tst) (runTestIO (read-print-loop nil in-mv tid) inputs))
             (finally
              (shouldSatisfy (pending-input (tst-replstate tst)) null)
              (killThread tid)))))))
@@ -261,7 +261,8 @@
                        ;; will not terminate before the testing client connect.
                        (replMain [(++ "--listen=" port)
                                   (++ "--file=" input-file)
-                                  "--prompt="])))
+                                  "--prompt="
+                                  "--quiet"])))
               ;; Pause for a bit after forking the server action.
               (replicateM_ 5 short-pause)
               (<- addr (resolve "127.0.0.1" port))

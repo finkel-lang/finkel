@@ -24,6 +24,7 @@
     (defaultBehavior defaultSettings useFile runInputTBehavior))
 
    ;; finkel-kernel
+   (Language.Finkel.Form (Code))
    (Language.Finkel.Fnk ((FnkEnv ..) runFnk))
 
    ;; internal
@@ -44,11 +45,17 @@
 ;;; Starting the REPL
 
 (defn (:: start-repl
-        (-> [String] (Maybe FilePath) (Maybe Int) FnkEnv ReplState (IO ())))
+        (-> [String]
+            (Maybe FilePath)
+            (Maybe Int)
+            FnkEnv
+            ReplState
+            Code
+            (IO ())))
   "Start REPL, maybe listen to given port number when given."
-  [ghc-opts mb-path mb-port fnk-env repl-st]
+  [ghc-opts mb-path mb-port fnk-env repl-st init-form]
   (bracket acquire-repl cleanup-repl
-           (use-repl ghc-opts mb-path mb-port fnk-env repl-st)))
+           (use-repl ghc-opts mb-path mb-port fnk-env repl-st init-form)))
 
 (defn (:: acquire-repl (IO (, FilePath Handle (MVar Input))))
   "Return a file path and handle for temporary use."
@@ -71,13 +78,14 @@
                        (Maybe Int)
                        FnkEnv
                        ReplState
+                       Code
                        (, a Handle (MVar Input))
                        (IO ())))
   "Inner work for `start-repl'."
-  [ghc-opts mb-path mb-port fnk-env repl-st (, _ hdl in-mv)]
+  [ghc-opts mb-path mb-port fnk-env repl-st init-form (, _ hdl in-mv)]
   (do (mapM- (start-listener in-mv) mb-port)
       (<- tid (forkIO (runFnk (eval-loop ghc-opts hdl in-mv) fnk-env)))
-      (let ((= rpl (read-print-loop in-mv tid))
+      (let ((= rpl (read-print-loop init-form in-mv tid))
             (= behavior (maybe defaultBehavior useFile mb-path))
             (= run (runInputTBehavior behavior defaultSettings))))
 

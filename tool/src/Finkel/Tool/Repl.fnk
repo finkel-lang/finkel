@@ -26,8 +26,9 @@
    (System.Environment (getProgName))
 
    ;; finkel-kernel
+   (Language.Finkel (Code defaultFnkEnv qList qString qSymbol))
    (Language.Finkel.Fnk ((FnkEnv ..) EnvMacros makeEnvMacros mergeMacros))
-   (Language.Finkel.SpecialForms (defaultFnkEnv specialForms))
+   (Language.Finkel.SpecialForms (specialForms))
 
    ;; finkel-core
    (Finkel.Core)
@@ -88,6 +89,7 @@
                repl-listen-port (Maybe Int)
                repl-input-path (Maybe FilePath)
                repl-prompt (Maybe String)
+               repl-quiet Bool
                repl-ghc-options [String]}))
 
 (defn (:: make-initial-option (-> [String] ReplOption))
@@ -96,6 +98,7 @@
                repl-listen-port Nothing
                repl-input-path Nothing
                repl-prompt Nothing
+               repl-quiet False
                repl-ghc-options ghc-options}))
 
 (defn (:: partition-repl-args (-> [String] (, [String] [String])))
@@ -128,7 +131,11 @@
    (Option [] ["prompt"]
            (ReqArg (\ str o (o {repl-prompt (Just str)}))
                    "TEXT")
-           "Prompt for input (default: '> ')")])
+           "Prompt for input (default: '> ')")
+   (Option [] ["quiet"]
+           (NoArg (\ o (o {repl-quiet True
+                           repl-prompt (Just "")})))
+           "Suppress message from REPL")])
 
 (defn (:: act (=> (CLI m) (-> ReplOption (m ()))))
   [ro]
@@ -139,7 +146,15 @@
                             (repl-listen-port ro)
                             repl-env
                             (maybe mempty (\ p (mempty {prompt-string p}))
-                                   (repl-prompt ro))))))
+                                   (repl-prompt ro))
+                            (if (repl-quiet ro)
+                                '(:begin)
+                                greet)))))
+
+(defn (:: greet Code)
+  "Form containing initial message for the REPL."
+  '(System.IO.putStrLn
+    "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
 
 (defn (:: print-errors (=> (CLI m) (-> [String] (m ()))))
   [errs]

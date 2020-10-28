@@ -3,7 +3,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Repl.IO
-  (export init-form read-form read-print-loop with-io-redirect)
+  (export %_init-form read-form read-print-loop with-io-redirect)
   (import
    ;; base
    (Control.Concurrent
@@ -37,12 +37,12 @@
 
 (defn (:: read-print-loop
         (=> (MonadIO cl) (CLI cl) (HasReplState cl)
-            (-> (MVar Input) ThreadId (cl ()))))
+            (-> Code (MVar Input) ThreadId (cl ()))))
   "Loop for reading input and printing the output.
 
 Tracks the state of intermediate S-expression from input, and continue
 reading the input until successful parse result."
-  [to-mvar eval-tid]
+  [init-form to-mvar eval-tid]
   (let ((= go result-mv
           (do (<- st0 getReplState)
               (let ((= prompt
@@ -162,10 +162,6 @@ reading the input until successful parse result."
     (go [])))
 
 ;;; Auxiliary
-
-(defn (:: init-form Code)
-  "Form containing initial message for the REPL."
-  '(System.IO.putStrLn "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
 
 (defn (:: quit (=> (MonadIO m) (-> ThreadId (m ()))))
   (. liftIO killThread))

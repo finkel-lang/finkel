@@ -199,7 +199,7 @@
             (= cleanup
               (do (killThread etid)
                   (cleanup-repl resources)))))
-      (putMVar in-mv (Input Connection init-form out-mv))
+      (putMVar in-mv (Input Connection '(:begin) out-mv))
       (<- _ (takeMVar out-mv))
       (return (EvalTestFns {etf-ok ok
                             etf-ng ng
