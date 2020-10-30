@@ -55,6 +55,7 @@
          (it "should show version message by default"
            (main' ["version"])))
       helpTests
+      evalTests
       replTests
       versionTests))
 
@@ -64,29 +65,46 @@
       (do (<- (, _ lns) (runTestIO (show-usage commands) []))
           (let ((= messageShouldContain
                   (shouldContain (unlines (tst-outputs lns))))))
+          (messageShouldContain "eval")
           (messageShouldContain "repl")
           (messageShouldContain "make")
           (messageShouldContain "version")))))
 
+(defn (:: evalTests Spec)
+  (describe "eval command"
+    (do (it "should show help with --help"
+          (main' ["eval" "--help"]))
+        (it "should evaluate '(+ 1 2 3 4 5)'"
+          (main' ["eval" "(+ 1 2 3 4 5)"]))
+        (it "should load module and evaluate given form"
+          (main' ["eval" (++ "-i" test-data-dir) "LoadMe.fnk"
+                  "(from-load-me \"LOADED\")"]))
+        (it "should show error message when invoked without form"
+          (shouldThrow (main' ["eval"]) anyExitFailure))
+        (it "should exit with non-zero on compile error"
+          (shouldThrow (main' ["eval" "(+ 1 True)"]) anyExitFailure))
+        (it "should exit with non-zero on parse error"
+          (shouldThrow (main' ["eval" "(+ 1 True)))"]) anyExitFailure)))))
+
 (defn (:: replTests Spec)
-  (let ((= td (</> "test" "data"))
-        (= print-int (</> td "print-int.fnk"))
-        (= load-me (</> td "LoadMe.fnk"))
-        (= print-load-me (</> td "print-load-me.fnk"))
-        (= err001 (</> td "Err001.fnk")))
+  (let ((= print-int (test-data "print-int.fnk"))
+        (= print-load-me (test-data "print-load-me.fnk"))
+        (= err001 (test-data "Err001.fnk")))
     (describe "repl command"
       (do (it "should show help on --help"
             (main' ["repl" "--help"]))
           (it "should show warning messages"
             (main' ["repl" (++ "--file=" print-int) "-v2" "-O"]))
           (it "should evaluate file contents after loading module"
-            (main' ["repl" (++ "--file=" print-load-me) load-me]))
+            (main' ["repl" "--quiet" (++ "--file=" print-load-me) load-me]))
           (it "should show compilation error when loading invalid module"
-            (main' ["repl" (++ "--file=" print-int) print-int]))
+            (main' ["repl" "--quiet" (++ "--file=" print-int) print-int]))
           (it "should show load failure with type error on load"
-            (main' ["repl" (++ "--file=" print-int) err001]))
+            (main' ["repl" "--quiet" (++ "--file=" print-int) err001]))
           (it "should compilain missing argument"
-            (shouldThrow (main' ["repl" "--prompt"]) anyException))))))
+            (shouldThrow
+             (main' ["repl" (++ "--file=" print-int) "--prompt"])
+             anyExitFailure))))))
 
 (defn (:: versionTests Spec)
   (describe "version command"
@@ -118,6 +136,8 @@
           (do (<- msg (version ["--no-such-option"]))
               (shouldContain msg "--no-such-option"))))))
 
+;;; Auxiliary
+
 (defn (:: with-tmp-env (-> [(, String String)] (IO a) (IO a)))
   [envvars act]
   (bracket getEnvironment
@@ -126,3 +146,16 @@
 
 (defn (:: main' (-> [String] (IO ())))
   (flip withArgs main))
+
+(defn (:: anyExitFailure (Selector ExitCode))
+  [(ExitFailure _)] True
+  [_] False)
+
+(defn (:: test-data-dir FilePath)
+  (</> "test" "data"))
+
+(defn (:: test-data (-> FilePath FilePath))
+  (</> test-data-dir))
+
+(defn (:: load-me FilePath)
+  (test-data "LoadMe.fnk"))

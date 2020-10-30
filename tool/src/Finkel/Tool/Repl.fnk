@@ -20,7 +20,6 @@
    ;; base
    (Control.Monad (mplus))
    (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.List (isPrefixOf))
    (System.Console.GetOpt
     ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
    (System.Environment (getProgName))
@@ -46,7 +45,7 @@
 (defn (:: replMain (=> (CLI m) (-> [String] (m ()))))
   "Main entry point function for REPL."
   [args]
-  (let ((= (, repl-opts ghc-opts) (partition-repl-args args))
+  (let ((= (, repl-opts ghc-opts) (partition-descrs descrs args))
         (= initial-option (make-initial-option ghc-opts)))
     (case (getOpt Permute descrs repl-opts)
       (, o _other []) (act (foldl (flip id) initial-option o))
@@ -63,23 +62,6 @@
 
 ;;; Internal
 
-;;; Note: [REPL options, ghc options, and RTS options]
-;;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-;;;
-;;; REPL sub command supporst options specific to the REPL sub command, options
-;;; to update `DynFlags' in GhcMonad, and options for RTS. To accompilish
-;;; support of these three kind of options, the command line argument handling
-;;; work starts with filtering out the REPL specific options with manually
-;;; separating the long options defined with `OptDescr' from
-;;; `System.Console.GetOpts' module. Then, the rest of the arguments are treated
-;;; as ghc options and RTS options.
-;;;
-;;; Note that, in the C source code of the `rts' package, command line arguments
-;;; after `--' are passed to the callee program (see: "rts/RtsFlags.c" in the
-;;; ghc source code for detail). Once the command line parser for REPL options
-;;; tried to separate ghc options from REPL specific options with `--', however
-;;; this approach did not work well when considering RTS options.
-
 (data ReplMode
   Help
   Run)
@@ -90,6 +72,7 @@
                repl-input-path (Maybe FilePath)
                repl-prompt (Maybe String)
                repl-quiet Bool
+               repl-init-form Code
                repl-ghc-options [String]}))
 
 (defn (:: make-initial-option (-> [String] ReplOption))
@@ -99,17 +82,8 @@
                repl-input-path Nothing
                repl-prompt Nothing
                repl-quiet False
+               repl-init-form greet
                repl-ghc-options ghc-options}))
-
-(defn (:: partition-repl-args (-> [String] (, [String] [String])))
-  "Separate REPL specific options from other (ghc and RTS) options."
-  (let ((= partition-arg x (, rs gs)
-          (if (any (in-long-opt x) descrs)
-              (, (: x rs) gs)
-              (, rs (: x gs))))
-        (= in-long-opt x (Option _ ls _ _)
-          (any (. (flip isPrefixOf x) (++ "--")) ls)))
-    (foldr partition-arg (, [] []))))
 
 (defn (:: descrs [OptDescr (-> ReplOption ReplOption)])
   [(Option [] ["help"]
@@ -134,7 +108,8 @@
            "Prompt for input (default: '> ')")
    (Option [] ["quiet"]
            (NoArg (\ o (o {repl-quiet True
-                           repl-prompt (Just "")})))
+                           repl-prompt (Just "")
+                           repl-init-form '(:begin)})))
            "Suppress message from REPL")])
 
 (defn (:: act (=> (CLI m) (-> ReplOption (m ()))))
@@ -147,9 +122,7 @@
                             repl-env
                             (maybe mempty (\ p (mempty {prompt-string p}))
                                    (repl-prompt ro))
-                            (if (repl-quiet ro)
-                                '(:begin)
-                                greet)))))
+                            (repl-init-form ro)))))
 
 (defn (:: greet Code)
   "Form containing initial message for the REPL."

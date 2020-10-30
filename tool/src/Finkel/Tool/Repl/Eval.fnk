@@ -3,7 +3,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Repl.Eval
-  (export eval-loop)
+  (export eval-loop eval-once)
   (import-when [:compile]
    ;; finkel-core
    (Finkel.Prelude))
@@ -14,9 +14,8 @@
    (Control.Monad (unless void))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate))
-
-   (System.Exit (exitWith))
    (System.IO (Handle))
+   (qualified System.Exit)
 
    ;; ghc
    (BasicTypes ((SuccessFlag ..)))
@@ -182,7 +181,15 @@
 
 (defn (:: eval-loop (-> [String] Handle (MVar Input) (Fnk ())))
   "Loop to evaluate expressions."
-  [ghc-opts hdl in-mvar]
+  (eval-loop-or-once False))
+
+(defn (:: eval-once (-> [String] Handle (MVar Input) (Fnk ())))
+  "Evalute the form once and return."
+  (eval-loop-or-once True))
+
+(defn (:: eval-loop-or-once (-> Bool [String] Handle (MVar Input) (Fnk ())))
+  "Evaluate expressions, and loop or return."
+  [once-only ghc-opts hdl in-mvar]
   (let ((= withAsyncHandler wrapper
           (ghandle
            (\ e
@@ -213,7 +220,8 @@
           (withAsyncHandler wrapper
                             (>> (eval-one wrapper)
                                 (loop wrapper)))))
-    (>>= (init-eval-loop ghc-opts) loop)))
+    (>>= (init-eval-loop ghc-opts)
+         (if once-only eval-one loop))))
 
 (defn (:: set-print-name (-> String (Fnk ())))
   "Set the name of function used for printing values in interactive
@@ -309,7 +317,7 @@ context."
         (= exception serialized
           (case serialized
             (EOtherException e) (return (Left (++ "*** Exception: " e)))
-            (EExitCode ecode) (liftIO (exitWith ecode))
+            (EExitCode ecode) (liftIO (System.Exit.exitWith ecode))
             EUserInterrupt (return (Left "Interrupted."))))
         (= incomplete
           (return (Left "update-hsc-env failed.")))

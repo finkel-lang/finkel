@@ -1,0 +1,102 @@
+;;;; Eval sub command
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Eval
+  (export evalMain)
+  (import
+   ;; base
+   (Control.Concurrent (MVar newEmptyMVar newMVar takeMVar))
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (System.Console.GetOpt
+    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
+   (System.Environment (getProgName))
+   (System.Exit (exitFailure))
+
+   ;; ghc
+   (StringBuffer (stringToStringBuffer))
+
+   ;; finkel-kernel
+   (Language.Finkel)
+   (Language.Finkel.Lexer (evalSP))
+   (Language.Finkel.Reader (sexpr))
+
+   ;; Internal
+   (Finkel.Tool.CLI)
+   (Finkel.Tool.Repl (repl-env))
+   (Finkel.Tool.Repl.Eval)
+   (Finkel.Tool.Repl.Types)))
+
+
+
+;;; Exported
+
+(defn (:: evalMain (=> (CLI m) (-> [String] (m ()))))
+  [args]
+  (let ((= (, es gs) (partition-descrs eval-opts args))
+        (= mk-opt (foldl (flip id) initial-eval-option)))
+    (case (getOpt Permute eval-opts es)
+      (, o _ _) (do-eval (mk-opt o) gs))))
+
+
+;;; Internal
+
+(data EvalOption
+  (EvalOption {eo-help Bool}))
+
+(defn (:: initial-eval-option EvalOption)
+  (EvalOption {eo-help False}))
+
+(defn (:: eval-opts [(OptDescr (-> EvalOption EvalOption))])
+  [(Option [] ["help"]
+           (NoArg (\ o (o {eo-help True})))
+           "Show this help and exit")])
+
+(defn (:: print-eval-help (=> (CLI m) (m ())))
+  (do (<- me (liftIO getProgName))
+      (putString
+       (unlines
+        [(concat ["USAGE: " me " eval [OPTIONS] FORM"])
+         ""
+         "Evaluate given FORM expression."
+         ""
+         (usageInfo "OPTIONS:\n" eval-opts)
+         others-passed-to-ghc]))))
+
+(defn (:: do-eval (=> (CLI m) (-> EvalOption [String] (m ()))))
+  [eo args]
+  (if (eo-help eo)
+      print-eval-help
+      (let ((= (, ghc-args mb-str) (separate-args args))
+            (= parse (. (evalSP sexpr (Just "<eval>")) stringToStringBuffer))
+            (= run form (runFnk (eval-and-exit form ghc-args) repl-env)))
+        (liftIO
+         (case mb-str
+           (Just str) (case (parse str)
+                        (Right form) (run form)
+                        (Left err) (>> (putStrLn err) exitFailure))
+           Nothing (>> print-eval-help exitFailure))))))
+
+(defn (:: separate-args (-> [String] (, [String] (Maybe String))))
+  [args]
+  (case args
+    [] (, [] Nothing)
+    [x] (, [] (Just x))
+    (: x xs) (let ((= (, ghc-opts mb-form) (separate-args xs)))
+               (, (: x ghc-opts) mb-form))))
+
+(defn (:: eval-and-exit (-> Code [String] (Fnk ())))
+  [form args]
+  (do (let ((= hdl (error "eval-and-exit: uninitialized handle"))))
+      (<- (, in-mv out-mv) (make-in-and-out form))
+      (eval-once args hdl in-mv)
+      (liftIO (case-do (takeMVar out-mv)
+                (Right msg) (putStr msg)
+                (Left errs) (>> (putStrLn errs) exitFailure)))))
+
+(defn (:: make-in-and-out (-> Code (Fnk (, (MVar Input) (MVar Result)))))
+  [form]
+  (liftIO
+   (do (<- out-mv newEmptyMVar)
+       (<- in-mv (newMVar (Input Prompt form out-mv)))
+       (return (, in-mv out-mv)))))

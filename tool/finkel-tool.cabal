@@ -42,6 +42,7 @@ custom-setup
 library
   hs-source-dirs:      src
   exposed-modules:     Finkel.Tool.CLI
+                       Finkel.Tool.Eval
                        Finkel.Tool.Help
                        Finkel.Tool.Repl.Types
                        Finkel.Tool.Repl.IO

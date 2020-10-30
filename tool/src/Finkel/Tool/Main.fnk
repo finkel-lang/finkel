@@ -19,6 +19,7 @@
    (Finkel.Core)
 
    ;; Internal
+   (Finkel.Tool.Eval)
    (Finkel.Tool.Help)
    (Finkel.Tool.Repl)
    (Finkel.Tool.Version)))
@@ -36,7 +37,8 @@
 
 (defn (:: commands [Command])
   "Available commands in the executable."
-  [(Command "help" "show help information" (helpMain commands))
+  [(Command "eval" "evaluate given form" evalMain)
+   (Command "help" "show help information" (helpMain commands))
    (Command "make" "compile source codes" makeMain)
    (Command "repl" "start interactive REPL" replMain)
    (Command "version" "show version" versionMain)])
