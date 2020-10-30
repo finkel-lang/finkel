@@ -56,6 +56,7 @@
       helpTests
       evalTests
       replTests
+      runTests
       versionTests))
 
 (defn (:: helpTests Spec)
@@ -104,6 +105,28 @@
             (shouldThrow
              (main' ["repl" (++ "--file=" print-int) "--prompt"])
              anyExitFailure))))))
+
+(defn (:: runTests Spec)
+  (describe "run command"
+    (do (let ((= run args (main' (: "run" args)))))
+        (it "should show help on --help"
+          (run ["--help"]))
+        (it "should run run-me.fnk"
+          (run ["-v0" (test-data "run-me.fnk")]))
+        (it "should search directory with ghc option"
+          (run ["-v0" (++ "-i" test-data-dir) "run-me.fnk"]))
+        (it "should run given function"
+          (run ["-v0" "--main" "main-two" (test-data "RunMeToo.fnk")]))
+        (it "should complain with malformed argument"
+          (shouldThrow (run ["-v0" "--main"]) anyExitFailure))
+        (it "should exit with status from given script"
+          (shouldThrow
+           (run ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
+                 "--" "elephant"])
+           anyExitFailure))
+        (it "should pass arguments after `--'"
+          (run ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
+                "--" "dog"])))))
 
 (defn (:: versionTests Spec)
   (describe "version command"

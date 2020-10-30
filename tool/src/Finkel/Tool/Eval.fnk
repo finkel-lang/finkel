@@ -3,7 +3,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Eval
-  (export evalMain)
+  (export evalMain eval-and-exit eval-and-exit-with)
   (import
    ;; base
    (Control.Concurrent (MVar newEmptyMVar newMVar takeMVar))
@@ -68,12 +68,11 @@
   (if (eo-help eo)
       print-eval-help
       (let ((= (, ghc-args mb-str) (separate-args args))
-            (= parse (. (evalSP sexpr (Just "<eval>")) stringToStringBuffer))
-            (= run form (runFnk (eval-and-exit form ghc-args) repl-env)))
+            (= parse (. (evalSP sexpr (Just "<eval>")) stringToStringBuffer)))
         (liftIO
          (case mb-str
            (Just str) (case (parse str)
-                        (Right form) (run form)
+                        (Right form) (eval-and-exit ghc-args form)
                         (Left err) (>> (putStrLn err) exitFailure))
            Nothing (>> print-eval-help exitFailure))))))
 
@@ -85,14 +84,19 @@
     (: x xs) (let ((= (, ghc-opts mb-form) (separate-args xs)))
                (, (: x ghc-opts) mb-form))))
 
-(defn (:: eval-and-exit (-> Code [String] (Fnk ())))
-  [form args]
-  (do (let ((= hdl (error "eval-and-exit: uninitialized handle"))))
-      (<- (, in-mv out-mv) (make-in-and-out form))
-      (eval-once args hdl in-mv)
-      (liftIO (case-do (takeMVar out-mv)
-                (Right msg) (putStr msg)
-                (Left errs) (>> (putStrLn errs) exitFailure)))))
+(defn (:: eval-and-exit (-> [String] Code (IO ())))
+  (eval-and-exit-with []))
+
+(defn (:: eval-and-exit-with (-> [String] [String] Code (IO ())))
+  [wrapper-args ghc-args form]
+  (runFnk
+   (do (let ((= hdl (error "eval-and-exit: uninitialized handle"))))
+       (<- (, in-mv out-mv) (make-in-and-out form))
+       (eval-once wrapper-args ghc-args hdl in-mv)
+       (liftIO (case-do (takeMVar out-mv)
+                 (Right msg) (putStr msg)
+                 (Left errs) (>> (putStrLn errs) exitFailure))))
+   repl-env))
 
 (defn (:: make-in-and-out (-> Code (Fnk (, (MVar Input) (MVar Result)))))
   [form]

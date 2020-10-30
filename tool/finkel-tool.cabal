@@ -52,6 +52,7 @@ library
                        Finkel.Tool.Repl.Loop
                        Finkel.Tool.Repl.Macro
                        Finkel.Tool.Repl
+                       Finkel.Tool.Run
                        Finkel.Tool.Version
                        Finkel.Tool.Version.Commit
                        Finkel.Tool.Main

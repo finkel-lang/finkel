@@ -1,0 +1,74 @@
+;;; Module for run sub command
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Run
+  (export runMain)
+  (import
+   ;; base
+   (Control.Monad.IO.Class ((MonadIO ..)))
+   (System.Console.GetOpt
+    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt' usageInfo))
+   (System.Environment (getProgName))
+   (System.Exit (exitFailure))
+
+   ;; finkel-kernel
+   (Language.Finkel)
+
+   ;; Internal
+   (Finkel.Tool.CLI)
+   (Finkel.Tool.Eval)))
+
+(defn (:: runMain (=> (CLI m) (-> [String] (m ()))))
+  [args0]
+  (let ((= (, args1 prog-args) (split-program-args args0))
+        (= (, rargs gargs) (partition-descrs run-opts args1))
+        (= (, o _ _ es) (getOpt' Permute run-opts rargs))
+        (= ro (foldl (flip id) initial-run-option o))
+        (= main-fn (qSymbol (mangle-name (ro-main ro)))))
+    (if (ro-help ro)
+        print-run-help
+        (liftIO (case es
+                  [] (eval-and-exit-with prog-args gargs main-fn)
+                  _ (do (mapM- putStr es)
+                        print-run-help
+                        (liftIO exitFailure)))))))
+
+(data RunOption
+  (RunOption {ro-help Bool
+              ro-main String}))
+
+(defn (:: initial-run-option RunOption)
+  (RunOption {ro-help False
+              ro-main "main"}))
+
+(defn (:: run-opts [(OptDescr (-> RunOption RunOption))])
+  [(Option [] ["help"]
+           (NoArg (\ o (o {ro-help True})))
+           "Show this help and exit")
+   (Option [] ["main"]
+           (ReqArg (\ name o (o {ro-main name}))
+                   "NAME")
+           "Name of the function to run (default: main)")])
+
+(defn (:: print-run-help (=> (CLI m) (m ())))
+  (do (<- me (liftIO getProgName))
+      (putString
+       (unlines
+        [(concat ["USAGE: " me " run [OPTIONS] FILE"])
+         ""
+         "Compile and run given FILE."
+         ""
+         (usageInfo "OPTIONS:\n" run-opts)
+         others-passed-to-ghc]))))
+
+(defn (:: split-program-args (-> [String] (, [String] [String])))
+  [xs]
+  (case (break (== "--") xs)
+    (, pre (: "--" post)) (, pre post)
+    (, pre _) (, pre [])))
+
+(defn (:: mangle-name (-> String String))
+  (let ((= replace #'- #'_)
+        (= replace c c))
+    (map replace)))
