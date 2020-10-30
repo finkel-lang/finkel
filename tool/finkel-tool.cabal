@@ -44,6 +44,7 @@ library
   exposed-modules:     Finkel.Tool.CLI
                        Finkel.Tool.Eval
                        Finkel.Tool.Help
+                       Finkel.Tool.Make
                        Finkel.Tool.Repl.Types
                        Finkel.Tool.Repl.IO
                        Finkel.Tool.Repl.Listen

@@ -26,7 +26,6 @@
    (Finkel.Tool.CLI)
    (Finkel.Tool.Help)
    (Finkel.Tool.Main)
-   (Finkel.Tool.Repl)
    (Finkel.Tool.Version)
    (Finkel.Tool.Version.Commit)
    (TestAux)))

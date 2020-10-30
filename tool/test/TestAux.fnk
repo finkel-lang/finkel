@@ -11,7 +11,7 @@
   (import
    ;; base
    (Control.Concurrent
-    (ThreadId MVar forkIO newEmptyMVar killThread putMVar takeMVar))
+    (ThreadId forkIO newEmptyMVar killThread putMVar takeMVar))
    (Control.Monad (mplus))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
@@ -39,7 +39,6 @@
    (Finkel.Tool.CLI)
    (Finkel.Tool.Repl)
    (Finkel.Tool.Repl.Eval)
-   (Finkel.Tool.Repl.IO)
    (Finkel.Tool.Repl.Loop)
    (Finkel.Tool.Repl.Types)))
 

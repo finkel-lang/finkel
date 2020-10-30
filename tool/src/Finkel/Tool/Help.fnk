@@ -11,23 +11,15 @@
    ;; Help command
    helpMain
    show-usage)
-  (import-when [:compile]
-   ;; finkel-core
-   (Finkel.Prelude))
   (import
    ;; base
    (Control.Monad.IO.Class ((MonadIO ..)))
+   (Data.Foldable (find maximumBy))
    (Data.Function (on))
    (System.Environment (getProgName))
 
    ;; Internal
    (Finkel.Tool.CLI)))
-
-(cond-expand
-  [(<= 808 :ghc)
-   (import Data.Foldable (find maximumBy))]
-  [otherwise
-   (import Data.Foldable ((Foldable ..) find maximumBy))])
 
 ;;; Data type to wrap an IO action taking string arguments with name and
 ;;; description.
@@ -36,9 +28,7 @@
             cmd-descr String
             cmd-act (-> [String] (IO ()))}))
 
-(defn (:: find-command
-        (=> (Foldable t)
-            (-> (t Command) String (Maybe Command))))
+(defn (:: find-command (-> [Command] String (Maybe Command)))
   "Find the command by command name."
   [cmds name]
   (find (. (== name) cmd-name) cmds))
@@ -48,11 +38,7 @@
   [cmds args]
   (case args
     (: name _ ) (| ((<- (Just cmd) (find-command cmds name))
-                    (let ((= flag
-                            (case name
-                              "make" "--fnk-help"
-                              _      "--help")))
-                      (liftIO (cmd-act cmd [flag])))))
+                    (liftIO (cmd-act cmd ["--help"]))))
     _ (show-usage cmds)))
 
 (defn (:: show-usage (=> (CLI m) (-> [Command] (m ()))))
