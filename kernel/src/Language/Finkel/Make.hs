@@ -43,7 +43,7 @@ import           DynFlags                     (DumpFlag (..), DynFlags (..),
                                                parseDynamicFilePragma)
 import           ErrUtils                     (MsgDoc, dumpIfSet_dyn,
                                                mkPlainErrMsg)
-import           Exception                    (gbracket, handleIO)
+import           Exception                    (handleIO)
 import           FastString                   (FastString, fsLit)
 import           Finder                       (addHomeModuleToFinder,
                                                cannotFindModule,
@@ -427,12 +427,6 @@ setDumpPrefix path = do
   let (basename, _suffix) = splitExtension path
       dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
   setDynFlags dflags1
-
--- | Run given action with temporary 'DynFlags'.
-withTmpDynFlags :: GhcMonad m => DynFlags -> m a -> m a
-withTmpDynFlags dflags act =
-  gbracket getDynFlags setDynFlags (\_ -> setDynFlags dflags >> act)
-{-# INLINE withTmpDynFlags #-}
 
 -- | Trace function for this module.
 traceMake :: FnkEnv -> MsgDoc -> [MsgDoc] -> Fnk ()

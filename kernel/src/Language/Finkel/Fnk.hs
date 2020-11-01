@@ -19,6 +19,7 @@ module Language.Finkel.Fnk
   , putFnkEnv
   , modifyFnkEnv
   , setDynFlags
+  , withTmpDynFlags
   , setContextModules
   , prepareInterpreter
 
@@ -371,6 +372,12 @@ setDynFlags dflags =
   modifySession (\h -> h { hsc_dflags = dflags
                          , hsc_IC = (hsc_IC h) {ic_dflags = dflags}})
 {-# INLINE setDynFlags #-}
+
+-- | Run given action with temporary 'DynFlags'.
+withTmpDynFlags :: GhcMonad m => DynFlags -> m a -> m a
+withTmpDynFlags dflags act =
+  gbracket getDynFlags setDynFlags (\_ -> setDynFlags dflags >> act)
+{-# INLINE withTmpDynFlags #-}
 
 -- | Prepare 'DynFlags' for interactive evaluation.
 prepareInterpreter :: GhcMonad m => m ()

@@ -19,8 +19,9 @@
 
    ;; ghc
    (BasicTypes ((SuccessFlag ..)))
-   (DynFlags ((DynFlags ..) (GeneralFlag ..) (HasDynFlags ..) (Option ..)
-              gopt-set parseDynamicFlagsCmdLine xopt-unset))
+   (DynFlags
+    ((DynFlags ..) (GeneralFlag ..) (HasDynFlags ..) (HscTarget ..) (Option ..)
+     gopt-set parseDynamicFlagsCmdLine xopt-unset))
    (ErrUtils (pprErrMsgBagWithLoc))
    (Exception (ghandle))
    (GHC ((Target ..) (TargetId ..)
@@ -61,7 +62,8 @@
    (Language.Finkel.Eval (evalDecls))
    (Language.Finkel.Expand (expands))
    (Language.Finkel.Make (initSessionForMake))
-   (Language.Finkel.Fnk ((FnkEnv ..) failS modifyFnkEnv prepareInterpreter))
+   (Language.Finkel.Fnk
+    ((FnkEnv ..) failS modifyFnkEnv prepareInterpreter withTmpDynFlags))
    (Language.Finkel.Syntax (parseExpr parseImports parseStmt parseTopDecls))
    (Language.Finkel.TargetSource (isFnkFile isHsFile))
 
@@ -273,11 +275,9 @@ context."
 
 (defn (:: eval-decls (-> [HDecl] (Fnk Result)))
   [decls]
-  (do (let ((= decls' (cvTopDecls (toOL decls)))))
-      (<- (, tythings ic) (evalDecls decls'))
-      (<- hsc-env getSession)
-      (setSession (hsc-env {hsc-IC ic}))
-      (let ((= dflags (hsc-dflags hsc-env))
+  (do (<- hsc-env getSession)
+      (let ((= decls' (cvTopDecls (toOL decls)))
+            (= dflags (hsc-dflags hsc-env))
             (= pr tt
               (case tt
                 (AnId var) (var-name-and-type dflags (getName var) var)
@@ -287,9 +287,23 @@ context."
                 (if (== "$trModule" nstr)
                     acc
                     (: (pr tt) acc))))
-            (= tystrs (foldr show-tything [] tythings))
-            (= tystr (intercalate "\n" tystrs))))
-      (return (Right tystr))))
+            (= tystr tt
+              (intercalate "\n" (foldr show-tything [] tt)))))
+
+      ;; In "ghc/GHCi/UI.hs", the `runStmt' function is wrapping declarations
+      ;; with `let' expression and passing to `execStmt'' as a work around for
+      ;; supporting top level declaration. However, this approach seems like
+      ;; not working well when multiple declarations were entered at once.
+      ;;
+      ;; In finkel REPL, instead of wrapping with `let', always using
+      ;; `HscInterpreted' as target when evaluating declarations to support
+      ;; declaring functions and values when REPL were using `-fobject-code'.
+      (<- (, tythings ic)
+        (withTmpDynFlags (dflags {hscTarget HscInterpreted})
+                         (evalDecls decls')))
+
+      (setSession (hsc-env {hsc-IC ic}))
+      (return (Right (tystr tythings)))))
 
 (defn (:: update-hsc-env (-> Handle ForeignHValue InSource HscEnv
                              [Id] ForeignHValue FixityEnv (Fnk Result)))
