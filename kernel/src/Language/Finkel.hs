@@ -35,6 +35,7 @@ module Language.Finkel
   , Macro(Macro)
   , isMacro
   , expand
+  , expands
   , expand1
   , gensym
   , gensym'

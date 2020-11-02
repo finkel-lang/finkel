@@ -60,7 +60,6 @@
    (Language.Finkel.Builder (HDecl HIE HImportDecl HStmt
                              syntaxErrCode syntaxErrMsg evalBuilder))
    (Language.Finkel.Eval (evalDecls))
-   (Language.Finkel.Expand (expands))
    (Language.Finkel.Make (initSessionForMake))
    (Language.Finkel.Fnk
     ((FnkEnv ..) failS modifyFnkEnv prepareInterpreter withTmpDynFlags))
@@ -264,10 +263,8 @@ context."
   (do (<- ctx0 getContext)
       (let ((= mkIIDecl (L _ idecl)
               (IIDecl idecl))
-            (= mdls
-              (++ "; " (intercalate ", "
-                                    (map (. (showSDoc dflags) ppr)
-                                         imports))))
+            (= imps (map (. (showSDoc dflags) ppr) imports))
+            (= mdls (++ "; " (intercalate ", " imps)))
             (= ctx1 (foldr (\ mdl (add-gt-ii (mkIIDecl mdl)))
                            ctx0 imports))))
       (setContext ctx1)

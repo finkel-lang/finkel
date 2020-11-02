@@ -188,10 +188,11 @@ and temporally macro @m@ at compilation time.
         (:: emit (-> [Code] [Code] (Fnk Code)))
         (= emit phases body
           (| ((&& (at-compile phases) (at-load phases))
-              (return
-               `(:begin
-                  (:eval-when-compile ,@body)
-                  ,@body)))
+              (do (<- expanded (expands body))
+                  (return
+                   (cons ':begin
+                         (cons (cons ':eval-when-compile expanded)
+                               expanded)))))
              ((at-compile phases)
               (return `(:eval-when-compile ,@body)))
              ((at-load phases)
