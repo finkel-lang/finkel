@@ -5,45 +5,35 @@ on:
   push:
     paths-ignore:
       - '**.md'
+
 env:
   cache-version: v1
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   stack:
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-        plan:
-          - resolver: "lts-11"
-          - resolver: "lts-12"
-          - resolver: "lts-14"
-          - resolver: "lts-16"
-        exclude:
+        include:
+          - os: ubuntu-latest
+            resolver: lts-11
+          - os: ubuntu-latest
+            resolver: lts-12
+          - os: ubuntu-latest
+            resolver: lts-14
+          - os: ubuntu-latest
+            resolver: lts-16
           - os: macos-latest
-            plan:
-              resolver: "lts-11"
-          - os: macos-latest
-            plan:
-              resolver: "lts-12"
-          - os: macos-latest
-            plan:
-              resolver: "lts-14"
+            resolver: lts-16
           - os: windows-latest
-            plan:
-              resolver: "lts-11"
-          - os: windows-latest
-            plan:
-              resolver: "lts-12"
-          - os: windows-latest
-            plan:
-              resolver: "lts-16"
+            resolver: lts-14
 
     env:
-      STACK: stack --resolver=${{ matrix.plan.resolver }}
-      RESOLVER: ${{ matrix.plan.resolver }}
+      STACK: stack --resolver=${{ matrix.resolver }}
+      RESOLVER: ${{ matrix.resolver }}
 
     runs-on:
       - ${{ matrix.os }}
@@ -58,57 +48,41 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.stack
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
 
       - name: Cache stack packages database (windows)
         if: matrix.os == 'windows-latest'
         uses: actions/cache@v2
         with:
           path: C:\Users\runneradmin\AppData\Roaming\stack
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.plan.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
 
       - name: Cache stack (windows)
         if: matrix.os == 'windows-latest'
         uses: actions/cache@v2
         with:
           path: C:\Users\runneradmin\AppData\Local\Programs\stack
-          key: ${{ runner.os }}-stack-local-${{ matrix.plan.resolver }}-${{ env.cache-version }}
+          key: ${{ runner.os }}-stack-local-${{ matrix.resolver }}-${{ env.cache-version }}
 
       - name: Show stack version
-        shell: bash
         run: $STACK --version
 
-      - name: Add PATH for executable installed with stack (linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: echo "/home/runner/.local/bin" >> $GITHUB_PATH
-
-      - name: Add PATH for executable installed with stack (osx)
-        if: matrix.os == 'macos-latest'
-        run: echo "/Users/runner/.local/bin" >> $GITHUB_PATH
-
-      - name: Add PATH for executable installed with stack (windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: echo "C:/Users/runneradmin/AppData/Roaming/local/bin" >> $GITHUB_PATH
+      - name: Add PATH for executable installed with stack
+        run: $STACK path --local-bin >> $GITHUB_PATH
 
       - name: Setup stack
-        shell: bash
         run: $STACK setup
 
       - name: Install dependency packages
-        shell: bash
         run: $STACK build -j 2 --test --only-dependencies
 
       - name: Build packages
-        shell: bash
         run: $STACK build --fast --test --coverage --no-run-tests
 
       - name: Run tests
-        shell: bash
-        run: RESOLVER=${{ matrix.plan.resolver }} $STACK --jobs 1 build --fast --test --coverage
+        run: RESOLVER=${{ matrix.resolver }} $STACK --jobs 1 build --fast --test --coverage
 
       - name: Generate coverge report
-        shell: bash
         run: |
           $STACK install hpc-codecov
           HPCROOT=$($STACK path --local-hpc-root)
@@ -127,7 +101,6 @@ jobs:
             --out=codecov.json --verbose $TIX
 
       - name: Send coverage report
-        shell: bash
         run: bash <(curl -s https://codecov.io/bash)
 
   cabal:
@@ -135,7 +108,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - windows-latest
+          # - windows-latest
         plan:
           - ghc: "8.10.2"
             cabal: "3.2.0.0"
@@ -143,17 +116,6 @@ jobs:
           - ghc: "8.10.2"
             cabal: "3.2.0.0"
             flags: "-O2"
-        exclude:
-          - os: windows-latest
-            plan:
-              ghc: "8.10.2"
-              cabal: "3.2.0.0"
-              flags: "-O0"
-          - os: windows-latest
-            plan:
-              ghc: "8.10.2"
-              cabal: "3.2.0.0"
-              flags: "-O2"
     runs-on:
       - ${{ matrix.os }}
 
@@ -221,37 +183,90 @@ jobs:
           echo "C:/ProgramData/chocolatey/lib/ghc/tools/ghc-${{matrix.plan.ghc }}/bin" >> $GITHUB_PATH
 
       - name: Show version and paths
-        shell: bash
         run: |
           ghc --version
           cabal --version
 
       - name: Update cabal package list
-        shell: bash
         run: cabal v2-update
 
       - name: Write cabal.project.local with v2-configure (non-windows)
-        shell: bash
         if: matrix.os != 'windows-latest'
         run: cabal v2-configure ${{ matrix.plan.flags }}
 
       - name: Write cabal.project.local with v2-configure (windows)
-        shell: bash
         if: matrix.os == 'windows-latest'
         run: cabal v2-configure --disable-library-profiling ${{ matrix.plan.flags }}
 
       - name: Build dependency packages
-        shell: bash
         run: cabal v2-build all -j --only-dependencies
 
       - name: Build packages
-        shell: bash
         run: cabal v2-build all
 
       - name: Run tests
-        shell: bash
         run: cabal v2-test all
 
       - name: Run haddock
-        shell: bash
         run: cabal v2-haddock all
+
+  sdist:
+    runs-on:
+      - ubuntu-latest
+
+    env:
+      STACK: stack --resolver=lts-16
+
+    steps:
+      - name: Checkout git repository
+        uses: actions/checkout@v2
+
+      - name: Show versions
+        run: |
+          stack --version
+          ghc --version
+          cabal --version
+
+      - name: Build finkel-setup
+        # The "finkel-setup" is used by other packages in custom-setup stanza of
+        # cabal configuration, building before running sdist command.
+        run: $STACK build --fast finkel-setup
+
+      - name: Run stack sdist
+        run: $STACK sdist kernel fkc setup core tool finkel --tar-dir sdist
+
+      - name: Emit temporary stack.yaml
+        run: |
+          cd sdist
+          echo 'resolver: lts-0.0' > stack.yaml
+          echo 'packages:' >> stack.yaml
+          ls *.tar.gz | sed -e 's/\(.*\)\.tar.gz/  - \1/' >> stack.yaml
+          cat stack.yaml
+
+      - name: Build from tarballs with stack
+        run: |
+          cd sdist
+          for t in `ls *.tar.gz`; do tar zxvf $t; done
+          $STACK build --fast
+
+      - name: Emit temporary cabal.project
+        run: |
+          cd sdist
+          echo 'packages:' >> cabal.project
+          ls *.tar.gz | sed -e 's/\(.*\)\.tar.gz/  \1/' >> cabal.project
+          cat cabal.project
+
+      - name: Build from tarballs with cabal-install
+        run: |
+          cd sdist
+          cabal v2-update
+          cabal v2-build all
+
+      - name: Upload package tarballs
+        uses: actions/upload-artifact@v2
+        with:
+          name: finkel-packages
+          path: |
+            sdist/*.tar.gz
+            sdist/stack.yaml
+            sdist/cabal.project
