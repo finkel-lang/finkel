@@ -131,7 +131,7 @@ Sample run:
   `(case ()
      _ (| ,@(map1 curve body))))
 
-(defmacro lcase
+(defmacroM lcase
   "Same as @\\\\case@ enabled with the @LambdaCase@ extension.
 
 ==== __Syntax __
@@ -145,7 +145,7 @@ Sample run:
 [\"zero\", \"one\", \"many\",\"many\"]
 "
   args
-  `(\ $tmp (case $tmp ,@args)))
+  (fmap (\ g `(\ ,g (case ,g ,@args))) gensym))
 
 (defmacroM case-do
   "Like @case@, but takes an expression with 'Monad' type.
