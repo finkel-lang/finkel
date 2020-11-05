@@ -1,0 +1,6 @@
+(:require R01)
+
+(module R04)
+
+(:: main (IO ()))
+(= main (putStrLn (foo-macro)))

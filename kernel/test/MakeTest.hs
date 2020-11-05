@@ -41,6 +41,9 @@ import Packages                     (InstalledPackageInfo (..), PackageConfig,
                                      lookupPackageName, pprPackageConfig)
 import SrcLoc                       (noLoc)
 
+-- process
+import System.Process               (readProcess)
+
 -- hspec
 import Test.Hspec
 
@@ -135,21 +138,41 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   buildFilesNG [] ["E01"]
 
   -- Reload tests
-  let r1_simple t = buildReload t
-                                "foo"
-                                [("R1.fnk.1", "R1.fnk"), (t, t)]
-                                [("R1.fnk.2", "R1.fnk")]
-                                "foo: before"
-                                "foo: after"
-  r1_simple "R2.fnk"
+  let reload_simple t =
+        buildReload t
+                    "foo"
+                    [("R01.fnk.1", "R01.fnk"), (t, t)]
+                    [("R01.fnk.2", "R01.fnk")]
+                    "foo: before"
+                    "foo: after"
+  reload_simple "R02.fnk"
 
 #if MIN_VERSION_ghc(8,10,0)
   -- Reloading test for modules containing `:require' of home package modules
   -- not working well with ghc < 8.10.
 
   -- XXX: Disabled at the moment.
-  -- r1_simple "R3.fnk"
+  -- reload_simple "R03.fnk"
 #endif
+
+  -- Recompile tests
+  let recompile_simple t extras =
+        buildRecompile t
+                       ([ ("R01.fnk.1", "R01.fnk")
+                        , dot_fnk t
+                        ] ++ map dot_fnk extras)
+                       [("R01.fnk.2", "R01.fnk")]
+                       "foo: before\n"
+                       "foo: after\n"
+      dot_fnk x = let y = x <.> "fnk" in (y,y)
+
+  recompile_simple "R04" []
+  recompile_simple "R05" ["R05a"]
+  recompile_simple "R06" ["R06a"]
+  recompile_simple "R07" ["R07a", "R07b"]
+  recompile_simple "R08" ["R08a", "R08b"]
+  recompile_simple "R09" ["R09a", "R09b"]
+  recompile_simple "R10" ["R10a", "R10b"]
 
 -- Action to unload package libraries
 --
@@ -306,13 +329,13 @@ odir = "test" </> "data" </> "make"
 
 -- ------------------------------------------------------------------------
 --
--- For reload test
+-- For reload and recompile tests
 --
 -- ------------------------------------------------------------------------
 
 buildReload
-  :: String -- ^ Target module name
-  -> String -- ^ Function to return 'String'
+  :: String -- ^ Target module name.
+  -> String -- ^ Function to return a 'String' value.
   -> [(String, String)] -- ^ List of (input file, output file), before.
   -> [(String, String)] -- ^ List of (input file, output file), after.
   -> String -- ^ Expected value of before.
@@ -335,7 +358,7 @@ buildReload the_file fname files1 files2 before_str after_str =
           else do
             is_travis <- lookupEnv "TRAVIS"
             if isJust is_travis && os == "darwin"
-               then pendingWith "not yet supported under Travis OSX"
+               then pendingWith "not supported under Travis OSX"
                else do_work' use_obj tmpdir
 
     do_work' use_obj tmpdir = do
@@ -375,18 +398,57 @@ buildReload the_file fname files1 files2 before_str after_str =
       hexpr <- buildHsSyn parseExpr [qSymbol fname]
       unsafeCoerce# <$> evalExpr hexpr
 
-    copy_files tmpdir = liftIO . mapM_ (copy tmpdir)
-    copy tmp (i, o) = copyFile (odir </> i) (tmp </> o)
-
     reset_env = getSession >>= liftIO . flip unload []
 
-    rmdir my_tmpdir =
-      removeDirectoryRecursive my_tmpdir
+-- | Make a test for recompilation.
+buildRecompile
+  :: String -- ^ Module containing the @main@ function.
+  -> [(String, String)] -- ^ List of @(SRC_FILE, DEST_FILE)@ for first run.
+  -> [(String, String)] -- ^ List of @(SRC_FILE, DEST_FILE)@ for second run.
+  -> String -- ^ Expected output from the first run.
+  -> String -- ^ Expected output from the second run.
+  -> Spec
+buildRecompile main_mod files1 files2 before_str after_str =
+  beforeAll (mk_tmp_dir ("recompile" ++ main_mod)) (afterAll rmdir work)
+    where
+      work =
+        describe ("Recompile " ++ main_mod) $
+          it "should return expected result" $ \tmpdir -> do
+          is_travis <- lookupEnv "TRAVIS"
+          if isJust is_travis && os == "darwin"
+            then pendingWith "not supported under Travis OSX"
+            else do_work tmpdir
 
-    mk_tmp_dir name =
-      do tmp <- getTemporaryDirectory
-         let my_tmpdir = tmp </> name
-         catch (removeDirectoryRecursive my_tmpdir)
-               (\(SomeException _e) -> return ())
-         createDirectoryIfMissing True my_tmpdir
-         return my_tmpdir
+      do_work tmpdir = do
+        compile_and_run tmpdir files1 before_str
+        compile_and_run tmpdir files2 after_str
+
+      compile_and_run tmpdir files expected_str = do
+        let a_dot_out = tmpdir </> "a.out"
+        copy_files tmpdir files
+        buildWork [] [ "-i" ++ tmpdir
+                     , "-outputdir", tmpdir
+                     , "-main-is", main_mod
+                     , "-o", a_dot_out
+                     , main_mod ]
+        output1 <- readProcess a_dot_out [] ""
+        output1 `shouldBe` expected_str
+
+copy_files :: MonadIO m => FilePath -> [(FilePath, FilePath)] -> m ()
+copy_files dir fs = liftIO (mapM_ copy fs)
+  where
+    copy (i,o) = copyFile (odir </> i) (dir </> o)
+
+-- | Create temporary directory with given name.
+mk_tmp_dir :: String -> IO FilePath
+mk_tmp_dir name = do
+  tmp <- getTemporaryDirectory
+  let my_tmpdir = tmp </> name
+  catch (removeDirectoryRecursive my_tmpdir)
+        (\(SomeException _e) -> return ())
+  createDirectoryIfMissing True my_tmpdir
+  return my_tmpdir
+
+-- | Remove given directory.
+rmdir :: FilePath -> IO ()
+rmdir = removeDirectoryRecursive

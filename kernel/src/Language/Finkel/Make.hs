@@ -13,8 +13,9 @@ module Language.Finkel.Make
 -- base
 import           Control.Monad                (foldM, unless, void, when)
 import           Control.Monad.IO.Class       (MonadIO (..))
-import           Data.Foldable                (find)
-import           Data.Maybe                   (isJust, mapMaybe)
+import           Data.Foldable                (find, foldl')
+import           Data.List                    (nub)
+import           Data.Maybe                   (isJust)
 import           GHC.Fingerprint              (getFileHash)
 import           System.IO                    (IOMode (..), withFile)
 
@@ -40,7 +41,8 @@ import           DynFlags                     (DumpFlag (..), DynFlags (..),
                                                GeneralFlag (..), GhcMode (..),
                                                getDynFlags, gopt, gopt_set,
                                                gopt_unset, isObjectTarget,
-                                               parseDynamicFilePragma)
+                                               parseDynamicFilePragma,
+                                               thisPackage)
 import           ErrUtils                     (MsgDoc, dumpIfSet_dyn,
                                                mkPlainErrMsg)
 import           Exception                    (handleIO)
@@ -65,8 +67,9 @@ import           HscTypes                     (FindResult (..),
                                                Usage (..), lookupHpt,
                                                ms_mod_name, throwOneError)
 import           Module                       (ModLocation (..), Module (..),
-                                               ModuleName, mkModuleName,
-                                               moduleName, moduleNameSlashes,
+                                               ModuleName, mkModule,
+                                               mkModuleName, moduleName,
+                                               moduleNameSlashes,
                                                moduleNameString, moduleUnitId)
 import           Outputable                   (Outputable (..), SDoc, hcat,
                                                nest, printForUser, quotes, text,
@@ -79,9 +82,11 @@ import           Util                         (getModificationUTCTime,
                                                modificationTimeIfExists)
 
 #if MIN_VERSION_ghc(8,10,0)
-import           HscTypes                     (ModIface_ (..))
+import           HscTypes                     (ModIface_ (..), ms_home_allimps)
 #else
+import           DynFlags                     (dynFlagDependencies)
 import           HscTypes                     (ModIface (..))
+import           SrcLoc                       (noLoc)
 #endif
 
 #if MIN_VERSION_ghc (8,10,0)
@@ -96,7 +101,8 @@ import           HscTypes                     (throwErrors)
 
 #if MIN_VERSION_ghc(8,4,0)
 import           HscTypes                     (extendMG, mgElemModule,
-                                               mgModSummaries, mkModuleGraph)
+                                               mgLookupModule, mgModSummaries,
+                                               mkModuleGraph)
 
 #endif
 
@@ -126,8 +132,8 @@ import           Language.Finkel.TargetSource
 --
 -- ---------------------------------------------------------------------
 
--- [Requiring home package module]
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Note [Requiring home package module]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
 -- The problem in dependency resolution when requiring home package module is,
 -- we need module imports list to make ModSummary, but modules imports could not
@@ -489,7 +495,7 @@ maybeExpandedSummary old_summaries tu@(tsource,_) = do
          if ms_hs_date ms < mtime
             then new_summary
             else do
-              usages_ok <- maybe (pure False) checkUsages mb_usages
+              usages_ok <- maybe (pure False) checkFileUsages mb_usages
               if not usages_ok
                  then new_summary
                  else do
@@ -547,9 +553,9 @@ maybeExpandedSummary old_summaries tu@(tsource,_) = do
       modificationTimeIfExists (ml_obj_file loc)
 
 -- | Simple function to check whther the 'UsageFile' is up to date.
-checkUsages :: [Usage] -> Fnk Bool
--- See: 'MkIface.checkModUsage'.
-checkUsages =  go
+checkFileUsages :: [Usage] -> Fnk Bool
+checkFileUsages =  go
+  -- See: 'MkIface.checkModUsage'.
   where
     go us =
       case us of
@@ -669,8 +675,8 @@ compileOtherFile path = do
       dflags1 = dflags0 {ldInputs = FileOption "" o_file : ldInputs dflags0}
   void (setSessionDynFlags dflags1)
 
--- [Avoiding Recompilation]
--- ~~~~~~~~~~~~~~~~~~~~~~~~
+-- Note [Avoiding Recompilation]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
 -- See below for details of how GHC avoid recompilation:
 --
@@ -681,19 +687,19 @@ compileOtherFile path = do
 -- "UsageFile" in "mi_usages", via "hpm_src_files" field in "HsParsedModule"
 -- used when making "ModSummary" data.
 --
--- XXX: Currently, dependencies of required home package module are not chased,
--- since the information of required module is stored as a plain file path, not
--- as a module.
+-- Currently, dependencies of required home package module are chased with plain
+-- file path, since the information of required module is stored as a plain file
+-- path, not as a module. This is to avoid compiling required modules as object
+-- code, because macro expansions are done with byte code interpreter.
 
 -- | Make 'ModSummary'.
 mkModSummary
-  :: GhcMonad m
-  => DynFlags -- ^ File local 'DynFlags'.
+  :: DynFlags -- ^ File local 'DynFlags'.
   -> FilePath -- ^ The source code path.
   -> HModule  -- ^ Parsed module.
   -> [ModSummary] -- ^ List of required 'ModSummary' in home package.
-  -> m ModSummary
-mkModSummary dflags file mdl reqs =
+  -> Fnk ModSummary
+mkModSummary dflags file mdl reqs = do
   let modName = case hsmodName mdl of
                   Just name -> unLoc name
                   Nothing   -> mkModuleName "Main"
@@ -706,18 +712,16 @@ mkModSummary dflags file mdl reqs =
       imports = map (\lm -> (Nothing, ideclName (unLoc lm)))
                     (hsmodImports mdl)
 
-      -- Adding file path of the required modules to "hpm_src_files" to
-      -- support recompilation.
-      --
-      -- XXX: Add the dependencies of the required modules. The required modules
-      -- may import or require other home package modules.
-      req_srcs = mapMaybe (ml_hs_file . ms_location) reqs
+  -- Adding file path of the required modules and file paths of imported home
+  -- package modules to "hpm_src_files" to support recompilation.
+  req_srcs <- requiredDependencies reqs
 
-      pm = HsParsedModule
+  let pm = HsParsedModule
         { hpm_module = L r_s_span mdl
-        , hpm_src_files = file : req_srcs
+        , hpm_src_files = req_srcs
         , hpm_annotations = emptyAnns }
-  in  mkModSummary' dflags file modName [] imports (Just pm) Nothing
+
+  mkModSummary' dflags file modName [] imports (Just pm) Nothing
 
 -- | Make 'ModSummary' from source file, module name, and imports.
 mkModSummary'
@@ -836,6 +840,64 @@ dumpParsedAST dflags ms =
     txt = text
 #endif
 
+-- Note [Chasing dependencies of required home package module]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- When home package module were required, recompilation happen when the
+-- required module was changed.
+--
+-- The required modules lives in a dedicated HscEnv (the one stored at
+-- `envSessionForExpand' field in 'FnkEnv') which uses bytecode interpreter.
+-- Required modules are stored as 'UsageFile' in the 'mi_usages' field of
+-- 'ModIface', not as 'UsageHomeModule', because if stored as 'UsageHomeModule',
+-- required modules will compiled as object codes, which is not used by the
+-- macro expander at the moment.
+--
+-- To chase dependencies of the required home package modules, following
+-- functions temporary switch to the macro expansion session and recursively
+-- chases the file paths of imported modules and required modules.
+
+requiredDependencies :: [ModSummary] -> Fnk [FilePath]
+requiredDependencies mss = withExpanderSettings' False $ do
+  hsc_env <- getSession
+  return $! nub $! foldl' (requiredDependency hsc_env) [] mss
+
+requiredDependency :: HscEnv -> [FilePath] -> ModSummary -> [FilePath]
+requiredDependency hsc_env = go
+  where
+    go acc ms =
+      case ml_hs_file (ms_location ms) of
+        Nothing -> acc
+        Just me -> dep_files ms (me : acc)
+
+    dep_files ms acc =
+      let mg = hsc_mod_graph hsc_env
+          hpt = hsc_HPT hsc_env
+          acc1 = find_require_paths hpt acc ms
+      in  foldl' (find_import_path mg) acc1 (ms_home_allimps ms)
+
+    find_import_path mg acc mod_name =
+      let mdl = mkModule (thisPackage (hsc_dflags hsc_env)) mod_name
+      in  maybe acc (go acc) (mgLookupModule' mg mdl)
+
+    find_require_paths hpt acc ms =
+      case lookupHpt hpt (ms_mod_name ms) of
+        Nothing  -> acc
+        Just hmi -> foldl' req_paths acc (mi_usages (hm_iface hmi))
+
+    req_paths acc usage =
+      case usage of
+        -- Recursively calling `dependencyFile' with the ModSummary referred by
+        -- the usage file path .
+        UsageFile {usg_file_path = path} ->
+          let mb_ms1 = find is_my_path mss
+              is_my_path = maybe False (== path) . ml_hs_file . ms_location
+              mss = mgModSummaries' (hsc_mod_graph hsc_env)
+              acc1 = path : acc
+          in  maybe acc1 (go acc1) mb_ms1
+        _ -> acc
+
+
 -- ------------------------------------------------------------------------
 --
 -- GHC version compatibility functions
@@ -848,12 +910,14 @@ extendMG' :: ModuleGraph -> ModSummary -> ModuleGraph
 mgElemModule' :: ModuleGraph -> Module -> Bool
 mkModuleGraph' :: [ModSummary] -> ModuleGraph
 mgModSummaries' :: ModuleGraph -> [ModSummary]
+mgLookupModule' :: ModuleGraph -> Module -> Maybe ModSummary
 
 #if MIN_VERSION_ghc(8,4,0)
 extendMG' = extendMG
 mgElemModule' = mgElemModule
 mkModuleGraph' = mkModuleGraph
 mgModSummaries' = mgModSummaries
+mgLookupModule' = mgLookupModule
 #else
 extendMG' = flip (:)
 mgElemModule' mg mdl = go mg
@@ -862,6 +926,32 @@ mgElemModule' mg mdl = go mg
     go (ms:mss) = if ms_mod ms == mdl then True else go mss
 mkModuleGraph' = id
 mgModSummaries' = id
+mgLookupModule' mg mdl = find (\ms -> ms_mod_name ms == moduleName mdl) mg
+#endif
+
+#if !MIN_VERSION_ghc(8,10,0)
+-- The `ms_home_allimps' function did not exist until ghc 8.10.x.
+ms_home_allimps :: ModSummary -> [ModuleName]
+ms_home_allimps ms = map unLoc (ms_home_srcimps ms ++ ms_home_imps ms)
+
+ms_home_srcimps :: ModSummary -> [Located ModuleName]
+ms_home_srcimps = home_imps . ms_srcimps
+
+ms_home_imps :: ModSummary -> [Located ModuleName]
+ms_home_imps = home_imps . ms_imps
+
+ms_imps :: ModSummary -> [(Maybe FastString, Located ModuleName)]
+ms_imps ms =
+  ms_textual_imps ms ++
+  map mk_additional_import (dynFlagDependencies (ms_hspp_opts ms))
+  where
+    mk_additional_import mod_nm = (Nothing, noLoc mod_nm)
+
+home_imps :: [(Maybe FastString, Located ModuleName)] -> [Located ModuleName]
+home_imps imps = [ lmodname |  (mb_pkg, lmodname) <- imps, isLocal mb_pkg ]
+  where isLocal Nothing    = True
+        isLocal (Just pkg) | pkg == fsLit "this" = True -- "this" is special
+        isLocal _          = False
 #endif
 
 -- | Label and wrap the given action with 'withTiming'.

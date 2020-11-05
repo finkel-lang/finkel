@@ -7,6 +7,7 @@ module Language.Finkel.Expand
   , expands
   , expands'
   , withExpanderSettings
+  , withExpanderSettings'
   , bcoDynFlags
   , isInterpreted
   , discardInteractiveContext
@@ -53,7 +54,12 @@ import           Language.Finkel.Form
 -- | Perform given action with 'HscEnv' updated for macroexpansion with
 -- interactive evaluation, then reset to the preserved original 'HscEnv'.
 withExpanderSettings :: Fnk a -> Fnk a
-withExpanderSettings act =
+withExpanderSettings = withExpanderSettings' True
+
+-- | Like 'withExpanderSettings', but takes a flag to discard interactive
+-- context in the session used for the expansion.
+withExpanderSettings' :: Bool -> Fnk a -> Fnk a
+withExpanderSettings' discard_ic act =
   do dflags <- getDynFlags
      -- Switching to the dedicated 'HscEnv' for macro expansion when compiling
      -- object code. If not, assuming current session is using bytecode
@@ -70,7 +76,9 @@ withExpanderSettings act =
       -- 'HscEnv'. When reusing, discarding the previous 'InteractiveContext',
       -- to avoid file local compile time functions to affect other modules.
       case envSessionForExpand fnk_env of
-        Just he -> setSession $! discardInteractiveContext he
+        Just he -> if discard_ic
+                      then setSession $! discardInteractiveContext he
+                      else setSession he
         Nothing -> new_hsc_env fnk_env dflags >>= setSession
 
       return hsc_env_old
