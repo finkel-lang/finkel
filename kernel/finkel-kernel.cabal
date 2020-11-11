@@ -69,8 +69,11 @@ library
                        Language.Finkel.Fnk
                        Language.Finkel.SpecialForms
                        Language.Finkel.Syntax
-                       Language.Finkel.TargetSource
-  other-modules:       Language.Finkel.Syntax.SynUtils
+  other-modules:       Language.Finkel.Make.Recompile
+                       Language.Finkel.Make.Summary
+                       Language.Finkel.Make.TargetSource
+                       Language.Finkel.Make.Trace
+                       Language.Finkel.Syntax.SynUtils
                        Language.Finkel.Syntax.HDecl
                        Language.Finkel.Syntax.HExpr
                        Language.Finkel.Syntax.HIE

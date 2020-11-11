@@ -35,6 +35,7 @@ module Language.Finkel.Fnk
   , fopt_set
   , setFnkVerbosity
   , debugWhen
+  , debugWhen'
   , dumpDynFlags
   , getFnkDebug
   , fnkDebugFlagOptions
@@ -566,16 +567,21 @@ setFnkVerbosity v fnk_env = fnk_env {envVerbosity = v}
 -- | Dump 'MsgDoc's when the given 'FnkDebugFlag' is turned on.
 debugWhen
   :: (MonadIO m, HasDynFlags m) => FnkEnv -> FnkDebugFlag -> [MsgDoc] -> m ()
-debugWhen fnk_env flag mdocs = when (fopt flag fnk_env) (dumpMsgDocs mdocs)
+debugWhen fnk_env flag mdocs =
+  getDynFlags >>= \dflags -> debugWhen' dflags fnk_env flag mdocs
+{-# INLINE debugWhen #-}
 
-dumpMsgDocs :: (MonadIO m, HasDynFlags m) => [MsgDoc] -> m ()
-dumpMsgDocs mdocs =
-  do dflags <- getDynFlags
-     liftIO (printSDocLn Pretty.PageMode
-                         dflags
-                         stderr
-                         (defaultErrStyle dflags)
-                         (vcat mdocs))
+debugWhen'
+  :: MonadIO m => DynFlags -> FnkEnv -> FnkDebugFlag -> [MsgDoc] -> m ()
+debugWhen' dflags fnk_env flag mdocs =
+  when (fopt flag fnk_env) (dumpMsgDocs dflags mdocs)
+{-# INLINE debugWhen' #-}
+
+dumpMsgDocs :: MonadIO m => DynFlags -> [MsgDoc] -> m ()
+dumpMsgDocs dflags mdocs =
+  liftIO (printSDocLn Pretty.PageMode dflags stderr
+                      (defaultErrStyle dflags) (vcat mdocs))
+{-# INLINE dumpMsgDocs #-}
 
 -- | Get finkel debug setting from environment variable /FNK_DEBUG/.
 getFnkDebug :: MonadIO m => m Bool

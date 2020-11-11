@@ -89,7 +89,7 @@
     ((FnkEnv ..) fnkDebugFlagOptions getFnkEnv macroNames modifyFnkEnv
      partitionFinkelOptions putFnkEnv setDynFlags setFnkVerbosity))
    (Language.Finkel.Syntax (parseExpr parseType))
-   (Language.Finkel.TargetSource (asModuleName))
+   (Language.Finkel.Make (asModuleName))
 
    ;; finkel-core
    (Finkel.Core.Functions)))

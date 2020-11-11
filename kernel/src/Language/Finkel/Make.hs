@@ -2,133 +2,80 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- | Make mode for Finkel compiler.
 module Language.Finkel.Make
-  ( make
+  (
+    -- * Make functions
+    initSessionForMake
+  , make
   , makeFromRequire
-  , initSessionForMake
+
+    -- * Syntax builder utility
   , buildHsSyn
+
+    -- * Target unit utilities
+  , TargetUnit
+  , TargetSource(..)
+  , findTargetModuleName
+  , findTargetModuleNameMaybe
+  , findTargetSource
+  , findTargetSourceMaybe
+  , asModuleName
+  , isFnkFile
+  , isHsFile
   ) where
 
 #include "Syntax.h"
 
+
 -- base
-import           Control.Monad                (foldM, unless, void, when)
-import           Control.Monad.IO.Class       (MonadIO (..))
-import           Data.Foldable                (find, foldl')
-import           Data.List                    (nub)
-import           Data.Maybe                   (isJust)
-import           GHC.Fingerprint              (getFileHash)
-import           System.IO                    (IOMode (..), withFile)
-
--- container
-import qualified Data.Map                     as Map
-
--- date
-import           Data.Time                    (UTCTime)
-
--- directory
-import           System.Directory             (createDirectoryIfMissing)
+import Control.Monad                     (foldM, unless, void, when)
+import Control.Monad.IO.Class            (MonadIO (..))
+import Data.Foldable                     (find)
+import Data.Maybe                        (isJust)
 
 -- filepath
-import           System.FilePath              (splitExtension, takeBaseName,
-                                               takeDirectory, (<.>), (</>))
+import System.FilePath                   (splitExtension)
 
 -- ghc
-import           BasicTypes                   (SuccessFlag (..))
-import           DriverPhases                 (HscSource (..), Phase (..))
-import           DriverPipeline               (compileFile, preprocess,
-                                               writeInterfaceOnlyMode)
-import           DynFlags                     (DumpFlag (..), DynFlags (..),
-                                               GeneralFlag (..), GhcMode (..),
-                                               getDynFlags, gopt, gopt_set,
-                                               gopt_unset, isObjectTarget,
-                                               parseDynamicFilePragma,
-                                               thisPackage)
-import           ErrUtils                     (MsgDoc, dumpIfSet_dyn,
-                                               mkPlainErrMsg)
-import           Exception                    (handleIO)
-import           FastString                   (FastString, fsLit)
-import           Finder                       (addHomeModuleToFinder,
-                                               cannotFindModule,
-                                               findExposedPackageModule,
-                                               mkHomeModLocation)
-import           GHC                          (getPrintUnqual,
-                                               setSessionDynFlags)
-import           GHC_Hs                       (HsModule (..))
-import           GHC_Hs_Dump                  (BlankSrcSpan (..), showAstData)
-import           GHC_Hs_ImpExp                (ImportDecl (..))
-import           GhcMake                      (LoadHowMuch (..), load')
-import           GhcMonad                     (GhcMonad (..))
-import           HeaderInfo                   (getImports)
-import           HscStats                     (ppSourceStats)
-import           HscTypes                     (FindResult (..),
-                                               HomeModInfo (..),
-                                               HsParsedModule (..), HscEnv (..),
-                                               ModSummary (..), ModuleGraph,
-                                               Usage (..), lookupHpt,
-                                               ms_mod_name, throwOneError)
-import           Module                       (ModLocation (..), Module (..),
-                                               ModuleName, mkModule,
-                                               mkModuleName, moduleName,
-                                               moduleNameSlashes,
-                                               moduleNameString, moduleUnitId)
-import           Outputable                   (Outputable (..), SDoc, hcat,
-                                               nest, printForUser, quotes, text,
-                                               vcat, ($$), (<+>))
-import           SrcLoc                       (GenLocated (..), Located, getLoc,
-                                               mkSrcLoc, mkSrcSpan, unLoc)
-import           StringBuffer                 (StringBuffer, hGetStringBuffer)
-import           Util                         (getModificationUTCTime,
-                                               looksLikeModuleName,
-                                               modificationTimeIfExists)
+import BasicTypes                        (SuccessFlag (..))
+import DriverPhases                      (Phase (..))
+import DynFlags                          (DynFlags (..), GeneralFlag (..),
+                                          GhcMode (..), HasDynFlags (..), gopt,
+                                          gopt_set, gopt_unset, isObjectTarget)
+import ErrUtils                          (mkPlainErrMsg)
+import Finder                            (cannotFindModule,
+                                          findExposedPackageModule)
+import GHC                               (setSessionDynFlags)
+import GhcMake                           (LoadHowMuch (..), load')
+import GhcMonad                          (GhcMonad (..))
+import HscTypes                          (FindResult (..), HscEnv (..),
+                                          ModSummary (..), lookupHpt,
+                                          ms_mod_name, throwOneError)
+import Module                            (Module (..), ModuleName, moduleUnitId)
+import Outputable                        (Outputable (..), brackets, nest, text,
+                                          vcat, (<+>))
+import SrcLoc                            (Located, getLoc, unLoc)
+import Util                              (getModificationUTCTime)
 
-#if MIN_VERSION_ghc(8,10,0)
-import           HscTypes                     (ModIface_ (..), ms_home_allimps)
-#else
-import           DynFlags                     (dynFlagDependencies)
-import           HscTypes                     (ModIface (..))
-import           SrcLoc                       (noLoc)
-#endif
-
-#if MIN_VERSION_ghc (8,10,0)
-import           ErrUtils                     (withTimingD)
-#else
-import           ErrUtils                     (withTiming)
-#endif
-
-#if MIN_VERSION_ghc(8,8,0)
-import           HscTypes                     (throwErrors)
-#endif
-
-#if MIN_VERSION_ghc(8,4,0)
-import           HscTypes                     (extendMG, mgElemModule,
-                                               mgLookupModule, mgModSummaries,
-                                               mkModuleGraph)
-
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import           CliOption                    (Option (..))
-#else
-import           DynFlags                     (Option (..))
+#if MIN_VERSION_ghc(8,6,0)
+import DynamicLoading                    (initializePlugins)
+import HscTypes                          (runHsc)
+import Plugins                           (Plugin (..), withPlugins)
 #endif
 
 -- internal
-import           Language.Finkel.Builder
-import           Language.Finkel.Emit
-import           Language.Finkel.Expand
-import           Language.Finkel.Fnk
-import           Language.Finkel.Form
-import           Language.Finkel.Lexer
-import           Language.Finkel.Reader
-import           Language.Finkel.Syntax
-import           Language.Finkel.TargetSource
+import Language.Finkel.Expand
+import Language.Finkel.Fnk
+import Language.Finkel.Make.Recompile
+import Language.Finkel.Make.Summary
+import Language.Finkel.Make.TargetSource
+import Language.Finkel.Make.Trace
 
 #include "finkel_kernel_config.h"
 
 
 -- ---------------------------------------------------------------------
 --
--- Exported make interface
+-- The make function
 --
 -- ---------------------------------------------------------------------
 
@@ -157,14 +104,12 @@ make
   -> Maybe FilePath -- ^ Output file, if any.
   -> Fnk SuccessFlag
 make infiles force_recomp mb_output = do
-
   -- Setting ghcMode as done in ghc's "Main.hs".
   --
-  -- Also setting force recompilation field from the argument, since the current
-  -- ghc running in OneShot mode instead of CompManager mode until this
-  -- point. Some of the dump flags will turn the force recompilation flag
-  -- on. Ghc does this switching of recompilation checker in
-  -- DynFlags.{setDumpFlag',forceRecompile}.
+  -- Also setting the force recompilation field from the argument, since the
+  -- current ghc may running in OneShot mode instead of CompManager mode until
+  -- this point. Some of the dump flags will turn the force recompilation flag
+  -- on. Ghc does this in DynFlags.{setDumpFlag',forceRecompile}.
   dflags0 <- getDynFlags
   let dflags1 = dflags0 { ghcMode = CompManager
                         , outputFile = mb_output }
@@ -179,22 +124,33 @@ make infiles force_recomp mb_output = do
 
   -- Decide the kind of sources of the inputs, inputs arguments could be file
   -- paths, or module names.
-  targets <- mapM findTargetUnit infiles
+  targets <- mapM (findTargetUnit dflags3) infiles
 
   -- Do the compilation work.
   old_summaries <- fmap (mgModSummaries' . hsc_mod_graph) getSession
   make1 LoadAllTargets old_summaries targets
 
--- | Calls 'GHC.setSessionDynFlags' to initialize session.
+-- | Calls 'GHC.setSessionDynFlags' and do some works to initialize session.
 initSessionForMake :: Fnk ()
 initSessionForMake = do
-  -- Returned list of 'InstalledUnitId's are ignored.
   dflags0 <- getDynFlags
-  _preload <- setSessionDynFlags dflags0
 
-  -- Above 'setSessionDynFlags' changes the current 'DynFlags', get the updated
-  -- "DynFlags".
-  dflags1 <- getDynFlags
+#if MIN_VERSION_ghc(8,6,0)
+  -- Initializing the DynFlags for plugin at this point, to avoid repeated calls
+  -- of "initializePlugins" before applying plugin action "parsedResultAction".
+  -- The 'setSessionDynFlags' changes the current 'DynFlags', so getting the
+  -- updated "DynFlags". Returned list of 'InstalledUnitId's are ignored.
+  _preload0 <- setSessionDynFlags dflags0
+  hsc_env <- getSession
+  let dflags0' = hsc_dflags hsc_env
+  dflags1 <- liftIO $! initializePlugins hsc_env dflags0'
+#else
+  let dflags1 = dflags0
+#endif
+
+  -- ... And setting and getting the DynFlags again.
+  _preload1 <- setSessionDynFlags dflags1
+  dflags2 <- getDynFlags
 
   -- Load modules names in FnkEnv to current interactive context.
   fnk_env <- getFnkEnv
@@ -212,7 +168,7 @@ initSessionForMake = do
   -- Updating the debug settings. Also setting the default 'DynFlag' at this
   -- point.
   putFnkEnv (fnk_env { envVerbosity = vrbs2
-                     , envDefaultDynFlags = Just dflags1 })
+                     , envDefaultDynFlags = Just dflags2 })
 
 -- | Simple make function returning compiled home module information. Intended
 -- to be used in 'require' macro.
@@ -223,25 +179,15 @@ makeFromRequire lmname = do
 
   let old_summaries = mgModSummaries' (hsc_mod_graph hsc_env)
       tr = traceMake fnk_env "makeFromRequire"
+      dflags = hsc_dflags hsc_env
 
   tr ["required module:" <+> ppr (unLoc lmname)]
-  tu <- emptyTargetUnit <$> findTargetModuleName lmname
+  tu <- emptyTargetUnit <$> findTargetModuleName dflags lmname
   _success_flag <- make1 (LoadUpTo (targetUnitName tu)) old_summaries [tu]
 
   mgraph <- hsc_mod_graph <$> getSession
   let mod_summaries = mgModSummaries' mgraph
   tr ["summaries:", nvc_or_none mod_summaries]
-
--- | Run given builder.
-buildHsSyn
-  :: Builder a -- ^ Builder to use.
-  -> [Code]    -- ^ Input codes.
-  -> Fnk a
-buildHsSyn bldr forms = do
-  dflags <- getDynFlags
-  case evalBuilder dflags bldr forms of
-    Right a                     -> return a
-    Left (SyntaxError code msg) -> finkelSrcError code msg
 
 
 -- ---------------------------------------------------------------------
@@ -250,31 +196,11 @@ buildHsSyn bldr forms = do
 --
 -- ---------------------------------------------------------------------
 
--- | Unit for compilation target.
---
--- Simply a 'TargetSource' paired with 'Maybe' 'Phase'.
-type TargetUnit = (TargetSource, Maybe Phase)
-
--- | Make empty 'TargetUnit' from 'TargetSource'
-emptyTargetUnit :: TargetSource -> TargetUnit
-emptyTargetUnit ts = (ts, Nothing)
-
--- | Get 'TargetUnit' from pair of module name or file path, and phase.
-findTargetUnit :: (Located String, Maybe Phase) -> Fnk TargetUnit
-findTargetUnit (lpath,mbp) = (\t -> (t, mbp)) <$> findTargetSource lpath
-
--- | Get 'ModuleName' from given 'TargetUnit'.
-targetUnitName :: TargetUnit -> ModuleName
-targetUnitName (ts, _) =
-  case ts of
-    FnkSource _ mn -> mn
-    HsSource _ mn  -> mn
-    _              -> mkModuleName "module-name-unknown"
-
 -- | Compile 'TargetUnit' to interface file and object code, and return a list
 -- of compiled 'ModSummary'.
 --
--- Do macro expansion, conver to 'ModSummary', and then pass to 'GhcMake.load''.
+-- This function does macro expansion, conver 'TargetUnit' to 'ModSummary', and
+-- pass the results to 'GhcMake.load''.
 --
 make1 :: LoadHowMuch -> [ModSummary] -> [TargetUnit] -> Fnk SuccessFlag
 make1 how_much old_summaries targets = do
@@ -288,14 +214,18 @@ make1 how_much old_summaries targets = do
      , "targets:", targets_sdoc
      , "old summaries:", nvc_or_none old_summaries]
 
-  mss0 <- expandTargets old_summaries targets
-  tr ["expanded mod summaries:", nvc_or_none mss0]
+  hsc_env <- getSession
+  (mss0, options) <- summariseTargets hsc_env old_summaries targets
+  unless (null options) (updateFlagOptions options)
 
   -- Make new ModuleGrpah from expanded summaries, then update the old mod
   -- summaries if the summaries were missing.
-  let mgraph0 = updateMG (mkModuleGraph' mss0) old_summaries
+  let mgraph0 = foldr updateMG (mkModuleGraph' mss0) old_summaries
+      updateMG ms mg = if mgElemModule' mg (ms_mod ms)
+                          then mg
+                          else extendMG' mg ms
       messager = envMessager fnk_env
-  tr ["merged module mgraph:", nvc_or_none (mgModSummaries' mgraph0)]
+  tr ["new summaries:", nvc_or_none (mgModSummaries' mgraph0)]
 
   -- Pass the merged ModuleGraph to the "load'" function, delegate the hard
   -- works to it.
@@ -304,154 +234,17 @@ make1 how_much old_summaries targets = do
 
   return success_flag
 
-updateMG :: ModuleGraph -> [ModSummary] -> ModuleGraph
-updateMG = foldr f
-  where
-    f ms mg = if mgElemModule' mg (ms_mod ms)
-                 then mg
-                 else extendMG' mg ms
-
--- | Make a list of 'ModSummary' from the given 'TargetUnit's.
---
--- Purpose is similar to the 'downsweep' function, but does less work (e.g.,
--- does not detect circular module dependencies).
-expandTargets
-  :: [ModSummary]
-  -- ^ List of old 'ModSummary'.
-  -> [TargetUnit]
-  -- ^ List of 'TargetUnit' to compile.
-  -> Fnk [ModSummary]
-  -- ^ Expanded module summaries.
-expandTargets old_summaries tus_to_compile = timeIt label $ do
+updateFlagOptions :: [Option] -> Fnk ()
+updateFlagOptions options = do
   hsc_env <- getSession
-  fnk_env <- getFnkEnv
-  go [] fnk_env hsc_env tus_to_compile
-  where
-    label = "expandTargets [Finkel]"
-    expandOne fnk_env hsc_env (acc0, more_tus) tu = do
-       if acc0 `has_seen` tu
-          then
-            -- Earlier modules already added this TargetUnit, skipping
-            -- the expansion.
-            return (acc0, more_tus)
-          else do
-            -- Expand this TargetUnit, then add imported home modules if not
-            -- added yet.
-            mb_es <- maybeExpandedSummary old_summaries tu
-            case mb_es of
-              Nothing -> return (acc0, more_tus)
-              Just (ms, reqs) -> do
-                let limps = not_yet_ready acc0 more_tus ms
-                    new_reqs = reqs `not_in` acc0
-                    dflags = hsc_dflags hsc_env
+  let dflags0 = hsc_dflags hsc_env
+      dflags1 = dflags0 {ldInputs = options ++ ldInputs dflags0}
+  void (setSessionDynFlags dflags1)
 
-                    -- Adding required ModSummary to the accumulator when using
-                    -- interpreter, since it could be reused.
-                    acc1 = if isInterpreted dflags
-                             then ms:new_reqs ++ acc0
-                             else ms:acc0
-
-                not_compiled <- filterNotCompiled fnk_env hsc_env limps
-                return (acc1, not_compiled ++ more_tus)
-
-    has_seen mss tu =
-      targetUnitName tu `elem` map ms_mod_name mss
-
-    not_in rs as =
-      let anames = map ms_mod_name as
-      in  filter (\r -> ms_mod_name r `notElem` anames) rs
-
-    not_yet_ready mss_so_far more_tus ms =
-      let names1 = map targetUnitName tus_to_compile
-          names2 = map targetUnitName more_tus
-          names3 = map ms_mod_name mss_so_far
-      in  foldr (\(_, lmn) acc ->
-                   if unLoc lmn `elem` names1 ||
-                      unLoc lmn `elem` names2 ||
-                      unLoc lmn `elem` names3
-                     then acc
-                     else lmn:acc)
-                []
-                (ms_textual_imps ms)
-
-    -- Recursive function to expand all home modules from the 'tus' argument.
-    go acc fnk_env hsc_env tus = do
-      if null tus
-         then return acc
-         else do
-           let expandOne' = expandOne fnk_env hsc_env
-           (next_acc, more_tus) <- foldM expandOne' (acc,[]) tus
-           go next_acc fnk_env hsc_env more_tus
-
--- | Return a list of 'TargetUnit' to compile for given 'ModuleName's.
-filterNotCompiled
-   :: FnkEnv
-   -> HscEnv
-   -> [Located ModuleName]
-   -> Fnk [TargetUnit]
-filterNotCompiled fnk_env hsc_env lmnames = foldM f [] lmnames
-  where
-    f acc lmname =
-      maybe acc (:acc) <$> findNotCompiledImport fnk_env hsc_env lmname
-
--- | Find not compiled module.
-findNotCompiledImport
-  :: FnkEnv -- ^ Current fnk environment.
-  -> HscEnv       -- ^ Current hsc environment.
-  -> Located ModuleName -- ^ The target module to find.
-  -> Fnk (Maybe TargetUnit)
-findNotCompiledImport fnk_env hsc_env lmname = do
-  -- Search files in home package modules sources before searching in external
-  -- packages, to support loading home package modules when working with modules
-  -- in cabal packages.
-  mb_ts <- findTargetModuleNameMaybe lmname
-  case mb_ts of
-    Just ts -> do
-      tr ["Found" <+> ppr mname <+> "at" <+> text (targetSourcePath ts)]
-      return $! Just $! emptyTargetUnit ts
-    Nothing -> do
-      -- Search for import from external packages.
-      find_result <- liftIO (findExposedPackageModule hsc_env mname Nothing)
-      case find_result of
-        Found _ mdl -> do
-          tr ["Found" <+> ppr mname <+> "in" <+> ppr (moduleUnitId mdl)]
-          return Nothing
-        _ -> do
-          let dflags = hsc_dflags hsc_env
-              doc = cannotFindModule dflags mname find_result
-              err = mkPlainErrMsg dflags loc doc
-          throwOneError err
-  where
-    mname = unLoc lmname
-    loc = getLoc lmname
-    tr = traceMake fnk_env "findNotCompiledImport"
-
--- | Set 'dumpPrefix' from file path.
-setDumpPrefix :: FilePath -> Fnk ()
-setDumpPrefix path = do
-  dflags0 <- getDynFlags
-  let (basename, _suffix) = splitExtension path
-      dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
-  setDynFlags dflags1
-
--- | Trace function for this module.
-traceMake :: FnkEnv -> MsgDoc -> [MsgDoc] -> Fnk ()
-traceMake fnk_env fn_name msgs0 =
-  let msgs1 = (hcat [";;; [Language.Finkel.Make.", fn_name, "]:"] : msgs0)
-  in  debugWhen fnk_env Fnk_trace_make msgs1
-
--- | Nested 'vcat' or text @"none"@.
-nvc_or_none :: Outputable a => [a] -> SDoc
-nvc_or_none xs = nest 2 sdoc
-  where
-    sdoc =
-       if null xs
-         then "none"
-         else vcat (map ppr xs)
 
 -- ------------------------------------------------------------------------
 --
--- For ModSummary
+-- For summarising TargetUnit
 --
 -- ------------------------------------------------------------------------
 
@@ -462,526 +255,286 @@ nvc_or_none xs = nest 2 sdoc
 --
 --   https://gitlab.haskell.org/ghc/ghc/-/issues/18330
 
+-- | Newtype to summaries list of 'TargetUnit'.
+newtype MakeM a = MakeM {unMakeM :: MkSt -> Fnk (a, MkSt)}
+
+instance Functor MakeM where
+  fmap f (MakeM k) = MakeM (\st -> fmap (\(a,st') -> (f a, st')) (k st))
+  {-# INLINE fmap #-}
+
+instance Applicative MakeM where
+  pure a = MakeM (\st -> pure (a, st))
+  {-# INLINE pure #-}
+  f <*> m = do {g <- f; a <- m; pure (g a)}
+  {-# INLINE (<*>) #-}
+
+instance Monad MakeM where
+  MakeM m >>= k = MakeM (\s0 -> m s0 >>= \(a,s1) -> unMakeM (k a) s1)
+  {-# INLINE (>>=) #-}
+
+instance MonadIO MakeM where
+  liftIO io = MakeM (\s -> liftIO io >>= \a -> pure (a, s))
+  {-# INLINE liftIO #-}
+
+-- | State for 'MakeM'.
+data MkSt = MkSt
+  { -- | Resulting list of 'ModSummary'.
+    mks_summarised    :: ![ModSummary]
+    -- | Resulting list of 'Option'.
+  , mks_flag_options  :: ![Option]
+    -- | List of 'TargetUnit' to compile.
+  , mks_to_summarise  :: ![TargetUnit]
+
+    -- | Old ModSummary from last run, if any.
+  , mks_old_summaries :: ![ModSummary]
+  }
+
+getMkSt :: MakeM MkSt
+getMkSt = MakeM (\s -> pure (s,s))
+{-# INLINE getMkSt #-}
+
+putMkSt :: MkSt -> MakeM ()
+putMkSt s = MakeM (\_ -> pure ((),s))
+{-# INLINE putMkSt #-}
+
+toMakeM :: Fnk a -> MakeM a
+toMakeM fnk = MakeM (\st -> fnk >>= \a -> pure (a,st))
+{-# INLINE toMakeM #-}
+
+-- | Make a list of 'ModSummary' and 'Option' from the given 'TargetUnit's.
+--
+-- Purpose is similar to the 'downsweep' function, but does less work (e.g.,
+-- does not detect circular module dependencies).
+summariseTargets
+  :: HscEnv
+  -- ^ Current session.
+  -> [ModSummary]
+  -- ^ List of old 'ModSummary'.
+  -> [TargetUnit]
+  -- ^ List of 'TargetUnit' to compile.
+  -> Fnk ([ModSummary], [Option])
+  -- ^ A pair of list of 'ModSummary' and list of file option.
+summariseTargets hsc_env old_summaries tus_to_summarise =
+  withTiming' "summariseTargets [Finkel]" $ do
+    fnk_env <- getFnkEnv
+    let mks0 = MkSt { mks_summarised = []
+                    , mks_flag_options = []
+                    , mks_to_summarise = tus_to_summarise
+                    , mks_old_summaries = old_summaries }
+        rs0 = emptyRecompState hsc_env
+    (_, mks1) <- unMakeM (summariseAll fnk_env hsc_env rs0) mks0
+    return (mks_summarised mks1, reverse (mks_flag_options mks1))
+
+-- | 'MakeM' action to summarise all 'TargetUnit's.
+summariseAll :: FnkEnv -> HscEnv -> RecompState -> MakeM RecompState
+summariseAll fnk_env hsc_env rs0 = go rs0
+  where
+    -- When compiling object codes, macro expander will update HomePackageTable
+    -- to check old interface read from file. Recursively passing the
+    -- RecompState to use the updated HomePackageTable.
+    go rs = do
+      s0 <- getMkSt
+      case mks_to_summarise s0 of
+        []   -> return rs
+        t:ts -> do
+          putMkSt (s0 {mks_to_summarise = ts})
+          summariseOne fnk_env hsc_env t rs >>= go
+
+-- | Summarise one 'TargetUnit'.
+summariseOne
+  :: FnkEnv -> HscEnv -> TargetUnit -> RecompState -> MakeM RecompState
+summariseOne fnk_env hsc_env tu rs0 = do
+  mks@MkSt{ mks_summarised = summarised
+          , mks_flag_options = flag_options
+          , mks_to_summarise = to_summarise } <- getMkSt
+
+  let summarised_names = map ms_mod_name summarised
+      names_to_summarise = map targetUnitName to_summarise
+      reqs_not_in_mss =
+        filter (\r -> ms_mod_name r `notElem` summarised_names)
+      not_yet_ready ms =
+        foldr (\(_, lmn) acc ->
+                 if unLoc lmn `elem` names_to_summarise ||
+                    unLoc lmn `elem` summarised_names
+                   then acc
+                   else lmn:acc)
+              []
+              (ms_textual_imps ms)
+
+  -- Skip the expansion when earlier modules already saw this TargetUnit.
+  if targetUnitName tu `elem` summarised_names
+     then return rs0
+     else do
+       (tsum, rs1) <- makeTargetSummary fnk_env rs0 tu
+       case tsum of
+         -- Linker option, not a module.
+         LdInput fo -> putMkSt (mks {mks_flag_options=fo:flag_options})
+
+         -- Expanded to ModSummary, add imported home modules if not added yet.
+         -- Adding the required ModSummary to the accumulator when using
+         -- interpreter, since it could be reused.
+         EMS ms _ reqs -> do
+           not_compiled <- filterNotCompiled fnk_env hsc_env (not_yet_ready ms)
+           putMkSt (mks { mks_summarised =
+                           if isInterpreted (hsc_dflags hsc_env)
+                             then ms:reqs_not_in_mss reqs ++ summarised
+                             else ms:summarised
+                        , mks_to_summarise = not_compiled ++ to_summarise
+                        })
+       return rs1
+
 -- | Returns 'Just' pair of compiled 'ModSummary' and the required home package
 -- module 'ModSummary' for 'FnkSource' and 'HsSource', or 'Nothing' for
 -- 'OtherSource'.
-maybeExpandedSummary
-  :: [ModSummary] -> TargetUnit -> Fnk (Maybe (ModSummary, [ModSummary]))
-maybeExpandedSummary old_summaries tu@(tsource,_) = do
-  hsc_env <- getSession
-  fnk_env <- getFnkEnv
+makeTargetSummary
+  :: FnkEnv -> RecompState -> TargetUnit -> MakeM (TargetSummary, RecompState)
+makeTargetSummary fnk_env rs0 tu@(tsource,_) = do
+  -- To maximize recompilation avoidance when compiling object codes, seems like
+  -- it is required to first scan all the home package interfaces on file system
+  -- to mark outdated "ModSummary"s, and then do the expansion to avoid parsing
+  -- the source codes.
+  --
+  -- Perhaps the "checkOldIface" function is designed to work with topologically
+  -- sorted list of "ModSummary", not to be called during macro expansion of
+  -- Finkel module source code.  'MkIface.getFromModIface' is calling
+  -- 'loadInterface', which is adding empty interface to PIT when loading non
+  -- hi-boot interface for home package module. To avoid loading dummy
+  -- interfaces, recompilation checks done in "RecompM" is reading interfaces
+  -- and updating HPT before invoking 'checkOldIface'.
 
-  let new_summary = do
-        tr ["Making new summary for" <+> ppr tsource]
-        make_new_summary hsc_env fnk_env
+  old_summaries <- mks_old_summaries <$> getMkSt
+
+  let tr = traceMake' dflags fnk_env "makeTargetSummary"
+      hsc_env = rs_hsc_env rs0
+      dflags = hsc_dflags hsc_env
       this_mod_name = targetUnitName tu
       by_mod_name = (== this_mod_name) . ms_mod_name
-      force_recomp = gopt Opt_ForceRecomp (hsc_dflags hsc_env)
-      src_path = targetSourcePath tsource
-      mb_usages = do
-        old_hmi <- lookupHpt (hsc_HPT hsc_env) this_mod_name
-        return (mi_usages (hm_iface old_hmi))
-      tr = traceMake fnk_env "maybeExpandedSummary"
 
-  if force_recomp
-     then new_summary
+      update_summary obj_allowed rs ms0 = do
+        ms1 <- updateSummaryTimestamps dflags obj_allowed ms0
+        return (plainEMS ms1, rs)
+
+      new_summary rs why = do
+        tr ["Making new summary for" <+> ppr this_mod_name <+> brackets why]
+        tsum  <- makeNewSummary fnk_env hsc_env tu
+        return (tsum, rs)
+
+      -- XXX: In below, `obj_allowed' argument is constantly 'False' at the
+      -- moment, it will be nice to pass this arg from REPL.
+      reuse_summary rs ms0 = do
+        tr ["Reusing old summary for" <+> ppr this_mod_name]
+        update_summary False rs ms0
+
+      reuse_iface rs ms0 = do
+        tr ["Reusing iface file for" <+> ppr this_mod_name]
+        update_summary True rs ms0
+
+  if gopt Opt_ForceRecomp dflags
+     then new_summary rs0 "force recomp"
      else case find by_mod_name old_summaries of
-       Nothing -> new_summary
-       Just ms -> do
-         -- Checking whether recompilation is required or not at this point,
-         -- since when reompiling, may need to parse the source code to reflect
-         -- the changes in macros from home package modules.
-         mtime <- liftIO (getModificationUTCTime src_path)
-         if ms_hs_date ms < mtime
-            then new_summary
+       -- Old summaries did not contain this module, checking whether the
+       -- interface file and object code file are reusable when compiling to
+       -- object code.
+       Nothing ->
+         if not (isObjectTarget (hscTarget dflags))
+            then new_summary rs0 "non object target"
             else do
-              usages_ok <- maybe (pure False) checkFileUsages mb_usages
-              if not usages_ok
-                 then new_summary
-                 else do
-                  tr ["Reusing old summary for" <+> ppr tsource]
+              (et_ms, rs1) <- runRecompilationCheck fnk_env rs0 tu
+              case et_ms of
+                Left why -> new_summary rs1 (text why)
+                Right ms -> reuse_iface rs1 ms
 
-                  -- Check timestamps, update the obj_data, iface_date, and
-                  -- hie_date to reflect the changes in file system from last
-                  -- compilation. See 'GhcMake.checkSummaryTimestamp' called
-                  -- during down sweep, which does similar works.
-                  let ms_loc = ms_location ms
-                      dflags = hsc_dflags hsc_env
+       -- Checking whether recompilation is required or not at this point, since
+       -- when reompiling, may need to parse the source code to reflect the
+       -- changes in macros from home package modules.
+       Just ms -> do
+         mtime <- liftIO (getModificationUTCTime (targetSourcePath tsource))
+         if ms_hs_date ms < mtime
+            then new_summary rs0 "source code is new"
+            else do
+              summary_ok <- checkModSummary hsc_env ms
+              if not summary_ok
+                 then new_summary rs0 "out of date usages"
+                 else reuse_summary rs0 ms
 
-                      -- XXX: The below `obj_allowed' is constantly 'False' at
-                      -- the moment, it will be nice to pass this from REPL.
-                      obj_allowed = False
+-- | Make new 'ModSummary' with required home package modules and.
+makeNewSummary :: FnkEnv -> HscEnv -> TargetUnit -> MakeM TargetSummary
+makeNewSummary fnk_env hsc_env tu = toMakeM $ do
+  tsum <- summariseTargetUnit tu
+  case tsum of
+    LdInput _option -> return tsum
+    EMS ms0 mb_sp reqs -> do
+      dumpDynFlags fnk_env "makeNewSummary" (ms_hspp_opts ms0)
+      -- Since the entire compilation work does not use DriverPipeline,
+      -- setting the dumpPrefix at this point.
+      setDumpPrefix (ms_hspp_file ms0)
 
-                  obj_date <-
-                      if isObjectTarget (hscTarget dflags) || obj_allowed
-                        then liftIO (getObjTimestamp ms_loc)
-                        else return Nothing
-                  hi_date <- liftIO (maybeGetIfaceDate dflags ms_loc)
-#if MIN_VERSION_ghc(8,8,0)
-                  hie_date <-
-                    liftIO (modificationTimeIfExists (ml_hie_file ms_loc))
+      -- Dump the module contents as Haskell source when dump option were
+      -- set and this is the first time for compiling the target Module.
+      when (fopt Fnk_dump_hs fnk_env || isJust (envHsOutDir fnk_env)) $
+        case lookupHpt (hsc_HPT hsc_env) (ms_mod_name ms0) of
+          Nothing -> dumpModSummary fnk_env hsc_env mb_sp ms0
+          Just _  -> return ()
+
+      -- To support -ddump-parsed-ast option.
+      dumpParsedAST (ms_hspp_opts ms0) ms0
+
+#if MIN_VERSION_ghc(8,6,0)
+      -- To support parsedResultAction in plugin. See "HscMain.hscParse'"
+      ms1 <- case ms_parsed_mod ms0 of
+        Nothing -> return ms0
+        Just pm -> do
+          let do_action p opts = parsedResultAction p opts ms0
+              dflags0 = hsc_dflags hsc_env
+              dflags1 = adjustIncludePaths dflags0 ms0
+              act = withPlugins dflags1 do_action pm
+              hsc_env' = hsc_env {hsc_dflags = dflags1}
+          new_pm <- liftIO (runHsc hsc_env' act)
+          return $! ms0 {ms_parsed_mod = Just new_pm}
+#else
+      -- Ghc does not support parsedResultAction.
+      let ms1 = ms0
 #endif
-                  -- XXX: Fill in the list of required ModSummary.
-                  return $ Just (ms { ms_obj_date = obj_date
-                                    , ms_iface_date = hi_date
-#if MIN_VERSION_ghc(8,8,0)
-                                    , ms_hie_date = hie_date
-#endif
-                                    }, [])
-  where
-    make_new_summary hsc_env fnk_env = do
-      mb_tup <- newExpandedSummary tu
-      case mb_tup of
-        Nothing -> return Nothing
-        Just (ms, mb_sp, reqs) -> do
-          -- Since the entire compilation work does not use DriverPipeline,
-          -- setting the dumpPrefix at this point.
-          setDumpPrefix (ms_hspp_file ms)
+      return $! EMS ms1 Nothing reqs
 
-          -- Dump the module contents as Haskell source when dump option were
-          -- set and this is the first time for compiling the target Module.
-          when (fopt Fnk_dump_hs fnk_env || isJust (envHsOutDir fnk_env)) $
-            case lookupHpt (hsc_HPT hsc_env) (ms_mod_name ms) of
-              Nothing -> dumpModSummary mb_sp ms
-              Just _  -> return ()
-
-          -- To support -ddump-parsed-ast option.
-          dumpParsedAST (ms_hspp_opts ms) ms
-
-          return $ Just (ms, reqs)
-    getObjTimestamp loc =
-      modificationTimeIfExists (ml_obj_file loc)
-
--- | Simple function to check whther the 'UsageFile' is up to date.
-checkFileUsages :: [Usage] -> Fnk Bool
-checkFileUsages =  go
-  -- See: 'MkIface.checkModUsage'.
-  where
-    go us =
-      case us of
-        [] -> return True
-        u:us' -> do
-          ret <- check u
-          if ret
-             then go us'
-             else return False
-    check u =
-      case u of
-        UsageFile {usg_file_path = file
-                  ,usg_file_hash = old_hash} ->
-          liftIO (handleIO (const (return False))
-                           (fmap (== old_hash) (getFileHash file)))
-        _ -> return True
-
--- See: GhcMake.maybeGetIfaceDate
-maybeGetIfaceDate :: DynFlags -> ModLocation -> IO (Maybe UTCTime)
-maybeGetIfaceDate dflags location =
-  if writeInterfaceOnlyMode dflags
-     then modificationTimeIfExists (ml_hi_file location)
-     else return Nothing
-
--- | Make a pair of 'ModSummary' and a list of required 'ModSummary' in home
--- package.
-newExpandedSummary
-  :: TargetUnit -> Fnk (Maybe (ModSummary, Maybe SPState, [ModSummary]))
-newExpandedSummary (tsrc, mbphase) =
-  case tsrc of
-    FnkSource path mn -> Just <$> compileFnkFile path mn
-    HsSource path _   -> Just <$> compileHsFile path mbphase
-    OtherSource path  -> compileOtherFile path >> return Nothing
-
--- | Compile Finkel source.
-compileFnkFile
-  :: FilePath -> ModuleName -> Fnk (ModSummary, Maybe SPState, [ModSummary])
-compileFnkFile path modname = do
-  contents <- liftIO (hGetStringBuffer path)
-  (forms, sp) <- parseSexprs (Just path) contents
-  dflags0 <- getDynFlagsFromSPState sp
-  fnk_env0 <- getFnkEnv
-  let tr = traceMake fnk_env0 "compileFnkFile"
-      mname_str = moduleNameString modname
-      mname_sdoc = text (mname_str ++ ":")
-
-  -- Compile the form with local DynFlags to support file local pragmas.
-  (mdl, reqs) <- withTmpDynFlags dflags0 $
-    timeIt ("FinkelModule [" ++ mname_str ++ "]") $ do
-      -- Reset current FnkEnv. No need to worry about managing DynFlags, this
-      -- action is wrapped with 'withTmpDynFlags' above.
-      resetFnkEnv
-      mdl <- compileFnkModuleForm forms
-      fnk_env1 <- getFnkEnv
-      return (mdl, envRequiredHomeModules fnk_env1)
-
-  tr ["reqs in" <+> mname_sdoc <+> ppr (map ms_mod_name reqs)]
-
-  let rreqs = reverse reqs
-  ms <- mkModSummary dflags0 path mdl rreqs
-  return (ms, Just sp, rreqs)
-
--- | Compile 'HModule' from given list of 'Code'.
-compileFnkModuleForm :: [Code] -> Fnk HModule
-compileFnkModuleForm form = do
-  expanded <- withExpanderSettings (expands form)
-  let colons = replicate 20 ';'
-  fnk_env <- getFnkEnv
-  debugWhen fnk_env
-            Fnk_dump_expand
-            [ text ""
-            , text colons <+> text "Expanded" <+> text colons
-            , text ""
-            , vcat (map ppr expanded)
-            , text ""]
-  buildHsSyn parseModule expanded
-
--- | Get language extensions in current 'Fnk' from given 'SPState'.
-getDynFlagsFromSPState :: SPState -> Fnk DynFlags
-getDynFlagsFromSPState sp = do
+-- | Set 'dumpPrefix' from file path.
+setDumpPrefix :: GhcMonad m => FilePath -> m ()
+setDumpPrefix path = do
   dflags0 <- getDynFlags
-  -- Adding "-X" to 'String' representation of 'LangExt' data type, as done in
-  -- 'HeaderInfo.checkExtension'.
-  let mkx = fmap ("-X" ++)
-      exts = map mkx (langExts sp)
-  (dflags1,_,_) <- parseDynamicFilePragma dflags0 exts
-  (dflags2,_,_) <- parseDynamicFilePragma dflags1 (ghcOptions sp)
-  return dflags2
+  let (basename, _suffix) = splitExtension path
+      dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
+  setDynFlags dflags1
+{-# INLINE setDumpPrefix #-}
 
-resetFnkEnv :: Fnk ()
-resetFnkEnv =
-  modifyFnkEnv (\fnk_env ->
-                   fnk_env { envMacros = envDefaultMacros fnk_env
-                           , envRequiredHomeModules = [] })
+-- | Run the recompilation check.
+runRecompilationCheck
+  :: FnkEnv -> RecompState -> TargetUnit
+  -> MakeM (Either String ModSummary, RecompState)
+runRecompilationCheck fnk_env rs tu =
+  toMakeM (unRecompM (checkRecompileRequired fnk_env tu) rs)
+{-# INLINE runRecompilationCheck #-}
 
-compileHsFile
-  :: FilePath -> Maybe Phase -> Fnk (ModSummary, Maybe SPState, [a])
-compileHsFile path mb_phase = do
-  -- Not parsing the Haskell source code, it will be parsed by the "load'"
-  -- function later.
-  hsc_env <- getSession
-  (dflags, pp_path) <- liftIO (preprocess' hsc_env (path, mb_phase))
-  sbuf <- liftIO (hGetStringBuffer pp_path)
-  (simps, timps, L _l mname) <- liftIO (getImports' dflags sbuf pp_path path)
-  ms <- mkModSummary' dflags path mname simps timps Nothing (Just sbuf)
-  return (ms, Nothing, [])
-
-compileOtherFile :: FilePath -> Fnk ()
-compileOtherFile path = do
-  hsc_env <- getSession
-  fnk_env <- getFnkEnv
-  traceMake fnk_env
-            "compileOtherFile"
-            ["Compiling OtherSource:" <+> text path]
-  o_file <- liftIO (compileFile hsc_env StopLn (path, Nothing))
-  let dflags0 = hsc_dflags hsc_env
-      dflags1 = dflags0 {ldInputs = FileOption "" o_file : ldInputs dflags0}
-  void (setSessionDynFlags dflags1)
-
--- Note [Avoiding Recompilation]
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
---
--- See below for details of how GHC avoid recompilation:
---
---   https://gitlab.haskell.org/ghc/ghc/wikis/commentary/compiler/recompilation-avoidance
---
--- To support recompiling the target module when the required modules were
--- changed, checking the file paths of home package modules are stored as
--- "UsageFile" in "mi_usages", via "hpm_src_files" field in "HsParsedModule"
--- used when making "ModSummary" data.
---
--- Currently, dependencies of required home package module are chased with plain
--- file path, since the information of required module is stored as a plain file
--- path, not as a module. This is to avoid compiling required modules as object
--- code, because macro expansions are done with byte code interpreter.
-
--- | Make 'ModSummary'.
-mkModSummary
-  :: DynFlags -- ^ File local 'DynFlags'.
-  -> FilePath -- ^ The source code path.
-  -> HModule  -- ^ Parsed module.
-  -> [ModSummary] -- ^ List of required 'ModSummary' in home package.
-  -> Fnk ModSummary
-mkModSummary dflags file mdl reqs = do
-  let modName = case hsmodName mdl of
-                  Just name -> unLoc name
-                  Nothing   -> mkModuleName "Main"
-      emptyAnns = (Map.empty, Map.empty)
-      r_s_loc = mkSrcLoc (fsLit file) 1 1
-      r_s_span = mkSrcSpan r_s_loc r_s_loc
-
-      -- XXX: PackageImports language extension not yet supported.  See
-      -- 'HscTypes.ms_home_imps'
-      imports = map (\lm -> (Nothing, ideclName (unLoc lm)))
-                    (hsmodImports mdl)
-
-  -- Adding file path of the required modules and file paths of imported home
-  -- package modules to "hpm_src_files" to support recompilation.
-  req_srcs <- requiredDependencies reqs
-
-  let pm = HsParsedModule
-        { hpm_module = L r_s_span mdl
-        , hpm_src_files = req_srcs
-        , hpm_annotations = emptyAnns }
-
-  mkModSummary' dflags file modName [] imports (Just pm) Nothing
-
--- | Make 'ModSummary' from source file, module name, and imports.
-mkModSummary'
-  :: GhcMonad m
-  => DynFlags
-  -> FilePath
-  -> ModuleName
-  -> [(Maybe FastString, Located ModuleName)]
-  -> [(Maybe FastString, Located ModuleName)]
-  -> Maybe HsParsedModule
-  -> Maybe StringBuffer
-  -> m ModSummary
-mkModSummary' dflags file mod_name srcimps txtimps mb_pm mb_buf = do
-  -- Throw an exception on module name mismatch.
-  assertModuleNameMatch dflags file mb_pm
-  hsc_env <- getSession
-
-  let tryGetObjectDate path =
-        if isObjectTarget (hscTarget dflags)
-           then modificationTimeIfExists path
-           else return Nothing
-
-  liftIO
-    (do mloc <- mkHomeModLocation dflags mod_name file
-        mmod <- addHomeModuleToFinder hsc_env mod_name mloc
-        hs_date <- getModificationUTCTime file
-        obj_date <- tryGetObjectDate (ml_obj_file mloc)
-        iface_date <- maybeGetIfaceDate dflags mloc
-#if MIN_VERSION_ghc(8,8,0)
-        hie_date <- modificationTimeIfExists (ml_hie_file mloc)
-#endif
-        return ModSummary { ms_mod = mmod
-                          , ms_hsc_src = HsSrcFile
-                          , ms_location = mloc
-                          , ms_hs_date = hs_date
-                          , ms_obj_date = obj_date
-                          , ms_iface_date = iface_date
-#if MIN_VERSION_ghc(8,8,0)
-                          , ms_hie_date = hie_date
-#endif
-                          , ms_parsed_mod = mb_pm
-                          , ms_srcimps = srcimps
-                          , ms_textual_imps = txtimps
-                          , ms_hspp_file = file
-                          , ms_hspp_opts = dflags
-                          , ms_hspp_buf = mb_buf })
-
--- See: "GhcMake.summariseModule"
-assertModuleNameMatch
-  :: GhcMonad m => DynFlags -> FilePath -> Maybe HsParsedModule -> m ()
-assertModuleNameMatch dflags file mb_pm =
-  case mb_pm of
-    Just pm | Just lsaw <- hsmodName (unLoc (hpm_module pm))
-            , let wanted = asModuleName file
-            , let saw = moduleNameString (unLoc lsaw)
-            , saw /= "Main"
-            , saw /= wanted
-            -> let msg = text "File name does not match module"
-                         $$ text "Saw:" <+> quotes (text saw)
-                         $$ text "Expected:" <+> quotes (text wanted)
-                   loc = getLoc lsaw
-               in  throwOneError (mkPlainErrMsg dflags loc msg)
-    _ -> return ()
-
--- | Dump the module contents of given 'ModSummary'.
-dumpModSummary :: Maybe SPState -> ModSummary -> Fnk ()
-dumpModSummary mb_sp ms =
-  case mb_sp of
-    Just sp | Just pm <- ms_parsed_mod ms -> work sp pm
-    _                                     -> return ()
+-- | Return a list of 'TargetUnit' to compile for given 'ModuleName's.
+filterNotCompiled
+  :: MonadIO m => FnkEnv -> HscEnv -> [Located ModuleName] -> m [TargetUnit]
+filterNotCompiled fnk_env hsc_env = foldM find_not_compiled []
   where
-    work sp pm = do
-      fnk_env <- getFnkEnv
-      let hsrc = gen sp pm
-          hdr = text (unwords [colons, orig_path, colons])
-      debugWhen fnk_env Fnk_dump_hs ["", hdr, "" , hsrc, ""]
-      mapM_ (doWrite fnk_env hsrc) (envHsOutDir fnk_env)
-    doWrite fnk_env hsrc dir = do
-       let out_path = get_out_path dir
-           out_dir = takeDirectory out_path
-       traceMake fnk_env "dumpModSummary" ["Writing to" <+> text out_path]
-       dflags <- getDynFlags
-       unqual <- getPrintUnqual
-       let emit hdl = printForUser dflags hdl unqual hsrc
-       liftIO (do createDirectoryIfMissing True out_dir
-                  withFile out_path WriteMode emit)
-    get_out_path dir =
-      let mname = moduleName (ms_mod ms)
-          bname = takeBaseName orig_path
-          file_name = if looksLikeModuleName bname
-                         then moduleNameSlashes mname
-                         else bname
-      in  dir </> file_name <.> "hs"
-    gen sp pm = toHsSrc sp (Hsrc (unLoc (hpm_module pm)))
-    orig_path = ms_hspp_file ms
-    colons = replicate 20 ';'
-
--- See: "hscParse'" in main/HscMain.hs
-dumpParsedAST :: DynFlags -> ModSummary -> Fnk ()
-dumpParsedAST dflags ms =
-  liftIO
-    (case ms_parsed_mod ms of
-       Just pm ->
-         do let rdr_module = hpm_module pm
-            dumpIfSet_dyn dflags Opt_D_dump_parsed "Parser"
-                          (ppr rdr_module)
-            dumpIfSet_dyn dflags Opt_D_dump_parsed_ast "Parser AST"
-                          (txt (showAstData NoBlankSrcSpan rdr_module))
-            dumpIfSet_dyn dflags Opt_D_source_stats "Source Statistic"
-                          (ppSourceStats False rdr_module)
-       Nothing -> return ())
-  where
-#if MIN_VERSION_ghc(8,4,0)
-    txt = id
-#else
-    txt = text
-#endif
-
--- Note [Chasing dependencies of required home package module]
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
---
--- When home package module were required, recompilation happen when the
--- required module was changed.
---
--- The required modules lives in a dedicated HscEnv (the one stored at
--- `envSessionForExpand' field in 'FnkEnv') which uses bytecode interpreter.
--- Required modules are stored as 'UsageFile' in the 'mi_usages' field of
--- 'ModIface', not as 'UsageHomeModule', because if stored as 'UsageHomeModule',
--- required modules will compiled as object codes, which is not used by the
--- macro expander at the moment.
---
--- To chase dependencies of the required home package modules, following
--- functions temporary switch to the macro expansion session and recursively
--- chases the file paths of imported modules and required modules.
-
-requiredDependencies :: [ModSummary] -> Fnk [FilePath]
-requiredDependencies mss = withExpanderSettings' False $ do
-  hsc_env <- getSession
-  return $! nub $! foldl' (requiredDependency hsc_env) [] mss
-
-requiredDependency :: HscEnv -> [FilePath] -> ModSummary -> [FilePath]
-requiredDependency hsc_env = go
-  where
-    go acc ms =
-      case ml_hs_file (ms_location ms) of
-        Nothing -> acc
-        Just me -> dep_files ms (me : acc)
-
-    dep_files ms acc =
-      let mg = hsc_mod_graph hsc_env
-          hpt = hsc_HPT hsc_env
-          acc1 = find_require_paths hpt acc ms
-      in  foldl' (find_import_path mg) acc1 (ms_home_allimps ms)
-
-    find_import_path mg acc mod_name =
-      let mdl = mkModule (thisPackage (hsc_dflags hsc_env)) mod_name
-      in  maybe acc (go acc) (mgLookupModule' mg mdl)
-
-    find_require_paths hpt acc ms =
-      case lookupHpt hpt (ms_mod_name ms) of
-        Nothing  -> acc
-        Just hmi -> foldl' req_paths acc (mi_usages (hm_iface hmi))
-
-    req_paths acc usage =
-      case usage of
-        -- Recursively calling `dependencyFile' with the ModSummary referred by
-        -- the usage file path .
-        UsageFile {usg_file_path = path} ->
-          let mb_ms1 = find is_my_path mss
-              is_my_path = maybe False (== path) . ml_hs_file . ms_location
-              mss = mgModSummaries' (hsc_mod_graph hsc_env)
-              acc1 = path : acc
-          in  maybe acc1 (go acc1) mb_ms1
-        _ -> acc
-
-
--- ------------------------------------------------------------------------
---
--- GHC version compatibility functions
---
--- ------------------------------------------------------------------------
-
--- ModuleGraph was an alias of [ModSummary] in ghc < 8.4.
-
-extendMG' :: ModuleGraph -> ModSummary -> ModuleGraph
-mgElemModule' :: ModuleGraph -> Module -> Bool
-mkModuleGraph' :: [ModSummary] -> ModuleGraph
-mgModSummaries' :: ModuleGraph -> [ModSummary]
-mgLookupModule' :: ModuleGraph -> Module -> Maybe ModSummary
-
-#if MIN_VERSION_ghc(8,4,0)
-extendMG' = extendMG
-mgElemModule' = mgElemModule
-mkModuleGraph' = mkModuleGraph
-mgModSummaries' = mgModSummaries
-mgLookupModule' = mgLookupModule
-#else
-extendMG' = flip (:)
-mgElemModule' mg mdl = go mg
-  where
-    go []       = False
-    go (ms:mss) = if ms_mod ms == mdl then True else go mss
-mkModuleGraph' = id
-mgModSummaries' = id
-mgLookupModule' mg mdl = find (\ms -> ms_mod_name ms == moduleName mdl) mg
-#endif
-
-#if !MIN_VERSION_ghc(8,10,0)
--- The `ms_home_allimps' function did not exist until ghc 8.10.x.
-ms_home_allimps :: ModSummary -> [ModuleName]
-ms_home_allimps ms = map unLoc (ms_home_srcimps ms ++ ms_home_imps ms)
-
-ms_home_srcimps :: ModSummary -> [Located ModuleName]
-ms_home_srcimps = home_imps . ms_srcimps
-
-ms_home_imps :: ModSummary -> [Located ModuleName]
-ms_home_imps = home_imps . ms_imps
-
-ms_imps :: ModSummary -> [(Maybe FastString, Located ModuleName)]
-ms_imps ms =
-  ms_textual_imps ms ++
-  map mk_additional_import (dynFlagDependencies (ms_hspp_opts ms))
-  where
-    mk_additional_import mod_nm = (Nothing, noLoc mod_nm)
-
-home_imps :: [(Maybe FastString, Located ModuleName)] -> [Located ModuleName]
-home_imps imps = [ lmodname |  (mb_pkg, lmodname) <- imps, isLocal mb_pkg ]
-  where isLocal Nothing    = True
-        isLocal (Just pkg) | pkg == fsLit "this" = True -- "this" is special
-        isLocal _          = False
-#endif
-
--- | Label and wrap the given action with 'withTiming'.
-timeIt :: String -> Fnk a -> Fnk a
-#if MIN_VERSION_ghc(8,10,0)
-timeIt label = withTimingD (text label) (const ())
-#else
-timeIt label = withTiming getDynFlags (text label) (const ())
-#endif
-
-preprocess' :: HscEnv -> (FilePath, Maybe Phase) -> IO (DynFlags, FilePath)
-
-getImports' :: DynFlags -> StringBuffer -> FilePath -> FilePath
-            -> IO ([(Maybe FastString, Located ModuleName)],
-                   [(Maybe FastString, Located ModuleName)],
-                   Located ModuleName)
-
-#if MIN_VERSION_ghc(8,8,0)
-preprocess' hsc_env (path, mb_phase) =
-  do et_result <- preprocess hsc_env path Nothing mb_phase
-     case et_result of
-       Left err   -> throwErrors err
-       Right pair -> return pair
-
-getImports' dflags sbuf pp_path path = do
-  et_ret <- getImports dflags sbuf pp_path path
-  case et_ret of
-    Left errs -> throwErrors errs
-    Right ret -> return ret
-#else
-preprocess' = preprocess
-getImports' = getImports
-#endif
+    dflags = hsc_dflags hsc_env
+    tr = traceMake' dflags fnk_env "findNotCompiledImport"
+    find_not_compiled acc lmname = do
+      let mname = unLoc lmname
+      mb_ts <- findTargetModuleNameMaybe dflags lmname
+      case mb_ts of
+        Just ts -> do
+          tr ["Found" <+> ppr mname <+> "at" <+> text (targetSourcePath ts)]
+          return $! (emptyTargetUnit ts : acc)
+        Nothing -> do
+          fr <- liftIO (findExposedPackageModule hsc_env mname Nothing)
+          case fr of
+            Found _ mdl -> do
+              tr ["Found" <+> ppr mname <+> "in" <+> ppr (moduleUnitId mdl)]
+              return acc
+            _ -> do
+              let doc = cannotFindModule dflags mname fr
+                  err = mkPlainErrMsg dflags (getLoc lmname) doc
+              throwOneError err

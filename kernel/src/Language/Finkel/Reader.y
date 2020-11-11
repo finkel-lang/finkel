@@ -8,6 +8,7 @@
 --
 module Language.Finkel.Reader
   ( parseSexprs
+  , parseHeaderPragmas
   , sexpr
   , sexprs
   , psexpr
@@ -43,6 +44,7 @@ import           Language.Finkel.Syntax
 %name sexprs_ sexps
 
 %partial psexpr_ sexp
+%partial pheader header
 
 %tokentype { Located Token }
 %monad { SP } { >>= } { return }
@@ -93,7 +95,7 @@ sexp :: { Code }
     | '[' sexps ']'           { mkHsList $1 $2 }
     | 'pcommas'               { mkPcommas $1 }
     | '(' sexps ')'           { mkUnitOrList $1 $2}
-    | '%' sexp                {% rmac $1 $2 }
+    | prag                    { $1 }
 
 sexps :: { [Code] }
     : rsexps { reverse $1 }
@@ -115,6 +117,14 @@ atom :: { Code }
     | 'doc^'    { mkDocp $1 }
     | 'doch'    { mkDoch $1 }
     | 'doc$'    { mkDock $1 }
+
+prag :: { Code }
+    : '%' sexp {% rmac $1 $2 }
+
+
+header :: { [Code] }
+    : {- empty -} { [] }
+    | header prag { $2 : $1 }
 
 {
 atom :: SrcSpan -> Atom -> Code
@@ -374,10 +384,22 @@ parseSexprs :: MonadFail m
             => Maybe FilePath -- ^ Name of input file.
             -> StringBuffer   -- ^ Contents to parse.
             -> m ([Code], SPState)
-parseSexprs mb_file contents =
-  case runSP sexprs mb_file contents of
+parseSexprs = parseWith sexprs_
+
+-- | Parse file header LANGUAGE pragmas.
+parseHeaderPragmas :: MonadFail m
+                   => Maybe FilePath
+                   -> StringBuffer
+                   -> m ([Code], SPState)
+parseHeaderPragmas = parseWith pheader
+
+parseWith
+  :: MonadFail m => SP a -> Maybe FilePath -> StringBuffer -> m (a, SPState)
+parseWith p mb_file contents =
+  case runSP p mb_file contents of
     Right a  -> return a
     Left err -> Control.Monad.Fail.fail err
+{-# INLINE parseWith #-}
 
 -- | Parse single S-expression.
 sexpr :: SP Code

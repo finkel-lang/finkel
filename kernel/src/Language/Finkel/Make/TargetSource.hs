@@ -1,9 +1,16 @@
 -- | Module for source code file path look up.
-module Language.Finkel.TargetSource
-  ( -- * Target source
-    TargetSource(..)
+module Language.Finkel.Make.TargetSource
+  (
+  -- * Target unit
+    TargetUnit
+  , emptyTargetUnit
+  , findTargetUnit
+  , findTargetUnitMaybe
+  , targetUnitName
+
+  -- * Target source
+  , TargetSource(..)
   , targetSourcePath
-  , isOtherSource
 
   -- * Finder functions
   , findTargetModuleName
@@ -19,7 +26,7 @@ module Language.Finkel.TargetSource
   ) where
 
 -- base
-import Control.Exception      (SomeException)
+import Control.Exception      (SomeException, try)
 import Control.Monad          (mplus)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Char              (isUpper)
@@ -33,9 +40,9 @@ import System.FilePath        (dropExtension, normalise, pathSeparator,
                                (<.>), (</>))
 
 -- ghc
-import DynFlags               (DynFlags (..), HasDynFlags (..))
+import DriverPhases           (Phase)
+import DynFlags               (DynFlags (..))
 import ErrUtils               (mkErrMsg)
-import Exception              (gtry)
 import HscTypes               (throwOneError)
 import Module                 (ModuleName, mkModuleName, moduleNameSlashes,
                                moduleNameString)
@@ -43,8 +50,41 @@ import Outputable             (Outputable (..), neverQualify, sep, text)
 import SrcLoc                 (GenLocated (..), Located)
 import Util                   (looksLikeModuleName)
 
--- Internal
-import Language.Finkel.Fnk
+
+-- ---------------------------------------------------------------------
+--
+-- Target unit
+--
+-- ---------------------------------------------------------------------
+
+-- | Unit for compilation target.
+--
+-- Simply a 'TargetSource' paired with 'Maybe' 'Phase'.
+type TargetUnit = (TargetSource, Maybe Phase)
+
+-- | Make empty 'TargetUnit' from 'TargetSource'
+emptyTargetUnit :: TargetSource -> TargetUnit
+emptyTargetUnit ts = (ts, Nothing)
+
+-- | Get 'TargetUnit' from pair of module name or file path, and phase.
+findTargetUnit
+  :: MonadIO m => DynFlags -> (Located String, Maybe Phase) -> m TargetUnit
+findTargetUnit dflags (lpath,mbp) =
+  (\t -> (t, mbp)) <$> findTargetSource dflags lpath
+
+findTargetUnitMaybe
+  :: MonadIO m
+  => DynFlags -> (Located String, Maybe Phase) -> m (Maybe TargetUnit)
+findTargetUnitMaybe dflags (lpath,mbp) =
+  fmap (\t -> (t, mbp)) <$> findTargetSourceMaybe dflags lpath
+
+-- | Get 'ModuleName' from given 'TargetUnit'.
+targetUnitName :: TargetUnit -> ModuleName
+targetUnitName (ts, _) =
+  case ts of
+    FnkSource _ mn -> mn
+    HsSource _ mn  -> mn
+    _              -> mkModuleName "module-name-unknown"
 
 
 -- ---------------------------------------------------------------------
@@ -85,13 +125,6 @@ targetSourcePath mt =
     FnkSource path _ -> path
     HsSource path _  -> path
     OtherSource path -> path
-
--- | 'True' is the 'TargetSource' is 'OtherSource'.
-isOtherSource :: TargetSource -> Bool
-isOtherSource ts =
-  case ts of
-    OtherSource{} -> True
-    _             -> False
 
 -- | True if given file has Finkel extension.
 isFnkFile :: FilePath -> Bool
@@ -157,19 +190,33 @@ findFileInImportPaths dirs modName = do
                  else dirs ++ ["."]
   search Nothing dirs'
 
-findTargetModuleName :: Located ModuleName -> Fnk TargetSource
-findTargetModuleName (L l mname) =
-  findTargetSource (L l (moduleNameString mname))
+-- | Like 'findTargetSource', but takes 'ModuleName' argument.
+findTargetModuleName
+  :: MonadIO m => DynFlags -> Located ModuleName -> m TargetSource
+findTargetModuleName dflags (L l mname) =
+  findTargetSource dflags (L l (moduleNameString mname))
 
-findTargetModuleNameMaybe :: Located ModuleName -> Fnk (Maybe TargetSource)
-findTargetModuleNameMaybe (L l mname) =
-  findTargetSourceMaybe (L l (moduleNameString mname))
+-- | Like 'findTargetSourceMaybe', but takes 'ModuleName' argument.
+findTargetModuleNameMaybe
+  :: MonadIO m => DynFlags -> Located ModuleName -> m (Maybe TargetSource)
+findTargetModuleNameMaybe dflags (L l mname) =
+  findTargetSourceMaybe dflags (L l (moduleNameString mname))
+
+-- | Like 'findTargetSource', but the result wrapped in 'Maybe'.
+findTargetSourceMaybe
+  :: MonadIO m => DynFlags -> Located String -> m (Maybe TargetSource)
+findTargetSourceMaybe dflags modName = do
+  et_ret <- liftIO (try (findTargetSource dflags modName))
+  case et_ret of
+    Right found -> return (Just found)
+    Left _err   -> let _err' = _err :: SomeException
+                   in  return Nothing
 
 -- | Find 'TargetSource' from command line argument. This function throws
 -- 'FinkelException' when the target source was not found.
-findTargetSource :: Located String -> Fnk TargetSource
-findTargetSource (L l modNameOrFilePath)= do
-  dflags <- getDynFlags
+findTargetSource
+  :: MonadIO m => DynFlags -> Located String -> m TargetSource
+findTargetSource dflags (L l modNameOrFilePath)= do
   mb_inputPath <- findFileInImportPaths (importPaths dflags) modNameOrFilePath
   let detectSource path
         | isFnkFile path =
@@ -184,12 +231,3 @@ findTargetSource (L l modNameOrFilePath)= do
       let err = mkErrMsg dflags l neverQualify doc
           doc = text ("cannot find target source: " ++ modNameOrFilePath)
       throwOneError err
-
--- | Like 'findTargetSource', but the result wrapped in 'Maybe'.
-findTargetSourceMaybe :: Located String -> Fnk (Maybe TargetSource)
-findTargetSourceMaybe modName = do
-  et_ret <- gtry (findTargetSource modName)
-  case et_ret of
-    Right found -> return (Just found)
-    Left _err   -> let _err' = _err :: SomeException
-                   in  return Nothing

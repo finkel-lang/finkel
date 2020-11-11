@@ -7,7 +7,7 @@ module MakeTest
 
 -- base
 import Control.Exception            (SomeException (..), catch)
-import Control.Monad                (when)
+import Control.Monad                (unless, when)
 import Control.Monad.IO.Class       (MonadIO (..))
 import Data.List                    (isPrefixOf, tails)
 import Data.Maybe                   (isJust)
@@ -54,7 +54,6 @@ import Language.Finkel.Form
 import Language.Finkel.Make
 import Language.Finkel.SpecialForms
 import Language.Finkel.Syntax
-import Language.Finkel.TargetSource
 
 -- Internal
 import TestAux
@@ -134,9 +133,6 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
     buildObj' ["-O","-prof", "-osuf", "p_o", "-hisuf", "p_hi"] ["P1", "P2"]
     buildObj' ["-O","-prof", "-osuf", "p_o", "-hisuf", "p_hi"] ["P1", "P2"]
 
-  -- Errors
-  buildFilesNG [] ["E01"]
-
   -- Reload tests
   let reload_simple t =
         buildReload t
@@ -145,6 +141,15 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
                     [("R01.fnk.2", "R01.fnk")]
                     "foo: before"
                     "foo: after"
+
+  -- Reloading without modifications.
+  buildReload "R02.fnk"
+              "foo"
+              [("R01.fnk.1","R01.fnk"), ("R02.fnk","R02.fnk")]
+              []
+              "foo: before"
+              "foo: before"
+
   reload_simple "R02.fnk"
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -158,9 +163,8 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   -- Recompile tests
   let recompile_simple t extras =
         buildRecompile t
-                       ([ ("R01.fnk.1", "R01.fnk")
-                        , dot_fnk t
-                        ] ++ map dot_fnk extras)
+                       ([ ("R01.fnk.1", "R01.fnk") , dot_fnk t] ++
+                        map dot_fnk extras)
                        [("R01.fnk.2", "R01.fnk")]
                        "foo: before\n"
                        "foo: after\n"
@@ -173,6 +177,12 @@ makeTests = beforeAll_ (removeArtifacts odir) $ do
   recompile_simple "R08" ["R08a", "R08b"]
   recompile_simple "R09" ["R09a", "R09b"]
   recompile_simple "R10" ["R10a", "R10b"]
+  recompile_simple "R11" ["R11a", "R11b"]
+
+  -- Errors
+  buildFilesNG [] ["E01"]
+  buildFilesNG [] ["E02"]
+
 
 -- Action to unload package libraries
 --
@@ -362,8 +372,10 @@ buildReload the_file fname files1 files2 before_str after_str =
                else do_work' use_obj tmpdir
 
     do_work' use_obj tmpdir = do
-       (ret1, ret2) <- runFnk (fnk_work use_obj tmpdir) defaultFnkEnv
+       (ret1, ret2) <- runFnk (fnk_work use_obj tmpdir) reloadFnkEnv
        (ret1, ret2) `shouldBe` (before_str, after_str)
+
+    reloadFnkEnv = defaultFnkEnv {envVerbosity = 3}
 
     fnk_work use_obj tmpdir = do
       setup_reload_env use_obj tmpdir
@@ -420,16 +432,19 @@ buildRecompile main_mod files1 files2 before_str after_str =
             else do_work tmpdir
 
       do_work tmpdir = do
-        compile_and_run tmpdir files1 before_str
-        compile_and_run tmpdir files2 after_str
+        -- Running with files1 twice to see compilation avoidance.
+        compile_and_run tmpdir False files1 before_str
+        compile_and_run tmpdir True files1 before_str
+        compile_and_run tmpdir False files2 after_str
 
-      compile_and_run tmpdir files expected_str = do
+      compile_and_run tmpdir skip_copy files expected_str = do
         let a_dot_out = tmpdir </> "a.out"
-        copy_files tmpdir files
+        unless skip_copy $ copy_files tmpdir files
         buildWork [] [ "-i" ++ tmpdir
                      , "-outputdir", tmpdir
                      , "-main-is", main_mod
                      , "-o", a_dot_out
+                     , "--fnk-trace-make"
                      , main_mod ]
         output1 <- readProcess a_dot_out [] ""
         output1 `shouldBe` expected_str

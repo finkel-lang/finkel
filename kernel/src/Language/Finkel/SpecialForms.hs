@@ -62,10 +62,10 @@ import Language.Finkel.Expand          (bcoDynFlags, expand, expands')
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
-import Language.Finkel.Make            (makeFromRequire)
+import Language.Finkel.Make            (findTargetModuleNameMaybe,
+                                        makeFromRequire)
 import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModule)
 import Language.Finkel.Syntax.SynUtils (cL, dL)
-import Language.Finkel.TargetSource    (findTargetModuleNameMaybe)
 
 #include "finkel_kernel_config.h"
 
@@ -276,8 +276,10 @@ requiredMessager hsc_env mod_index recomp mod_summary =
 makeMissingHomeMod :: HImportDecl -> Fnk ()
 makeMissingHomeMod (L _ idecl) = do
   -- Try finding the required module. Delegate the work to 'makeFromRequire'
-  -- function defined in Language.Finkel.Make when the file is found in import
-  -- paths.
+  -- function when the file is found in import paths.
+  -- Look up module with "findTargetModuleNameMaybe" before "findImportedModule"
+  -- is to avoid loading modules from own package when generating documentation
+  -- with haddock. Always checking up-to-date ness via "makeFromRequire".
   --
   -- N.B. 'findImportedModule' does not know ".fnk" file extension, so it will
   -- not return Finkel source files for home package modules.
@@ -287,21 +289,19 @@ makeMissingHomeMod (L _ idecl) = do
   let mname = unLoc lmname
       lmname = ideclName idecl
       smpl_mk = withRequiredSettings (makeFromRequire lmname)
+      dflags = hsc_dflags hsc_env
 
   case lookupHpt (hsc_HPT hsc_env) mname of
-    -- Avoid touching file system. Always checking up-to-date ness via
-    -- "makeFromRequire".
     Just _ -> smpl_mk
     _ -> do
-      mb_ts <- findTargetModuleNameMaybe lmname
+      mb_ts <- findTargetModuleNameMaybe dflags lmname
       case mb_ts of
         Just _ -> smpl_mk
         Nothing -> do
           fresult <- liftIO (findImportedModule hsc_env mname Nothing)
           case fresult of
             Found {} -> return ()
-            _        -> smpl_mk -- XXX: Throw cannot find module error.
-
+            _        -> smpl_mk
 
 -- ---------------------------------------------------------------------
 --

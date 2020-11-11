@@ -60,11 +60,10 @@
    (Language.Finkel.Builder (HDecl HIE HImportDecl HStmt
                              syntaxErrCode syntaxErrMsg evalBuilder))
    (Language.Finkel.Eval (evalDecls))
-   (Language.Finkel.Make (initSessionForMake))
+   (Language.Finkel.Make (initSessionForMake isFnkFile isHsFile))
    (Language.Finkel.Fnk
     ((FnkEnv ..) failS modifyFnkEnv prepareInterpreter withTmpDynFlags))
    (Language.Finkel.Syntax (parseExpr parseImports parseStmt parseTopDecls))
-   (Language.Finkel.TargetSource (isFnkFile isHsFile))
 
    ;; internal
    (Finkel.Tool.Repl.IO)
@@ -84,12 +83,6 @@
    ;; ghc
    (import HsImpExp ((ImportDecl ..)))])
 
-(cond-expand
-  [(<= 806 :ghc)
-   (import DynamicLoading (initializePlugins))]
-  [otherwise
-   (:begin)])
-
 ;;; Version compatibility function
 
 (cond-expand
@@ -107,14 +100,6 @@
        (liftIO (extendLinkEnv names-vals)))
      (defn (:: is-import-decl-qualified (-> Bool Bool))
        id))])
-
-(defn (:: initialize-plugins (-> HscEnv DynFlags (IO DynFlags)))
-  [_hsc-env dflags]
-  (cond-expand
-    [(<= 806 :ghc)
-     (initializePlugins _hsc-env dflags)]
-    [otherwise
-     (pure dflags)]))
 
 (defn (:: optional-dynflags [GeneralFlag])
   "Optional 'GeneralFlag' set for REPL."
@@ -154,8 +139,8 @@
                                      (ldInputs dflags1))}))))
 
       ;; Initializing plugins with dflags from updated session.
-      (<- dflags3 (liftIO (initialize-plugins hsc-env0 dflags2)))
-      (void (setSessionDynFlags dflags3))
+      (void (setSessionDynFlags dflags2))
+      (<- dflags3 getDynFlags)
 
       ;; Setting the default `DynFlags' for macro expansion.
       (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags3)})))
