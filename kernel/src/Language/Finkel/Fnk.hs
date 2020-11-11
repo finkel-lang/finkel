@@ -87,8 +87,9 @@ import           Bag                    (unitBag)
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
                                          HscTarget (..), gopt, gopt_set,
-                                         gopt_unset, interpWays, updateWays,
-                                         wayGeneralFlags, wayUnsetGeneralFlags)
+                                         gopt_unset, interpWays, picPOpts,
+                                         updateWays, wayGeneralFlags,
+                                         wayUnsetGeneralFlags)
 import           ErrUtils               (MsgDoc, mkErrMsg)
 import           Exception              (ExceptionMonad (..), ghandle)
 import           FastString             (FastString, fsLit, unpackFS)
@@ -123,6 +124,16 @@ import           DynFlags               (targetPlatform)
 import           CliOption              (showOpt)
 #else
 import           DynFlags               (showOpt)
+#endif
+
+#if MIN_VERSION_ghc(8,6,0)
+import           DynFlags               (IncludeSpecs (..), opt_P_signature)
+#endif
+
+#if MIN_VERSION_ghc(8,4,0)
+import qualified EnumSet
+#else
+import qualified Data.IntSet            as IntSet
 #endif
 
 -- Internal
@@ -590,4 +601,35 @@ dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
       , "  importPaths:" <+> sep (map text (importPaths dflags))
       , "  optLevel:" <+> text (show (optLevel dflags))
       , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)
-      , "  ldInputs: " <+> sep (map (text . showOpt) (ldInputs dflags))]
+      , "  ldInputs:" <+> sep (map (text . showOpt) (ldInputs dflags))
+      , "  mainModIs:" <+> ppr (mainModIs dflags)
+      , "  mainFunIs:" <+> ppr (mainFunIs dflags)
+      , "  safeHaskell:" <+> text (show (safeHaskell dflags))
+      , "  lang:" <+> ppr (language dflags)
+#if MIN_VERSION_ghc(8,4,0)
+      , "  extensionFlags:" <+> ppr (EnumSet.toList (extensionFlags dflags))
+#else
+      , "  extensionFlags:" <+> ppr (IntSet.toList (extensionFlags dflags))
+#endif
+#if MIN_VERSION_ghc(8,6,0)
+      , "  includePathsQuote:" <+>
+        vcat (map text (includePathsQuote (includePaths dflags)))
+      , "  includePathsGlobal:" <+>
+        vcat (map text (includePathsGlobal (includePaths dflags)))
+#else
+      , "  includePaths:" <+> vcat (map text (includePaths dflags))
+#endif
+      , "  picPOpts:" <+> sep (map text (picPOpts dflags))
+#if MIN_VERSION_ghc(8,6,0)
+      , "  opt_P_signature:" <+> ppr (opt_P_signature dflags)
+#endif
+      , "  hcSuf:" <+> text (hcSuf dflags)
+      , "  sccProfilingOn:" <+> if gopt Opt_SccProfilingOn dflags
+                                   then "True"
+                                   else "False"
+      , "  ticky:" <+> ppr (map (`gopt` dflags) [ Opt_Ticky
+                                                , Opt_Ticky_Allocd
+                                                , Opt_Ticky_LNE
+                                                , Opt_Ticky_Dyn_Thunk ])
+      , "  debugLevel:" <+> ppr (debugLevel dflags)
+      ]
