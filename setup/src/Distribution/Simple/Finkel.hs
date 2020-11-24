@@ -110,7 +110,7 @@ fnkInternalMain =
 fnkMainWith :: String   -- ^ Executable name.
             -> [String] -- ^ Args passed to the executable.
             -> IO ()
-fnkMainWith = makeFnkMain "v2-exec"
+fnkMainWith exe args = rawFnkMain exe args False
 
 -- | Make a main function for compiling Finkel codes.
 makeFnkMain :: String   -- ^ Cabal command to invoke when building
