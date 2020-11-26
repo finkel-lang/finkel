@@ -7,7 +7,7 @@ on:
       - '**.md'
 
 env:
-  cache-version: v1
+  cache-version: v2
 
 defaults:
   run:
