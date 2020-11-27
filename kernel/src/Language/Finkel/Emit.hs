@@ -119,8 +119,6 @@ import OccName               (HasOccName (..))
 -- Internal
 import Language.Finkel.Lexer
 
-#include "Syntax.h"
-
 
 -- ---------------------------------------------------------------------
 --
