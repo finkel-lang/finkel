@@ -12,8 +12,8 @@
   (export replMain repl-env)
   (import-when [:compile]
     ;; finkel-core
-    (Finkel.Prelude)
-
+    (Finkel.Prelude))
+  (import-when [:compile :load]
     ;; Internal
     (Finkel.Tool.Repl.Macro))
   (import
@@ -34,7 +34,6 @@
 
    ;; Internal
    (Finkel.Tool.CLI)
-   (Finkel.Tool.Repl.Macro)
    (Finkel.Tool.Repl.Loop)
    (Finkel.Tool.Repl.Types)))
 
