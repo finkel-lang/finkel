@@ -17,7 +17,8 @@
    (StringBuffer (stringToStringBuffer))
 
    ;; finkel-kernel
-   (Language.Finkel)
+   (Language.Finkel.Fnk (Fnk runFnk))
+   (Language.Finkel.Form (Code))
    (Language.Finkel.Lexer (evalSP))
    (Language.Finkel.Reader (sexpr))
 
