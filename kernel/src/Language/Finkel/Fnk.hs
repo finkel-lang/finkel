@@ -564,10 +564,11 @@ setFnkVerbosity v fnk_env = fnk_env {envVerbosity = v}
 {-# INLINE setFnkVerbosity #-}
 
 -- | Dump 'MsgDoc's when the given 'FnkDebugFlag' is turned on.
-debugWhen :: FnkEnv -> FnkDebugFlag -> [MsgDoc] -> Fnk ()
+debugWhen
+  :: (MonadIO m, HasDynFlags m) => FnkEnv -> FnkDebugFlag -> [MsgDoc] -> m ()
 debugWhen fnk_env flag mdocs = when (fopt flag fnk_env) (dumpMsgDocs mdocs)
 
-dumpMsgDocs :: [MsgDoc] -> Fnk ()
+dumpMsgDocs :: (MonadIO m, HasDynFlags m) => [MsgDoc] -> m ()
 dumpMsgDocs mdocs =
   do dflags <- getDynFlags
      liftIO (printSDocLn Pretty.PageMode
@@ -586,7 +587,8 @@ getFnkDebug =
 {-# INLINE getFnkDebug #-}
 
 -- | Show some fields in 'DynFlags'.
-dumpDynFlags :: FnkEnv -> MsgDoc -> DynFlags -> Fnk ()
+dumpDynFlags
+  :: (MonadIO m, HasDynFlags m) => FnkEnv -> MsgDoc -> DynFlags -> m ()
 dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
   where
     msgs =
