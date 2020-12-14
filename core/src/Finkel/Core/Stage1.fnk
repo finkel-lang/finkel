@@ -6,10 +6,10 @@
 
 (module Finkel.Core.Stage1
   defmodule
-  defmacro defmacro'
-  defmacroM defmacroM'
+  defmacro defmacro' defmacro-
+  defmacroM defmacroM' defmacroM-
   macrolet macroletM
-  defn defn'
+  defn defn' defn-
   eval-when eval-and-compile)
 
 ;;; Compile time imports
@@ -140,11 +140,11 @@ With documentation comment:
 
 ;;; Exported codes
 
-(:doc "Macro to specify the /PHASE/s of evaluation of /BODY/ codes. Valid
-phases are __@compile@__ and __@load@__. The @compile@ phase evaluates
-the body forms at the time of compilation, so that the compilation
-context can refer to the function and macros definied in the /BODY/
-forms. The @load@ phase simply emit the body forms to compiled result.
+(:doc "Macro to specify the /PHASE/s of evaluation of /BODY/ codes. Valid phases
+are __@:compile@__ and __@:load@__. The @:compile@ phase evaluates the body
+forms at the time of compilation, so that the compilation context can refer to
+the function and macros definied in the /BODY/ forms. The @:load@ phase simply
+emit the body forms to compiled result.
 
 ==== __Syntax__
 
@@ -155,13 +155,13 @@ forms. The @load@ phase simply emit the body forms to compiled result.
 
 ==== __Example__
 
-In following module, the function @f@ is defined inside 'eval_when', so
-that the function could be accessed from the function @g@ at run-time,
-and temporally macro @m@ at compilation time.
+In following module, the function @f@ is defined inside 'eval_when', so that the
+function could be called from the function @g@ at run-time, and temporally macro
+@m@ at compilation time.
 
 @
 (defmodule Main
-  (require-and-import
+  (import-when [:compile :load]
     (Finkel.Prelude)))
 
 (eval-when [:compile :load]
@@ -206,7 +206,7 @@ and temporally macro @m@ at compilation time.
          ((<- (HsList phases) lst) (emit phases body)))
       _ (finkelSrcError form (++ "eval-when: invalid form: " (show form))))))
 
-(:doc "Same as 'eval_when' macro with __@compile@__ and __@load@__ phases.
+(:doc "Same as 'eval_when' macro with __@:compile@__ and __@:load@__ phases.
 
 ==== __Syntax__
 
@@ -440,6 +440,20 @@ See 'defmacro' and 'defmacroM'.")
   (return `(eval-and-compile
              (defmacroM ,@(cdr form)))))
 
+(:doc "Variant of 'defmacroM', wrapped in @:eval_when_compile@.
+
+==== __Syntax__
+
+See 'defmacro'.
+
+==== __Examples__
+
+See 'defmacro' and 'defmacroM'. ")
+
+(define-macro defmacroM- form
+  (return `(:eval-when-compile
+             (defmacroM ,@(cdr form)))))
+
 (:doc "Macro to define a macro named /NAME/, similar to the macro with same
 name found in other Lisps, such as Common Lisp, Clojure, LFE, Hy
 ... etc. The 'defmacro' can take an optional /DOC/ comment string in
@@ -526,6 +540,20 @@ See 'defmacro'.
 "
   form
   (return `(eval-and-compile
+             (defmacro ,@(cdr form)))))
+
+(define-macro defmacro-
+  "Variant of 'defmacro', wrapped in @:eval-when-compile@.
+
+==== __Syntax__
+
+See 'defmacro'.
+
+==== __Examples__
+
+See 'defmacro'."
+  form
+  (return `(:eval-when-compile
              (defmacro ,@(cdr form)))))
 
 (define-macro defn
@@ -668,6 +696,21 @@ See 'defn'."
   (return `(eval-and-compile
              (defn ,@(cdr form)))))
 
+(define-macro defn-
+  "Macro to define a compilation time only function. This macro uses
+  @:eval-when-compile@ and 'defn'.
+
+==== __Syntax__
+
+See 'defn'.
+
+==== __Examples__
+
+See 'defn'."
+  form
+  (return `(:eval-when-compile
+             (defn ,@(cdr form)))))
+
 
 ;;; Module header
 
@@ -747,13 +790,13 @@ Expands to:
                                 (== label 'import))
                             (return
                              (: (, 'import (map1 (\ es `(import ,@es))
-                                                   payload))
+                                                 payload))
                                 acc)))
                            ((|| (== label 'load)
                                 (== label 'require))
                             (return
                              (: (, ':require (map1 (\ es `(:require ,@es))
-                                                     payload))
+                                                   payload))
                                 acc)))
                            ((|| (== label 'require-and-import)
                                 (== label 'load-use))

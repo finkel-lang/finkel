@@ -150,7 +150,7 @@ or `HsList'. Other @x@ value will throw a `NonListvalue' exception.
 >>> (map1 (\\ x `(x is ,x)) '(foo bar buzz))
 ((x is foo) (x is bar) (x is buzz))
 >>> (map1 (\\ x `(x is ,x)) 'foo)
-*** Exception: map1: non-list value `bar'")
+*** Exception: map1: non-list value `foo'")
 (:: map1 (-> (-> Code Code) Code Code))
 (= map1 f
   (make-list-fn "map1" (\ _ c xs (c (map f xs)))))

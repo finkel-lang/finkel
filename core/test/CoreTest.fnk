@@ -315,13 +315,22 @@
              (defmacroM m1 [a b] [c d] `[,a ,b ,c ,d])))))
 
     (describe "defmacroM'"
-      (it "expands to (eval-when (...) (defmacro* ...))"
+      (it "expands to (eval-when (...) (defmacroM ...))"
         (expandTo
          (defmacroM' m1 (a)
            `(return (putStrLn ,a)))
          (eval-and-compile
            (defmacroM m1 (a)
              (:quasiquote (return (putStrLn (:unquote a)))))))))
+
+    (describe "defmacroM-"
+      (it "expands to (:eval-when-compile (defmacroM ...)"
+        (expandTo
+         (defmacroM- m1 [a]
+           (return `(putStrLn ,a)))
+         (:eval-when-compile
+           (defmacroM m1 [a]
+             (return (:quasiquote (putStrLn (:unquote a)))))))))
 
     (describe "defmacro"
       (do
@@ -361,6 +370,15 @@
            (defmacro m1 (a)
              (:quasiquote (putStrLn (:unquote a))))))))
 
+    (describe "defmacro-"
+      (it "expands to (:eval-when-compile (...) (defmacro ...))"
+        (expandTo
+         (defmacro- m1 (a)
+           `(putStrLn ,a))
+         (:eval-when-compile
+           (defmacro m1 (a)
+             (:quasiquote (putStrLn (:unquote a))))))))
+
     (describe "macro containing `$foo'"
       (it "should replace `$foo' with gensym"
         (do (let ((= f code
@@ -377,7 +395,7 @@
         (it "should expand to :with-macro"
           (expandTo
            (macroletM [(m1 [a b]
-                          (return `(+ ,a ,b)))]
+                         (return `(+ ,a ,b)))]
              (m1 20 22))
            (:with-macro
                ((= m1
@@ -399,7 +417,7 @@
         (it "should replace () arg with _"
           (expandTo
            (macroletM ((m1 ()
-                          (return `(print #'x))))
+                         (return `(print #'x))))
              (m1))
            (:with-macro ((= m1
                            (let ((:: $m1 (-> Code (Fnk Code)))
@@ -423,7 +441,7 @@
         (it "should detect invalid local macro form"
           (expandFailureWith
            (macroletM ((m1 ()
-                          foo bar buzz))
+                         foo bar buzz))
              (m1))
            (srcSubseqErr "invalid form")))))
 
@@ -553,6 +571,15 @@
            (+ a b))
          (eval-and-compile
            (defn foo (a b)
+             (+ a b))))))
+
+    (describe "defn-"
+      (it "should expand to (:eval-when-compile (defn ...))"
+        (expandTo
+         (defn- foo [a b]
+           (+ a b))
+         (:eval-when-compile
+           (defn foo [a b]
              (+ a b))))))
 
     (describe "cond"

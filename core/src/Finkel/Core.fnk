@@ -13,13 +13,13 @@ default, i.e., available without /require/-ing the \"Finkel.Core\" module.")
   defmodule
 
   (:dh1 "Macro for macros")
-  defmacro defmacro' defmacroM defmacroM'
+  defmacro defmacro' defmacro- defmacroM defmacroM' defmacroM-
 
   (:dh1 "Temporary macros")
   macrolet macroletM
 
   (:dh1 "Declaring functions")
-  defn defn'
+  defn defn' defn-
 
   (:dh1 "Expanding macros")
   macroexpand macroexpand-1 exported-macros
