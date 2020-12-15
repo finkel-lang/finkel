@@ -1,6 +1,6 @@
 # Finkel
 
-[![Travis][build-badge]][travis]
+[![Build status][build-badge]][build]
 [![Documentation][doc-badge]][doc]
 [![Codecov][codecov-badge]][codecov]
 
@@ -18,8 +18,9 @@ Or in other words, [Haskell][haskell] in S-expression.
 - Lisp style macro system.
 - Tool executable, including interactive REPL.
 
+## Example
 
-## Sample code
+### Sample code
 
 ```clojure
 ;;;; File: fib.fnk
@@ -45,7 +46,7 @@ input and print the fibonacci number of the argument.")
          (fib (- n 2))))
 ```
 
-## Compiling an executable
+### Compiling an executable
 
 ```console
 $ finkel make -o fib fib.fnk
@@ -55,7 +56,7 @@ $ ./fib 10
 55
 ```
 
-## Running REPL
+### Running REPL
 
 ```console
 $ finkel repl
@@ -81,9 +82,8 @@ See the [documentation][doc] for more details.
 
 Contributions are welcome. Please see the [CONTRIBUTING.md][contrib].
 
-
-[build-badge]: https://travis-ci.com/finkel-lang/finkel.svg?branch=master
-[travis]: https://travis-ci.com/finkel-lang/finkel
+[build-badge]: https://img.shields.io/github/workflow/status/finkel-lang/finkel/build/master?label=build
+[build]: https://github.com/finkel-lang/finkel/actions?query=workflow%3Abuild
 [doc-badge]: http://readthedocs.org/projects/finkel/badge/?version=latest
 [doc]: https://finkel.readthedocs.io/en/latest/
 [codecov-badge]: https://codecov.io/gh/finkel-lang/finkel/branch/master/graph/badge.svg
