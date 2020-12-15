@@ -1,5 +1,9 @@
 language: c
 
+branches:
+  only:
+    - /^travis-.*/
+
 git:
   depth: 3
 
