@@ -63,7 +63,9 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
   (do (<- me getExecutablePath)
       (return (if (isSubsequenceOf ".stack" me)
                   Stack
-                  Cabal))))
+                  (if (isSubsequenceOf "dist-newstyle" me)
+                      Cabal
+                      Raw)))))
 
 (defn (:: get-stack-resolver (IO String))
   "Return @RESOLVER@ environment variable."
@@ -76,7 +78,8 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
           Cabal (return (proc "cabal" ["v2-exec" "--" "ghc" "--print-libdir"]))
           Stack (do (<- resolver get-stack-resolver)
                     (return (proc "stack" ["--resolver" resolver "exec" "--"
-                                           "ghc" "--print-libdir"])))))
+                                           "ghc" "--print-libdir"])))
+          Raw (return (proc "ghc" ["--print-libdir"]))))
       (let ((= p1 (p0 {std-out CreatePipe}))))
       (<- (, _mb-in mb-out _mb-err ph) (createProcess p1))
       (<- _ec (waitForProcess ph))
@@ -121,6 +124,9 @@ be skipped.")
 
   ;; | This package is build with `stack'.
   Stack
+
+  ;; | This package is build with raw invokation of available commands.
+  Raw
   (deriving Eq))
 
 (defn (:: run-console-test (-> FilePath ; ^ Directory to run the command.
@@ -134,7 +140,8 @@ be skipped.")
           Cabal (return (, "cabal" ["v2-exec" "-v0" "--" "finkel"]))
           Stack (do (<- resolver get-stack-resolver)
                     (return (, "stack" ["--resolver" resolver "--silent"
-                                        "exec" "--" "finkel"])))))
+                                        "exec" "--" "finkel"])))
+          Raw (return (, "finkel" []))))
       (let ((= tests (parse-console contents))
             (= aliases [(, "finkel" finkel)])))
       (mapM_ (run-console dir aliases) tests)))

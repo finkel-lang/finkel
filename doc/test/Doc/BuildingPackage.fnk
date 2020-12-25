@@ -32,6 +32,7 @@
     (it "matches package made with hsfiles template"
       (case-do get-build-tool
         Cabal (pendingWith "not running with cabal-install")
+        Raw (pendingWith "not running with raw build")
         Stack compare-new-package))))
 
 

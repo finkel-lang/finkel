@@ -4,7 +4,6 @@ module Distribution.Simple.Finkel
   (
   -- * Main functions
     fnkMain
-  , fnkInternalMain
   , finkelMakeMain
   , fnkMainWith
   , makeFnkMain
@@ -28,8 +27,7 @@ import           Data.List                          (isSubsequenceOf, unionBy)
 import           Data.Monoid                        (Monoid (..))
 #endif
 
-import           System.Environment                 (getExecutablePath,
-                                                     getProgName)
+import           System.Environment                 (getExecutablePath)
 
 -- filepath
 import           System.FilePath                    ((<.>), (</>))
@@ -89,21 +87,6 @@ fnkMain = rawFnkMain "fkc" [] False
 -- building a package.
 finkelMakeMain :: IO ()
 finkelMakeMain = rawFnkMain "finkel" ["make"] False
-
--- | Main function using /fkc/ executable for finkel related packages.
---
--- This function is intended to be used via @stack@ and
--- @cabal@. It calls given executable via @cabal new-run@ when the
--- executable built from @Setup.hs@ were not for @stack@.
-fnkInternalMain :: IO ()
-fnkInternalMain =
- do me <- getProgName
-    if me == "Setup.hs"
-       -- Directly invoked the "Setup.hs" of cabal package perhaps with
-       -- 'runhaskell'.  Use the 'fkc' installed somewhere in current 'PATH'.
-       then do putStrLn "Running `Setup.hs' script, using raw `fkc'"
-               rawFnkMain "fkc" [] False
-       else makeFnkMain "v2-run" "fkc" []
 
 -- | Main function with given executable name and arguments passed to
 -- the executable.

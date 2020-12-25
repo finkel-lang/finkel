@@ -11,14 +11,16 @@ import System.Environment                (getEnv, getExecutablePath, lookupEnv,
 import Config                            (cProjectVersion)
 
 -- directory
-import System.Directory                  (getCurrentDirectory,
+import System.Directory                  (doesDirectoryExist,
+                                          getCurrentDirectory,
                                           removeDirectoryRecursive,
                                           setCurrentDirectory)
 import System.Directory.Internal.Prelude (isDoesNotExistError)
 
 -- filepath
 import System.FilePath                   (isSearchPathSeparator, joinPath,
-                                          splitDirectories, (</>))
+                                          splitDirectories, takeDirectory,
+                                          (</>))
 
 -- hspec
 import Test.Hspec
@@ -81,13 +83,15 @@ buildPackage cwd pkgdbs name =
 setup :: [String] -> IO ()
 setup args = do
   putStrLn (unwords ("running:" : args))
-  withArgs args fnkInternalMain
+  withArgs args fnkMain
 
 getPackageDbs :: String -> IO [String]
 getPackageDbs executable_path =
   if ".stack-work" `isSubsequenceOf` executable_path
      then getStackPackageDbs
-     else getCabalPackageDbs executable_path
+     else if "dist-newstyle" `isSubsequenceOf` executable_path
+             then getCabalPackageDbs executable_path
+             else getPackageConfD executable_path
 
 getStackPackageDbs :: IO [String]
 getStackPackageDbs = do
@@ -108,14 +112,26 @@ sepBySearchPathSeparator xs =
 
 getCabalPackageDbs :: String -> IO [String]
 getCabalPackageDbs executable_path = do
-  home <- getEnv "HOME"
   let dirs = splitDirectories executable_path
       distdir = takeWhile (/= "dist-newstyle") dirs
       ghc_ver = "ghc-" ++ cProjectVersion
       localdb = joinPath distdir </>
                 joinPath ["dist-newstyle", "packagedb", ghc_ver]
-      storedb = joinPath [home, ".cabal", "store", ghc_ver, "package.db"]
-  return [storedb, localdb]
+  -- return [storedb, localdb]
+  return [localdb]
+
+getPackageConfD :: FilePath -> IO [FilePath]
+getPackageConfD path = go path (takeDirectory path)
+  where
+    go prev current =
+        if prev == current
+           then return []
+           else do
+             let pkg_conf_d = current </> "package.conf.d"
+             found <- doesDirectoryExist pkg_conf_d
+             if found
+                then return [pkg_conf_d]
+                else go current (takeDirectory current)
 
 remove_dist_if_exist :: FilePath -> IO ()
 remove_dist_if_exist cwd =

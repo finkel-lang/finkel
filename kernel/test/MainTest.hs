@@ -19,8 +19,7 @@ import TestAux
 mainTests :: Spec
 mainTests =
   beforeAll_ (removeArtifacts odir) $ do
-    packageEnvFlag <- runIO getPackageEnvFlag
-    let common_flags = "-v0" : "-fno-code" : packageEnvFlag
+    let common_flags = ["-v0", "-fno-code"]
     compileFile common_flags "m001.fnk"
     compileFile common_flags "m002.hs"
     compileFile ("-c" : common_flags) "m003.c"
@@ -81,11 +80,3 @@ trivialTest desc label flags = describe desc $
 
 odir :: FilePath
 odir = "test" </> "data" </> "main"
-
-getPackageEnvFlag :: IO [String]
-getPackageEnvFlag =
-#if MIN_VERSION_ghc(8,4,4)
-  ifUsingStack (return ["-package-env=-"]) (return [])
-#else
-  return []
-#endif
