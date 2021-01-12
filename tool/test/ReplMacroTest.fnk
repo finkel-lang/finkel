@@ -73,8 +73,6 @@
               "<quoted code>: error: browse: invalid form `foo'")
 
           ;; cd
-          (ok `(repl-macro cd) "")
-          (ok `(repl-macro cd "~") "")
           (ok `(repl-macro cd ,current-dir) "")
           (ok `(repl-macro cd ,(testdata "")) "")
           (ok '(repl-macro cd ../../) "")
