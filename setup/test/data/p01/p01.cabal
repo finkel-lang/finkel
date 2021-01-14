@@ -8,7 +8,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Author name here
 maintainer:          example@example.com
-copyright:           2020 Author name here
+copyright:           2021 Author name here
 category:            Test
 build-type:          Custom
 extra-source-files:  src/P01/*.fnk
