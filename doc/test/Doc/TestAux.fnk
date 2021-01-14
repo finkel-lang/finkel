@@ -69,7 +69,7 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
 
 (defn (:: get-stack-resolver (IO String))
   "Return @RESOLVER@ environment variable."
-  (fmap (fromMaybe "lts-15") (lookupEnv "RESOLVER")))
+  (fmap (fromMaybe "lts-16") (lookupEnv "RESOLVER")))
 
 (defn (:: get-ghc-lib (IO (Maybe FilePath)))
   (do (<- build-tool get-build-tool)
