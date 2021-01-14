@@ -14,33 +14,39 @@
 
    ;; finkel-kernel
    (Language.Finkel)
+   (Language.Finkel.Fnk (FnkEnv fromFnkEnvOptions fnkEnvOptionsUsage))
 
    ;; Internal
    (Finkel.Tool.CLI)
-   (Finkel.Tool.Eval)))
+   (Finkel.Tool.Eval)
+   (Finkel.Tool.Repl (repl-env))))
 
 (defn (:: runMain (=> (CLI m) (-> [String] (m ()))))
   [args0]
   (let ((= (, args1 prog-args) (split-program-args args0))
-        (= (, rargs gargs) (partition-descrs run-opts args1))
-        (= (, o _ _ es) (getOpt' Permute run-opts rargs))
+        (= all-opts (++ run-opts run-fnk-env-opts))
+        (= (, rargs gargs) (partition-descrs all-opts args1))
+        (= (, o _ _ es) (getOpt' Permute all-opts rargs))
         (= ro (foldl (flip id) initial-run-option o))
         (= main-fn (qSymbol (mangle-name (ro-main ro)))))
     (if (ro-help ro)
         print-run-help
         (liftIO (case es
-                  [] (eval-and-exit-with prog-args gargs main-fn)
+                  [] (eval-and-exit-with prog-args gargs (ro-fnk-env ro)
+                                         main-fn)
                   _ (do (mapM- putStr es)
                         print-run-help
                         (liftIO exitFailure)))))))
 
 (data RunOption
   (RunOption {ro-help Bool
-              ro-main String}))
+              ro-main String
+              ro-fnk-env FnkEnv}))
 
 (defn (:: initial-run-option RunOption)
   (RunOption {ro-help False
-              ro-main "main"}))
+              ro-main "main"
+              ro-fnk-env repl-env}))
 
 (defn (:: run-opts [(OptDescr (-> RunOption RunOption))])
   [(Option [] ["help"]
@@ -51,6 +57,9 @@
                    "NAME")
            "Name of the function to run (default: main)")])
 
+(defn (:: run-fnk-env-opts [(OptDescr (-> RunOption RunOption))])
+  (fromFnkEnvOptions (\ f o (o {ro-fnk-env (f (ro-fnk-env o))}))))
+
 (defn (:: print-run-help (=> (CLI m) (m ())))
   (do (<- me (liftIO getProgName))
       (putString
@@ -60,6 +69,7 @@
          "Compile and run given FILE."
          ""
          (usageInfo "OPTIONS:\n" run-opts)
+         (fnkEnvOptionsUsage "DEBUG OPTIONS:\n")
          others-passed-to-ghc]))))
 
 (defn (:: split-program-args (-> [String] (, [String] [String])))

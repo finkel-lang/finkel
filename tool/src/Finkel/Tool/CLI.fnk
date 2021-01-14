@@ -126,7 +126,8 @@
                (, as bs) (, (: x0 x1 as) bs))]
             [(<- (: x0 rest) xs0)
              (case (go rest)
-               (, as bs) (if (|| (req-arg x0) (no-arg x0) (opt-arg x0))
+               (, as bs) (if (|| (req-arg x0) (no-arg x0) (opt-arg x0)
+                                 (req-arg-short-no-space x0))
                              (, (: x0 as) bs)
                              (, as (: x0 bs))))]
             [(<- [] xs0)
@@ -139,7 +140,11 @@
         (= req-arg x
           (case x
             (: #'- #'- cs) (elem cs long-reqs)
-            (: #'- [c]) (elem c short-reqs)
+            (: #'- c []) (elem c short-reqs)
+            _ False))
+        (= req-arg-short-no-space x
+          (case x
+            (: #'- c _) (elem c short-reqs)
             _ False))
         (= opt-arg x
           (case x
@@ -152,7 +157,8 @@
 (defn (:: group-descrs
         (-> [(OptDescr a)] (, String [String] String [String] [String])))
   [descrs]
-  (let ((= long-eq cs (++ cs "="))
+  (let ((= long-eq cs
+          (++ cs "="))
         (= oflags cs acc
           (++ (map long-eq cs) acc))
         (= f (Option ss ls adescr _) (, sns lns srs lrs les)

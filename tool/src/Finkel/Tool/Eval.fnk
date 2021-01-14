@@ -17,7 +17,8 @@
    (StringBuffer (stringToStringBuffer))
 
    ;; finkel-kernel
-   (Language.Finkel.Fnk (Fnk runFnk))
+   (Language.Finkel.Fnk ((Fnk) FnkEnv
+                         runFnk fromFnkEnvOptions fnkEnvOptionsUsage))
    (Language.Finkel.Form (Code))
    (Language.Finkel.Lexer (evalSP))
    (Language.Finkel.Reader (sexpr))
@@ -34,24 +35,30 @@
 
 (defn (:: evalMain (=> (CLI m) (-> [String] (m ()))))
   [args]
-  (let ((= (, es gs) (partition-descrs eval-opts args))
+  (let ((= all-opts (++ eval-opts eval-fnk-env-opts))
+        (= (, es gs) (partition-descrs all-opts args))
         (= mk-opt (foldl (flip id) initial-eval-option)))
-    (case (getOpt Permute eval-opts es)
+    (case (getOpt Permute all-opts es)
       (, o _ _) (do-eval (mk-opt o) gs))))
 
 
 ;;; Internal
 
 (data EvalOption
-  (EvalOption {eo-help Bool}))
+  (EvalOption {eo-help Bool
+               eo-fnk-env FnkEnv}))
 
 (defn (:: initial-eval-option EvalOption)
-  (EvalOption {eo-help False}))
+  (EvalOption {eo-help False
+               eo-fnk-env repl-env}))
 
 (defn (:: eval-opts [(OptDescr (-> EvalOption EvalOption))])
   [(Option [] ["help"]
            (NoArg (\ o (o {eo-help True})))
            "Show this help and exit")])
+
+(defn (:: eval-fnk-env-opts [(OptDescr (-> EvalOption EvalOption))])
+  (fromFnkEnvOptions (\ f o (o {eo-fnk-env (f (eo-fnk-env o))}))))
 
 (defn (:: print-eval-help (=> (CLI m) (m ())))
   (do (<- me (liftIO getProgName))
@@ -62,6 +69,7 @@
          "Evaluate given FORM expression."
          ""
          (usageInfo "OPTIONS:\n" eval-opts)
+         (fnkEnvOptionsUsage "DEBUG OPTIONS:\n")
          others-passed-to-ghc]))))
 
 (defn (:: do-eval (=> (CLI m) (-> EvalOption [String] (m ()))))
@@ -73,7 +81,7 @@
         (liftIO
          (case mb-str
            (Just str) (case (parse str)
-                        (Right form) (eval-and-exit ghc-args form)
+                        (Right form) (eval-and-exit ghc-args (eo-fnk-env eo) form)
                         (Left err) (>> (putStrLn err) exitFailure))
            Nothing (>> print-eval-help exitFailure))))))
 
@@ -85,11 +93,11 @@
     (: x xs) (let ((= (, ghc-opts mb-form) (separate-args xs)))
                (, (: x ghc-opts) mb-form))))
 
-(defn (:: eval-and-exit (-> [String] Code (IO ())))
+(defn (:: eval-and-exit (-> [String] FnkEnv Code (IO ())))
   (eval-and-exit-with []))
 
-(defn (:: eval-and-exit-with (-> [String] [String] Code (IO ())))
-  [wrapper-args ghc-args form]
+(defn (:: eval-and-exit-with (-> [String] [String] FnkEnv Code (IO ())))
+  [wrapper-args ghc-args fnk-env form]
   (runFnk
    (do (let ((= hdl (error "eval-and-exit: uninitialized handle"))))
        (<- (, in-mv out-mv) (make-in-and-out form))
@@ -97,7 +105,7 @@
        (liftIO (case-do (takeMVar out-mv)
                  (Right msg) (putStr msg)
                  (Left errs) (>> (putStrLn errs) exitFailure))))
-   repl-env))
+   fnk-env))
 
 (defn (:: make-in-and-out (-> Code (Fnk (, (MVar Input) (MVar Result)))))
   [form]

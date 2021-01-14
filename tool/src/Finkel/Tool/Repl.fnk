@@ -26,7 +26,9 @@
 
    ;; finkel-kernel
    (Language.Finkel (Code defaultFnkEnv qList qString qSymbol))
-   (Language.Finkel.Fnk ((FnkEnv ..) EnvMacros makeEnvMacros mergeMacros))
+   (Language.Finkel.Fnk ((FnkEnv ..) EnvMacros
+                         fnkEnvOptionsUsage fromFnkEnvOptions
+                         makeEnvMacros mergeMacros))
    (Language.Finkel.SpecialForms (specialForms))
 
    ;; finkel-core
@@ -44,9 +46,10 @@
 (defn (:: replMain (=> (CLI m) (-> [String] (m ()))))
   "Main entry point function for REPL."
   [args]
-  (let ((= (, repl-opts ghc-opts) (partition-descrs descrs args))
+  (let ((= all-descrs (++ repl-options repl-fnk-env-options))
+        (= (, repl-opts ghc-opts) (partition-descrs all-descrs args))
         (= initial-option (make-initial-option ghc-opts)))
-    (case (getOpt Permute descrs repl-opts)
+    (case (getOpt Permute all-descrs repl-opts)
       (, o _other []) (act (foldl (flip id) initial-option o))
       (, _ _ es) (print-errors es))))
 
@@ -72,7 +75,8 @@
                repl-prompt (Maybe String)
                repl-quiet Bool
                repl-init-form Code
-               repl-ghc-options [String]}))
+               repl-ghc-options [String]
+               repl-fnk-env FnkEnv}))
 
 (defn (:: make-initial-option (-> [String] ReplOption))
   [ghc-options]
@@ -82,9 +86,10 @@
                repl-prompt Nothing
                repl-quiet False
                repl-init-form greet
-               repl-ghc-options ghc-options}))
+               repl-ghc-options ghc-options
+               repl-fnk-env repl-env}))
 
-(defn (:: descrs [OptDescr (-> ReplOption ReplOption)])
+(defn (:: repl-options [OptDescr (-> ReplOption ReplOption)])
   [(Option [] ["help"]
            (NoArg (\ o (o {repl-mode Help})))
            "Show this help and exit")
@@ -111,6 +116,9 @@
                            repl-init-form '(:begin)})))
            "Suppress message from REPL")])
 
+(defn (:: repl-fnk-env-options [(OptDescr (-> ReplOption ReplOption))])
+  (fromFnkEnvOptions (\ f o (o {repl-fnk-env (f (repl-fnk-env o))}))))
+
 (defn (:: act (=> (CLI m) (-> ReplOption (m ()))))
   [ro]
   (case (repl-mode ro)
@@ -118,7 +126,7 @@
     Run (liftIO (start-repl (repl-ghc-options ro)
                             (repl-input-path ro)
                             (repl-listen-port ro)
-                            repl-env
+                            (repl-fnk-env ro)
                             (maybe mempty (\ p (mempty {prompt-string p}))
                                    (repl-prompt ro))
                             (repl-init-form ro)))))
@@ -142,7 +150,8 @@
          ""
          "Start interactive REPL."
          ""
-         (usageInfo "OPTIONS:\n" descrs)
+         (usageInfo "OPTIONS:\n" repl-options)
+         (fnkEnvOptionsUsage "DEBUG OPTIONS:\n")
          "  Other options are passed to ghc."]))))
 
 (defn (:: replMacros EnvMacros)

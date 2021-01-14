@@ -74,6 +74,8 @@
   (describe "eval command"
     (do (it "should show help with --help"
           (main' ["eval" "--help"]))
+        (it "should understand debug option"
+          (main' ["eval" "--fnk-verbosity=3" "(not False)"]))
         (it "should evaluate '(+ 1 2 3 4 5)'"
           (main' ["eval" "(+ 1 2 3 4 5)"]))
         (it "should load module and evaluate given form"

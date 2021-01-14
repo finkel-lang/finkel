@@ -86,8 +86,8 @@
    (Language.Finkel.Form (mkLocatedForm))
    (Language.Finkel.Make (buildHsSyn make))
    (Language.Finkel.Fnk
-    ((FnkEnv ..) fnkDebugFlagOptions getFnkEnv macroNames modifyFnkEnv
-     partitionFinkelOptions putFnkEnv setDynFlags setFnkVerbosity))
+    ((FnkEnv ..) fnkEnvOptions getFnkEnv macroNames modifyFnkEnv
+     partitionFnkEnvOptions putFnkEnv setDynFlags setFnkVerbosity))
    (Language.Finkel.Syntax (parseExpr parseType))
    (Language.Finkel.Make (asModuleName))
 
@@ -791,11 +791,11 @@ paths from import directories."
                                       (Just name) (: name acc)
                                       _ acc))
                                   [] forms))
-              (= (, fnk-flags hs-flags) (partitionFinkelOptions all-flags))
+              (= (, fnk-flags hs-flags) (partitionFnkEnvOptions all-flags))
               (= update-fnk-opts opts fnk-env
                 (foldl (flip id) fnk-env opts))))
         (when (not (null fnk-flags))
-          (case (getOpt Permute fnkDebugFlagOptions fnk-flags)
+          (case (getOpt Permute fnkEnvOptions fnk-flags)
             (, o _ []) (modifyFnkEnv (update-fnk-opts o))
             (, _ _ es) (liftIO (print es))))
         (<- dflags0 getSessionDynFlags)

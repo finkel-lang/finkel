@@ -38,8 +38,14 @@ module Language.Finkel.Fnk
   , debugWhen'
   , dumpDynFlags
   , getFnkDebug
-  , fnkDebugFlagOptions
-  , partitionFinkelOptions
+
+  -- * Command line option handlings
+  , fnkEnvOptions
+  , fnkEnvOptionsWithLib
+  , partitionFnkEnvOptions
+  , parseFnkEnvOptions
+  , fromFnkEnvOptions
+  , fnkEnvOptionsUsage
 
   -- * Macro related functions
   , emptyEnvMacros
@@ -71,12 +77,13 @@ import           Control.Monad.Fail     (MonadFail (..))
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Bits              (setBit, testBit, zeroBits)
 import           Data.Char              (toLower)
-import           Data.IORef             (IORef, atomicModifyIORef', newIORef,
-                                         readIORef, writeIORef)
+import           Data.IORef             (IORef, atomicModifyIORef',
+                                         atomicWriteIORef, newIORef, readIORef)
 import           Data.List              (isPrefixOf, partition)
 import           Data.Word              (Word8)
-import           System.Console.GetOpt  (ArgDescr (..), OptDescr (..))
-import           System.Environment     (lookupEnv)
+import           System.Console.GetOpt  (ArgDescr (..), ArgOrder (..),
+                                         OptDescr (..), getOpt', usageInfo)
+import           System.Environment     (getProgName, lookupEnv)
 import           System.IO              (stderr)
 import           System.IO.Unsafe       (unsafePerformIO)
 
@@ -311,7 +318,7 @@ instance GhcMonad Fnk where
 -- | Run 'Fnk' with given environment.
 runFnk :: Fnk a -> FnkEnv -> IO a
 runFnk m fnk_env = do
-  us <- liftIO $! mkSplitUniqSupply '_'
+  us <- mkSplitUniqSupply '_'
   ref <- newIORef $! fnk_env {envUniqSupply=us}
   runGhc (envLibDir fnk_env) (toGhc m (FnkEnvRef ref))
 
@@ -333,7 +340,7 @@ getFnkEnv = Fnk (\(FnkEnvRef ref) -> liftIO $! readIORef ref)
 -- | Set current 'FnkEnv' to given argument.
 putFnkEnv :: FnkEnv -> Fnk ()
 putFnkEnv fnk_env =
-  Fnk (\(FnkEnvRef ref) -> fnk_env `seq` liftIO $! writeIORef ref fnk_env)
+  Fnk (\(FnkEnvRef ref) -> liftIO $! atomicWriteIORef ref fnk_env)
 {-# INLINE putFnkEnv #-}
 
 -- | Update 'FnkEnv' with applying given function to current 'FnkEnv'.
@@ -535,30 +542,6 @@ fopt_set flag fnk_env =
   fnk_env {envDumpFlags = setBit (envDumpFlags fnk_env) (fromEnum flag)}
 {-# INLINE fopt_set #-}
 
--- | Separate Finkel debug options from others.
-partitionFinkelOptions
-   :: [String]
-   -- ^ Flag inputs, perhaps given as command line arguments.
-   -> ([String], [String])
-   -- ^ Pair of @(finkel_flags, other_flags)@.
-partitionFinkelOptions = partition ("--fnk-" `isPrefixOf`)
-
--- | Command line option handlers to update 'FnkDumpFlag' in 'FnkEnv'.
-fnkDebugFlagOptions :: [OptDescr (FnkEnv -> FnkEnv)]
-fnkDebugFlagOptions =
-  [ opt Fnk_dump_dflags "Dump DynFlags settings."
-  , opt Fnk_dump_expand "Dump expanded code."
-  , opt Fnk_dump_hs "Dump Haskell source code."
-  , opt Fnk_trace_expand "Trace macro expansion."
-  , opt Fnk_trace_make "Trace make function."
-  , opt Fnk_trace_spf "Trace builtin special forms."
-  ]
-  where
-    opt flag descr = Option [] [to_str flag] (NoArg (fopt_set flag)) descr
-    to_str = map replace . show
-    replace '_' = '-'
-    replace c   = toLower c
-
 -- | Update the 'envVerbosity' to given value.
 setFnkVerbosity :: Int -> FnkEnv -> FnkEnv
 setFnkVerbosity v fnk_env = fnk_env {envVerbosity = v}
@@ -641,3 +624,80 @@ dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
                                                 , Opt_Ticky_Dyn_Thunk ])
       , "  debugLevel:" <+> ppr (debugLevel dflags)
       ]
+
+
+-- ---------------------------------------------------------------------
+--
+-- Command line option handling
+--
+-- ---------------------------------------------------------------------
+
+parseFnkEnvOptions ::
+    MonadIO m => FnkEnv -> [String] -> m (FnkEnv, [String], [String])
+parseFnkEnvOptions fnk_env args0 = do
+  let (fnk_opts0, args1) = partitionFnkEnvOptions args0
+  case getOpt' Permute fnkEnvOptionsWithLib fnk_opts0 of
+    (o,_,fnk_opts1,[]) -> pure (foldl (flip id) fnk_env o, fnk_opts1, args1)
+    (_,_,_,es) -> do
+      me <- liftIO getProgName
+      liftIO (throwFinkelExceptionIO (FinkelException (me ++ ": " ++ concat es)))
+
+-- | Separate Finkel debug options from others.
+partitionFnkEnvOptions
+   :: [String]
+   -- ^ Flag inputs, perhaps given as command line arguments.
+   -> ([String], [String])
+   -- ^ Pair of @(finkel_flags, other_flags)@.
+partitionFnkEnvOptions = partition test
+  where
+    -- The "-B" option is to update the ghc libdir in FnkEnv.
+    test arg = "--fnk-" `isPrefixOf` arg || "-B" `isPrefixOf` arg
+
+-- | Command line option handlers to update 'FnkDumpFlag' in 'FnkEnv'.
+fnkEnvOptions :: [OptDescr (FnkEnv -> FnkEnv)]
+fnkEnvOptions =
+  [ opt ["fnk-verbose"]
+        (ReqArg (\i o -> o {envVerbosity = parseVerbosity i}) "INT")
+        "Set verbosity level to INT."
+  , opt ["fnk-hsdir"]
+        (ReqArg (\path o -> o {envHsOutDir = Just path}) "DIR")
+        "Set Haskell code output directory to DIR."
+
+  -- Dump and trace options
+  , debug_opt Fnk_dump_dflags "Dump DynFlags settings."
+  , debug_opt Fnk_dump_expand "Dump expanded code."
+  , debug_opt Fnk_dump_hs "Dump Haskell source code."
+  , debug_opt Fnk_trace_expand "Trace macro expansion."
+  , debug_opt Fnk_trace_make "Trace make function."
+  , debug_opt Fnk_trace_spf "Trace builtin special forms."
+  ]
+  where
+    opt = Option []
+    debug_opt flag descr = opt [to_str flag] (NoArg (fopt_set flag)) descr
+    to_str = map replace . show
+    replace '_' = '-'
+    replace c   = toLower c
+    parseVerbosity str =
+      case reads str of
+        [(n, "")] -> n
+        _ -> throwFinkelException
+               (FinkelException
+                 ("expecting Int value for verbosity but got " ++ show str))
+
+-- | Options for @FnkEnv@ with an option to set ghc @libdir@.
+fnkEnvOptionsWithLib :: [OptDescr (FnkEnv -> FnkEnv)]
+fnkEnvOptionsWithLib = lib_option : fnkEnvOptions
+  where
+    lib_option =
+      Option ['B'] []
+             (ReqArg (\path o -> o {envLibDir = Just path}) "DIR")
+             "Set ghc library directory to DIR."
+
+-- | Convert 'fnkEnvOptions' to list of 'OptDescr' taking a function modifying
+-- 'FnkEnv'.
+fromFnkEnvOptions :: ((FnkEnv -> FnkEnv) -> a) -> [OptDescr a]
+fromFnkEnvOptions f = map (fmap f) fnkEnvOptionsWithLib
+
+-- | Usage information for 'fnkEnvOptions', without @-B@ option.
+fnkEnvOptionsUsage :: String -> String
+fnkEnvOptionsUsage header = usageInfo header fnkEnvOptions
