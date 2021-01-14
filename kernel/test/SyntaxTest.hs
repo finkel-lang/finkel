@@ -9,7 +9,7 @@ module SyntaxTest (syntaxTests, ignored_84x, ignored_82x) where
 
 -- base
 import Control.Monad    (when)
-import Data.IORef       (newIORef, readIORef, writeIORef)
+import Data.IORef       (atomicWriteIORef, newIORef, readIORef)
 import System.Exit      (ExitCode (..))
 import System.Info      (os)
 
@@ -89,7 +89,7 @@ mkTest' path = do
     it "should run executable compiled with Fnk" $ do
       removeWhenExist dotTix
       (ecode, stdout, _stderr) <- runDotO
-      writeIORef fnkORef stdout
+      atomicWriteIORef fnkORef stdout
       ecode `shouldBe` ExitSuccess
 
     it "should dump Haskell source" $ do
@@ -121,7 +121,7 @@ mkTest' path = do
     it "should run executable compiled from Haskell code" $ do
       removeWhenExist dotTix
       (ecode, stdout, _stderr) <- runDotO
-      writeIORef hsORef stdout
+      atomicWriteIORef hsORef stdout
       ecode `shouldBe` ExitSuccess
 
     it "should have same output from Finkel and Haskell executable" $ do

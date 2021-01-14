@@ -7,7 +7,7 @@ module TestAux
   ) where
 
 -- base
-import           Control.Exception      (catch, throw)
+import           Control.Exception      (catch, fromException, throw)
 import           Control.Monad          (when)
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Version           (showVersion)
@@ -135,6 +135,6 @@ runDefaultMain args =
   -- related works to ghc, which throws "ExitSuccess" when successfully done.
   do pkgargs <- getPackageArgs
      catch (withArgs (pkgargs ++ args) defaultMain)
-           (\e -> case e of
-                    ExitSuccess -> return ()
-                    _           -> throw e)
+           (\e -> case fromException e of
+               Just ExitSuccess -> return ()
+               _                -> print e >> throw e)
