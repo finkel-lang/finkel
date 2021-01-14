@@ -29,6 +29,10 @@ import           DynFlags               (DynFlags (..), GeneralFlag (..),
                                          HscTarget (..), Way (..), interpWays,
                                          thisPackage, unSetGeneralFlag',
                                          updOptLevel)
+#if MIN_VERSION_ghc(8,10,1)
+import           DynFlags               (setGeneralFlag')
+#endif
+
 import           ErrUtils               (MsgDoc)
 import           Exception              (gbracket)
 import           FastString             (FastString, headFS)
@@ -130,8 +134,15 @@ bcoDynFlags dflags0 =
                         , ghcLink = LinkInMemory }
       dflags2 = foldr unSetGeneralFlag' dflags1 [ Opt_Hpc
                                                 , Opt_BuildDynamicToo ]
-      dflags3 = updOptLevel 0 dflags2
-  in  dflags3
+#if MIN_VERSION_ghc(8,10,3)
+      dflags3 = setGeneralFlag' Opt_ByteCodeIfUnboxed dflags2
+#elif MIN_VERSION_ghc(8,10,1)
+      dflags3 = setGeneralFlag' Opt_ByteCode dflags2
+#else
+      dflags3 = dflags2
+#endif
+      dflags4 = updOptLevel 0 dflags3
+  in  dflags4
 {-# INLINE bcoDynFlags #-}
 
 -- | Returns a list of bounded names in let expression.

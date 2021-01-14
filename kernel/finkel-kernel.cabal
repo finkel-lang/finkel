@@ -36,6 +36,7 @@ tested-with:           GHC == 8.2.2
                      , GHC == 8.6.5
                      , GHC == 8.8.2
                      , GHC == 8.10.2
+                     , GHC == 8.10.3
 
 custom-setup
   setup-depends:       base     >= 4.10  && < 5
@@ -96,7 +97,7 @@ library
                      , time         >= 1.8.0  && < 1.10
                      , process      >= 1.6.1  && < 1.7
   build-tool-depends:  alex:alex    >= 3.1.7  && < 3.3
-                     , happy:happy  >= 1.19.5 && < 1.20
+                     , happy:happy  >= 1.19.5 && < 1.21
   default-language:    Haskell2010
   ghc-options:         -Wall
 
@@ -139,10 +140,16 @@ test-suite finkel-kernel-test
                      , process
                      , finkel-kernel
                      --
-                     , QuickCheck   >= 2.10.1 && < 2.14
+                     , QuickCheck   >= 2.10.1 && < 2.15
                      , hspec        >= 2.4.8  && < 2.8
                      , transformers >= 0.5.2  && < 0.5.7
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+
+  -- The "Linker.c" codes in the "rts" package bundled with ghc 8.10.3 had
+  -- problem when running the tests with "+RTS -N", disabling.
+  if impl (ghc >= 8.10.3)
+    ghc-options:       -Wall -threaded -rtsopts
+  else
+    ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 source-repository head

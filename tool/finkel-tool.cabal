@@ -95,7 +95,7 @@ test-suite finkel-tool-test
                      --
                      , filepath   >= 1.4.1  && < 1.5
                      , hspec      >= 2.4.8  && < 2.8
-                     , QuickCheck >= 2.10.1 && < 2.14
+                     , QuickCheck >= 2.10.1 && < 2.15
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic

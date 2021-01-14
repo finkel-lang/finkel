@@ -43,10 +43,14 @@ import           Util                         (looksLikeModuleName)
 
 #if MIN_VERSION_ghc(8,10,0)
 import           CliOption                    (Option (FileOption))
-import           DynFlags                     (HscTarget (..), gopt_set)
 #else
 import           DynFlags                     (Option (FileOption),
                                                targetPlatform)
+#endif
+
+#if MIN_VERSION_ghc(8,10,3)
+#elif MIN_VERSION_ghc(8,10,1)
+import           DynFlags                     (HscTarget (..), gopt_set)
 #endif
 
 -- ghc-boot
@@ -160,9 +164,11 @@ main3 orig_args ghc_args = do
   let largs = map on_the_cmdline ghc_args
       on_the_cmdline = mkGeneralLocated "on the commandline"
       dflags1 = dflags0 {verbosity = 1}
-#if MIN_VERSION_ghc(8,10,0)
+#if MIN_VERSION_ghc(8,10,3)
+      dflags1b = dflags1
+#elif MIN_VERSION_ghc(8,10,1)
       -- Workaround for "-fbyte-code" command line option handling in ghc
-      -- 8.10.1.  The use of `noArgM' and `pure $ gopt_set ...' for
+      -- 8.10.1 and 8.10.2.  The use of `noArgM' and `pure $ gopt_set ...' for
       -- "-fbyte-code" option in "compiler/main/DynFlags.hs" is ignoring the
       -- updated hscTarget ...
       dflags1b =
