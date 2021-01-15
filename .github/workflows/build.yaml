@@ -110,10 +110,10 @@ jobs:
           - ubuntu-latest
           # - windows-latest
         plan:
-          - ghc: "8.10.2"
+          - ghc: "8.10.3"
             cabal: "3.2.0.0"
             flags: "-O0"
-          - ghc: "8.10.2"
+          - ghc: "8.10.3"
             cabal: "3.2.0.0"
             flags: "-O2"
     runs-on:
