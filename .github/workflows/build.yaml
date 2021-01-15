@@ -7,7 +7,7 @@ on:
       - '**.md'
 
 env:
-  cache-version: v4
+  cache-version: v5
 
 defaults:
   run:
@@ -44,7 +44,9 @@ jobs:
 
       - name: Cache stack package database (non-windows)
         id: cache-stack-pkg-db-non-win
-        if: matrix.os != 'windows-latest'
+        # Caching under macos-latest had problem while compiling the "fkc"
+        # package with the cached "~/.stack" data, disabling at the moment.
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/cache@v2
         with:
           path: ~/.stack
