@@ -77,7 +77,7 @@
    (Debugger (pprTypeAndContents))
 
    ;; process
-   (System.Process (system))
+   (System.Process (callProcess))
 
    ;; finkel-kernel
    (Language.Finkel)
@@ -600,7 +600,11 @@ object code."
 (defn (:: system-cmd ReplAction)
   "Invoke system command."
   [forms]
-  (do (<- _ecode (liftIO (system (intercalate " " (map show forms)))))
+  ;; Using `callProces' which uses `System.Process.RawCommand' instead of
+  ;; `System.Process.Shell', to support invoking commands without shell.
+  (do (case (map show forms)
+        [] (return ())
+        (: cmd rest) (liftIO (callProcess cmd rest)))
       (return '(:begin))))
 
 ;;; Mostly taken from `GHCi.UI.guessCurrentModule'.
