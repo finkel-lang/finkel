@@ -213,14 +213,17 @@ expands' forms = fmap concat (mapM expand' forms)
 
 -- | Expand form to list of 'Code', supports special form /begin/.
 expand' :: Code -> Fnk [Code]
-expand' form = do
-  form' <- expand form
-  case unCode form' of
-    List (LForm (L _ (Atom (ASymbol ":begin"))):rest) ->
-      case rest of
-        [] -> return []
-        _  -> expands' rest
-    _ -> return [form']
+expand' form =
+  case unCode form of
+    List (hd:_) | Atom (ASymbol ":quote") <- unCode hd -> return [form]
+    _ -> do
+     form' <- expand form
+     case unCode form' of
+       List (LForm (L _ (Atom (ASymbol ":begin"))):rest) ->
+         case rest of
+           [] -> return []
+           _  -> expands' rest
+       _ -> return [form']
 {-# INLINE expand' #-}
 
 -- | Recursively expands the given 'Code'.

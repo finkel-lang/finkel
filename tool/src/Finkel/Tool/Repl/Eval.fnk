@@ -226,12 +226,12 @@ context."
   [hdl dflags wrapper itype forms]
   (| ((null forms)
       (return (Right "")))
-     ((<- (Right stmt) (evalBuilder dflags parseStmt forms))
+     ((<- (Right stmt) (evalBuilder dflags True parseStmt forms))
       (eval-statement hdl wrapper itype stmt))
-     ((<- (Right decls) (evalBuilder dflags parseTopDecls forms))
+     ((<- (Right decls) (evalBuilder dflags True parseTopDecls forms))
       (eval-decls decls))
      (otherwise
-      (case (evalBuilder dflags parseImports forms)
+      (case (evalBuilder dflags True parseImports forms)
         (Right idecl) (eval-imports dflags idecl)
         (Left se) (finkelSrcError (syntaxErrCode se) (syntaxErrMsg se))))))
 
@@ -383,7 +383,7 @@ to separate object files from source code files."
               (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
                                                RebindableSyntax)}))))
       (<- dflags getDynFlags)
-      (case (evalBuilder dflags parseExpr [form])
+      (case (evalBuilder dflags True parseExpr [form])
         (Right expr) (withTempSession no-rb-hsc
                                       (compileParsedExprRemote expr))
         (Left err) (finkelSrcError (syntaxErrCode err)

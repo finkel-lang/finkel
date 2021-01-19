@@ -52,6 +52,18 @@ module Language.Finkel.Builder
   , HStmt
   , HTyVarBndr
   , HType
+
+  -- * Function names for @:quote@
+  , Quote
+  , qListS
+  , qHsListS
+  , qSymbolS
+  , qCharS
+  , qStringS
+  , qIntegerS
+  , qFractionalS
+  , qUnitS
+  , quoteWith
   ) where
 
 #include "Syntax.h"
@@ -59,6 +71,7 @@ module Language.Finkel.Builder
 -- ghc
 import Bag                  (Bag)
 import DynFlags             (DynFlags)
+import FastString           (FastString, appendFS)
 import ForeignCall          (CCallConv (..))
 
 import GHC_Hs               (HsModule)
@@ -97,11 +110,13 @@ import Language.Finkel.Form
 -- | State for 'Builder'.
 data BState = BState
     { -- | Input tokens to parse.
-      inputs    :: [Code]
+      inputs       :: [Code]
       -- | The 'PState' used for parser from GHC.
-    , ghcPState :: PState
+    , ghcPState    :: PState
       -- | Last token, for error message.
-    , lastToken :: Maybe Code
+    , lastToken    :: Maybe Code
+      -- | Whether to use qualified functions when quoting.
+    , qualifyQuote :: Bool
     }
 
 -- | Wrapper data for syntax error.
@@ -140,20 +155,22 @@ instance Monad Builder where
 
 -- | Run given 'Builder' with using given list of 'Code' as input.
 runBuilder :: DynFlags
+           -> Bool
            -> Builder a
            -> [Code]
            -> Either SyntaxError (a, [Code])
-runBuilder dflags bld toks =
+runBuilder dflags qualify bld toks =
   let buf = error "PState StringBuffer is empty"
       rl  = error "PState RealSrcLoc is empty"
       ps  = mkPState dflags buf rl
-  in  case unBuilder bld (BState toks ps Nothing) of
+  in  case unBuilder bld (BState toks ps Nothing qualify) of
         Right (a, st) -> Right (a, inputs st)
         Left err      -> Left err
 
 -- | Like 'runBuilder', but discards left over 'Code's.
-evalBuilder :: DynFlags -> Builder a -> [Code] -> Either SyntaxError a
-evalBuilder dflags bld toks = fmap fst (runBuilder dflags bld toks)
+evalBuilder :: DynFlags -> Bool -> Builder a -> [Code] -> Either SyntaxError a
+evalBuilder dflags qualify bld toks =
+  fmap fst (runBuilder dflags qualify bld toks)
 
 -- | Fail builder computation with given message.
 failB :: String -> Builder a
@@ -192,8 +209,10 @@ setLastToken code = do
 -- | Parse with builder using given tokens, continue on successful parse.
 parse :: Builder a -> [Code] -> Builder a
 parse bld toks =
-  do pstate <- ghcPState <$> getBState
-     case unBuilder bld (BState toks pstate Nothing) of
+  do bstate <- getBState
+     let pstate = ghcPState bstate
+         qualify = qualifyQuote bstate
+     case unBuilder bld (BState toks pstate Nothing qualify) of
        Right (a, _) -> return a
        Left err     -> Builder (const (Left err))
 
@@ -295,3 +314,60 @@ type HStmt = ExprLStmt PARSED
 type HTyVarBndr = LHsTyVarBndr PARSED
 
 type HType = LHsType PARSED
+
+
+-- ---------------------------------------------------------------------
+--
+-- Function names for ":quote"
+--
+-- ---------------------------------------------------------------------
+
+
+-- Note: Qualified names for quoting functions
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Quoting functions can use qualified name after expansion, to support quote in
+-- REPL without importing the "Language.Finkel" module.  See how
+-- "Opt_ImplicitImportQualified" flag is set in initialization code of Finkel
+-- REPL in "finkel-tool" package.
+
+type Quote = Bool -> FastString
+
+quoteWith :: FastString -> Quote
+quoteWith name qualify =
+  if qualify
+     then appendFS "Language.Finkel."  name
+     else name
+{-# INLINE quoteWith #-}
+
+qListS :: Quote
+qListS = quoteWith "qList"
+{-# INLINE qListS #-}
+
+qHsListS :: Quote
+qHsListS = quoteWith "qHsList"
+{-# INLINE qHsListS #-}
+
+qSymbolS :: Quote
+qSymbolS = quoteWith "qSymbol"
+{-# INLINE qSymbolS #-}
+
+qCharS :: Quote
+qCharS = quoteWith "qChar"
+{-# INLINE qCharS #-}
+
+qStringS :: Quote
+qStringS = quoteWith "qString"
+{-# INLINE qStringS #-}
+
+qIntegerS :: Quote
+qIntegerS = quoteWith "qInteger"
+{-# INLINE qIntegerS #-}
+
+qFractionalS :: Quote
+qFractionalS = quoteWith "qFractional"
+{-# INLINE qFractionalS #-}
+
+qUnitS :: Quote
+qUnitS = quoteWith "qUnit"
+{-# INLINE qUnitS #-}

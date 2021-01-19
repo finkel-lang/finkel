@@ -138,6 +138,17 @@
   (do (print (natVal (:: Proxy (Proxy (+ 1 2)))))
       (print (natVal (:: Proxy (Proxy (+ 3 4)))))))
 
+
+;;; Using same names in type constructor and data constructor
+
+(data Bar Bar)
+
+(type family (:: (Buzz (:: a Bool)) Bar)
+  (= (Buzz 'True) 'Bar))
+
+
+;;; The main function
+
 (:: main (IO ()))
 (= main
   (do (putStrLn ";;; datakinds ;;;")

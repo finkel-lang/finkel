@@ -22,12 +22,11 @@ import GHC.Exts                        (unsafeCoerce#)
 import Data.Map                        (fromList)
 
 -- ghc
-import BasicTypes                      (FractionalLit (..), SourceText (..))
 import DynFlags                        (DynFlags (..), GeneralFlag (..),
                                         getDynFlags, unSetGeneralFlag')
 import ErrUtils                        (MsgDoc, compilationProgressMsg)
 import Exception                       (gbracket)
-import FastString                      (FastString, appendFS, fsLit, unpackFS)
+import FastString                      (FastString, fsLit, unpackFS)
 import Finder                          (findImportedModule)
 import GHC                             (ModuleInfo, getModuleInfo, lookupModule,
                                         lookupName, modInfoExports, setContext)
@@ -56,7 +55,7 @@ import HscTypes                        (mgLookupModule)
 #endif
 
 -- Internal
-import Language.Finkel.Builder         (HImportDecl, evalBuilder, syntaxErrMsg)
+import Language.Finkel.Builder
 import Language.Finkel.Eval
 import Language.Finkel.Expand          (bcoDynFlags, expand, expands')
 import Language.Finkel.Fnk
@@ -72,33 +71,9 @@ import Language.Finkel.Syntax.SynUtils (cL, dL)
 
 -- ---------------------------------------------------------------------
 --
--- Quote
+-- Quasiquote
 --
 -- ---------------------------------------------------------------------
-
-quote :: Bool -> Code -> Code
-quote qual orig@(LForm (L l form)) =
-  case form of
-    Atom atom -> quoteAtom qual l atom
-    List xs   -> quoteList (qListS qual)  xs
-    HsList xs -> quoteList (qHsListS qual) xs
-    _         -> orig
-    where
-      quoteList tag xs =
-        tList l [tSym l tag, tHsList l (map (quote qual) xs)]
-
-quoteAtom :: Bool -> SrcSpan -> Atom -> Code
-quoteAtom qual l form =
-  case form of
-    ASymbol s     -> li [tSym l (qSymbolS qual), tString l NoSourceText s]
-    AChar st c    -> li [tSym l (qCharS qual), tChar l st c]
-    AString st s  -> li [tSym l (qStringS qual), tString l st s]
-    AInteger il   -> li [tSym l (qIntegerS qual), tInteger l il]
-    AFractional n -> li [tSym l (qFractionalS qual), tFractional l n]
-    AUnit         -> tSym l (qUnitS qual)
-  where
-    li = tList l
-{-# INLINE quoteAtom #-}
 
 -- Quasiquote is implemented as special form in Haskell. Though it could be
 -- implemented in Finkel code later. If done in Finkel code, lexer and reader
@@ -119,7 +94,7 @@ quasiquote qual orig@(LForm (L l form)) =
     HsList forms'
       | any isUnquoteSplice forms' -> splicedList qHsListS forms'
       | otherwise                  -> nonSplicedList qHsListS forms'
-    Atom atom                      -> quoteAtom qual l atom
+    Atom _                         -> tList l [tSym l ":quote", orig]
     TEnd                           -> orig
   where
    splicedList tag forms =
@@ -175,8 +150,9 @@ coerceMacro dflags name =
     Atom (ASymbol _) -> go
     _                -> failS ("coerceMacro: expecting name symbol")
   where
-    go =
-      case evalBuilder dflags parseExpr [name] of
+    go = do
+      qualify <- envQualifyQuotePrimitives <$> getFnkEnv
+      case evalBuilder dflags qualify parseExpr [name] of
         Right hexpr -> unsafeCoerce# <$> evalExpr hexpr
         Left err    -> failS (syntaxErrMsg err)
 {-# INLINE coerceMacro #-}
@@ -309,15 +285,6 @@ makeMissingHomeMod (L _ idecl) = do
 --
 -- ---------------------------------------------------------------------
 
-m_quote :: MacroFunction
-m_quote form =
-  case unLForm form of
-    L l (List [_,body]) -> do
-      qualify <- fmap envQualifyQuotePrimitives getFnkEnv
-      let LForm (L _ body') = quote qualify body
-      return (LForm (L l body'))
-    _ -> finkelSrcError form ("malformed quote at " ++ showLoc form)
-
 m_quasiquote :: MacroFunction
 m_quasiquote form =
     case unLForm form of
@@ -353,7 +320,8 @@ m_withMacro form =
   where
     evalMacroDefs dflags forms = do
       forms' <- mapM expand forms
-      case evalBuilder dflags parseModule forms' of
+      qualify <- envQualifyQuotePrimitives <$> getFnkEnv
+      case evalBuilder dflags qualify parseModule forms' of
         Right (HsModule {hsmodDecls=decls}) -> do
           (tythings, ic) <- evalDecls decls
           modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
@@ -383,7 +351,8 @@ m_require form =
   case form of
     LForm (L _ (List (_:code))) ->
       do dflags <- getDynFlags
-         case evalBuilder dflags parseLImport code of
+         qualify <- envQualifyQuotePrimitives <$> getFnkEnv
+         case evalBuilder dflags qualify parseLImport code of
            Right lidecl@(L _ idecl) -> do
              fnk_env <- getFnkEnv
              let tr = debug fnk_env "m_require"
@@ -426,7 +395,8 @@ m_evalWhenCompile form =
     L l (List (_ : body)) -> do
       expanded <- expands' body
       dflags <- getDynFlags
-      case evalBuilder dflags parseModule expanded of
+      qualify <- envQualifyQuotePrimitives <$> getFnkEnv
+      case evalBuilder dflags qualify parseModule expanded of
         Right (HsModule { hsmodDecls = decls
                         , hsmodImports = limps }) -> do
 
@@ -460,7 +430,6 @@ specialForms =
   makeEnvMacros
     [(":eval-when-compile", SpecialForm m_evalWhenCompile)
     ,(":with-macro", SpecialForm m_withMacro)
-    ,(":quote", SpecialForm m_quote)
     ,(":quasiquote", SpecialForm m_quasiquote)
     ,(":require", SpecialForm m_require)]
 
@@ -486,22 +455,6 @@ tSym :: SrcSpan -> FastString -> Code
 tSym l s = LForm (L l (Atom (ASymbol s)))
 {-# INLINE tSym #-}
 
-tChar :: SrcSpan -> SourceText -> Char -> Code
-tChar l st c = LForm (L l (Atom (AChar st c)))
-{-# INLINE tChar #-}
-
-tString :: SrcSpan -> SourceText -> FastString -> Code
-tString l st s = LForm (L l (Atom (AString st s)))
-{-# INLINE tString #-}
-
-tInteger :: SrcSpan -> IntegralLit -> Code
-tInteger l il = LForm (L l (Atom (AInteger il)))
-{-# INLINE tInteger #-}
-
-tFractional :: SrcSpan -> FractionalLit -> Code
-tFractional l n = LForm (L l (Atom (AFractional n)))
-{-# INLINE tFractional #-}
-
 tList :: SrcSpan -> [Code] -> Code
 tList l forms = LForm (L l (List forms))
 {-# INLINE tList #-}
@@ -514,55 +467,6 @@ emptyForm :: Code
 emptyForm =
   LForm (genSrc (List [LForm (genSrc (Atom (ASymbol ":begin")))]))
 {-# INLINE emptyForm #-}
-
--- Note: Qualified names for quoting functions
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
---
--- Quoting functions can use qualified name after expansion, to support quote in
--- REPL without importing the "Language.Finkel" module.  See how
--- "Opt_ImplicitImportQualified" flag is set in initialization code of Finkel
--- REPL in "finkel-tool" package.
-
-type Quote = Bool -> FastString
-
-quoteWith :: FastString -> Quote
-quoteWith name qualify =
-  if qualify
-     then appendFS "Language.Finkel."  name
-     else name
-{-# INLINE quoteWith #-}
-
-qListS :: Quote
-qListS = quoteWith "qList"
-{-# INLINE qListS #-}
-
-qHsListS :: Quote
-qHsListS = quoteWith "qHsList"
-{-# INLINE qHsListS #-}
-
-qSymbolS :: Quote
-qSymbolS = quoteWith "qSymbol"
-{-# INLINE qSymbolS #-}
-
-qCharS :: Quote
-qCharS = quoteWith "qChar"
-{-# INLINE qCharS #-}
-
-qStringS :: Quote
-qStringS = quoteWith "qString"
-{-# INLINE qStringS #-}
-
-qIntegerS :: Quote
-qIntegerS = quoteWith "qInteger"
-{-# INLINE qIntegerS #-}
-
-qFractionalS :: Quote
-qFractionalS = quoteWith "qFractional"
-{-# INLINE qFractionalS #-}
-
-qUnitS :: Quote
-qUnitS = quoteWith "qUnit"
-{-# INLINE qUnitS #-}
 
 toCodeS :: Quote
 toCodeS = quoteWith "toCode"

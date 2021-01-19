@@ -13,7 +13,7 @@ import Data.Maybe                      (fromMaybe)
 
 -- ghc
 import BasicTypes                      (Arity, Boxity (..), FractionalLit (..),
-                                        Origin (..))
+                                        Origin (..), SourceText (..))
 import FastString                      (FastString, headFS, lengthFS, nullFS,
                                         tailFS, unpackFS)
 import GHC_Hs_Doc                      (HsDocString)
@@ -33,7 +33,8 @@ import Lexeme                          (isLexCon, isLexSym, isLexVarId)
 import OrdList                         (toOL)
 import RdrHsSyn                        (mkRdrRecordCon, mkRdrRecordUpd)
 import RdrName                         (RdrName, getRdrName)
-import SrcLoc                          (GenLocated (..), Located, getLoc, noLoc)
+import SrcLoc                          (GenLocated (..), Located, SrcSpan,
+                                        getLoc, noLoc)
 import TysWiredIn                      (tupleDataCon)
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -159,7 +160,7 @@ b_recConOrUpdE whole@ (LForm (L l form)) flds =
     mkufld  = cfld2ufld . mkcfld
 {-# INLINE b_recConOrUpdE #-}
 
-b_recUpdE :: Builder HExpr -> [(Located FastString,HExpr)]
+b_recUpdE :: Builder HExpr -> [(Located FastString, HExpr)]
           -> Builder HExpr
 b_recUpdE expr flds = do
    expr' <- expr
@@ -325,6 +326,37 @@ b_arithSeqE fromE thenE toE =
          | otherwise = From fromE
     l = getLoc fromE
 {-# INLINE b_arithSeqE #-}
+
+b_quoteE :: Code -> Builder HExpr
+b_quoteE (LForm (L l form)) = do
+  qualify <- fmap qualifyQuote getBState
+  case form of
+    Atom atom -> b_quoteAtomE l qualify atom
+    List xs   -> b_quoteListE l (qListS qualify) xs
+    HsList xs -> b_quoteListE l (qHsListS qualify) xs
+    _         -> builderError
+
+b_quoteAtomE :: SrcSpan -> Bool -> Atom -> Builder HExpr
+b_quoteAtomE l qualify atom =
+  case atom of
+    ASymbol s       -> mk_app qSymbolS (mk_sym s)
+    AChar st c      -> mk_app qCharS (L l (hsLit (HsChar st c)))
+    AString st str  -> mk_app qStringS (L l (hsLit (HsString st str)))
+    AInteger _il    -> b_integerE orig >>= mk_app qIntegerS
+    AFractional _fl -> b_fracE orig >>= mk_app qFractionalS
+    AUnit           -> b_varE (LForm (L l (Atom (ASymbol (qUnitS qualify)))))
+  where
+    orig = LForm (L l (Atom atom))
+    mk_sym s = L l (hsLit (HsString (SourceText (show s)) s))
+    mk_app name arg = do
+      fn <- b_varE (LForm (L l (Atom (ASymbol (name qualify)))))
+      return (b_appE ([fn, arg], []))
+
+b_quoteListE :: SrcSpan -> FastString -> [Code] -> Builder HExpr
+b_quoteListE l fn_name xs = do
+  mk_list <- b_varE (LForm (L l (Atom (ASymbol fn_name))))
+  arg <- fmap (b_hsListE . Right) (mapM b_quoteE xs)
+  return (b_appE ([mk_list, arg], []))
 
 
 -- ------------------------------------------------------------------------

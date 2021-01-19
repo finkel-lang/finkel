@@ -536,7 +536,8 @@ buildHsSyn
   -> Fnk a
 buildHsSyn bldr forms = do
   dflags <- getDynFlags
-  case evalBuilder dflags bldr forms of
+  qualify <- envQualifyQuotePrimitives <$> getFnkEnv
+  case evalBuilder dflags qualify bldr forms of
     Right a                     -> return a
     Left (SyntaxError code msg) -> finkelSrcError code msg
 

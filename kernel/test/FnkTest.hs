@@ -7,7 +7,6 @@ import           Control.Monad.IO.Class
 import           Data.Maybe                   (fromMaybe, isNothing)
 
 -- ghc
-import           BasicTypes                   (SourceText (..))
 import           Exception                    (gbracket)
 import           FastString                   (fsLit)
 import           HscTypes                     (SourceError, ms_mod_name)
@@ -168,13 +167,12 @@ expandTest = do
       ret `shouldBe` form
   describe "expanding with macroFunction" $
     it "should return empty form" $ do
-      let mb_qt = lookupMacro (fsLit ":quote") env
+      let mb_qt = lookupMacro (fsLit ":quasiquote") env
           qt = fromMaybe (error "macro not found") mb_qt
           s x = LForm (genSrc (Atom (ASymbol (fsLit x))))
           li xs = LForm (genSrc (List xs))
-          t x = LForm (genSrc (Atom (AString NoSourceText (fsLit x))))
-          form0 = li [s ":quote", s "a"]
-          form1 = li [s "qSymbol", t "a"]
+          form0 = li [s ":quasiquote", s "a"]
+          form1 = li [s ":quote", s "a"]
       ret <- runFnk (macroFunction qt form0) env
       ret `shouldBe` form1
 

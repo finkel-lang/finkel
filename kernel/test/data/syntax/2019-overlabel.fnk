@@ -51,7 +51,7 @@
 (instance %p(OVERLAPPABLE) (=> (HasField x r a) (IsLabel x (-> r a)))
   (= fromLabel (getField @ x)))
 
-(:: r1 (Record '[(, "personId" Int) (, "name" String)]))
+(:: r1 (Record '[ '(, "personId" Int) '(, "name" String)]))
 (= r1 (Cons Proxy 42 (Cons Proxy "R" Nil)))
 
 (:: i1 Int)
@@ -60,7 +60,7 @@
 (:: i2 Int)
 (= i2 (#personId r1))
 
-(:: r2 (Record '[(, True Char) (, False Char)]))
+(:: r2 (Record '[ '(, True Char) '(, False Char)]))
 (= r2 (Cons Proxy #'a (Cons Proxy #'b Nil)))
 
 (:: j1 Char)

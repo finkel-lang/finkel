@@ -216,13 +216,13 @@
 
     ;; Expansion quoted codes in REPL
     (ok '(macroexpand ''foo)
-        "(Language.Finkel.qSymbol \"foo\")")
+        "(:quote foo)")
     (ok '(macroexpand '`(a ,@(b) c))
         (concat
          ["(Language.Finkel.qList (Data.Foldable.concat ["
-          "[(Language.Finkel.qSymbol \"a\")] "
+          "[(:quote a)] "
           "(Language.Finkel.unquoteSplice ((b))) "
-          "[(Language.Finkel.qSymbol \"c\")]"
+          "[(:quote c)]"
           "]))"]))
 
     ;; Exported macros

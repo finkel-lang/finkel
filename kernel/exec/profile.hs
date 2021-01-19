@@ -134,7 +134,7 @@ parseFnkModuleWith act path = Fnk.runFnk go SpecialForms.defaultFnkEnv
           Right (forms, sp) -> do
             forms' <- Expand.withExpanderSettings (Expand.expands forms)
             dflags <- getDynFlags
-            case Builder.evalBuilder dflags Syntax.parseModule forms' of
+            case Builder.evalBuilder dflags False Syntax.parseModule forms' of
               Right mdl -> act mdl sp
               Left  err -> liftIO (putStrLn ("error: " ++
                                              Builder.syntaxErrMsg err))

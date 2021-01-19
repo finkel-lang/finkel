@@ -21,7 +21,7 @@ import GHC_Hs_Types                    (HsSrcBang (..), HsTupleSort (..),
                                         SrcUnpackedness (..), mkAnonWildCardTy,
                                         mkHsAppTy, mkHsOpTy)
 import Lexeme                          (isLexCon, isLexConSym, isLexVarSym)
-import OccName                         (tcName, tvName)
+import OccName                         (dataName, tcName, tvName)
 import RdrName                         (getRdrName, mkQual, mkUnqual)
 import SrcLoc                          (GenLocated (..), Located, addCLoc,
                                         getLoc)
@@ -203,8 +203,8 @@ b_opOrAppT form@(LForm (L l ty)) typs
 b_prmConT :: Code -> Builder HType
 b_prmConT (LForm (L l form)) =
   case form of
-    Atom (AString _ str) -> return $! ty str
-    _                    -> builderError
+    Atom (ASymbol name) -> return $! ty name
+    _                   -> builderError
   where
     ty name = L l (hsTyVar iSPROMOTED (cL l (rname name)))
     rname name =
@@ -214,20 +214,10 @@ b_prmConT (LForm (L l form)) =
                     (mkQual tcName)
                     (splitQualName name)
     namespace n
-      | isLexCon n    = tcName
+      | isLexCon n    = dataName
       | isLexVarSym n = tcName
       | otherwise     = tvName
 {-# INLINE b_prmConT #-}
-
--- | 'True' when given form is for qSymbol. There are two situations:
--- "qSymbol" (when compiling files) and "Language.Finkel.qSymbol" (from
--- REPL) are used for quoted names after macro expansion.
-isQSymbol :: Form Atom -> Bool
-isQSymbol aform =
-  case aform of
-    Atom (ASymbol q) -> q == "qSymbol" || q== "Language.Finkel.qSymbol"
-    _                -> False
-{-# INLINE isQSymbol #-}
 
 b_appT :: [HType] -> Builder HType
 b_appT []     = builderError
@@ -310,18 +300,18 @@ b_prmListT prsr typs =
       | null xs   -> return (cL l (hsExplicitListTy []))
       | otherwise -> do
           tys <- prsr xs
-          let tys' = map unPromoteTyVar tys
-          return (cL l (hsExplicitListTy tys'))
+          return $! cL l (hsExplicitListTy tys)
     _ -> builderError
 {-# INLINE b_prmListT #-}
 
-b_prmTupT :: ([Code] -> Builder [HType]) -> Code -> Builder HType
+b_prmTupT :: ([Code] -> Builder [HType]) -> [Code] -> Builder HType
 b_prmTupT prsr typs =
   case typs of
-    LForm (L l (HsList (hd:tl)))
+    hd:tl
       | isCommaSymbol hd -> do
         tys <- prsr tl
         let tys' = map unPromoteTyVar tys
+            l = getLoc (mkLocatedList (map unLForm typs))
         return (cL l (hsExplicitTupleTy tys'))
     _ -> builderError
 {-# INLINE b_prmTupT #-}
@@ -329,8 +319,8 @@ b_prmTupT prsr typs =
 isCommaSymbol :: Code -> Bool
 isCommaSymbol (LForm (L _ form)) =
   case form of
-    List [LForm (L _ q), LForm (L _ (Atom (AString _ ",")))] -> isQSymbol q
-    _                                                        -> False
+    Atom (ASymbol ",") -> True
+    _                  -> False
 {-# INLINE isCommaSymbol #-}
 
 hsTupleTy :: HsTupleSort -> [HType] -> HsType PARSED

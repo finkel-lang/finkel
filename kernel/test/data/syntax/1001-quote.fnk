@@ -19,7 +19,7 @@
 (:: main (IO ()))
 (= main
   (do
-    ;; "'foo" is same as "(quote foo)".
+    ;; "'foo" is same as "(:quote foo)".
     (print 'foo)
     (print (:quote foo))
 
@@ -34,6 +34,46 @@
     (print '\c)
     (print '[1 2 3])
     (print '())
+
+    ;; Quoting reserved symbols
+    (print 'case)
+    (print 'class)
+    (print 'data)
+    (print 'default)
+    (print 'do)
+    (print 'foreign)
+    (print 'infix)
+    (print 'infixl)
+    (print 'infixr)
+    (print 'instance)
+    (print 'let)
+    (print 'newtype)
+    (print 'type)
+    (print '!)
+    (print '->)
+    (print '..)
+    (print '::)
+    (print '<-)
+    (print '=)
+    (print '=>)
+    (print '@)
+    (print '{) (print '})
+    (print '|)
+    (print '~)
+    (print '_)
+    (print 'forall)
+    (print 'anyclass)
+    (print 'as)
+    (print 'family)
+    (print 'hiding)
+    (print 'stock)
+    (print 'via)
+    (print 'qualified)
+    (print ':quote)
+    (print '(deriving))
+    (print '(import))
+    (print '(module))
+    (print '(where))
 
     ;; Quasiquote.
     (print `foo)

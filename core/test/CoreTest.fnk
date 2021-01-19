@@ -137,7 +137,6 @@
              (:: foo Int)
              (= foo 42))
            (srcSubseqErr "invalid phase")))
-
         (it "throws and exception on non-list phase"
           (expandFailureWith
            (eval-when :compile

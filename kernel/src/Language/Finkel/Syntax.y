@@ -196,19 +196,8 @@ import Language.Finkel.Syntax.SynUtils
 'dh3'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh3"))) : _))) }
 'dh4'  { LForm (L _ (List (LForm (L _ (Atom (ASymbol ":dh4"))) : _))) }
 
--- Finkel specific
---
--- Following keywords are used in promoted list constructors. The `qSymbol' is
--- for module file compilatoin, and `qualQSymbol' is for REPL, and so on.
-
-'qSymbol'     { LForm (L _ (Atom (ASymbol "qSymbol"))) }
-'qualQSymbol' { LForm (L _ (Atom (ASymbol "Language.Finkel.qSymbol"))) }
-'qString'     { LForm (L _ (Atom (ASymbol "qString"))) }
-'qualQString' { LForm (L _ (Atom (ASymbol "Language.Finkel.qString"))) }
-'qHsList'     { LForm (L _ (Atom (ASymbol "qHsList"))) }
-'qualQHsList' { LForm (L _ (Atom (ASymbol "Language.Finkel.qHsList"))) }
-'qList'       { LForm (L _ (Atom (ASymbol "qList"))) }
-'qualQList'   { LForm (L _ (Atom (ASymbol "Language.Finkel.qList"))) }
+-- Finkel specific quote primitive
+':quote' { LForm (L _ (Atom (ASymbol ":quote"))) }
 
 -- Plain constructors
 'symbol'  { LForm (L _ (Atom (ASymbol _))) }
@@ -661,14 +650,9 @@ types0_no_qtype :: { HType }
     | ',' type_args            { b_tupT $1 $2 }
     | 'forall' forallty        { b_forallT $1 $2 }
     | '::' type type           { b_kindedType $1 $2 $3 }
-    | 'qSymbol' 'string'       {% b_prmConT $2 }
-    | 'qualQSymbol' 'string'   {% b_prmConT $2 }
-    | 'qString' 'string'       {% b_tyLitT $2 }
-    | 'qualQString' 'string'   {% b_tyLitT $2 }
-    | 'qHsList' 'hslist'       {% b_prmListT (parse p_types) $2 }
-    | 'qualQHsList' 'hslist'   {% b_prmListT (parse p_types) $2 }
-    | 'qList' 'hslist'         {% b_prmTupT (parse p_types) $2 }
-    | 'qualQList' 'hslist'     {% b_prmTupT (parse p_types) $2 }
+    | ':quote' conid           {% b_prmConT $2 }
+    | ':quote' 'hslist'        {% b_prmListT (parse p_types) $2 }
+    | ':quote' 'list'          {% b_prmTupT (parse p_types) $2 }
     | 'symbol' type_args       {% b_opOrAppT $1 $2 }
     | type_no_symbol type_args {% b_appT ($1:$2) }
 
@@ -790,6 +774,7 @@ exprs :: { HExpr }
     | '::' expr dtype       { b_tsigE $1 $2 $3 }
     | idsym '{' fbinds '}'  {% b_recConOrUpdE $1 $3 }
     | 'list' '{' fbinds '}' {% b_recUpdE (parse p_exprs $1) $3 }
+    | ':quote' form         {% b_quoteE $2 }
     | idsym app             {% b_opOrAppE $1 $2 }
     | expr_no_idsym app     { case $2 of (es,ts) -> b_appE ($1:es,ts) }
     | expr                  { $1 }
@@ -879,6 +864,67 @@ where :: { ([HGRHS],[HDecl]) }
     : 'list' lbinds0 {% parse p_guards0 $1 >>= \gs -> return (gs,$2) }
     | atom lbinds0   { ([L (getLoc $1) (b_GRHS [] $1)], $2) }
 
+-- Quoted form
+
+form :: { Code }
+    : 'symbol'  { $1 }
+    | all_syms  { $1 }
+    | 'char'    { $1 }
+    | 'string'  { $1 }
+    | 'integer' { $1 }
+    | 'frac'    { $1 }
+    | 'unit'    { $1 }
+    | 'list'    { LForm (genSrc (List $1)) }
+    | all_lists { $1 }
+    | 'hslist'  { $1 }
+
+all_syms :: { Code }
+    : 'case' { $1 }
+    | 'class' { $1 }
+    | 'data' { $1 }
+    | 'default' { $1 }
+    | 'do' { $1 }
+    | 'foreign' { $1 }
+    | 'if' { $1 }
+    | 'infix' { $1 }
+    | 'infixl' { $1 }
+    | 'infixr' { $1 }
+    | 'instance' { $1 }
+    | 'let' { $1 }
+    | 'newtype' { $1 }
+    | 'type' { $1 }
+
+    | '!' { $1 }
+    | ',' { $1 }
+    | '->' { $1 }
+    | '..' { $1 }
+    | '::' { $1 }
+    | '<-' { $1 }
+    | '=' { $1 }
+    | '=>' { $1 }
+    | '@' { $1 }
+    | '\\' { $1 }
+    | '{' { $1 }
+    | '|' { $1 }
+    | '}' { $1 }
+    | '~' { $1 }
+    | '_' { $1 }
+
+    | special_id_no_bang { $1 }
+
+    | 'inlinable' { $1 }
+    | 'inline' { $1 }
+    | 'noinline' { $1 }
+    | 'specialize' { $1 }
+
+    | ':quote' { $1 }
+
+all_lists :: { Code }
+    : 'deriving' { LForm (genSrc (List (qSymbol "deriving" : $1))) }
+    | 'import' { LForm (genSrc (List (qSymbol "import" : $1))) }
+    | 'module' { LForm (genSrc (List (qSymbol "module" : $1))) }
+    | 'where' { LForm (genSrc (List (qSymbol "where" : $1))) }
+
 
 -- ---------------------------------------------------------------------
 --
@@ -930,14 +976,6 @@ special_id_no_bg_fa :: { Code }
     | 'stock'       { $1 }
     | 'via'         { $1 }
     | 'qualified'   { $1 }
-    | 'qSymbol'     { $1 }
-    | 'qualQSymbol' { $1 }
-    | 'qString'     { $1 }
-    | 'qualQString' { $1 }
-    | 'qHsList'     { $1 }
-    | 'qualQHsList' { $1 }
-    | 'qList'       { $1 }
-    | 'qualQList'   { $1 }
 
 idsyms :: { [Code] }
     : 'list' {% parse p_idsyms1 $1 }
