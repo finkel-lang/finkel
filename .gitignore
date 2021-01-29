@@ -12,6 +12,7 @@
 *.tix
 *.yaml.lock
 .ghc.environment.*
+result*
 
 TAGS
 a.out

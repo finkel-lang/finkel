@@ -26,10 +26,12 @@ jobs:
             resolver: lts-14
           - os: ubuntu-latest
             resolver: lts-16
+          - os: ubuntu-latest
+            resolver: lts-17
           - os: macos-latest
-            resolver: lts-16
+            resolver: lts-17
           - os: windows-latest
-            resolver: lts-14
+            resolver: lts-17
 
     env:
       STACK: stack --resolver=${{ matrix.resolver }}
@@ -59,21 +61,14 @@ jobs:
           path: C:\Users\runneradmin\AppData\Roaming\stack
           key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
 
-      - name: Cache stack (windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/cache@v2
-        with:
-          path: C:\Users\runneradmin\AppData\Local\Programs\stack
-          key: ${{ runner.os }}-stack-local-${{ matrix.resolver }}-${{ env.cache-version }}
-
       - name: Show stack version
         run: $STACK --version
 
-      - name: Add PATH for executable installed with stack
-        run: $STACK path --local-bin >> $GITHUB_PATH
-
       - name: Setup stack
         run: $STACK setup
+
+      - name: Add PATH for executable installed with stack
+        run: $STACK path --local-bin >> $GITHUB_PATH
 
       - name: Install dependency packages
         run: $STACK build -j 2 --test --only-dependencies
@@ -82,7 +77,9 @@ jobs:
         run: $STACK build --fast --test --coverage --no-run-tests
 
       - name: Run tests
-        run: RESOLVER=${{ matrix.resolver }} $STACK --jobs 1 build --fast --test --coverage
+        run: |
+          RESOLVER=${{ matrix.resolver }} $STACK --jobs 1 build \
+          --fast --test --coverage
 
       - name: Generate coverge report
         run: |
@@ -105,11 +102,12 @@ jobs:
       - name: Send coverage report
         run: bash <(curl -s https://codecov.io/bash)
 
-  cabal:
+  cabal-install:
     strategy:
       matrix:
         os:
           - ubuntu-latest
+          # - macos-latest
           # - windows-latest
         plan:
           - ghc: "8.10.3"
@@ -127,6 +125,7 @@ jobs:
 
       - name: Cache ~/.ghcup
         id: home-dot-ghcup
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         uses: actions/cache@v2
         with:
           path: ~/.ghcup
@@ -134,6 +133,7 @@ jobs:
 
       - name: Cache cabal package database
         id: home-dot-cabal
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         uses: actions/cache@v2
         with:
           path: ~/.cabal
@@ -141,48 +141,48 @@ jobs:
 
       # Manually installing ghc and bundled packages with "ghcup" for Linux and
       # OSX, because the setup-haskell action may reuse the preinstalled GHC in
-      # the github runner, and the preinstalled GHC does not contain profiling
-      # library for the "base" package. Without profiling libraries, "doc"
-      # package tests will fail.
+      # the github runner, and the preinstalled GHC in GitHub runner does not
+      # contain profiling library for the "base" package. Without profiling
+      # libraries, "doc" package tests will fail.
 
-      - name: Install ghcup (linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install ghcup (ubuntu and macos)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+        env:
+          os: ${{ matrix.os }}
         run: |
-          url='https://downloads.haskell.org/~ghcup/x86_64-linux-ghcup'
-          mkdir -p ~/.ghcup/bin
-          curl -sL $url > ~/.ghcup/bin/ghcup
-          chmod +x ~/.ghcup/bin/ghcup
-          echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
-
-      - name: Install ghcup (osx)
-        if: matrix.os == 'macos-latest'
-        run: |
-          url='https://downloads.haskell.org/~ghcup/x86_64-apple-darwin-ghcup'
+          case $os in
+            "ubuntu-latest")
+               ghcup_name="linux"
+               ;;
+            "macos-latest")
+               ghcup_name="apple-darwin"
+               ;;
+            *)
+               echo Unknown os: $os
+               exit 1
+               ;;
+          esac
+          url="https://downloads.haskell.org/~ghcup/x86_64-${ghcup_name}-ghcup"
           mkdir -p ~/.ghcup/bin
           curl -sL $url > ~/.ghcup/bin/ghcup
           chmod +x ~/.ghcup/bin/ghcup
           echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
 
       - name: Install ghc and cabal-install (linux and osx)
-        if: matrix.os != 'windows-latest'
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: |
           ghcup install cabal ${{ matrix.plan.cabal }}
           ghcup install ghc ${{ matrix.plan.ghc }}
           ghcup set ghc ${{ matrix.plan.ghc }}
           which cabal
           which ghc
-          cabal --version
-          ghc --version
 
       - name: Install ghc and cabal-install (windows)
         if: matrix.os == 'windows-latest'
-        run: |
-          choco source add -n mistuke -s https://www.myget.org/F/mistuke/api/v2
-          choco install -y cabal --version ${{ matrix.plan.cabal }}
-          choco install -y ghc --version ${{ matrix.plan.ghc }}
-          refreshenv
-          echo "C:/Users/runneradmin/AppData/Roaming/cabal/bin" >> $GITHUB_PATH
-          echo "C:/ProgramData/chocolatey/lib/ghc/tools/ghc-${{matrix.plan.ghc }}/bin" >> $GITHUB_PATH
+        uses: haskell/actions/setup@v1
+        with:
+          ghc-version: ${{ matrix.plan.ghc }}
+          cabal-version: ${{ matrix.plan.cabal }}
 
       - name: Show version and paths
         run: |
@@ -212,12 +212,57 @@ jobs:
       - name: Run haddock
         run: cabal v2-haddock all
 
-  sdist:
+  nix-build:
+    strategy:
+      matrix:
+        include:
+          - nixpkgs: "channel:nixos-unstable"
+            compiler: "ghc8103"
+          # - nixpkgs: "channel:nixos-20.09"
+          #   compiler: "ghc884"
+          # - nixpkgs: "channel:nixos-20.03"
+          #   compiler: "ghc865"
+
+    runs-on:
+      - ubuntu-latest
+
+    steps:
+      - name: Checkout git repository
+        uses: actions/checkout@v2
+
+      - name: Install nix
+        uses: cachix/install-nix-action@v12
+        with:
+          nix_path: nixpkgs=${{ matrix.nixpkgs }}
+
+      - name: Build with nix-build
+        run: nix-build --argstr compiler ${{ matrix.compiler }}
+
+      - name: Build container image stream
+        if: matrix.compiler == 'ghc8103' && github.ref == 'refs/heads/master'
+        run: |
+          nix-build --argstr compiler ${{ matrix.compiler }} ./nix/docker.nix
+          echo "image_stream=$(readlink result)" >> $GITHUB_ENV
+
+      - name: Push image to ghcr.io
+        if: matrix.compiler == 'ghc8103' && github.ref == 'refs/heads/master'
+        env:
+          CRED: ${{ secrets.GHCR_USER }}:${{ secrets.GHCR_PAT }}
+          FROM: docker-archive:/dev/stdin
+          TO: docker://ghcr.io/${{ github.repository }}:latest
+        # Using `sudo' when invoking `skopeo', to avoid `mkdir /run/containers:
+        # permission denied" error.
+        run: |
+          ${{ env.image_stream }} | \
+            gzip | \
+            sudo skopeo --debug copy --dest-creds ${CRED} ${FROM} ${TO}
+
+  make-sdist-with-stack:
     runs-on:
       - ubuntu-latest
 
     env:
-      STACK: stack --resolver=lts-16
+      STACK: stack --resolver=lts-17
 
     steps:
       - name: Checkout git repository
@@ -267,7 +312,7 @@ jobs:
       - name: Upload package tarballs
         uses: actions/upload-artifact@v2
         with:
-          name: finkel-packages
+          name: finkel-srcs
           path: |
             sdist/*.tar.gz
             sdist/stack.yaml
