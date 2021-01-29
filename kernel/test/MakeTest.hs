@@ -292,17 +292,30 @@ buildObj = buildFiles
 buildObjAndExist :: [String] -> [FilePath] -> [String] -> Spec
 buildObjAndExist args inputs outputs =
   describe (labelWithOptionsAndFiles args inputs) $
-    do it "should compile successfully" (buildWork args inputs)
-       mapM_ (\f ->
-                do let ofile = odir </> f
-                   it ("should write " ++ ofile) $
-                     doesFileExist ofile `shouldReturn` True)
-             outputs
+    it "should write to output" $
+       pendingInputsForWindowsOr inputs $
+         mapM_ (\f ->
+                  do buildWork args inputs
+                     doesFileExist (odir </> f) `shouldReturn` True)
+               outputs
 
 buildFiles :: [String] -> [FilePath] -> Spec
 buildFiles pre inputs =
   describe (labelWithOptionsAndFiles pre inputs) $
-    it "should compile successfully" (buildWork pre inputs)
+    it "should compile successfully" $
+      pendingInputsForWindowsOr inputs $
+          buildWork pre inputs
+
+pendingInputsForWindowsOr :: [String] -> Expectation -> Expectation
+pendingInputsForWindowsOr inputs spec =
+  if os == "mingw32" && any (`elem` pendingInputsUnderWindows) inputs
+    then pendingWith "pending under Windows"
+    else spec
+
+-- Compilation of modules containing macro expansion is not working well under
+-- Windows, pending for now.
+pendingInputsUnderWindows :: [String]
+pendingInputsUnderWindows = ["main4.fnk", "main8.fnk", "main9.fnk", "P1"]
 
 buildFilesNG :: [String] -> [FilePath] -> Spec
 buildFilesNG pre inputs =
@@ -429,7 +442,11 @@ buildRecompile main_mod files1 files2 before_str after_str =
           is_travis <- lookupEnv "TRAVIS"
           if isJust is_travis && os == "darwin"
             then pendingWith "not supported under Travis OSX"
-            else do_work tmpdir
+            else if os == "mingw32"
+              -- XXX: Recompile tests not working well under Windows, pending
+              -- for now.
+              then pendingWith "recompile tests pending under Windows"
+              else do_work tmpdir
 
       do_work tmpdir = do
         -- Running with files1 twice to see compilation avoidance.
