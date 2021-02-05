@@ -1,9 +1,9 @@
 module EmitTest where
 
 -- ghc
-import FastString                   (fsLit)
-import RdrName                      (mkVarUnqual)
-import SrcLoc                       (GenLocated (..), noSrcSpan)
+import FastString            (fsLit)
+import RdrName               (mkVarUnqual)
+import SrcLoc                (GenLocated (..), noSrcSpan)
 
 -- hspec
 import Test.Hspec
@@ -12,7 +12,9 @@ import Test.Hspec
 import Language.Finkel.Emit
 import Language.Finkel.Fnk
 import Language.Finkel.Lexer
-import Language.Finkel.SpecialForms
+
+-- Internal
+import TestAux
 
 emitTests :: Spec
 emitTests = do
@@ -27,6 +29,6 @@ emitTests = do
       x `shouldBe` "foo"
 
 emitSimple :: HsSrc a => a -> IO String
-emitSimple h = runFnk (genHsSrc sp h) defaultFnkEnv
+emitSimple h = runFnk (genHsSrc sp h) fnkTestEnv
   where
     sp = initialSPState (fsLit "<EmitTest>") 0 0

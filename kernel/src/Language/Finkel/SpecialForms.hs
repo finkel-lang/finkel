@@ -66,8 +66,6 @@ import Language.Finkel.Make            (findTargetModuleNameMaybe,
 import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModule)
 import Language.Finkel.Syntax.SynUtils (cL, dL)
 
-#include "finkel_kernel_config.h"
-
 
 -- ---------------------------------------------------------------------
 --
@@ -438,11 +436,7 @@ defaultFnkEnv :: FnkEnv
 defaultFnkEnv = emptyFnkEnv
   { envMacros         = specialForms
   , envDefaultMacros  = specialForms
-  , envLibDir         = Just libdir }
- where
-   -- CPP macro defined in "finkel_kernel_config.h", see "Setup.hs"
-   -- for detail.
-   libdir = FINKEL_KERNEL_LIBDIR
+  }
 
 
 -- ---------------------------------------------------------------------

@@ -6,43 +6,41 @@ module MakeTest
   ) where
 
 -- base
-import Control.Exception            (SomeException (..), catch)
-import Control.Monad                (unless, when)
-import Control.Monad.IO.Class       (MonadIO (..))
-import Data.List                    (isPrefixOf, tails)
-import Data.Maybe                   (isJust)
-import GHC.Exts                     (unsafeCoerce#)
-import System.Environment           (lookupEnv)
-import System.FilePath              ((<.>), (</>))
-import System.Info                  (os)
+import Control.Exception      (SomeException (..), catch)
+import Control.Monad          (unless, when)
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.List              (isPrefixOf, tails)
+import Data.Maybe             (isJust)
+import GHC.Exts               (unsafeCoerce#)
+import System.Environment     (lookupEnv)
+import System.FilePath        ((<.>), (</>))
+import System.Info            (os)
 
 -- directory
-import System.Directory             (copyFile, createDirectoryIfMissing,
-                                     doesFileExist, getDirectoryContents,
-                                     getTemporaryDirectory,
-                                     removeDirectoryRecursive)
+import System.Directory       (copyFile, createDirectoryIfMissing,
+                               doesFileExist, getDirectoryContents,
+                               getTemporaryDirectory, removeDirectoryRecursive)
 
 -- filepath
-import System.FilePath              (takeExtension)
+import System.FilePath        (takeExtension)
 
 -- ghc
-import DynFlags                     (DynFlags (..), HasDynFlags (..), Way (..),
-                                     dynamicGhc, interpWays,
-                                     parseDynamicFlagsCmdLine)
-import FastString                   (fsLit)
-import GHC                          (setTargets)
-import GhcMonad                     (GhcMonad (..))
-import HscTypes                     (Target (..), TargetId (..))
-import Linker                       (unload)
-import Module                       (componentIdToInstalledUnitId, mkModuleName)
-import Outputable                   (Outputable (..), showPpr, showSDoc)
-import Packages                     (InstalledPackageInfo (..), PackageConfig,
-                                     PackageName (..), lookupInstalledPackage,
-                                     lookupPackageName, pprPackageConfig)
-import SrcLoc                       (noLoc)
+import DynFlags               (DynFlags (..), HasDynFlags (..), Way (..),
+                               dynamicGhc, interpWays, parseDynamicFlagsCmdLine)
+import FastString             (fsLit)
+import GHC                    (setTargets)
+import GhcMonad               (GhcMonad (..))
+import HscTypes               (Target (..), TargetId (..))
+import Linker                 (unload)
+import Module                 (componentIdToInstalledUnitId, mkModuleName)
+import Outputable             (Outputable (..), showPpr, showSDoc)
+import Packages               (InstalledPackageInfo (..), PackageConfig,
+                               PackageName (..), lookupInstalledPackage,
+                               lookupPackageName, pprPackageConfig)
+import SrcLoc                 (noLoc)
 
 -- process
-import System.Process               (readProcess)
+import System.Process         (readProcess)
 
 -- hspec
 import Test.Hspec
@@ -52,7 +50,6 @@ import Language.Finkel.Eval
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Make
-import Language.Finkel.SpecialForms
 import Language.Finkel.Syntax
 
 -- Internal
@@ -199,13 +196,13 @@ doUnload :: IO ()
 doUnload = return ()
 #else
 -- Persistent linker state is a global IORef.
-doUnload = runFnk (getSession >>= liftIO . flip unload []) defaultFnkEnv
+doUnload = runFnk (getSession >>= liftIO . flip unload []) fnkTestEnv
 #endif
 
 -- Action to decide whether profiling objects for the "finkel-kernel" package
 -- are available at runtime.
 hasProfilingObj :: IO Bool
-hasProfilingObj = runFnk (hasProfilingObj' pkg_name) defaultFnkEnv
+hasProfilingObj = runFnk (hasProfilingObj' pkg_name) fnkTestEnv
   where
     pkg_name = PackageName (fsLit "finkel-kernel")
 
@@ -264,7 +261,7 @@ asModuleNameTest =
 
 runOutputable :: (MonadIO m, Outputable a) => a -> m String
 runOutputable obj =
-  liftIO $ runFnk (flip showPpr obj <$> getDynFlags) defaultFnkEnv
+  liftIO $ runFnk (flip showPpr obj <$> getDynFlags) fnkTestEnv
 
 pprTargetTest :: Spec
 pprTargetTest =
@@ -388,7 +385,7 @@ buildReload the_file fname files1 files2 before_str after_str =
        (ret1, ret2) <- runFnk (fnk_work use_obj tmpdir) reloadFnkEnv
        (ret1, ret2) `shouldBe` (before_str, after_str)
 
-    reloadFnkEnv = defaultFnkEnv {envVerbosity = 3}
+    reloadFnkEnv = fnkTestEnv {envVerbosity = 3}
 
     fnk_work use_obj tmpdir = do
       setup_reload_env use_obj tmpdir

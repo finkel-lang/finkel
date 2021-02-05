@@ -76,7 +76,7 @@ import           Control.Monad.Fail     (MonadFail (..))
 
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Bits              (setBit, testBit, zeroBits)
-import           Data.Char              (toLower)
+import           Data.Char              (isSpace, toLower)
 import           Data.IORef             (IORef, atomicModifyIORef',
                                          atomicWriteIORef, newIORef, readIORef)
 import           Data.List              (isPrefixOf, partition)
@@ -90,8 +90,16 @@ import           System.IO.Unsafe       (unsafePerformIO)
 -- containers
 import qualified Data.Map               as Map
 
+import           System.Directory       (canonicalizePath, doesFileExist,
+                                         findExecutable)
+import           System.FilePath        (takeDirectory, (</>))
+
+-- process
+import           System.Process         (readProcess)
+
 -- ghc
 import           Bag                    (unitBag)
+import           Config                 (cProjectVersion)
 import           DynFlags               (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
                                          HscTarget (..), gopt, gopt_set,
@@ -320,7 +328,43 @@ runFnk :: Fnk a -> FnkEnv -> IO a
 runFnk m fnk_env = do
   us <- mkSplitUniqSupply '_'
   ref <- newIORef $! fnk_env {envUniqSupply=us}
-  runGhc (envLibDir fnk_env) (toGhc m (FnkEnvRef ref))
+  libdir <- case envLibDir fnk_env of
+    Just path -> return path
+    Nothing   -> getLibDirFromGhc
+  runGhc (Just libdir) (toGhc m (FnkEnvRef ref))
+
+-- | Get ghc lib directory by file layout lookup or invoking @ghc
+-- --print-libdir@.
+getLibDirFromGhc :: IO FilePath
+getLibDirFromGhc = do
+  -- Manually lookup the path of "ghc" executable, then try finding the
+  -- "settings" file in installed ghc. Assuming file layouts are:
+  -- is located at:
+  --
+  --   .../bin/ghc        <- symlink to ghc wrapper script
+  --   .../lib/ghc-X.Y.Z  <- $topdir
+  --
+  -- To confirm that the "ghc-X.Y.Z" is indeed the library directory to return,
+  -- checking the existence of "settings" file in the directory.  If the
+  -- "settings" file was not found, delegating the work by invoking the "ghc"
+  -- command with "--print-libdir". This is slower than additional directory and
+  -- file lookups, but should be safer and more reliable.
+  --
+  -- See "GHC.BaseDir.getBaseDir" in "ghc-boot" package, which is doing similar
+  -- work but using "getExecutablePath".
+  mb_ghc_script <- findExecutable "ghc" >>= mapM canonicalizePath
+  case mb_ghc_script of
+    Nothing -> throwIO (FinkelException "cannot find ghc in current PATH")
+    Just ghc_script -> do
+      let ghc_top_dir = takeDirectory (takeDirectory ghc_script)
+          ghc_lib_dir = ghc_top_dir </> "lib" </> "ghc-" ++ cProjectVersion
+      settings_found <- doesFileExist (ghc_lib_dir </> "settings")
+      if settings_found
+         then return ghc_lib_dir
+         else do
+           out  <- readProcess "ghc" ["--print-libdir"] ""
+           return (reverse (dropWhile isSpace (reverse out)))
+{-# INLINE getLibDirFromGhc #-}
 
 -- | Extract 'Ghc' from 'Fnk'.
 toGhc :: Fnk a -> FnkEnvRef -> Ghc a

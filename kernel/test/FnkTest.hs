@@ -29,6 +29,8 @@ import           Language.Finkel.Reader
 import           Language.Finkel.SpecialForms
 import           Language.Finkel.Syntax
 
+import           TestAux
+
 fnkTests :: Spec
 fnkTests = do
   exceptionTest
@@ -67,20 +69,20 @@ exceptionTest = do
   describe "Applicative instance of Fnk" $
     it "should return 42" $ do
       let act = (*) <$> pure 6 <*> pure 7
-      ret <- runFnk act defaultFnkEnv
+      ret <- runFnk act fnkTestEnv
       ret `shouldBe` (42 :: Int)
 
   describe "ExceptionMonad instance of Fnk" $
     it "should return 42" $ do
       let act = gbracket (return 21) return (\x -> return (x * 2))
-      ret <- runFnk act defaultFnkEnv
+      ret <- runFnk act fnkTestEnv
       ret `shouldBe` (42 :: Int)
 
   describe "Handling FinkelException" $
     it "should return 42" $ do
       let act = handleFinkelException (\_ -> return (42 :: Int))
                                   (liftIO (throwIO (FinkelException "")))
-      ret <- runFnk act defaultFnkEnv
+      ret <- runFnk act fnkTestEnv
       ret `shouldBe` 42
 
   describe "running Fnk action containing `failS'" $
@@ -88,21 +90,21 @@ exceptionTest = do
       let p :: FinkelException -> Bool
           p (FinkelException m) = m == "foo"
           act = failS "foo"
-      runFnk act defaultFnkEnv `shouldThrow` p
+      runFnk act fnkTestEnv `shouldThrow` p
 
   describe "running Fnk action containing `fail'" $
     it "should throw FinkelException" $ do
       let p :: FinkelException -> Bool
           p (FinkelException m) = m == "foo"
           act = MonadFail.fail "foo"
-      runFnk act defaultFnkEnv `shouldThrow` p
+      runFnk act fnkTestEnv `shouldThrow` p
 
   describe "running Fnk action containing SourceError" $
     it "should throw SourceError" $ do
       let act = finkelSrcError nil "foo"
           p :: SourceError -> Bool
           p = const True
-      runFnk act defaultFnkEnv `shouldThrow` p
+      runFnk act fnkTestEnv `shouldThrow` p
 
   describe "applying macroNames to specialForms" $
     it "should not return name of special forms" $ do
@@ -114,7 +116,7 @@ exceptionTest = do
       let form = "(:: foo ->) (= foo 100)"
           sel :: SourceError -> Bool
           sel _ = True
-          run a = runFnk a defaultFnkEnv
+          run a = runFnk a fnkTestEnv
           form' = stringToStringBuffer form
           build = do (form'', _) <- parseSexprs Nothing form'
                      buildHsSyn parseDecls form''
@@ -126,7 +128,7 @@ fromGhcTest =
     it "should return the returned value in Ghc" $ do
       let v :: Int
           v = 42
-      x <- runFnk (fromGhc (return v)) defaultFnkEnv
+      x <- runFnk (fromGhc (return v)) fnkTestEnv
       x `shouldBe` v
 
 gensymTest :: Spec
@@ -226,4 +228,4 @@ emptyForm =
   in  LForm (genSrc (List [bgn]))
 
 cleanFnkEnv :: FnkEnv
-cleanFnkEnv = defaultFnkEnv {envDefaultMacros = emptyEnvMacros}
+cleanFnkEnv = fnkTestEnv {envDefaultMacros = emptyEnvMacros}

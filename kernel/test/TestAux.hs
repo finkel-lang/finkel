@@ -4,6 +4,7 @@ module TestAux
   ( initSessionForTest
   , removeArtifacts
   , runDefaultMain
+  , fnkTestEnv
   ) where
 
 -- base
@@ -28,7 +29,8 @@ import           DynFlags               (DynFlags (..), HasDynFlags (..),
 import           SrcLoc                 (noLoc)
 
 -- fnk-kernel
-import           Language.Finkel.Fnk    (Fnk, setDynFlags)
+import           Language.Finkel        (defaultFnkEnv)
+import           Language.Finkel.Fnk    (Fnk, FnkEnv (..), setDynFlags)
 import           Language.Finkel.Main   (defaultMain)
 import           Language.Finkel.Make   (initSessionForMake)
 import qualified Paths_finkel_kernel
@@ -138,3 +140,7 @@ runDefaultMain args =
            (\e -> case fromException e of
                Just ExitSuccess -> return ()
                _                -> print e >> throw e)
+
+-- | The 'FnkEnv' used for test. Has 'envLibDir' field from CPP header file.
+fnkTestEnv :: FnkEnv
+fnkTestEnv = defaultFnkEnv {envLibDir = Just FINKEL_KERNEL_LIBDIR}
