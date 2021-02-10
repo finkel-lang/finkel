@@ -30,6 +30,10 @@
     (do (print (+ x y))
         (print (+ a b)))))
 
+(:: bp06 (-> Int (IO ())))
+(= bp06 !name-with-hyphens
+  (print name-with-hyphens))
+
 (:: non-bp01 (-> Int (IO ())))
 (= non-bp01 n
   (let ((= ! a b (+ a b)))

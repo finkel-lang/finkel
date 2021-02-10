@@ -57,8 +57,9 @@ import           Encoding                   (utf8DecodeByteString)
 import           FastString                 (FastString,
                                              fsLit, headFS, nullFS,
                                              mkFastStringByteString,
-                                             unpackFS)
-import           Lexeme                     (startsConSym, startsVarSym)
+                                             tailFS, unpackFS)
+import           Lexeme                     (startsConSym, startsVarId,
+                                             startsVarSym)
 import           SrcLoc                     (GenLocated(..), Located,
                                              RealSrcLoc, SrcLoc(..),
                                              SrcSpan(..), advanceSrcLoc,
@@ -565,11 +566,19 @@ tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
 tok_symbol :: Action
 tok_symbol (AlexInput _ buf) l =
   let fs0 = takeUtf8FS l buf
-      fs1 | startsVarSym c || startsConSym c = fs0
+      fs1 | c == '!', secondIsStartsVarId fs0 = replaceHyphens fs0
+          | startsVarSym c || startsConSym c = fs0
           | otherwise = replaceHyphens fs0
           where c = currentChar buf
   in  fs0 `seq` fs1 `seq` return $! TSymbol fs1
 {-# INLINE tok_symbol #-}
+
+secondIsStartsVarId :: FastString -> Bool
+secondIsStartsVarId fs0 =
+  let fs1 = tailFS fs0
+      c = headFS fs1
+  in  not (nullFS fs0) && not (nullFS fs1) && startsVarId c
+{-# INLINE secondIsStartsVarId #-}
 
 replaceHyphens :: FastString -> FastString
 replaceHyphens =
