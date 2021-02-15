@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 -- | Tests for "Language.Finkel.Main"
 module MainTest
-  ( mainTests
+  ( mainFnkTests
   ) where
 
 -- base
@@ -16,8 +16,8 @@ import Test.Hspec
 -- Internal
 import TestAux
 
-mainTests :: Spec
-mainTests =
+mainFnkTests :: FnkSpec
+mainFnkTests =
   beforeAll_ (removeArtifacts odir) $ do
     let common_flags = ["-v0", "-fno-code"]
     compileFile common_flags "m001.fnk"
@@ -30,53 +30,52 @@ mainTests =
     finkelInfoTest
     finkelUnknownFlagTest
 
-compileFile :: [String] -> FilePath -> Spec
+compileFile :: [String] -> FilePath -> FnkSpec
 compileFile args file = describe ("file " ++ file) $
-  it "should compile successfully" $
-    runDefaultMain (args ++ pure (odir </> file)) `shouldReturn` ()
+  it "should compile successfully" $ \ftr ->
+    ftr_main ftr (args ++ pure (odir </> file))
 
-rawGhcTest :: Spec
+rawGhcTest :: FnkSpec
 rawGhcTest =
   trivialTest "option --version"
               "should show project-version"
               ["--version"]
 
-finkelHelpTest :: Spec
+finkelHelpTest :: FnkSpec
 finkelHelpTest =
   trivialTest "option --fnk-help"
               "should show Finkel help"
               ["--fnk-help"]
 
-finkelVersionTest :: Spec
+finkelVersionTest :: FnkSpec
 finkelVersionTest =
   trivialTest "option --fnk-version"
               "should show finkel-kernel package version"
               ["--fnk-version"]
 
-finkelSupportedLanguagesTest :: Spec
+finkelSupportedLanguagesTest :: FnkSpec
 finkelSupportedLanguagesTest =
   trivialTest "option --fnk-languages"
               "should show supported language extensions"
               ["--fnk-languages"]
 
-finkelInfoTest :: Spec
+finkelInfoTest :: FnkSpec
 finkelInfoTest =
   trivialTest "option --info"
               "should show info of DynFlags"
               ["--info"]
 
-finkelUnknownFlagTest :: Spec
+finkelUnknownFlagTest :: FnkSpec
 finkelUnknownFlagTest =
   describe "invalid flag" $ do
-    it "should exit with failure with unknown flag" $
-      runDefaultMain ["--fnk-foo"] `shouldThrow` (== ExitFailure 1)
-    it "should exit with failure with invalid verbosity level" $
-      runDefaultMain ["--fnk-verbose=foo"] `shouldThrow` (== ExitFailure 1)
+    it "should exit with failure with unknown flag" $ \ftr ->
+      ftr_main ftr ["--fnk-foo"] `shouldThrow` (== ExitFailure 1)
+    it "should exit with failure with invalid verbosity level" $ \ftr ->
+      ftr_main ftr ["--fnk-verbose=foo"] `shouldThrow` (== ExitFailure 1)
 
-
-trivialTest :: String -> String -> [String] -> Spec
+trivialTest :: String -> String -> [String] -> FnkSpec
 trivialTest desc label flags = describe desc $
-  it label (runDefaultMain flags `shouldReturn` ())
+  it label (\ftr -> ftr_main ftr flags)
 
 odir :: FilePath
 odir = "test" </> "data" </> "main"

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | Module for source code file path look up.
 module Language.Finkel.Make.TargetSource
   (
@@ -25,6 +26,8 @@ module Language.Finkel.Make.TargetSource
   , isHsFile
   ) where
 
+#include "ghc_modules.h"
+
 -- base
 import Control.Exception      (SomeException, try)
 import Control.Monad          (mplus)
@@ -40,15 +43,15 @@ import System.FilePath        (dropExtension, normalise, pathSeparator,
                                (<.>), (</>))
 
 -- ghc
-import DriverPhases           (Phase)
-import DynFlags               (DynFlags (..))
-import ErrUtils               (mkErrMsg)
-import HscTypes               (throwOneError)
-import Module                 (ModuleName, mkModuleName, moduleNameSlashes,
+import GHC_Driver_Phases      (Phase)
+import GHC_Driver_Session     (DynFlags (..))
+import GHC_Driver_Types       (throwOneError)
+import GHC_Types_SrcLoc       (GenLocated (..), Located)
+import GHC_Unit_Module        (ModuleName, mkModuleName, moduleNameSlashes,
                                moduleNameString)
-import Outputable             (Outputable (..), neverQualify, sep, text)
-import SrcLoc                 (GenLocated (..), Located)
-import Util                   (looksLikeModuleName)
+import GHC_Utils_Error        (mkErrMsg)
+import GHC_Utils_Misc         (looksLikeModuleName)
+import GHC_Utils_Outputable   (Outputable (..), neverQualify, sep, text)
 
 
 -- ---------------------------------------------------------------------

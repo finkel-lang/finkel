@@ -10,7 +10,7 @@ module Language.Finkel.SpecialForms
   , defaultFnkEnv
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
 import Control.Monad                   (foldM, unless, when)
@@ -21,37 +21,44 @@ import GHC.Exts                        (unsafeCoerce#)
 -- containers
 import Data.Map                        (fromList)
 
+-- exceptions
+import Control.Monad.Catch             (bracket)
+
 -- ghc
-import DynFlags                        (DynFlags (..), GeneralFlag (..),
-                                        getDynFlags, unSetGeneralFlag')
-import ErrUtils                        (MsgDoc, compilationProgressMsg)
-import Exception                       (gbracket)
-import FastString                      (FastString, fsLit, unpackFS)
-import Finder                          (findImportedModule)
 import GHC                             (ModuleInfo, getModuleInfo, lookupModule,
                                         lookupName, modInfoExports, setContext)
-import GHC_Hs                          (HsModule (..))
-import GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
-import GhcMonad                        (GhcMonad (..), modifySession)
-import HscMain                         (Messager, hscTcRnLookupRdrName,
+import GHC_Core_TyCo_Rep               (TyThing (..))
+import GHC_Data_FastString             (FastString, fsLit, unpackFS)
+import GHC_Driver_Finder               (findImportedModule)
+import GHC_Driver_Main                 (Messager, hscTcRnLookupRdrName,
                                         showModuleIndex)
-import HscTypes                        (FindResult (..), HscEnv (..),
+import GHC_Driver_Monad                (GhcMonad (..), modifySession)
+import GHC_Driver_Session              (DynFlags (..), GeneralFlag (..),
+                                        getDynFlags, unSetGeneralFlag')
+import GHC_Driver_Types                (FindResult (..), HscEnv (..),
                                         InteractiveImport (..), ModSummary (..),
                                         ModuleGraph, lookupHpt, showModMsg)
-import InteractiveEval                 (getContext)
-import MkIface                         (RecompileRequired (..),
+import GHC_Hs                          (HsModule (..))
+import GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
+import GHC_Iface_Recomp                (RecompileRequired (..),
                                         recompileRequired)
-import Module                          (Module, moduleNameString)
-import Name                            (nameOccName, occName)
-import OccName                         (occNameFS)
-import Outputable                      (hcat, ppr, showPpr)
-import RdrName                         (rdrNameOcc)
-import SrcLoc                          (GenLocated (..), SrcSpan, unLoc)
-import TyCoRep                         (TyThing (..))
-import Var                             (varName)
+import GHC_Runtime_Eval                (getContext)
+import GHC_Types_Basic                 (SourceText (..))
+import GHC_Types_Name                  (nameOccName, occName)
+import GHC_Types_Name_Occurrence       (occNameFS)
+import GHC_Types_Name_Reader           (rdrNameOcc)
+import GHC_Types_SrcLoc                (GenLocated (..), SrcSpan (..), unLoc)
+import GHC_Types_Var                   (varName)
+import GHC_Unit_Module                 (Module, moduleNameString)
+import GHC_Utils_Error                 (MsgDoc, compilationProgressMsg)
+import GHC_Utils_Outputable            (hcat, ppr, showPpr)
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Types_SrcLoc                (UnhelpfulSpanReason (..))
+#endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import HscTypes                        (mgLookupModule)
+import GHC_Driver_Types                (mgLookupModule)
 #endif
 
 -- Internal
@@ -66,6 +73,11 @@ import Language.Finkel.Make            (findTargetModuleNameMaybe,
 import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModule)
 import Language.Finkel.Syntax.SynUtils (cL, dL)
 
+#if MIN_VERSION_ghc(9,0,0)
+#define _MB_BUF_POS _
+#else
+#define _MB_BUF_POS {- empty -}
+#endif
 
 -- ---------------------------------------------------------------------
 --
@@ -87,21 +99,24 @@ quasiquote qual orig@(LForm (L l form)) =
     List forms'
       | [q, body] <- forms'
       , q == tSym l ":quasiquote"  -> qq (qq body)
-      | any isUnquoteSplice forms' -> splicedList qListS forms'
-      | otherwise                  -> nonSplicedList qListS forms'
+      | any isUnquoteSplice forms' -> spliced qListS forms'
+      | otherwise                  -> nonSpliced qListS forms'
     HsList forms'
-      | any isUnquoteSplice forms' -> splicedList qHsListS forms'
-      | otherwise                  -> nonSplicedList qHsListS forms'
+      | any isUnquoteSplice forms' -> spliced qHsListS forms'
+      | otherwise                  -> nonSpliced qHsListS forms'
     Atom _                         -> tList l [tSym l ":quote", orig]
     TEnd                           -> orig
   where
-   splicedList tag forms =
+   spliced tag forms =
      tList l [ tSym l (tag qual)
              , tList l [ tSym l (concatS qual)
-                       , tHsList l (go [] forms)]]
-   nonSplicedList tag forms =
+                       , tHsList l (go [] forms) ]
+             , fname, sl, sc, el, ec ]
+   nonSpliced tag forms =
      tList l [ tSym l (tag qual)
-             , tHsList l (map qq forms)]
+             , tHsList l (map qq forms)
+             , fname, sl, sc, el, ec ]
+   (fname, sl, sc, el, ec) = withLocInfo l (tString qq_l) (tInt qq_l)
    go acc forms =
      let (pre, post) = break isUnquoteSplice forms
      in  case post of
@@ -113,6 +128,11 @@ quasiquote qual orig@(LForm (L l form)) =
            _ | null pre  -> acc
              | otherwise -> acc ++ [tHsList l (map qq pre)]
    qq = quasiquote qual
+#if MIN_VERSION_ghc(9,0,0)
+   qq_l = UnhelpfulSpan (UnhelpfulOther (fsLit "<quasiquote>"))
+#else
+   qq_l = UnhelpfulSpan (fsLit "<quasiquote>")
+#endif
 
 isUnquoteSplice :: Code -> Bool
 isUnquoteSplice (LForm form) =
@@ -220,7 +240,7 @@ setRequiredSettings = do
 
 withRequiredSettings :: Fnk a -> Fnk a
 withRequiredSettings act =
-  gbracket
+  bracket
     (do dflags <- getDynFlags
         fnk_env <- getFnkEnv
         return (dflags, fnk_env))
@@ -448,6 +468,14 @@ defaultFnkEnv = emptyFnkEnv
 tSym :: SrcSpan -> FastString -> Code
 tSym l s = LForm (L l (Atom (ASymbol s)))
 {-# INLINE tSym #-}
+
+tString :: SrcSpan -> FastString -> Code
+tString l s = LForm (L l (Atom (AString (SourceText (show s)) s)))
+{-# INLINE tString #-}
+
+tInt :: SrcSpan -> Int -> Code
+tInt l i = LForm (L l (Atom (AInteger (mkIntegralLit i))))
+{-# INLINE tInt #-}
 
 tList :: SrcSpan -> [Code] -> Code
 tList l forms = LForm (L l (List forms))

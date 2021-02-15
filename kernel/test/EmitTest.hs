@@ -1,9 +1,13 @@
+{-# LANGUAGE CPP #-}
+
 module EmitTest where
 
+#include "ghc_modules.h"
+
 -- ghc
-import FastString            (fsLit)
-import RdrName               (mkVarUnqual)
-import SrcLoc                (GenLocated (..), noSrcSpan)
+import GHC_Data_FastString   (fsLit)
+import GHC_Types_Name_Reader (mkVarUnqual)
+import GHC_Types_SrcLoc      (GenLocated (..), noSrcSpan)
 
 -- hspec
 import Test.Hspec

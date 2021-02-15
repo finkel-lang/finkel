@@ -6,46 +6,38 @@
 module Language.Finkel.Syntax.HType where
 
 #include "Syntax.h"
-
+#include "ghc_modules.h"
 
 -- base
 import Data.List                       (foldl')
 
 -- ghc
-import BasicTypes                      (Boxity (..), SourceText (..))
-import FastString                      (headFS, lengthFS, nullFS, tailFS)
+import GHC_Builtin_Types               (consDataCon, listTyCon_RDR, tupleTyCon)
+import GHC_Data_FastString             (headFS, lengthFS, nullFS)
 import GHC_Hs_Doc                      (LHsDocString)
-import GHC_Hs_Types                    (HsSrcBang (..), HsTupleSort (..),
-                                        HsTyLit (..), HsType (..), LHsTyVarBndr,
+import GHC_Hs_Type                     (HsSrcBang (..), HsTupleSort (..),
+                                        HsTyLit (..), HsType (..),
                                         SrcStrictness (..),
                                         SrcUnpackedness (..), mkAnonWildCardTy,
                                         mkHsAppTy, mkHsOpTy)
-import Lexeme                          (isLexCon, isLexConSym, isLexVarSym)
-import OccName                         (dataName, tcName, tvName)
-import RdrName                         (getRdrName, mkQual, mkUnqual)
-import SrcLoc                          (GenLocated (..), Located, addCLoc,
+import GHC_Types_Basic                 (Boxity (..), SourceText (..))
+import GHC_Types_Name_Occurrence       (dataName, tcName, tvName)
+import GHC_Types_Name_Reader           (getRdrName, mkQual, mkUnqual)
+import GHC_Types_SrcLoc                (GenLocated (..), Located, addCLoc,
                                         getLoc)
-import TysPrim                         (funTyCon)
-import TysWiredIn                      (consDataCon, listTyCon_RDR, tupleTyCon)
+import GHC_Utils_Lexeme                (isLexCon, isLexConSym, isLexVarSym)
 
-#if MIN_VERSION_ghc(8,10,0)
-import Var                             (ForallVisFlag (..))
-#endif
-
-#if MIN_VERSION_ghc(8,8,0)
-import BasicTypes                      (PromotionFlag (..))
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Builtin_Types               (unrestrictedFunTyCon)
 #else
-import GHC_Hs_Types                    (Promoted (..))
+import GHC_Builtin_Types_Prim          (funTyCon)
 #endif
 
-#if MIN_VERSION_ghc(8,8,0)
-import TysWiredIn                      (eqTyCon_RDR)
-#else
-import PrelNames                       (eqTyCon_RDR)
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Types                    (parenthesizeHsType)
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Hs_Type                     (HsArrow (..), mkHsForAllInvisTele)
+import GHC_Parser_Annotation           (IsUnicodeSyntax (..))
+#elif MIN_VERSION_ghc(8,10,0)
+import GHC_Types_Var                   (ForallVisFlag (..))
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -56,7 +48,17 @@ import GHC_Hs_Extension                (noExt)
 import PlaceHolder                     (placeHolderKind)
 #endif
 
-#if !MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(8,8,0)
+import GHC_Builtin_Types               (eqTyCon_RDR)
+import GHC_Types_Basic                 (PromotionFlag (..))
+#else
+import GHC_Hs_Type                     (Promoted (..))
+import PrelNames                       (eqTyCon_RDR)
+#endif
+
+#if MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Type                     (parenthesizeHsType)
+#else
 import TysWiredIn                      (starKindTyCon)
 #endif
 
@@ -169,8 +171,17 @@ b_funT (LForm (L l _)) ts =
     _            -> return (foldr1 f ts)
   where
     f a b = addCLoc a b (hsFunTy (parenthesizeHsType' funPrec a) b)
+#if MIN_VERSION_ghc(9,0,0)
+    -- XXX: Does not support linear type and unicode syntax.
+    hsFunTy = HsFunTy NOEXT (HsUnrestrictedArrow NormalSyntax)
+#else
     hsFunTy = HsFunTy NOEXT
+#endif
+#if MIN_VERSION_ghc(9,0,0)
+    funty = L l (hsTyVar NotPromoted (L l (getRdrName unrestrictedFunTyCon)))
+#else
     funty = L l (hsTyVar NotPromoted (L l (getRdrName funTyCon)))
+#endif
 {-# INLINE b_funT #-}
 
 b_tyLitT :: Code -> Builder HType
@@ -252,7 +263,7 @@ b_bangT (LForm (L l _)) t = L l (hsBangTy srcBang (parTyApp t))
     srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
 {-# INLINE b_bangT #-}
 
-b_forallT :: Code -> ([HTyVarBndr], ([HType], HType)) -> HType
+b_forallT :: Code -> ([HTyVarBndrSpecific], ([HType], HType)) -> HType
 b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
   let ty0 = cL l0 (mkHsQualTy_compat (mkLocatedList ctxts) body)
 #if MIN_VERSION_ghc(8,4,0)
@@ -331,16 +342,22 @@ hsBangTy :: HsSrcBang -> HType -> HsType PARSED
 hsBangTy = HsBangTy NOEXT
 {-# INLINE hsBangTy #-}
 
-forAllTy :: [LHsTyVarBndr PARSED] -> HType -> HsType PARSED
+forAllTy :: [HTyVarBndrSpecific] -> HType -> HsType PARSED
 forAllTy bndrs body =
-  HsForAllTy { hst_bndrs = bndrs
+  HsForAllTy { hst_body = body
+#if MIN_VERSION_ghc(9,0,0)
+             , hst_tele = mkHsForAllInvisTele bndrs
+#else
+             , hst_bndrs = bndrs
 #if MIN_VERSION_ghc(8,10,0)
              , hst_fvf = ForallInvis
 #endif
+#endif
+
 #if MIN_VERSION_ghc(8,6,0)
              , hst_xforall = NOEXT
 #endif
-             , hst_body = body }
+             }
 {-# INLINE forAllTy #-}
 
 hsParTy :: HType -> HsType PARSED

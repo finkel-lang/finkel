@@ -6,16 +6,17 @@
 module Language.Finkel.Syntax.HExpr where
 
 #include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
 import Data.List                       (foldl', foldl1')
 import Data.Maybe                      (fromMaybe)
 
 -- ghc
-import BasicTypes                      (Arity, Boxity (..), FractionalLit (..),
-                                        Origin (..), SourceText (..))
-import FastString                      (FastString, headFS, lengthFS, nullFS,
-                                        tailFS, unpackFS)
+import GHC_Builtin_Types               (tupleDataCon)
+import GHC_Data_FastString             (FastString, fsLit, headFS, lengthFS,
+                                        nullFS, unpackFS)
+import GHC_Data_OrdList                (toOL)
 import GHC_Hs_Doc                      (HsDocString)
 import GHC_Hs_Expr                     (ArithSeqInfo (..), GRHS (..),
                                         HsExpr (..), HsMatchContext (..),
@@ -23,25 +24,29 @@ import GHC_Hs_Expr                     (ArithSeqInfo (..), GRHS (..),
                                         Match (..), StmtLR (..))
 import GHC_Hs_Lit                      (HsLit (..), HsOverLit (..))
 import GHC_Hs_Pat                      (HsRecFields (..))
-import GHC_Hs_Types                    (mkHsWildCardBndrs)
-import GHC_Hs_Utils                    (mkBindStmt, mkBodyStmt, mkHsApp,
-                                        mkHsComp, mkHsDo, mkHsFractional,
-                                        mkHsIf, mkHsLam, mkLHsPar,
-                                        mkLHsSigWcType, mkLHsTupleExpr,
-                                        mkMatchGroup)
-import Lexeme                          (isLexCon, isLexSym, isLexVarId)
-import OrdList                         (toOL)
-import RdrHsSyn                        (mkRdrRecordCon, mkRdrRecordUpd)
-import RdrName                         (RdrName, getRdrName)
-import SrcLoc                          (GenLocated (..), Located, SrcSpan,
+import GHC_Hs_Type                     (mkHsWildCardBndrs)
+import GHC_Hs_Utils                    (mkBodyStmt, mkHsApp, mkHsComp, mkHsDo,
+                                        mkHsFractional, mkHsIf, mkHsLam,
+                                        mkLHsPar, mkLHsSigWcType,
+                                        mkLHsTupleExpr, mkMatchGroup)
+import GHC_Parser_PostProcess          (mkRdrRecordCon, mkRdrRecordUpd)
+import GHC_Types_Basic                 (Arity, Boxity (..), FractionalLit (..),
+                                        Origin (..), SourceText (..))
+import GHC_Types_Name_Reader           (RdrName, getRdrName)
+import GHC_Types_SrcLoc                (GenLocated (..), Located, SrcSpan (..),
                                         getLoc, noLoc)
-import TysWiredIn                      (tupleDataCon)
+import GHC_Utils_Lexeme                (isLexCon, isLexSym, isLexVarId)
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Hs_Utils                    (mkPsBindStmt)
+import GHC_Types_SrcLoc                (UnhelpfulSpanReason (..))
+#else
+import GHC_Hs_Utils                    (mkBindStmt)
+#endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import GHC_Hs_Expr                     (parenthesizeHsExpr)
 import GHC_Hs_Extension                (noExtField)
 #elif MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Expr                     (parenthesizeHsExpr)
 import GHC_Hs_Extension                (noExt)
 #else
 import GHC_Hs_Expr                     (isListCompExpr, noPostTcExpr)
@@ -49,12 +54,15 @@ import GHC_Hs_Lit                      (OverLitVal (..))
 import PlaceHolder                     (placeHolderType)
 #endif
 
+#if MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Expr                     (parenthesizeHsExpr)
+#endif
+
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Form
 import Language.Finkel.Syntax.SynUtils
 
-#include "Syntax.h"
 
 -- ---------------------------------------------------------------------
 --
@@ -129,7 +137,12 @@ b_GRHS = GRHS NOEXT
 {-# INLINE b_GRHS #-}
 
 b_doE :: Code -> [HStmt] -> HExpr
+#if MIN_VERSION_ghc(9,0,0)
+-- XXX: Does not support "[ModuleName.].do" syntax.
+b_doE (LForm (L l _)) exprs = L l (mkHsDo (DoExpr Nothing) exprs)
+#else
 b_doE (LForm (L l _)) exprs = L l (mkHsDo DoExpr exprs)
+#endif
 {-# INLINE b_doE #-}
 
 b_tsigE :: Code -> HExpr -> ([HType], HType) -> HExpr
@@ -148,7 +161,7 @@ b_tsigE (LForm (L l _)) e0 (ctxt,t) =
 {-# INLINE b_tsigE #-}
 
 b_recConOrUpdE :: Code -> [(Located FastString,HExpr)] -> Builder HExpr
-b_recConOrUpdE whole@ (LForm (L l form)) flds =
+b_recConOrUpdE whole@(LForm (L l form)) flds =
   case form of
     Atom (ASymbol name) | isLexCon name
       -> return (L l (mkRdrRecordCon (L l (mkVarRdrName name)) cflds))
@@ -332,31 +345,56 @@ b_quoteE (LForm (L l form)) = do
   qualify <- fmap qualifyQuote getBState
   case form of
     Atom atom -> b_quoteAtomE l qualify atom
-    List xs   -> b_quoteListE l (qListS qualify) xs
-    HsList xs -> b_quoteListE l (qHsListS qualify) xs
+    List xs   -> b_quoteLocListE l (qListS qualify) xs
+    HsList xs -> b_quoteLocListE l (qHsListS qualify) xs
     _         -> builderError
+{-# INLINE b_quoteE #-}
 
 b_quoteAtomE :: SrcSpan -> Bool -> Atom -> Builder HExpr
 b_quoteAtomE l qualify atom =
   case atom of
-    ASymbol s       -> mk_app qSymbolS (mk_sym s)
-    AChar st c      -> mk_app qCharS (L l (hsLit (HsChar st c)))
-    AString st str  -> mk_app qStringS (L l (hsLit (HsString st str)))
-    AInteger _il    -> b_integerE orig >>= mk_app qIntegerS
-    AFractional _fl -> b_fracE orig >>= mk_app qFractionalS
-    AUnit           -> b_varE (LForm (L l (Atom (ASymbol (qUnitS qualify)))))
+    ASymbol s       -> mk_lapp qSymbolS (mk_sym s)
+    AChar st c      -> mk_lapp qCharS (L l (hsLit (HsChar st c)))
+    AString st str  -> mk_lapp qStringS (mk_str st str)
+    AInteger _il    -> b_integerE orig >>= mk_lapp qIntegerS
+    AFractional _fl -> b_fracE orig >>= mk_lapp qFractionalS
+    AUnit           -> mk_unit
   where
-    orig = LForm (L l (Atom atom))
     mk_sym s = L l (hsLit (HsString (SourceText (show s)) s))
-    mk_app name arg = do
-      fn <- b_varE (LForm (L l (Atom (ASymbol (name qualify)))))
-      return (b_appE ([fn, arg], []))
+    mk_str st str = L l (hsLit (HsString st str))
+    orig = LForm (L l (Atom atom))
+    mk_lapp lname arg = do
+      let (fname, sl, sc, el, ec) = getLocInfo l
+      fn <- b_varE (LForm (L l (Atom (ASymbol (lname qualify)))))
+      return (b_appE ([fn, arg, fname, sl, sc, el, ec], []))
+    mk_unit = do
+      let (fname, sl, sc, el, ec) = getLocInfo l
+      fn <- b_varE (LForm (L l (Atom (ASymbol (qUnitS qualify)))))
+      return (b_appE ([fn, fname, sl, sc, el, ec], []))
+{-# INLINE b_quoteAtomE #-}
 
-b_quoteListE :: SrcSpan -> FastString -> [Code] -> Builder HExpr
-b_quoteListE l fn_name xs = do
+b_quoteLocListE :: SrcSpan -> FastString -> [Code] -> Builder HExpr
+b_quoteLocListE l fn_name xs = do
   mk_list <- b_varE (LForm (L l (Atom (ASymbol fn_name))))
-  arg <- fmap (b_hsListE . Right) (mapM b_quoteE xs)
-  return (b_appE ([mk_list, arg], []))
+  args <- fmap (b_hsListE . Right) (mapM b_quoteE xs)
+  let (fname, sl, sc, el, ec) = getLocInfo l
+  return (b_appE ([mk_list, args, fname, sl, sc, el, ec], []))
+{-# INLINE b_quoteLocListE #-}
+
+getLocInfo :: SrcSpan -> (HExpr, HExpr, HExpr, HExpr, HExpr)
+getLocInfo l = withLocInfo l fname mk_int
+  where
+    -- Using unhelpful location for file names, lines, and columns. Otherwise,
+    -- hpc code coverage will mark the location information as non-evaluated
+    -- expressions.
+    fname fs = L ql (hsLit (HsString (SourceText (show fs)) fs))
+    mk_int n = L ql $! hsOverLit $! mkHsIntegral_compat $! mkIntegralLit n
+#if MIN_VERSION_ghc(9,0,0)
+    ql = UnhelpfulSpan (UnhelpfulOther (fsLit "<b_quoteE>"))
+#else
+    ql = UnhelpfulSpan (fsLit "<b_quoteE>")
+#endif
+{-# INLINE getLocInfo #-}
 
 
 -- ------------------------------------------------------------------------
@@ -400,7 +438,11 @@ tupConName boxity arity = getRdrName (tupleDataCon boxity arity)
 -- ---------------------------------------------------------------------
 
 b_bindS :: Code -> HPat -> HExpr -> HStmt
+#if MIN_VERSION_ghc(9,0,0)
+b_bindS (LForm (L l _)) pat expr = L l (mkPsBindStmt pat expr)
+#else
 b_bindS (LForm (L l _)) pat expr = L l (mkBindStmt pat expr)
+#endif
 {-# INLINE b_bindS #-}
 
 b_letS :: Code -> [HDecl] -> Builder HStmt

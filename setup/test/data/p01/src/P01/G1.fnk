@@ -9,7 +9,8 @@
              (case (unCode form)
                (List [_ name arg body])
                (let ((= __name
-                       (toCode (qSymbol (++ "__" (show name))))))
+                       (toCode (qSymbol (++ "__" (show name))
+                                        "G1.fnk" 0 0 0 0))))
                  (return
                    `(:begin
                       (:: ,name Macro)

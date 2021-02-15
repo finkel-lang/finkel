@@ -51,7 +51,9 @@
             (= with-right form test
               (satisfy form (either (const False) test)))
             (= with-left form test
-              (satisfy form (either test (const False))))))
+              (satisfy form (either test (const False))))
+            (= with-left-subseq form str0
+              (satisfy form (either (isSubsequenceOf str0) (const False))))))
       (beforeAll_
        clear-m02-files
        (afterAll_
@@ -67,10 +69,10 @@
             (isSubsequenceOf "show this help"))
 
           ;; browse
-          (ok '(repl-macro browse Unsafe.Coerce)
-              "Unsafe.Coerce.unsafeCoerce :: a -> b")
-          (ng '(repl-macro browse foo bar)
-              "<quoted code>: error: browse: invalid form `foo'")
+          (with-right '(repl-macro browse Unsafe.Coerce)
+            (isSubsequenceOf "Unsafe.Coerce.unsafeCoerce :: a -> b"))
+          (with-left-subseq '(repl-macro browse foo bar)
+            "browse: invalid form `foo'")
 
           ;; cd
           (ok `(repl-macro cd ,current-dir) "")
@@ -84,8 +86,8 @@
                 (defn f (where g (defn g [x] (print (++ "g: " x))))))
               "(= f (where g (defn g [x] (print (++ \"g: \" x)))))")
           (ok '(repl-macro expand) "")
-          (ng '(repl-macro expand foo bar)
-              "<quoted code>: error: expand: invalid form `foo'")
+          (with-left-subseq '(repl-macro expand foo bar)
+            "expand: invalid form `foo'")
 
           ;; expand!
           (ok '(repl-macro expand!
@@ -106,8 +108,8 @@
           ;; kind
           (ok '(repl-macro kind Maybe)
               "Maybe :: * -> *")
-          (ng '(repl-macro kind (foo bar) buzz)
-              "<quoted code>: error: kind: invalid form `(foo bar)'")
+          (with-left-subseq '(repl-macro kind (foo bar) buzz)
+            "kind: invalid form `(foo bar)'")
 
           ;; pwd
           (ok '(repl-macro pwd) (show current-dir))
@@ -139,7 +141,7 @@
                 ";  ghcMode: CompManager"
                 ";  hscTarget: HscInterpreted"
                 ";  objectDir: Nothing"
-                ";  thisInstalledUnitId: main"
+                ";  homeUnitId: main"
                 ";  forceRecomp: False"]))
           (ok '(:begin
                 (repl-macro set -odir /tmp)
@@ -150,7 +152,7 @@
                 ";  ghcMode: CompManager"
                 ";  hscTarget: HscInterpreted"
                 ";  objectDir: Just \"/tmp\""
-                ";  thisInstalledUnitId: main"
+                ";  homeUnitId: main"
                 ";  forceRecomp: False"]))
           (ok '(repl-macro show hpt)
               "show: no home package table found")
@@ -194,8 +196,8 @@
               "(foldr + (:: 0 Int)) :: Foldable t => t Int -> Int")
           (ok '(repl-macro type 'x)
               "(:quote x) :: Language.Finkel.Form.Code")
-          (ng '(repl-macro type (foo bar) buzz)
-              "<quoted code>: error: type: invalid form `(foo bar)'")
+          (with-left-subseq '(repl-macro type (foo bar) buzz)
+            "type: invalid form `(foo bar)'")
 
           ;; verbose
           (ok '(repl-macro verbose) "Verbosity level is 1")
@@ -207,7 +209,7 @@
           ;; load and reload
           (let ((= m01-dot-fnk (testdata "m01.fnk"))))
           (ok `(:begin
-                 (repl-macro load ,(qSymbol m01-dot-fnk))
+                 (repl-macro load ,(make-symbol m01-dot-fnk))
                  main)
               "=== m01.fnk ===")
           (ok '(repl-macro reload)
@@ -232,7 +234,7 @@
                  (pendingWith "OSX not supported yet")))]
             [otherwise
              (ok `(:begin
-                    (repl-macro load ,(qSymbol m02-dot-fnk))
+                    (repl-macro load ,(make-symbol m02-dot-fnk))
                     main)
                  "True")])
           (ok `(writeFile ,m02-dot-fnk "(defn main (print False))")
@@ -272,10 +274,10 @@
                    (++ "; reloaded " m02-dot-fnk)))])
 
           ;; Errors
-          (ng '(repl-macro load (foo bar))
-              "<quoted code>: error: load: not a FilePath: (foo bar)")
-          (ng '(repl-macro load (foo bar) buzz)
-              "<quoted code>: error: load: invalid form `(foo bar)'")
+          (with-left-subseq '(repl-macro load (foo bar))
+            "load: not a FilePath: (foo bar)")
+          (with-left-subseq '(repl-macro load (foo bar) buzz)
+            "load: invalid form `(foo bar)'")
 
           ;; Calling functions from Prelude after load error:
           (ok '(:begin
@@ -284,10 +286,10 @@
               "True")
 
           ;; Errors
-          (ng '(repl-macro info (foo bar))
-              "<quoted code>: error: info: invalid form `(foo bar)'")
-          (ng '(repl-macro)
-              "<quoted code>: error: invalid args: nil"))))))
+          (with-left-subseq '(repl-macro info (foo bar))
+            "info: invalid form `(foo bar)'")
+          (with-left-subseq '(repl-macro)
+            "invalid args: nil"))))))
 
 (defn (:: remove-if-exist (-> FilePath (IO ())))
   [path]

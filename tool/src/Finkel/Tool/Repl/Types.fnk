@@ -18,6 +18,9 @@
 
    ;; re-export
    (MonadTrans ..))
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import-when [:compile]
    ;; finkel-core
    (Finkel.Prelude))
@@ -28,15 +31,16 @@
    (Data.Function (on))
    (Data.IORef (IORef atomicWriteIORef newIORef readIORef))
 
-   ;; ghc
-   (StringBuffer (StringBuffer appendStringBuffers))
-   (FastFunctions (inlinePerformIO))
 
    ;; transformers
    (Control.Monad.Trans.Class ((MonadTrans ..)))
 
    ;; finkel-kernel
    (Language.Finkel (Code))))
+
+(imports-from-ghc
+ (GHC.Data.StringBuffer (StringBuffer appendStringBuffers))
+ (GHC.Utils.IO.Unsafe (inlinePerformIO)))
 
 (cond-expand
   [(<= 810 :ghc)

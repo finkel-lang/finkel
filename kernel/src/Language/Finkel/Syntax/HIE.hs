@@ -4,22 +4,27 @@
 module Language.Finkel.Syntax.HIE where
 
 #include "Syntax.h"
+#include "ghc_modules.h"
 
 -- ghc
-import FastString                      (FastString, unpackFS)
-import FieldLabel                      (FieldLbl (..))
+import GHC_Data_FastString             (FastString, unpackFS)
+import GHC_Data_OrdList                (toOL)
 import GHC_Hs                          (HsModule (..))
 import GHC_Hs_Doc                      (LHsDocString)
 import GHC_Hs_ImpExp                   (IE (..), IEWildcard (..),
                                         IEWrappedName (..), ImportDecl (..),
                                         simpleImportDecl)
-import Lexeme                          (isLexCon)
-import Module                          (mkModuleNameFS)
-import OccName                         (tcClsName)
-import OrdList                         (toOL)
-import RdrHsSyn                        (cvTopDecls)
-import RdrName                         (mkQual, mkUnqual)
-import SrcLoc                          (GenLocated (..), SrcSpan)
+import GHC_Parser_PostProcess          (cvTopDecls)
+import GHC_Types_FieldLabel            (FieldLbl (..))
+import GHC_Types_Name_Occurrence       (tcClsName)
+import GHC_Types_Name_Reader           (mkQual, mkUnqual)
+import GHC_Types_SrcLoc                (GenLocated (..), SrcSpan)
+import GHC_Unit_Module                 (mkModuleNameFS)
+import GHC_Utils_Lexeme                (isLexCon)
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Types_SrcLoc                (LayoutInfo (..))
+#endif
 
 #if MIN_VERSION_ghc(8,10,0)
 import GHC_Hs_Extension                (noExtField)
@@ -66,6 +71,9 @@ b_module mb_form exports =
                -- taking different patterns in its arguments.
                , hsmodDecls = cvTopDecls (toOL decls)
                , hsmodDeprecMessage = Nothing
+#if MIN_VERSION_ghc(9,0,0)
+               , hsmodLayout = NoLayoutInfo
+#endif
                , hsmodHaddockModHeader = mbdoc }
 {-# INLINE b_module #-}
 

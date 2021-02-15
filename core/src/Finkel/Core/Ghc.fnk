@@ -1,0 +1,7 @@
+;;;; Macros related to ghc
+
+(module Finkel.Core.Ghc
+  ghc-module-name
+  imports-from-ghc)
+
+(import Finkel.Core.Ghc.Module)

@@ -16,7 +16,7 @@ copyright:           2017-2021 8c6794b6
 category:            Language
 build-type:          Custom
 extra-source-files:  README.md
-                     include/Syntax.h
+                     include/*.h
                      --
                      test/data/eval/*.fnk
                      test/data/syntax/*.fnk
@@ -40,7 +40,7 @@ tested-with:           GHC == 8.2.2
 
 custom-setup
   setup-depends:       base     >= 4.10  && < 5
-                     , Cabal    >= 2.0   && < 3.3
+                     , Cabal    >= 2.0   && < 3.5
                      , filepath >= 1.4.1 && < 1.5
 
 flag dynamic
@@ -82,6 +82,7 @@ library
                        Language.Finkel.Syntax.HType
   autogen-modules:     Paths_finkel_kernel
   includes:            Syntax.h
+                       ghc_modules.h
   include-dirs:        include
   c-sources:           include/hooks.c
   build-depends:       array        >= 0.5.2  && < 0.6
@@ -90,12 +91,13 @@ library
                      , containers   >= 0.5.10 && < 0.7
                      , deepseq      >= 1.4.3  && < 1.5
                      , directory    >= 1.3.0  && < 1.4
+                     , exceptions   >= 0.8.3  && < 0.11
                      , filepath     >= 1.4.1  && < 1.5
-                     , ghc          >= 8.2.0  && < 8.11.0
-                     , ghc-boot     >= 8.2.0  && < 8.11.0
-                     , ghci         >= 8.2.0  && < 8.11.0
-                     , time         >= 1.8.0  && < 1.10
+                     , ghc          >= 8.2.0  && < 9.1.0
+                     , ghc-boot     >= 8.2.0  && < 9.1.0
+                     , ghci         >= 8.2.0  && < 9.1.0
                      , process      >= 1.6.1  && < 1.7
+                     , time         >= 1.8.0  && < 1.10
   build-tool-depends:  alex:alex    >= 3.1.7  && < 3.3
                      , happy:happy  >= 1.19.5 && < 1.21
   default-language:    Haskell2010
@@ -135,6 +137,7 @@ test-suite finkel-kernel-test
                      , containers
                      , deepseq
                      , directory
+                     , exceptions
                      , filepath
                      , ghc
                      , process
@@ -142,7 +145,7 @@ test-suite finkel-kernel-test
                      --
                      , QuickCheck   >= 2.10.1 && < 2.15
                      , hspec        >= 2.4.8  && < 2.8
-                     , transformers >= 0.5.2  && < 0.5.7
+                     , transformers >= 0.5.2  && < 0.6
 
   -- The "Linker.c" codes in the "rts" package bundled with ghc 8.10.3 had
   -- problem when running the tests with "+RTS -N", disabling.

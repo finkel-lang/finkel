@@ -10,7 +10,7 @@ module Language.Finkel.Make.Recompile
   , adjustIncludePaths
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
 import           Control.Monad                     (forM_, when)
@@ -24,16 +24,12 @@ import           System.FilePath                   (dropExtension,
                                                     takeDirectory)
 
 -- ghc
-import           BinFingerprint                    (putNameLiterally)
-import           DriverPhases                      (Phase (..))
-import           DynFlags                          (DynFlags (..),
+import           GHC_Data_FastString               (FastString)
+import           GHC_Driver_Finder                 (findObjectLinkableMaybe)
+import           GHC_Driver_Phases                 (Phase (..))
+import           GHC_Driver_Session                (DynFlags (..),
                                                     HasDynFlags (..))
-import           Exception                         (handleIO)
-import           FastString                        (FastString)
-import           Finder                            (findObjectLinkableMaybe)
-import           Fingerprint                       (Fingerprint)
-import           FlagChecker                       (fingerprintDynFlags)
-import           HscTypes                          (Dependencies (..),
+import           GHC_Driver_Types                  (Dependencies (..),
                                                     HomeModInfo (..),
                                                     HscEnv (..),
                                                     IsBootInterface,
@@ -42,35 +38,44 @@ import           HscTypes                          (Dependencies (..),
                                                     Usage (..), addToHpt,
                                                     lookupHpt, msHiFilePath,
                                                     ms_mod_name)
-import           LoadIface                         (readIface)
-import           MkIface                           (RecompileRequired (..),
+import           GHC_IfaceToCore                   (typecheckIface)
+import           GHC_Iface_Load                    (readIface)
+import           GHC_Iface_Recomp                  (RecompileRequired (..),
                                                     checkOldIface)
-import           Module                            (ModLocation (..),
+import           GHC_Iface_Recomp_Binary           (putNameLiterally)
+import           GHC_Iface_Recomp_Flags            (fingerprintDynFlags)
+import           GHC_Tc_Module                     (getModuleInterface)
+import           GHC_Tc_Utils_Monad                (initIfaceLoad)
+import           GHC_Types_SrcLoc                  (Located, noLoc, unLoc)
+import           GHC_Types_Unique_Set              (UniqSet, addOneToUniqSet,
+                                                    elementOfUniqSet,
+                                                    emptyUniqSet)
+import           GHC_Unit_Module                   (ModLocation (..),
                                                     ModuleName, mkModuleName,
                                                     moduleName,
                                                     moduleNameString)
-import           Outputable                        (Outputable (..), (<+>))
-import           Packages                          (LookupResult (..),
+import           GHC_Unit_State                    (LookupResult (..),
                                                     lookupModuleWithSuggestions)
-import           SrcLoc                            (Located, noLoc, unLoc)
-import           TcIface                           (typecheckIface)
-import           TcRnDriver                        (getModuleInterface)
-import           TcRnMonad                         (initIfaceLoad)
-import           UniqSet                           (UniqSet, addOneToUniqSet,
-                                                    elementOfUniqSet,
-                                                    emptyUniqSet)
+import           GHC_Utils_Exception               (handleIO)
+import           GHC_Utils_Fingerprint             (Fingerprint)
+import           GHC_Utils_Outputable              (Outputable (..), (<+>))
 
-import qualified Maybes
+import qualified GHC_Data_Maybe                    as Maybes
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC_Unit_Types                    (GenWithIsBoot (..),
+                                                    ModuleNameWithIsBoot)
+#endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import           HscTypes                          (ModIface, ModIface_ (..),
+import           GHC_Driver_Types                  (ModIface, ModIface_ (..),
                                                     mi_flag_hash, mi_mod_hash)
 #else
 import           HscTypes                          (ModIface (..))
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import           DynFlags                          (IncludeSpecs,
+import           GHC_Driver_Session                (IncludeSpecs,
                                                     addQuoteInclude)
 #endif
 
@@ -80,7 +85,6 @@ import           Language.Finkel.Make.Summary
 import           Language.Finkel.Make.TargetSource
 import           Language.Finkel.Make.Trace
 
-#include "finkel_kernel_config.h"
 
 -- ------------------------------------------------------------------------
 --
@@ -285,7 +289,12 @@ checkUsagePackageModules usages = getHscEnv >>= forM_ usages . go
                   Just iface ->
                     when (mi_mod_hash' iface /= old_hash)
                          (outdate mname (mname_str ++ " hash changed"))
-          case lookupModuleWithSuggestions dflags mname Nothing of
+#if MIN_VERSION_ghc(9,0,0)
+              lmws_arg1 = unitState
+#else
+              lmws_arg1 = id
+#endif
+          case lookupModuleWithSuggestions (lmws_arg1 dflags) mname Nothing of
             LookupFound {}    -> check_mod_hash
             LookupMultiple {} -> check_mod_hash
             LookupHidden {}   -> check_mod_hash
@@ -301,18 +310,28 @@ refillHomeImports fnk_env ms mi = do
   -- XXX: At the moment cannot find any clue to get textual imports of external
   -- packages from ModIface, recompilation due to changes in external package
   -- modules are done with "checkUsagePackageModules".
-  let dmods = dep_mods (mi_deps mi)
+  let dmods0 = dep_mods (mi_deps mi)
+      dmods1 = map unDeps dmods0
       tr = traceMake fnk_env "refillHomeImports"
       mname = ms_mod_name ms
 
   tr [ "dep_mods mi_deps of" <+> ppr mname
-     , nvc_or_none (map fst dmods) ]
+     , nvc_or_none (map fst dmods1) ]
 
   -- Marking this module as outdated when any of the mported home package module
   -- was outdated, and at the same time, preserving the state with outdated home
   -- package module.
-  imps <- outdateToo mname (mapM (collectOldIface fnk_env) dmods)
+  imps <- outdateToo mname (mapM (collectOldIface fnk_env) dmods1)
   return (ms {ms_textual_imps=imps})
+
+#if MIN_VERSION_ghc(9,0,0)
+unDeps :: ModuleNameWithIsBoot -> (ModuleName, IsBootInterface)
+unDeps gwib = (gwib_mod gwib, gwib_isBoot gwib)
+#else
+unDeps :: a -> a
+unDeps = id
+#endif
+{-# INLINE unDeps #-}
 
 -- | Load old interface when usable and not yet loaded.
 collectOldIface

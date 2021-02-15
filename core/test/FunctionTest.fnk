@@ -6,12 +6,12 @@
   (export functionTests
           cxrTests
           listTests)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import
    ;; base
    (Data.List (isSubsequenceOf))
-   ;; ghc
-   (HscTypes (SourceError))
-
    ;; finkel-kernel
    (Language.Finkel)
 
@@ -24,6 +24,9 @@
    ;; Internal
    (Finkel.Prelude)
    (Orphan ())))
+
+(imports-from-ghc
+ (GHC.Driver.Types (SourceError)))
 
 (defn (:: functionTests Spec)
   (do (describe "Error" errorTests)

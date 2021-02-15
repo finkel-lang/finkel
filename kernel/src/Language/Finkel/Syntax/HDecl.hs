@@ -6,20 +6,15 @@
 module Language.Finkel.Syntax.HDecl where
 
 #include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
 import Data.Maybe                      (fromMaybe)
 
 -- ghc
-import BasicTypes                      (Activation (..), Fixity (..),
-                                        FixityDirection (..), InlineSpec (..),
-                                        LexicalFixity (..), OverlapMode (..),
-                                        PhaseNum, RuleMatchInfo (..),
-                                        SourceText (..))
-import DataCon                         (SrcStrictness (..))
-import FastString                      (FastString, unpackFS)
-import ForeignCall                     (CCallConv (..), CExportSpec (..),
-                                        Safety (..))
+import GHC_Core_DataCon                (SrcStrictness (..))
+import GHC_Data_FastString             (FastString, unpackFS)
+import GHC_Data_OrdList                (toOL)
 import GHC_Hs_Binds                    (FixitySig (..), HsBind, HsBindLR (..),
                                         Sig (..))
 import GHC_Hs_Decls                    (ClsInstDecl (..), ConDecl (..),
@@ -35,34 +30,42 @@ import GHC_Hs_Decls                    (ClsInstDecl (..), ConDecl (..),
 import GHC_Hs_Doc                      (LHsDocString)
 import GHC_Hs_Expr                     (HsMatchContext (..), Match (..))
 import GHC_Hs_Pat                      (Pat (..))
-import GHC_Hs_Types                    (ConDeclField (..), HsConDetails (..),
+import GHC_Hs_Type                     (ConDeclField (..), HsConDetails (..),
                                         HsTyVarBndr (..), HsType (..),
                                         HsWildCardBndrs (..), mkFieldOcc,
                                         mkHsImplicitBndrs, mkHsQTvs)
 import GHC_Hs_Utils                    (mkClassOpSigs, mkFunBind, mkLHsSigType,
                                         mkLHsSigWcType)
-import OccName                         (dataName, tcName)
-import OrdList                         (toOL)
-import RdrHsSyn                        (mkConDeclH98, mkGadtDecl,
+import GHC_Parser_PostProcess          (mkConDeclH98, mkGadtDecl,
                                         mkInlinePragma, parseCImport)
-import RdrName                         (RdrName, mkUnqual)
-import SrcLoc                          (GenLocated (..), Located, getLoc, noLoc,
+import GHC_Types_Basic                 (Activation (..), Fixity (..),
+                                        FixityDirection (..), InlineSpec (..),
+                                        LexicalFixity (..), OverlapMode (..),
+                                        PhaseNum, RuleMatchInfo (..),
+                                        SourceText (..))
+import GHC_Types_ForeignCall           (CCallConv (..), CExportSpec (..),
+                                        Safety (..))
+import GHC_Types_Name_Occurrence       (dataName, tcName)
+import GHC_Types_Name_Reader           (RdrName, mkUnqual)
+import GHC_Types_SrcLoc                (GenLocated (..), Located, getLoc, noLoc,
                                         unLoc)
 
-#if MIN_VERSION_ghc(8,10,0)
-import BasicTypes                      (Origin (..))
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Hs_Type                     (HsArrow (..), HsScaled (..),
+                                        LHsTyVarBndr)
+import GHC_Parser_Annotation           (IsUnicodeSyntax (..))
+import GHC_Parser_Lexer                (P (..), ParseResult (..))
+import GHC_Types_SrcLoc                (LayoutInfo (..))
+import GHC_Types_Var                   (Specificity (..))
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
 import GHC_Hs_Decls                    (LTyFamDefltDecl)
+import GHC_Types_Basic                 (Origin (..))
 #else
 import GHC_Hs_Decls                    (LTyFamDefltEqn)
 import Outputable                      (showSDocUnsafe)
 import RdrHsSyn                        (mkATDefault)
-#endif
-
-#if MIN_VERSION_ghc(8,8,0)
-import GHC_Hs_Types                    (HsArg (..))
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -82,6 +85,10 @@ import GHC_Hs_Decls                    (FamEqn (..))
 import GHC_Hs_Decls                    (FamEqn (..), HsTyPats)
 #else
 import GHC_Hs_Decls                    (TyFamEqn (..))
+#endif
+
+#if MIN_VERSION_ghc(8,8,0)
+import GHC_Hs_Type                     (HsArg (..))
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -190,7 +197,11 @@ b_qtyconD (whole@(L l decl), tys) =
 #endif
 {-# INLINE b_qtyconD #-}
 
+#if MIN_VERSION_ghc(9,0,0)
+b_forallD :: [LHsTyVarBndr Specificity PARSED] -> (HConDecl, [HType]) -> HConDecl
+#else
 b_forallD :: [HTyVarBndr] -> (HConDecl, [HType]) -> HConDecl
+#endif
 b_forallD vars (L l cdecl, cxts) =
 #if MIN_VERSION_ghc(8,6,0)
   L l cdecl { con_forall = noLoc True
@@ -206,12 +217,28 @@ b_gadtD :: Code -> ([HType], HType) -> Builder HConDecl
 b_gadtD form@(LForm (L l1 _)) (ctxt, bodyty) = do
   name <- getConId form
   let name' = L l1 (mkUnqual dataName name)
-      ty = L l1 qty
-      qty = mkHsQualTy_compat (mkLocatedList ctxt) bodyty
-#if MIN_VERSION_ghc(8,6,0)
-      decl = fst (mkGadtDecl [name'] ty)
+#if MIN_VERSION_ghc(9,0,0)
+      -- Removing parentheses of the body type, so that the 'mkGadtDecl' can
+      -- split the internal elements. Parentheses are added to the body of GADT
+      -- when it is HsForAllTy, to support documentation string.
+      ty = case qty of
+             HsParTy _ unpar_ty -> unpar_ty
+             _                  -> L l1 qty
+
 #else
-      decl = mkGadtDecl [name'] (mkLHsSigType ty)
+      ty = L l1 qty
+#endif
+      qty = mkHsQualTy_compat (mkLocatedList ctxt) bodyty
+  decl <-
+#if MIN_VERSION_ghc(9,0,0)
+    do ps <- fmap ghcPState getBState
+       case unP (mkGadtDecl [name'] ty) ps of
+         POk _ d -> return (fst d)
+         _       -> builderError
+#elif MIN_VERSION_ghc(8,6,0)
+    pure (fst (mkGadtDecl [name'] ty))
+#else
+    pure (mkGadtDecl [name'] (mkLHsSigType ty))
 #endif
   return (L l1 decl)
 {-# INLINE b_gadtD #-}
@@ -222,7 +249,14 @@ b_conOnlyD name = b_conD name (PrefixCon [])
 
 -- XXX: Infix data constructor not supported.
 b_conDeclDetails :: [HType] -> HConDeclDetails
+#if MIN_VERSION_ghc(9,0,0)
+b_conDeclDetails = PrefixCon . map (hsScaled . parTyApp)
+  where
+    -- XXX: Does not support liner types and unicode syntax.
+    hsScaled = HsScaled (HsUnrestrictedArrow NormalSyntax)
+#else
 b_conDeclDetails = PrefixCon . map parTyApp
+#endif
 {-# INLINE b_conDeclDetails #-}
 
 b_recFieldsD :: [HConDeclField] -> HConDeclDetails
@@ -284,10 +318,16 @@ b_standaloneD mb_strategy mb_overlap ty0@(dL-> L l _) = L l (DerivD NOEXT dd)
 b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do
     cd <- cvBindsAndSigs (toOL decls)
-    let userTV = UserTyVar NOEXT
+    let
+#if MIN_VERSION_ghc(9,0,0)
+        userTV = UserTyVar NOEXT ()
+        kindedTV = KindedTyVar NOEXT ()
+#else
+        userTV = UserTyVar NOEXT
         kindedTV = KindedTyVar NOEXT
+#endif
         -- Recursing in `HsAppTy' to support MultiParamTypeClasses.
-        unAppTy t =
+    let unAppTy t =
           case t of
             L l (HsTyVar _ _EXT n) ->
               return (l, n, [L l (userTV n)])
@@ -316,7 +356,9 @@ b_classD (tys,ty) decls = do
                         , tcdATs = cd_fds cd
                         , tcdATDefs = atdefs
                         , tcdDocs = cd_docs cd
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(9,0,0)
+                        , tcdCExt = NoLayoutInfo
+#elif MIN_VERSION_ghc(8,6,0)
                         , tcdCExt = NOEXT
 #else
                         , tcdFVs = placeHolderNames
@@ -651,7 +693,7 @@ b_tsigD names (ctxts,typ0) = do
       mkName form =
         case form of
           LForm (L l1 (Atom (ASymbol name))) -> return (L l1 (mkRdrName name))
-          _ -> builderError
+          _                                  -> builderError
       l = getLoc (mkLocatedForm names)
       typeSig = TypeSig NOEXT
   names' <- mapM mkName names
@@ -802,7 +844,6 @@ type FAMEQN p rhs = TyFamEqn p rhs
 
 #if MIN_VERSION_ghc(8,4,0)
 mkFamEqn :: Located RdrName -> [HType] -> rhs
-         -- -> FamEqn PARSED (HsTyPats PARSED) rhs
          -> FAMEQN PARSED rhs
 mkFamEqn tycon pats rhs =
   FamEqn { feqn_tycon = tycon
@@ -847,7 +888,6 @@ cd2atdefs cd = mapM toATDef (cd_tfis cd)
      toATDef d = case mkATDefault' d of
                    Right lty      -> return lty
                    Left (_, sdoc) -> failB (showSDocUnsafe sdoc)
-     -- Version compatibility helper for 'mkATDefault'.
 #if MIN_VERSION_ghc(8,8,0)
      mkATDefault' = fmap fst . mkATDefault
 #else

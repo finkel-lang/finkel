@@ -3,41 +3,66 @@
 -- | Tests for 'make'.
 module MakeTest
   ( makeTests
+  , makeFnkTests
   ) where
 
+#include "ghc_modules.h"
+
 -- base
-import Control.Exception      (SomeException (..), catch)
+import Control.Exception      (SomeException (..))
 import Control.Monad          (unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.List              (isPrefixOf, tails)
 import Data.Maybe             (isJust)
 import GHC.Exts               (unsafeCoerce#)
 import System.Environment     (lookupEnv)
-import System.FilePath        ((<.>), (</>))
 import System.Info            (os)
 
 -- directory
 import System.Directory       (copyFile, createDirectoryIfMissing,
-                               doesFileExist, getDirectoryContents,
-                               getTemporaryDirectory, removeDirectoryRecursive)
+                               doesFileExist, getTemporaryDirectory,
+                               removeDirectoryRecursive)
+#if !MIN_VERSION_ghc(9,0,0)
+import System.Directory       (getDirectoryContents)
+#endif
 
 -- filepath
+import System.FilePath        ((<.>), (</>))
+#if !MIN_VERSION_ghc(9,0,0)
 import System.FilePath        (takeExtension)
+#endif
 
 -- ghc
-import DynFlags               (DynFlags (..), HasDynFlags (..), Way (..),
-                               dynamicGhc, interpWays, parseDynamicFlagsCmdLine)
-import FastString             (fsLit)
 import GHC                    (setTargets)
-import GhcMonad               (GhcMonad (..))
-import HscTypes               (Target (..), TargetId (..))
-import Linker                 (unload)
-import Module                 (componentIdToInstalledUnitId, mkModuleName)
-import Outputable             (Outputable (..), showPpr, showSDoc)
+import GHC_Data_FastString    (fsLit)
+import GHC_Driver_Monad       (GhcMonad (..))
+import GHC_Driver_Session     (HasDynFlags (..), parseDynamicFlagsCmdLine)
+#if !MIN_VERSION_ghc(9,0,0)
+import GHC_Driver_Session     (DynFlags (..))
+#endif
+import GHC_Driver_Types       (Target (..), TargetId (..))
+import GHC_Runtime_Linker     (unload)
+import GHC_Types_SrcLoc       (noLoc)
+import GHC_Unit_Module        (mkModuleName)
+
+import GHC_Unit_State         (PackageName (..))
+#if !MIN_VERSION_ghc(9,0,0)
+import GHC_Unit_State         (lookupPackageName)
+#endif
+
+import GHC_Utils_Outputable   (Outputable (..), showPpr)
+#if !MIN_VERSION_ghc(9,0,0)
+import GHC_Utils_Outputable   (showSDoc)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC.Driver.Ways        (hostIsDynamic, hostIsProfiled)
+#else
+import DynFlags               (Way (..), dynamicGhc, interpWays)
+import Module                 (componentIdToInstalledUnitId)
 import Packages               (InstalledPackageInfo (..), PackageConfig,
-                               PackageName (..), lookupInstalledPackage,
-                               lookupPackageName, pprPackageConfig)
-import SrcLoc                 (noLoc)
+                               lookupInstalledPackage, pprPackageConfig)
+#endif
 
 -- process
 import System.Process         (readProcess)
@@ -56,7 +81,10 @@ import Language.Finkel.Syntax
 import TestAux
 
 makeTests :: Spec
-makeTests = beforeAll_ (removeArtifacts odir) $ do
+makeTests = beforeAll getFnkTestResource makeFnkTests
+
+makeFnkTests :: FnkSpec
+makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
   targetSourceTests
 
   -- Build bytecode
@@ -202,18 +230,21 @@ doUnload = runFnk (getSession >>= liftIO . flip unload []) fnkTestEnv
 -- Action to decide whether profiling objects for the "finkel-kernel" package
 -- are available at runtime.
 hasProfilingObj :: IO Bool
-hasProfilingObj = runFnk (hasProfilingObj' pkg_name) fnkTestEnv
+hasProfilingObj = runFnk (hasProfilingObj1 pkg_name) fnkTestEnv
   where
     pkg_name = PackageName (fsLit "finkel-kernel")
 
-hasProfilingObj' :: PackageName -> Fnk Bool
-hasProfilingObj' pkg_name  =
-  do initSessionForTest
-     dflags <- getDynFlags
-     case lookupPackageConfig dflags pkg_name of
-       Nothing  -> return False
-       Just cfg -> liftIO (do putStrLn (showSDoc dflags (pprPackageConfig cfg))
-                              lookupProfObjInDirectories (libraryDirs cfg))
+hasProfilingObj1 :: PackageName -> Fnk Bool
+#if MIN_VERSION_ghc(9,0,0)
+hasProfilingObj1 _ = return False
+#else
+hasProfilingObj1 pkg_name = do
+  initSessionForTest
+  dflags <- getDynFlags
+  case lookupPackageConfig dflags pkg_name of
+    Nothing -> return False
+    Just cfg -> liftIO (do putStrLn (showSDoc dflags (pprPackageConfig cfg))
+                           lookupProfObjInDirectories (libraryDirs cfg))
 
 lookupPackageConfig :: DynFlags -> PackageName -> Maybe PackageConfig
 lookupPackageConfig dflags pkg_name = do
@@ -229,6 +260,7 @@ lookupProfObjInDirectories =
             else go dirs
       go [] = return False
   in  go
+#endif
 
 fnksrc1, hssrc1, othersrc1 :: TargetSource
 fnksrc1 = FnkSource "path1" (mkModuleName "Foo")
@@ -238,87 +270,87 @@ othersrc1 = OtherSource "path3"
 subseq :: Eq a => [a] -> [a] -> Bool
 subseq xs ys = any (isPrefixOf xs) (tails ys)
 
-targetSourceTests :: Spec
+targetSourceTests :: FnkSpec
 targetSourceTests =
   describe "TargetSource" $ do
     showTargetTest
     pprTargetTest
     asModuleNameTest
 
-showTargetTest :: Spec
+showTargetTest :: FnkSpec
 showTargetTest = do
   describe "show TargetSource" $
-    it "should contain filepath" $ do
+    it "should contain filepath" $ \_ -> do
       show fnksrc1 `shouldSatisfy` subseq "path1"
       show hssrc1 `shouldSatisfy` subseq "path2"
       show othersrc1 `shouldSatisfy` subseq "path3"
 
-asModuleNameTest :: Spec
+asModuleNameTest :: FnkSpec
 asModuleNameTest =
   describe "asModuleName" $
-    it "should replace path separators" $
+    it "should replace path separators" $ \_ ->
       asModuleName ("Foo" </> "Bar" </> "Buzz.fnk") `shouldBe` "Foo.Bar.Buzz"
 
 runOutputable :: (MonadIO m, Outputable a) => a -> m String
 runOutputable obj =
   liftIO $ runFnk (flip showPpr obj <$> getDynFlags) fnkTestEnv
 
-pprTargetTest :: Spec
+pprTargetTest :: FnkSpec
 pprTargetTest =
   describe "ppr TargetSource" $
-    it "should contain filepath" $ do
+    it "should contain filepath" $ \_ -> do
       let t target path = do str <- runOutputable target
                              str `shouldSatisfy` subseq path
       t fnksrc1 "path1"
       t hssrc1 "path2"
       t othersrc1 "path3"
 
-buildByteCode :: FilePath -> Spec
+buildByteCode :: FilePath -> FnkSpec
 buildByteCode = buildByteCodeWith []
 
-buildByteCodeWith :: [String] -> FilePath -> Spec
+buildByteCodeWith :: [String] -> FilePath -> FnkSpec
 buildByteCodeWith extra file =
   buildFiles (["-no-link", "-fbyte-code"] ++ extra) [file]
 
-buildC :: FilePath -> Spec
+buildC :: FilePath -> FnkSpec
 buildC file = buildFiles ["-no-link"] [file]
 
-buildObj :: [String] -> [FilePath] -> Spec
+buildObj :: [String] -> [FilePath] -> FnkSpec
 buildObj = buildFiles
 
-buildObjAndExist :: [String] -> [FilePath] -> [String] -> Spec
+buildObjAndExist :: [String] -> [FilePath] -> [String] -> FnkSpec
 buildObjAndExist args inputs outputs =
   describe (labelWithOptionsAndFiles args inputs) $
-    it "should write to output" $
+    it "should write to output" $ \ftr ->
        pendingInputsForWindowsOr inputs $
          mapM_ (\f ->
-                  do buildWork args inputs
+                  do buildWork ftr args inputs
                      doesFileExist (odir </> f) `shouldReturn` True)
                outputs
 
-buildFiles :: [String] -> [FilePath] -> Spec
+buildFiles :: [String] -> [FilePath] -> FnkSpec
 buildFiles pre inputs =
   describe (labelWithOptionsAndFiles pre inputs) $
-    it "should compile successfully" $
+    it "should compile successfully" $ \ftr ->
       pendingInputsForWindowsOr inputs $
-          buildWork pre inputs
+          buildWork ftr pre inputs
 
 pendingInputsForWindowsOr :: [String] -> Expectation -> Expectation
-pendingInputsForWindowsOr inputs spec =
+pendingInputsForWindowsOr inputs act =
   if os == "mingw32" && any (`elem` pendingInputsUnderWindows) inputs
     then pendingWith "pending under Windows"
-    else spec
+    else act
 
 -- Compilation of modules containing macro expansion is not working well under
 -- Windows, pending for now.
 pendingInputsUnderWindows :: [String]
 pendingInputsUnderWindows = ["main4.fnk", "main8.fnk", "main9.fnk", "P1"]
 
-buildFilesNG :: [String] -> [FilePath] -> Spec
+buildFilesNG :: [String] -> [FilePath] -> FnkSpec
 buildFilesNG pre inputs =
   describe (labelWithOptionsAndFiles pre inputs) $
-    it "should throw an exception"
-       (buildWork pre inputs `shouldThrow` anyException)
+    it "should throw an exception" $ \ftr ->
+       (buildWork ftr pre inputs `shouldThrow` anyException)
 
 labelWithOptionsAndFiles :: [String] -> [FilePath] -> String
 labelWithOptionsAndFiles pre inputs  =
@@ -327,11 +359,11 @@ labelWithOptionsAndFiles pre inputs  =
      then ""
      else " with " ++ unwords pre
 
-buildWork :: [String] -> [FilePath] -> Expectation
-buildWork pre inputs = do_work
+buildWork :: FnkTestResource -> [String] -> [FilePath] -> Expectation
+buildWork ftr pre inputs = do_work
   where
     do_work
-       | WayProf `elem` interpWays = do_prof_work
+       | isProfWay = do_prof_work
        | otherwise = do_work_with []
     -- Use dflags setttings for profile when running test executable with "+RTS
     -- -p" option.
@@ -339,9 +371,14 @@ buildWork pre inputs = do_work
       do_work_with [ "-prof", "-fprof-auto", "-fprof-cafs"
                    , "-hisuf", "p_hi", "-osuf", "p_o" ]
     do_work_with extra =
-      runDefaultMain (extra ++ common_args ++ pre)
+      ftr_main ftr (extra ++ common_args ++ pre)
     common_args =
       ["-i.", "-i" ++ odir, "-v0"] ++ inputs
+#if MIN_VERSION_ghc(9,0,0)
+    isProfWay = hostIsProfiled
+#else
+    isProfWay = WayProf `elem` interpWays
+#endif
 
 odir :: FilePath
 odir = "test" </> "data" </> "make"
@@ -360,16 +397,19 @@ buildReload
   -> [(String, String)] -- ^ List of (input file, output file), after.
   -> String -- ^ Expected value of before.
   -> String -- ^ Expected value for after.
-  -> Spec
+  -> FnkSpec
 buildReload the_file fname files1 files2 before_str after_str =
-  beforeAll (mk_tmp_dir ("reload" ++ the_file)) (afterAll rmdir work)
+  beforeAllWith (\ftr -> do
+                    dir <- mk_tmp_dir ("reload" ++ the_file)
+                    return (dir, ftr))
+                (afterAll (rmdir . fst) work)
   where
     work = do
       describe (unwords ["Reload test for", the_file , "with", fname]) $ do
         it "should get expected values (bytecode)" $ do_work False
         it "should get expected values (objcode)" $ do_work True
 
-    do_work use_obj tmpdir = do
+    do_work use_obj (tmpdir, ftr) = do
        if use_obj && not dynamicGhc
           -- XXX: Reloading with non-dynamic object code not yet working. It
           -- does work when the test executable was compiled with "-dynamic"
@@ -379,16 +419,16 @@ buildReload the_file fname files1 files2 before_str after_str =
             is_travis <- lookupEnv "TRAVIS"
             if isJust is_travis && os == "darwin"
                then pendingWith "not supported under Travis OSX"
-               else do_work' use_obj tmpdir
+               else do_work' use_obj tmpdir ftr
 
-    do_work' use_obj tmpdir = do
-       (ret1, ret2) <- runFnk (fnk_work use_obj tmpdir) reloadFnkEnv
+    do_work' use_obj tmpdir ftr = do
+       (ret1, ret2) <- runFnk (fnk_work use_obj tmpdir ftr) reloadFnkEnv
        (ret1, ret2) `shouldBe` (before_str, after_str)
 
     reloadFnkEnv = fnkTestEnv {envVerbosity = 3}
 
-    fnk_work use_obj tmpdir = do
-      setup_reload_env use_obj tmpdir
+    fnk_work use_obj tmpdir ftr = do
+      setup_reload_env use_obj tmpdir ftr
       copy_files tmpdir files1
       str1 <- make_and_eval
       reset_env
@@ -396,8 +436,8 @@ buildReload the_file fname files1 files2 before_str after_str =
       str2 <- make_and_eval
       return (str1, str2)
 
-    setup_reload_env :: Bool -> FilePath -> Fnk ()
-    setup_reload_env use_obj tmpdir = do
+    setup_reload_env :: Bool -> FilePath -> FnkTestResource -> Fnk ()
+    setup_reload_env use_obj tmpdir ftr = do
       let args0 = ("-i" ++ tmpdir) : if use_obj
                                        then ["-fobject-code"]
                                        else []
@@ -408,7 +448,7 @@ buildReload the_file fname files1 files2 before_str after_str =
             setDynFlags dflags1
           tfile = TargetFile the_file Nothing
       parseAndSet args0
-      initSessionForTest
+      ftr_init ftr
       prepareInterpreter
       parseAndSet args1
       setTargets [Target tfile use_obj Nothing]
@@ -417,10 +457,14 @@ buildReload the_file fname files1 files2 before_str after_str =
     make_and_eval = do
       _ <- make [(noLoc the_file, Nothing)] False Nothing
       setContextModules [asModuleName the_file]
-      hexpr <- buildHsSyn parseExpr [qSymbol fname]
+      hexpr <- buildHsSyn parseExpr [qSymbol fname fname 0 0 0 0]
       unsafeCoerce# <$> evalExpr hexpr
 
     reset_env = getSession >>= liftIO . flip unload []
+
+#if MIN_VERSION_ghc(9,0,0)
+    dynamicGhc = hostIsDynamic
+#endif
 
 -- | Make a test for recompilation.
 buildRecompile
@@ -429,13 +473,16 @@ buildRecompile
   -> [(String, String)] -- ^ List of @(SRC_FILE, DEST_FILE)@ for second run.
   -> String -- ^ Expected output from the first run.
   -> String -- ^ Expected output from the second run.
-  -> Spec
+  -> FnkSpec
 buildRecompile main_mod files1 files2 before_str after_str =
-  beforeAll (mk_tmp_dir ("recompile" ++ main_mod)) (afterAll rmdir work)
+  beforeAllWith (\ftr -> do
+                    dir <- mk_tmp_dir ("recompile" ++ main_mod)
+                    return (dir, ftr))
+                (afterAll (rmdir . fst) work)
     where
       work =
         describe ("Recompile " ++ main_mod) $
-          it "should return expected result" $ \tmpdir -> do
+          it "should return expected result" $ \(tmpdir, ftr) -> do
           is_travis <- lookupEnv "TRAVIS"
           if isJust is_travis && os == "darwin"
             then pendingWith "not supported under Travis OSX"
@@ -443,23 +490,24 @@ buildRecompile main_mod files1 files2 before_str after_str =
               -- XXX: Recompile tests not working well under Windows, pending
               -- for now.
               then pendingWith "recompile tests pending under Windows"
-              else do_work tmpdir
+              else do_work (tmpdir, ftr)
 
-      do_work tmpdir = do
+      do_work (tmpdir, ftr) = do
         -- Running with files1 twice to see compilation avoidance.
-        compile_and_run tmpdir False files1 before_str
-        compile_and_run tmpdir True files1 before_str
-        compile_and_run tmpdir False files2 after_str
+        compile_and_run tmpdir ftr False files1 before_str
+        compile_and_run tmpdir ftr True files1 before_str
+        compile_and_run tmpdir ftr False files2 after_str
 
-      compile_and_run tmpdir skip_copy files expected_str = do
+      compile_and_run tmpdir ftr skip_copy files expected_str = do
         let a_dot_out = tmpdir </> "a.out"
         unless skip_copy $ copy_files tmpdir files
-        buildWork [] [ "-i" ++ tmpdir
-                     , "-outputdir", tmpdir
-                     , "-main-is", main_mod
-                     , "-o", a_dot_out
-                     , "--fnk-trace-make"
-                     , main_mod ]
+        buildWork ftr []
+                  [ "-i" ++ tmpdir
+                  , "-outputdir", tmpdir
+                  , "-main-is", main_mod
+                  , "-o", a_dot_out
+                  , "--fnk-trace-make"
+                  , main_mod ]
         output1 <- readProcess a_dot_out [] ""
         output1 `shouldBe` expected_str
 

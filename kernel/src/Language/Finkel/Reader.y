@@ -15,7 +15,7 @@ module Language.Finkel.Reader
   , supportedLangExts
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
 import           Control.Monad.Fail     (MonadFail(..))
@@ -23,12 +23,12 @@ import           Data.Char              (toLower)
 import           Data.List              (foldl')
 
 -- ghc
-import           BasicTypes             (SourceText(..))
-import           FastString             (FastString, fsLit, unpackFS)
+import           GHC_Types_Basic        (SourceText(..))
+import           GHC_Data_FastString    (FastString, fsLit, unpackFS)
 import           GHC_Hs_ImpExp          (ideclName)
-import           Module                 (moduleNameString)
-import           SrcLoc                 (GenLocated(..), Located, SrcSpan)
-import           StringBuffer           (StringBuffer)
+import           GHC_Unit_Module        (moduleNameString)
+import           GHC_Types_SrcLoc       (GenLocated(..), Located, SrcSpan)
+import           GHC_Data_StringBuffer  (StringBuffer)
 
 -- ghc-boot
 import           GHC.LanguageExtensions (Extension(..))

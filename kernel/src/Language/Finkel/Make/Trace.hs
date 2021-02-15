@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Language.Finkel.Make.Trace
   ( traceMake
@@ -5,13 +6,15 @@ module Language.Finkel.Make.Trace
   , nvc_or_none
   ) where
 
+#include "ghc_modules.h"
+
 -- base
 import Control.Monad.IO.Class (MonadIO (..))
 
 -- ghc
-import DynFlags               (DynFlags, HasDynFlags (..))
-import ErrUtils               (MsgDoc)
-import Outputable             (Outputable (..), SDoc, hcat, nest, vcat)
+import GHC_Driver_Session     (DynFlags, HasDynFlags (..))
+import GHC_Utils_Error        (MsgDoc)
+import GHC_Utils_Outputable   (Outputable (..), SDoc, hcat, nest, vcat)
 
 -- Internal
 import Language.Finkel.Fnk    (FnkDebugFlag (..), FnkEnv, debugWhen')

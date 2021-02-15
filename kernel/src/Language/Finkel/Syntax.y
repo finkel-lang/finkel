@@ -25,16 +25,16 @@ module Language.Finkel.Syntax
   , parseType
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 -- ghc
-import BasicTypes ( Activation(..), FixityDirection(..), InlineSpec(..)
-                  , OverlapMode(..), SourceText(..) )
-import FastString (FastString)
-import ForeignCall (Safety)
+import GHC_Types_Basic ( Activation(..), FixityDirection(..), InlineSpec(..)
+                       , OverlapMode(..), SourceText(..) )
+import GHC_Data_FastString (FastString)
+import GHC_Types_ForeignCall (Safety)
 import GHC_Hs_Doc (LHsDocString)
 import GHC_Hs_Expr (GRHS(..))
-import SrcLoc (GenLocated(..), Located, getLoc, noLoc)
+import GHC_Types_SrcLoc (GenLocated(..), Located, getLoc, noLoc)
 
 #if MIN_VERSION_ghc(8,6,0)
 import GHC_Hs_Decls (DerivStrategy(..))
@@ -84,6 +84,7 @@ import Language.Finkel.Syntax.SynUtils
 %name p_lconstr lconstr
 %name p_lqtycon lqtycon
 %name p_lkindtv lkindtv
+%name p_lkindtv_specific lkindtv_specific
 %name p_lh98constr lh98constr
 %name p_deriving_clause deriving_clause
 %name p_standalone_deriv standalone_deriv
@@ -415,23 +416,19 @@ lconstr :: { HConDecl }
     | 'forall' forallcon { b_forallD (fst $2) (snd $2) }
     | lqtycon            { b_qtyconD $1 }
 
-forallcon :: { ([HTyVarBndr], (HConDecl, [HType])) }
+forallcon :: { ([HTyVarBndrSpecific], (HConDecl, [HType])) }
     : qtycon           { ([], $1) }
-    | tvbndr forallcon { case $2 of (vs,con) -> ($1:vs,con) }
-
-tvbndrs :: { [HTyVarBndr] }
-    : rtvbndrs { reverse $1 }
-
-rtvbndrs :: { [HTyVarBndr] }
-    : {- empty -}     { [] }
-    | rtvbndrs tvbndr { $2:$1 }
-
-tvbndr :: { HTyVarBndr }
-    : idsym   { codeToUserTyVar $1 }
-    | list_es {% parse p_lkindtv $1 }
+    | tvbndr_specific forallcon { case $2 of (vs,con) -> ($1:vs,con) }
 
 lkindtv :: { HTyVarBndr }
     : '::' idsym type {% kindedTyVar $1 $2 $3 }
+
+tvbndr_specific :: { HTyVarBndrSpecific }
+    : idsym   { codeToUserTyVarSpecific $1 }
+    | list_es {% parse p_lkindtv_specific $1 }
+
+lkindtv_specific :: { HTyVarBndrSpecific }
+    : '::' idsym type {% kindedTyVarSpecific $1 $2 $3 }
 
 qtycon :: { (HConDecl, [HType]) }
     : list_es {% parse p_lqtycon $1 }
@@ -524,6 +521,18 @@ ldconhead :: { (FastString, [HTyVarBndr], Maybe HType)  }
 
 famconhd :: { (FastString, [HTyVarBndr]) }
     : conid tvbndrs {% getConId $1 >>= \n -> return (n,$2) }
+
+tvbndrs :: { [HTyVarBndr] }
+    : rtvbndrs { reverse $1 }
+
+rtvbndrs :: { [HTyVarBndr] }
+    : {- empty -}     { [] }
+    | rtvbndrs tvbndr { $2:$1 }
+
+tvbndr :: { HTyVarBndr }
+    : idsym   { codeToUserTyVar $1 }
+    | list_es {% parse p_lkindtv $1 }
+
 
 finsthd :: { (Located FastString, [HType]) }
     : list_es {% parse p_lfinsthd $1 }
@@ -659,9 +668,9 @@ types0_no_qtype :: { HType }
     | 'symbol' type_args       {% b_opOrAppT $1 $2 }
     | type_no_symbol type_args {% b_appT ($1:$2) }
 
-forallty :: { ([HTyVarBndr], ([HType], HType)) }
-    : qtycl           { ([], $1) }
-    | tvbndr forallty { case $2 of (vs,ty) -> ($1:vs,ty) }
+forallty :: { ([HTyVarBndrSpecific], ([HType], HType)) }
+    : qtycl                    { ([], $1) }
+    | tvbndr_specific forallty { case $2 of (vs,ty) -> ($1:vs,ty) }
 
 qtypes :: { ([HType], HType) }
     : type        { ([], $1) }
@@ -923,10 +932,10 @@ all_syms :: { Code }
     | ':quote' { $1 }
 
 all_lists :: { Code }
-    : 'deriving' { LForm (genSrc (List (qSymbol "deriving" : $1))) }
-    | 'import' { LForm (genSrc (List (qSymbol "import" : $1))) }
-    | 'module' { LForm (genSrc (List (qSymbol "module" : $1))) }
-    | 'where' { LForm (genSrc (List (qSymbol "where" : $1))) }
+    : 'deriving' { consListWith $1 "deriving" }
+    | 'import'   { consListWith $1 "import" }
+    | 'module'   { consListWith $1 "module" }
+    | 'where'    { consListWith $1 "where" }
 
 
 -- ---------------------------------------------------------------------

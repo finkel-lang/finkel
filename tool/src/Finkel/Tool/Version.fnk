@@ -4,6 +4,9 @@
 
 (defmodule Finkel.Tool.Version
   (export versionMain)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import-when [:compile]
     ;; base
     (Control.Monad.IO.Class ((MonadIO ..)))
@@ -22,14 +25,14 @@
    (System.Environment (getProgName))
    (System.Info (arch os))
 
-   ;; ghc
-   (Config (cProjectVersion))
-
    ;; finkel-core
    (qualified Paths_finkel_core)
 
    ;; Internal
    (Finkel.Tool.CLI)))
+
+(imports-from-ghc
+ (GHC.Settings.Config (cProjectVersion)))
 
 
 

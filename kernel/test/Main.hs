@@ -1,14 +1,13 @@
 -- | Tests for Finkel.
 module Main where
 
-import Data.List
-import System.Directory
-import System.FilePath
+-- hspec
+import Test.Hspec (hspec, beforeAll, beforeAll_, describe)
 
-import Test.Hspec
-
+-- finkel-kernel
 import Language.Finkel.Fnk (initUniqSupply')
 
+-- Internal
 import EmitTest
 import EvalTest
 import FnkTest
@@ -16,20 +15,10 @@ import FormTest
 import MainTest
 import MakeTest
 import SyntaxTest
-
-getTestFiles :: String -> IO [FilePath]
-getTestFiles name =
-  let dir = "test" </> "data" </> name
-      f x acc = if takeExtension x == ".fnk"
-                  then (dir </> x) : acc
-                  else acc
-      files = getDirectoryContents dir
-  in  sort <$> foldr f [] <$> files
+import TestAux
 
 main :: IO ()
-main = do
-  syntaxFiles <- getTestFiles "syntax"
-  evalFiles <- getTestFiles "eval"
+main =
   hspec
     (beforeAll_
        -- Initializing UniqSupply before all tests, so that the tests not using
@@ -39,7 +28,8 @@ main = do
        (do describe "Form" formTests
            describe "Fnk" fnkTests
            describe "Emit" emitTests
-           describe "Eval" (evalTests evalFiles)
-           describe "Main" mainTests
-           describe "Make" makeTests
-           describe "Syntax" (syntaxTests syntaxFiles)))
+           beforeAll getFnkTestResource $ do
+             describe "Eval" evalFnkTests
+             describe "Main" mainFnkTests
+             describe "Make" makeFnkTests
+             describe "Syntax" syntaxFnkTests))

@@ -5,20 +5,17 @@
 (defmodule CoreTest
   (export coreTests
           macroTests)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import-when [:compile]
     ;; Internal
     (Finkel.Prelude))
   (import
    ;; base
+   (Control.Exception ((SomeException ..) try))
    (Data.List (isSubsequenceOf))
    (System.Info (os arch))
-
-   ;; ghc
-   (BasicTypes ((SourceText ..)))
-   (FastString (fsLit headFS nullFS))
-   (HscTypes (SourceError))
-   (Config (cProjectVersionInt))
-   (Exception ((SomeException ..) gtry))
 
    ;; hspec
    (Test.Hspec)
@@ -29,6 +26,12 @@
 
    ;; Internal
    (Finkel.Core)))
+
+(imports-from-ghc
+ (GHC.Types.Basic ((SourceText ..)))
+ (GHC.Data.FastString (fsLit headFS nullFS))
+ (GHC.Driver.Types (SourceError))
+ (GHC.Settings.Config (cProjectVersionInt)))
 
 (defn (:: coreTests Spec)
   (describe "Macro" macroTests))
@@ -68,7 +71,7 @@
 (eval-when [:compile]
   (defmacro expandTo
     [in out]
-    `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
+    `(do (<- v (try (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
          (case v
            (Left e)  (expectationFailure (show (:: e SomeException)))
            (Right r) (shouldBe (GensymCode r) (GensymCode ',out)))))
@@ -84,7 +87,7 @@
 
   (defmacro expandSatisfy
     [in test]
-    `(do (<- v (gtry (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
+    `(do (<- v (try (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
          (case v
            (Left e) (expectationFailure (show (:: e SomeException)))
            (Right x) (shouldSatisfy x ,test)))))

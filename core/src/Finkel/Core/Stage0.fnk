@@ -3,6 +3,8 @@
 ;;; This module contains few functions and type to work with `Code', just enough
 ;;; to define some macros in the next `Finkel.Core.Stage1' module.
 
+(:require Finkel.Core.Ghc.Module)
+
 (module Finkel.Core.Stage0
   ;; Exported from other modules.
   (FinkelListException ..)
@@ -14,12 +16,12 @@
 ;; base
 (import Control.Exception ((Exception ..) throw))
 
-;; ghc
-(import SrcLoc (SrcSpan))
-
 ;; finkel-kernel
 (import Language.Finkel)
 (import Language.Finkel.Form (mkLocatedForm))
+
+(imports-from-ghc
+ (GHC.Types.SrcLoc (SrcSpan)))
 
 ;;; Exception
 

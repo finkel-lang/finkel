@@ -1,0 +1,102 @@
+;;; Module containing ghc version compatibililty macro.
+
+(module Finkel.Core.Ghc.Module
+  ghc-module-name
+  imports-from-ghc)
+
+;;; finkel-kernel
+(import Language.Finkel)
+
+;;; Internal
+(import Finkel.Core.Ghc.Version)
+
+
+;;; Auxiliary functions
+
+;;; List of `Code' pairs, to relate module names in ghc 9.0.1 and older
+;;; versions.
+(:: ghc-module-names-pre-900 [(, Code Code)])
+(= ghc-module-names-pre-900
+  [(, 'GHC 'GHC)
+
+   (, 'GHC.Core.FamInstEnv 'FamInstEnv)
+   (, 'GHC.Core.InstEnv 'InstEnv)
+   (, 'GHC.Core.Ppr.TyThing 'PprTyThing)
+   (, 'GHC.Core.TyCo.Rep 'TyCoRep)
+
+   (, 'GHC.Data.FastString 'FastString)
+   (, 'GHC.Data.OrdList 'OrdList)
+   (, 'GHC.Data.StringBuffer 'StringBuffer)
+
+   (, 'GHC.Driver.Finder 'Finder)
+   (, 'GHC.Driver.Main 'HscMain)
+   (, 'GHC.Driver.Make 'GhcMake)
+   (, 'GHC.Driver.Monad 'GhcMonad)
+   (, 'GHC.Driver.Session 'DynFlags)
+   (, 'GHC.Driver.Types 'HscTypes)
+
+   (, 'GHC.Iface.Syntax 'IfaceSyn)
+
+   (, 'GHC.Parser 'Parser)
+   (, 'GHC.Parser.Lexer 'Lexer)
+   (, 'GHC.Parser.PostProcess 'RdrHsSyn)
+
+   (, 'GHC.Runtime.Debugger 'Debugger)
+   (, 'GHC.Runtime.Eval 'InteractiveEval)
+   (, 'GHC.Runtime.Interpreter 'GHCi)
+   (, 'GHC.Runtime.Linker 'Linker)
+
+   (, 'GHC.Settings.Config 'Config)
+
+   (, 'GHC.Types.Basic 'BasicTypes)
+   (, 'GHC.Types.Name 'Name)
+   (, 'GHC.Types.Name.Set 'NameSet)
+   (, 'GHC.Types.SrcLoc 'SrcLoc)
+   (, 'GHC.Types.Var 'Var)
+
+   (, 'GHC.Unit.Module 'Module)
+
+   (, 'GHC.Utils.Error 'ErrUtils)
+   (, 'GHC.Utils.IO.Unsafe 'FastFunctions)
+   (, 'GHC.Utils.Lexeme 'Lexeme)
+   (, 'GHC.Utils.Misc 'Util)
+   (, 'GHC.Utils.Outputable 'Outputable)])
+
+(:: rename (-> Code Code))
+(= rename name
+  (case (reads cProjectVersionInt)
+    [(, v "")] (if (<= (:: 900 Int) v)
+                   name
+                   (case (lookup name ghc-module-names-pre-900)
+                     (Just found) found
+                     _ (error (++ "rename: cannot find " (show name)))))
+    _ (error "rename: panic")))
+
+(:: import-one (-> Code [Code] Code))
+(= import-one name rest
+  `(import ,(rename name) ,@rest))
+
+(:: make-import (-> Code Code))
+(= make-import form
+  (case (unCode form)
+    (List (: name rest)) (import-one name rest)
+    _ (error "make-import: panic")))
+
+
+;;; Exported
+
+(:: ghc-module-name Macro)
+(= ghc-module-name
+  (Macro (\ form
+           (case (unCode form)
+             (List [_ name]) (return `,(rename name))
+             _ (error "ghc-module-name: panic")))))
+
+(:doc "Like 'import-from-ghc', but takes multiple modules in single form.")
+(:: imports-from-ghc Macro)
+(= imports-from-ghc
+  (Macro (\ form
+           (case (unCode form)
+             (List (: _ rest)) (return `(:begin
+                                          ,@(map make-import rest)))
+             _ (error "imports-from-ghc: panic")))))

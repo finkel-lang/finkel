@@ -8,6 +8,8 @@ module Language.Finkel.Eval
   , evalTypeKind
   ) where
 
+#include "ghc_modules.h"
+
 -- base
 import Control.Monad.IO.Class  (liftIO)
 
@@ -15,27 +17,28 @@ import Control.Monad.IO.Class  (liftIO)
 import Data.IORef              (readIORef)
 #endif
 
+import Control.Exception       (throwIO)
+
 -- ghc
-import ErrUtils                (Messages)
-import Exception               (throwIO)
-import GhcMonad                (GhcMonad (..))
-import HscTypes                (HscEnv (..), InteractiveContext (..),
+import GHC_Core_TyCo_Rep       (Kind, Type (..))
+import GHC_Driver_Monad        (GhcMonad (..))
+import GHC_Driver_Types        (HscEnv (..), InteractiveContext (..),
                                 TyThing (..), mkSrcErr)
-import InteractiveEval         (compileParsedExprRemote)
-import TcRnDriver              (TcRnExprMode (..), tcRnExpr, tcRnType)
-import TyCoRep                 (Kind, Type (..))
-import VarEnv                  (emptyTidyEnv)
+import GHC_Runtime_Eval        (compileParsedExprRemote)
+import GHC_Tc_Module           (TcRnExprMode (..), tcRnExpr, tcRnType)
+import GHC_Types_Var_Env       (emptyTidyEnv)
+import GHC_Utils_Error         (Messages)
 
 #if MIN_VERSION_ghc(8,10,0)
-import TcHsSyn                 (ZonkFlexi (..))
-import TyCoTidy                (tidyType)
+import GHC_Core_TyCo_Tidy      (tidyType)
+import GHC_Tc_Utils_Zonk       (ZonkFlexi (..))
 #else
 import TyCoRep                 (tidyType)
 #endif
 
 #if MIN_VERSION_ghc(8,8,0)
-import GhcMonad                (withSession)
-import HscMain                 (hscParsedDecls)
+import GHC_Driver_Main         (hscParsedDecls)
+import GHC_Driver_Monad        (withSession)
 #else
 import ByteCodeGen             (byteCodeGen)
 import ConLike                 (ConLike (..))

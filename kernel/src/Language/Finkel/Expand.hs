@@ -13,7 +13,7 @@ module Language.Finkel.Expand
   , discardInteractiveContext
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
 import           Control.Monad          (foldM, when)
@@ -23,26 +23,39 @@ import           Data.Char              (isLower)
 -- containers
 import qualified Data.Map               as Map
 
--- ghc
-import           DynFlags               (DynFlags (..), GeneralFlag (..),
-                                         GhcLink (..), HasDynFlags (..),
-                                         HscTarget (..), Way (..), interpWays,
-                                         thisPackage, unSetGeneralFlag',
-                                         updOptLevel)
-#if MIN_VERSION_ghc(8,10,1)
-import           DynFlags               (setGeneralFlag')
+#if MIN_VERSION_ghc(9,0,0)
+import qualified Data.Set               as Set
 #endif
 
-import           ErrUtils               (MsgDoc)
-import           Exception              (gbracket)
-import           FastString             (FastString, headFS)
-import           GhcMonad               (getSession, setSession)
-import           HscMain                (newHscEnv)
-import           HscTypes               (HscEnv (..), InteractiveContext (..),
+-- exception
+import           Control.Monad.Catch    (bracket)
+
+-- ghc
+import           GHC_Data_FastString    (FastString, headFS)
+import           GHC_Driver_Main        (newHscEnv)
+import           GHC_Driver_Monad       (getSession, setSession)
+import           GHC_Driver_Session     (DynFlags (..), GeneralFlag (..),
+                                         GhcLink (..), HasDynFlags (..),
+                                         HscTarget (..), unSetGeneralFlag',
+                                         updOptLevel)
+import           GHC_Driver_Types       (HscEnv (..), InteractiveContext (..),
                                          emptyInteractiveContext)
-import           Name                   (nameIsFromExternalPackage)
-import           Outputable             (Outputable (..), cat, fsep, nest, vcat)
-import           SrcLoc                 (GenLocated (..))
+import           GHC_Types_Name         (nameIsFromExternalPackage)
+import           GHC_Types_SrcLoc       (GenLocated (..))
+import           GHC_Utils_Error        (MsgDoc)
+import           GHC_Utils_Outputable   (Outputable (..), cat, fsep, nest, vcat)
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC                    (setSessionDynFlags)
+import           GHC_Driver_Session     (homeUnit)
+import           GHC_Driver_Ways        (Way (..), hostFullWays)
+#else
+import           GHC_Driver_Session     (Way (..), interpWays, thisPackage)
+#endif
+
+#if MIN_VERSION_ghc(8,10,0)
+import           GHC_Driver_Session     (setGeneralFlag')
+#endif
 
 -- Internal
 import           Language.Finkel.Fnk
@@ -70,7 +83,7 @@ withExpanderSettings' discard_ic act =
      -- interpreter, using the given action as it.
      if isInterpreted dflags
         then act
-        else gbracket (prepare dflags) restore (const act)
+        else bracket (prepare dflags) restore (const act)
   where
     prepare dflags = do
       fnk_env <- getFnkEnv
@@ -83,7 +96,7 @@ withExpanderSettings' discard_ic act =
         Just he -> if discard_ic
                       then setSession $! discardInteractiveContext he
                       else setSession he
-        Nothing -> new_hsc_env fnk_env dflags >>= setSession
+        Nothing -> new_hsc_env fnk_env dflags >>= setSession >> postSetSession
 
       return hsc_env_old
 
@@ -99,9 +112,8 @@ withExpanderSettings' discard_ic act =
       debug fnk_env Nothing ["Making new session for expand"]
       let dflags1 = bcoDynFlags dflags0
           ways1 = ways dflags1
-          interp_has_no_way_dyn = WayDyn `notElem` interpWays
           dflags2 = if interp_has_no_way_dyn
-                       then dflags1 {ways = filter (/= WayDyn) ways1}
+                       then dflags1 {ways = removeWayDyn ways1}
                        else dflags1
 
       when interp_has_no_way_dyn $
@@ -109,6 +121,28 @@ withExpanderSettings' discard_ic act =
       dumpDynFlags fnk_env "Language.Finkel.Expand.new_hsc_env" dflags2
 
       liftIO $! newHscEnv dflags2
+
+#if MIN_VERSION_ghc(9,0,0)
+    -- To set the "hsc_interp" field in new session.
+    postSetSession = getDynFlags >>= setSessionDynFlags
+#else
+    postSetSession = return ()
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+removeWayDyn :: Set.Set Way -> Set.Set Way
+removeWayDyn = Set.filter (/= WayDyn)
+#else
+removeWayDyn :: [Way] -> [Way]
+removeWayDyn = filter (/= WayDyn)
+#endif
+
+interp_has_no_way_dyn :: Bool
+#if MIN_VERSION_ghc(9,0,0)
+interp_has_no_way_dyn = WayDyn `notElem` hostFullWays
+#else
+interp_has_no_way_dyn = WayDyn `notElem` interpWays
+#endif
 
 -- | From `discardIC'.
 discardInteractiveContext :: HscEnv -> HscEnv
@@ -123,7 +157,11 @@ discardInteractiveContext hsc_env =
            else ic_name empty_ic
         where
          old_name = ic_name old_ic
+#if MIN_VERSION_ghc(9,0,0)
+      this_pkg = homeUnit dflags
+#else
       this_pkg = thisPackage dflags
+#endif
   in  hsc_env {hsc_IC = empty_ic {ic_monad = new_ic_monad}}
 
 -- | Setup 'DynFlags' for interactive evaluation.

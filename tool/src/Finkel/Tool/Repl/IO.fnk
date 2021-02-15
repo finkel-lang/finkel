@@ -4,6 +4,9 @@
 
 (defmodule Finkel.Tool.Repl.IO
   (export %_init-form read-form read-print-loop with-io-redirect)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import
    ;; base
    (Control.Concurrent
@@ -20,17 +23,20 @@
    ;; deepseq
    (Control.DeepSeq)
 
-   ;; ghc
-   (StringBuffer (appendStringBuffers stringToStringBuffer))
-
    ;; finkel-kernel
    (Language.Finkel)
    (Language.Finkel.Lexer (evalSP))
    (Language.Finkel.Reader (sexpr))
 
+   ;; finkel-core
+   (Finkel.Core.Functions (make-symbol))
+
    ;; Internal
    (Finkel.Tool.CLI)
    (Finkel.Tool.Repl.Types)))
+
+(imports-from-ghc
+ (GHC.Data.StringBuffer (appendStringBuffers stringToStringBuffer)))
 
 
 ;;; Read and print loop
@@ -175,4 +181,4 @@ reading the input until successful parse result."
 
 (defn (:: as-repl-macro (-> String Code))
   [str]
-  `(repl-macro ,@(map qSymbol (words str))))
+  `(repl-macro ,@(map make-symbol (words str))))

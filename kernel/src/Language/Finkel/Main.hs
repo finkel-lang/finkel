@@ -9,6 +9,8 @@ module Language.Finkel.Main
   , defaultMainWith
   ) where
 
+#include "ghc_modules.h"
+
 -- base
 import           Control.Monad                (unless)
 import           Control.Monad.IO.Class       (MonadIO (..))
@@ -24,33 +26,30 @@ import           System.IO                    (BufferMode (..), hSetBuffering,
 import           System.Process               (rawSystem)
 
 -- ghc
-import           BasicTypes                   (SuccessFlag (..))
-import           DriverPhases                 (isDynLibFilename,
+import           GHC                          (defaultErrorHandler,
+                                               parseDynamicFlags)
+import           GHC_Driver_Monad             (printException)
+import           GHC_Driver_Phases            (isDynLibFilename,
                                                isObjectFilename)
-import           DynFlags                     (DynFlags (..), GeneralFlag (..),
+import           GHC_Driver_Session           (DynFlags (..), GeneralFlag (..),
                                                HasDynFlags (..), compilerInfo,
                                                defaultFatalMessager,
-                                               defaultFlushOut, gopt,
-                                               parseDynamicFlagsCmdLine)
-import           GHC                          (defaultErrorHandler)
-import           GhcMonad                     (printException)
-import           HscTypes                     (handleFlagWarnings,
+                                               defaultFlushOut, gopt)
+import           GHC_Driver_Types             (handleFlagWarnings,
                                                handleSourceError)
-import           Panic                        (GhcException (..),
+import           GHC_Types_Basic              (SuccessFlag (..))
+import           GHC_Types_SrcLoc             (mkGeneralLocated, unLoc)
+import           GHC_Utils_CliOption          (Option (FileOption))
+import           GHC_Utils_Misc               (looksLikeModuleName)
+import           GHC_Utils_Panic              (GhcException (..),
                                                throwGhcException)
-import           SrcLoc                       (mkGeneralLocated, unLoc)
-import           Util                         (looksLikeModuleName)
 
-#if MIN_VERSION_ghc(8,10,0)
-import           CliOption                    (Option (FileOption))
-#else
-import           DynFlags                     (Option (FileOption),
-                                               targetPlatform)
+#if MIN_VERSION_ghc(8,10,1) && !MIN_VERSION_ghc(8,10,3)
+import           GHC_Driver_Session           (HscTarget (..), gopt_set)
 #endif
 
-#if MIN_VERSION_ghc(8,10,3)
-#elif MIN_VERSION_ghc(8,10,1)
-import           DynFlags                     (HscTarget (..), gopt_set)
+#if !MIN_VERSION_ghc(8,10,0)
+import           GHC_Driver_Session           (targetPlatform)
 #endif
 
 -- ghc-boot
@@ -179,7 +178,10 @@ main3 orig_args ghc_args = do
       dflags1b = dflags1
 #endif
 
-  (dflags2, lfileish, warnings) <- parseDynamicFlagsCmdLine dflags1b largs
+  -- From ghc 9.0, "interpretPackageEnv" is called from "parseDynamicFlags". In
+  -- older versions, package environment initialization works were done by
+  -- "setSessionDynFlags" via "initPackages".
+  (dflags2, lfileish, warnings) <- parseDynamicFlags dflags1b largs
 
   let fileish = map unLoc lfileish
       platform = targetPlatform dflags2
@@ -363,7 +365,7 @@ rawGhcOptions =
 -- | THrow 'UsageError' when unknown flag were found.
 checkUnknownFlags :: [String] -> IO ()
 checkUnknownFlags fileish = do
-  let unknowns = [f | (f@ ('-':_)) <- fileish]
+  let unknowns = [f | (f@('-':_)) <- fileish]
       oneErr f = "unrecognised flag: " ++ f ++ "\n"
   unless (null unknowns)
          (throwGhcException (UsageError (concatMap oneErr unknowns)))

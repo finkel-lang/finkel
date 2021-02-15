@@ -25,7 +25,7 @@
    (System.Environment (getProgName))
 
    ;; finkel-kernel
-   (Language.Finkel (Code defaultFnkEnv qList qString qSymbol))
+   (Language.Finkel)
    (Language.Finkel.Fnk ((FnkEnv ..) EnvMacros
                          fnkEnvOptionsUsage fromFnkEnvOptions
                          makeEnvMacros mergeMacros))
@@ -158,7 +158,7 @@
   "Default macros imported in REPL. These macros always get imported after
 loading compiled modules."
   (macrolet ((the-macros ()
-               `[,@(map (\ mac `(, ,mac ,(qSymbol mac)))
+               `[,@(map (\ mac `(, ,mac ,(make-symbol mac)))
                         (++ (exported-macros Finkel.Core)
                             (exported-macros Finkel.Tool.Repl.Macro)))]))
     (makeEnvMacros (the-macros))))

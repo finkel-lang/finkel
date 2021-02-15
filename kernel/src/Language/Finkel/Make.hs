@@ -23,7 +23,7 @@ module Language.Finkel.Make
   , isHsFile
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 
 -- base
@@ -36,30 +36,36 @@ import Data.Maybe                        (isJust)
 import System.FilePath                   (splitExtension)
 
 -- ghc
-import BasicTypes                        (SuccessFlag (..))
-import DriverPhases                      (Phase (..))
-import DynFlags                          (DynFlags (..), GeneralFlag (..),
+import GHC                               (setSessionDynFlags)
+import GHC_Driver_Finder                 (cannotFindModule,
+                                          findExposedPackageModule)
+import GHC_Driver_Make                   (LoadHowMuch (..), load')
+import GHC_Driver_Monad                  (GhcMonad (..))
+import GHC_Driver_Phases                 (Phase (..))
+import GHC_Driver_Session                (DynFlags (..), GeneralFlag (..),
                                           GhcMode (..), HasDynFlags (..), gopt,
                                           gopt_set, gopt_unset, isObjectTarget)
-import ErrUtils                          (mkPlainErrMsg)
-import Finder                            (cannotFindModule,
-                                          findExposedPackageModule)
-import GHC                               (setSessionDynFlags)
-import GhcMake                           (LoadHowMuch (..), load')
-import GhcMonad                          (GhcMonad (..))
-import HscTypes                          (FindResult (..), HscEnv (..),
+import GHC_Driver_Types                  (FindResult (..), HscEnv (..),
                                           ModSummary (..), lookupHpt,
                                           ms_mod_name, throwOneError)
-import Module                            (Module (..), ModuleName, moduleUnitId)
-import Outputable                        (Outputable (..), brackets, nest, text,
+import GHC_Types_Basic                   (SuccessFlag (..))
+import GHC_Types_SrcLoc                  (Located, getLoc, unLoc)
+import GHC_Unit_Module                   (ModuleName)
+import GHC_Utils_Error                   (mkPlainErrMsg)
+import GHC_Utils_Misc                    (getModificationUTCTime)
+import GHC_Utils_Outputable              (Outputable (..), brackets, nest, text,
                                           vcat, (<+>))
-import SrcLoc                            (Located, getLoc, unLoc)
-import Util                              (getModificationUTCTime)
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Unit_Types                    (moduleUnit)
+#else
+import GHC_Unit_Module                   (Module (..), moduleUnitId)
+#endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import DynamicLoading                    (initializePlugins)
-import HscTypes                          (runHsc)
-import Plugins                           (Plugin (..), withPlugins)
+import GHC_Driver_Types                  (runHsc)
+import GHC_Plugins                       (Plugin (..), withPlugins)
+import GHC_Runtime_Loader                (initializePlugins)
 #endif
 
 -- internal
@@ -69,8 +75,6 @@ import Language.Finkel.Make.Recompile
 import Language.Finkel.Make.Summary
 import Language.Finkel.Make.TargetSource
 import Language.Finkel.Make.Trace
-
-#include "finkel_kernel_config.h"
 
 
 -- ---------------------------------------------------------------------
@@ -532,7 +536,12 @@ filterNotCompiled fnk_env hsc_env = foldM find_not_compiled []
           fr <- liftIO (findExposedPackageModule hsc_env mname Nothing)
           case fr of
             Found _ mdl -> do
-              tr ["Found" <+> ppr mname <+> "in" <+> ppr (moduleUnitId mdl)]
+#if MIN_VERSION_ghc(9,0,0)
+              let mod_unit = moduleUnit mdl
+#else
+              let mod_unit = moduleUnitId mdl
+#endif
+              tr ["Found" <+> ppr mname <+> "in" <+> ppr mod_unit]
               return acc
             _ -> do
               let doc = cannotFindModule dflags mname fr

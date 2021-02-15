@@ -30,6 +30,8 @@ module Language.Finkel.Lexer
   , modifySPState
   ) where
 
+#include "ghc_modules.h"
+
 -- base
 import           Control.Monad              (ap, liftM, msum)
 import           Data.Char                  (GeneralCategory(..), chr,
@@ -50,32 +52,38 @@ import qualified Data.ByteString.Char8      as C8
 import qualified Data.Map                   as Map
 
 -- ghc
-import           ApiAnnotation              (AnnotationComment(..))
-import           BasicTypes                 (FractionalLit(..), SourceText(..))
-import           Ctype                      (is_space)
-import           Encoding                   (utf8DecodeByteString)
-import           FastString                 (FastString,
+import           GHC_Data_FastString        (FastString,
                                              fsLit, headFS, nullFS,
                                              mkFastStringByteString,
-                                             tailFS, unpackFS)
-import           Lexeme                     (startsConSym, startsVarId,
-                                             startsVarSym)
-import           SrcLoc                     (GenLocated(..), Located,
+                                             unpackFS)
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC_Data_FastString        (bytesFS)
+#else
+import           GHC_Data_FastString        (tailFS)
+#endif
+
+import           GHC_Data_StringBuffer      (StringBuffer, atEnd,
+                                             byteDiff, cur, currentChar,
+                                             lexemeToFastString,
+                                             lexemeToString, nextChar,
+                                             prevChar, stepOn)
+import qualified GHC_Data_StringBuffer       as SB
+import           GHC_Parser_Annotation      (AnnotationComment(..))
+import           GHC_Parser_CharClass       (is_space)
+import           GHC_Utils_Encoding         (utf8DecodeByteString)
+import           GHC_Types_Basic            (FractionalLit(..), SourceText(..))
+import           GHC_Types_SrcLoc           (GenLocated(..), Located,
                                              RealSrcLoc, SrcLoc(..),
                                              SrcSpan(..), advanceSrcLoc,
                                              mkRealSrcLoc, mkRealSrcSpan,
                                              srcLocCol, srcLocLine)
 
-import           StringBuffer               (StringBuffer, atEnd,
-                                             byteDiff, cur, currentChar,
-                                             lexemeToFastString,
-                                             lexemeToString, nextChar,
-                                             prevChar, stepOn)
-import qualified StringBuffer               as SB
-import           Util                       (readRational)
+import           GHC_Utils_Lexeme           (startsConSym, startsVarId,
+                                             startsVarSym)
+import           GHC_Utils_Misc              (readRational)
 
 #if MIN_VERSION_ghc (8,10,0)
-import           FastString                 (bytesFS)
+import           GHC_Data_FastString        (bytesFS)
 #else
 import           FastString                 (fastStringToByteString)
 #endif
@@ -335,7 +343,11 @@ alexInputPrevChar (AlexInput _ buf) = prevChar buf '\NUL'
 {-# INLINE alexInputPrevChar #-}
 
 alexError :: String -> SP a
+#if MIN_VERSION_ghc(9,0,0)
+alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st) Nothing) msg)
+#else
 alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st)) msg)
+#endif
 {-# INLINE alexError #-}
 
 alexGetInput :: SP AlexInput
@@ -574,10 +586,18 @@ tok_symbol (AlexInput _ buf) l =
 {-# INLINE tok_symbol #-}
 
 secondIsStartsVarId :: FastString -> Bool
+#if MIN_VERSION_ghc(9,0,0)
+-- 'GHC.Data.FastString.tailFS' disappeared in ghc 9.0.0.
+secondIsStartsVarId fs0 =
+  let bs1 = C8.tail (bytesFS fs0)
+      c = C8.head bs1
+  in  not (nullFS fs0) && not (C8.null bs1) && startsVarId c
+#else
 secondIsStartsVarId fs0 =
   let fs1 = tailFS fs0
       c = headFS fs1
   in  not (nullFS fs0) && not (nullFS fs1) && startsVarId c
+#endif
 {-# INLINE secondIsStartsVarId #-}
 
 replaceHyphens :: FastString -> FastString
@@ -773,7 +793,11 @@ scanToken = do
       -- Getting current location again after invoking 'act', to update
       -- location information of String tokens.
       loc1 <- fmap currentLoc getSPState
-      let span = RealSrcSpan $ mkRealSrcSpan loc0 loc1
+#if MIN_VERSION_ghc(9,0,0)
+      let span = RealSrcSpan (mkRealSrcSpan loc0 loc1) Nothing
+#else
+      let span = RealSrcSpan (mkRealSrcSpan loc0 loc1)
+#endif
       return (L span tok)
     AlexError (AlexInput loc1 buf) -> do
       sp <- getSPState

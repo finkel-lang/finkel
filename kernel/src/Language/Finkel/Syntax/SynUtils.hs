@@ -11,70 +11,84 @@ module Language.Finkel.Syntax.SynUtils
   ) where
 
 #include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
-import           Data.Char               (isUpper)
+#if MIN_VERSION_ghc(9,0,0)
+import           Control.Monad             (mplus)
+#endif
+import           Data.Char                 (isUpper)
 
--- ghc
-import           Bag                     (listToBag)
-import           BasicTypes              (SourceText (..))
-import           FastString              (FastString, fsLit, headFS, unpackFS)
-import           HaddockUtils            (addConDoc)
-
-import           GHC_Hs_Binds            (HsLocalBindsLR (..),
-                                          HsValBindsLR (..), emptyLocalBinds)
-import           GHC_Hs_Decls            (HsDecl (..), LConDecl,
-                                          LDataFamInstDecl, LDocDecl,
-                                          LFamilyDecl, LTyFamInstDecl)
-import           GHC_Hs_Doc              (LHsDocString)
-import           GHC_Hs_Expr             (GRHSs (..), LGRHS)
-import           GHC_Hs_Lit              (HsOverLit (..))
-import           GHC_Hs_Pat              (HsRecField' (..), LHsRecField,
-                                          LHsRecUpdField)
-import           GHC_Hs_Types            (AmbiguousFieldOcc (..), FieldOcc (..),
-                                          HsTyVarBndr (..), HsType (..),
-                                          LHsContext, mkFieldOcc)
-import           GHC_Hs_Utils            (mkHsIntegral)
-
-import           Lexeme                  (isLexCon, isLexConSym, isLexVar,
-                                          isLexVarSym)
-import           Lexer                   (P (..), ParseResult (..))
-import           OccName                 (NameSpace, srcDataName, tcName,
-                                          tvName, varName)
-import           OrdList                 (OrdList, toOL)
-import           RdrHsSyn                (cvTopDecls)
-import qualified RdrHsSyn
-import           RdrName                 (RdrName, mkQual, mkUnqual,
-                                          mkVarUnqual, nameRdrName)
-import           SrcLoc                  (GenLocated (..), Located, SrcSpan,
-                                          combineLocs, noLoc, unLoc)
-import           TysWiredIn              (consDataConName)
-
-#if MIN_VERSION_ghc(8,10,0)
-import           FastString              (bytesFS)
-#elif MIN_VERSION_ghc(8,6,0)
-import           FastString              (fastStringToByteString)
+-- bytestring
+#if MIN_VERSION_ghc(9,0,0)
+import qualified Data.ByteString.Char8     as BS
 #endif
 
-#if MIN_VERSION_ghc(8,8,0)
-import qualified SrcLoc
+
+-- ghc
+import           GHC_Data_Bag              (listToBag)
+import           GHC_Data_FastString       (FastString, fsLit, headFS, unpackFS)
+import           GHC_Types_Basic           (SourceText (..))
+
+import           GHC_Hs_Binds              (HsLocalBindsLR (..),
+                                            HsValBindsLR (..), emptyLocalBinds)
+import           GHC_Hs_Decls              (HsDecl (..), LConDecl,
+                                            LDataFamInstDecl, LDocDecl,
+                                            LFamilyDecl, LTyFamInstDecl)
+import           GHC_Hs_Doc                (LHsDocString)
+import           GHC_Hs_Expr               (GRHSs (..), LGRHS)
+import           GHC_Hs_Lit                (HsOverLit (..))
+import           GHC_Hs_Pat                (HsRecField' (..), LHsRecField,
+                                            LHsRecUpdField)
+import           GHC_Hs_Type               (AmbiguousFieldOcc (..),
+                                            FieldOcc (..), HsTyVarBndr (..),
+                                            HsType (..), LHsContext, mkFieldOcc)
+import           GHC_Hs_Utils              (mkHsIntegral)
+
+import           GHC_Builtin_Types         (consDataConName)
+import           GHC_Data_OrdList          (OrdList, toOL)
+import           GHC_Parser_Lexer          (P (..), ParseResult (..))
+import qualified GHC_Parser_PostProcess    as PostProcess
+import           GHC_Types_Name_Occurrence (NameSpace, srcDataName, tcName,
+                                            tvName, varName)
+import           GHC_Types_Name_Reader     (RdrName, mkQual, mkUnqual,
+                                            mkVarUnqual, nameRdrName)
+import           GHC_Types_SrcLoc          (GenLocated (..), Located, SrcSpan,
+                                            combineLocs, noLoc, unLoc)
+import           GHC_Utils_Lexeme          (isLexCon, isLexConSym, isLexVar,
+                                            isLexVarSym)
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC_Data_FastString       (mkFastStringByteString)
+import           GHC_Hs_Decls              (ConDecl (..))
+import           GHC_Hs_Type               (LHsTyVarBndr)
+import           GHC_Types_Var             (Specificity (..))
+#else
+import qualified GHC_Data_FastString       as FastString
+import           HaddockUtils              (addConDoc)
+#endif
+
+#if MIN_VERSION_ghc(8,10,0)
+import           GHC_Data_FastString       (bytesFS)
+import           GHC_Hs_Extension          (noExtField)
+#elif MIN_VERSION_ghc(8,6,0)
+import           GHC_Data_FastString       (fastStringToByteString)
+import           GHC_Hs_Extension          (noExt)
+#else
+import           PlaceHolder               (PlaceHolder (..), placeHolderType)
+#endif
+
+#if MIN_VERSION_ghc(8,8,0) && !MIN_VERSION_ghc(9,0,0)
+import qualified GHC_Types_SrcLoc          as SrcLoc
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import           BasicTypes              (PprPrec (..), appPrec, funPrec,
-                                          opPrec, sigPrec, topPrec)
-import           GHC_Hs_Doc              (HsDocString,
-                                          mkHsDocStringUtf8ByteString)
+import           GHC_Hs_Doc                (HsDocString,
+                                            mkHsDocStringUtf8ByteString)
+import           GHC_Types_Basic           (PprPrec (..), appPrec, funPrec,
+                                            opPrec, sigPrec, topPrec)
 #else
-import           GHC_Hs_Doc              (HsDocString (..))
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import           GHC_Hs_Extension        (noExtField)
-#elif MIN_VERSION_ghc(8,6,0)
-import           GHC_Hs_Extension        (noExt)
-#else
-import           PlaceHolder             (PlaceHolder (..), placeHolderType)
+import           GHC_Hs_Doc                (HsDocString (..))
 #endif
 
 -- Internal
@@ -164,10 +178,10 @@ declsToBinds l decls = L l binds'
     binds' = case decls of
       [] -> emptyLocalBinds
       _  -> mkHsValBinds_compat (listToBag binds) sigs
-    -- Using 'RdrHsSyn.cvTopDecls' to group same names in where
+    -- Using 'PostProcess.cvTopDecls' to group same names in where
     -- clause. Perhaps better to do similar things done in
-    -- 'RdrHsSyn.cvBindGroup', which is dedicated for 'P' monad ...
-    decls' = RdrHsSyn.cvTopDecls (toOL decls)
+    -- 'PostProcess.cvBindGroup', which is dedicated for 'P' monad ...
+    decls' = PostProcess.cvTopDecls (toOL decls)
     (binds, sigs) = go ([],[]) decls'
     go (bs,ss) ds =
       case ds of
@@ -194,7 +208,9 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
   where
     unambiguous = Unambiguous NOEXT rdr
+#if !MIN_VERSION_ghc(9,0,0)
 cfld2ufld _ = error "Language.Finkel.Syntax.SynUtils:cfld2ufld"
+#endif
 #else
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
@@ -252,7 +268,7 @@ toCategorizedDecls (binds, sigs, fds, tfis, dfis, docs) =
 cvBindsAndSigs :: OrdList HDecl -> Builder CategorizedDecls
 cvBindsAndSigs fb =
   do ps <- fmap ghcPState getBState
-     case unP (fmap toCategorizedDecls (RdrHsSyn.cvBindsAndSigs fb)) ps of
+     case unP (fmap toCategorizedDecls (PostProcess.cvBindsAndSigs fb)) ps of
        POk _ cd -> return cd
        _        -> builderError
 
@@ -261,16 +277,53 @@ kindedTyVar (LForm (L l _dc)) name kind =
   case name of
     LForm (L ln (Atom (ASymbol name'))) -> do
        let name'' = L ln (mkUnqual tvName name')
+#if MIN_VERSION_ghc(9,0,0)
+       return $! L l (KindedTyVar NOEXT () name'' kind)
+#else
        return $! L l (KindedTyVar NOEXT name'' kind)
+#endif
     _ -> builderError
 {-# INLINE kindedTyVar #-}
 
+kindedTyVarSpecific :: Code -> Code -> HType -> Builder HTyVarBndrSpecific
+#if MIN_VERSION_ghc(9,0,0)
+kindedTyVarSpecific (LForm (L l _dc)) name kind =
+  case name of
+    LForm (L ln (Atom (ASymbol name'))) -> do
+       let name'' = L ln (mkUnqual tvName name')
+       return $! L l (KindedTyVar NOEXT SpecifiedSpec name'' kind)
+    _ -> builderError
+#else
+kindedTyVarSpecific = kindedTyVar
+#endif
+{-# INLINE kindedTyVarSpecific #-}
+
+#if MIN_VERSION_ghc(9,0,0)
+codeToUserTyVar :: Code -> LHsTyVarBndr () PARSED
+codeToUserTyVar code =
+  case code of
+    LForm (L l (Atom (ASymbol name)))
+     -> L l (UserTyVar NOEXT () (L l (mkUnqual tvName name)))
+    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
+
+codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
+codeToUserTyVarSpecific code =
+  case code of
+    LForm (L l (Atom (ASymbol name)))
+      -- XXX: Does not support 'InferredSpec' yet.
+      -> L l (UserTyVar NOEXT SpecifiedSpec (L l (mkUnqual tvName name)))
+    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
+#else
 codeToUserTyVar :: Code -> HTyVarBndr
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name)))
      -> L l (UserTyVar NOEXT (L l (mkUnqual tvName name)))
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
+
+codeToUserTyVarSpecific :: Code -> HTyVarBndrSpecific
+codeToUserTyVarSpecific = codeToUserTyVar
+#endif
 {-# INLINE codeToUserTyVar #-}
 
 -- | Auxiliary function to make 'HsDocString'.
@@ -336,7 +389,14 @@ addConDoc'' = flip addConDoc . Just
 
 -- For 8.8.0 compatibility in source code location management
 
-#if MIN_VERSION_ghc(8,8,0)
+-- #if MIN_VERSION_ghc(8,8,0)
+#if MIN_VERSION_ghc(9,0,0)
+dL :: Located a -> Located a
+dL = id
+
+cL :: SrcSpan -> a -> Located a
+cL = L
+#elif MIN_VERSION_ghc(8,8,0)
 dL :: SrcLoc.HasSrcSpan a => a -> Located (SrcLoc.SrcSpanLess a)
 dL = SrcLoc.dL
 
@@ -373,3 +433,23 @@ funPrec = PprPrec 2 -- Function args; no parens for constructor apps
 opPrec  = PprPrec 2 -- Infix operator
 appPrec = PprPrec 3 -- Constructor args; no parens for atomic
 #endif
+
+#if MIN_VERSION_ghc(9,0,0)
+addConDoc :: LConDecl a -> Maybe LHsDocString -> LConDecl a
+addConDoc decl    Nothing = decl
+addConDoc (L p c) doc     = L p ( c { con_doc = con_doc c `mplus` doc } )
+#endif
+
+-- Version compatibility helper.
+tailFS :: FastString -> FastString
+#if MIN_VERSION_ghc(9,0,0)
+tailFS = mkFastStringByteString . BS.tail . bytesFS
+#else
+tailFS = FastString.tailFS
+#endif
+{-# INLINE tailFS #-}
+
+consListWith :: [Code] -> String -> Code
+consListWith rest sym =
+  LForm (genSrc (List (LForm (genSrc (Atom (aSymbol sym))) : rest)))
+{-# INLINE consListWith #-}

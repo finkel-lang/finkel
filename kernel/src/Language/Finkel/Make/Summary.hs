@@ -27,7 +27,7 @@ module Language.Finkel.Make.Summary
   , Option(..)
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
 import           Control.Monad.IO.Class            (MonadIO (..))
@@ -53,79 +53,80 @@ import           System.FilePath                   (takeBaseName, takeDirectory,
                                                     (<.>), (</>))
 
 -- ghc
-import           DriverPhases                      (HscSource (..), Phase (..))
-import           DriverPipeline                    (compileFile, preprocess,
+import           GHC_Data_FastString               (FastString, fsLit)
+import           GHC_Data_StringBuffer             (StringBuffer,
+                                                    hGetStringBuffer)
+import           GHC_Driver_Finder                 (addHomeModuleToFinder,
+                                                    mkHomeModLocation)
+import           GHC_Driver_Monad                  (GhcMonad (..))
+import           GHC_Driver_Phases                 (HscSource (..), Phase (..))
+import           GHC_Driver_Pipeline               (compileFile, preprocess,
                                                     writeInterfaceOnlyMode)
-import           DynFlags                          (DumpFlag (..),
+import           GHC_Driver_Session                (DumpFlag (..),
                                                     DynFlags (..),
                                                     HasDynFlags (..),
                                                     isObjectTarget,
-                                                    parseDynamicFilePragma,
-                                                    thisPackage)
-import           ErrUtils                          (MsgDoc, dumpIfSet_dyn,
-                                                    mkPlainErrMsg)
-import           FastString                        (FastString, fsLit)
-import           Finder                            (addHomeModuleToFinder,
-                                                    mkHomeModLocation)
-import           GHC_Hs                            (HsModule (..))
-import           GHC_Hs_Dump                       (BlankSrcSpan (..),
-                                                    showAstData)
-import           GHC_Hs_ImpExp                     (ImportDecl (..))
-import           GhcMonad                          (GhcMonad (..))
-import           HeaderInfo                        (getImports)
-import           HscStats                          (ppSourceStats)
-import           HscTypes                          (HomeModInfo (..),
+                                                    parseDynamicFilePragma)
+import           GHC_Driver_Types                  (HomeModInfo (..),
                                                     HsParsedModule (..),
                                                     HscEnv (..),
                                                     ModSummary (..),
                                                     ModuleGraph, Usage (..),
+                                                    handleFlagWarnings,
                                                     icPrintUnqual, lookupHpt,
                                                     ms_mod_name, throwOneError)
-import           Module                            (ModLocation (..), Module,
+import           GHC_Hs                            (HsModule (..))
+import           GHC_Hs_Dump                       (BlankSrcSpan (..),
+                                                    showAstData)
+import           GHC_Hs_ImpExp                     (ImportDecl (..))
+import           GHC_Hs_Stats                      (ppSourceStats)
+import           GHC_Parser_Header                 (getImports)
+import           GHC_Types_SrcLoc                  (GenLocated (..), Located,
+                                                    getLoc, mkSrcLoc, mkSrcSpan,
+                                                    unLoc)
+import           GHC_Unit_Module                   (ModLocation (..), Module,
                                                     ModuleName, mkModule,
                                                     mkModuleName, moduleName,
                                                     moduleNameSlashes,
                                                     moduleNameString)
-import           Outputable                        (Outputable (..), hcat,
-                                                    printForUser, quotes, text,
-                                                    vcat, ($$), (<+>))
-import           SrcLoc                            (GenLocated (..), Located,
-                                                    getLoc, mkSrcLoc, mkSrcSpan,
-                                                    unLoc)
-import           StringBuffer                      (StringBuffer,
-                                                    hGetStringBuffer)
-import           Util                              (getModificationUTCTime,
+import           GHC_Utils_Error                   (MsgDoc, dumpIfSet_dyn,
+                                                    mkPlainErrMsg)
+import           GHC_Utils_Misc                    (getModificationUTCTime,
                                                     looksLikeModuleName,
                                                     modificationTimeIfExists)
+import           GHC_Utils_Outputable              (Outputable (..), hcat,
+                                                    printForUser, quotes, text,
+                                                    vcat, ($$), (<+>))
 
-#if MIN_VERSION_ghc(8,4,0)
-import           HscTypes                          (extendMG, mgElemModule,
-                                                    mgLookupModule,
-                                                    mgModSummaries,
-                                                    mkModuleGraph)
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC_Driver_Session                (homeUnit)
+import           GHC_Parser_Annotation             (ApiAnns (..))
+import           GHC_Utils_Error                   (DumpFormat (..))
+import           GHC_Utils_Outputable              (Depth (..))
+#else
+import           GHC_Driver_Session                (thisPackage)
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import           CliOption                         (Option (..))
-#else
-import           DynFlags                          (Option (..))
-#endif
-
-#if MIN_VERSION_ghc (8,10,0)
-import           ErrUtils                          (withTimingD)
-#else
-import           ErrUtils                          (withTiming)
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import           HscTypes                          (ModIface_ (..),
+import           GHC_Driver_Types                  (ModIface_ (..),
                                                     ms_home_allimps)
+import           GHC_Utils_CliOption               (Option (..))
+import           GHC_Utils_Error                   (withTimingD)
 #else
-import           HscTypes                          (ModIface (..), ms_imps)
+import           GHC_Driver_Session                (Option (..))
+import           GHC_Driver_Types                  (ModIface (..), ms_imps)
+import           GHC_Utils_Error                   (withTiming)
 #endif
 
 #if MIN_VERSION_ghc(8,8,0)
-import           HscTypes                          (throwErrors)
+import           GHC_Driver_Types                  (throwErrors)
+#endif
+
+#if MIN_VERSION_ghc(8,4,0)
+import           GHC_Driver_Types                  (extendMG, mgElemModule,
+                                                    mgLookupModule,
+                                                    mgModSummaries,
+                                                    mkModuleGraph)
 #endif
 
 -- Internal
@@ -221,8 +222,10 @@ getDynFlagsFromSPState dflags0 sp = do
   -- 'HeaderInfo.checkExtension'.
   let mkx = fmap ("-X" ++)
       exts = map mkx (langExts sp)
-  (dflags1,_,_) <- parseDynamicFilePragma dflags0 exts
-  (dflags2,_,_) <- parseDynamicFilePragma dflags1 (ghcOptions sp)
+  (dflags1,_,warns1) <- parseDynamicFilePragma dflags0 exts
+  liftIO (handleFlagWarnings dflags1 warns1)
+  (dflags2,_,warns2) <- parseDynamicFilePragma dflags1 (ghcOptions sp)
+  liftIO (handleFlagWarnings dflags2 warns2)
   return dflags2
 
 resetFnkEnv :: Fnk ()
@@ -281,7 +284,7 @@ mkModSummary hsc_env dflags file mdl reqs = do
   let mod_name = case hsmodName mdl of
                   Just name -> unLoc name
                   Nothing   -> mkModuleName "Main"
-      empty_anns = (Map.empty, Map.empty)
+      empty_anns = mkEmptyApiAnns
       r_s_loc = mkSrcLoc (fsLit file) 1 1
       r_s_span = mkSrcSpan r_s_loc r_s_loc
 
@@ -300,6 +303,18 @@ mkModSummary hsc_env dflags file mdl reqs = do
         , hpm_annotations = empty_anns }
 
   mkModSummary' hsc_env dflags file mod_name [] imports (Just pm) Nothing
+
+#if MIN_VERSION_ghc(9,0,0)
+mkEmptyApiAnns :: ApiAnns
+mkEmptyApiAnns = ApiAnns { apiAnnItems = Map.empty
+                         , apiAnnEofPos = Nothing
+                         , apiAnnComments = Map.empty
+                         , apiAnnRogueComments = []
+                         }
+#else
+mkEmptyApiAnns :: (Map.Map a b, Map.Map c d)
+mkEmptyApiAnns = (Map.empty, Map.empty)
+#endif
 
 -- | Make 'ModSummary' for recompilation check done with 'doCheckOldIface'.
 mkModSummaryForRecompile
@@ -427,9 +442,13 @@ dumpModSummary fnk_env hsc_env mb_sp ms =
        let out_path = get_out_path dir
            out_dir = takeDirectory out_path
        traceSummary fnk_env "dumpModSummary" ["Writing to" <+> text out_path]
-       let emit hdl = printForUser dflags hdl unqual hsrc
-           unqual = icPrintUnqual dflags (hsc_IC hsc_env)
+       let unqual = icPrintUnqual dflags (hsc_IC hsc_env)
            dflags = hsc_dflags hsc_env
+#if MIN_VERSION_ghc(9,0,0)
+           emit hdl = printForUser dflags hdl unqual AllTheWay hsrc
+#else
+           emit hdl = printForUser dflags hdl unqual hsrc
+#endif
        liftIO (do createDirectoryIfMissing True out_dir
                   withFile out_path WriteMode emit)
     get_out_path dir =
@@ -450,18 +469,27 @@ dumpParsedAST dflags ms =
     (case ms_parsed_mod ms of
        Just pm ->
          do let rdr_module = hpm_module pm
-            dumpIfSet_dyn dflags Opt_D_dump_parsed "Parser"
-                          (ppr rdr_module)
-            dumpIfSet_dyn dflags Opt_D_dump_parsed_ast "Parser AST"
-                          (txt (showAstData NoBlankSrcSpan rdr_module))
-            dumpIfSet_dyn dflags Opt_D_source_stats "Source Statistic"
-                          (ppSourceStats False rdr_module)
+            dumpIfSet_dyn_hs dflags Opt_D_dump_parsed "Parser"
+                             (ppr rdr_module)
+            dumpIfSet_dyn_hs dflags Opt_D_dump_parsed_ast "Parser AST"
+                             (txt (showAstData NoBlankSrcSpan rdr_module))
+            dumpIfSet_dyn_txt dflags Opt_D_source_stats "Source Statistic"
+                              (ppSourceStats False rdr_module)
        Nothing -> return ())
   where
 #if MIN_VERSION_ghc(8,4,0)
     txt = id
 #else
     txt = text
+#endif
+#if MIN_VERSION_ghc(9,0,0)
+    dumpIfSet_dyn_hs df flag label sdoc =
+      dumpIfSet_dyn df flag label FormatHaskell sdoc
+    dumpIfSet_dyn_txt df flag label sdoc =
+      dumpIfSet_dyn df flag label FormatText sdoc
+#else
+    dumpIfSet_dyn_hs = dumpIfSet_dyn
+    dumpIfSet_dyn_txt = dumpIfSet_dyn
 #endif
 
 -- Note [Chasing dependencies of required home package module]
@@ -502,7 +530,7 @@ requiredDependency hsc_env = go
       in  foldl' (find_import_path mg) acc1 (ms_home_allimps ms)
 
     find_import_path mg acc mod_name =
-      let mdl = mkModule (thisPackage (hsc_dflags hsc_env)) mod_name
+      let mdl = mkModuleFromDynFlags (hsc_dflags hsc_env) mod_name
       in  maybe acc (go acc) (mgLookupModule' mg mdl)
 
     find_require_paths hpt acc ms =
@@ -521,6 +549,15 @@ requiredDependency hsc_env = go
               acc1 = path : acc
           in  maybe acc1 (go acc1) mb_ms1
         _ -> acc
+
+
+mkModuleFromDynFlags :: DynFlags -> ModuleName -> Module
+mkModuleFromDynFlags dflags mod_name =
+#if MIN_VERSION_ghc(9,0,0)
+  mkModule (homeUnit dflags) mod_name
+#else
+  mkModule (thisPackage dflags) mod_name
+#endif
 
 -- | Trace function for this module.
 traceSummary

@@ -10,17 +10,20 @@
 (:require Finkel.Core)
 
 (defmodule Orphan
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import
-   ;; ghc
-   (BasicTypes ((SourceText ..)))
-
    ;; QuickCheck
-   (Test.QuickCheck ((Arbitrary ..) (Gen)
-                     arbitraryUnicodeChar elements getUnicodeString
-                     listOf oneof scale))
+   (Test.QuickCheck
+    ((Arbitrary ..) (Gen)
+     arbitraryUnicodeChar elements getUnicodeString listOf oneof scale))
 
    ;; finkel-kernel
    (Language.Finkel.Form)))
+
+(imports-from-ghc
+ (GHC.Types.Basic ((SourceText ..))))
 
 (instance (Arbitrary Atom)
   (= arbitrary

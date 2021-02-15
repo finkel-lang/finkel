@@ -25,10 +25,12 @@ tested-with:           GHC == 8.2.2
                      , GHC == 8.6.4
                      , GHC == 8.8.1
                      , GHC == 8.10.2
+                     , GHC == 8.10.4
+                     , GHC == 9.0.1
 
 custom-setup
   setup-depends:       base         >= 4.10 && < 5
-                     , Cabal        >= 2.0  && < 3.3
+                     , Cabal        >= 2.0  && < 3.5
                      , finkel-setup == 0.0.0
 
 library
@@ -36,13 +38,16 @@ library
   exposed-modules:     Paths_finkel_core
                        Finkel.Core
                        Finkel.Core.Functions
+                       Finkel.Core.Ghc
                        Finkel.Prelude
   other-modules:       Finkel.Core.Stage0
                        Finkel.Core.Stage1
                        Finkel.Core.Stage2
+                       Finkel.Core.Ghc.Module
+                       Finkel.Core.Ghc.Version
   autogen-modules:     Paths_finkel_core
   build-depends:       base          >= 4.7   && < 5
-                     , ghc           >= 8.2.0 && < 8.11.0
+                     , ghc           >= 8.2.0 && < 9.1
                      , finkel-kernel == 0.0.0
   build-tool-depends:  fkc:fkc == 0.0.0
   default-language:    Haskell2010

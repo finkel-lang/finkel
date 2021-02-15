@@ -1,12 +1,15 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- Orphan instance definitions for Form, for QuickCheck.
 
 module Orphan where
 
+#include "ghc_modules.h"
+
 -- ghc
-import BasicTypes           (FractionalLit (..), SourceText (..))
-import FastString           (unpackFS)
-import SrcLoc               (GenLocated (..))
+import GHC_Data_FastString  (unpackFS)
+import GHC_Types_Basic      (FractionalLit (..), SourceText (..))
+import GHC_Types_SrcLoc     (GenLocated (..))
 
 -- QuickCheck
 import Test.QuickCheck      (Arbitrary (..), CoArbitrary (..), Gen,

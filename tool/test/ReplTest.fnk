@@ -6,6 +6,9 @@
 
 (defmodule ReplTest
   (export replTests listenTests)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
@@ -23,9 +26,6 @@
 
    ;; filepath
    (System.FilePath (</>))
-
-   ;; ghc
-   (StringBuffer (StringBuffer stringToStringBuffer))
 
    ;; haskeline
    (System.Console.Haskeline (defaultSettings runInputT))
@@ -50,6 +50,10 @@
    (Finkel.Tool.Repl.IO)
    (Finkel.Tool.Repl.Types)
    (TestAux)))
+
+(imports-from-ghc
+ (GHC.Data.StringBuffer (StringBuffer stringToStringBuffer)))
+
 
 ;;; Extra imports
 
@@ -217,13 +221,6 @@
     ;; Expansion quoted codes in REPL
     (ok '(macroexpand ''foo)
         "(:quote foo)")
-    (ok '(macroexpand '`(a ,@(b) c))
-        (concat
-         ["(Language.Finkel.qList (Data.Foldable.concat ["
-          "[(:quote a)] "
-          "(Language.Finkel.unquoteSplice ((b))) "
-          "[(:quote c)]"
-          "]))"]))
 
     ;; Exported macros
     (satisfy '(exported-macros Finkel.Core)
@@ -233,13 +230,17 @@
                  _ False)))
 
     ;; Errors
-    (ng 'buzz
-        (concat ["<interactive>:1:1: error: "
-                 "Variable not in scope: buzz"]))
-    (ng '(= f a (+ a 1) (+ a 2))
-        (concat
-         ["<quoted code>: error:\n"
-          "    syntax error on input `(= f a (+ a 1) (+ a 2))'"]))
+    (satisfy 'buzz
+             (\ result
+               (case result
+                 (Left str) (isSubsequenceOf "Variable not in scope: buzz" str)
+                 _ False)))
+    (satisfy '(= f a (+ a 1) (+ a 2))
+             (\ result
+               (case result
+                 (Left str) (isSubsequenceOf "syntax error on input" str)
+                 _ False)))
+
     (ng '(head [])
         "*** Exception: Prelude.head: empty list")))
 

@@ -1,18 +1,24 @@
+{-# LANGUAGE CPP #-}
+
 module FnkTest where
 
+#include "ghc_modules.h"
+
 -- base
-import           Control.Exception
+import           Control.Exception            (throwIO)
 import qualified Control.Monad.Fail           as MonadFail
 import           Control.Monad.IO.Class
 import           Data.Maybe                   (fromMaybe, isNothing)
 
 -- ghc
-import           Exception                    (gbracket)
-import           FastString                   (fsLit)
-import           HscTypes                     (SourceError, ms_mod_name)
-import           Module                       (moduleNameString)
-import           SrcLoc                       (GenLocated (..))
-import           StringBuffer                 (stringToStringBuffer)
+import           GHC_Data_FastString          (fsLit)
+import           GHC_Data_StringBuffer        (stringToStringBuffer)
+import           GHC_Driver_Types             (SourceError, ms_mod_name)
+import           GHC_Types_SrcLoc             (GenLocated (..))
+import           GHC_Unit_Module              (moduleNameString)
+
+-- exceptions
+import           Control.Monad.Catch          (bracket)
 
 -- hspec
 import           Test.Hspec
@@ -41,6 +47,13 @@ fnkTests = do
 
 exceptionTest :: Spec
 exceptionTest = do
+
+  let e_foo :: FinkelException
+      e_foo = FinkelException "foo"
+
+      test_e_foo :: FinkelException -> Bool
+      test_e_foo (FinkelException msg) = msg == "foo"
+
   describe "Eq and Show instance of FinkelException" $ do
     it "should return True when comparing with itself" $
       property (\str -> let e1 = FinkelException str
@@ -72,32 +85,45 @@ exceptionTest = do
       ret <- runFnk act fnkTestEnv
       ret `shouldBe` (42 :: Int)
 
-  describe "ExceptionMonad instance of Fnk" $
-    it "should return 42" $ do
-      let act = gbracket (return 21) return (\x -> return (x * 2))
+  describe "ExceptionMonad instance of Fnk" $ do
+    it "should return 42 with action in bracket" $ do
+      let act = bracket (return 21) return (\x -> return (x * 2))
       ret <- runFnk act fnkTestEnv
       ret `shouldBe` (42 :: Int)
 
+    it "should catch exception from throwM" $ do
+      let act = throwM e `catch` handler
+          e = FinkelException ""
+          handler :: FinkelException -> Fnk Int
+          handler _ = return 42
+      ret <- runFnk act fnkTestEnv
+      ret `shouldBe` 42
+
+    it "masks an exception" $ do
+      let act = mask (\restore -> restore (throwM e_foo))
+      runFnk act fnkTestEnv `shouldThrow` test_e_foo
+
+    it "masks an exception (uninterruptible)" $ do
+      let act = uninterruptibleMask (\restore -> restore (throwM e_foo))
+      runFnk act fnkTestEnv `shouldThrow` test_e_foo
+
   describe "Handling FinkelException" $
     it "should return 42" $ do
-      let act = handleFinkelException (\_ -> return (42 :: Int))
-                                  (liftIO (throwIO (FinkelException "")))
+      let act = handleFinkelException
+                  (\_ -> return (42 :: Int))
+                  (liftIO (throwIO (FinkelException "")))
       ret <- runFnk act fnkTestEnv
       ret `shouldBe` 42
 
   describe "running Fnk action containing `failS'" $
     it "should throw FinkelException" $ do
-      let p :: FinkelException -> Bool
-          p (FinkelException m) = m == "foo"
-          act = failS "foo"
-      runFnk act fnkTestEnv `shouldThrow` p
+      let act = failS "foo"
+      runFnk act fnkTestEnv `shouldThrow` test_e_foo
 
   describe "running Fnk action containing `fail'" $
     it "should throw FinkelException" $ do
-      let p :: FinkelException -> Bool
-          p (FinkelException m) = m == "foo"
-          act = MonadFail.fail "foo"
-      runFnk act fnkTestEnv `shouldThrow` p
+      let act = MonadFail.fail "foo"
+      runFnk act fnkTestEnv `shouldThrow` test_e_foo
 
   describe "running Fnk action containing SourceError" $
     it "should throw SourceError" $ do
@@ -162,7 +188,7 @@ expandTest = do
       ret <- expand1_fn form
       length ret `shouldSatisfy` (>= 1)
   describe "expand-1 of non-macro" $
-    it "should return the original form" $do
+    it "should return the original form" $ do
       let form = toCode (List [toCode $ aSymbol "show"
                               ,toCode $ aFractional (42 :: Double)])
       ret <- expand1_fn form

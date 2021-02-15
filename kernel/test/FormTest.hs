@@ -3,6 +3,8 @@
 -- | Tests for forms.
 module FormTest where
 
+#include "ghc_modules.h"
+
 -- base
 import           Control.Applicative          (Alternative (..))
 import           Data.Char                    (toUpper)
@@ -33,13 +35,17 @@ import           Data.Monoid                  ((<>))
 import           Control.DeepSeq
 
 -- ghc
-import           BasicTypes                   (SourceText (..), fl_value)
-import           DynFlags                     (HasDynFlags (..))
-import           FastString                   (fsLit, unpackFS)
-import           Outputable                   (showPpr)
-import           SrcLoc                       (GenLocated (..), SrcSpan (..),
+import           GHC_Data_FastString          (fsLit, unpackFS)
+import           GHC_Data_StringBuffer        (stringToStringBuffer)
+import           GHC_Driver_Session           (HasDynFlags (..))
+import           GHC_Types_Basic              (SourceText (..), fl_value)
+import           GHC_Types_SrcLoc             (GenLocated (..), SrcSpan (..),
                                                noSrcSpan)
-import           StringBuffer                 (stringToStringBuffer)
+import           GHC_Utils_Outputable         (showPpr)
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC_Types_SrcLoc             (UnhelpfulSpanReason (..))
+#endif
 
 -- transformers
 import           Control.Monad.Trans.State
@@ -172,8 +178,9 @@ dataInstanceTests = do
       readConstr dtype "AUnit" `shouldBe` Just cnstr
   describe "Data instance for Form" $ do
     let fatom = Atom AUnit
-        flist = List [qChar 'a', qChar 'b']
-        fhslist = HsList [qChar 'a', qChar 'b']
+        qc c = qChar c "" 0 0 0 0
+        flist = List [qc 'a', qc 'b']
+        fhslist = HsList [qc 'a', qc 'b']
         ftend :: Form Atom
         ftend = TEnd
     it "should return Just self with simple gfoldl" $ do
@@ -195,7 +202,7 @@ dataInstanceTests = do
     it "should return same result from dataCast1 and gcast1" $ do
       (dataCast1 [TEnd] :: Maybe [Form Atom]) `shouldBe` Just [TEnd]
   describe "Data instance for LForm" $ do
-    let qc = qChar 'x'
+    let qc = qChar 'x' "" 0 0 0 0
         d1, d2, d3 :: Data a => a
         d1 = fromConstr (toConstr noSrcSpan)
         d2 = fromConstrB (fromConstr (toConstr AUnit))
@@ -211,12 +218,13 @@ dataInstanceTests = do
                 0 -> return d1
                 1 -> return d2
                 _ -> error ("index " ++ show i ++ " for LForm")
-        d4 = fromConstrB d3 (toConstr qUnit)
+        d4 = fromConstrB d3 (toConstr qu)
         gc1 :: Data a => Maybe [LForm a]
         gc1 =
           let a :: Data a => a
               a = fromConstr (toConstr AUnit)
           in  dataCast1 [LForm (L noSrcSpan (Atom a))]
+        qu = qUnit "" 0 0 0 0
     it "should return Just self with simple gfoldl" $ do
       t_gfoldl_self qc
     it "should show itself with toConstr" $ do
@@ -226,38 +234,41 @@ dataInstanceTests = do
           cnstr = toConstr qc
       readConstr dtype "LForm" `shouldBe` Just cnstr
     it "should construct qUnit from constructors" $ do
-      d4 `shouldBe` qUnit
+      d4 `shouldBe` qu
     it "should return qUnit from dataCast1" $
-      gc1 `shouldBe` Just [qUnit]
+      gc1 `shouldBe` Just [qu]
 
 qFunctionTests :: Spec
 qFunctionTests = do
   describe "qSymbol function" $
     it "should equal to quoted symbol" $
-      qSymbol "foo" `shouldBe` toCode (ASymbol (fsLit "foo"))
+      qSymbol "foo" "" 0 0 0 0 `shouldBe` toCode (ASymbol (fsLit "foo"))
   describe "qChar function" $
     it "should equal to quoted char" $
-      qChar 'x' `shouldBe` toCode 'x'
+      qChar 'x' "" 0 0 0 0 `shouldBe` toCode 'x'
   describe "qString function" $
     it "should equal to quoted string" $
-      qString "foo" `shouldBe` toCode "foo"
+      qString "foo" "" 0 0 0 0 `shouldBe` toCode "foo"
   describe "qInteger function" $
     it "should equal to quoted integer" $
-      qInteger 42 `shouldBe` toCode (42 :: Integer)
+      qInteger 42 "" 0 0 0 0 `shouldBe` toCode (42 :: Integer)
   describe "qFractional function" $
     it "should equal to quoted fractional" $
-      qFractional (1.23 :: Double) `shouldBe` toCode (1.23 :: Double)
+      qFractional (1.23 :: Double) "" 0 0 0 0
+        `shouldBe` toCode (1.23 :: Double)
   describe "qUnit function" $
     it "should equal to quoted unit" $
-      qUnit `shouldBe` toCode ()
+      qUnit "" 0 0 0 0 `shouldBe` toCode ()
+
+  let qc x = qChar x "" 0 0 0 0
   describe "qList function" $
     it "should equal to quoted codes" $
-      let xs = [qChar 'a', qChar 'b']
-      in qList xs `shouldBe` toCode (List xs)
+      let xs = [qc 'a', qc 'b']
+      in qList xs "" 0 0 0 0 `shouldBe` toCode (List xs)
   describe "qHsList function" $
     it "should equal to quoted haskell list" $
-      let xs = [qChar 'a', qChar 'b']
-      in  qHsList xs `shouldBe` toCode (HsList xs)
+      let xs = [qc 'a', qc 'b']
+      in  qHsList xs "" 0 0 0 0 `shouldBe` toCode (HsList xs)
 
 fracTest :: Double -> Spec
 fracTest x =
@@ -289,8 +300,8 @@ applicativeTest :: Spec
 applicativeTest = do
   let atom_a = AChar NoSourceText 'a'
       char_a = toCode atom_a
-      al2 = qList [char_a, char_a]
-      ahl2 = qHsList [char_a, char_a]
+      al2 = qList [char_a, char_a] "" 0 0 0 0
+      ahl2 = qHsList [char_a, char_a] "" 0 0 0 0
       unit = toCode ()
       f1 a b = (a,b)
       a_pair = lf (Atom (atom_a, atom_a))
@@ -333,15 +344,17 @@ monadTest = do
   let f1 x = case x of
                AChar st c -> AChar st (toUpper c)
                _          -> x
+      qh x = qHsList x "" 0 0 0 0
+      ql x = qList x "" 0 0 0 0
   describe "bind" $ do
     it "should apply f1 to atom" $
       do {x <- toCode 'x'; return (f1 x)} `shouldBe` toCode 'X'
     it "should apply f1 to list" $
-      do {x <- qList [toCode 'x', toCode 'x']; return (f1 x)} `shouldBe`
-         qList [toCode 'X', toCode 'X']
+      do {x <- ql [toCode 'x', toCode 'x']; return (f1 x)} `shouldBe`
+         ql [toCode 'X', toCode 'X']
     it "should apply f1 to hslist" $
-      do {x <- qHsList [toCode 'x',toCode 'x']; return (f1 x)} `shouldBe`
-         qHsList [toCode 'X', toCode 'X']
+      do {x <- qh [toCode 'x',toCode 'x']; return (f1 x)} `shouldBe`
+         qh [toCode 'X', toCode 'X']
     it "should apply f1 to TEnd" $
       do {x <- toCode (TEnd :: Form Atom); return (f1 x)} `shouldBe`
          toCode (TEnd :: Form Atom)
@@ -357,7 +370,11 @@ foldableTest = do
     it ("should be 55 for " ++ str1) $
       fsum (parseE str1) `shouldBe` 55
     it "should be 0 for TEnd" $ do
+#if MIN_VERSION_ghc(9,0,0)
+      let sp = UnhelpfulSpan (UnhelpfulOther (fsLit "<foldableTest>"))
+#else
       let sp = UnhelpfulSpan (fsLit "<foldableTest>")
+#endif
       fsum (LForm (L sp TEnd)) `shouldBe` 0
   describe "length of nil" $
     it "should be 0" $
@@ -394,7 +411,11 @@ eqPropTest = do
     it "should ignore location information" $ do
       let g :: Code -> Bool
           g x@(LForm (L _ body)) = x == LForm (L sp body)
+#if MIN_VERSION_ghc(9,0,0)
+          sp = UnhelpfulSpan (UnhelpfulOther (fsLit "<eqPropTest>"))
+#else
           sp = UnhelpfulSpan (fsLit "<eqPropTest>")
+#endif
       property g
   describe "comparing TEnd with TEnd" $
     it "should be True" $
@@ -467,7 +488,9 @@ homoiconicTests = do
   t (Semigroup.Last 'z')
   t (Semigroup.Max (42 :: Int))
   t (Semigroup.Min (42 :: Int))
+#if !MIN_VERSION_ghc(9,0,0)
   t (Semigroup.Option (Just "foo"))
+#endif
   t (Semigroup.WrapMonoid True)
   t (42 :: Natural)
   t (Atom (aIntegral (42 :: Int)))
@@ -616,10 +639,10 @@ fromCodeTest = do
 
   describe "getting Nothing from fromCode" $ do
     let ng title x = it title $ x `shouldBe` Nothing
-        q = qSymbol
+        q x = qSymbol x "" 0 0 0 0
         foo = q "foo"
-        foo1 = qList [q "Foo", q "a"]
-        foo2 = qList [q "Foo", q "a", q "b"]
+        foo1 = qList [q "Foo", q "a"] "" 0 0 0 0
+        foo2 = qList [q "Foo", q "a", q "b"] "" 0 0 0 0
 
     it "should result to Nothing with explicit Nothing" $ do
       fromCode (q "Nothing") `shouldBe` (Just Nothing :: Maybe (Maybe ()))
@@ -730,11 +753,13 @@ eqForm a b =
     -- Recursively compare with `eqForm' for 'List' and 'HsList'.
     (List [], List []) -> True
     (List (x:xs), List (y:ys)) ->
-      eqForm x y && eqForm (qList xs) (qList ys)
+      let ql z = qList z "" 0 0 0 0
+      in  eqForm x y && eqForm (ql xs) (ql ys)
 
     (HsList [], HsList []) -> True
     (HsList (x:xs), HsList (y:ys)) ->
-      eqForm x y && eqForm (qHsList xs) (qHsList ys)
+      let qh z = qHsList z "" 0 0 0 0
+      in  eqForm x y && eqForm (qh xs) (qh ys)
 
     -- Treating empty 'List' and Atom symbol 'nil' as same value.
     (Atom (ASymbol sym), List []) | sym == fsLit "nil" -> True

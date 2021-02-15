@@ -6,21 +6,34 @@
 module Language.Finkel.Syntax.HPat where
 
 #include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
 import Data.List                       (foldl')
 
 -- ghc
-import BasicTypes                      (Boxity (..), SourceText (..))
-import FastString                      (headFS, nullFS, tailFS)
+import GHC_Data_FastString             (headFS, nullFS)
 import GHC_Hs_Lit                      (HsLit (..))
-import GHC_Hs_Pat                      (HsRecFields (..), Pat (..))
-import GHC_Hs_Types                    (HsConDetails (..))
-import GHC_Hs_Utils                    (mkHsIsString, mkLHsSigWcType, mkNPat,
-                                        nlWildPat)
-import Lexeme                          (isLexCon, isLexConId, isLexConSym,
+import GHC_Hs_Pat                      (HsConPatDetails, HsRecFields (..),
+                                        Pat (..))
+import GHC_Hs_Type                     (HsConDetails (..))
+import GHC_Hs_Utils                    (mkHsIsString, mkNPat, nlWildPat)
+import GHC_Types_Basic                 (Boxity (..), SourceText (..))
+import GHC_Types_SrcLoc                (GenLocated (..), Located)
+import GHC_Utils_Lexeme                (isLexCon, isLexConId, isLexConSym,
                                         isLexSym)
-import SrcLoc                          (GenLocated (..))
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Hs_Pat                      (ConLikeP)
+#elif MIN_VERSION_ghc(8,4,0)
+import GHC_Hs_Extension                (IdP)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Hs_Type                     (mkHsPatSigType)
+#else
+import GHC_Hs_Utils                    (mkLHsSigWcType)
+#endif
 
 #if MIN_VERSION_ghc(8,10,0)
 import GHC_Hs_Extension                (noExtField)
@@ -118,7 +131,7 @@ b_symP orig@(LForm (dL->L l form))
   = case () of
       _ | isLexCon name
         -- Constructor.
-        -> return (cL l (ConPatIn (L l (mkVarRdrName name))
+        -> return (cL l (mkConPat (L l (mkVarRdrName name))
                                   (PrefixCon [])))
         | hdchr == '~'
         -- Lazy pattern or operator function.
@@ -180,7 +193,7 @@ b_labeledP (LForm (L l form)) ps
                          , rec_dotdot = Nothing }
         cid = L l (mkVarRdrName name)
         cpd = RecCon rc
-    return (cL l (ConPatIn cid cpd))
+    return (cL l (mkConPat cid cpd))
   | otherwise = builderError
 {-# INLINE b_labeledP #-}
 
@@ -218,12 +231,12 @@ b_conP forms is_paren rest =
       where
         rname = mkVarRdrName name
         lrname = L l rname
-        prefixPat = return (cL l (ConPatIn lrname (PrefixCon prest)))
+        prefixPat = return (cL l (mkConPat lrname (PrefixCon prest)))
         prest = map (parenthesizePat' appPrec) rest
         infixPat =
           case rest of
             (hd:rest') ->
-              let f lh rh = cL l (ConPatIn lrname (InfixCon lh (paren rh)))
+              let f lh rh = cL l (mkConPat lrname (InfixCon lh (paren rh)))
                   paren = parenthesizePat' opPrec
               in  return (foldl' f (parenthesizePat' opPrec hd) rest')
             _ -> builderError
@@ -232,7 +245,9 @@ b_conP forms is_paren rest =
 
 b_sigP :: Code -> HPat -> HType -> HPat
 b_sigP (LForm (L l _)) pat ty =
-#if MIN_VERSION_ghc(8,8,0)
+#if MIN_VERSION_ghc(9,0,0)
+  cL l (SigPat NOEXT pat (mkHsPatSigType ty))
+#elif MIN_VERSION_ghc(8,8,0)
   cL l (SigPat NOEXT pat (mkLHsSigWcType ty))
 #elif MIN_VERSION_ghc(8,6,0)
   cL l (SigPat (mkLHsSigWcType ty) pat)
@@ -254,6 +269,17 @@ mkParPat' :: HPat -> HPat
 mkParPat' (dL->L l p) =
   cL l (ParPat NOEXT (cL l p))
 {-# INLINE mkParPat' #-}
+
+#if MIN_VERSION_ghc(9,0,0)
+mkConPat :: Located (ConLikeP PARSED) -> HsConPatDetails PARSED -> Pat PARSED
+mkConPat = ConPat NOEXT
+#elif MIN_VERSION_ghc(8,4,0)
+mkConPat :: Located (IdP PARSED) -> HsConPatDetails PARSED -> Pat PARSED
+mkConPat = ConPatIn
+#else
+mkConPat :: Located PARSED -> HsConPatDetails PARSED -> Pat PARSED
+mkConPat = ConPatIn
+#endif
 
 
 -- ------------------------------------------------------------------------

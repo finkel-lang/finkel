@@ -8,6 +8,9 @@
           run-console-tests
           run-console-test
           remove-compiled)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import
    ;; base
    (Control.Exception (catch throw))
@@ -27,9 +30,6 @@
    ;; filepath
    (System.FilePath (</> <.> takeExtension))
 
-   ;; ghc
-   (Config (cProjectVersion))
-
    ;; hspc
    (Test.Hspec
     ((Expectation) (Spec) expectationFailure it pendingWith runIO shouldBe))
@@ -37,6 +37,9 @@
    ;; process
    (System.Process
     ((CreateProcess ..) (StdStream ..) createProcess proc waitForProcess))))
+
+(imports-from-ghc
+ (GHC.Settings.Config (cProjectVersion)))
 
 
 ;;; Exported

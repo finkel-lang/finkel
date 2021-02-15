@@ -4,6 +4,9 @@
 
 (defmodule Finkel.Tool.Repl.Listen
   (export listener accept-loop run-conn)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import
    ;; base
    (Control.Concurrent
@@ -19,9 +22,6 @@
    (Data.ByteString.Internal (toForeignPtr))
    (qualified Data.ByteString.Char8 as BS)
 
-   ;; ghc
-   (StringBuffer ((StringBuffer ..)))
-
    ;; network
    (Network.Socket
     ((AddrInfo ..) (AddrInfoFlag ..) PortNumber Socket (SocketOption ..)
@@ -34,6 +34,9 @@
 
    ;; internal
    (Finkel.Tool.Repl.Types)))
+
+(imports-from-ghc
+ (GHC.Data.StringBuffer ((StringBuffer ..))))
 
 (defn (:: listener (-> PortNumber (MVar Input) (IO ())))
   [pnum mvar]

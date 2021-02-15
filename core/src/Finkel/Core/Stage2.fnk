@@ -4,6 +4,7 @@
             TypeSynonymInstances)
 
 (:require Finkel.Core.Stage1)
+(:require Finkel.Core.Ghc.Module)
 
 (defmodule Finkel.Core.Stage2
   (export
@@ -38,29 +39,30 @@
 
   (import-when [:compile :load]
     ;; finkel-kernel
-    (Language.Finkel))
+    (Language.Finkel)
+    (Language.Finkel.Form (aSymbol genSrc)))
 
   (import
    ;; base
    (System.IO.Unsafe (unsafePerformIO))
    (qualified System.Info)
 
-   ;; ghc
-   (Config (cProjectVersionInt))
-   (DynFlags ((HasDynFlags ..)))
-   (FastString (FastString fsLit unpackFS))
-   (GHC (getModuleInfo lookupModule lookupName modInfoExports))
-   (Module (mkModuleName))
-   (Outputable (ppr showSDoc))
-   (BasicTypes ((SourceText ..)))
-   (TyCoRep ((TyThing ..)))
-   (Var (varName))
-
    ;; finkel-kernel
-   (Language.Finkel.Form (aString aSymbol mkLocatedForm))
+   (Language.Finkel.Form (aString mkLocatedForm))
 
    ;; Internal
    (Finkel.Core.Stage0)))
+
+(imports-from-ghc
+ (GHC (getModuleInfo lookupModule lookupName modInfoExports))
+ (GHC.Core.TyCo.Rep ((TyThing ..)))
+ (GHC.Driver.Session ((HasDynFlags ..)))
+ (GHC.Data.FastString (FastString fsLit unpackFS))
+ (GHC.Settings.Config (cProjectVersionInt))
+ (GHC.Types.Basic ((SourceText ..)))
+ (GHC.Types.Var (varName))
+ (GHC.Unit.Module (mkModuleName))
+ (GHC.Utils.Outputable (ppr showSDoc)))
 
 
 ;;; ------------------------------------------------------------------------
@@ -419,7 +421,7 @@ False"
 
 (defn (:: make-symbol (-> String Code))
   "Make an `Atom' of `ASymbol' from given `String'."
-  qSymbol)
+  (. LForm genSrc Atom aSymbol))
 %p(INLINABLE make-symbol)
 
 (defn (:: mb-symbol-name (-> Code (Maybe String)))
@@ -489,7 +491,7 @@ and the definition of 'cdadr' is:
 
   (defn (:: cxr-name (-> String Code))
     [x]
-    (qSymbol (concat ["c" x "r"])))
+    ($ LForm genSrc Atom aSymbol concat ["c" x "r"]))
 
   (defn (:: doc (-> String Code))
     [xs]

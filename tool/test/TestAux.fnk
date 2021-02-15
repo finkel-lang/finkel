@@ -5,6 +5,9 @@
 (defmodule TestAux
   (export (TestIO ..) (TestIOState ..) runTestIO
           (EvalTestFns ..) makeEvalTestFns)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
@@ -23,11 +26,6 @@
    ;; filepath
    (System.FilePath (</>))
 
-   ;; ghc
-   (Config (cProjectVersion))
-   (DynFlags ((HasDynFlags ..) parseDynamicFlagsCmdLine))
-   (SrcLoc (noLoc))
-
    ;; hspec
    (Test.Hspec)
 
@@ -41,6 +39,12 @@
    (Finkel.Tool.Repl.Eval)
    (Finkel.Tool.Repl.Loop)
    (Finkel.Tool.Repl.Types)))
+
+(imports-from-ghc
+ (GHC.Settings.Config (cProjectVersion))
+ (GHC.Driver.Session ((HasDynFlags ..) parseDynamicFlagsCmdLine))
+ (GHC.Types.SrcLoc (noLoc)))
+
 
 ;;; Extra imports
 

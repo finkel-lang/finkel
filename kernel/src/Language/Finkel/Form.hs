@@ -12,6 +12,7 @@ module Language.Finkel.Form
   , LForm(..)
 
   -- * Constructor functions
+  , QuoteFn
   , qSymbol
   , qChar
   , qString
@@ -32,34 +33,44 @@ module Language.Finkel.Form
   , showLoc
   , toListL
   , unCode
+  , withLocInfo
 
   -- * Re-export
   , IntegralLit (..)
   , mkIntegralLit
   ) where
 
+#include "ghc_modules.h"
+
 -- base
-import Control.Applicative (Alternative (..))
-import Control.Monad       (MonadPlus (..))
-import Data.Data           (Data, Typeable)
-import Data.Function       (on)
-import GHC.Generics        (Generic)
+import Control.Applicative  (Alternative (..))
+import Control.Monad        (MonadPlus (..))
+import Data.Data            (Data, Typeable)
+import Data.Function        (on)
+import Data.Maybe           (fromMaybe)
+import GHC.Generics         (Generic)
 
 -- ghc
-import BasicTypes          (FractionalLit (..), SourceText (..))
-import FastString          (FastString, fsLit, unpackFS)
-import Outputable          (Outputable (..), brackets, cat, char, double,
-                            doubleQuotes, fsep, integer, parens, text)
-import SrcLoc              (GenLocated (..), Located, SrcSpan (..), combineLocs,
-                            combineSrcSpans, srcSpanFile, srcSpanStartCol,
-                            srcSpanStartLine)
+import GHC_Data_FastString  (FastString, fsLit, unpackFS)
+import GHC_Types_Basic      (FractionalLit (..), SourceText (..))
+import GHC_Types_SrcLoc     (GenLocated (..), Located, SrcSpan (..),
+                             combineLocs, combineSrcSpans, mkSrcLoc, mkSrcSpan,
+                             srcSpanEndCol, srcSpanEndLine, srcSpanFile,
+                             srcSpanFileName_maybe, srcSpanStartCol,
+                             srcSpanStartLine)
+import GHC_Utils_Outputable (Outputable (..), brackets, cat, char, double,
+                             doubleQuotes, fsep, integer, parens, text)
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Types_SrcLoc     (UnhelpfulSpanReason (..), unhelpfulSpanFS)
+#endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import BasicTypes          (IntegralLit (..), mkFractionalLit, mkIntegralLit)
+import GHC_Types_Basic      (IntegralLit (..), mkFractionalLit, mkIntegralLit)
 #endif
 
 -- deepseq
-import Control.DeepSeq     (NFData (..))
+import Control.DeepSeq      (NFData (..))
 
 
 -- -------------------------------------------------------------------
@@ -201,20 +212,20 @@ instance Applicative Form where
   pure = Atom
   {-# INLINE pure #-}
 
-  Atom f <*> Atom a = Atom (f a)
-  Atom f <*> List as = List (map (fmap f) as)
-  Atom f <*> HsList as = HsList (map (fmap f) as)
+  Atom f <*> Atom a        = Atom (f a)
+  Atom f <*> List as       = List (map (fmap f) as)
+  Atom f <*> HsList as     = HsList (map (fmap f) as)
 
-  List fs <*> a@(Atom _) = List (fmap apLF fs <*> [a])
-  List fs <*> List as = List ((fmap (<*>) fs) <*> as)
-  List fs <*> HsList as = List ((fmap (<*>) fs) <*> as)
+  List fs <*> a@(Atom _)   = List (fmap apLF fs <*> [a])
+  List fs <*> List as      = List ((fmap (<*>) fs) <*> as)
+  List fs <*> HsList as    = List ((fmap (<*>) fs) <*> as)
 
   HsList fs <*> a@(Atom _) = HsList (fmap apLF fs <*> [a])
-  HsList fs <*> List as = HsList ((fmap (<*>) fs) <*> as)
-  HsList fs <*> HsList as = HsList ((fmap (<*>) fs) <*> as)
+  HsList fs <*> List as    = HsList ((fmap (<*>) fs) <*> as)
+  HsList fs <*> HsList as  = HsList ((fmap (<*>) fs) <*> as)
 
-  TEnd <*> _ = TEnd
-  _ <*> TEnd = TEnd
+  TEnd <*> _               = TEnd
+  _ <*> TEnd               = TEnd
   {-# INLINE (<*>) #-}
 
 instance Applicative LForm where
@@ -293,20 +304,20 @@ instance Outputable a => Outputable (LForm a) where
 
 #if MIN_VERSION_ghc(8,4,0)
 instance Semigroup (Form a) where
-  Atom a <> Atom b = List [atomForm a, atomForm b]
-  Atom a <> List bs = List (atomForm a : bs)
-  Atom a <> HsList bs = List (atomForm a : bs)
+  Atom a <> Atom b       = List [atomForm a, atomForm b]
+  Atom a <> List bs      = List (atomForm a : bs)
+  Atom a <> HsList bs    = List (atomForm a : bs)
 
-  List as <> Atom b = List (as <> [atomForm b])
-  List as <> List bs = List (as <> bs)
-  List as <> HsList bs = List (as <> bs)
+  List as <> Atom b      = List (as <> [atomForm b])
+  List as <> List bs     = List (as <> bs)
+  List as <> HsList bs   = List (as <> bs)
 
-  HsList as <> Atom b = List (as <> [atomForm b])
-  HsList as <> List bs = List (as <> bs)
+  HsList as <> Atom b    = List (as <> [atomForm b])
+  HsList as <> List bs   = List (as <> bs)
   HsList as <> HsList bs = List (as <> bs)
 
-  TEnd <> b = b
-  a <> TEnd = a
+  TEnd <> b              = b
+  a <> TEnd              = a
   {-# INLINE (<>) #-}
 
 instance Semigroup (LForm a) where
@@ -322,20 +333,20 @@ instance Monoid (LForm a) where
   {-# INLINE mempty #-}
 #else
 instance Monoid (Form a) where
-  Atom a `mappend` Atom b = List [atomForm a, atomForm b]
-  Atom a `mappend` List bs = List (atomForm a : bs)
-  Atom a `mappend` HsList bs = List (atomForm a : bs)
+  Atom a `mappend` Atom b       = List [atomForm a, atomForm b]
+  Atom a `mappend` List bs      = List (atomForm a : bs)
+  Atom a `mappend` HsList bs    = List (atomForm a : bs)
 
-  List as `mappend` Atom b = List (as `mappend` [atomForm b])
-  List as `mappend` List bs = List (as `mappend` bs)
-  List as `mappend` HsList bs = List (as `mappend` bs)
+  List as `mappend` Atom b      = List (as `mappend` [atomForm b])
+  List as `mappend` List bs     = List (as `mappend` bs)
+  List as `mappend` HsList bs   = List (as `mappend` bs)
 
-  HsList as `mappend` Atom b = List (as `mappend` [atomForm b])
-  HsList as `mappend` List bs = List (as `mappend` bs)
+  HsList as `mappend` Atom b    = List (as `mappend` [atomForm b])
+  HsList as `mappend` List bs   = List (as `mappend` bs)
   HsList as `mappend` HsList bs = List (as `mappend` bs)
 
-  TEnd `mappend` b = b
-  a `mappend` TEnd = a
+  TEnd `mappend` b              = b
+  a `mappend` TEnd              = a
   {-# INLINE mappend #-}
 
   mempty = List []
@@ -399,38 +410,48 @@ instance Fractional Code where
 --
 -- -------------------------------------------------------------------
 
+-- | Type synonym for functions for quoting form.
+type QuoteFn
+  = String -- ^ File name.
+  -> Int -- ^ Start line.
+  -> Int -- ^ Start column.
+  -> Int -- ^ End line.
+  -> Int -- ^ End column.
+  -> Code
+
 -- | Make quoted symbol from 'String'.
-qSymbol :: String -> Code
-qSymbol = quoted . Atom . aSymbol
+qSymbol :: String -> QuoteFn
+qSymbol = quotedWithLoc . Atom . aSymbol
 
 -- | Make quoted char from 'Char'.
-qChar :: Char -> Code
-qChar = quoted . Atom . AChar NoSourceText
+qChar :: Char -> QuoteFn
+qChar = quotedWithLoc . Atom . AChar NoSourceText
 
 -- | Make quoted string from 'String'.
-qString :: String -> Code
-qString = quoted . Atom . aString NoSourceText
+qString :: String -> QuoteFn
+qString = quotedWithLoc . Atom . aString NoSourceText
 
 -- | Make quoted integer from 'Integer'.
-qInteger :: Integer -> Code
-qInteger = quoted . Atom . AInteger . mkIntegralLit
+qInteger :: Integer -> QuoteFn
+qInteger = quotedWithLoc . Atom . AInteger . mkIntegralLit
 
--- | Make quoted fractional from read value.
-qFractional :: (Real a, Show a) => a -> Code
-qFractional = quoted . Atom . aFractional
+-- | Make quoted fractional from 'Real' value.
+qFractional :: (Real a, Show a) => a -> QuoteFn
+qFractional = quotedWithLoc . Atom . aFractional
 
 -- | Make quoted unit.
-qUnit :: Code
-qUnit = quoted (Atom AUnit)
+qUnit :: QuoteFn
+qUnit = quotedWithLoc (Atom AUnit)
 
 -- | Make quoted list from list of 'Code'.
-qList :: [Code] -> Code
-qList = quoted . List
+qList :: [Code] -> QuoteFn
+qList = quotedWithLoc . List
 
 -- | Make quoted haskell list from list of 'Code'.
-qHsList :: [Code] -> Code
-qHsList = quoted . HsList
+qHsList :: [Code] -> QuoteFn
+qHsList = quotedWithLoc . HsList
 
+-- -- | Make quoted symbol from 'String'.
 -- | Auxiliary function to construct 'ASymbol' atom.
 aSymbol :: String -> Atom
 aSymbol = ASymbol . fsLit
@@ -462,9 +483,42 @@ aIntegral x = AInteger $! mkIntegralLit x
 nil :: Code
 nil = LForm (genSrc (List []))
 
-quoted :: Form Atom -> Code
-quoted = LForm . L (UnhelpfulSpan (fsLit "<quoted code>"))
-{-# INLINE quoted #-}
+quotedWithLoc :: Form Atom -> QuoteFn
+quotedWithLoc x file start_line start_col end_line end_col =
+  let file_fs = fsLit file
+      span_start = mkSrcLoc file_fs start_line start_col
+      span_end = mkSrcLoc file_fs end_line end_col
+      l = mkSrcSpan span_start span_end
+  in  LForm (L l x)
+{-# INLINE quotedWithLoc #-}
+
+-- From ghc 9.0.1, a new field with 'Maybe Int' was added to RealSrcSpan
+-- constructor of SrcLoc data type.
+
+#if __GLASGOW_HASKELL__ >= 900
+#define _MB_BUF_POS _
+#else
+#define _MB_BUF_POS {- empty -}
+#endif
+
+-- | Apply given functions to file name, start line, start column, end line, and
+-- end column.
+withLocInfo ::
+    SrcSpan -- ^ Source code span to get location info.
+    -> (FastString -> a) -- ^ Function applied to file name.
+    -> (Int -> b) -- ^ Function applied to lines and columns.
+    -> (a, b, b, b, b)
+withLocInfo l f_file f_n =
+  let file = f_file (fromMaybe (fsLit "<noloc>") (srcSpanFileName_maybe l))
+      sl = get_n srcSpanStartLine
+      sc = get_n srcSpanStartCol
+      el = get_n srcSpanEndLine
+      ec = get_n srcSpanEndCol
+      get_n getter = case l of
+        RealSrcSpan rspan _MB_BUF_POS -> f_n $! getter rspan
+        _                             -> f_n 0
+  in  (file, sl, sc, el, ec)
+{-# INLINE withLocInfo #-}
 
 
 -- -------------------------------------------------------------------
@@ -473,15 +527,29 @@ quoted = LForm . L (UnhelpfulSpan (fsLit "<quoted code>"))
 --
 -- -------------------------------------------------------------------
 
+finkelUnhelpfulSpan :: SrcSpan
+#if MIN_VERSION_ghc(9,0,0)
+finkelUnhelpfulSpan =
+  UnhelpfulSpan (UnhelpfulOther (fsLit "<finkel generated code>"))
+#else
+finkelUnhelpfulSpan =
+  UnhelpfulSpan (fsLit "<finkel generated code>")
+#endif
+{-# INLINE finkelUnhelpfulSpan #-}
+
 -- | String representation of located data.
 showLoc :: LForm a -> String
 showLoc (LForm (L l _)) =
   case l of
-    RealSrcSpan r    ->
+    RealSrcSpan r _MB_BUF_POS  ->
       unpackFS (srcSpanFile r) ++ ":" ++
       show (srcSpanStartLine r) ++ ":" ++
       show (srcSpanStartCol r) ++ ": "
+#if MIN_VERSION_ghc(9,0,0)
+    UnhelpfulSpan uh -> unpackFS (unhelpfulSpanFS uh) ++ ": "
+#else
     UnhelpfulSpan fs -> unpackFS fs ++ ": "
+#endif
 
 -- | Make 'List' from given code. When the given argument was already a 'List',
 -- the given 'List' is returned. If the argument was 'HsList', converted to
@@ -501,7 +569,7 @@ unCode (LForm (L _ a)) = a
 
 -- | Attach location to mark generated code.
 genSrc :: a -> Located a
-genSrc = L (UnhelpfulSpan (fsLit "<finkel generated code>"))
+genSrc = L finkelUnhelpfulSpan
 {-# INLINE genSrc #-}
 
 -- | Make located list from list of located elements.

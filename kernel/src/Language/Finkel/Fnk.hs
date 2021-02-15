@@ -1,6 +1,7 @@
 -- | Wrapper for Finkel code compilation monad.
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Language.Finkel.Fnk
   ( -- * Finkel compiler monad
     Fnk(..)
@@ -62,94 +63,107 @@ module Language.Finkel.Fnk
   , gensym
   , gensym'
   , initUniqSupply'
+
+  -- * Re-export from 'exceptions' package
+  , MonadCatch(..)
+  , MonadThrow(..)
+  , MonadMask(..)
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 -- base
-import           Control.Exception      (Exception (..), throw, throwIO)
-import           Control.Monad          (mplus, unless, when)
+import           Control.Exception       (Exception (..), throw, throwIO)
+import           Control.Monad           (mplus, unless, when)
+import           Control.Monad.IO.Class  (MonadIO (..))
+import           Data.Bits               (setBit, testBit, zeroBits)
+import           Data.Char               (isSpace, toLower)
+import           Data.IORef              (IORef, atomicModifyIORef',
+                                          atomicWriteIORef, newIORef, readIORef)
+import           Data.List               (isPrefixOf, partition)
+import           Data.Word               (Word8)
+import           System.Console.GetOpt   (ArgDescr (..), ArgOrder (..),
+                                          OptDescr (..), getOpt', usageInfo)
+import           System.Environment      (getProgName, lookupEnv)
+import           System.IO               (stderr)
+import           System.IO.Unsafe        (unsafePerformIO)
 
 #if !MIN_VERSION_ghc(8,8,0)
-import           Control.Monad.Fail     (MonadFail (..))
+import           Control.Monad.Fail      (MonadFail (..))
 #endif
-
-import           Control.Monad.IO.Class (MonadIO (..))
-import           Data.Bits              (setBit, testBit, zeroBits)
-import           Data.Char              (isSpace, toLower)
-import           Data.IORef             (IORef, atomicModifyIORef',
-                                         atomicWriteIORef, newIORef, readIORef)
-import           Data.List              (isPrefixOf, partition)
-import           Data.Word              (Word8)
-import           System.Console.GetOpt  (ArgDescr (..), ArgOrder (..),
-                                         OptDescr (..), getOpt', usageInfo)
-import           System.Environment     (getProgName, lookupEnv)
-import           System.IO              (stderr)
-import           System.IO.Unsafe       (unsafePerformIO)
 
 -- containers
-import qualified Data.Map               as Map
+import qualified Data.Map                as Map
 
-import           System.Directory       (canonicalizePath, doesFileExist,
-                                         findExecutable)
-import           System.FilePath        (takeDirectory, (</>))
+import           System.Directory        (canonicalizePath, doesFileExist,
+                                          findExecutable)
+import           System.FilePath         (takeDirectory, (</>))
 
--- process
-import           System.Process         (readProcess)
+-- exceptions
+import           Control.Monad.Catch     (MonadCatch (..), MonadMask (..),
+                                          MonadThrow (..))
 
--- ghc
-import           Bag                    (unitBag)
-import           Config                 (cProjectVersion)
-import           DynFlags               (DynFlags (..), GeneralFlag (..),
-                                         GhcLink (..), HasDynFlags (..),
-                                         HscTarget (..), gopt, gopt_set,
-                                         gopt_unset, interpWays, picPOpts,
-                                         updateWays, wayGeneralFlags,
-                                         wayUnsetGeneralFlags)
-import           ErrUtils               (MsgDoc, mkErrMsg)
-import           Exception              (ExceptionMonad (..), ghandle)
-import           FastString             (FastString, fsLit, unpackFS)
-import           GHC                    (runGhc)
-import           GhcMonad               (Ghc (..), GhcMonad (..),
-                                         getSessionDynFlags, modifySession)
-import           HscMain                (Messager, batchMsg)
-import           HscTypes               (HscEnv (..), InteractiveContext (..),
-                                         InteractiveImport (..),
-                                         ModSummary (..), TyThing (..),
-                                         mkSrcErr)
-import           InteractiveEval        (setContext)
-import           Module                 (mkModuleName)
-import           Outputable             (alwaysQualify, defaultErrStyle,
-                                         neverQualify, ppr, printSDocLn, sep,
-                                         showSDocForUser, text, vcat, (<+>))
-import qualified Pretty
-import           SrcLoc                 (GenLocated (..))
-import           UniqSupply             (MonadUnique (..), UniqSupply,
-                                         initUniqSupply, mkSplitUniqSupply,
-                                         splitUniqSupply, takeUniqFromSupply)
-import           Var                    (varType)
-
-import           GHC_Hs_ImpExp          (simpleImportDecl)
-
-#if !MIN_VERSION_ghc(8,10,0)
-import           DynFlags               (targetPlatform)
+#if MIN_VERSION_ghc(9,0,0)
+import           Control.Monad.Catch     (bracket, handle)
 #endif
 
--- Import for Option
-#if MIN_VERSION_ghc(8,10,0)
-import           CliOption              (showOpt)
+-- process
+import           System.Process          (readProcess)
+
+-- ghc
+import           GHC                     (runGhc)
+import           GHC_Data_Bag            (unitBag)
+import           GHC_Data_FastString     (FastString, fsLit, unpackFS)
+import           GHC_Driver_Main         (Messager, batchMsg)
+import           GHC_Driver_Monad        (Ghc (..), GhcMonad (..),
+                                          getSessionDynFlags, modifySession)
+import           GHC_Driver_Session      (DynFlags (..), GeneralFlag (..),
+                                          GhcLink (..), HasDynFlags (..),
+                                          HscTarget (..), gopt, gopt_set,
+                                          gopt_unset, picPOpts)
+import           GHC_Driver_Types        (HscEnv (..), InteractiveContext (..),
+                                          InteractiveImport (..),
+                                          ModSummary (..), TyThing (..),
+                                          mkSrcErr)
+import           GHC_Hs_ImpExp           (simpleImportDecl)
+import           GHC_Runtime_Eval        (setContext)
+import           GHC_Settings_Config     (cProjectVersion)
+import           GHC_Types_SrcLoc        (GenLocated (..))
+import           GHC_Types_Unique_Supply (MonadUnique (..), UniqSupply,
+                                          initUniqSupply, mkSplitUniqSupply,
+                                          splitUniqSupply, takeUniqFromSupply)
+import           GHC_Types_Var           (varType)
+import           GHC_Unit_Module         (mkModuleName)
+import           GHC_Utils_CliOption     (showOpt)
+import           GHC_Utils_Error         (MsgDoc, mkErrMsg)
+import           GHC_Utils_Outputable    (alwaysQualify, defaultErrStyle,
+                                          neverQualify, ppr, printSDocLn, sep,
+                                          showSDocForUser, text, vcat, (<+>))
+import qualified GHC_Utils_Ppr           as Pretty
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Driver.Ways         (hostFullWays, wayGeneralFlags,
+                                          wayUnsetGeneralFlags)
+import           GHC_Driver_Session      (initSDocContext, sccProfilingEnabled)
+import           GHC_Utils_Exception     (ExceptionMonad)
 #else
-import           DynFlags               (showOpt)
+import           GHC_Driver_Ways         (interpWays, updateWays,
+                                          wayGeneralFlags, wayUnsetGeneralFlags)
+import           GHC_Utils_Exception     (ExceptionMonad (..), ghandle)
+#endif
+
+#if !MIN_VERSION_ghc(8,10,0)
+import           GHC_Driver_Session      (targetPlatform)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import           DynFlags               (IncludeSpecs (..), opt_P_signature)
+import           GHC_Driver_Session      (IncludeSpecs (..), opt_P_signature)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import qualified EnumSet
+import qualified GHC_Data_EnumSet        as FlagSet
 #else
-import qualified Data.IntSet            as IntSet
+import qualified Data.IntSet             as FlagSet
 #endif
 
 -- Internal
@@ -175,7 +189,11 @@ throwFinkelExceptionIO = throwIO
 
 handleFinkelException :: ExceptionMonad m
                       => (FinkelException -> m a) -> m a -> m a
+#if MIN_VERSION_ghc(9,0,0)
+handleFinkelException = handle
+#else
 handleFinkelException = ghandle
+#endif
 
 
 -- ---------------------------------------------------------------------
@@ -288,15 +306,88 @@ instance MonadIO Fnk where
   liftIO io = Fnk (\_ -> liftIO io)
   {-# INLINE liftIO #-}
 
+instance MonadCatch Fnk where
+  catch m h =
+    Fnk (\ref -> unFnk m ref `catch` \e -> unFnk (h e) ref)
+  {-# INLINE catch #-}
+
+instance MonadThrow Fnk where
+  throwM e = Fnk (\ _ -> throwM e)
+  {-# INLINE throwM #-}
+
+instance MonadMask Fnk  where
+  mask f =
+    Fnk (\ref ->
+           mask (\r -> let r' m = Fnk (r . unFnk m)
+                       in  unFnk (f r') ref))
+  {-# INLINE mask #-}
+
+  uninterruptibleMask f =
+    Fnk (\ref ->
+           uninterruptibleMask (\r -> let r' m = Fnk (r . unFnk m)
+                                      in  unFnk (f r') ref))
+  {-# INLINE uninterruptibleMask #-}
+
+#if MIN_VERSION_exceptions(0,10,0)
+  generalBracket acquire release use =
+    Fnk (\ref ->
+           let acquire' = unFnk acquire ref
+               release' r err = unFnk (release r err) ref
+               use' v = unFnk (use v) ref
+           in  generalBracket acquire' release' use')
+  {-# INLINE generalBracket #-}
+#endif
+
+#if !MIN_VERSION_ghc(9,0,0)
+
+-- Note: [Orphan instances for type classes from Control.Monad.Catch]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Manually defining instances instead of "deriving via" approach done in ghc
+-- 9.0.1, to support older version of ghc which does not have support of
+-- "DerivingVia" language extension.
+
+instance MonadThrow Ghc where
+  throwM e = liftIO (throwM e)
+  {-# INLINE throwM #-}
+
+instance MonadCatch Ghc where
+  catch m h =
+    Ghc (\he -> unGhc m he `catch` \e -> unGhc (h e) he)
+  {-# INLINE catch #-}
+
+instance MonadMask Ghc where
+  mask f =
+    Ghc (\he -> mask (\ r -> let r' m = Ghc (r . unGhc m)
+                             in  unGhc (f r') he))
+  {-# INLINE mask #-}
+
+  uninterruptibleMask f =
+    Ghc (\he -> uninterruptibleMask (\r -> let r' m = Ghc (r . unGhc m)
+                                           in  unGhc (f r') he))
+  {-# INLINE uninterruptibleMask #-}
+
+#if MIN_VERSION_exceptions(0,10,0)
+  generalBracket acquire release use =
+    Ghc (\he ->
+           let acquire' = unGhc acquire he
+               release' r err = unGhc (release r err) he
+               use' v = unGhc (use v) he
+           in  generalBracket acquire' release' use')
+  {-# INLINE generalBracket #-}
+#endif
+
 instance ExceptionMonad Fnk where
   gcatch m h =
     Fnk (\ref -> unFnk m ref `gcatch` \e -> unFnk (h e) ref)
   {-# INLINE gcatch #-}
+
   gmask f =
     Fnk (\ref ->
            gmask (\r -> let r' m = Fnk (r . unFnk m)
                         in  unFnk (f r') ref))
   {-# INLINE gmask #-}
+#endif
 
 instance MonadUnique Fnk where
   getUniqueSupplyM = do
@@ -438,8 +529,13 @@ setDynFlags dflags =
 
 -- | Run given action with temporary 'DynFlags'.
 withTmpDynFlags :: GhcMonad m => DynFlags -> m a -> m a
-withTmpDynFlags dflags act =
-  gbracket getDynFlags setDynFlags (\_ -> setDynFlags dflags >> act)
+withTmpDynFlags dflags act = wrap (\_ -> setDynFlags dflags >> act)
+  where
+#if MIN_VERSION_ghc(9,0,0)
+    wrap = bracket getDynFlags setDynFlags
+#else
+    wrap = gbracket getDynFlags setDynFlags
+#endif
 {-# INLINE withTmpDynFlags #-}
 
 -- | Prepare 'DynFlags' for interactive evaluation.
@@ -448,15 +544,20 @@ prepareInterpreter = do
   -- See: "main''" in "ghc/Main.hs".
   hsc_env <- getSession
   let dflags0 = ic_dflags (hsc_IC hsc_env)
+      platform = targetPlatform dflags0
       dflags1 = dflags0 {ghcLink = LinkInMemory
                         ,hscTarget = HscInterpreted
                         ,verbosity = 1}
-      dflags2 = updateWays (dflags1 {ways = interpWays})
-      platform = targetPlatform dflags2
+#if MIN_VERSION_ghc(9,0,0)
+      updateWays = id
+#else
+      hostFullWays = interpWays
+#endif
+      dflags2 = updateWays (dflags1 {ways = hostFullWays})
       dflags3 = foldl gopt_set dflags2
-                      (concatMap (wayGeneralFlags platform) interpWays)
+                      (concatMap (wayGeneralFlags platform) hostFullWays)
       dflags4 = foldl gopt_unset dflags3
-                      (concatMap (wayUnsetGeneralFlags platform) interpWays)
+                      (concatMap (wayUnsetGeneralFlags platform) hostFullWays)
   setDynFlags dflags4
 
 -- | Set context modules in current session to given modules.
@@ -536,8 +637,8 @@ gensym' prefix = do
   u <- getUniqueM
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))
 
--- Note: Initialization of UniqSupply
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Note: [Initialization of UniqSupply]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
 -- Test codes in finkel-kernel packages are calling the 'defaultMain' function
 -- multiple times. To avoid initialization of UniqSupply multiple times, using
@@ -605,9 +706,15 @@ debugWhen' dflags fnk_env flag mdocs =
 {-# INLINE debugWhen' #-}
 
 dumpMsgDocs :: MonadIO m => DynFlags -> [MsgDoc] -> m ()
-dumpMsgDocs dflags mdocs =
-  liftIO (printSDocLn Pretty.PageMode dflags stderr
-                      (defaultErrStyle dflags) (vcat mdocs))
+dumpMsgDocs dflags mdocs = liftIO (pr (vcat mdocs))
+  where
+#if MIN_VERSION_ghc(9,0,0)
+    pr = printSDocLn (initSDocContext dflags err_style) Pretty.PageMode stderr
+    err_style = defaultErrStyle
+#else
+    pr = printSDocLn Pretty.PageMode dflags stderr err_style
+    err_style = defaultErrStyle dflags
+#endif
 {-# INLINE dumpMsgDocs #-}
 
 -- | Get finkel debug setting from environment variable /FNK_DEBUG/.
@@ -632,20 +739,24 @@ dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
       , "  hscTarget:" <+> text (show (hscTarget dflags))
       , "  ways:" <+> text (show (ways dflags))
       , "  forceRecomp:" <+> text (show (gopt Opt_ForceRecomp dflags))
+#if MIN_VERSION_ghc(9,0,0)
+      , "  hostFullWays:" <+> text (show hostFullWays)
+#else
       , "  interpWays:" <+> text (show interpWays)
+#endif
       , "  importPaths:" <+> sep (map text (importPaths dflags))
       , "  optLevel:" <+> text (show (optLevel dflags))
+#if MIN_VERSION_ghc(9,0,0)
+      , "  homeUnitId:" <+> ppr (homeUnitId dflags)
+#else
       , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)
+#endif
       , "  ldInputs:" <+> sep (map (text . showOpt) (ldInputs dflags))
       , "  mainModIs:" <+> ppr (mainModIs dflags)
       , "  mainFunIs:" <+> ppr (mainFunIs dflags)
       , "  safeHaskell:" <+> text (show (safeHaskell dflags))
       , "  lang:" <+> ppr (language dflags)
-#if MIN_VERSION_ghc(8,4,0)
-      , "  extensionFlags:" <+> ppr (EnumSet.toList (extensionFlags dflags))
-#else
-      , "  extensionFlags:" <+> ppr (IntSet.toList (extensionFlags dflags))
-#endif
+      , "  extensionFlags:" <+> ppr (FlagSet.toList (extensionFlags dflags))
 #if MIN_VERSION_ghc(8,6,0)
       , "  includePathsQuote:" <+>
         vcat (map text (includePathsQuote (includePaths dflags)))
@@ -659,9 +770,11 @@ dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
       , "  opt_P_signature:" <+> ppr (opt_P_signature dflags)
 #endif
       , "  hcSuf:" <+> text (hcSuf dflags)
-      , "  sccProfilingOn:" <+> if gopt Opt_SccProfilingOn dflags
-                                   then "True"
-                                   else "False"
+#if MIN_VERSION_ghc(9,0,0)
+      , "  sccProfilingOn:" <+> text (show (sccProfilingEnabled dflags))
+#else
+      , "  sccProfilingOn:" <+> text (show (gopt Opt_SccProfilingOn dflags))
+#endif
       , "  ticky:" <+> ppr (map (`gopt` dflags) [ Opt_Ticky
                                                 , Opt_Ticky_Allocd
                                                 , Opt_Ticky_LNE

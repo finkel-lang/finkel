@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -6,6 +7,8 @@ module Language.Finkel.Homoiconic
   ( ToCode(..)
   , FromCode(..)
   ) where
+
+#include "ghc_modules.h"
 
 -- base
 import           Data.Complex          (Complex (..))
@@ -29,9 +32,9 @@ import qualified Data.Functor.Sum      as Sum
 import qualified Data.Semigroup        as Semigroup
 
 -- ghc
-import           BasicTypes            (SourceText (..), fl_value)
-import           FastString            (FastString, unpackFS)
-import           SrcLoc                (GenLocated (..), getLoc)
+import           GHC_Data_FastString   (FastString, unpackFS)
+import           GHC_Types_Basic       (SourceText (..), fl_value)
+import           GHC_Types_SrcLoc      (GenLocated (..), getLoc)
 
 -- internal
 import           Language.Finkel.Form
@@ -505,11 +508,13 @@ instance ToCode a => ToCode (Semigroup.Min a) where
 instance FromCode a => FromCode (Semigroup.Min a) where
   fromCode = fromCode1 "Min" Semigroup.Min
 
+#if !MIN_VERSION_ghc(9,0,0)
 instance ToCode a => ToCode (Semigroup.Option a) where
   toCode (Semigroup.Option a) = toCode1 "Option" a
 
 instance FromCode a => FromCode (Semigroup.Option a) where
   fromCode = fromCode1 "Option" Semigroup.Option
+#endif
 
 instance ToCode a => ToCode (Semigroup.WrappedMonoid a) where
   toCode (Semigroup.WrapMonoid a) = toCode1 "WrapMonoid" a

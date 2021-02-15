@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | Module re-exporting runtime dependency for Finkel kernel programs.
 --
 -- This module exports types and functions for writing Finkel kernel
@@ -16,7 +17,7 @@ module Language.Finkel
   , ToCode(..)
   , FromCode(..)
 
-  , nil
+  , QuoteFn
   , qSymbol
   , qChar
   , qString
@@ -25,6 +26,7 @@ module Language.Finkel
   , qUnit
   , qList
   , qHsList
+  , nil
 
   -- * Fnk
   , Fnk
@@ -47,8 +49,10 @@ module Language.Finkel
   , GenLocated(..)
   ) where
 
+#include "ghc_modules.h"
+
 -- ghc
-import SrcLoc                       (GenLocated (..))
+import GHC_Types_SrcLoc             (GenLocated (..))
 
 -- Internal
 import Language.Finkel.Expand

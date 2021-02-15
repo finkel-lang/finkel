@@ -6,12 +6,12 @@ import Finkel.Prelude
 main :: IO ()
 main
   = do putStrLn ";;; quote ;;;"
-       print (qSymbol "foo")
-       print (qSymbol "foo")
-       print (qInteger 42)
-       print (qInteger 42)
-       print (qString "string")
-       print (qString "string")
+       print (qSymbol "foo" "quote.fnk" 8 15 8 18)
+       print (qSymbol "foo" "quote.fnk" 9 22 9 25)
+       print (qInteger 42 "quote.fnk" 10 15 10 17)
+       print (qInteger 42 "quote.fnk" 11 22 11 24)
+       print (qString "string" "quote.fnk" 12 15 12 23)
+       print (qString "string" "quote.fnk" 13 22 13 30)
 
 
 [1 of 1] Compiling Main             ( quote.fnk, nothing )

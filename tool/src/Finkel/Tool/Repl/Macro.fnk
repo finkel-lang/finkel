@@ -11,6 +11,9 @@
 (defmodule Finkel.Tool.Repl.Macro
   (export repl-macro
           compile-and-import)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
@@ -34,47 +37,8 @@
    ;; filepath
    (System.FilePath (normalise))
 
-   ;; ghc
-   (BasicTypes (Fixity (StringLiteral ..) (SuccessFlag ..) defaultFixity))
-   (DynFlags ((DynFlags ..) (GhcMode ..) (HasDynFlags ..) (HscTarget ..)
-              (Language ..) (PackageFlag ..) (GeneralFlag ..)  defaultDynFlags
-              fFlags flagSpecFlag flagSpecName gopt isObjectTarget lang_set
-              parseDynamicFlagsCmdLine xFlags xopt wopt wWarningFlags))
-   (ErrUtils (pprErrMsgBagWithLoc))
-   (Exception (gcatch gbracket))
-   (FamInstEnv (FamInst pprFamInst))
-   (FastString (FastString fsLit unpackFS))
-   (Finder (flushFinderCaches uncacheModule))
-   (GHC ((ModuleInfo) findModule getBindings getModSummary getModuleGraph
-         getModuleInfo getPrintUnqual getTargets isLoaded lookupName
-         lookupModule modInfoExports setSessionDynFlags setTargets
-         workingDirectoryChanged))
-   (GhcMake ((LoadHowMuch ..)))
-   (GhcMonad ((GhcMonad ..) getSessionDynFlags withTempSession))
-   (HscTypes ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-              (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
-              handleFlagWarnings ms_mod_name pprHPT pprTarget srcErrorMessages
-              tyThingParent_maybe))
-   (IfaceSyn (showToHeader))
-   (InstEnv (ClsInst pprInstance))
-   (InteractiveEval (abandonAll getContext getInfo moduleIsInterpreted
-                                parseName setContext showModule))
-   (Linker (initDynLinker showLinkerState))
-   (Module ((Module ..) ModuleName mkModuleName mkModuleNameFS
-            moduleNameString))
-   (Name (getName nameModule nameOccName nameSrcSpan pprInfixName))
-   (NameSet (elemNameSet mkNameSet))
-   (Outputable (SDoc $$ <+> <> empty dcolon hsep nest ppr sep
-                     showPpr showSDoc showSDocForUser text vcat))
-   (PprTyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
-   (SrcLoc (Located getLoc isGoodSrcSpan mkGeneralLocated unLoc))
-   (TyCoRep ((TyThing ..)))
-   (Util (looksLikeModuleName))
-
-   (qualified GhcMake as GhcMake)
-
-   ;; ghci
-   (Debugger (pprTypeAndContents))
+   ;; exceptions
+   (Control.Monad.Catch (catch bracket))
 
    ;; process
    (System.Process (callProcess))
@@ -94,13 +58,72 @@
    ;; finkel-core
    (Finkel.Core.Functions)))
 
+;;; ghc
+(imports-from-ghc
+ (GHC
+  ((ModuleInfo) findModule getBindings getModSummary getModuleGraph
+   getModuleInfo getPrintUnqual getTargets isLoaded lookupName
+   lookupModule modInfoExports setSessionDynFlags setTargets
+   workingDirectoryChanged))
+ (GHC.Types.Basic
+  (Fixity (StringLiteral ..) (SuccessFlag ..) defaultFixity))
+ (GHC.Driver.Session
+  ((DynFlags ..) (GhcMode ..) (HasDynFlags ..) (HscTarget ..)
+   (Language ..) (PackageFlag ..) (GeneralFlag ..)  defaultDynFlags
+   fFlags flagSpecFlag flagSpecName gopt isObjectTarget lang_set
+   parseDynamicFlagsCmdLine xFlags xopt wopt wWarningFlags))
+ (GHC.Utils.Error (pprErrMsgBagWithLoc))
+ (GHC.Core.FamInstEnv (FamInst pprFamInst))
+ (GHC.Data.FastString (FastString fsLit unpackFS))
+ (GHC.Driver.Finder (flushFinderCaches uncacheModule))
+ (GHC.Driver.Make ((LoadHowMuch ..)))
+ (GHC.Driver.Monad ((GhcMonad ..) getSessionDynFlags withTempSession))
+ (GHC.Driver.Types
+  ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
+   (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
+   handleFlagWarnings ms_mod_name pprHPT pprTarget srcErrorMessages
+   tyThingParent_maybe))
+ (GHC.Iface.Syntax (showToHeader))
+ (GHC.Core.InstEnv (ClsInst pprInstance))
+ (GHC.Runtime.Eval
+  (abandonAll getContext getInfo moduleIsInterpreted parseName setContext
+              showModule))
+ (GHC.Runtime.Linker (initDynLinker showLinkerState))
+ (GHC.Runtime.Debugger (pprTypeAndContents))
+
+ (GHC.Unit.Module
+  (ModuleName mkModuleName mkModuleNameFS moduleNameString))
+ (GHC.Types.Name (Name getName nameModule nameOccName nameSrcSpan pprInfixName))
+ (GHC.Types.Name.Set (elemNameSet mkNameSet))
+ (GHC.Utils.Outputable
+  (SDoc $$ <+> <> empty dcolon hsep nest ppr sep showPpr showSDoc showSDocForUser
+        text vcat))
+ (GHC.Core.Ppr.TyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
+ (GHC.Types.SrcLoc (Located getLoc isGoodSrcSpan mkGeneralLocated unLoc))
+ (GHC.Core.TyCo.Rep ((TyThing ..)))
+ (GHC.Utils.Misc (looksLikeModuleName)))
+
+(import qualified (ghc-module-name GHC.Driver.Make) as GhcMake)
+
+
 ;;; Extra imports
+
+(cond-expand
+  [(<= 900 :ghc)
+   (:begin
+     (import GHC.Types.SrcLoc (leftmost-smallest))
+     (import GHC.Unit.Module ((Module) moduleName)))]
+  [otherwise
+   (imports-from-ghc
+    (GHC.Unit.Module ((Module ..))))])
 
 (cond-expand
   [(<= 810 :ghc)
    (:begin
      (import GHC.Hs.ImpExp ((ImportDecl ..) simpleImportDecl))
-     (import DynFlags (settings)))]
+     (imports-from-ghc
+      (GHC.Driver.Session (settings))
+      (GHC.Runtime.Interpreter ((Message ..) iservCmd))))]
   [otherwise
    (import HsImpExp ((ImportDecl ..) simpleImportDecl))])
 
@@ -108,18 +131,9 @@
   [(<= 804 :ghc)
    (:begin
      (import Prelude hiding (<>))
-     (import qualified HscTypes as HscTypes))]
+     (import qualified (ghc-module-name GHC.Driver.Types) as HscTypes))]
   [otherwise
    (:begin)])
-
-(cond-expand
-  [(<= 810 :ghc)
-   (:begin
-     (import GHCi (iservCmd))
-     (import GHCi.Message ((Message ..))))]
-  [otherwise
-   (:begin)])
-
 
 
 ;;; Types
@@ -134,6 +148,14 @@
 
 
 ;;; Auxiliary functions
+
+(defn (:: showUnitId (-> DynFlags String))
+  [dflags]
+  (cond-expand
+    [(<= 900 :ghc)
+     (showPpr dflags (homeUnitId dflags))]
+    [otherwise
+     (showPpr dflags (thisInstalledUnitId dflags))]))
 
 (defn (:: gen-default-dflags (-> DynFlags DynFlags))
   [flg]
@@ -157,6 +179,9 @@
 (defn (:: show-linker-state (-> HscEnv (IO ())))
   [hsc-env]
   (cond-expand
+    [(<= 900 :ghc)
+     (do (<- sdoc (showLinkerState (hsc-dynLinker hsc-env)))
+         (putStrLn (showPpr (hsc-dflags hsc-env) sdoc)))]
     [(<= 810 :ghc)
      (showLinkerState (hsc-dynLinker hsc-env) (hsc-dflags hsc-env))]
     [otherwise
@@ -220,7 +245,7 @@
 
 (defn (:: compile-module (-> [(Located String)] (Fnk SuccessFlag)))
   [lstrs]
-  (where (gbracket acquire cleanup work)
+  (where (bracket acquire cleanup work)
     (= acquire
       (do (<- dflags getDynFlags)
           (<- fnk-env getFnkEnv)
@@ -291,7 +316,7 @@ object code."
 
 (defn (:: env-context-on-exception (-> (Fnk Code) (Fnk Code)))
   [action]
-  (gcatch
+  (catch
    action
    (\ e
      (do (let ((= print-se se
@@ -306,6 +331,13 @@ object code."
          (setContext (map mk-ii-str mods))
          (return '(:begin))))))
 
+(defn (:: sort-by-name-src-span (-> [Name] [Name]))
+  (cond-expand
+    [(<= 900 :ghc)
+     (sortBy (on leftmost-smallest nameSrcSpan))]
+    [otherwise
+     (sortBy (on compare nameSrcSpan))]))
+
 (defn (:: browse-module (-> Module ModuleInfo (Fnk Code)))
   "Simplified version of `GHCi.UI.browseModule'."
   [mdl mod-info]
@@ -317,7 +349,7 @@ object code."
             (= occ-sort (sortBy (on compare nameOccName)))
             (= loc-sort ns
               (| ((<- (: n _) ns) (isGoodSrcSpan (nameSrcSpan n))
-                  (sortBy (on compare nameSrcSpan) ns))
+                  (sort-by-name-src-span ns))
                  (otherwise (occ-sort ns))))
             (= pretty
               (pprTyThing showToHeader))))
@@ -427,8 +459,7 @@ object code."
                (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
                (++ ";  hscTarget: " (show (hscTarget dflags)))
                (++ ";  objectDir: " (show (objectDir dflags)))
-               (++ ";  thisInstalledUnitId: "
-                   (showPpr dflags (thisInstalledUnitId dflags)))
+               (++ ";  homeUnitId: " (showUnitId dflags))
                (++ ";  forceRecomp: "
                    (show (gopt Opt-ForceRecomp dflags)))])
             (= showGhcMode m
@@ -686,8 +717,8 @@ object code."
   [forms]
   (case (map unCode forms)
     [(@ form (Atom (ASymbol _)))] (info-name (toCode form))
-    [(Atom AUnit)] (info-name (qSymbol "()"))
-    [(HsList [])] (info-name (qSymbol "[]"))
+    [(Atom AUnit)] (info-name (make-symbol "()"))
+    [(HsList [])] (info-name (make-symbol "[]"))
     _ (invalid-form "info" forms)))
 
 ;; From `GHCi.UI.kindOfType'

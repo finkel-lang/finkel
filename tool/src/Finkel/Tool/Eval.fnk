@@ -4,6 +4,9 @@
 
 (defmodule Finkel.Tool.Eval
   (export evalMain eval-and-exit eval-and-exit-with)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import
    ;; base
    (Control.Concurrent (MVar newEmptyMVar newMVar takeMVar))
@@ -12,9 +15,6 @@
     ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
    (System.Environment (getProgName))
    (System.Exit (exitFailure))
-
-   ;; ghc
-   (StringBuffer (stringToStringBuffer))
 
    ;; finkel-kernel
    (Language.Finkel.Fnk ((Fnk) FnkEnv
@@ -28,6 +28,9 @@
    (Finkel.Tool.Repl (repl-env))
    (Finkel.Tool.Repl.Eval)
    (Finkel.Tool.Repl.Types)))
+
+(imports-from-ghc
+ (GHC.Data.StringBuffer (stringToStringBuffer)))
 
 
 

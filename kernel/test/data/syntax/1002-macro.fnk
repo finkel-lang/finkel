@@ -15,7 +15,9 @@
              (case (unCode form)
                (List (: _ (: name rest)))
                (let ((= __name
-                       (toCode (qSymbol (++ "__" (show name))))))
+                       (toCode (qSymbol (++ "__" (show name))
+                                        "1002-macro.fnk"
+                                        0 0 0 0))))
                  (return
                    `(:begin
                       (:: ,name Macro)
@@ -30,7 +32,9 @@
     (let ((= f form
             (case (unCode form)
               (List [name arg body])
-              (let ((= __name (toCode (qSymbol (++ "__" (show name))))))
+              (let ((= __name (toCode (qSymbol (++ "__" (show name))
+                                               "1002-macro.fnk"
+                                               0 0 0 0))))
                 (return `(= ,name
                            (let ((:: ,__name (-> Code (Fnk Code)))
                                  (= ,__name ,arg ,body))

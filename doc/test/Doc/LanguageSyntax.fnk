@@ -2,6 +2,9 @@
 
 (defmodule Doc.LanguageSyntax
   (export spec)
+  (require
+   ;; finkel-core
+   (Finkel.Core.Ghc))
   (import-when [:compile]
     ;; finkel-lang
     (Finkel.Prelude))
@@ -15,16 +18,6 @@
    ;; filepath
    (System.FilePath (</> <.> dropExtension takeExtension))
 
-   ;; ghc
-   (DynFlags ((DynFlags) unsafeGlobalDynFlags))
-   (FastString (fsLit))
-   (GHC (runGhc))
-   (Outputable ((Outputable ..) showPpr))
-   (Lexer ((P ..) (ParseResult ..) mkPState))
-   (SrcLoc ((GenLocated ..) mkRealSrcLoc interactiveSrcSpan))
-   (StringBuffer (hGetStringBuffer))
-   (qualified Parser as GhcParser)
-
    ;; finkel-kernel
    (Language.Finkel.Builder ((Builder) evalBuilder))
    (Language.Finkel.Reader (parseSexprs))
@@ -37,10 +30,23 @@
    ;; Internal
    (Doc.TestAux)))
 
+;; ghc
+(imports-from-ghc
+ (GHC (runGhc))
+ (GHC.Driver.Session ((DynFlags) unsafeGlobalDynFlags))
+ (GHC.Data.FastString (fsLit))
+ (GHC.Utils.Outputable ((Outputable ..) showPpr))
+ (GHC.Parser.Lexer ((P ..) (ParseResult ..)))
+ (GHC.Types.SrcLoc ((GenLocated ..) mkRealSrcLoc interactiveSrcSpan))
+ (GHC.Data.StringBuffer (hGetStringBuffer)))
+
+(import qualified (ghc-module-name GHC.Parser) as GhcParser)
+(import qualified (ghc-module-name GHC.Parser.Lexer) as Lexer)
+
 (cond-expand
   [(<= 810 :ghc)
-   ;; ghc
-   (import RdrHsSyn (runECP_P))]
+   (imports-from-ghc
+    (GHC.Parser.PostProcess (runECP-P)))]
   [otherwise
    (:begin)])
 
@@ -52,7 +58,7 @@
    (describe "language syntax"
      (do (let ((= expFromECP
                  (cond-expand
-                   ((<= 810 :ghc) runECP_P)
+                   ((<= 810 :ghc) runECP-P)
                    [otherwise return]))))
          (describe "expression"
            (parser-tests "expr" (Parsers (>>= GhcParser.parseExpression

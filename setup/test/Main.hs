@@ -8,7 +8,11 @@ import System.Environment                (getEnv, getExecutablePath, lookupEnv,
                                           setEnv, unsetEnv, withArgs)
 
 -- ghc
+#if MIN_VERSION_ghc(9,0,0)
+import GHC.Settings.Config               (cProjectVersion)
+#else
 import Config                            (cProjectVersion)
+#endif
 
 -- directory
 import System.Directory                  (doesDirectoryExist,

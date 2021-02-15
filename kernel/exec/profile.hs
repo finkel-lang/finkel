@@ -4,25 +4,31 @@
 -- Simple executable to wrap some simple actions.
 module Main where
 
+#include "ghc_modules.h"
+
 -- base
 import           Control.Monad.IO.Class       (MonadIO (..))
 import           System.Environment           (getArgs)
 import           System.Exit                  (exitFailure)
-import           System.IO                    (stdout)
+import           System.IO                    (Handle, stdout)
 
 -- filepath
 import qualified System.FilePath              as FilePath
 
 -- ghc
-import           BasicTypes                   (SuccessFlag (..))
-import           DynFlags                     (GeneralFlag (..),
-                                               HasDynFlags (..), gopt_set)
-import           ErrUtils                     (printBagOfErrors)
 import qualified GHC                          as GHC
-import           Outputable                   (Outputable (..), neverQualify,
-                                               printForUser)
-import           SrcLoc                       (mkGeneralLocated)
-import           StringBuffer                 (hGetStringBuffer)
+import           GHC_Data_StringBuffer        (hGetStringBuffer)
+import           GHC_Driver_Session           (DynFlags, GeneralFlag (..),
+                                               HasDynFlags (..), gopt_set)
+import           GHC_Types_Basic              (SuccessFlag (..))
+import           GHC_Types_SrcLoc             (mkGeneralLocated)
+import           GHC_Utils_Error              (printBagOfErrors)
+import           GHC_Utils_Outputable         (Outputable (..),
+                                               PrintUnqualified, SDoc,
+                                               neverQualify, printForUser)
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC_Utils_Outputable         (Depth (..))
+#endif
 
 -- finkel-kernel
 import qualified Language.Finkel.Builder      as Builder
@@ -93,7 +99,7 @@ pprFnkModule =
   parseFnkModuleWith
     (\m _ ->
        do dflags <- getDynFlags
-          liftIO (printForUser dflags stdout neverQualify (ppr m)))
+          liftIO (prForUser dflags stdout neverQualify (ppr m)))
 
 pprHsModule :: FilePath -> IO ()
 pprHsModule path = Fnk.runFnk go SpecialForms.defaultFnkEnv
@@ -113,9 +119,16 @@ pprHsModule path = Fnk.runFnk go SpecialForms.defaultFnkEnv
          case ret of
            Right lmdl ->
              liftIO
-               (printForUser dflags1 stdout neverQualify (ppr lmdl))
+               (prForUser dflags1 stdout neverQualify (ppr lmdl))
            Left err   -> liftIO (do putStrLn "pprHsModule: error"
                                     printBagOfErrors dflags1 err)
+
+prForUser :: DynFlags -> Handle -> PrintUnqualified -> SDoc -> IO ()
+#if MIN_VERSION_ghc(9,0,0)
+prForUser df hdl qual sdoc = printForUser df hdl qual AllTheWay sdoc
+#else
+prForUser = printForUser
+#endif
 
 printHsrc :: FilePath -> IO ()
 printHsrc =

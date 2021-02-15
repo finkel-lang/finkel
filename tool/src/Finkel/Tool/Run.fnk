@@ -13,8 +13,10 @@
    (System.Exit (exitFailure))
 
    ;; finkel-kernel
-   (Language.Finkel)
    (Language.Finkel.Fnk (FnkEnv fromFnkEnvOptions fnkEnvOptionsUsage))
+
+   ;; finkel-core
+   (Finkel.Core.Functions (make-symbol))
 
    ;; Internal
    (Finkel.Tool.CLI)
@@ -25,18 +27,18 @@
   [args0]
   (let ((= (, args1 prog-args) (split-program-args args0))
         (= all-opts (++ run-opts run-fnk-env-opts))
-        (= (, rargs gargs) (partition-descrs all-opts args1))
+        (= (, rargs ghc-args) (partition-descrs all-opts args1))
         (= (, o _ _ es) (getOpt' Permute all-opts rargs))
         (= ro (foldl (flip id) initial-run-option o))
-        (= main-fn (qSymbol (mangle-name (ro-main ro)))))
+        (= main-fn (make-symbol (mangle-name (ro-main ro)))))
     (if (ro-help ro)
         print-run-help
-        (liftIO (case es
-                  [] (eval-and-exit-with prog-args gargs (ro-fnk-env ro)
-                                         main-fn)
-                  _ (do (mapM- putStr es)
-                        print-run-help
-                        (liftIO exitFailure)))))))
+        (liftIO
+         (case es
+           [] (eval-and-exit-with prog-args ghc-args (ro-fnk-env ro) main-fn)
+           _ (do (mapM- putStr es)
+                 print-run-help
+                 exitFailure))))))
 
 (data RunOption
   (RunOption {ro-help Bool

@@ -51,6 +51,7 @@ module Language.Finkel.Builder
   , HSig
   , HStmt
   , HTyVarBndr
+  , HTyVarBndrSpecific
   , HType
 
   -- * Function names for @:quote@
@@ -64,37 +65,40 @@ module Language.Finkel.Builder
   , qFractionalS
   , qUnitS
   , quoteWith
+
   ) where
 
-#include "Syntax.h"
+#include "ghc_modules.h"
 
 -- ghc
-import Bag                  (Bag)
-import DynFlags             (DynFlags)
-import FastString           (FastString, appendFS)
-import ForeignCall          (CCallConv (..))
+import GHC_Data_Bag          (Bag)
+import GHC_Data_FastString   (FastString, appendFS)
+import GHC_Driver_Session    (DynFlags)
+import GHC_Hs                (HsModule)
+import GHC_Hs_Binds          (HsLocalBinds, LHsBind, LSig)
+import GHC_Hs_Decls          (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
+import GHC_Hs_Expr           (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
+import GHC_Hs_ImpExp         (LIE, LIEWrappedName, LImportDecl)
+import GHC_Hs_Pat            (LPat)
+import GHC_Hs_Type           (LConDeclField, LHsTyVarBndr, LHsType)
+import GHC_Parser_Lexer      (PState (..), mkPState)
+import GHC_Types_ForeignCall (CCallConv (..))
+import GHC_Types_SrcLoc      (GenLocated (..), Located, noLoc)
 
-import GHC_Hs               (HsModule)
-import GHC_Hs_Binds         (HsLocalBinds, LHsBind, LSig)
-import GHC_Hs_Decls         (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
-import GHC_Hs_Expr          (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
-import GHC_Hs_ImpExp        (LIE, LIEWrappedName, LImportDecl)
-import GHC_Hs_Pat           (LPat)
-import GHC_Hs_Types         (LConDeclField, LHsTyVarBndr, LHsType)
-
-import Lexer                (PState (..), mkPState)
-import SrcLoc               (GenLocated (..), Located, noLoc)
-
-#if MIN_VERSION_ghc(8,4,0)
-import GHC_Hs_Extension     (GhcPs)
-#else
-import RdrName              (RdrName)
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Types_Var         (Specificity (..))
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Decls         (LDerivStrategy)
+import GHC_Hs_Decls          (LDerivStrategy)
 #else
-import BasicTypes           (DerivStrategy)
+import BasicTypes            (DerivStrategy)
+#endif
+
+#if MIN_VERSION_ghc(8,4,0)
+import GHC_Hs_Extension      (GhcPs)
+#else
+import RdrName               (RdrName)
 #endif
 
 -- Internal
@@ -303,7 +307,11 @@ type HLocalBinds = Located (HsLocalBinds PARSED)
 
 type HMatch = LMatch PARSED HExpr
 
+#if MIN_VERSION_ghc(9,0,0)
+type HModule = HsModule
+#else
 type HModule = HsModule PARSED
+#endif
 
 type HPat = LPat PARSED
 
@@ -311,7 +319,13 @@ type HSig = LSig PARSED
 
 type HStmt = ExprLStmt PARSED
 
+#if MIN_VERSION_ghc(9,0,0)
+type HTyVarBndr = LHsTyVarBndr () PARSED
+type HTyVarBndrSpecific = LHsTyVarBndr Specificity PARSED
+#else
 type HTyVarBndr = LHsTyVarBndr PARSED
+type HTyVarBndrSpecific = HTyVarBndr
+#endif
 
 type HType = LHsType PARSED
 
@@ -323,8 +337,8 @@ type HType = LHsType PARSED
 -- ---------------------------------------------------------------------
 
 
--- Note: Qualified names for quoting functions
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Note: [Qualified names for quoting functions]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
 -- Quoting functions can use qualified name after expansion, to support quote in
 -- REPL without importing the "Language.Finkel" module.  See how
