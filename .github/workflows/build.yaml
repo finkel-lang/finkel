@@ -7,7 +7,7 @@ on:
       - '**.md'
 
 env:
-  cache-version: v6
+  cache-version: v9
 
 defaults:
   run:
@@ -110,12 +110,22 @@ jobs:
           # - macos-latest
           # - windows-latest
         plan:
-          - ghc: "8.10.4"
-            cabal: "3.2.0.0"
+          # - ghc: "8.10.4"
+          #   cabal: "3.2.0.0"
+          #   flags: "-O0"
+
+          # - ghc: "8.10.4"
+          #   cabal: "3.2.0.0"
+          #   flags: "-O2"
+
+          - ghc: "9.0.1"
+            cabal: "3.4.0.0"
             flags: "-O0"
-          - ghc: "8.10.4"
-            cabal: "3.2.0.0"
+
+          - ghc: "9.0.1"
+            cabal: "3.4.0.0"
             flags: "-O2"
+
     runs-on:
       - ${{ matrix.os }}
 
@@ -165,7 +175,7 @@ jobs:
           url="https://downloads.haskell.org/~ghcup/x86_64-${ghcup_name}-ghcup"
           mkdir -p ~/.ghcup/bin
           curl -sL $url > ~/.ghcup/bin/ghcup
-          chmod +x ~/.ghcup/bin/ghcup
+          sudo chmod +x ~/.ghcup/bin/ghcup
           echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
 
       - name: Install ghc and cabal-install (linux and osx)
@@ -217,12 +227,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - nixpkgs: "channel:nixos-unstable"
-            compiler: "ghc8103"
-          # - nixpkgs: "channel:nixos-20.09"
-          #   compiler: "ghc884"
           # - nixpkgs: "channel:nixos-20.03"
           #   compiler: "ghc865"
+          # - nixpkgs: "channel:nixos-20.09"
+          #   compiler: "ghc884"
+          - nixpkgs: "channel:nixos-unstable"
+            compiler: "ghc8104"
+          # - nixpkgs: "channel:nixos-unstable"
+          #   compiler: "ghc901"
 
     runs-on:
       - ubuntu-latest
@@ -240,13 +252,13 @@ jobs:
         run: nix-build --argstr compiler ${{ matrix.compiler }}
 
       - name: Build container image stream
-        if: matrix.compiler == 'ghc8103' && github.ref == 'refs/heads/master'
+        if: matrix.compiler == 'ghc8104' && github.ref == 'refs/heads/master'
         run: |
           nix-build --argstr compiler ${{ matrix.compiler }} ./nix/docker.nix
           echo "image_stream=$(readlink result)" >> $GITHUB_ENV
 
       - name: Push image to ghcr.io
-        if: matrix.compiler == 'ghc8103' && github.ref == 'refs/heads/master'
+        if: matrix.compiler == 'ghc8104' && github.ref == 'refs/heads/master'
         env:
           CRED: ${{ secrets.GHCR_USER }}:${{ secrets.GHCR_PAT }}
           FROM: docker-archive:/dev/stdin
