@@ -1,6 +1,6 @@
 {
   nixpkgs ? <nixpkgs>,
-  compiler ? "ghc8103"
+  compiler ? "ghc8104"
 }:
 
 let
