@@ -46,13 +46,15 @@ module Language.Finkel
   , finkelSrcError
 
   -- * Re-export from ghc
+  , Located
   , GenLocated(..)
+  , SrcSpan
   ) where
 
 #include "ghc_modules.h"
 
 -- ghc
-import GHC_Types_SrcLoc             (GenLocated (..))
+import GHC_Types_SrcLoc             (GenLocated (..), Located, SrcSpan)
 
 -- Internal
 import Language.Finkel.Expand

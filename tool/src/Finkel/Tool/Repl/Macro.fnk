@@ -99,7 +99,7 @@
   (SDoc $$ <+> <> empty dcolon hsep nest ppr sep showPpr showSDoc showSDocForUser
         text vcat))
  (GHC.Core.Ppr.TyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
- (GHC.Types.SrcLoc (Located getLoc isGoodSrcSpan mkGeneralLocated unLoc))
+ (GHC.Types.SrcLoc (getLoc isGoodSrcSpan mkGeneralLocated unLoc))
  (GHC.Core.TyCo.Rep ((TyThing ..)))
  (GHC.Utils.Misc (looksLikeModuleName)))
 

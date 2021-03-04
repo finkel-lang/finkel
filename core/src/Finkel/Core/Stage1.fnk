@@ -36,8 +36,7 @@
 
 (imports-from-ghc
  (GHC.Data.FastString (FastString fsLit unpackFS))
- (GHC.Utils.Lexeme (isLexCon))
- (GHC.Types.SrcLoc ((SrcSpan ..))))
+ (GHC.Utils.Lexeme (isLexCon)))
 
 
 

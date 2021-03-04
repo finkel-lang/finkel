@@ -73,7 +73,7 @@
   (SDoc PrintUnqualified ppr mkErrStyle renderWithStyle setStyleColoured
         showPpr showSDoc vcat))
  (GHC.Parser.PostProcess (cvTopDecls))
- (GHC.Types.SrcLoc (Located mkGeneralLocated unLoc))
+ (GHC.Types.SrcLoc (mkGeneralLocated unLoc))
  (GHC.Core.TyCo.Rep ((TyThing ..)))
  (GHC.Utils.Misc (looksLikeModuleName))
  (GHC.Types.Var (Id Var varType)))
