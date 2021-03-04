@@ -40,7 +40,7 @@ import           GHC_Data_StringBuffer        (stringToStringBuffer)
 import           GHC_Driver_Session           (HasDynFlags (..))
 import           GHC_Types_Basic              (SourceText (..), fl_value)
 import           GHC_Types_SrcLoc             (GenLocated (..), SrcSpan (..),
-                                               noSrcSpan)
+                                               getLoc, noSrcSpan)
 import           GHC_Utils_Outputable         (showPpr)
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -101,6 +101,7 @@ formTests = do
 
   locationTest Nothing "foo"
   locationTest (Just "locationTest") "foo"
+  asLocOfTest
 
   lengthTest 3 "(a b c)"
   lengthTest 5 "(a (b (c)) d e)"
@@ -432,6 +433,15 @@ locationTest mb_path str =
        case mb_path of
          Just path -> (path `isPrefixOf` l) `shouldBe` True
          Nothing   -> ("anon" `isSubsequenceOf` l) `shouldBe` True
+
+asLocOfTest :: Spec
+asLocOfTest =
+  describe ("apply asLocOf to code") $ do
+    it "should return the value of first arg" $
+      property (\ a b -> asLocOf a b == a)
+    it "should use the location of second arg" $
+      property (\ a b -> case (asLocOf a b, b) of
+                   (LForm (L l1 _), LForm (L l2 _)) -> l1 == l2)
 
 lengthTest :: Int -> String -> Spec
 lengthTest n str =

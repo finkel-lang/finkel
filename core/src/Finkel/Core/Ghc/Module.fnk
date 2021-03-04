@@ -68,7 +68,7 @@
     [(, v "")] (if (<= (:: 900 Int) v)
                    name
                    (case (lookup name ghc-module-names-pre-900)
-                     (Just found) found
+                     (Just found) (asLocOf found name)
                      _ (error (++ "rename: cannot find " (show name)))))
     _ (error "rename: panic")))
 

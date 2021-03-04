@@ -27,6 +27,7 @@ module Language.Finkel
   , qList
   , qHsList
   , nil
+  , asLocOf
 
   -- * Fnk
   , Fnk

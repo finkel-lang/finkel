@@ -34,6 +34,7 @@ module Language.Finkel.Form
   , toListL
   , unCode
   , withLocInfo
+  , asLocOf
 
   -- * Re-export
   , IntegralLit (..)
@@ -519,6 +520,11 @@ withLocInfo l f_file f_n =
         _                             -> f_n 0
   in  (file, sl, sc, el, ec)
 {-# INLINE withLocInfo #-}
+
+-- | Return the first arg, with location information from the second arg.
+asLocOf :: Code -> Code -> Code
+asLocOf (LForm (L _ a)) (LForm (L l _)) = LForm (L l a)
+{-# INLINE asLocOf #-}
 
 
 -- -------------------------------------------------------------------
