@@ -66,10 +66,10 @@ b_module mb_form exports =
                                    then Nothing
                                    else Just (mkLocatedList  exports)
                , hsmodImports = imports
-               -- Function `cvTopDecls' is used for mergeing
-               -- multiple top-level FunBinds, which possibly
-               -- taking different patterns in its arguments.
+               -- Function `cvTopDecls' is used for mergeing multiple top-level
+               -- FunBinds, which may take different patterns in its arguments.
                , hsmodDecls = cvTopDecls (toOL decls)
+               -- XXX: Does not support DEPRECATED message.
                , hsmodDeprecMessage = Nothing
 #if MIN_VERSION_ghc(9,0,0)
                , hsmodLayout = NoLayoutInfo
@@ -168,10 +168,12 @@ b_importD :: (Code, Bool, Maybe Code) -> (Bool, Maybe [HIE])
 b_importD (name, qualified, mb_as) (hiding, mb_entities) =
   case name of
     LForm (L l (Atom (ASymbol m))) ->
-      let decl = simpleImportDecl (mkModuleNameFS m)
+      let decl = simpleImportDecl mname
           decl' = decl { ideclQualified = qualified'
                        , ideclAs = fmap asModName mb_as
+                       , ideclName = L l mname
                        , ideclHiding = hiding' }
+          mname = mkModuleNameFS m
 #if MIN_VERSION_ghc(8,10,0)
           qualified' | qualified = QualifiedPre
                      | otherwise = NotQualified

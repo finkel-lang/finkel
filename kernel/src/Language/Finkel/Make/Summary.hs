@@ -343,7 +343,6 @@ mkModSummary'
 mkModSummary' hsc_env dflags file mod_name srcimps txtimps mb_pm mb_buf = do
   -- Throw an exception on module name mismatch.
   assertModuleNameMatch dflags file mb_pm
-  -- hsc_env <- getSession
 
   let tryGetObjectDate path =
         if isObjectTarget (hscTarget dflags)
