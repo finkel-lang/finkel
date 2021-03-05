@@ -1,0 +1,100 @@
+;;;; Auxiliary macros for test
+
+%p(LANGUAGE TypeApplications)
+
+(:require Finkel.Core)
+
+(defmodule TestAux
+  (export
+   (GensymCode ..)
+   expand-form
+   expand-form-satisfies
+   expandTo
+   expandFailure
+   expandFailureWith
+   expandSatisfy)
+  (require
+   (Finkel.Core.Ghc))
+  (import
+   ;; base
+   (Control.Exception ((SomeException ..) try))
+   (Data.Function (on))
+
+   ;; hspec
+   (Test.Hspec (Expectation expectationFailure shouldBe shouldSatisfy))
+
+   ;; finkel-core
+   (Finkel.Prelude)))
+
+(imports-from-ghc
+ (GHC.Data.FastString (headFS nullFS)))
+
+;;; Types
+
+;; Using a newtype to compare 'Code's containing symbols generated
+;; with `gensym'.
+(newtype GensymCode (GensymCode Code)
+  (deriving Show))
+
+(instance (Eq GensymCode)
+  (= == eqGensymCode))
+
+(defn (:: eqGensymCode (-> GensymCode GensymCode Bool))
+  [(GensymCode a) (GensymCode b)]
+  (eqGensymCode1 a b))
+
+(defn (:: eqGensymCode1 (-> Code Code Bool))
+  [a b]
+  (eqGensymCode2 (unCode a) (unCode b)))
+
+(defn (:: eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
+  [(Atom (ASymbol a)) (Atom (ASymbol b))]
+  (| ((nullFS a) (nullFS b))
+     ((== (headFS a) #'$) True)
+     ((== (headFS b) #'$) True)
+     (otherwise (== a b)))
+  [(List as) (List bs)] (eqGensymCodes as bs)
+  [(HsList as) (HsList bs)] (eqGensymCodes as bs)
+  [a b] (== a b))
+
+(defn (:: eqGensymCodes (-> [Code] [Code] Bool))
+  [[] []] True
+  [[]  _] False
+  [ _ []] False
+  [(: x xs) (: y ys)] (&& (eqGensymCode1 x y) (eqGensymCodes xs ys)))
+
+
+;;; Functions
+
+(defn (:: expand-form (-> Macro Code Code Expectation))
+  (expand-form-with (on shouldBe GensymCode)))
+
+(defn (:: expand-form-satisfies (-> Macro Code (-> Code Bool) Expectation))
+  [macro in-form test]
+  (expand-form-with (\ a _ (shouldSatisfy a test)) macro in-form nil))
+
+(defn (:: expand-form-with (-> (-> Code Code Expectation)
+                               Macro Code Code Expectation))
+  [test macro in-form out-form]
+  (>>= (try (runFnk (macroFunction macro in-form) defaultFnkEnv))
+       (either (. expectationFailure (show @ SomeException))
+               (flip test out-form))))
+
+;;; Macros
+
+(defmacro expandTo
+  [in out]
+  `(expand-form ,(car in) ',in ',out))
+
+(defmacro expandFailureWith
+  [in test]
+  `(let ((= act (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
+     (shouldThrow act ,test)))
+
+(defmacro expandFailure
+  [in]
+  `(expandFailureWith ,in anyException))
+
+(defmacro expandSatisfy
+  [in test]
+  `(expand-form-satisfies ,(car in) ',in ,test))

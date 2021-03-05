@@ -1,6 +1,7 @@
 ;;;; Macros related to ghc
 
 (module Finkel.Core.Ghc
+  ghc-module-names-pre-900
   ghc-module-name
   imports-from-ghc)
 

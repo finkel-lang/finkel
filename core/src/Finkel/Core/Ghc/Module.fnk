@@ -1,6 +1,10 @@
 ;;; Module containing ghc version compatibililty macro.
 
 (module Finkel.Core.Ghc.Module
+  ;; Functions
+  ghc-module-names-pre-900
+
+  ;; Macros
   ghc-module-name
   imports-from-ghc)
 
@@ -13,8 +17,8 @@
 
 ;;; Auxiliary functions
 
-;;; List of `Code' pairs, to relate module names in ghc 9.0.1 and older
-;;; versions.
+;;; List of `Code' pairs, to relate module names in ghc 9.0.1 with module names
+;;; in older versions.
 (:: ghc-module-names-pre-900 [(, Code Code)])
 (= ghc-module-names-pre-900
   [(, 'GHC 'GHC)
@@ -72,14 +76,10 @@
                      _ (error (++ "rename: cannot find " (show name)))))
     _ (error "rename: panic")))
 
-(:: import-one (-> Code [Code] Code))
-(= import-one name rest
-  `(import ,(rename name) ,@rest))
-
 (:: make-import (-> Code Code))
 (= make-import form
   (case (unCode form)
-    (List (: name rest)) (import-one name rest)
+    (List (: name rest)) `(import ,(rename name) ,@rest)
     _ (error "make-import: panic")))
 
 
@@ -89,7 +89,7 @@
 (= ghc-module-name
   (Macro (\ form
            (case (unCode form)
-             (List [_ name]) (return `,(rename name))
+             (List [_ name]) (return (rename name))
              _ (error "ghc-module-name: panic")))))
 
 (:doc "Like 'import-from-ghc', but takes multiple modules in single form.")

@@ -7,13 +7,15 @@
           macroTests)
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Core.Ghc)
+
+   ;; Internal
+   (TestAux))
   (import-when [:compile]
     ;; Internal
     (Finkel.Prelude))
   (import
    ;; base
-   (Control.Exception ((SomeException ..) try))
    (Data.List (isSubsequenceOf))
    (System.Info (os arch))
 
@@ -24,8 +26,11 @@
    (Language.Finkel)
    (Language.Finkel.Form (aString aIntegral))
 
+   ;; finkel-core
+   (Finkel.Core)
+
    ;; Internal
-   (Finkel.Core)))
+   (TestAux)))
 
 (imports-from-ghc
  (GHC.Types.Basic ((SourceText ..)))
@@ -35,62 +40,6 @@
 
 (defn (:: coreTests Spec)
   (describe "Macro" macroTests))
-
-;; Using a newtype to compare 'Code's containing symbols generated
-;; with `gensym'.
-(newtype GensymCode (GensymCode Code)
-  (deriving Show))
-
-(instance (Eq GensymCode)
-  (= == eqGensymCode))
-
-(defn (:: eqGensymCode (-> GensymCode GensymCode Bool))
-  [(GensymCode a) (GensymCode b)]
-  (eqGensymCode1 a b))
-
-(defn (:: eqGensymCode1 (-> Code Code Bool))
-  [a b]
-  (eqGensymCode2 (unCode a) (unCode b)))
-
-(defn (:: eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
-  [(Atom (ASymbol a)) (Atom (ASymbol b))]
-  (| ((nullFS a) (nullFS b))
-     ((== (headFS a) #'$) True)
-     ((== (headFS b) #'$) True)
-     (otherwise (== a b)))
-  [(List as) (List bs)] (eqGensymCodes as bs)
-  [(HsList as) (HsList bs)] (eqGensymCodes as bs)
-  [a b] (== a b))
-
-(defn (:: eqGensymCodes (-> [Code] [Code] Bool))
-  [[] []] True
-  [[]  _] False
-  [ _ []] False
-  [(: x xs) (: y ys)] (&& (eqGensymCode1 x y) (eqGensymCodes xs ys)))
-
-(eval-when [:compile]
-  (defmacro expandTo
-    [in out]
-    `(do (<- v (try (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
-         (case v
-           (Left e)  (expectationFailure (show (:: e SomeException)))
-           (Right r) (shouldBe (GensymCode r) (GensymCode ',out)))))
-
-  (defmacro expandFailureWith
-    [in test]
-    `(let ((= act (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
-       (shouldThrow act ,test)))
-
-  (defmacro expandFailure
-    [in]
-    `(expandFailureWith ,in anyException))
-
-  (defmacro expandSatisfy
-    [in test]
-    `(do (<- v (try (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
-         (case v
-           (Left e) (expectationFailure (show (:: e SomeException)))
-           (Right x) (shouldSatisfy x ,test)))))
 
 (defn (:: macroTests Spec)
   (do
@@ -708,7 +657,8 @@
          (cond-expand
            [(<= 700 :ghc) (== :arch "x86_64") (== :os "linux")
             "ghc newer than 7.0.0, x86_64-linux"]
-           [otherwise "other"])
+           [otherwise
+            "other"])
          (\ form
            (&& (elem (aIntegral (:: (read cProjectVersionInt) Int)) form)
                (elem (aString NoSourceText arch) form)
