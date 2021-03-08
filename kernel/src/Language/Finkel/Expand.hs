@@ -273,12 +273,15 @@ expand form =
         -- Expand `let' expression, `do' expression, `case' expression, lambda
         -- expression and function binding with shadowing the lexically bounded
         -- names. Expansion of other forms are done without name shadowing.
+        -- This function does not expand quoted forms, to preserve the structure
+        -- of the quoted forms containing `:begin'.
         kw@(LForm (L _ (Atom (ASymbol x)))):y:rest
           | x == "let"            -> expandLet l kw y rest
           | x == "do"             -> expandDo l kw (y:rest)
           | x == "case"           -> expandCase l kw y rest
           | x == "where"          -> expandWhere l kw y rest
           | x == "=" || x == "\\" -> expandFunBind l kw (y:rest)
+          | x == ":quote"         -> return form
         _                         -> expandList l forms
 
     L l (HsList forms) ->

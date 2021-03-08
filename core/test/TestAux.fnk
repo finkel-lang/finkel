@@ -9,6 +9,8 @@
    (GensymCode ..)
    expand-form
    expand-form-satisfies
+   expand-form-with
+   expand-form-with-env
    expandTo
    expandFailure
    expandFailureWith
@@ -22,6 +24,9 @@
 
    ;; hspec
    (Test.Hspec (Expectation expectationFailure shouldBe shouldSatisfy))
+
+   ;; finkel-kernel
+   (Language.Finkel.Fnk ((FnkEnv ..)))
 
    ;; finkel-core
    (Finkel.Prelude)))
@@ -75,8 +80,13 @@
 
 (defn (:: expand-form-with (-> (-> Code Code Expectation)
                                Macro Code Code Expectation))
-  [test macro in-form out-form]
-  (>>= (try (runFnk (macroFunction macro in-form) defaultFnkEnv))
+  (expand-form-with-env defaultFnkEnv))
+
+(defn (:: expand-form-with-env (-> FnkEnv
+                                   (-> Code Code Expectation)
+                                   Macro Code Code Expectation))
+  [fnk-env test macro in-form out-form]
+  (>>= (try (runFnk (macroFunction macro in-form) fnk-env))
        (either (. expectationFailure (show @ SomeException))
                (flip test out-form))))
 

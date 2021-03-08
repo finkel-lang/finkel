@@ -25,9 +25,11 @@
    ;; finkel-kernel
    (Language.Finkel)
    (Language.Finkel.Form (aString aIntegral))
+   (Language.Finkel.Fnk ((FnkEnv ..) makeEnvMacros mergeMacros))
 
    ;; finkel-core
    (Finkel.Core)
+   (Finkel.Core.Functions (cadr))
 
    ;; Internal
    (TestAux)))
@@ -569,7 +571,27 @@
             (expandTo
              (macroexpand-1 (car nil)) (car nil)))
           (it "should expand to itself"
-            (expandTo (macroexpand-1 42) 42))))
+            (expandTo (macroexpand-1 42) 42))
+
+          (it "should expand to form containing :begin"
+            (let ((= m1
+                    (Macro (\ form
+                             (return `(:begin
+                                        (:: foo String)
+                                        (= foo ,(show (cadr form))))))))
+                  (= my-macros
+                    (mergeMacros
+                     (envMacros defaultFnkEnv)
+                     (makeEnvMacros [(, "m1" m1)])))
+                  (= my-env
+                    (defaultFnkEnv {envMacros my-macros})))
+              (expand-form-with-env my-env
+                                    shouldBe
+                                    macroexpand-1
+                                    '(macroexpand-1 '(m1 True))
+                                    '(:quote (:begin
+                                               (:: foo String)
+                                               (= foo "True"))))))))
 
     (describe "macroexpand"
       (do (it "should expand to '(toCode 3)"
