@@ -44,7 +44,6 @@ module Language.Finkel.Fnk
   , fnkEnvOptions
   , fnkEnvOptionsWithLib
   , partitionFnkEnvOptions
-  , parseFnkEnvOptions
   , fromFnkEnvOptions
   , fnkEnvOptionsUsage
 
@@ -82,9 +81,9 @@ import           Data.IORef              (IORef, atomicModifyIORef',
                                           atomicWriteIORef, newIORef, readIORef)
 import           Data.List               (isPrefixOf, partition)
 import           Data.Word               (Word8)
-import           System.Console.GetOpt   (ArgDescr (..), ArgOrder (..),
-                                          OptDescr (..), getOpt', usageInfo)
-import           System.Environment      (getProgName, lookupEnv)
+import           System.Console.GetOpt   (ArgDescr (..), OptDescr (..),
+                                          usageInfo)
+import           System.Environment      (lookupEnv)
 import           System.IO               (stderr)
 import           System.IO.Unsafe        (unsafePerformIO)
 
@@ -788,16 +787,6 @@ dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
 -- Command line option handling
 --
 -- ---------------------------------------------------------------------
-
-parseFnkEnvOptions ::
-    MonadIO m => FnkEnv -> [String] -> m (FnkEnv, [String], [String])
-parseFnkEnvOptions fnk_env args0 = do
-  let (fnk_opts0, args1) = partitionFnkEnvOptions args0
-  case getOpt' Permute fnkEnvOptionsWithLib fnk_opts0 of
-    (o,_,fnk_opts1,[]) -> pure (foldl (flip id) fnk_env o, fnk_opts1, args1)
-    (_,_,_,es) -> do
-      me <- liftIO getProgName
-      liftIO (throwFinkelExceptionIO (FinkelException (me ++ ": " ++ concat es)))
 
 -- | Separate Finkel debug options from others.
 partitionFnkEnvOptions

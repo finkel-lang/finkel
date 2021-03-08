@@ -40,7 +40,7 @@ import           GHC_Data_StringBuffer        (stringToStringBuffer)
 import           GHC_Driver_Session           (HasDynFlags (..))
 import           GHC_Types_Basic              (SourceText (..), fl_value)
 import           GHC_Types_SrcLoc             (GenLocated (..), SrcSpan (..),
-                                               getLoc, noSrcSpan)
+                                               noSrcSpan)
 import           GHC_Utils_Outputable         (showPpr)
 
 #if MIN_VERSION_ghc(9,0,0)

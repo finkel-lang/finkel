@@ -243,10 +243,8 @@ main3 orig_args ghc_args = do
 -- ---------------------------------------------------------------------
 
 data FinkelOption = FinkelOption
-  { finkelVerbose  :: String
-  , finkelHelp     :: Maybe FinkelHelp
-  , finkelHsOutDir :: Maybe FilePath
-  , finkelEnv      :: FnkEnv
+  { finkelHelp :: Maybe FinkelHelp
+  , finkelEnv  :: FnkEnv
   }
 
 data FinkelHelp
@@ -256,9 +254,7 @@ data FinkelHelp
 
 defaultFinkelOption :: FnkEnv -> FinkelOption
 defaultFinkelOption fnk_env = FinkelOption
-  { finkelVerbose = "1"
-  , finkelHelp = Nothing
-  , finkelHsOutDir = Nothing
+  { finkelHelp = Nothing
   , finkelEnv = fnk_env
   }
 
@@ -333,7 +329,6 @@ printFinkelVersion = putStrLn v
 --
 -- ---------------------------------------------------------------------
 
--- XXX: Add option to specify path of ghc executable?
 rawGhc :: [String] -> IO ()
 rawGhc args = rawSystem ghc args >>= exitWith
   where
