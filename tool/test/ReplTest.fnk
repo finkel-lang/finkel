@@ -73,7 +73,7 @@
       (describe "Eval"
         (cond-expand
           [(== :os "mingw32")
-           (it "should skip under Windows"
+           (it "should be skipped under Windows"
              (pendingWith "Windows not supported yet"))]
           [otherwise (evalTests etf)]))))
 
@@ -94,67 +94,65 @@
 ;;; Internal
 
 (defn (:: replStateTests Spec)
-  (do (let ((= d describe)
-            (= rs1 (mempty {pending-input (Just "(foo")}))
+  (do (let ((= rs1 (mempty {pending-input (Just "(foo")}))
             (= rs2 (mempty {pending-input (Just " bar)")}))))
-      (d "Show instance"
-         (it "should show pending inputs"
-           (shouldBe
-            (show rs1)
-            "ReplState {pending_input = Just <stringbuffer(4,0)>, \
+      (describe "Show instance"
+        (it "should show pending inputs"
+          (shouldBe
+           (show rs1)
+           "ReplState {pending_input = Just <stringbuffer(4,0)>, \
 \prompt_string = \"> \"}")))
-      (d "Eq instance"
-         (do (it "should be itself" (shouldBe rs1 rs1))
-             (it "should not be different pending input"
-               (shouldNotBe rs1 rs2))))
-      (d "Monoid laws for ReplState"
-         (do (it "should have an identity element"
-               (shouldBe (<> mempty rs1) rs1))
-             (it "should satisfy associativity law"
-               (shouldBe (<> (<> rs1 mempty) rs2)
-                         (<> rs1 (<> mempty rs2))))))
-      (d "get and put ReplState for InputT"
-         (do (let ((= act
-                     (run-repl (runInputT defaultSettings work)
-                               mempty))
-                   (= work
-                     (do (putReplState mempty)
-                         getReplState))))
-             (it "should return the given ReplState"
-               (shouldReturn act mempty))))
+      (describe "Eq instance"
+        (do (it "should be itself" (shouldBe rs1 rs1))
+            (it "should not be different pending input"
+              (shouldNotBe rs1 rs2))))
+      (describe "Monoid laws for ReplState"
+        (do (it "should have an identity element"
+              (shouldBe (<> mempty rs1) rs1))
+            (it "should satisfy associativity law"
+              (shouldBe (<> (<> rs1 mempty) rs2)
+                        (<> rs1 (<> mempty rs2))))))
+      (describe "get and put ReplState for InputT"
+        (do (let ((= act
+                    (run-repl (runInputT defaultSettings work)
+                              mempty))
+                  (= work
+                    (do (putReplState mempty)
+                        getReplState))))
+            (it "should return the given ReplState"
+              (shouldReturn act mempty))))
       (let ((= run-repl' (flip run-repl mempty))
             (= repl1 (pure True))))
-      (d "Functor instance of Repl"
-         (do (it "should satisfy identity law"
-               (shouldReturn (run-repl' (fmap id repl1)) True))
-             (it "should satisfy composition law"
-               (shouldReturn
-                (run-repl' (fmap show (fmap not repl1)))
-                (show (not True))))
-             (it "should return second arg with <$"
-               (shouldReturn
-                (run-repl' (<$ True (pure False)))
-                True))))
-      (d "Applicative instance of Repl"
-         (it "should satisfy applicative law"
-           (shouldReturn
-            (run-repl' (<*> (pure not) repl1))
-            False)))))
+      (describe "Functor instance of Repl"
+        (do (it "should satisfy identity law"
+              (shouldReturn (run-repl' (fmap id repl1)) True))
+            (it "should satisfy composition law"
+              (shouldReturn
+               (run-repl' (fmap show (fmap not repl1)))
+               (show (not True))))
+            (it "should return second arg with <$"
+              (shouldReturn
+               (run-repl' (<$ True (pure False)))
+               True))))
+      (describe "Applicative instance of Repl"
+        (it "should satisfy applicative law"
+          (shouldReturn
+           (run-repl' (<*> (pure not) repl1))
+           False)))))
 
 (defn (:: readTests Spec)
-  (do (let ((= d describe)))
-      (d "reading single line form"
-         (it "returns '(foo bar buzz)"
-           (do (<- form (run-repl (read-form "(foo bar buzz)")
-                                  initial-repl-state))
-               (shouldBe form (Just '(foo bar buzz))))))
-      (d "reading multi line form"
-         (it "returns '(a b c)"
-           (do (<- form (run-repl (do (<- _ (read-form "(a "))
-                                      (<- _ (read-form "b "))
-                                      (read-form "c)"))
-                                  initial-repl-state))
-               (shouldBe form (Just '(a b c))))))))
+  (do (describe "reading single line form"
+        (it "returns '(foo bar buzz)"
+          (do (<- form (run-repl (read-form "(foo bar buzz)")
+                                 initial-repl-state))
+              (shouldBe form (Just '(foo bar buzz))))))
+      (describe "reading multi line form"
+        (it "returns '(a b c)"
+          (do (<- form (run-repl (do (<- _ (read-form "(a "))
+                                     (<- _ (read-form "b "))
+                                     (read-form "c)"))
+                                 initial-repl-state))
+              (shouldBe form (Just '(a b c))))))))
 
 (defn (:: readPrintTests Spec)
   (describe "read and print loop"
