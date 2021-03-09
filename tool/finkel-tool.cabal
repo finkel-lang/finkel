@@ -85,6 +85,7 @@ test-suite finkel-tool-test
   main-is:             Spec.hs
   build-depends:       base
                      , directory
+                     , exceptions
                      , ghc
                      , haskeline
                      , network

@@ -17,12 +17,14 @@
    (Control.Concurrent
     (forkIO newEmptyMVar killThread putMVar takeMVar threadDelay yield))
    (Control.Exception
-    ((IOException ..) bracket catch evaluate finally throwIO))
+    ((IOException ..) SomeException bracket evaluate finally throwIO))
+   (qualified Control.Exception as ControlException)
    (Control.Monad (forever replicateM_ void when))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate isSubsequenceOf))
    (Data.String ((IsString ..)))
    (GHC.Conc ((ThreadStatus ..) threadStatus))
+   (GHC.IO.Exception ((AsyncException ..)))
 
    ;; filepath
    (System.FilePath (</>))
@@ -58,6 +60,13 @@
 ;;; Extra imports
 
 (cond-expand
+  [(<= 810 :ghc)
+   (import Control.Monad.Catch
+           ((MonadThrow ..) (MonadCatch ..) (MonadMask ..)))]
+  [otherwise
+   (:begin)])
+
+(cond-expand
   [(<= 804 :ghc)
    (:begin)]
   [otherwise
@@ -68,6 +77,7 @@
 (defn (:: replTests (-> EvalTestFns Spec))
   [etf]
   (do (describe "ReplState" replStateTests)
+      (describe "Exception" exceptionTests)
       (describe "Read" readTests)
       (describe "ReadPrint" readPrintTests)
       (describe "Eval"
@@ -140,18 +150,54 @@
            (run-repl' (<*> (pure not) repl1))
            False)))))
 
+(defn (:: do-repl (-> (Repl a) (IO a)))
+  (flip run-repl initial-repl-state))
+
+(defn (:: exceptionTests Spec)
+  (describe "exceptions instances for REPL"
+    (cond-expand
+      [(<= 810 :ghc)
+       (do (let ((= throw-sof-on-no-input
+                   (>>= getReplState
+                        (. (maybe (throwM StackOverflow)
+                                  (const (return 42)))
+                           pending-input)))))
+           (it "should throw exception"
+             (shouldThrow (do-repl (throwM StackOverflow)) anyException))
+           (it "should catch exception"
+             (let ((= act (catch throw-sof-on-no-input handler))
+                   (:: handler (-> AsyncException (Repl Int)))
+                   (= handler ae
+                     (do (<- st getReplState)
+                         (case (, ae (pending-input st))
+                           (, StackOverflow Nothing) (return 42)
+                           _ (throwM ae)))))
+               (shouldReturn (do-repl act) 42)))
+           (it "should throw exception from mask when unmasked"
+             (let ((= act
+                     (mask (\ unmask
+                             (unmask throw-sof-on-no-input)))))
+               (shouldThrow (do-repl act) anyException)))
+           (it "should throw exception from uninterruptibleMask when unmasked"
+             (let ((= act
+                     (uninterruptibleMask
+                      (\ unmask
+                        (unmask throw-sof-on-no-input)))))
+               (shouldThrow (do-repl act) anyException))))]
+      [otherwise
+       (it "should throw, catch, and mask exceptions as necessary"
+         (pendingWith "... on newer versions of ghc"))])))
+
 (defn (:: readTests Spec)
   (do (describe "reading single line form"
         (it "returns '(foo bar buzz)"
-          (do (<- form (run-repl (read-form "(foo bar buzz)")
-                                 initial-repl-state))
+          (do (<- form (do-repl (read-form "(foo bar buzz)")))
               (shouldBe form (Just '(foo bar buzz))))))
       (describe "reading multi line form"
         (it "returns '(a b c)"
-          (do (<- form (run-repl (do (<- _ (read-form "(a "))
-                                     (<- _ (read-form "b "))
-                                     (read-form "c)"))
-                                 initial-repl-state))
+          (do (<- form (do-repl (do (<- _ (read-form "(a "))
+                                    (<- _ (read-form "b "))
+                                    (read-form "c)"))))
               (shouldBe form (Just '(a b c))))))))
 
 (defn (:: readPrintTests Spec)
@@ -272,7 +318,7 @@
                 (connect conn (addrAddress addr)))
               (return (, conn tid))))
         (= with-retry n act
-          (catch act
+          (ControlException.catch act
             (\ e
               (if (< 0 n)
                   (do yield
