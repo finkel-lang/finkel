@@ -23,6 +23,7 @@ mainFnkTests =
     compileFile common_flags "m001.fnk"
     compileFile common_flags "m002.hs"
     compileFile ("-c" : common_flags) "m003.c"
+    compileFile ("-main-is" : "MyMain.my-main" : common_flags) "MyMain.fnk"
     rawGhcTest
     finkelHelpTest
     finkelVersionTest

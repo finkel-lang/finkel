@@ -152,9 +152,15 @@ initSessionForMake = do
   let dflags1 = dflags0
 #endif
 
+  -- Mangle the function name in "mainFunIs" field, to support mangled name,
+  -- e.g. to support "foo-bar-buzz" instead of "foo_bar_buzz".
+  let updateMainFunIs = maybe Nothing (Just . mangle)
+      mangle = map (\c -> if c == '-' then '_' else c)
+      dflags2 = dflags1 { mainFunIs = updateMainFunIs (mainFunIs dflags1) }
+
   -- ... And setting and getting the DynFlags again.
-  _preload1 <- setSessionDynFlags dflags1
-  dflags2 <- getDynFlags
+  _preload1 <- setSessionDynFlags dflags2
+  dflags3 <- getDynFlags
 
   -- Load modules names in FnkEnv to current interactive context.
   fnk_env <- getFnkEnv
@@ -172,7 +178,7 @@ initSessionForMake = do
   -- Updating the debug settings. Also setting the default 'DynFlag' at this
   -- point.
   putFnkEnv (fnk_env { envVerbosity = vrbs2
-                     , envDefaultDynFlags = Just dflags2 })
+                     , envDefaultDynFlags = Just dflags3 })
 
 -- | Simple make function returning compiled home module information. Intended
 -- to be used in 'require' macro.
