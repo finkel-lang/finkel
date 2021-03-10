@@ -3,11 +3,11 @@ packages:
   - .
 extra-deps:
   - git: https://github.com/finkel-lang/finkel
-    commit: da46cdf3265427f835074c472b87759c91edd7e6
+    commit: e38c74b6ac6f7eb20fdc10b8c4b832dea7af3660
     subdirs:
-      - kernel
+      - finkel-kernel
       - fkc
-      - setup
-      - core
-      - tool
+      - finkel-setup
+      - finkel-core
+      - finkel-tool
       - finkel
