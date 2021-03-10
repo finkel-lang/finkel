@@ -3,7 +3,7 @@ packages:
   - .
 extra-deps:
   - git: https://github.com/finkel-lang/finkel
-    commit: e38c74b6ac6f7eb20fdc10b8c4b832dea7af3660
+    commit: c0ce56cc220d533dc2e46e0bcf6387fed238abc7
     subdirs:
       - finkel-kernel
       - fkc
