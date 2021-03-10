@@ -157,5 +157,5 @@ test-suite finkel-kernel-test
 
 source-repository head
   type:     git
-  location: https://github.com/finkel-lang/finkel.git
+  location: https://github.com/finkel-lang/finkel-kernel.git
   subdir:   kernel

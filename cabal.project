@@ -1,10 +1,10 @@
 packages:
   -- Main components
-  kernel/
+  finkel-kernel/
   fkc/
-  setup/
-  core/
-  tool/
+  finkel-setup/
+  finkel-core/
+  finkel-tool/
   finkel/
 
   -- For test

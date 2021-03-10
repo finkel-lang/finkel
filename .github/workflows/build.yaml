@@ -89,10 +89,10 @@ jobs:
           DOCPKG=doc/include/building-package
           TIX=$(find $HPCROOT -name 'all.tix')
           hpc-codecov \
-            --src=kernel --mix=kernel/$DISTDIR/hpc \
-            --src=setup --mix=setup/$DISTDIR/hpc \
-            --src=core --mix=core/$DISTDIR/hpc \
-            --src=tool --mix=tool/$DISTDIR/hpc \
+            --src=finkel-kernel --mix=finkel-kernel/$DISTDIR/hpc \
+            --src=finkel-setup --mix=finkel-setup/$DISTDIR/hpc \
+            --src=finkel-core --mix=finkel-core/$DISTDIR/hpc \
+            --src=finkel-tool --mix=finkel-tool/$DISTDIR/hpc \
             --src=$DOCPKG/my-second-package \
             --mix=$DOCPKG/my-second-package/$DISTDIR/hpc \
             --src=$DOCPKG/my-new-package \
@@ -293,7 +293,15 @@ jobs:
         run: $STACK build --fast finkel-setup
 
       - name: Run stack sdist
-        run: $STACK sdist kernel fkc setup core tool finkel --tar-dir sdist
+        run: |
+          $STACK sdist \
+            finkel-kernel \
+            fkc \
+            finkel-setup \
+            finkel-core \
+            finkel-tool \
+            finkel \
+            --tar-dir sdist
 
       - name: Emit temporary stack.yaml
         run: |

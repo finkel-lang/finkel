@@ -117,7 +117,7 @@
   ;;
   ;; See: https://docs.haskellstack.org/en/stable/GUIDE/#templates
   ;;
-  (canonicalizePath (</> ".." "tool" "finkel.hsfiles")))
+  (canonicalizePath (</> ".." "finkel-tool" "finkel.hsfiles")))
 
 (defn (:: get-resolver-version (-> String (IO (Maybe String))))
   "Get stack resolver version from YAML file used in `my-new-package'."

@@ -89,10 +89,10 @@ travis_after_success_linux () {
             DOCPKG=doc/include/building-package
             TIX=$(find $HPCROOT -name 'all.tix')
             hpc-codecov \
-                --src=kernel --mix=kernel/$DISTDIR/hpc \
-                --src=setup --mix=setup/$DISTDIR/hpc \
-                --src=core --mix=core/$DISTDIR/hpc \
-                --src=tool --mix=tool/$DISTDIR/hpc \
+                --src=finkel-kernel --mix=kernel/$DISTDIR/hpc \
+                --src=finkel-setup --mix=setup/$DISTDIR/hpc \
+                --src=finkel-core --mix=core/$DISTDIR/hpc \
+                --src=finkel-tool --mix=tool/$DISTDIR/hpc \
                 --src=$DOCPKG/my-second-package \
                 --mix=$DOCPKG/my-second-package/$DISTDIR/hpc \
                 --src=$DOCPKG/my-new-package \

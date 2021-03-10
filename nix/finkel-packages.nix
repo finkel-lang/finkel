@@ -27,11 +27,11 @@ let
         inherit name src;
       }
     ) {
-      finkel-kernel = ../kernel;
+      finkel-kernel = ../finkel-kernel;
       fkc = ../fkc;
-      finkel-setup = ../setup;
-      finkel-core = ../core;
-      finkel-tool= ../tool;
+      finkel-setup = ../finkel-setup;
+      finkel-core = ../finkel-core;
+      finkel-tool= ../finkel-tool;
       finkel = ../finkel;
     };
 

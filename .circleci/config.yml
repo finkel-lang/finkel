@@ -12,11 +12,11 @@ jobs:
           name: Restore Cached Dependencies
           keys:
             - stack-{{ checksum "stack.yaml" }}
-            - kernel-{{ checksum "kernel/finkel-kernel.cabal" }}
+            - kernel-{{ checksum "finkel-kernel/finkel-kernel.cabal" }}
             - kernel-{{ checksum "fkc/fkc.cabal" }}
-            - setup-{{ checksum "setup/finkel-setup.cabal" }}
-            - lang-{{ checksum "lang/finkel-lang.cabal" }}
-            - tool-{{ checksum "tool/finkel-tool.cabal" }}
+            - setup-{{ checksum "finkel-setup/finkel-setup.cabal" }}
+            - lang-{{ checksum "finkel-core/finkel-core.cabal" }}
+            - tool-{{ checksum "finkel-tool/finkel-tool.cabal" }}
             - finkel-{{ checksum "finkel/finkel.cabal" }}
       - run:
           name: Resolve/Update Dependencies

@@ -109,5 +109,5 @@ test-suite finkel-tool-test
 
 source-repository head
   type:     git
-  location: https://github.com/finkel-lang/finkel
+  location: https://github.com/finkel-lang/finkel-tool.git
   subdir:   tool
