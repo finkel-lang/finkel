@@ -20,13 +20,11 @@ import           Control.Exception                  (bracket_)
 import           Control.Monad                      (foldM, mapAndUnzipM, when)
 import           Data.Foldable                      (toList)
 import           Data.Function                      (on)
-import           Data.List                          (isSubsequenceOf, unionBy)
+import           Data.List                          (unionBy)
 
 #if !MIN_VERSION_base(4,13,0)
 import           Data.Monoid                        (Monoid (..))
 #endif
-
-import           System.Environment                 (getExecutablePath)
 
 -- filepath
 import           System.FilePath                    ((<.>), (</>))
