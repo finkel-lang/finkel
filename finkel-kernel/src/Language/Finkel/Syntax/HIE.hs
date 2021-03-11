@@ -75,11 +75,11 @@ b_module mb_form exports =
                , hsmodLayout = NoLayoutInfo
 #endif
                , hsmodHaddockModHeader = mbdoc }
-{-# INLINE b_module #-}
+{-# INLINABLE b_module #-}
 
 b_implicitMainModule :: Builder ([HImportDecl] -> [HDecl] -> HModule)
 b_implicitMainModule = b_module Nothing [] <*> pure Nothing
-{-# INLINE b_implicitMainModule #-}
+{-# INLINABLE b_implicitMainModule #-}
 
 b_ieSym :: Code -> Builder HIE
 b_ieSym form@(LForm (L l _)) = do
@@ -89,7 +89,7 @@ b_ieSym form@(LForm (L l _)) = do
   if isLexCon name
      then return (con name)
      else return (var name)
-{-# INLINE b_ieSym #-}
+{-# INLINABLE b_ieSym #-}
 
 b_ieGroup :: Int -> Code -> Builder HIE
 b_ieGroup n form@(LForm (L l body))
@@ -98,14 +98,14 @@ b_ieGroup n form@(LForm (L l body))
   = return $! L l (IEGroup NOEXT (fromIntegral n) (hsDocString doc))
   | otherwise
   = setLastToken form >> failB "Invalid group documentation"
-{-# INLINE b_ieGroup #-}
+{-# INLINABLE b_ieGroup #-}
 
 b_ieDoc :: Code -> Builder HIE
 b_ieDoc (LForm (L l form)) =
   case form of
     Atom (AString _ str) -> return $! L l (IEDoc NOEXT (hsDocString str))
     _                    -> builderError
-{-# INLINE b_ieDoc #-}
+{-# INLINABLE b_ieDoc #-}
 
 b_ieDocNamed :: Code -> Builder HIE
 b_ieDocNamed (LForm (L l form))
@@ -113,11 +113,11 @@ b_ieDocNamed (LForm (L l form))
   , Atom (ASymbol name) <- unCode name_code
   = return $! L l (IEDocNamed NOEXT (unpackFS name))
   | otherwise = builderError
-{-# INLINE b_ieDocNamed #-}
+{-# INLINABLE b_ieDocNamed #-}
 
 b_ieAbs :: Code -> Builder HIE
 b_ieAbs form@(LForm (L l _)) = iEThingAbs l <$> getConId form
-{-# INLINE b_ieAbs #-}
+{-# INLINABLE b_ieAbs #-}
 
 b_ieAll :: Code -> Builder HIE
 b_ieAll form@(LForm (L l _)) = do
@@ -126,7 +126,7 @@ b_ieAll form@(LForm (L l _)) = do
       iEThingAll = IEThingAll NOEXT
       uq = mkUnqual tcClsName
   return thing
-{-# INLINE b_ieAll #-}
+{-# INLINABLE b_ieAll #-}
 
 b_ieWith :: Code -> [Code] -> Builder HIE
 b_ieWith (LForm (L l form)) names =
@@ -151,7 +151,7 @@ b_ieWith (LForm (L l form)) names =
                       , flIsOverloaded = False
                       , flSelector = mkRdrName x }
     iEThingWith = IEThingWith NOEXT
-{-# INLINE b_ieWith #-}
+{-# INLINABLE b_ieWith #-}
 
 b_ieMdl :: [Code] -> Builder HIE
 b_ieMdl xs =
@@ -161,7 +161,7 @@ b_ieMdl xs =
   where
     thing l n = L l (iEModuleContents (L l (mkModuleNameFS n)))
     iEModuleContents = IEModuleContents NOEXT
-{-# INLINE b_ieMdl #-}
+{-# INLINABLE b_ieMdl #-}
 
 b_importD :: (Code, Bool, Maybe Code) -> (Bool, Maybe [HIE])
           -> Builder HImportDecl
@@ -189,7 +189,7 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
               Just entities -> Just (hiding, L l entities)
       in  return (L l decl')
     _ -> builderError
-{-# INLINE b_importD #-}
+{-# INLINABLE b_importD #-}
 
 
 -- ------------------------------------------------------------------------
@@ -201,4 +201,4 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
 iEThingAbs :: SrcSpan -> FastString -> HIE
 iEThingAbs l name =
   L l (IEThingAbs NOEXT (L l (IEName (L l (mkUnqual tcClsName name)))))
-{-# INLINE iEThingAbs #-}
+{-# INLINABLE iEThingAbs #-}

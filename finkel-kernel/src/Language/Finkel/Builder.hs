@@ -196,19 +196,19 @@ syntaxErrCode (SyntaxError code _) = code
 -- | Get current 'BState'.
 getBState :: Builder BState
 getBState = Builder (\st -> Right (st,st))
-{-# INLINE getBState #-}
+{-# INLINABLE getBState #-}
 
 -- | Put current 'BState'.
 putBState :: BState -> Builder ()
 putBState st = Builder (\_ -> Right ((), st))
-{-# INLINE putBState #-}
+{-# INLINABLE putBState #-}
 
 -- | Set last token to given 'Code'.
 setLastToken :: Code -> Builder ()
 setLastToken code = do
   st <- getBState
   putBState (st {lastToken = Just code})
-{-# INLINE setLastToken #-}
+{-# INLINABLE setLastToken #-}
 
 -- | Parse with builder using given tokens, continue on successful parse.
 parse :: Builder a -> [Code] -> Builder a
@@ -229,7 +229,7 @@ formLexer cont = do
       x:xs -> do
         putBState (st {inputs = xs, lastToken = Just x})
         cont x
-{-# INLINE formLexer #-}
+{-# INLINABLE formLexer #-}
 
 -- | Show simple syntax error message with current 'Code'.
 builderError :: Builder a
@@ -352,36 +352,36 @@ quoteWith name qualify =
   if qualify
      then appendFS "Language.Finkel."  name
      else name
-{-# INLINE quoteWith #-}
+{-# INLINABLE quoteWith #-}
 
 qListS :: Quote
 qListS = quoteWith "qList"
-{-# INLINE qListS #-}
+{-# INLINABLE qListS #-}
 
 qHsListS :: Quote
 qHsListS = quoteWith "qHsList"
-{-# INLINE qHsListS #-}
+{-# INLINABLE qHsListS #-}
 
 qSymbolS :: Quote
 qSymbolS = quoteWith "qSymbol"
-{-# INLINE qSymbolS #-}
+{-# INLINABLE qSymbolS #-}
 
 qCharS :: Quote
 qCharS = quoteWith "qChar"
-{-# INLINE qCharS #-}
+{-# INLINABLE qCharS #-}
 
 qStringS :: Quote
 qStringS = quoteWith "qString"
-{-# INLINE qStringS #-}
+{-# INLINABLE qStringS #-}
 
 qIntegerS :: Quote
 qIntegerS = quoteWith "qInteger"
-{-# INLINE qIntegerS #-}
+{-# INLINABLE qIntegerS #-}
 
 qFractionalS :: Quote
 qFractionalS = quoteWith "qFractional"
-{-# INLINE qFractionalS #-}
+{-# INLINABLE qFractionalS #-}
 
 qUnitS :: Quote
 qUnitS = quoteWith "qUnit"
-{-# INLINE qUnitS #-}
+{-# INLINABLE qUnitS #-}

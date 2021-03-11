@@ -90,11 +90,11 @@ type PROMOTIONFLAG = Promoted
 iSPROMOTED :: PROMOTIONFLAG
 iSPROMOTED = Promoted
 #endif
-{-# INLINE iSPROMOTED #-}
+{-# INLINABLE iSPROMOTED #-}
 
 nOTPROMOTED :: PROMOTIONFLAG
 nOTPROMOTED = NotPromoted
-{-# INLINE nOTPROMOTED #-}
+{-# INLINABLE nOTPROMOTED #-}
 
 unPromoteTyVar :: HType -> HType
 unPromoteTyVar ty =
@@ -102,7 +102,7 @@ unPromoteTyVar ty =
     (dL->L l (HsTyVar _EXT _ (L ln name))) ->
       cL l (hsTyVar nOTPROMOTED (L ln name))
     _ -> ty
-{-# INLINE unPromoteTyVar #-}
+{-# INLINABLE unPromoteTyVar #-}
 
 
 -- ---------------------------------------------------------------------
@@ -113,7 +113,7 @@ unPromoteTyVar ty =
 
 b_anonWildT :: Code -> HType
 b_anonWildT (LForm (L l _)) = L l mkAnonWildCardTy
-{-# INLINE b_anonWildT #-}
+{-# INLINABLE b_anonWildT #-}
 
 b_symT :: Code -> Builder HType
 b_symT whole@(LForm (L l form)) =
@@ -148,15 +148,15 @@ b_symT whole@(LForm (L l form)) =
       | otherwise                     = tvName
     tv t = L l (hsTyVar NotPromoted (L l t))
     bang = b_bangT whole
-{-# INLINE b_symT #-}
+{-# INLINABLE b_symT #-}
 
 b_unitT :: Code -> HType
 b_unitT (LForm (L l _)) = L l (hsTupleTy HsBoxedTuple [])
-{-# INLINE b_unitT #-}
+{-# INLINABLE b_unitT #-}
 
 b_tildeT :: Code -> HType
 b_tildeT (LForm (L l _)) = L l (hsTyVar NotPromoted (L l eqTyCon_RDR))
-{-# INLINE b_tildeT #-}
+{-# INLINABLE b_tildeT #-}
 
 b_funT :: Code -> [HType] -> Builder HType
 b_funT (LForm (L l _)) ts =
@@ -182,7 +182,7 @@ b_funT (LForm (L l _)) ts =
 #else
     funty = L l (hsTyVar NotPromoted (L l (getRdrName funTyCon)))
 #endif
-{-# INLINE b_funT #-}
+{-# INLINABLE b_funT #-}
 
 b_tyLitT :: Code -> Builder HType
 b_tyLitT (LForm (L l form))
@@ -193,7 +193,7 @@ b_tyLitT (LForm (L l form))
   | otherwise = builderError
   where
     mkLit loc lit = cL loc (HsTyLit NOEXT lit)
-{-# INLINE b_tyLitT #-}
+{-# INLINABLE b_tyLitT #-}
 
 b_opOrAppT :: Code -> [HType] -> Builder HType
 b_opOrAppT form@(LForm (L l ty)) typs
@@ -209,7 +209,7 @@ b_opOrAppT form@(LForm (L l ty)) typs
   | otherwise =
     do op <- b_symT form
        b_appT (op:typs)
-{-# INLINE b_opOrAppT #-}
+{-# INLINABLE b_opOrAppT #-}
 
 b_prmConT :: Code -> Builder HType
 b_prmConT (LForm (L l form)) =
@@ -228,7 +228,7 @@ b_prmConT (LForm (L l form)) =
       | isLexCon n    = dataName
       | isLexVarSym n = tcName
       | otherwise     = tvName
-{-# INLINE b_prmConT #-}
+{-# INLINABLE b_prmConT #-}
 
 b_appT :: [HType] -> Builder HType
 b_appT []     = builderError
@@ -237,16 +237,16 @@ b_appT (x:xs) =
     [] -> return x
     _  -> let f t1 t2 = addCLoc t1 t2 (HsAppTy NOEXT t1 (parTyApp t2))
           in  return (foldl' f x xs)
-{-# INLINE b_appT #-}
+{-# INLINABLE b_appT #-}
 
 b_listT :: HType -> HType
 b_listT ty@(L l _) = L l (HsListTy NOEXT ty)
-{-# INLINE b_listT #-}
+{-# INLINABLE b_listT #-}
 
 b_nilT :: Code -> HType
 b_nilT (LForm (L l _)) =
   L l (hsTyVar NotPromoted (L l (listTyCon_RDR)))
-{-# INLINE b_nilT #-}
+{-# INLINABLE b_nilT #-}
 
 b_tupT :: Code -> [HType] -> HType
 b_tupT (LForm (L l _)) ts =
@@ -255,13 +255,13 @@ b_tupT (LForm (L l _)) ts =
      where
        tup = getRdrName (tupleTyCon Boxed 2)
    _  -> L l (hsTupleTy HsBoxedTuple ts)
-{-# INLINE b_tupT #-}
+{-# INLINABLE b_tupT #-}
 
 b_bangT :: Code -> HType -> HType
 b_bangT (LForm (L l _)) t = L l (hsBangTy srcBang (parTyApp t))
   where
     srcBang = HsSrcBang (SourceText "b_bangT") NoSrcUnpack SrcStrict
-{-# INLINE b_bangT #-}
+{-# INLINABLE b_bangT #-}
 
 b_forallT :: Code -> ([HTyVarBndrSpecific], ([HType], HType)) -> HType
 b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
@@ -272,12 +272,12 @@ b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
       ty1 = forAllTy bndrs ty0
 #endif
   in  cL l0 ty1
-{-# INLINE b_forallT #-}
+{-# INLINABLE b_forallT #-}
 
 b_qualT :: Code -> ([HType], HType) -> HType
 b_qualT (LForm (L l _)) (ctxts, body) =
   cL l (mkHsQualTy_compat (mkLocatedList ctxts) body)
-{-# INLINE b_qualT #-}
+{-# INLINABLE b_qualT #-}
 
 b_kindedType :: Code -> HType -> HType -> HType
 b_kindedType (LForm (L l _)) ty kind =
@@ -288,11 +288,11 @@ b_kindedType (LForm (L l _)) ty kind =
 #else
    L l (HsKindSig NOEXT ty kind)
 #endif
-{-# INLINE b_kindedType #-}
+{-# INLINABLE b_kindedType #-}
 
 b_docT :: HType -> LHsDocString -> HType
 b_docT ty doc = let l = getLoc ty in L l (HsDocTy NOEXT ty doc)
-{-# INLINE b_docT #-}
+{-# INLINABLE b_docT #-}
 
 b_unpackT :: Code -> HType -> HType
 b_unpackT (LForm (L l _)) t = L l (hsBangTy bang t')
@@ -302,7 +302,7 @@ b_unpackT (LForm (L l _)) t = L l (hsBangTy bang t')
       case t of
         L _ (HsBangTy _EXT (HsSrcBang _ _ st) t0) -> (st, t0)
         _                                         -> (NoSrcStrict, t)
-{-# INLINE b_unpackT #-}
+{-# INLINABLE b_unpackT #-}
 
 b_prmListT :: ([Code] -> Builder [HType]) -> Code -> Builder HType
 b_prmListT prsr typs =
@@ -313,7 +313,7 @@ b_prmListT prsr typs =
           tys <- prsr xs
           return $! cL l (hsExplicitListTy tys)
     _ -> builderError
-{-# INLINE b_prmListT #-}
+{-# INLINABLE b_prmListT #-}
 
 b_prmTupT :: ([Code] -> Builder [HType]) -> [Code] -> Builder HType
 b_prmTupT prsr typs =
@@ -325,22 +325,22 @@ b_prmTupT prsr typs =
             l = getLoc (mkLocatedList (map unLForm typs))
         return (cL l (hsExplicitTupleTy tys'))
     _ -> builderError
-{-# INLINE b_prmTupT #-}
+{-# INLINABLE b_prmTupT #-}
 
 isCommaSymbol :: Code -> Bool
 isCommaSymbol (LForm (L _ form)) =
   case form of
     Atom (ASymbol ",") -> True
     _                  -> False
-{-# INLINE isCommaSymbol #-}
+{-# INLINABLE isCommaSymbol #-}
 
 hsTupleTy :: HsTupleSort -> [HType] -> HsType PARSED
 hsTupleTy = HsTupleTy NOEXT
-{-# INLINE hsTupleTy #-}
+{-# INLINABLE hsTupleTy #-}
 
 hsBangTy :: HsSrcBang -> HType -> HsType PARSED
 hsBangTy = HsBangTy NOEXT
-{-# INLINE hsBangTy #-}
+{-# INLINABLE hsBangTy #-}
 
 forAllTy :: [HTyVarBndrSpecific] -> HType -> HsType PARSED
 forAllTy bndrs body =
@@ -358,15 +358,15 @@ forAllTy bndrs body =
              , hst_xforall = NOEXT
 #endif
              }
-{-# INLINE forAllTy #-}
+{-# INLINABLE forAllTy #-}
 
 hsParTy :: HType -> HsType PARSED
 hsParTy = HsParTy NOEXT
-{-# INLINE hsParTy #-}
+{-# INLINABLE hsParTy #-}
 
 hsTyVar :: PROMOTIONFLAG -> Located (IdP PARSED) -> HsType PARSED
 hsTyVar = HsTyVar NOEXT
-{-# INLINE hsTyVar #-}
+{-# INLINABLE hsTyVar #-}
 
 hsExplicitListTy :: [HType] -> HsType PARSED
 hsExplicitListTy tys =
@@ -398,7 +398,7 @@ hsExplicitTupleTy tys =
 -- | Parenthesize given 'HType' with 'appPrec'.
 parTyApp :: HType -> HType
 parTyApp = parenthesizeHsType' appPrec
-{-# INLINE parTyApp #-}
+{-# INLINABLE parTyApp #-}
 
 #if MIN_VERSION_ghc(8,6,0)
 parenthesizeHsType' :: PprPrec -> HType -> HType

@@ -80,7 +80,7 @@ evalExpr :: HExpr -> Fnk HValue
 evalExpr expr = do
   fhv <- compileParsedExprRemote expr
   liftIO (withForeignRef fhv localRef)
-{-# INLINE evalExpr #-}
+{-# INLINABLE evalExpr #-}
 
 -- | Evaluate the type of given expression.
 evalExprType :: HExpr -> Fnk Type

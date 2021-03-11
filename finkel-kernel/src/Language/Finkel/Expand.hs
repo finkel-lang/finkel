@@ -181,7 +181,7 @@ bcoDynFlags dflags0 =
 #endif
       dflags4 = updOptLevel 0 dflags3
   in  dflags4
-{-# INLINE bcoDynFlags #-}
+{-# INLINABLE bcoDynFlags #-}
 
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
@@ -190,14 +190,14 @@ boundedNames form =
     List xs          -> concatMap boundedName xs
     Atom (ASymbol n) -> [n]
     _                -> []
-{-# INLINE boundedNames #-}
+{-# INLINABLE boundedNames #-}
 
 boundedName :: Code -> [FastString]
 boundedName form =
   case unCode form of
     List ((LForm (L _ (Atom (ASymbol "=")))):n:_) -> boundedNameOne n
     _                                             -> []
-{-# INLINE boundedName #-}
+{-# INLINABLE boundedName #-}
 
 boundedNameOne :: Code -> [FastString]
 boundedNameOne form =
@@ -211,7 +211,7 @@ boundedNameOne form =
       case unCode x of
         Atom (ASymbol n) | isLower (headFS n) -> [n]
         _                                     -> []
-{-# INLINE boundedNameOne #-}
+{-# INLINABLE boundedNameOne #-}
 
 -- | Perform 'Fnk' action with temporary shadowed macro environment.
 withShadowing :: [FastString] -- ^ Names of macro to shadow.
@@ -247,7 +247,7 @@ expands forms = do
 -- | Internal works for 'expands'.
 expands' :: [Code] -> Fnk [Code]
 expands' forms = fmap concat (mapM expand' forms)
-{-# INLINE expands' #-}
+{-# INLINABLE expands' #-}
 
 -- | Expand form to list of 'Code', supports special form /begin/.
 expand' :: Code -> Fnk [Code]
@@ -262,7 +262,7 @@ expand' form =
            [] -> return []
            _  -> expands' rest
        _ -> return [form']
-{-# INLINE expand' #-}
+{-# INLINABLE expand' #-}
 
 -- | Recursively expands the given 'Code'.
 expand :: Code -> Fnk Code
@@ -368,7 +368,7 @@ expandInDo (bounded, xs) x = do
           _               -> []
   x' <- withShadowing bounded (expand x)
   return (newbind ++ bounded, (x':xs))
-{-# INLINE expandInDo #-}
+{-# INLINABLE expandInDo #-}
 
 -- | Expand given form once if the form is a macro form, otherwise
 -- return the given form.
@@ -386,7 +386,7 @@ expand1 form =
 -- | 'True' when the 'DynFlags' is using interpreter.
 isInterpreted :: DynFlags -> Bool
 isInterpreted dflags = hscTarget dflags == HscInterpreted
-{-# INLINE isInterpreted #-}
+{-# INLINABLE isInterpreted #-}
 
 -- | Debug function fot this module.
 debug :: FnkEnv -> Maybe MsgDoc -> [MsgDoc] -> Fnk ()

@@ -454,35 +454,35 @@ getLibDirFromGhc = do
          else do
            out  <- readProcess "ghc" ["--print-libdir"] ""
            return (reverse (dropWhile isSpace (reverse out)))
-{-# INLINE getLibDirFromGhc #-}
+{-# INLINABLE getLibDirFromGhc #-}
 
 -- | Extract 'Ghc' from 'Fnk'.
 toGhc :: Fnk a -> FnkEnvRef -> Ghc a
 toGhc = unFnk
-{-# INLINE toGhc #-}
+{-# INLINABLE toGhc #-}
 
 -- | Lift 'Ghc' to 'Fnk'.
 fromGhc :: Ghc a -> Fnk a
 fromGhc m = Fnk (const m)
-{-# INLINE fromGhc #-}
+{-# INLINABLE fromGhc #-}
 
 -- | Get current 'FnkEnv'.
 getFnkEnv :: Fnk FnkEnv
 getFnkEnv = Fnk (\(FnkEnvRef ref) -> liftIO $! readIORef ref)
-{-# INLINE getFnkEnv #-}
+{-# INLINABLE getFnkEnv #-}
 
 -- | Set current 'FnkEnv' to given argument.
 putFnkEnv :: FnkEnv -> Fnk ()
 putFnkEnv fnk_env =
   Fnk (\(FnkEnvRef ref) -> liftIO $! atomicWriteIORef ref fnk_env)
-{-# INLINE putFnkEnv #-}
+{-# INLINABLE putFnkEnv #-}
 
 -- | Update 'FnkEnv' with applying given function to current 'FnkEnv'.
 modifyFnkEnv :: (FnkEnv -> FnkEnv) -> Fnk ()
 modifyFnkEnv f =
   Fnk (\(FnkEnvRef ref) ->
          liftIO $! atomicModifyIORef' ref (\fnk_env -> (f fnk_env, ())))
-{-# INLINE modifyFnkEnv #-}
+{-# INLINABLE modifyFnkEnv #-}
 
 -- | Throw 'FinkelException' with given message.
 failS :: String -> Fnk a
@@ -524,7 +524,7 @@ setDynFlags :: GhcMonad m => DynFlags -> m ()
 setDynFlags dflags =
   modifySession (\h -> h { hsc_dflags = dflags
                          , hsc_IC = (hsc_IC h) {ic_dflags = dflags}})
-{-# INLINE setDynFlags #-}
+{-# INLINABLE setDynFlags #-}
 
 -- | Run given action with temporary 'DynFlags'.
 withTmpDynFlags :: GhcMonad m => DynFlags -> m a -> m a
@@ -535,7 +535,7 @@ withTmpDynFlags dflags act = wrap (\_ -> setDynFlags dflags >> act)
 #else
     wrap = gbracket getDynFlags setDynFlags
 #endif
-{-# INLINE withTmpDynFlags #-}
+{-# INLINABLE withTmpDynFlags #-}
 
 -- | Prepare 'DynFlags' for interactive evaluation.
 prepareInterpreter :: GhcMonad m => m ()
@@ -578,7 +578,7 @@ lookupMacro name fnk_env = go (envTmpMacros fnk_env)
   where
     go []     = Map.lookup name (envMacros fnk_env)
     go (t:ts) = Map.lookup name t `mplus` go ts
-{-# INLINE lookupMacro #-}
+{-# INLINABLE lookupMacro #-}
 
 -- | Empty 'EnvMacros'.
 emptyEnvMacros :: EnvMacros
@@ -678,31 +678,31 @@ fopt flag fnk_env =
         Fnk_trace_expand -> 3
         Fnk_trace_make   -> 3
         Fnk_trace_spf    -> 3
-{-# INLINE fopt #-}
+{-# INLINABLE fopt #-}
 
 -- | Turn on the given 'FnkDebugFlag'.
 fopt_set :: FnkDebugFlag -> FnkEnv -> FnkEnv
 fopt_set flag fnk_env =
   fnk_env {envDumpFlags = setBit (envDumpFlags fnk_env) (fromEnum flag)}
-{-# INLINE fopt_set #-}
+{-# INLINABLE fopt_set #-}
 
 -- | Update the 'envVerbosity' to given value.
 setFnkVerbosity :: Int -> FnkEnv -> FnkEnv
 setFnkVerbosity v fnk_env = fnk_env {envVerbosity = v}
-{-# INLINE setFnkVerbosity #-}
+{-# INLINABLE setFnkVerbosity #-}
 
 -- | Dump 'MsgDoc's when the given 'FnkDebugFlag' is turned on.
 debugWhen
   :: (MonadIO m, HasDynFlags m) => FnkEnv -> FnkDebugFlag -> [MsgDoc] -> m ()
 debugWhen fnk_env flag mdocs =
   getDynFlags >>= \dflags -> debugWhen' dflags fnk_env flag mdocs
-{-# INLINE debugWhen #-}
+{-# INLINABLE debugWhen #-}
 
 debugWhen'
   :: MonadIO m => DynFlags -> FnkEnv -> FnkDebugFlag -> [MsgDoc] -> m ()
 debugWhen' dflags fnk_env flag mdocs =
   when (fopt flag fnk_env) (dumpMsgDocs dflags mdocs)
-{-# INLINE debugWhen' #-}
+{-# INLINABLE debugWhen' #-}
 
 dumpMsgDocs :: MonadIO m => DynFlags -> [MsgDoc] -> m ()
 dumpMsgDocs dflags mdocs = liftIO (pr (vcat mdocs))
@@ -714,7 +714,7 @@ dumpMsgDocs dflags mdocs = liftIO (pr (vcat mdocs))
     pr = printSDocLn Pretty.PageMode dflags stderr err_style
     err_style = defaultErrStyle dflags
 #endif
-{-# INLINE dumpMsgDocs #-}
+{-# INLINABLE dumpMsgDocs #-}
 
 -- | Get finkel debug setting from environment variable /FNK_DEBUG/.
 getFnkDebug :: MonadIO m => m Bool
@@ -723,7 +723,7 @@ getFnkDebug =
      case mb_debug of
        Nothing -> return False
        Just _  -> return True
-{-# INLINE getFnkDebug #-}
+{-# INLINABLE getFnkDebug #-}
 
 -- | Show some fields in 'DynFlags'.
 dumpDynFlags

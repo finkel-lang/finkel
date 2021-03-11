@@ -83,7 +83,7 @@ b_intP (LForm (L l form)) =
     Atom (AInteger n) ->
       return $! cL l (mkNPat (L l (mkHsIntegral_compat n)) Nothing)
     _                 -> builderError
-{-# INLINE b_intP #-}
+{-# INLINABLE b_intP #-}
 
 b_stringP :: Code -> Builder HPat
 b_stringP (LForm (L l form)) =
@@ -98,7 +98,7 @@ b_stringP (LForm (L l form)) =
 #else
       mkHsIsString s t placeHolderType
 #endif
-{-# INLINE b_stringP #-}
+{-# INLINABLE b_stringP #-}
 
 b_charP :: Code -> Builder HPat
 b_charP (LForm (dL->L l form)) =
@@ -107,21 +107,21 @@ b_charP (LForm (dL->L l form)) =
     _                -> builderError
   where
     lit c = HsChar (SourceText (show c)) c
-{-# INLINE b_charP #-}
+{-# INLINABLE b_charP #-}
 
 b_unitP :: Code -> Builder HPat
 b_unitP (LForm (dL->L l form)) =
   case form of
     Atom AUnit -> return $! cL l (mkTuplePat' [])
     _          -> builderError
-{-# INLINE b_unitP #-}
+{-# INLINABLE b_unitP #-}
 
 b_wildP :: Code -> HPat
 b_wildP (LForm (dL->L l _)) = cL l wildPat
   where
     wildPat | L _ pat <- dL nlWildPat = pat
 
-{-# INLINE b_wildP #-}
+{-# INLINABLE b_wildP #-}
 
 b_symP :: Code -> Builder HPat
 b_symP orig@(LForm (dL->L l form))
@@ -159,7 +159,7 @@ b_symP orig@(LForm (dL->L l form))
         -> do checkVarId orig name
               return (cL l (VarPat NOEXT (L l (mkRdrName name))))
   | otherwise = builderError
-{-# INLINE b_symP #-}
+{-# INLINABLE b_symP #-}
 
 b_hsListP :: [HPat] -> HPat
 b_hsListP pats = p
@@ -179,7 +179,7 @@ b_hsListP pats = p
 #else
        ListPat ps placeHolderType Nothing
 #endif
-{-# INLINE b_hsListP #-}
+{-# INLINABLE b_hsListP #-}
 
 b_labeledP :: Code -> [(Code, HPat)] -> Builder HPat
 b_labeledP (LForm (L l form)) ps
@@ -195,11 +195,11 @@ b_labeledP (LForm (L l form)) ps
         cpd = RecCon rc
     return (cL l (mkConPat cid cpd))
   | otherwise = builderError
-{-# INLINE b_labeledP #-}
+{-# INLINABLE b_labeledP #-}
 
 b_tupP :: Code -> [HPat] -> HPat
 b_tupP (LForm (L l _)) ps = cL l (mkTuplePat' ps)
-{-# INLINE b_tupP #-}
+{-# INLINABLE b_tupP #-}
 
 b_asP :: Code -> HPat -> Builder HPat
 b_asP (LForm (dL->L l form)) pat =
@@ -209,17 +209,17 @@ b_asP (LForm (dL->L l form)) pat =
     _ -> builderError
   where
     asPat = AsPat NOEXT
-{-# INLINE b_asP #-}
+{-# INLINABLE b_asP #-}
 
 b_lazyP :: HPat -> HPat
 b_lazyP (dL-> L l pat0) = cL l (LazyPat NOEXT pat1)
   where
     pat1 = parenthesizePat' appPrec (cL l pat0)
-{-# INLINE b_lazyP #-}
+{-# INLINABLE b_lazyP #-}
 
 b_bangP :: HPat -> HPat
 b_bangP (dL->L l pat) = cL l (BangPat NOEXT (cL l pat))
-{-# INLINE b_bangP #-}
+{-# INLINABLE b_bangP #-}
 
 b_conP :: [Code] -> Bool -> [HPat] -> Builder HPat
 b_conP forms is_paren rest =
@@ -241,7 +241,7 @@ b_conP forms is_paren rest =
               in  return (foldl' f (parenthesizePat' opPrec hd) rest')
             _ -> builderError
     _ -> builderError
-{-# INLINE b_conP #-}
+{-# INLINABLE b_conP #-}
 
 b_sigP :: Code -> HPat -> HType -> HPat
 b_sigP (LForm (L l _)) pat ty =
@@ -254,7 +254,7 @@ b_sigP (LForm (L l _)) pat ty =
 #else
   cL l (SigPatIn pat (mkLHsSigWcType ty))
 #endif
-{-# INLINE b_sigP #-}
+{-# INLINABLE b_sigP #-}
 
 mkTuplePat' :: [HPat] -> Pat PARSED
 mkTuplePat' ps =
@@ -263,12 +263,12 @@ mkTuplePat' ps =
 #else
   TuplePat ps Boxed []
 #endif
-{-# INLINE mkTuplePat' #-}
+{-# INLINABLE mkTuplePat' #-}
 
 mkParPat' :: HPat -> HPat
 mkParPat' (dL->L l p) =
   cL l (ParPat NOEXT (cL l p))
-{-# INLINE mkParPat' #-}
+{-# INLINABLE mkParPat' #-}
 
 #if MIN_VERSION_ghc(9,0,0)
 mkConPat :: Located (ConLikeP PARSED) -> HsConPatDetails PARSED -> Pat PARSED

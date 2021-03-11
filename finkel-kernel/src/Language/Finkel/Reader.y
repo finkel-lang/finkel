@@ -129,58 +129,58 @@ header :: { [Code] }
 {
 atom :: SrcSpan -> Atom -> Code
 atom l x = LForm $ L l $ Atom x
-{-# INLINE atom #-}
+{-# INLINABLE atom #-}
 
 sym :: SrcSpan -> FastString -> Code
 sym l str = atom l $ ASymbol str
-{-# INLINE sym #-}
+{-# INLINABLE sym #-}
 
 li :: SrcSpan -> [Code] -> Code
 li l xs = LForm $ L l $ List xs
-{-# INLINE li #-}
+{-# INLINABLE li #-}
 
 mkQuote :: Located Token -> Code -> Code
 mkQuote (L l _) body = li l [sym l ":quote", body]
-{-# INLINE mkQuote #-}
+{-# INLINABLE mkQuote #-}
 
 mkQuasiquote :: Located Token -> Code -> Code
 mkQuasiquote (L l _) body = li l [sym l ":quasiquote", body]
-{-# INLINE mkQuasiquote #-}
+{-# INLINABLE mkQuasiquote #-}
 
 mkUnquote :: Located Token -> Code -> Code
 mkUnquote (L l _) body = li l [sym l ":unquote", body]
-{-# INLINE mkUnquote #-}
+{-# INLINABLE mkUnquote #-}
 
 mkUnquoteSplice :: Located Token -> Code -> Code
 mkUnquoteSplice (L l _) body = li l [sym l ":unquote-splice", body]
-{-# INLINE mkUnquoteSplice #-}
+{-# INLINABLE mkUnquoteSplice #-}
 
 mkHsList :: Located Token -> [Code] -> Code
 mkHsList (L l _) body = LForm $ L l $ HsList body
-{-# INLINE mkHsList #-}
+{-# INLINABLE mkHsList #-}
 
 mkPcommas :: Located Token -> Code
 mkPcommas (L l (TPcommas n)) = li l [sym l (fsLit (replicate n ','))]
-{-# INLINE mkPcommas #-}
+{-# INLINABLE mkPcommas #-}
 
 mkUnitOrList :: Located Token -> [Code] -> Code
 mkUnitOrList (L l _) body =
   case body of
     [] -> atom l AUnit
     _  -> li l body
-{-# INLINE mkUnitOrList #-}
+{-# INLINABLE mkUnitOrList #-}
 
 mkASymbol :: Located Token -> Code
 mkASymbol (L l (TSymbol x)) = atom l $ ASymbol x
-{-# INLINE mkASymbol #-}
+{-# INLINABLE mkASymbol #-}
 
 mkAChar :: Located Token -> Code
 mkAChar (L l (TChar st x)) = atom l $ AChar st x
-{-# INLINE mkAChar #-}
+{-# INLINABLE mkAChar #-}
 
 mkAString :: Located Token -> Code
 mkAString (L l (TString st x)) = atom l $ aString st x
-{-# INLINE mkAString #-}
+{-# INLINABLE mkAString #-}
 
 mkAInteger :: Located Token -> Code
 mkAInteger (L l (TInteger st n)) = atom l $ AInteger lit
@@ -188,29 +188,29 @@ mkAInteger (L l (TInteger st n)) = atom l $ AInteger lit
     lit = IL { il_text = st
              , il_neg = n < 0
              , il_value = n }
-{-# INLINE mkAInteger #-}
+{-# INLINABLE mkAInteger #-}
 
 mkAFractional :: Located Token -> Code
 mkAFractional (L l (TFractional x)) = atom l $ AFractional x
-{-# INLINE mkAFractional #-}
+{-# INLINABLE mkAFractional #-}
 
 mkOcSymbol :: Located Token -> Code
 mkOcSymbol (L l _) = sym l "{"
-{-# INLINE mkOcSymbol #-}
+{-# INLINABLE mkOcSymbol #-}
 
 mkCcSymbol :: Located Token -> Code
 mkCcSymbol (L l _) = sym l "}"
-{-# INLINE mkCcSymbol #-}
+{-# INLINABLE mkCcSymbol #-}
 
 mkDoc :: Located Token -> Code
 mkDoc (L l (TDocNext str)) =
   li l [sym l ":doc", atom l (AString (SourceText (unpackFS str)) str)]
-{-# INLINE mkDoc #-}
+{-# INLINABLE mkDoc #-}
 
 mkDocp :: Located Token -> Code
 mkDocp (L l (TDocPrev str)) =
   li l [sym l ":doc^", atom l (AString (SourceText (unpackFS str)) str)]
-{-# INLINE mkDocp #-}
+{-# INLINABLE mkDocp #-}
 
 mkDoch :: Located Token -> Code
 mkDoch (L l (TDocGroup n s)) = li l [sym l dh, atom l (AString st s)]
@@ -221,7 +221,7 @@ mkDoch (L l (TDocGroup n s)) = li l [sym l dh, atom l (AString st s)]
            3 -> ":dh3"
            _ -> ":dh4"
     st = SourceText (unpackFS s)
-{-# INLINE mkDoch #-}
+{-# INLINABLE mkDoch #-}
 
 mkDock :: Located Token -> Code
 mkDock (L l (TDocNamed k mb_doc)) =
@@ -230,14 +230,14 @@ mkDock (L l (TDocNamed k mb_doc)) =
     Just d  -> li l (pre ++ [atom l (AString (SourceText (unpackFS d)) d)])
   where
     pre = [sym l ":doc$", atom l (ASymbol k)]
-{-# INLINE mkDock #-}
+{-# INLINABLE mkDock #-}
 
 rmac :: Char -> Code -> SP Code
 rmac c expr =
   case c of
     'p' -> pragma expr
     _   -> errorSP expr ("rmac: unsupported char " ++ show c)
-{-# INLINE rmac #-}
+{-# INLINABLE rmac #-}
 
 -- Module from ghc package with codes related to language pragma:
 --
@@ -399,7 +399,7 @@ parseWith p mb_file contents =
   case runSP p mb_file contents of
     Right a  -> return a
     Left err -> Control.Monad.Fail.fail err
-{-# INLINE parseWith #-}
+{-# INLINABLE parseWith #-}
 
 -- | Parse single S-expression.
 sexpr :: SP Code

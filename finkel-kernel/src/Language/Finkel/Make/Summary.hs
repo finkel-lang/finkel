@@ -585,19 +585,19 @@ buildHsSyn bldr forms = do
 -- ---------------------------------------------------------------------
 
 extendMG' :: ModuleGraph -> ModSummary -> ModuleGraph
-{-# INLINE extendMG' #-}
+{-# INLINABLE extendMG' #-}
 
 mgElemModule' :: ModuleGraph -> Module -> Bool
-{-# INLINE mgElemModule' #-}
+{-# INLINABLE mgElemModule' #-}
 
 mkModuleGraph' :: [ModSummary] -> ModuleGraph
-{-# INLINE mkModuleGraph' #-}
+{-# INLINABLE mkModuleGraph' #-}
 
 mgModSummaries' :: ModuleGraph -> [ModSummary]
-{-# INLINE mgModSummaries' #-}
+{-# INLINABLE mgModSummaries' #-}
 
 mgLookupModule' :: ModuleGraph -> Module -> Maybe ModSummary
-{-# INLINE mgLookupModule' #-}
+{-# INLINABLE mgLookupModule' #-}
 
 #if MIN_VERSION_ghc(8,4,0)
 -- ModuleGraph was an alias of [ModSummary] in ghc < 8.4.
@@ -636,13 +636,13 @@ home_imps imps = [ lmodname |  (mb_pkg, lmodname) <- imps, isLocal mb_pkg ]
 #endif
 
 preprocess' :: HscEnv -> (FilePath, Maybe Phase) -> IO (DynFlags, FilePath)
-{-# INLINE preprocess' #-}
+{-# INLINABLE preprocess' #-}
 
 getImports' :: DynFlags -> StringBuffer -> FilePath -> FilePath
             -> IO ([(Maybe FastString, Located ModuleName)],
                    [(Maybe FastString, Located ModuleName)],
                    Located ModuleName)
-{-# INLINE getImports' #-}
+{-# INLINABLE getImports' #-}
 
 #if MIN_VERSION_ghc(8,8,0)
 preprocess' hsc_env (path, mb_phase) =
@@ -663,7 +663,7 @@ getImports' = getImports
 
 -- | Label and wrap the given action with 'withTiming'.
 withTiming' :: String -> Fnk a -> Fnk a
-{-# INLINE withTiming' #-}
+{-# INLINABLE withTiming' #-}
 
 #if MIN_VERSION_ghc(8,10,0)
 withTiming' label = withTimingD (text label) (const ())

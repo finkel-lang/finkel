@@ -116,14 +116,14 @@ b_dataD :: Code
         -> (HDeriving, [HConDecl])
         -> HDecl
 b_dataD = mkNewtypeOrDataD DataType
-{-# INLINE b_dataD #-}
+{-# INLINABLE b_dataD #-}
 
 b_newtypeD :: Code
            -> (FastString, [HTyVarBndr], Maybe HKind)
            -> (HDeriving, [HConDecl])
            -> HDecl
 b_newtypeD = mkNewtypeOrDataD NewType
-{-# INLINE b_newtypeD #-}
+{-# INLINABLE b_newtypeD #-}
 
 mkNewtypeOrDataD :: NewOrData
                  -> Code
@@ -154,7 +154,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
                       , dd_ext = NOEXT
 #endif
                       }
-{-# INLINE mkNewtypeOrDataD #-}
+{-# INLINABLE mkNewtypeOrDataD #-}
 
 b_typeD :: Code
         -> (FastString, [HTyVarBndr], Maybe HKind)
@@ -172,7 +172,7 @@ b_typeD (LForm (L l _)) (name, tvs, _) ty = L l (tyClD synonym)
                       , tcdFVs = placeHolderNames
 #endif
                       }
-{-# INLINE b_typeD #-}
+{-# INLINABLE b_typeD #-}
 
 b_conD :: Code -> HConDeclDetails -> Builder HConDecl
 b_conD form@(LForm (L l _)) details = do
@@ -184,7 +184,7 @@ b_conD form@(LForm (L l _)) details = do
       cxt = L l []
 #endif
   return (L l (mkConDeclH98 name' Nothing cxt details))
-{-# INLINE b_conD #-}
+{-# INLINABLE b_conD #-}
 
 b_qtyconD :: (HConDecl, [HType]) -> HConDecl
 b_qtyconD (whole@(L l decl), tys) =
@@ -195,7 +195,7 @@ b_qtyconD (whole@(L l decl), tys) =
 #else
     _  -> L l (decl { con_cxt = Just (mkLocatedList tys) })
 #endif
-{-# INLINE b_qtyconD #-}
+{-# INLINABLE b_qtyconD #-}
 
 #if MIN_VERSION_ghc(9,0,0)
 b_forallD :: [LHsTyVarBndr Specificity PARSED] -> (HConDecl, [HType]) -> HConDecl
@@ -211,7 +211,7 @@ b_forallD vars (L l cdecl, cxts) =
   L l cdecl { con_qvars = Just (mkHsQTvs vars)
             , con_cxt = Just (mkLocatedList cxts) }
 #endif
-{-# INLINE b_forallD #-}
+{-# INLINABLE b_forallD #-}
 
 b_gadtD :: Code -> ([HType], HType) -> Builder HConDecl
 b_gadtD form@(LForm (L l1 _)) (ctxt, bodyty) = do
@@ -241,11 +241,11 @@ b_gadtD form@(LForm (L l1 _)) (ctxt, bodyty) = do
     pure (mkGadtDecl [name'] (mkLHsSigType ty))
 #endif
   return (L l1 decl)
-{-# INLINE b_gadtD #-}
+{-# INLINABLE b_gadtD #-}
 
 b_conOnlyD :: Code -> Builder HConDecl
 b_conOnlyD name = b_conD name (PrefixCon [])
-{-# INLINE b_conOnlyD #-}
+{-# INLINABLE b_conOnlyD #-}
 
 -- XXX: Infix data constructor not supported.
 b_conDeclDetails :: [HType] -> HConDeclDetails
@@ -257,11 +257,11 @@ b_conDeclDetails = PrefixCon . map (hsScaled . parTyApp)
 #else
 b_conDeclDetails = PrefixCon . map parTyApp
 #endif
-{-# INLINE b_conDeclDetails #-}
+{-# INLINABLE b_conDeclDetails #-}
 
 b_recFieldsD :: [HConDeclField] -> HConDeclDetails
 b_recFieldsD = RecCon . mkLocatedList
-{-# INLINE b_recFieldsD #-}
+{-# INLINABLE b_recFieldsD #-}
 
 b_recFieldD :: [Code] -> HType -> Maybe LHsDocString
             -> Builder HConDeclField
@@ -280,7 +280,7 @@ b_recFieldD names ty mb_doc = do
                            , cd_fld_doc = mb_doc }
       loc = getLoc (mkLocatedForm names)
   return (L loc field)
-{-# INLINE b_recFieldD #-}
+{-# INLINABLE b_recFieldD #-}
 
 b_derivD :: Maybe HDerivStrategy -> [HType] -> HDeriving
 b_derivD mb_strat tys = L l dcs
@@ -288,11 +288,11 @@ b_derivD mb_strat tys = L l dcs
     l = getLoc (mkLocatedList tys)
     dcs = [L l dc]
     dc = HsDerivingClause NOEXT mb_strat (L l (map mkLHsSigType tys))
-{-# INLINE b_derivD #-}
+{-# INLINABLE b_derivD #-}
 
 b_derivsD :: HDeriving -> HDeriving -> HDeriving
 b_derivsD (dL->L _ new) (dL->L _ acc) = mkLocatedList (new ++ acc)
-{-# INLINE b_derivsD #-}
+{-# INLINABLE b_derivsD #-}
 
 b_viaD :: HType -> Builder (Maybe HDerivStrategy)
 #if MIN_VERSION_ghc(8,6,0)
@@ -300,7 +300,7 @@ b_viaD ty@(dL-> L l _) = return (Just (L l (ViaStrategy (mkLHsSigType ty))))
 #else
 b_viaD _               = builderError
 #endif
-{-# INLINE b_viaD #-}
+{-# INLINABLE b_viaD #-}
 
 b_standaloneD :: Maybe HDerivStrategy
               -> Maybe (Located OverlapMode)
@@ -365,7 +365,7 @@ b_classD (tys,ty) decls = do
 #endif
                         }
     return (L l (tyClD cls))
-{-# INLINE b_classD #-}
+{-# INLINABLE b_classD #-}
 
 b_instD :: Maybe (Located OverlapMode) -> ([HType], HType)
         -> [HDecl] -> Builder HDecl
@@ -385,11 +385,11 @@ b_instD overlap (ctxts,ty@(L l _)) decls = do
       instD = InstD NOEXT
       clsInstD = ClsInstD NOEXT
   return (L l (instD (clsInstD decl)))
-{-# INLINE b_instD #-}
+{-# INLINABLE b_instD #-}
 
 b_datafamD :: Code -> (FastString, [HTyVarBndr], Maybe HType) -> HDecl
 b_datafamD = mkFamilyDecl DataFamily
-{-# INLINE b_datafamD #-}
+{-# INLINABLE b_datafamD #-}
 
 b_tyfamD :: [(Located FastString, [HType], HType)]
          -> Code
@@ -404,7 +404,7 @@ b_tyfamD insts =
     f (L l name, argtys, ty) =
       let rname = L l (mkUnqual tcName name)
       in  L l (mkTyFamInstEqn rname argtys ty)
-{-# INLINE b_tyfamD #-}
+{-# INLINABLE b_tyfamD #-}
 
 -- See: "RdrHsSyn.mkFamDecl" and 'Convert.cvtDec'.
 mkFamilyDecl :: FamilyInfo PARSED
@@ -430,7 +430,7 @@ mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
                 Nothing   -> NoSig NOEXT
                 Just lsig -> KindSig NOEXT lsig
   in  L l (TyClD NOEXT (FamDecl NOEXT fam))
-{-# INLINE mkFamilyDecl #-}
+{-# INLINABLE mkFamilyDecl #-}
 
 b_dfltSigD :: HDecl -> Builder HDecl
 b_dfltSigD (dL->L l decl) =
@@ -438,7 +438,7 @@ b_dfltSigD (dL->L l decl) =
     SigD _EXT (TypeSig _EXT ids ty) ->
      return (cL l (sigD (ClassOpSig NOEXT True ids (hswc_body ty))))
     _                               -> builderError
-{-# INLINE b_dfltSigD #-}
+{-# INLINABLE b_dfltSigD #-}
 
 -- See: "Convert.cvtDec".
 b_datainstD :: Code
@@ -446,7 +446,7 @@ b_datainstD :: Code
             -> (HDeriving, [HConDecl])
             -> HDecl
 b_datainstD = mk_data_or_newtype_instD DataType
-{-# INLINE b_datainstD #-}
+{-# INLINABLE b_datainstD #-}
 
 b_newtypeinstD :: Code
                -> (Located FastString, [HType])
@@ -481,7 +481,7 @@ mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats)
       tycon = L ln (mkUnqual tcName name)
       inst = mkDataFamInstDecl tycon pats rhs
   in  L l (InstD NOEXT faminst)
-{-# INLINE mk_data_or_newtype_instD #-}
+{-# INLINABLE mk_data_or_newtype_instD #-}
 
 b_tyinstD :: Code -> (Located FastString, [HType]) -> HType -> HDecl
 b_tyinstD (LForm (L l _)) (L ln name, pats) rhs =
@@ -495,7 +495,7 @@ b_tyinstD (LForm (L l _)) (L ln name, pats) rhs =
                            , tfid_fvs = placeHolderNames }
 #endif
   in  L l (InstD NOEXT tyfaminstD)
-{-# INLINE b_tyinstD #-}
+{-# INLINABLE b_tyinstD #-}
 
 b_overlapP :: Code -> Maybe (Located OverlapMode)
 b_overlapP (LForm (L _ lst)) =
@@ -511,7 +511,7 @@ b_overlapP (LForm (L _ lst)) =
     -- XXX: Adding extra pragma comment header to support translation to
     -- Haskell source code.
     stxt = SourceText ("{-# " ++ unpackFS mode)
-{-# INLINE b_overlapP #-}
+{-# INLINABLE b_overlapP #-}
 
 b_qtyclC :: [HType] -> Builder ([HType], HType)
 b_qtyclC ts =
@@ -520,7 +520,7 @@ b_qtyclC ts =
     _   -> case splitAt (length ts - 1) ts of
             (ctxt, [t]) -> return (ctxt, t)
             _           -> builderError
-{-# INLINE b_qtyclC #-}
+{-# INLINABLE b_qtyclC #-}
 
 b_defaultD :: [HType] -> HDecl
 b_defaultD types = L l (defD (defaultDecl types))
@@ -528,7 +528,7 @@ b_defaultD types = L l (defD (defaultDecl types))
     l = getLoc (mkLocatedList types)
     defD = DefD NOEXT
     defaultDecl = DefaultDecl NOEXT
-{-# INLINE b_defaultD #-}
+{-# INLINABLE b_defaultD #-}
 
 b_fixityD :: FixityDirection -> Code -> [Code] -> Builder HDecl
 b_fixityD dir (LForm (L l form)) syms =
@@ -548,7 +548,7 @@ b_fixityD dir (LForm (L l form)) syms =
       names <- mapM lname syms
       return (L l (sigD (fixSig (fixitySig names fixity))))
     _ -> builderError
-{-# INLINE b_fixityD #-}
+{-# INLINABLE b_fixityD #-}
 
 b_ffiD :: Code -> Code -> HCCallConv -> Maybe (Located Safety)
        -> Code -> (Code, HType) -> Builder HDecl
@@ -593,7 +593,7 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty) =
             _  -> L l (quotedSourceText ename')
       safety = fromMaybe (noLoc PlaySafe) mb_safety
       forD = ForD NOEXT
-{-# INLINE b_ffiD #-}
+{-# INLINABLE b_ffiD #-}
 
 b_callConv :: Code -> Builder (Located CCallConv)
 b_callConv (LForm (L l form)) =
@@ -607,7 +607,7 @@ b_callConv (LForm (L l form)) =
     _ -> builderError
   where
     r = return . L l
-{-# INLINE b_callConv #-}
+{-# INLINABLE b_callConv #-}
 
 b_safety :: Code -> Builder (Located Safety)
 b_safety (LForm (L l form)) =
@@ -619,7 +619,7 @@ b_safety (LForm (L l form)) =
         "unsafe"        -> return (L l PlayRisky)
         _               -> builderError
     _ -> builderError
-{-# INLINE b_safety #-}
+{-# INLINABLE b_safety #-}
 
 b_funOrPatD :: Code -> [HPat] -> ([HGRHS], [HDecl]) -> Builder HDecl
 b_funOrPatD eq_form pats gxd@(grhss,decls) =
@@ -641,7 +641,7 @@ b_funOrPatD eq_form pats gxd@(grhss,decls) =
     isVarPat _           = False
     varToName (VarPat _EXT lname) = return lname
     varToName _                   = failB "invalid name"
-{-# INLINE b_funOrPatD #-}
+{-# INLINABLE b_funOrPatD #-}
 
 b_funBindD :: Located RdrName -> [HPat] -> [HGRHS] -> [HDecl]
             -> Builder HDecl
@@ -667,7 +667,7 @@ b_funBindD lname@(L l _) args grhss decls = do
 #endif
       bind = mkFunBind' lname [match]
   return (L l (valD bind))
-{-# INLINE b_funBindD #-}
+{-# INLINABLE b_funBindD #-}
 
 b_patBindD :: ([HGRHS],[HDecl]) -> HPat -> HDecl
 b_patBindD (grhss,decls) (dL->L l pat) =
@@ -681,7 +681,7 @@ b_patBindD (grhss,decls) (dL->L l pat) =
 #endif
                      , pat_ticks = ([],[]) }
   in  L l (valD bind)
-{-# INLINE b_patBindD #-}
+{-# INLINABLE b_patBindD #-}
 
 b_tsigD :: [Code] -> ([HType], HType) -> Builder HDecl
 b_tsigD names (ctxts,typ0) = do
@@ -698,7 +698,7 @@ b_tsigD names (ctxts,typ0) = do
       typeSig = TypeSig NOEXT
   names' <- mapM mkName names
   return (L l (sigD (typeSig names' typ')))
-{-# INLINE b_tsigD #-}
+{-# INLINABLE b_tsigD #-}
 
 b_inlineD :: InlineSpec -> Maybe Activation -> Code -> Builder HDecl
 b_inlineD ispec mb_act (LForm (L l form)) =
@@ -713,7 +713,7 @@ b_inlineD ispec mb_act (LForm (L l form)) =
                NoInline  -> "{-# NOINLINE"
                Inlinable -> "{-# INLINABLE"
                _         -> "{-# INLINE"
-{-# INLINE b_inlineD #-}
+{-# INLINABLE b_inlineD #-}
 
 b_activation :: (SourceText -> PhaseNum -> Activation)
              -> Code -> Builder Activation
@@ -726,16 +726,16 @@ b_activation f code@(LForm (L _l atom))
   | otherwise = builderError
   where
     source = SourceText (show code)
-{-# INLINE b_activation #-}
+{-# INLINABLE b_activation #-}
 
 b_specializeD :: Code -> Maybe Activation -> (Code, HType) -> Builder HDecl
 b_specializeD = specializeBuilder noUserInline "{-# SPECIALISE"
-{-# INLINE b_specializeD #-}
+{-# INLINABLE b_specializeD #-}
 
 b_specializeInlineD :: Code -> Maybe Activation -> (Code, HType)
                     -> Builder HDecl
 b_specializeInlineD = specializeBuilder Inline "{-# SPECIALISE INLINE"
-{-# INLINE b_specializeInlineD #-}
+{-# INLINABLE b_specializeInlineD #-}
 
 specializeBuilder :: InlineSpec
                   -> String
@@ -748,14 +748,14 @@ specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig) = do
       source = SourceText txt
       specSig = SpecSig NOEXT lname [mkLHsSigType tsig] ipragma
   return (L l (sigD specSig))
-{-# INLINE specializeBuilder #-}
+{-# INLINABLE specializeBuilder #-}
 
 b_docnextD :: Code -> Builder HDecl
 b_docnextD (LForm (L l form)) =
   case form of
     Atom (AString _ str) -> return $! L l (DocD NOEXT (docCommentNext str))
     _                    -> builderError
-{-# INLINE b_docnextD #-}
+{-# INLINABLE b_docnextD #-}
 
 b_docprevD :: Code -> Builder HDecl
 b_docprevD (LForm (L l form)) =
@@ -763,7 +763,7 @@ b_docprevD (LForm (L l form)) =
     Atom (AString _ str) ->
       return $! L l (DocD NOEXT (DocCommentPrev (hsDocString str)))
     _ -> builderError
-{-# INLINE b_docprevD #-}
+{-# INLINABLE b_docprevD #-}
 
 b_docGroupD :: Int -> Code -> Builder HDecl
 b_docGroupD n form@(LForm (L l _))
@@ -772,7 +772,7 @@ b_docGroupD n form@(LForm (L l _))
   = return $! L l (DocD NOEXT (DocGroup (fromIntegral n)
                                         (hsDocString doc)))
   | otherwise = setLastToken form >> failB "Invalid group doc"
-{-# INLINE b_docGroupD #-}
+{-# INLINABLE b_docGroupD #-}
 
 b_docNamed :: Code -> Builder HDecl
 b_docNamed form@(LForm (L l body))
@@ -784,23 +784,23 @@ b_docNamed form@(LForm (L l body))
     in return $! L l (DocD NOEXT (DocCommentNamed name' doc'))
   | otherwise
   = setLastToken form >> failB "Invalid named doc"
-{-# INLINE b_docNamed #-}
+{-# INLINABLE b_docNamed #-}
 
 docCommentNext :: FastString -> DocDecl
 docCommentNext = DocCommentNext . hsDocString
-{-# INLINE docCommentNext #-}
+{-# INLINABLE docCommentNext #-}
 
 tyClD :: TyClDecl PARSED -> HsDecl PARSED
 tyClD = TyClD NOEXT
-{-# INLINE tyClD #-}
+{-# INLINABLE tyClD #-}
 
 valD :: HsBind PARSED -> HsDecl PARSED
 valD = ValD NOEXT
-{-# INLINE valD #-}
+{-# INLINABLE valD #-}
 
 sigD :: Sig PARSED -> HsDecl PARSED
 sigD = SigD NOEXT
-{-# INLINE sigD #-}
+{-# INLINABLE sigD #-}
 
 mkDataFamInstDecl :: Located RdrName
                   -> [HType]
@@ -817,7 +817,7 @@ mkDataFamInstDecl tycon pats rhs = dfid
                            , dfid_defn = rhs
                            , dfid_fvs = placeHolderNames }
 #endif
-{-# INLINE mkDataFamInstDecl #-}
+{-# INLINABLE mkDataFamInstDecl #-}
 
 mkTyFamInstEqn :: Located RdrName
                -> [HType]
@@ -832,7 +832,7 @@ mkTyFamInstEqn tycon pats rhs =
            , tfe_fixity = Prefix
            , tfe_rhs = rhs }
 #endif
-{-# INLINE mkTyFamInstEqn #-}
+{-# INLINABLE mkTyFamInstEqn #-}
 
 #if MIN_VERSION_ghc(8,10,0)
 type FAMEQN p rhs = FamEqn p rhs
@@ -861,7 +861,7 @@ mkFamEqn tycon pats rhs =
          , feqn_ext = NOEXT
 #endif
          }
-{-# INLINE mkFamEqn #-}
+{-# INLINABLE mkFamEqn #-}
 #endif
 
 unParTy :: HType -> HType
@@ -869,7 +869,7 @@ unParTy t0 =
   case t0 of
     L _ (HsParTy _EXT t1) -> t1
     _                     -> t0
-{-# INLINE unParTy #-}
+{-# INLINABLE unParTy #-}
 
 noUserInline :: InlineSpec
 #if MIN_VERSION_ghc(8,4,0)

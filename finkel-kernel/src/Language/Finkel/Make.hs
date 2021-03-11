@@ -301,15 +301,15 @@ data MkSt = MkSt
 
 getMkSt :: MakeM MkSt
 getMkSt = MakeM (\s -> pure (s,s))
-{-# INLINE getMkSt #-}
+{-# INLINABLE getMkSt #-}
 
 putMkSt :: MkSt -> MakeM ()
 putMkSt s = MakeM (\_ -> pure ((),s))
-{-# INLINE putMkSt #-}
+{-# INLINABLE putMkSt #-}
 
 toMakeM :: Fnk a -> MakeM a
 toMakeM fnk = MakeM (\st -> fnk >>= \a -> pure (a,st))
-{-# INLINE toMakeM #-}
+{-# INLINABLE toMakeM #-}
 
 -- | Make a list of 'ModSummary' and 'Option' from the given 'TargetUnit's.
 --
@@ -514,7 +514,7 @@ setDumpPrefix path = do
   let (basename, _suffix) = splitExtension path
       dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
   setDynFlags dflags1
-{-# INLINE setDumpPrefix #-}
+{-# INLINABLE setDumpPrefix #-}
 
 -- | Run the recompilation check.
 runRecompilationCheck
@@ -522,7 +522,7 @@ runRecompilationCheck
   -> MakeM (Either String ModSummary, RecompState)
 runRecompilationCheck fnk_env rs tu =
   toMakeM (unRecompM (checkRecompileRequired fnk_env tu) rs)
-{-# INLINE runRecompilationCheck #-}
+{-# INLINABLE runRecompilationCheck #-}
 
 -- | Return a list of 'TargetUnit' to compile for given 'ModuleName's.
 filterNotCompiled

@@ -140,7 +140,7 @@ isUnquoteSplice (LForm form) =
     L _ (List (LForm (L _ (Atom (ASymbol ":unquote-splice"))):_))
       -> True
     _ -> False
-{-# INLINE isUnquoteSplice #-}
+{-# INLINABLE isUnquoteSplice #-}
 
 -- | Internally used by macro expander for @unquote-splice@ special
 -- form.
@@ -173,7 +173,7 @@ coerceMacro dflags name =
       case evalBuilder dflags qualify parseExpr [name] of
         Right hexpr -> unsafeCoerce# <$> evalExpr hexpr
         Left err    -> failS (syntaxErrMsg err)
-{-# INLINE coerceMacro #-}
+{-# INLINABLE coerceMacro #-}
 
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Fnk [TyThing]
 getTyThingsFromIDecl (L _ idecl) minfo = do
@@ -467,43 +467,43 @@ defaultFnkEnv = emptyFnkEnv
 
 tSym :: SrcSpan -> FastString -> Code
 tSym l s = LForm (L l (Atom (ASymbol s)))
-{-# INLINE tSym #-}
+{-# INLINABLE tSym #-}
 
 tString :: SrcSpan -> FastString -> Code
 tString l s = LForm (L l (Atom (AString (SourceText (show s)) s)))
-{-# INLINE tString #-}
+{-# INLINABLE tString #-}
 
 tInt :: SrcSpan -> Int -> Code
 tInt l i = LForm (L l (Atom (AInteger (mkIntegralLit i))))
-{-# INLINE tInt #-}
+{-# INLINABLE tInt #-}
 
 tList :: SrcSpan -> [Code] -> Code
 tList l forms = LForm (L l (List forms))
-{-# INLINE tList #-}
+{-# INLINABLE tList #-}
 
 tHsList :: SrcSpan -> [Code] -> Code
 tHsList l forms = LForm (L l (HsList forms))
-{-# INLINE tHsList #-}
+{-# INLINABLE tHsList #-}
 
 emptyForm :: Code
 emptyForm =
   LForm (genSrc (List [LForm (genSrc (Atom (ASymbol ":begin")))]))
-{-# INLINE emptyForm #-}
+{-# INLINABLE emptyForm #-}
 
 toCodeS :: Quote
 toCodeS = quoteWith "toCode"
-{-# INLINE toCodeS #-}
+{-# INLINABLE toCodeS #-}
 
 unquoteSpliceS :: Quote
 unquoteSpliceS = quoteWith "unquoteSplice"
-{-# INLINE unquoteSpliceS #-}
+{-# INLINABLE unquoteSpliceS #-}
 
 concatS :: Quote
 concatS qual =
   if qual
      then "Data.Foldable.concat"
      else "concat"
-{-# INLINE concatS #-}
+{-# INLINABLE concatS #-}
 
 -- | Debug function for this module
 debug :: FnkEnv -> MsgDoc -> [MsgDoc] -> Fnk ()

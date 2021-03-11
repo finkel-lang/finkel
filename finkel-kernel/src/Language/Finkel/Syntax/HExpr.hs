@@ -72,11 +72,11 @@ import Language.Finkel.Syntax.SynUtils
 
 b_ifE :: Code -> HExpr -> HExpr -> HExpr -> HExpr
 b_ifE (LForm (L l _)) p t f = L l (mkHsIf p t f)
-{-# INLINE b_ifE #-}
+{-# INLINABLE b_ifE #-}
 
 b_lamE :: (HExpr,[HPat]) -> HExpr
 b_lamE (body,pats) = mkHsLam pats body
-{-# INLINE b_lamE #-}
+{-# INLINABLE b_lamE #-}
 
 b_tupE :: Code -> [HExpr] -> HExpr
 b_tupE (LForm (L l _)) args = L l e
@@ -85,13 +85,13 @@ b_tupE (LForm (L l _)) args = L l e
     mkArg x@(L al _) = L al (present x)
     explicitTuple = ExplicitTuple NOEXT
     present = Present NOEXT
-{-# INLINE b_tupE #-}
+{-# INLINABLE b_tupE #-}
 
 -- Expression for tuple constructor function (i.e. the (,)
 -- function). See also 'b_varE' for tuples with more elements.
 b_tupConE :: Code -> HExpr
 b_tupConE (LForm (L l _)) = L l (HsVar NOEXT (L l (tupConName Boxed 2)))
-{-# INLINE b_tupConE #-}
+{-# INLINABLE b_tupConE #-}
 
 b_letE :: Code -> [HDecl] -> HExpr -> Builder HExpr
 b_letE (LForm (L l _)) decls body = do
@@ -99,7 +99,7 @@ b_letE (LForm (L l _)) decls body = do
   let valbinds = mkHsValBinds_compat (cd_binds cd) (cd_sigs cd)
       hsLet = HsLet NOEXT
   return (L l (hsLet (L l valbinds) body))
-{-# INLINE b_letE #-}
+{-# INLINABLE b_letE #-}
 
 b_caseE :: Code -> HExpr -> [HMatch] -> HExpr
 b_caseE (LForm (L l _)) expr matches = L l (hsCase expr mg)
@@ -121,7 +121,7 @@ b_match pat (grhss,decls) =
     grhss' = mkGRHSs grhss decls l
     ctxt = CaseAlt
     l = getLoc (dL pat)
-{-# INLINE b_match #-}
+{-# INLINABLE b_match #-}
 
 b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
@@ -130,11 +130,11 @@ b_hgrhs rhss (body, gs) =
         _  -> let l = getLoc (mkLocatedList gs) in L l rhs
       rhs = b_GRHS gs body
   in  (lrhs:rhss)
-{-# INLINE b_hgrhs #-}
+{-# INLINABLE b_hgrhs #-}
 
 b_GRHS :: [HGuardLStmt] -> HExpr -> GRHS PARSED HExpr
 b_GRHS = GRHS NOEXT
-{-# INLINE b_GRHS #-}
+{-# INLINABLE b_GRHS #-}
 
 b_doE :: Code -> [HStmt] -> HExpr
 #if MIN_VERSION_ghc(9,0,0)
@@ -143,7 +143,7 @@ b_doE (LForm (L l _)) exprs = L l (mkHsDo (DoExpr Nothing) exprs)
 #else
 b_doE (LForm (L l _)) exprs = L l (mkHsDo DoExpr exprs)
 #endif
-{-# INLINE b_doE #-}
+{-# INLINABLE b_doE #-}
 
 b_tsigE :: Code -> HExpr -> ([HType], HType) -> HExpr
 b_tsigE (LForm (L l _)) e0 (ctxt,t) =
@@ -158,7 +158,7 @@ b_tsigE (LForm (L l _)) e0 (ctxt,t) =
       e1 = ExprWithTySig e0 (mkLHsSigWcType t')
 #endif
   in  mkLHsPar (L l e1)
-{-# INLINE b_tsigE #-}
+{-# INLINABLE b_tsigE #-}
 
 b_recConOrUpdE :: Code -> [(Located FastString,HExpr)] -> Builder HExpr
 b_recConOrUpdE whole@(LForm (L l form)) flds =
@@ -171,7 +171,7 @@ b_recConOrUpdE whole@(LForm (L l form)) flds =
                         , rec_dotdot = Nothing }
     uflds = map mkufld flds
     mkufld  = cfld2ufld . mkcfld
-{-# INLINE b_recConOrUpdE #-}
+{-# INLINABLE b_recConOrUpdE #-}
 
 b_recUpdE :: Builder HExpr -> [(Located FastString, HExpr)]
           -> Builder HExpr
@@ -180,7 +180,7 @@ b_recUpdE expr flds = do
    let uflds = map (cfld2ufld . mkcfld) flds
        l = getLoc expr'
    return (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
-{-# INLINE b_recUpdE #-}
+{-# INLINABLE b_recUpdE #-}
 
 b_opOrAppE :: Code -> ([HExpr], [HType]) -> Builder HExpr
 b_opOrAppE code (args, tys) = do
@@ -196,11 +196,11 @@ b_opOrAppE code (args, tys) = do
       , hd:rest@(_:_) <- args
       -> pure (foldl' (mkOp l) (mkLHsParOp hd) rest)
     _ -> pure (b_appE (fn':args, tys))
-{-# INLINE b_opOrAppE #-}
+{-# INLINABLE b_opOrAppE #-}
 
 mkLHsParOp :: HExpr -> HExpr
 mkLHsParOp = parenthesizeHsExpr' opPrec
-{-# INLINE mkLHsParOp #-}
+{-# INLINABLE mkLHsParOp #-}
 
 mkOpApp :: HExpr -> HExpr -> HExpr -> HsExpr PARSED
 mkOpApp op l r =
@@ -209,17 +209,17 @@ mkOpApp op l r =
 #else
   OpApp l op placeHolderType r
 #endif
-{-# INLINE mkOpApp #-}
+{-# INLINABLE mkOpApp #-}
 
 b_appE :: ([HExpr], [HType]) -> HExpr
 b_appE (args,_tys) = foldl1' f args
   where
     f a b = mkHsApp a (mkLHsPar b)
-{-# INLINE b_appE #-}
+{-# INLINABLE b_appE #-}
 
 mkAppTypes :: HExpr -> [HType] -> HExpr
 mkAppTypes = foldl' mkAppType
-{-# INLINE mkAppTypes #-}
+{-# INLINABLE mkAppTypes #-}
 
 mkAppType :: HExpr -> HType -> HExpr
 mkAppType (dL->expr@(L l _)) ty =
@@ -236,14 +236,14 @@ b_charE (LForm (L l form)) =
   case form of
     Atom (AChar st x) -> return (L l (hsLit (HsChar st x)))
     _                 -> builderError
-{-# INLINE b_charE #-}
+{-# INLINABLE b_charE #-}
 
 b_stringE :: Code -> Builder HExpr
 b_stringE (LForm (L l form)) =
   case form of
     Atom (AString st x) -> return (L l (hsLit (HsString st x)))
     _                   -> builderError
-{-# INLINE b_stringE #-}
+{-# INLINABLE b_stringE #-}
 
 b_integerE :: Code -> Builder HExpr
 b_integerE (LForm (L l form)) =
@@ -254,7 +254,7 @@ b_integerE (LForm (L l form)) =
     _                  -> builderError
   where
     expr x = L l (hsOverLit $! mkHsIntegral_compat x)
-{-# INLINE b_integerE #-}
+{-# INLINABLE b_integerE #-}
 
 b_fracE :: Code -> Builder HExpr
 b_fracE (LForm (L l form)) =
@@ -265,7 +265,7 @@ b_fracE (LForm (L l form)) =
     _                  -> builderError
   where
     expr x = L l (hsOverLit $! hsFractional x)
-{-# INLINE b_fracE #-}
+{-# INLINABLE b_fracE #-}
 
 b_varE :: Code -> Builder HExpr
 b_varE (LForm (L l form))
@@ -290,18 +290,18 @@ b_varE (LForm (L l form))
   where
     ret e = return (cL l e)
     var n = HsVar NOEXT (cL l n)
-{-# INLINE b_varE #-}
+{-# INLINABLE b_varE #-}
 
 b_unitE :: Code -> HExpr
 b_unitE (LForm (L l _)) = case mkLHsTupleExpr [] of L _ t -> L l t
-{-# INLINE b_unitE #-}
+{-# INLINABLE b_unitE #-}
 
 b_docString :: Code -> Builder (Located HsDocString)
 b_docString (LForm (L l form)) =
   case form of
     Atom (AString _ x) -> return $! L l (hsDocString x)
     _                  -> builderError
-{-# INLINE b_docString #-}
+{-# INLINABLE b_docString #-}
 
 b_hsListE :: Either HExpr [HExpr] -> HExpr
 b_hsListE expr =
@@ -315,12 +315,12 @@ b_hsListE expr =
         xEXPLICITLIST = placeHolderType
 #endif
     Left arithSeqExpr -> arithSeqExpr
-{-# INLINE b_hsListE #-}
+{-# INLINABLE b_hsListE #-}
 
 b_lcompE :: HExpr -> [HStmt] -> HExpr
 b_lcompE ret stmts = L l (mkHsComp ListComp stmts ret)
   where l = getLoc ret
-{-# INLINE b_lcompE #-}
+{-# INLINABLE b_lcompE #-}
 
 b_arithSeqE :: HExpr -> Maybe HExpr -> Maybe HExpr -> HExpr
 b_arithSeqE fromE thenE toE =
@@ -338,7 +338,7 @@ b_arithSeqE fromE thenE toE =
            FromTo fromE toE'
          | otherwise = From fromE
     l = getLoc fromE
-{-# INLINE b_arithSeqE #-}
+{-# INLINABLE b_arithSeqE #-}
 
 b_quoteE :: Code -> Builder HExpr
 b_quoteE (LForm (L l form)) = do
@@ -348,7 +348,7 @@ b_quoteE (LForm (L l form)) = do
     List xs   -> b_quoteLocListE l (qListS qualify) xs
     HsList xs -> b_quoteLocListE l (qHsListS qualify) xs
     _         -> builderError
-{-# INLINE b_quoteE #-}
+{-# INLINABLE b_quoteE #-}
 
 b_quoteAtomE :: SrcSpan -> Bool -> Atom -> Builder HExpr
 b_quoteAtomE l qualify atom =
@@ -371,7 +371,7 @@ b_quoteAtomE l qualify atom =
       let (fname, sl, sc, el, ec) = getLocInfo l
       fn <- b_varE (LForm (L l (Atom (ASymbol (qUnitS qualify)))))
       return (b_appE ([fn, fname, sl, sc, el, ec], []))
-{-# INLINE b_quoteAtomE #-}
+{-# INLINABLE b_quoteAtomE #-}
 
 b_quoteLocListE :: SrcSpan -> FastString -> [Code] -> Builder HExpr
 b_quoteLocListE l fn_name xs = do
@@ -379,7 +379,7 @@ b_quoteLocListE l fn_name xs = do
   args <- fmap (b_hsListE . Right) (mapM b_quoteE xs)
   let (fname, sl, sc, el, ec) = getLocInfo l
   return (b_appE ([mk_list, args, fname, sl, sc, el, ec], []))
-{-# INLINE b_quoteLocListE #-}
+{-# INLINABLE b_quoteLocListE #-}
 
 getLocInfo :: SrcSpan -> (HExpr, HExpr, HExpr, HExpr, HExpr)
 getLocInfo l = withLocInfo l fname mk_int
@@ -394,7 +394,7 @@ getLocInfo l = withLocInfo l fname mk_int
 #else
     ql = UnhelpfulSpan (fsLit "<b_quoteE>")
 #endif
-{-# INLINE getLocInfo #-}
+{-# INLINABLE getLocInfo #-}
 
 
 -- ------------------------------------------------------------------------
@@ -409,15 +409,15 @@ hsLit :: HsLit PARSED -> HsExpr PARSED
 hsLit :: HsLit -> HsExpr PARSED
 #endif
 hsLit = HsLit NOEXT
-{-# INLINE hsLit #-}
+{-# INLINABLE hsLit #-}
 
 hsPar :: HExpr -> HsExpr PARSED
 hsPar = HsPar NOEXT
-{-# INLINE hsPar #-}
+{-# INLINABLE hsPar #-}
 
 hsOverLit :: HsOverLit PARSED -> HsExpr PARSED
 hsOverLit = HsOverLit NOEXT
-{-# INLINE hsOverLit #-}
+{-# INLINABLE hsOverLit #-}
 
 hsFractional :: FractionalLit -> HsOverLit PARSED
 #if MIN_VERSION_ghc(8,6,0)
@@ -425,11 +425,11 @@ hsFractional = mkHsFractional
 #else
 hsFractional x = mkHsFractional x placeHolderType
 #endif
-{-# INLINE hsFractional #-}
+{-# INLINABLE hsFractional #-}
 
 tupConName :: Boxity -> Arity -> RdrName
 tupConName boxity arity = getRdrName (tupleDataCon boxity arity)
-{-# INLINE tupConName #-}
+{-# INLINABLE tupConName #-}
 
 -- ---------------------------------------------------------------------
 --
@@ -443,7 +443,7 @@ b_bindS (LForm (L l _)) pat expr = L l (mkPsBindStmt pat expr)
 #else
 b_bindS (LForm (L l _)) pat expr = L l (mkBindStmt pat expr)
 #endif
-{-# INLINE b_bindS #-}
+{-# INLINABLE b_bindS #-}
 
 b_letS :: Code -> [HDecl] -> Builder HStmt
 b_letS (LForm (L l _)) decls = do
@@ -451,11 +451,11 @@ b_letS (LForm (L l _)) decls = do
   let valbinds = mkHsValBinds_compat (cd_binds cd) (cd_sigs cd)
       letStmt = LetStmt NOEXT
   return (L l (letStmt (L l valbinds)))
-{-# INLINE b_letS #-}
+{-# INLINABLE b_letS #-}
 
 b_bodyS :: HExpr -> HStmt
 b_bodyS expr = L (getLoc expr) (mkBodyStmt expr)
-{-# INLINE b_bodyS #-}
+{-# INLINABLE b_bodyS #-}
 
 
 -- ------------------------------------------------------------------------

@@ -137,15 +137,15 @@ type ModuleNameSet = UniqSet ModuleName
 
 emptyRecompState :: HscEnv -> RecompState
 emptyRecompState hsc_env = RecompState hsc_env emptyUniqSet
-{-# INLINE emptyRecompState #-}
+{-# INLINABLE emptyRecompState #-}
 
 addOutdated :: ModuleName -> RecompState -> RecompState
 addOutdated name rs = rs {rs_outdated = addOneToUniqSet (rs_outdated rs) name}
-{-# INLINE addOutdated #-}
+{-# INLINABLE addOutdated #-}
 
 elemOutdated :: ModuleName -> RecompState -> Bool
 elemOutdated name rs = name `elementOfUniqSet` rs_outdated rs
-{-# INLINE elemOutdated #-}
+{-# INLINABLE elemOutdated #-}
 
 -- "RecompM a" is same as "FnkT (ExceptT String (State RecompState)) a".
 
@@ -204,19 +204,19 @@ checkRecompileRequired fnk_env tu = do
 
 getRecompState :: RecompM RecompState
 getRecompState = RecompM (\st -> pure (Right st, st))
-{-# INLINE getRecompState #-}
+{-# INLINABLE getRecompState #-}
 
 getHscEnv :: RecompM HscEnv
 getHscEnv = RecompM (\st -> pure (Right (rs_hsc_env st), st))
-{-# INLINE getHscEnv #-}
+{-# INLINABLE getHscEnv #-}
 
 recomp :: String -> RecompM a
 recomp why = RecompM (\st -> pure (Left why, st))
-{-# INLINE recomp #-}
+{-# INLINABLE recomp #-}
 
 outdate :: ModuleName -> String -> RecompM a
 outdate name why = RecompM (\st0 -> pure (Left why, addOutdated name st0))
-{-# INLINE outdate #-}
+{-# INLINABLE outdate #-}
 
 outdateToo :: ModuleName -> RecompM a -> RecompM a
 outdateToo name (RecompM r) =
@@ -225,7 +225,7 @@ outdateToo name (RecompM r) =
     case et_a of
       (Left why, st1) -> pure (Left why, addOutdated name st1)
       (Right a, st1)  -> pure (Right a, st1)
-{-# INLINE outdateToo #-}
+{-# INLINABLE outdateToo #-}
 
 addHomeModInfo :: ModuleName -> HomeModInfo -> RecompM ()
 addHomeModInfo name hmi =
@@ -235,14 +235,14 @@ addHomeModInfo name hmi =
                  hsc_env1 = hsc_env0 {hsc_HPT = hpt1}
                  rs1 = rs0 {rs_hsc_env = hsc_env1}
              in  pure (Right (), rs1))
-{-# INLINE addHomeModInfo #-}
+{-# INLINABLE addHomeModInfo #-}
 
 checkOutdatedCache :: ModuleName -> RecompM ()
 checkOutdatedCache mname = do
   st <- getRecompState
   when (elemOutdated mname st)
        (recomp (moduleNameString mname ++ " in outdated cache"))
-{-# INLINE checkOutdatedCache #-}
+{-# INLINABLE checkOutdatedCache #-}
 
 checkObjDate :: ModSummary -> RecompM ()
 checkObjDate ms = do
@@ -253,7 +253,7 @@ checkObjDate ms = do
     Just odate | hdate < odate -> return ()
     Just _                     -> out "outdated object code"
     _                          -> out "no object code"
-{-# INLINE checkObjDate #-}
+{-# INLINABLE checkObjDate #-}
 
 lookupOrLoadIface :: ModSummary -> RecompM ModIface
 lookupOrLoadIface ms = do
@@ -261,7 +261,7 @@ lookupOrLoadIface ms = do
   case lookupHpt (hsc_HPT (rs_hsc_env rs)) (ms_mod_name ms) of
     Just hmi -> return (hm_iface hmi)
     Nothing  -> loadIface (rs_hsc_env rs) ms
-{-# INLINE lookupOrLoadIface #-}
+{-# INLINABLE lookupOrLoadIface #-}
 
 -- | Check whether 'UsagePackageModule' elements are up to date or not.
 checkUsagePackageModules :: [Usage] -> RecompM ()
@@ -331,7 +331,7 @@ unDeps gwib = (gwib_mod gwib, gwib_isBoot gwib)
 unDeps :: a -> a
 unDeps = id
 #endif
-{-# INLINE unDeps #-}
+{-# INLINABLE unDeps #-}
 
 -- | Load old interface when usable and not yet loaded.
 collectOldIface
@@ -404,7 +404,7 @@ checkTargetUnit name_and_mb_phase@(lname, _) = do
   case mb_tu of
     Nothing -> outdate mname ("Source of " ++ name ++ " not found")
     Just tu -> return tu
-{-# INLINE checkTargetUnit #-}
+{-# INLINABLE checkTargetUnit #-}
 
 checkFlagHash :: ModSummary -> ModIface -> RecompM ()
 checkFlagHash ms iface = do
@@ -415,7 +415,7 @@ checkFlagHash ms iface = do
       mdl = mi_module iface
   new_hash <- liftIO (fingerprintDynFlags dflags1 mdl putNameLiterally)
   when (old_hash /= new_hash) (outdate (moduleName mdl) "flag hash changed")
-{-# INLINE checkFlagHash #-}
+{-# INLINABLE checkFlagHash #-}
 
 -- | Wrapper function to load interface file with 'readIface'.
 loadIface :: HscEnv -> ModSummary -> RecompM ModIface
@@ -472,7 +472,7 @@ recompileReason rr =
     UpToDate          -> "up to date"
     MustCompile       -> "must compile"
     RecompBecause why -> why
-{-# INLINE recompileReason #-}
+{-# INLINABLE recompileReason #-}
 
 
 -- ------------------------------------------------------------------------
@@ -488,7 +488,7 @@ addQuoteInclude' = addQuoteInclude
 addQuoteInclude' :: [String] -> [String] -> [String]
 addQuoteInclude' = flip (++)
 #endif
-{-# INLINE addQuoteInclude' #-}
+{-# INLINABLE addQuoteInclude' #-}
 
 mi_mod_hash', mi_flag_hash' :: ModIface -> Fingerprint
 #if MIN_VERSION_ghc(8,10,0)
@@ -498,5 +498,5 @@ mi_flag_hash' = mi_flag_hash . mi_final_exts
 mi_mod_hash' = mi_mod_hash
 mi_flag_hash' = mi_flag_hash
 #endif
-{-# INLINE mi_mod_hash' #-}
-{-# INLINE mi_flag_hash' #-}
+{-# INLINABLE mi_mod_hash' #-}
+{-# INLINABLE mi_flag_hash' #-}

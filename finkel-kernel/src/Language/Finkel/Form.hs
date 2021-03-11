@@ -456,12 +456,12 @@ qHsList = quotedWithLoc . HsList
 -- | Auxiliary function to construct 'ASymbol' atom.
 aSymbol :: String -> Atom
 aSymbol = ASymbol . fsLit
-{-# INLINE aSymbol #-}
+{-# INLINABLE aSymbol #-}
 
 -- | Auxiliary function to construct 'AString' atom.
 aString :: SourceText -> String -> Atom
 aString st = AString st . fsLit
-{-# INLINE aString #-}
+{-# INLINABLE aString #-}
 
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.
@@ -473,7 +473,7 @@ aFractional x = AFractional $! mkFractionalLit x
 -- | Type fixed variant of 'aFractional'.
 aDouble :: Double -> Atom
 aDouble = aFractional
-{-# INLINE aDouble #-}
+{-# INLINABLE aDouble #-}
 
 aIntegral :: Integral a => a -> Atom
 aIntegral x = AInteger $! mkIntegralLit x
@@ -491,7 +491,7 @@ quotedWithLoc x file start_line start_col end_line end_col =
       span_end = mkSrcLoc file_fs end_line end_col
       l = mkSrcSpan span_start span_end
   in  LForm (L l x)
-{-# INLINE quotedWithLoc #-}
+{-# INLINABLE quotedWithLoc #-}
 
 -- From ghc 9.0.1, a new field with 'Maybe Int' was added to RealSrcSpan
 -- constructor of SrcLoc data type.
@@ -519,12 +519,12 @@ withLocInfo l f_file f_n =
         RealSrcSpan rspan _MB_BUF_POS -> f_n $! getter rspan
         _                             -> f_n 0
   in  (file, sl, sc, el, ec)
-{-# INLINE withLocInfo #-}
+{-# INLINABLE withLocInfo #-}
 
 -- | Return the first arg, with location information from the second arg.
 asLocOf :: Code -> Code -> Code
 asLocOf (LForm (L _ a)) (LForm (L l _)) = LForm (L l a)
-{-# INLINE asLocOf #-}
+{-# INLINABLE asLocOf #-}
 
 
 -- -------------------------------------------------------------------
@@ -541,7 +541,7 @@ finkelUnhelpfulSpan =
 finkelUnhelpfulSpan =
   UnhelpfulSpan (fsLit "<finkel generated code>")
 #endif
-{-# INLINE finkelUnhelpfulSpan #-}
+{-# INLINABLE finkelUnhelpfulSpan #-}
 
 -- | String representation of located data.
 showLoc :: LForm a -> String
@@ -566,17 +566,17 @@ toListL orig@(LForm (L l form)) =
     List _    -> orig
     HsList xs -> LForm (L l (List xs))
     _         -> LForm (L l (List [orig]))
-{-# INLINE toListL #-}
+{-# INLINABLE toListL #-}
 
 -- | Unwrap 'LForm' to 'Form'.
 unCode :: LForm a -> Form a
 unCode (LForm (L _ a)) = a
-{-# INLINE unCode #-}
+{-# INLINABLE unCode #-}
 
 -- | Attach location to mark generated code.
 genSrc :: a -> Located a
 genSrc = L finkelUnhelpfulSpan
-{-# INLINE genSrc #-}
+{-# INLINABLE genSrc #-}
 
 -- | Make located list from list of located elements.
 --
@@ -591,22 +591,22 @@ mkLocatedForm ms = L (combineLocs (unLForm (head ms))
 -- | Lift given argument to 'LForm'.
 atomForm :: a -> LForm a
 atomForm = LForm . genSrc . Atom
-{-# INLINE atomForm #-}
+{-# INLINABLE atomForm #-}
 
 -- | Apply function taking single 'Form' to 'LForm'.
 liftLF :: (Form a -> Form b) -> LForm a -> LForm b
 liftLF f (LForm (L l a)) = LForm (L l (f a))
-{-# INLINE liftLF #-}
+{-# INLINABLE liftLF #-}
 
 -- | Apply function taking two 'Form's to 'LForm's.
 liftLF2 :: (Form a -> Form b -> Form c) -> LForm a -> LForm b -> LForm c
 liftLF2 f (LForm (L l1 a)) (LForm (L _l2 b)) = LForm (L l1 (f a b))
-{-# INLINE liftLF2 #-}
+{-# INLINABLE liftLF2 #-}
 
 -- | Apply functoni in 'LForm' to 'Form'.
 apLF :: LForm (a -> b) -> Form a -> LForm b
 apLF (LForm (L l f)) b = LForm (L l (f <*> b))
-{-# INLINE apLF #-}
+{-# INLINABLE apLF #-}
 
 -- | Unary numeric operation helper.
 nop1 :: (a -> Atom)

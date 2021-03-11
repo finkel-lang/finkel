@@ -97,11 +97,11 @@ import           Language.Finkel.Form
 
 mkRdrName :: FastString -> RdrName
 mkRdrName = mkRdrName' tcName
-{-# INLINE mkRdrName #-}
+{-# INLINABLE mkRdrName #-}
 
 mkVarRdrName :: FastString -> RdrName
 mkVarRdrName = mkRdrName' srcDataName
-{-# INLINE mkVarRdrName #-}
+{-# INLINABLE mkVarRdrName #-}
 
 mkRdrName' :: NameSpace -> FastString -> RdrName
 mkRdrName' upperCaseNameSpace name
@@ -125,7 +125,7 @@ mkRdrName' upperCaseNameSpace name
   | otherwise = mkVarUnqual name
   where
     x = headFS name
-{-# INLINE mkRdrName' #-}
+{-# INLINABLE mkRdrName' #-}
 
 -- See also "compiler/parser/Lexer.x.source" in ghc source code. It has
 -- private function named "splitQualName".
@@ -143,14 +143,14 @@ splitQualName fstr =
     go ('.':[]) tmp acc = go [] ('.':tmp) acc
     go ('.':cs) tmp acc = go cs [] (('.':tmp) : acc)
     go (c:cs)   tmp acc = go cs (c:tmp) acc
-{-# INLINE splitQualName #-}
+{-# INLINABLE splitQualName #-}
 
 checkVarId :: Code -> FastString -> Builder ()
 checkVarId orig name =
   if isLexVar name
      then return ()
      else setLastToken orig >> failB "invalid variable identifier"
-{-# INLINE checkVarId #-}
+{-# INLINABLE checkVarId #-}
 
 getConId :: Code -> Builder FastString
 getConId orig@(LForm (L _ form)) =
@@ -160,7 +160,7 @@ getConId orig@(LForm (L _ form)) =
       | isLexCon sym    -> return sym
       | isLexVarSym sym -> return sym
     _ -> setLastToken orig >> failB "invalid constructor identifier"
-{-# INLINE getConId #-}
+{-# INLINABLE getConId #-}
 
 getVarOrConId :: Code -> Builder FastString
 getVarOrConId orig@(LForm (L _ form)) =
@@ -169,7 +169,7 @@ getVarOrConId orig@(LForm (L _ form)) =
       | isLexCon sym -> return sym
       | isLexVar sym -> return sym
     _ -> setLastToken orig >> failB "invalid identifier"
-{-# INLINE getVarOrConId #-}
+{-# INLINABLE getVarOrConId #-}
 
 -- | Build 'HLocalBinds' from list of 'HDecl's.
 declsToBinds :: SrcSpan -> [HDecl] -> HLocalBinds
@@ -196,7 +196,7 @@ declsToBinds l decls = L l binds'
 mkLocatedList ::  [Located a] -> Located [Located a]
 mkLocatedList [] = noLoc []
 mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
-{-# INLINE mkLocatedList #-}
+{-# INLINABLE mkLocatedList #-}
 
 -- | Convert record field constructor expression to record field update
 -- expression.
@@ -217,7 +217,7 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
   where
     unambiguous = Unambiguous rdr PlaceHolder
 #endif
-{-# INLINE cfld2ufld #-}
+{-# INLINABLE cfld2ufld #-}
 
 -- | Make 'HsRecField' with given name and located data.
 mkcfld :: (Located FastString, a) -> LHsRecField PARSED a
@@ -227,11 +227,11 @@ mkcfld ((L nl name), e) =
                   , hsRecPun = False }
   where
     mkfname n = L nl (mkFieldOcc (L nl (mkRdrName n)))
-{-# INLINE mkcfld #-}
+{-# INLINABLE mkcfld #-}
 
 quotedSourceText :: String -> SourceText
 quotedSourceText s = SourceText $ "\"" ++ s ++ "\""
-{-# INLINE quotedSourceText #-}
+{-# INLINABLE quotedSourceText #-}
 
 -- Following `cvBindsAndSigs`, `getMonoBind`, `has_args`, and
 -- `makeFunBind` functions are based on resembling functions defined in
@@ -283,7 +283,7 @@ kindedTyVar (LForm (L l _dc)) name kind =
        return $! L l (KindedTyVar NOEXT name'' kind)
 #endif
     _ -> builderError
-{-# INLINE kindedTyVar #-}
+{-# INLINABLE kindedTyVar #-}
 
 kindedTyVarSpecific :: Code -> Code -> HType -> Builder HTyVarBndrSpecific
 #if MIN_VERSION_ghc(9,0,0)
@@ -296,7 +296,7 @@ kindedTyVarSpecific (LForm (L l _dc)) name kind =
 #else
 kindedTyVarSpecific = kindedTyVar
 #endif
-{-# INLINE kindedTyVarSpecific #-}
+{-# INLINABLE kindedTyVarSpecific #-}
 
 #if MIN_VERSION_ghc(9,0,0)
 codeToUserTyVar :: Code -> LHsTyVarBndr () PARSED
@@ -324,7 +324,7 @@ codeToUserTyVar code =
 codeToUserTyVarSpecific :: Code -> HTyVarBndrSpecific
 codeToUserTyVarSpecific = codeToUserTyVar
 #endif
-{-# INLINE codeToUserTyVar #-}
+{-# INLINABLE codeToUserTyVar #-}
 
 -- | Auxiliary function to make 'HsDocString'.
 hsDocString :: FastString -> HsDocString
@@ -335,7 +335,7 @@ hsDocString = mkHsDocStringUtf8ByteString . fastStringToByteString
 #else
 hsDocString = HsDocString
 #endif
-{-# INLINE hsDocString #-}
+{-# INLINABLE hsDocString #-}
 
 -- | Auxiliary function to absorb version compatibiity of
 -- 'mkHsIntegral'.
@@ -348,11 +348,11 @@ mkHsIntegral_compat il =
 #else
     mkHsIntegral (il_text il) (il_value il) placeHolderType
 #endif
-{-# INLINE mkHsIntegral_compat #-}
+{-# INLINABLE mkHsIntegral_compat #-}
 
 mkGRHSs :: [LGRHS PARSED t] -> [HDecl] -> SrcSpan -> GRHSs PARSED t
 mkGRHSs grhss decls l = GRHSs NOEXT grhss (declsToBinds l decls)
-{-# INLINE mkGRHSs #-}
+{-# INLINABLE mkGRHSs #-}
 
 mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
 mkHsValBinds_compat binds sigs =
@@ -361,7 +361,7 @@ mkHsValBinds_compat binds sigs =
 #else
   HsValBinds (ValBindsIn binds sigs)
 #endif
-{-# INLINE mkHsValBinds_compat #-}
+{-# INLINABLE mkHsValBinds_compat #-}
 
 mkHsQualTy_compat :: LHsContext PARSED -> HType -> HsType PARSED
 mkHsQualTy_compat ctxt body
@@ -372,19 +372,19 @@ mkHsQualTy_compat ctxt body
              , hst_xqual = NOEXT
 #endif
              , hst_body = body }
-{-# INLINE mkHsQualTy_compat #-}
+{-# INLINABLE mkHsQualTy_compat #-}
 
 nullLHsContext :: LHsContext PARSED -> Bool
 nullLHsContext (L _ cs) = null cs
-{-# INLINE nullLHsContext #-}
+{-# INLINABLE nullLHsContext #-}
 
 addConDoc' :: Maybe LHsDocString -> LConDecl a -> LConDecl a
 addConDoc' = flip addConDoc
-{-# INLINE addConDoc' #-}
+{-# INLINABLE addConDoc' #-}
 
 addConDoc'' :: LHsDocString -> LConDecl a -> LConDecl a
 addConDoc'' = flip addConDoc . Just
-{-# INLINE addConDoc'' #-}
+{-# INLINABLE addConDoc'' #-}
 
 
 -- For 8.8.0 compatibility in source code location management
@@ -410,8 +410,8 @@ cL :: SrcSpan -> a -> Located a
 cL = L
 #endif
 
-{-# INLINE cL #-}
-{-# INLINE dL #-}
+{-# INLINABLE cL #-}
+{-# INLINABLE dL #-}
 
 -- For parenthesizing
 --
@@ -447,9 +447,9 @@ tailFS = mkFastStringByteString . BS.tail . bytesFS
 #else
 tailFS = FastString.tailFS
 #endif
-{-# INLINE tailFS #-}
+{-# INLINABLE tailFS #-}
 
 consListWith :: [Code] -> String -> Code
 consListWith rest sym =
   LForm (genSrc (List (LForm (genSrc (Atom (aSymbol sym))) : rest)))
-{-# INLINE consListWith #-}
+{-# INLINABLE consListWith #-}

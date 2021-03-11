@@ -262,17 +262,17 @@ evalSP sp target input = fmap fst (runSP sp target input)
 -- | Update current 'SPState' to given value.
 putSPState :: SPState -> SP ()
 putSPState st = SP (\_ -> SPOK st ())
-{-# INLINE putSPState #-}
+{-# INLINABLE putSPState #-}
 
 -- | Get current 'SPState' value.
 getSPState :: SP SPState
 getSPState = SP (\st -> SPOK st st)
-{-# INLINE getSPState #-}
+{-# INLINABLE getSPState #-}
 
 -- | Modify current 'SPState' with given function.
 modifySPState :: (SPState -> SPState) -> SP ()
 modifySPState f = SP (\st -> SPOK (f st) ())
-{-# INLINE modifySPState #-}
+{-# INLINABLE modifySPState #-}
 
 -- -- | Incrementally perform computation with parsed result and given
 -- -- function.
@@ -326,7 +326,7 @@ alexGetByte (AlexInput loc0 buf0) =
                              loc1 = advanceSrcLoc loc0 c
                          in  w `seq` loc1 `seq` buf1 `seq`
                              Just (w, AlexInput loc1 buf1)
-{-# INLINE alexGetByte #-}
+{-# INLINABLE alexGetByte #-}
 
 alexGetChar :: AlexInput -> Maybe (Char, AlexInput)
 alexGetChar (AlexInput loc0 buf0) =
@@ -336,11 +336,11 @@ alexGetChar (AlexInput loc0 buf0) =
             (c, buf1) -> let loc1 = advanceSrcLoc loc0 c
                          in  c `seq` loc1 `seq` buf1 `seq`
                              Just (c, AlexInput loc1 buf1)
-{-# INLINE alexGetChar #-}
+{-# INLINABLE alexGetChar #-}
 
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar (AlexInput _ buf) = prevChar buf '\NUL'
-{-# INLINE alexInputPrevChar #-}
+{-# INLINABLE alexInputPrevChar #-}
 
 alexError :: String -> SP a
 #if MIN_VERSION_ghc(9,0,0)
@@ -348,17 +348,17 @@ alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st) Nothing) msg)
 #else
 alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st)) msg)
 #endif
-{-# INLINE alexError #-}
+{-# INLINABLE alexError #-}
 
 alexGetInput :: SP AlexInput
 alexGetInput =
   SP (\st@SPState {currentLoc=l,buf=b} -> SPOK st (AlexInput l b))
-{-# INLINE alexGetInput #-}
+{-# INLINABLE alexGetInput #-}
 
 alexSetInput :: AlexInput -> SP ()
 alexSetInput (AlexInput l b) =
   SP (\st -> SPOK (st {buf=b,currentLoc=l}) ())
-{-# INLINE alexSetInput #-}
+{-# INLINABLE alexSetInput #-}
 
 
 -- ---------------------------------------------------------------------
@@ -431,35 +431,35 @@ type Action = AlexInput -> Int -> SP Token
 
 tok_oparen :: Action
 tok_oparen _ _ = return TOparen
-{-# INLINE tok_oparen #-}
+{-# INLINABLE tok_oparen #-}
 
 tok_cparen :: Action
 tok_cparen _ _ = return TCparen
-{-# INLINE tok_cparen #-}
+{-# INLINABLE tok_cparen #-}
 
 tok_obracket :: Action
 tok_obracket _ _ = return TObracket
-{-# INLINE tok_obracket #-}
+{-# INLINABLE tok_obracket #-}
 
 tok_cbracket :: Action
 tok_cbracket _ _ = return TCbracket
-{-# INLINE tok_cbracket #-}
+{-# INLINABLE tok_cbracket #-}
 
 tok_ocurly :: Action
 tok_ocurly _ _ = return TOcurly
-{-# INLINE tok_ocurly #-}
+{-# INLINABLE tok_ocurly #-}
 
 tok_ccurly :: Action
 tok_ccurly _ _ = return TCcurly
-{-# INLINE tok_ccurly #-}
+{-# INLINABLE tok_ccurly #-}
 
 tok_quote :: Action
 tok_quote _ _ = return TQuote
-{-# INLINE tok_quote #-}
+{-# INLINABLE tok_quote #-}
 
 tok_quasiquote :: Action
 tok_quasiquote _ _ = return TQuasiquote
-{-# INLINE tok_quasiquote #-}
+{-# INLINABLE tok_quasiquote #-}
 
 tok_pcommas :: Action
 tok_pcommas (AlexInput _ buf) l =
@@ -467,19 +467,19 @@ tok_pcommas (AlexInput _ buf) l =
          commas1 = bytesFS commas0
          commas2 = C8.filter (not . isSpace) commas1
      return $! TPcommas (fromIntegral (C8.length commas1 - 2))
-{-# INLINE tok_pcommas #-}
+{-# INLINABLE tok_pcommas #-}
 
 tok_comma :: Action
 tok_comma _ _ = return $ TSymbol $! fsLit ","
-{-# INLINE tok_comma #-}
+{-# INLINABLE tok_comma #-}
 
 tok_unquote :: Action
 tok_unquote _ _ = return TUnquote
-{-# INLINE tok_unquote #-}
+{-# INLINABLE tok_unquote #-}
 
 tok_unquote_splice :: Action
 tok_unquote_splice _ _ = return TUnquoteSplice
-{-# INLINE tok_unquote_splice #-}
+{-# INLINABLE tok_unquote_splice #-}
 
 tok_percent :: Action
 tok_percent (AlexInput _ buf) l
@@ -491,19 +491,19 @@ tok_percent (AlexInput _ buf) l
   | otherwise
   = let fs = lexemeToFastString buf l
     in  fs `seq` return $! TSymbol fs
-{-# INLINE tok_percent #-}
+{-# INLINABLE tok_percent #-}
 
 tok_discard :: Action
 tok_discard _ _ = return (TPercent '_')
-{-# INLINE tok_discard #-}
+{-# INLINABLE tok_discard #-}
 
 tok_line_comment :: Action
 tok_line_comment _ _ = return TComment
-{-# INLINE tok_line_comment #-}
+{-# INLINABLE tok_line_comment #-}
 
 tok_block_comment :: Action
 tok_block_comment = tok_block_comment_with (const TComment) alexGetChar
-{-# INLINE tok_block_comment #-}
+{-# INLINABLE tok_block_comment #-}
 
 tok_block_comment_with :: (String -> Token)
                        -> (AlexInput -> Maybe (Char, AlexInput))
@@ -522,15 +522,15 @@ tok_block_comment_with tok ini inp0 _ = do
         Just (c, inp') | prev == ';', c == '#' -> Just (tail acc, inp')
                        | otherwise             -> go inp' c (c:acc)
         Nothing                                -> Nothing
-{-# INLINE tok_block_comment_with #-}
+{-# INLINABLE tok_block_comment_with #-}
 
 tok_doc_prev :: Action
 tok_doc_prev = tok_doc_with TDocPrev '^'
-{-# INLINE tok_doc_prev #-}
+{-# INLINABLE tok_doc_prev #-}
 
 tok_doc_next :: Action
 tok_doc_next = tok_doc_with TDocNext '|'
-{-# INLINE tok_doc_next #-}
+{-# INLINABLE tok_doc_next #-}
 
 tok_doc_with :: (FastString -> Token) -> Char -> Action
 tok_doc_with constr char (AlexInput _ s) l = do
@@ -541,7 +541,7 @@ tok_doc_with constr char (AlexInput _ s) l = do
       bs1 = C8.unlines (line1 : map (C8.dropWhile (== ';')) bss)
       fs1 = mkFastStringByteString bs1
   return $! constr fs1
-{-# INLINE tok_doc_with #-}
+{-# INLINABLE tok_doc_with #-}
 
 tok_doc_named :: Action
 tok_doc_named (AlexInput _ s) l =
@@ -557,7 +557,7 @@ tok_doc_named (AlexInput _ s) l =
               [] -> Nothing
               _  -> Just fs1
   in  return $! TDocNamed key fs2
-{-# INLINE tok_doc_named #-}
+{-# INLINABLE tok_doc_named #-}
 
 tok_doc_group :: Action
 tok_doc_group (AlexInput _ s) l =
@@ -567,11 +567,11 @@ tok_doc_group (AlexInput _ s) l =
       level = C8.length stars
       fs0 = mkFastStringByteString (C8.tail bs2)
   in  return $! TDocGroup level fs0
-{-# INLINE tok_doc_group #-}
+{-# INLINABLE tok_doc_group #-}
 
 tok_lambda :: Action
 tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
-{-# INLINE tok_lambda #-}
+{-# INLINABLE tok_lambda #-}
 
 -- | Make token symbol.  When the given symbol starts with non-operatator
 -- character, replace hyphens with underscores.
@@ -583,7 +583,7 @@ tok_symbol (AlexInput _ buf) l =
           | otherwise = replaceHyphens fs0
           where c = currentChar buf
   in  fs0 `seq` fs1 `seq` return $! TSymbol fs1
-{-# INLINE tok_symbol #-}
+{-# INLINABLE tok_symbol #-}
 
 secondIsStartsVarId :: FastString -> Bool
 #if MIN_VERSION_ghc(9,0,0)
@@ -598,14 +598,14 @@ secondIsStartsVarId fs0 =
       c = headFS fs1
   in  not (nullFS fs0) && not (nullFS fs1) && startsVarId c
 #endif
-{-# INLINE secondIsStartsVarId #-}
+{-# INLINABLE secondIsStartsVarId #-}
 
 replaceHyphens :: FastString -> FastString
 replaceHyphens =
   mkFastStringByteString .
   C8.map (\c -> if c == '-' then '_' else c) .
   bytesFS
-{-# INLINE replaceHyphens #-}
+{-# INLINABLE replaceHyphens #-}
 
 tok_char :: Action
 tok_char inp0 _ = do
@@ -633,7 +633,7 @@ tok_char inp0 _ = do
                       | otherwise = '\'' : c : "'"
                return $! TChar (SourceText st) c
       | otherwise = alexError "tok_char.go1: panic"
-{-# INLINE tok_char #-}
+{-# INLINABLE tok_char #-}
 
 tok_string :: Action
 tok_string inp@(AlexInput _ buf) _l =
@@ -673,12 +673,12 @@ tok_string inp@(AlexInput _ buf) _l =
           | c == '\\'   -> go inp1 acc
           | is_space' c -> string_gap inp1 acc
         _ -> Nothing
-{-# INLINE tok_string #-}
+{-# INLINABLE tok_string #-}
 
 -- See "lex_stringgap" in "compiler/parser/Lexer.x".
 is_space' :: Char -> Bool
 is_space' c = c <= '\x7f' && is_space c
-{-# INLINE is_space' #-}
+{-# INLINABLE is_space' #-}
 
 escapeChar :: AlexInput -> Maybe (SourceText, Char, AlexInput)
 escapeChar inp0
@@ -742,13 +742,13 @@ escapeChar inp0
                  _ -> Nothing
             | otherwise -> Nothing
   | otherwise = Nothing
-{-# INLINE escapeChar #-}
+{-# INLINABLE escapeChar #-}
 
 tok_integer :: Action
 tok_integer (AlexInput _ buf) l =
   let str = lexemeToString buf (fromIntegral l)
   in  return $ TInteger (SourceText str) $! read $! str
-{-# INLINE tok_integer #-}
+{-# INLINABLE tok_integer #-}
 
 tok_fractional :: Action
 tok_fractional (AlexInput _ buf) l =
@@ -763,7 +763,7 @@ tok_fractional (AlexInput _ buf) l =
 #else
      return $! TFractional $! FL str rat
 #endif
-{-# INLINE tok_fractional #-}
+{-# INLINABLE tok_fractional #-}
 
 
 -- ---------------------------------------------------------------------
@@ -780,7 +780,7 @@ tokenLexer cont = do
   case tok of
     TComment -> SP (\st -> unSP (tokenLexer cont) st)
     _        -> cont ltok
-{-# INLINE tokenLexer #-}
+{-# INLINABLE tokenLexer #-}
 
 scanToken :: SP (Located Token)
 scanToken = do
@@ -811,7 +811,7 @@ scanToken = do
       alexSetInput inp1
       scanToken
     AlexEOF -> return (L undefined TEOF)
-{-# INLINE scanToken #-}
+{-# INLINABLE scanToken #-}
 
 -- | Lex the input to list of 'Token's.
 lexTokens :: Maybe FilePath
@@ -842,7 +842,7 @@ takeUtf8 = go []
                 (c, buf') -> let acc' = c: acc
                                  n' = n - 1
                              in  acc' `seq` n' `seq` go acc' n' buf'
-{-# INLINE takeUtf8 #-}
+{-# INLINABLE takeUtf8 #-}
 
 takeUtf8FS :: Int -> StringBuffer -> FastString
 takeUtf8FS n sb0 = lexemeToFastString sb0 diff
@@ -854,7 +854,7 @@ takeUtf8FS n sb0 = lexemeToFastString sb0 diff
          else let i' = i -1
                   sb' = stepOn sb
               in  i' `seq` sb' `seq` step i' sb'
-{-# INLINE takeUtf8FS #-}
+{-# INLINABLE takeUtf8FS #-}
 
 -- Taken from "compiler/parser/Lexer.x.source" ghc source.
 adjustChar :: Char -> Word8
@@ -903,7 +903,7 @@ adjustChar c = fromIntegral $ ord adj_c
                   OtherSymbol           -> symbol
                   Space                 -> space
                   _other                -> non_graphic
-{-# INLINE adjustChar #-}
+{-# INLINABLE adjustChar #-}
 
 #if !MIN_VERSION_ghc(8,10,0)
 -- | 'fastStringToByteString' is deprecated in ghc-8.10.x.
