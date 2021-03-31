@@ -67,9 +67,6 @@ jobs:
       - name: Setup stack
         run: $STACK setup
 
-      - name: Add PATH for executable installed with stack
-        run: $STACK path --local-bin >> $GITHUB_PATH
-
       - name: Install dependency packages
         run: $STACK build -j 2 --test --only-dependencies
 
@@ -81,26 +78,15 @@ jobs:
           RESOLVER=${{ matrix.resolver }} $STACK --jobs 1 build \
           --fast --test --coverage
 
-      - name: Generate coverge report
-        run: |
-          $STACK install hpc-codecov
-          HPCROOT=$($STACK path --local-hpc-root)
-          DISTDIR=$($STACK path --dist-dir)
-          DOCPKG=doc/include/building-package
-          TIX=$(find $HPCROOT -name 'all.tix')
-          hpc-codecov \
-            --src=finkel-kernel --mix=finkel-kernel/$DISTDIR/hpc \
-            --src=finkel-setup --mix=finkel-setup/$DISTDIR/hpc \
-            --src=finkel-core --mix=finkel-core/$DISTDIR/hpc \
-            --src=finkel-tool --mix=finkel-tool/$DISTDIR/hpc \
-            --src=$DOCPKG/my-second-package \
-            --mix=$DOCPKG/my-second-package/$DISTDIR/hpc \
-            --src=$DOCPKG/my-new-package \
-            --mix=$DOCPKG/my-new-package/$DISTDIR/hpc \
-            --out=codecov.json --verbose $TIX
+      - name: Generate coverage report
+        uses: 8c6794b6/hpc-codecov-action@v2
+        with:
+          target: stack:all
 
       - name: Send coverage report
-        run: bash <(curl -s https://codecov.io/bash)
+        run: |
+          bash <(curl -s https://codecov.io/bash) \
+            -n stack-${{ matrix.os }}-${{ matrix.resolver }}
 
   cabal-install:
     strategy:
