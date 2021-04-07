@@ -80,6 +80,12 @@ pygments_style = 'friendly'
 #
 html_theme = 'sphinx_rtd_theme'
 # html_theme = 'alabaster'
+# html_theme = 'furo'
+# html_theme = 'sphinx_material'
+# html_theme = 'pydata_sphinx_theme'
+# html_theme = 'sphinx_book_theme'
+# html_theme = 'sphinx_typlog_theme'
+# html_theme = 'insipid'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -91,6 +97,38 @@ html_theme_options = {}
 # html_theme_options = {
 #     'fixed_sidebar': True,
 #     'show_relbars': True,
+# }
+
+# For 'rtd' theme
+# html_theme_options = {
+#     'display_version': True,
+#     'prev_next_buttons_location': 'bottom',
+#     'style_nav_header_background': '#2980b9',
+# }
+
+# For 'sphinx_material' theme
+# html_theme_options = {
+#     'base_url': 'http://finkel.readthedocs.io/',
+#     'repo_url': 'https://github.com/finkel-lang/finkel/',
+#     'repo_name': 'Finkel',
+#     # 'google_analytics_account': 'UA-XXXXX',
+#     # 'html_minify': True,
+#     # 'css_minify': True,
+#     # 'nav_title': 'The Finkel Documentation',
+#     # 'logo_icon': '&#xe869',
+#     # 'logo_icon': '&#xe91d',
+#     'logo_icon': '&#xe86f',
+#     'globaltoc_depth': 1,
+#     'globaltoc_collapse': True,
+#     'color_primary': 'teal',
+# }
+
+# For furo
+# html_theme_options = {
+#     "light_css_variables": {
+#         "font-stack": "Arial, sans-serif",
+#         "font-stack--monospace": "Courier, monospace",
+#     },
 # }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -107,6 +145,25 @@ html_static_path = ['_static']
 # 'searchbox.html']``.
 #
 # html_sidebars = {}
+
+# html_sidebars = {
+#     "**": [
+#         "globaltoc.html",
+#         "localtoc.html",
+#         "searchbox.html",
+#     ]
+# }
+
+# For material
+# html_sidebars = {
+#     "**": [
+#         "logo-text.html",
+#         "globaltoc.html",
+#         "localtoc.html",
+#         "searchbox.html",
+#     ]
+# }
+
 
 
 # -- Options for HTMLHelp output ---------------------------------------------
