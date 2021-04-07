@@ -362,4 +362,4 @@ class FinkelLexer(RegexLexer):
     }
 
 def setup(sphinx):
-    sphinx.add_lexer("finkel", FinkelLexer())
+    sphinx.add_lexer("finkel", FinkelLexer)
