@@ -102,7 +102,7 @@ template:
 
 .. code-block:: console
 
-   $ stack new my-second-package https://raw.githubusercontent.com/finkel-lang/finkel/master/tool/finkel.hsfiles
+   $ stack new my-second-package https://raw.githubusercontent.com/finkel-lang/finkel/master/finkel-tool/finkel.hsfiles
 
 .. warning::
 

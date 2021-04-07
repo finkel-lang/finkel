@@ -188,7 +188,7 @@ The compiler treats the above expression as:
 
 .. code-block:: haskell
 
-  ((pure foldr <*> Just (+)) <*> pure 0) <*> pure [] -- Haskell
+  ((pure foldr <*> Just (+)) <*> pure 1) <*> pure [2, 3] -- Haskell
 
 because the ``<*>`` operator is left-associative.
 

@@ -32,8 +32,8 @@ more info.
 Building From Source
 --------------------
 
-Getting The Source
-^^^^^^^^^^^^^^^^^^
+Getting The Latest Source
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Clone the Finkel repository with ``git``:
 
@@ -65,15 +65,14 @@ Building With ``cabal-install``
 
 .. note::
 
-   As of ``cabal-install`` version 3.0.0.0, installing with ``cabal
+   As of ``cabal-install`` version 3.4.0.0, installing with ``cabal
    v2-install`` does not work. This is `a known issue
    <https://github.com/haskell/cabal/issues/6124>`_ related to the
    file extension used by Finkel. To install with ``cabal-install``,
    use the ``cabal v1-install`` command or the ``setup`` executable
    built under the ``dist-newstyle`` directory.
 
-Building and testing with ``cabal-install`` is supported with
-``ghc-8.8.x`` series:
+To build and test with ``cabal-install``:
 
 .. code-block:: console
 

@@ -36,9 +36,9 @@ Open a new file and save following contents to a file named
 .. literalinclude:: ../include/macros/eval-when.fnk
    :language: finkel
 
-In the above example, ``(require (Finkel.Prelude))`` is added in the
-``defmodule`` to introduce functions and data types for writing
-macros.
+In the above example, ``(import-when [:compile] (Finkel.Prelude))`` is
+added in the ``defmodule`` to import functions and data types for
+writing while compiling the ``Main`` module.
 
 The ``eval-when`` macro can take multiple forms. Two forms are passed
 to ``eval-when`` in the above example, one to define a macro named
@@ -125,7 +125,7 @@ Open a new file named ``unquote.fnk`` and save the following contents:
    :language: finkel
 
 The example defines two macros: ``uq1`` and ``uq2``. Both macros use
-````` (back-tick) instead of ``'`` in body expression.
+````` (back-tick) instead of ``'`` (single quote) in body expression.
 
 In ``uq1``, the macro argument ``arg`` is unquoted with ``,``, and the
 unquoted form is passed as the second argument of ``++`` function.  In
