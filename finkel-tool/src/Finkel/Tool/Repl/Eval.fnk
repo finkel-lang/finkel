@@ -165,12 +165,12 @@
         (handle
          (\ e
            (case (fromException e)
-             (Just se) (>>= (src-err-handler se) (. liftIO putStrLn))
-             _ (liftIO (print e))))
+             (Just se) (>>= (src-err-handler se) (. liftIO putErrLn))
+             _ (liftIO (printErr e))))
          (case-do (do (setTargets (map guessFnkTarget srcs))
                       (compile-and-import srcs))
            Failed (liftIO
-                   (putStrLn (++ "failed loading: "
+                   (putErrLn (++ "failed loading: "
                                  (intercalate ", " (map unLoc fileish)))))
            Succeeded (return ()))))
 
@@ -403,7 +403,10 @@ to separate object files from source code files."
 (defn (:: make-eval-wrapper (-> [String] (Fnk ForeignHValue)))
   [args]
   (do (let ((= form
-              `(\ m (System.Environment.withArgs ,args m)))
+              `(\ m (do (<- r (System.Environment.withArgs ,args m))
+                        (System.IO.hFlush System.IO.stdout)
+                        (System.IO.hFlush System.IO.stderr)
+                        (Control.Monad.return r))))
             (= no-rb-hsc hsc-env
               (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
                                                RebindableSyntax)}))))

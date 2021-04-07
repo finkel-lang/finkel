@@ -3,7 +3,13 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Repl.IO
-  (export %_init-form read-form read-print-loop with-io-redirect)
+  (export
+   read-form
+   read-print-loop
+   with-io-redirect
+   putErr
+   putErrLn
+   printErr)
   (require
    ;; finkel-core
    (Finkel.Core.Ghc))
@@ -16,8 +22,8 @@
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (inits intercalate isPrefixOf))
    (GHC.IO.Handle (hDuplicate hDuplicateTo))
-   (System.IO (Handle (SeekMode ..) hClose hFlush hGetLine hSeek
-                      hSetFileSize stdout))
+   (System.IO (Handle (SeekMode ..) hClose hFlush hGetLine hPutStr hPutStrLn
+                      hSeek hSetFileSize stdout stderr))
    (System.IO.Error (isEOFError))
 
    ;; deepseq
@@ -166,6 +172,19 @@ reading the input until successful parse result."
                   (return (reverse acc))
                   (throwIO e))))))
     (go [])))
+
+
+;;; Printing errors
+
+(defn (:: putErr (-> String (IO ())))
+  (hPutStr stderr))
+
+(defn (:: putErrLn (-> String (IO ())))
+  (hPutStrLn stderr))
+
+(defn (:: printErr (=> (Show a) (-> a (IO ()))))
+  (. putErrLn show))
+
 
 ;;; Auxiliary
 

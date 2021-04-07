@@ -21,7 +21,8 @@
    ;; Internal
    (Finkel.Tool.CLI)
    (Finkel.Tool.Eval)
-   (Finkel.Tool.Repl (repl-env))))
+   (Finkel.Tool.Repl (repl-env))
+   (Finkel.Tool.Repl.IO (putErr))))
 
 (defn (:: runMain (=> (CLI m) (-> [String] (m ()))))
   [args0]
@@ -40,8 +41,11 @@
         print-run-help
         (liftIO
          (case es
-           [] (eval-and-exit-with prog-args ghc-args-1 (ro-fnk-env ro) main-fn)
-           _ (do (mapM- putStr es)
+           [] (eval-and-exit-with-args prog-args
+                                       ghc-args-1
+                                       (ro-fnk-env ro)
+                                       main-fn)
+           _ (do (mapM- putErr es)
                  print-run-help
                  exitFailure))))))
 
