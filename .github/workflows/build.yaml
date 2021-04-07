@@ -52,14 +52,21 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/.stack
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ env.cache-version }}
+
+      - name: Cache directory for stack (windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v2
+        with:
+          path: C:\Users\runneradmin\AppData\Local\Programs\stack\
+          key: ${{ runner.os }}-stack-${{ env.cache-version }}
 
       - name: Cache stack packages database (windows)
         if: matrix.os == 'windows-latest'
         uses: actions/cache@v2
         with:
-          path: C:\Users\runneradmin\AppData\Roaming\stack
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ hashFiles('stack.yaml') }}-${{ env.cache-version }}
+          path: C:\Users\runneradmin\AppData\Roaming\stack\
+          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ env.cache-version }}
 
       - name: Show stack version
         run: $STACK --version
