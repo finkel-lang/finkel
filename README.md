@@ -1,6 +1,6 @@
 # Finkel
 
-[![Build status][build-badge]][build]
+[![CI status][ci-badge]][ci]
 [![Documentation][doc-badge]][doc]
 [![Codecov][codecov-badge]][codecov]
 
@@ -82,8 +82,8 @@ See the [documentation][doc] for more details.
 
 Contributions are welcome. Please see the [CONTRIBUTING.md][contrib].
 
-[build-badge]: https://img.shields.io/github/workflow/status/finkel-lang/finkel/build/master?label=build
-[build]: https://github.com/finkel-lang/finkel/actions?query=workflow%3Abuild
+[ci-badge]: https://img.shields.io/github/workflow/status/finkel-lang/finkel/ci/master?label=ci
+[ci]: https://github.com/finkel-lang/finkel/actions?query=workflow%3Aci
 [doc-badge]: http://readthedocs.org/projects/finkel/badge/?version=latest
 [doc]: https://finkel.readthedocs.io/en/latest/
 [codecov-badge]: https://codecov.io/gh/finkel-lang/finkel/branch/master/graph/badge.svg
