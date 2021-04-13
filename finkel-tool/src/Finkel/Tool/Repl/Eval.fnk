@@ -458,6 +458,6 @@ to separate object files from source code files."
 (defn (:: hiding-subsumes (-> (Maybe (, Bool (Located [HIE])))
                               (Maybe (, Bool (Located [HIE])))
                               Bool))
-  [_ (Just (, False (L _ [])))] True
+  [_                         (Just (, False (L _ [])))] True
   [(Just (, False (L _ xs))) (Just (, False (L _ ys)))] (all (flip elem xs) ys)
-  [a b ] (== a b))
+  [a                         b                        ] (== a b))
