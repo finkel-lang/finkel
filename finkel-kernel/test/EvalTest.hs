@@ -15,18 +15,14 @@ import System.Info             (os)
 import System.FilePath         (takeBaseName)
 
 -- ghc
-import GHC                     (getPrintUnqual, setContext)
+import GHC                     (getPrintUnqual)
 import GHC_Core_Ppr_TyThing    (pprTypeForUser)
-import GHC_Data_FastString     (fsLit)
 import GHC_Data_StringBuffer   (StringBuffer, hGetStringBuffer,
                                 stringToStringBuffer)
 import GHC_Driver_Monad        (printException)
 import GHC_Driver_Session      (HasDynFlags (..))
-import GHC_Driver_Types        (InteractiveImport (..), handleSourceError)
-import GHC_Hs_ImpExp           (simpleImportDecl)
-import GHC_Runtime_Eval        (getContext)
+import GHC_Driver_Types        (handleSourceError)
 import GHC_Settings_Config     (cProjectVersionInt)
-import GHC_Unit_Module         (mkModuleNameFS)
 import GHC_Utils_Outputable    (showSDocForUser)
 
 -- hspec
@@ -35,11 +31,7 @@ import Test.Hspec
 -- finkel-kernel
 import Language.Finkel.Builder (Builder)
 import Language.Finkel.Eval    (evalExpr, evalExprType, evalTypeKind)
-import Language.Finkel.Expand  (expands, withExpanderSettings)
-import Language.Finkel.Fnk     (Fnk, FnkEnv (..), failS, runFnk)
-import Language.Finkel.Lexer   (evalSP)
-import Language.Finkel.Make    (buildHsSyn)
-import Language.Finkel.Reader  (sexprs)
+import Language.Finkel.Fnk     (Fnk, FnkEnv (..), runFnk)
 import Language.Finkel.Syntax  (parseExpr, parseType)
 
 -- Test internal
@@ -110,21 +102,9 @@ typeKindTest = do
 
 doEval :: FnkTestResource
        -> String -> Builder a -> (a -> Fnk b) -> StringBuffer -> Fnk b
-doEval ftr !label !parser !act !input = do
+doEval !ftr !label !parser !act !input = do
   ftr_init ftr
-  case evalSP sexprs (Just label) input of
-    Right form0 -> do
-      !form1 <- withExpanderSettings (prepare >> expands form0)
-      !hthing <- buildHsSyn parser form1
-      act hthing
-    Left err -> failS err
-  where
-    -- Adding 'Prelude' and 'Language.Finkel' to interactive context, since the
-    -- codes in the file does not contain ':require' forms.
-    prepare = do
-      ctxt <- getContext
-      setContext (mkII "Prelude" : mkII "Language.Finkel" : ctxt)
-    mkII = IIDecl . simpleImportDecl . mkModuleNameFS . fsLit
+  evalWith label parser act input
 
 evalFnkEnv :: FnkEnv
 evalFnkEnv = fnkTestEnv {envContextModules = modules}

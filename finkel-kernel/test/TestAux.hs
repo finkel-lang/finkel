@@ -1,4 +1,6 @@
+{-# LANGUAGE BangPatterns     #-}
 {-# LANGUAGE CPP              #-}
+{-# LANGUAGE MagicHash        #-}
 {-# LANGUAGE TypeApplications #-}
 -- | Miscellaneous auxiliary codes for tests.
 module TestAux
@@ -6,6 +8,9 @@ module TestAux
   , FnkTestResource(..)
   , getFnkTestResource
   , initSessionForTest
+  , evalWith
+  , mkIIDecl
+  , parseAndSetDynFlags
   , removeArtifacts
   , fnkTestEnv
   , getTestFiles
@@ -15,49 +20,62 @@ module TestAux
 #include "ghc_modules.h"
 
 -- base
-import           Control.Exception      (catch, fromException, throw)
-import           Control.Monad          (when)
-import           Control.Monad.IO.Class (MonadIO (..))
-import           Data.List              (isSubsequenceOf, sort)
-import           Data.Maybe             (fromMaybe)
-import           Data.Version           (showVersion)
-import           System.Environment     (getExecutablePath, lookupEnv, withArgs)
-import           System.Exit            (ExitCode (..))
+import           Control.Exception       (catch, fromException, throw)
+import           Control.Monad           (when)
+import           Control.Monad.IO.Class  (MonadIO (..))
+import           Data.List               (isSubsequenceOf, sort)
+import           Data.Maybe              (fromMaybe)
+import           Data.Version            (showVersion)
+import           System.Environment      (getExecutablePath, lookupEnv,
+                                          withArgs)
+import           System.Exit             (ExitCode (..))
 
 #if !MIN_VERSION_hspec(2,7,6)
-import           Control.Concurrent     (MVar, modifyMVar, newMVar)
-import           Control.Exception      (SomeException, throwIO, try)
+import           Control.Concurrent      (MVar, modifyMVar, newMVar)
+import           Control.Exception       (SomeException, throwIO, try)
 #endif
 
 -- directory
-import           System.Directory       (doesFileExist, getDirectoryContents,
-                                         removeFile)
+import           System.Directory        (doesFileExist, getDirectoryContents,
+                                          removeFile)
 
 -- filepath
-import           System.FilePath        (joinPath, takeExtension, (<.>), (</>))
+import           System.FilePath         (joinPath, takeExtension, (<.>), (</>))
 
 -- ghc
-import           GHC_Driver_Session     (DynFlags (..), HasDynFlags (..),
-                                         parseDynamicFlagsCmdLine)
-import           GHC_Types_SrcLoc       (noLoc)
+import           GHC                     (setContext)
+import           GHC_Data_FastString     (fsLit)
+import           GHC_Data_StringBuffer   (StringBuffer)
+import           GHC_Driver_Session      (DynFlags (..), HasDynFlags (..),
+                                          parseDynamicFlagsCmdLine)
+import           GHC_Driver_Types        (InteractiveImport (..))
+import           GHC_Hs_ImpExp           (simpleImportDecl)
+import           GHC_Runtime_Eval        (getContext)
+import           GHC_Types_Basic         (SuccessFlag)
+import           GHC_Types_SrcLoc        (noLoc)
+import           GHC_Unit_Module         (mkModuleNameFS)
 
 -- hspec
-import           Test.Hspec             (SpecWith)
+import           Test.Hspec              (SpecWith)
 
 #if MIN_VERSION_hspec(2,7,6)
-import           Test.Hspec             (beforeAllWith)
+import           Test.Hspec              (beforeAllWith)
 #else
-import           Test.Hspec             (beforeWith, runIO)
+import           Test.Hspec              (beforeWith, runIO)
 #endif
 
 -- process
-import           System.Process         (readProcess)
+import           System.Process          (readProcess)
 
 -- fnk-kernel
-import           Language.Finkel        (defaultFnkEnv)
-import           Language.Finkel.Fnk    (Fnk, FnkEnv (..), setDynFlags)
-import           Language.Finkel.Main   (defaultMain)
-import           Language.Finkel.Make   (initSessionForMake)
+import           Language.Finkel         (defaultFnkEnv)
+import           Language.Finkel.Builder (Builder)
+import           Language.Finkel.Expand  (expands, withExpanderSettings)
+import           Language.Finkel.Fnk     (Fnk, FnkEnv (..), failS, setDynFlags)
+import           Language.Finkel.Lexer   (evalSP)
+import           Language.Finkel.Main    (defaultMain)
+import           Language.Finkel.Make    (buildHsSyn, initSessionForMake, make)
+import           Language.Finkel.Reader  (sexprs)
 import qualified Paths_finkel_kernel
 
 
@@ -93,6 +111,12 @@ data FnkTestResource =
     -- ^ Function to run 'defaultMain'.
     , ftr_init :: Fnk ()
     -- ^ Initialization action inside 'Fnk'.
+    , ftr_load :: [FilePath] -> Fnk SuccessFlag
+    -- ^ Function to load a module.
+    -- , ftr_eval :: forall a b. String -> Builder a -> (a -> Fnk b)
+    --            -> StringBuffer -> Fnk b
+    -- -- ^ Function to evaluate an expression string, returns a string
+    -- -- representation of evaluated result.
     }
 
 getFnkTestResource :: IO FnkTestResource
@@ -100,6 +124,7 @@ getFnkTestResource = do
   pkg_args <- getPackageArgs
   return (FnkTestResource { ftr_main = makeMain pkg_args
                           , ftr_init = makeInit pkg_args
+                          , ftr_load = makeLoad
                           })
 
 makeMain :: [String] -> [String] -> IO ()
@@ -190,6 +215,34 @@ clearPackageEnv dflags = dflags {packageEnv = Just "-"}
 #else
 clearPackageEnv dflags = dflags {packageEnv = Nothing}
 #endif
+
+parseAndSetDynFlags :: [String] -> Fnk ()
+parseAndSetDynFlags args = do
+  dflags0 <- getDynFlags
+  (dflags1,_,_) <- parseDynamicFlagsCmdLine dflags0 (map noLoc args)
+  setDynFlags dflags1
+
+makeLoad :: [FilePath] -> Fnk SuccessFlag
+makeLoad files = make (map (\p -> (noLoc p, Nothing)) files) False Nothing
+
+evalWith ::  String -> Builder a -> (a -> Fnk b) -> StringBuffer -> Fnk b
+evalWith !label !parser !act !input = do
+  case evalSP sexprs (Just label) input of
+    Right form0 -> do
+      !form1 <- withExpanderSettings (prepare >> expands form0)
+      !hthing <- buildHsSyn parser form1
+      act hthing
+    Left err -> failS err
+  where
+    -- Adding 'Prelude' and 'Language.Finkel' to interactive context, since the
+    -- codes in the file does not contain ':require' forms.
+    prepare = do
+      ctxt <- getContext
+      setContext (mkIIDecl "Prelude" : mkIIDecl "Language.Finkel" : ctxt)
+    -- mkII = IIDecl . simpleImportDecl . mkModuleNameFS . fsLit
+
+mkIIDecl :: String -> InteractiveImport
+mkIIDecl = IIDecl . simpleImportDecl . mkModuleNameFS . fsLit
 
 -- | Reset package env and initialize session with 'initSessionForMake'.
 initSessionForTest :: Fnk ()

@@ -145,6 +145,7 @@ test-suite finkel-kernel-test
                      --
                      , QuickCheck   >= 2.10.1 && < 2.15
                      , hspec        >= 2.4.8  && < 2.8
+                     , silently     >= 1.2    && < 1.3
                      , transformers >= 0.5.2  && < 0.6
 
   -- The "Linker.c" codes in the "rts" package bundled with ghc 8.10.3 had

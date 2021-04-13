@@ -36,7 +36,7 @@ import System.FilePath        (takeExtension)
 import GHC                    (setTargets)
 import GHC_Data_FastString    (fsLit)
 import GHC_Driver_Monad       (GhcMonad (..))
-import GHC_Driver_Session     (HasDynFlags (..), parseDynamicFlagsCmdLine)
+import GHC_Driver_Session     (HasDynFlags (..))
 #if !MIN_VERSION_ghc(9,0,0)
 import GHC_Driver_Session     (DynFlags (..))
 #endif
@@ -442,15 +442,11 @@ buildReload the_file fname files1 files2 before_str after_str =
                                        then ["-fobject-code"]
                                        else []
           args1 = ["-v0"]
-          parseAndSet args = do
-            dflags0 <- getDynFlags
-            (dflags1,_,_) <- parseDynamicFlagsCmdLine dflags0 (map noLoc args)
-            setDynFlags dflags1
           tfile = TargetFile the_file Nothing
-      parseAndSet args0
+      parseAndSetDynFlags args0
       ftr_init ftr
       prepareInterpreter
-      parseAndSet args1
+      parseAndSetDynFlags args1
       setTargets [Target tfile use_obj Nothing]
 
     make_and_eval :: Fnk String

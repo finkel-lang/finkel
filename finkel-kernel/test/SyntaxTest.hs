@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE MagicHash         #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- | Tests for syntax.
 --
@@ -15,26 +16,37 @@ module SyntaxTest
 #include "ghc_modules.h"
 
 -- base
-import Control.Monad       (when)
-import Data.IORef          (atomicWriteIORef, newIORef, readIORef)
-import System.Exit         (ExitCode (..))
-import System.Info         (os)
+import Control.Monad          (unless, when)
+import Data.IORef             (atomicWriteIORef, newIORef, readIORef)
+import GHC.Exts               (unsafeCoerce#)
+import System.IO              (BufferMode (..), hSetBuffering, stdout)
+import System.Info            (os)
 
 -- directory
-import System.Directory    (createDirectoryIfMissing, doesFileExist,
-                            getTemporaryDirectory, removeFile)
+import System.Directory       (createDirectoryIfMissing, doesFileExist,
+                               getTemporaryDirectory, removeFile)
 
 -- filepath
-import System.FilePath     (takeBaseName, (<.>), (</>))
+import System.FilePath        (takeBaseName, (<.>), (</>))
 
 -- ghc
-import GHC_Settings_Config (cProjectVersionInt)
+import GHC                    (setContext, setTargets)
+import GHC_Data_StringBuffer  (stringToStringBuffer)
+import GHC_Driver_Types       (Target (..), TargetId (..))
+import GHC_Settings_Config    (cProjectVersionInt)
+import GHC_Types_Basic        (SuccessFlag (..))
 
 -- hspec
 import Test.Hspec
 
--- process
-import System.Process      (readProcessWithExitCode)
+-- silently
+import System.IO.Silently     (capture_)
+
+-- finkel-kernel
+import Language.Finkel.Eval   (evalExpr)
+import Language.Finkel.Fnk    (Fnk, FnkEnv (..), modifyFnkEnv,
+                               prepareInterpreter, runFnk)
+import Language.Finkel.Syntax (parseExpr)
 
 -- Internal
 import TestAux
@@ -89,54 +101,86 @@ mkTest' path = do
       dotHs = odir </> takeBaseName path <.> "hs"
       dotTix = "a.out.tix"
       syndir = "test" </> "data" </> "syntax"
-      runDotO = readProcessWithExitCode aDotOut [] ""
+      -- runDotO = readProcessWithExitCode aDotOut [] ""
       prepare =
         do removeArtifacts syndir
            mapM_ removeWhenExist [dotTix, aDotOut, dotHs]
-  runIO (createDirectoryIfMissing True odir)
+      toNativeCompile =
+         takeBaseName path `elem` ["0008-ffi"]
+      compile =
+          if toNativeCompile
+            then nativeCompile
+            else byteCompile
+
+#if MIN_VERSION_ghc(8,8,0)
+      skipThisTest _ = (False, "")
+#elif MIN_VERSION_ghc(8,6,0)
+      skipThisTest p =
+          ( takeBaseName p == "2019-overlabel"
+          , "Generated Haskell code is malformed" )
+#else
+      skipThisTest p =
+          ( or [ b == "1004-doccomment-01"
+               , b == "2012-typeop"
+               , b == "2019-overlabel" ]
+          , "Generated Haskell code is malformed" )
+          where b = takeBaseName p
+#endif
+      skipOr act =
+        case skipThisTest path of
+          (True, reason) -> pendingWith reason
+          _              -> act
+
+  runIO (do createDirectoryIfMissing True odir
+            hSetBuffering stdout NoBuffering)
   beforeAll_ prepare $ describe path $ do
     it "should compile .fnk file" $ \ftr -> do
-      let args = [ "--fnk-hsdir=" ++ odir, "-o", aDotOut, "-v0" , path]
-      ftr_main ftr args
-
-    it "should run executable compiled with Fnk" $ \_ -> do
-      removeWhenExist dotTix
-      (ecode, stdout, _stderr) <- runDotO
-      atomicWriteIORef fnkORef stdout
-      ecode `shouldBe` ExitSuccess
+      io <- runFnk (compile ftr path (Just odir)) fnkTestEnv
+      unless toNativeCompile $ do
+        capture_ io >>= atomicWriteIORef fnkORef
 
     it "should dump Haskell source" $ \_ -> do
       exist <- doesFileExist dotHs
       exist `shouldBe` True
 
-    it "should compile dumped Haskell code" $ \ftr -> do
-      let task =
-            ftr_main ftr ["-o", aDotOut, "-v0", dotHs]
-#if MIN_VERSION_ghc(8,8,0)
-          skipThisTest _ = (False, "")
-#elif MIN_VERSION_ghc(8,6,0)
-          skipThisTest p =
-            ( takeBaseName p == "2019-overlabel"
-            , "Generated Haskell code is malformed")
-#else
-          skipThisTest p =
-            ( or [ b == "1004-doccomment-01"
-                 , b == "2012-typeop"
-                 , b == "2019-overlabel"]
-            , "Generated Haskell code is malformed" )
-            where b = takeBaseName p
-#endif
-      case skipThisTest path of
-        (True, reason) -> pendingWith reason
-        _              -> task
+    it "should compile dumped Haskell code" $ \ftr -> skipOr $ do
+      io <- runFnk (compile ftr dotHs Nothing) fnkTestEnv
+      unless toNativeCompile $
+        capture_ io >>= atomicWriteIORef hsORef
 
-    it "should run executable compiled from Haskell code" $ \_ -> do
-      removeWhenExist dotTix
-      (ecode, stdout, _stderr) <- runDotO
-      atomicWriteIORef hsORef stdout
-      ecode `shouldBe` ExitSuccess
+    it "should have same output" $ \_ -> skipOr $ do
+      unless toNativeCompile $ do
+        fnk <- readIORef fnkORef
+        hs <- readIORef hsORef
+        fnk `shouldBe` hs
 
-    it "should have same output from Finkel and Haskell executable" $ \_ -> do
-      fnko <- readIORef fnkORef
-      hso <- readIORef hsORef
-      fnko `shouldBe` hso
+nativeCompile :: FnkTestResource -> FilePath -> Maybe FilePath -> Fnk (IO ())
+nativeCompile = compileWith False []
+
+byteCompile :: FnkTestResource -> FilePath -> Maybe FilePath -> Fnk (IO ())
+byteCompile = compileWith True ["-no-link", "-fbyte-code"]
+
+compileWith
+  :: Bool -> [String] -> FnkTestResource -> FilePath -> Maybe FilePath
+  -> Fnk (IO ())
+compileWith is_interpreting ini_args ftr file mb_dir = do
+  parseAndSetDynFlags ini_args
+  ftr_init ftr
+  when is_interpreting prepareInterpreter
+  let update_dir dir = modifyFnkEnv (\e -> e {envHsOutDir = Just dir})
+  mapM_ update_dir mb_dir
+  parseAndSetDynFlags ["-v0"]
+  setTargets [Target (TargetFile file Nothing) (not is_interpreting) Nothing]
+  success_flag <- ftr_load ftr [file]
+  case success_flag of
+    Failed    -> error $ "Failed to compile: " ++ file
+    Succeeded ->
+      if is_interpreting
+        then do
+          -- Flush the stdout used by the compiled expression to get the string
+          -- output, which is captured later.
+          setContext [mkIIDecl "Main", mkIIDecl "System.IO"]
+          let act = unsafeCoerce# . evalExpr
+              buf = stringToStringBuffer "(>> main (hFlush stdout))"
+          evalWith (file ++ ":main") parseExpr act buf
+        else return (return ())
