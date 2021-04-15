@@ -43,11 +43,6 @@ custom-setup
                      , Cabal    >= 2.0   && < 3.5
                      , filepath >= 1.4.1 && < 1.5
 
-flag dynamic
-  description:         Dynamically link executables (except Windows)
-  default:             True
-  manual:              True
-
 flag dev
   description:         Flag for internal development
   default:             False
@@ -109,8 +104,6 @@ executable finkel-profile
   hs-source-dirs:      exec
   main-is:             profile.hs
   ghc-options:         -Wall -threaded -rtsopts
-  if !os(windows) && flag(dynamic)
-    ghc-options:       -dynamic
   build-depends:       base
                      , bytestring
                      , filepath
