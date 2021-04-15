@@ -3,7 +3,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Main
-  (export main
+  (export defaultMain
           commands)
   (import
    ;; base
@@ -17,7 +17,7 @@
    (Finkel.Tool.Run)
    (Finkel.Tool.Version)))
 
-(defn (:: main (IO ()))
+(defn (:: defaultMain (IO ()))
   "Main entry point function for the executable."
   (case-do getArgs
     (: name rest) (maybe (show-usage commands)

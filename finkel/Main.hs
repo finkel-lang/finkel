@@ -1,4 +1,4 @@
-import qualified Finkel.Tool.Main
+import Finkel.Tool.Main (defaultMain)
 
 main :: IO ()
-main = Finkel.Tool.Main.main
+main = defaultMain
