@@ -30,5 +30,5 @@ executable fkc
 
 source-repository head
   type:     git
-  location: https://github.com/finkel-lang/fkc.git
+  location: https://github.com/finkel-lang/finkel.git
   subdir:   fkc

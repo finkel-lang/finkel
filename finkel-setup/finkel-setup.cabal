@@ -61,5 +61,5 @@ test-suite finkel-setup-test
 
 source-repository head
   type:     git
-  location: https://github.com/finkel-lang/finkel-setup.git
-  subdir:   setup
+  location: https://github.com/finkel-lang/finkel.git
+  subdir:   finkel-setup

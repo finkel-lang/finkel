@@ -27,5 +27,5 @@ executable finkel
 
 source-repository head
   type:     git
-  location: https://github.com/finkel-lang/finkel
+  location: https://github.com/finkel-lang/finkel.git
   subdir:   finkel
