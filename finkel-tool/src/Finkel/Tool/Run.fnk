@@ -28,13 +28,8 @@
   [args0]
   (let ((= (, args1 prog-args) (split-program-args args0))
         (= all-opts (++ run-opts run-fnk-env-opts))
-        (= (, rargs ghc-args-0) (partition-descrs all-opts args1))
+        (= (, rargs ghc-args) (partition-descrs all-opts args1))
         (= (, o _ _ es) (getOpt' Permute all-opts rargs))
-
-        ;; Using "-v0" as default verbisoty, to suppress module compilation
-        ;; messages.
-        (= ghc-args-1 (: "-v0" ghc-args-0))
-
         (= ro (foldl (flip id) initial-run-option o))
         (= main-fn (make-symbol (mangle-name (ro-main ro)))))
     (if (ro-help ro)
@@ -42,7 +37,7 @@
         (liftIO
          (case es
            [] (eval-and-exit-with-args prog-args
-                                       ghc-args-1
+                                       ghc-args
                                        (ro-fnk-env ro)
                                        main-fn)
            _ (do (mapM- putErr es)

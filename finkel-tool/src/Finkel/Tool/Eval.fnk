@@ -87,7 +87,9 @@
         (liftIO
          (case mb-str
            (Just str) (case (parse str)
-                        (Right form) (eval-and-exit ghc-args (eo-fnk-env eo) form)
+                        (Right form) (eval-and-exit ghc-args
+                                                    (eo-fnk-env eo)
+                                                    form)
                         (Left err) (>> (putErrLn err) exitFailure))
            Nothing (>> print-eval-help exitFailure))))))
 
@@ -103,11 +105,14 @@
   (eval-and-exit-with-args []))
 
 (defn (:: eval-and-exit-with-args (-> [String] [String] FnkEnv Code (IO ())))
-  [wrapper-args ghc-args fnk-env form]
+  [wrapper-args ghc-args-0 fnk-env form]
   (runFnk
-   (do (let ((= hdl (error "eval-and-exit: uninitialized handle"))))
+   ;; Adding "-v0" to front of ghc arguments, to suppress module compilation
+   ;; messages.
+   (do (let ((= hdl (error "eval-and-exit: uninitialized handle"))
+             (= ghc-args-1 (: "-v0" ghc-args-0))))
        (<- (, in-mv out-mv) (make-in-and-out form))
-       (eval-once wrapper-args ghc-args hdl in-mv)
+       (eval-once wrapper-args ghc-args-1 hdl in-mv)
        (liftIO (case-do (takeMVar out-mv)
                  (Right msg) (putStr msg)
                  (Left errs) (>> (putErrLn errs) exitFailure))))
