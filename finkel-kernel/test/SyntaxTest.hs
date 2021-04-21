@@ -85,7 +85,7 @@ mkTest path
 
 ignored_84x, ignored_82x :: [String]
 ignored_84x = ["2024-derivingvia"]
-ignored_82x = ["2020-emptyderiv"] ++ ignored_84x
+ignored_82x = "2020-emptyderiv" : ignored_84x
 
 mkTest' :: FilePath -> FnkSpec
 mkTest' path = do

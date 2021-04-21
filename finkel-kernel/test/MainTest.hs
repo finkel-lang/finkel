@@ -76,7 +76,7 @@ finkelUnknownFlagTest =
 
 trivialTest :: String -> String -> [String] -> FnkSpec
 trivialTest desc label flags = describe desc $
-  it label (\ftr -> ftr_main ftr flags)
+  it label (`ftr_main` flags)
 
 odir :: FilePath
 odir = "test" </> "data" </> "main"

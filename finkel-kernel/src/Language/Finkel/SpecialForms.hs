@@ -166,7 +166,7 @@ coerceMacro :: DynFlags -> Code -> Fnk Macro
 coerceMacro dflags name =
   case unCode name of
     Atom (ASymbol _) -> go
-    _                -> failS ("coerceMacro: expecting name symbol")
+    _                -> failS "coerceMacro: expecting name symbol"
   where
     go = do
       qualify <- envQualifyQuotePrimitives <$> getFnkEnv
@@ -340,7 +340,7 @@ m_withMacro form =
       forms' <- mapM expand forms
       qualify <- envQualifyQuotePrimitives <$> getFnkEnv
       case evalBuilder dflags qualify parseModule forms' of
-        Right (HsModule {hsmodDecls=decls}) -> do
+        Right HsModule {hsmodDecls=decls} -> do
           (tythings, ic) <- evalDecls decls
           modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
           foldM (asMacro dflags) [] tythings
@@ -415,8 +415,8 @@ m_evalWhenCompile form =
       dflags <- getDynFlags
       qualify <- envQualifyQuotePrimitives <$> getFnkEnv
       case evalBuilder dflags qualify parseModule expanded of
-        Right (HsModule { hsmodDecls = decls
-                        , hsmodImports = limps }) -> do
+        Right HsModule { hsmodDecls = decls
+                       , hsmodImports = limps } -> do
 
           -- If module imports were given, add to current interactive context.
           -- Compile home modules if not found.

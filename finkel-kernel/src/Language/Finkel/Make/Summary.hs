@@ -543,7 +543,7 @@ requiredDependency hsc_env = go
         -- the usage file path .
         UsageFile {usg_file_path = path} ->
           let mb_ms1 = find is_my_path mss
-              is_my_path = maybe False (== path) . ml_hs_file . ms_location
+              is_my_path = (Just path ==) . ml_hs_file . ms_location
               mss = mgModSummaries' (hsc_mod_graph hsc_env)
               acc1 = path : acc
           in  maybe acc1 (go acc1) mb_ms1
@@ -551,11 +551,11 @@ requiredDependency hsc_env = go
 
 
 mkModuleFromDynFlags :: DynFlags -> ModuleName -> Module
-mkModuleFromDynFlags dflags mod_name =
+mkModuleFromDynFlags dflags =
 #if MIN_VERSION_ghc(9,0,0)
-  mkModule (homeUnit dflags) mod_name
+  mkModule (homeUnit dflags)
 #else
-  mkModule (thisPackage dflags) mod_name
+  mkModule (thisPackage dflags)
 #endif
 
 -- | Trace function for this module.

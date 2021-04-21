@@ -188,7 +188,7 @@ b_tyLitT :: Code -> Builder HType
 b_tyLitT (LForm (L l form))
   | Atom (AString _ str) <- form =
     return (mkLit l (HsStrTy (SourceText (show str)) str))
-  | Atom (AInteger (IL {il_value=n})) <- form =
+  | Atom (AInteger IL {il_value=n}) <- form =
     return (mkLit l (HsNumTy (SourceText (show n)) n))
   | otherwise = builderError
   where
@@ -245,7 +245,7 @@ b_listT ty@(L l _) = L l (HsListTy NOEXT ty)
 
 b_nilT :: Code -> HType
 b_nilT (LForm (L l _)) =
-  L l (hsTyVar NotPromoted (L l (listTyCon_RDR)))
+  L l (hsTyVar NotPromoted (L l listTyCon_RDR))
 {-# INLINABLE b_nilT #-}
 
 b_tupT :: Code -> [HType] -> HType
@@ -369,11 +369,11 @@ hsTyVar = HsTyVar NOEXT
 {-# INLINABLE hsTyVar #-}
 
 hsExplicitListTy :: [HType] -> HsType PARSED
-hsExplicitListTy tys =
+hsExplicitListTy =
 #if MIN_VERSION_ghc(8,6,0)
-  HsExplicitListTy NOEXT iSPROMOTED tys
+  HsExplicitListTy NOEXT iSPROMOTED
 #else
-  HsExplicitListTy iSPROMOTED placeHolderKind tys
+  HsExplicitListTy iSPROMOTED placeHolderKind
 #endif
 
 hsExplicitTupleTy :: [HType] -> HsType PARSED

@@ -229,16 +229,16 @@ b_gadtD form@(LForm (L l1 _)) (ctxt, bodyty) = do
       ty = L l1 qty
 #endif
       qty = mkHsQualTy_compat (mkLocatedList ctxt) bodyty
-  decl <-
 #if MIN_VERSION_ghc(9,0,0)
+  decl <-
     do ps <- fmap ghcPState getBState
        case unP (mkGadtDecl [name'] ty) ps of
          POk _ d -> return (fst d)
          _       -> builderError
 #elif MIN_VERSION_ghc(8,6,0)
-    pure (fst (mkGadtDecl [name'] ty))
+  let decl = fst (mkGadtDecl [name'] ty)
 #else
-    pure (mkGadtDecl [name'] (mkLHsSigType ty))
+  let decl = mkGadtDecl [name'] (mkLHsSigType ty)
 #endif
   return (L l1 decl)
 {-# INLINABLE b_gadtD #-}
@@ -507,7 +507,7 @@ b_overlapP (LForm (L _ lst)) =
     _              -> Nothing
   where
     pragma con = Just (L l (con stxt))
-    (List [(LForm (L l (Atom (ASymbol mode))))]) = lst
+    List [(LForm (L l (Atom (ASymbol mode))))] = lst
     -- XXX: Adding extra pragma comment header to support translation to
     -- Haskell source code.
     stxt = SourceText ("{-# " ++ unpackFS mode)
@@ -533,7 +533,7 @@ b_defaultD types = L l (defD (defaultDecl types))
 b_fixityD :: FixityDirection -> Code -> [Code] -> Builder HDecl
 b_fixityD dir (LForm (L l form)) syms =
   case form of
-    Atom (AInteger (IL {il_value=n})) -> do
+    Atom (AInteger IL {il_value=n}) -> do
       let lname (LForm (L l0 x)) =
             case x of
               Atom (ASymbol name) -> return (L l0 (mkRdrName name))
@@ -637,8 +637,8 @@ b_funOrPatD eq_form pats gxd@(grhss,decls) =
       | null pats'   -> return (b_patBindD gxd lpat)
       | otherwise    -> setLastToken eq_form >> failB "malformed binding"
   where
-    isVarPat (VarPat {}) = True
-    isVarPat _           = False
+    isVarPat VarPat {} = True
+    isVarPat _         = False
     varToName (VarPat _EXT lname) = return lname
     varToName _                   = failB "invalid name"
 {-# INLINABLE b_funOrPatD #-}

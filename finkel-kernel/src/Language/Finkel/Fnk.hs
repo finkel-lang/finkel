@@ -75,6 +75,7 @@ module Language.Finkel.Fnk
 import           Control.Exception       (Exception (..), throw, throwIO)
 import           Control.Monad           (mplus, unless, when)
 import           Control.Monad.IO.Class  (MonadIO (..))
+import           Data.Bifunctor          (first)
 import           Data.Bits               (setBit, testBit, zeroBits)
 import           Data.Char               (isSpace, toLower)
 import           Data.IORef              (IORef, atomicModifyIORef',
@@ -586,7 +587,7 @@ emptyEnvMacros = Map.empty
 
 -- | Make 'EnvMacros' from list of pair of macro name and value.
 makeEnvMacros :: [(String, Macro)] -> EnvMacros
-makeEnvMacros = Map.fromList . map (\(n,m) -> (fsLit n, m))
+makeEnvMacros = Map.fromList . map (first fsLit)
 
 -- | Merge macros.
 mergeMacros :: EnvMacros -> EnvMacros -> EnvMacros

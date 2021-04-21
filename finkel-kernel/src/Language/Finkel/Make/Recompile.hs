@@ -16,6 +16,7 @@ module Language.Finkel.Make.Recompile
 import           Control.Monad                     (forM_, when)
 import           Control.Monad.Fail                (MonadFail (..))
 import           Control.Monad.IO.Class            (MonadIO (..))
+import           Data.Bifunctor                    (first)
 import           GHC.Fingerprint                   (getFileHash)
 import           System.IO                         (fixIO)
 
@@ -155,14 +156,13 @@ newtype RecompM a =
   RecompM {unRecompM :: RecompState -> Fnk (Either String a, RecompState)}
 
 instance Functor RecompM where
-  fmap f (RecompM m) =
-    RecompM (fmap (\(et, st1) -> (fmap f et, st1)) . m)
+  fmap f (RecompM m) = RecompM (fmap (first (fmap f)) . m)
   {-# INLINE fmap #-}
 
 instance Applicative RecompM where
   pure a = RecompM (\st0 -> pure (pure a, st0))
   {-# INLINE pure #-}
-  f <*> m = do {g <- f; n <- m; pure (g n)}
+  f <*> m = f >>= flip fmap m
   {-# INLINE (<*>) #-}
 
 instance Monad RecompM where
@@ -444,8 +444,7 @@ mkHomeModInfo hsc_env0 ms iface0 = liftIO $ do
                     let hmi = HomeModInfo iface details' Nothing
                     in  addToHpt (hsc_HPT hsc_env) mname hmi
                 }
-          details <- initIfaceLoad hsc_env1 (typecheckIface iface)
-          return details
+          initIfaceLoad hsc_env1 (typecheckIface iface)
   details <- knot_tying hsc_env0 (ms_mod_name ms) iface0
   mb_linkable <- findObjectLinkableMaybe mdl mloc
   return $! HomeModInfo iface0 details mb_linkable

@@ -218,7 +218,7 @@ ioMsgMaybe ioA = do
 -- | GHC version compatibility helper for 'tcRnType'.
 tcRnType' :: HscEnv -> Bool -> HType -> IO (Messages, Maybe (Type, Kind))
 #if MIN_VERSION_ghc(8,10,0)
-tcRnType' hsc_env tidy typ = tcRnType hsc_env DefaultFlexi tidy typ
+tcRnType' hsc_env = tcRnType hsc_env DefaultFlexi
 #else
 tcRnType' = tcRnType
 #endif

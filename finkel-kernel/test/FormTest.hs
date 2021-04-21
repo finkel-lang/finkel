@@ -172,7 +172,7 @@ dataInstanceTests = do
       t_show_constr aint "AInteger"
       t_show_constr afrac "AFractional"
     it "should return AUnit with simple gunfold" $ do
-      gunfold (\_ -> Nothing) Just (toConstr AUnit) `shouldBe` Just AUnit
+      gunfold (const Nothing) Just (toConstr AUnit) `shouldBe` Just AUnit
     it "should return AUnit constr" $ do
       let dtype = dataTypeOf AUnit
           cnstr = toConstr AUnit
@@ -319,26 +319,26 @@ applicativeTest = do
 
   describe "<*>" $ do
     it "should apply f1 to atom and atom" $
-      pure f1 <*> char_a <*> char_a `shouldBe` a_pair
+      f1 <$> char_a <*> char_a `shouldBe` a_pair
     it "should apply f1 to atom and list" $
-      pure f1 <*> char_a <*> al2 `shouldBe` a_pair_ls
+      f1 <$> char_a <*> al2 `shouldBe` a_pair_ls
     it "should apply f1 to atom and hslist" $
-      pure f1 <*> char_a <*> ahl2 `shouldBe` a_pair_hls
+      f1 <$> char_a <*> ahl2 `shouldBe` a_pair_hls
     it "should aply f1 to list and atom" $
-      pure f1 <*> al2 <*> char_a `shouldBe` a_pair_ls
+      f1 <$> al2 <*> char_a `shouldBe` a_pair_ls
     it "should apply f1 to list and list" $
-      pure f1 <*> al2 <*> al2 `shouldBe` mk_a_pairs List 4
+      f1 <$> al2 <*> al2 `shouldBe` mk_a_pairs List 4
     it "should apply f1 to list and hslist" $
-      pure f1 <*> al2 <*> ahl2 `shouldBe` mk_a_pairs List 4
+      f1 <$> al2 <*> ahl2 `shouldBe` mk_a_pairs List 4
     it "should aply f1 to list and atom" $
-      pure f1 <*> ahl2 <*> char_a `shouldBe` a_pair_hls
+      f1 <$> ahl2 <*> char_a `shouldBe` a_pair_hls
     it "should apply f1 to list and list" $
-      pure f1 <*> ahl2 <*> al2 `shouldBe` mk_a_pairs HsList 4
+      f1 <$> ahl2 <*> al2 `shouldBe` mk_a_pairs HsList 4
     it "should apply f1 to list and list" $
-      pure f1 <*> ahl2 <*> ahl2 `shouldBe` mk_a_pairs HsList 4
+      f1 <$> ahl2 <*> ahl2 `shouldBe` mk_a_pairs HsList 4
     it "should result in TEnd" $ do
-      pure f1 <*> char_a <*> lf tend `shouldBe` lf TEnd
-      pure f1 <*> lf tend <*> char_a `shouldBe` lf TEnd
+      f1 <$> char_a <*> lf tend `shouldBe` lf TEnd
+      f1 <$> lf tend <*> char_a `shouldBe` lf TEnd
 
 monadTest :: Spec
 monadTest = do
@@ -511,9 +511,9 @@ homoiconicTests = do
   t [Right True, Left "foo"]
   t (Just 'x', [Right False, Left "foo"])
   t (Just 'x', [Right False, Left "foo"], EQ)
-  t (Just 'x', [Right False, Left "foo"], EQ, (42::Int))
-  t (Just 'x', [Right False, Left "foo"], EQ, (42::Int) ,False)
-  t (Just 'x', [Right False, Left "foo"], EQ, (42::Int)
+  t (Just 'x', [Right False, Left "foo"], EQ, 42::Int)
+  t (Just 'x', [Right False, Left "foo"], EQ, 42::Int ,False)
+  t (Just 'x', [Right False, Left "foo"], EQ, 42::Int
     ,False, Just [Right (Just EQ), Left (3.1 :: Double)])
 
 rnfTest :: Spec

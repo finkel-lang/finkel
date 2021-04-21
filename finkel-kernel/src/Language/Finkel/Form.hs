@@ -218,12 +218,12 @@ instance Applicative Form where
   Atom f <*> HsList as     = HsList (map (fmap f) as)
 
   List fs <*> a@(Atom _)   = List (fmap apLF fs <*> [a])
-  List fs <*> List as      = List ((fmap (<*>) fs) <*> as)
-  List fs <*> HsList as    = List ((fmap (<*>) fs) <*> as)
+  List fs <*> List as      = List (fmap (<*>) fs <*> as)
+  List fs <*> HsList as    = List (fmap (<*>) fs <*> as)
 
   HsList fs <*> a@(Atom _) = HsList (fmap apLF fs <*> [a])
-  HsList fs <*> List as    = HsList ((fmap (<*>) fs) <*> as)
-  HsList fs <*> HsList as  = HsList ((fmap (<*>) fs) <*> as)
+  HsList fs <*> List as    = HsList (fmap (<*>) fs <*> as)
+  HsList fs <*> HsList as  = HsList (fmap (<*>) fs <*> as)
 
   TEnd <*> _               = TEnd
   _ <*> TEnd               = TEnd

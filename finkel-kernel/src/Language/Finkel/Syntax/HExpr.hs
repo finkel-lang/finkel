@@ -203,11 +203,11 @@ mkLHsParOp = parenthesizeHsExpr' opPrec
 {-# INLINABLE mkLHsParOp #-}
 
 mkOpApp :: HExpr -> HExpr -> HExpr -> HsExpr PARSED
-mkOpApp op l r =
+mkOpApp op l =
 #if MIN_VERSION_ghc(8,6,0)
-  OpApp NOEXT l op r
+  OpApp NOEXT l op
 #else
-  OpApp l op placeHolderType r
+  OpApp l op placeHolderType
 #endif
 {-# INLINABLE mkOpApp #-}
 

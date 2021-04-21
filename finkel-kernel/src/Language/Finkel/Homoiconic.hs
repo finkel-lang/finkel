@@ -204,7 +204,7 @@ instance (ToCode a, ToCode b) => ToCode (a, b) where
   toCode (a1, a2) = toCode2 "," a1 a2
 
 instance (FromCode a, FromCode b) => FromCode (a, b) where
-  fromCode = fromCode2 "," (\x y -> (x, y))
+  fromCode = fromCode2 "," (,)
 
 instance (ToCode a, ToCode b, ToCode c)
          => ToCode (a, b, c) where
@@ -216,8 +216,7 @@ instance (FromCode a, FromCode b, FromCode c)
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3]
-        -> (\b1 b2 b3 -> (b1, b2, b3)) <$>
-           fromCode a1 <*> fromCode a2 <*> fromCode a3
+        -> (,,) <$> fromCode a1 <*> fromCode a2 <*> fromCode a3
       _ -> Nothing
 
 instance (ToCode a, ToCode b, ToCode c, ToCode d)
@@ -231,7 +230,7 @@ instance (FromCode a, FromCode b, FromCode c, FromCode d)
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4]
-        -> (\b1 b2 b3 b4 -> (b1, b2, b3, b4)) <$>
+        -> (,,,) <$>
            fromCode a1 <*> fromCode a2 <*> fromCode a3 <*> fromCode a4
       _ -> Nothing
 
@@ -246,7 +245,7 @@ instance (FromCode a, FromCode b, FromCode c, FromCode d, FromCode e)
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4, a5]
-        -> (\b1 b2 b3 b4 b5 -> (b1, b2, b3, b4, b5)) <$>
+        -> (,,,,) <$>
            fromCode a1 <*> fromCode a2 <*> fromCode a3 <*>
            fromCode a4 <*> fromCode a5
       _ -> Nothing
@@ -263,7 +262,7 @@ instance ( FromCode a, FromCode b, FromCode c, FromCode d, FromCode e
   fromCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4, a5, a6]
-        -> (\b1 b2 b3 b4 b5 b6 -> (b1, b2, b3, b4, b5, b6)) <$>
+        -> (,,,,,) <$>
            fromCode a1 <*> fromCode a2 <*> fromCode a3 <*>
            fromCode a4 <*> fromCode a5 <*> fromCode a6
       _ -> Nothing
@@ -624,7 +623,7 @@ dataToCode x =
                         _       -> False
                         where go xs = case xs of
                                         ',':xs' -> go xs'
-                                        ')':[]  -> True
+                                        [')']   -> True
                                         _       -> False
       cstr = case showConstr constr of
                str | isTupleStr str -> ","

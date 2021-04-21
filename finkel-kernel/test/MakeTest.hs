@@ -350,7 +350,7 @@ buildFilesNG :: [String] -> [FilePath] -> FnkSpec
 buildFilesNG pre inputs =
   describe (labelWithOptionsAndFiles pre inputs) $
     it "should throw an exception" $ \ftr ->
-       (buildWork ftr pre inputs `shouldThrow` anyException)
+       buildWork ftr pre inputs `shouldThrow` anyException
 
 labelWithOptionsAndFiles :: [String] -> [FilePath] -> String
 labelWithOptionsAndFiles pre inputs  =
@@ -438,9 +438,7 @@ buildReload the_file fname files1 files2 before_str after_str =
 
     setup_reload_env :: Bool -> FilePath -> FnkTestResource -> Fnk ()
     setup_reload_env use_obj tmpdir ftr = do
-      let args0 = ("-i" ++ tmpdir) : if use_obj
-                                       then ["-fobject-code"]
-                                       else []
+      let args0 = ("-i" ++ tmpdir) : ["-fobject-code" | use_obj]
           args1 = ["-v0"]
           tfile = TargetFile the_file Nothing
       parseAndSetDynFlags args0

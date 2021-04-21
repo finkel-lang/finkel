@@ -182,7 +182,7 @@ findFileInImportPaths dirs modName = do
                 hsPath = replaceExtension aPath ".hs"
             exists <- liftIO (doesFileExist aPath)
             if exists
-               then return $! Just aPath
+               then return (Just aPath)
                else do
                  exists' <- liftIO (doesFileExist hsPath)
                  if exists'

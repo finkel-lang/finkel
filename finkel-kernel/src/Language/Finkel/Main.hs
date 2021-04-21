@@ -360,7 +360,7 @@ rawGhcOptions =
 -- | THrow 'UsageError' when unknown flag were found.
 checkUnknownFlags :: [String] -> IO ()
 checkUnknownFlags fileish = do
-  let unknowns = [f | (f@('-':_)) <- fileish]
+  let unknowns = [f | f@('-':_) <- fileish]
       oneErr f = "unrecognised flag: " ++ f ++ "\n"
   unless (null unknowns)
          (throwGhcException (UsageError (concatMap oneErr unknowns)))

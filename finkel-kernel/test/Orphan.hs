@@ -26,7 +26,7 @@ instance Arbitrary Atom where
           , aSymbol <$> symbolG
           , AChar NoSourceText <$> arbitraryUnicodeChar
           , aString NoSourceText <$> stringG
-          , (AInteger . mkI) <$> arbitrary
+          , AInteger . mkI <$> arbitrary
           , aFractional <$> (arbitrary :: Gen Double) ]
     where
       headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "_!$&*+./<=>?@^~:"
@@ -76,7 +76,7 @@ instance CoArbitrary a => CoArbitrary (Form a) where
       var = variant
 
 instance Arbitrary a => Arbitrary (LForm a) where
-  arbitrary = (LForm . genSrc) <$> arbitrary
+  arbitrary = LForm . genSrc <$> arbitrary
 
 instance CoArbitrary a => CoArbitrary (LForm a) where
   coarbitrary (LForm (L _ form)) = coarbitrary form

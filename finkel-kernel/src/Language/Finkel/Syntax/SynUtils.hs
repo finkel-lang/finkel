@@ -64,7 +64,7 @@ import           GHC_Hs_Decls              (ConDecl (..))
 import           GHC_Hs_Type               (LHsTyVarBndr)
 import           GHC_Types_Var             (Specificity (..))
 #else
-import qualified GHC_Data_FastString       as FastString
+import qualified GHC_Data_FastString       as FS
 import           HaddockUtils              (addConDoc)
 #endif
 
@@ -140,7 +140,7 @@ splitQualName fstr =
     go []       tmp acc = let mdl = reverse (tail (concat acc))
                               var = reverse tmp
                           in  Just (fsLit mdl, fsLit var)
-    go ('.':[]) tmp acc = go [] ('.':tmp) acc
+    go "."      tmp acc = go [] ('.':tmp) acc
     go ('.':cs) tmp acc = go cs [] (('.':tmp) : acc)
     go (c:cs)   tmp acc = go cs (c:tmp) acc
 {-# INLINABLE splitQualName #-}
@@ -221,7 +221,7 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
 
 -- | Make 'HsRecField' with given name and located data.
 mkcfld :: (Located FastString, a) -> LHsRecField PARSED a
-mkcfld ((L nl name), e) =
+mkcfld (L nl name, e) =
   L nl HsRecField { hsRecFieldLbl = mkfname name
                   , hsRecFieldArg = e
                   , hsRecPun = False }
@@ -445,7 +445,7 @@ tailFS :: FastString -> FastString
 #if MIN_VERSION_ghc(9,0,0)
 tailFS = mkFastStringByteString . BS.tail . bytesFS
 #else
-tailFS = FastString.tailFS
+tailFS = FS.tailFS
 #endif
 {-# INLINABLE tailFS #-}
 

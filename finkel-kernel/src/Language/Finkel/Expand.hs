@@ -367,7 +367,7 @@ expandInDo (bounded, xs) x = do
             | sym == "<-" -> boundedNameOne n
           _               -> []
   x' <- withShadowing bounded (expand x)
-  return (newbind ++ bounded, (x':xs))
+  return (newbind ++ bounded, x':xs)
 {-# INLINABLE expandInDo #-}
 
 -- | Expand given form once if the form is a macro form, otherwise

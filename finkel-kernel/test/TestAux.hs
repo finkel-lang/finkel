@@ -273,7 +273,7 @@ getTestFiles name =
                   then (dir </> x) : acc
                   else acc
       files = getDirectoryContents dir
-  in  sort <$> foldr f [] <$> files
+  in  sort . foldr f [] <$> files
 
 #if !MIN_VERSION_hspec(2,7,6)
 -- "Test.Hspec.Core.Hooks.beforeAllWith" did not exist.

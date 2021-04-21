@@ -323,7 +323,7 @@ instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (IE a)) where
     case ie of
       IEGroup _EXT n doc  -> commentWithHeader ("-- " ++ replicate n '*')
                                                 doc
-      IEDoc _EXT doc      -> commentWithHeader ("-- |") doc
+      IEDoc _EXT doc      -> commentWithHeader "-- |" doc
       IEDocNamed _EXT doc -> text ("-- $" ++ doc)
       _                   -> ppr ie
 
@@ -484,9 +484,9 @@ pp_data_defn :: OUTPUTABLE n pr
              -> HsDataDefn n
              -> SDoc
 pp_data_defn
-  st pp_hdr (HsDataDefn { dd_ND = new_or_data, dd_ctxt = L _ context
-                        , dd_cType = mb_ct, dd_kindSig = mb_sig
-                        , dd_cons = condecls, dd_derivs = derivings })
+  st pp_hdr HsDataDefn { dd_ND = new_or_data, dd_ctxt = L _ context
+                       , dd_cType = mb_ct, dd_kindSig = mb_sig
+                       , dd_cons = condecls, dd_derivs = derivings }
   | null condecls
   = ppr new_or_data <+> pp_ct <+> pp_hdr context <+> pp_sig
     <+> pp_derivings derivings
@@ -522,7 +522,7 @@ pp_condecls st cs =
 -- concatenate the docstring for the last constructor argument and the docstring
 -- for constructor itself.
 pprConDecl :: OUTPUTABLE n pr => SPState -> ConDecl n -> SDoc
-pprConDecl st condecl@(ConDeclH98 {}) =
+pprConDecl st condecl@ConDeclH98 {} =
   pp_mbdocn doc $+$ sep [hforall, ppr_details details]
   where
 #if MIN_VERSION_ghc(9,0,0)
@@ -562,15 +562,15 @@ pprConDecl st condecl@(ConDeclH98 {}) =
     hsrc = toHsSrc st
 
 #if MIN_VERSION_ghc(8,6,0)
-pprConDecl st (ConDeclGADT { con_names = cons
-                           , con_qvars = qvars
-                           , con_mb_cxt = mcxt
-                           , con_args = args
-                           , con_res_ty = res_ty
-                           , con_doc = doc })
+pprConDecl st ConDeclGADT { con_names = cons
+                          , con_qvars = qvars
+                          , con_mb_cxt = mcxt
+                          , con_args = args
+                          , con_res_ty = res_ty
+                          , con_doc = doc }
   = pp_mbdocn doc $+$ ppr_con_names cons <+> dcolon
-    <+> (sep [hforall -- pprHsForAll' (hsq_explicit qvars) cxt
-             ,ppr_arrow_chain (get_args args ++ [hsrc res_ty])])
+    <+> sep [hforall -- pprHsForAll' (hsq_explicit qvars) cxt
+            ,ppr_arrow_chain (get_args args ++ [hsrc res_ty])]
   where
 #if MIN_VERSION_ghc(9,0,0)
     hforall = pprHsForAll' (mkHsForAllInvisTele qvars) cxt
@@ -607,9 +607,9 @@ pprConDeclFields :: OUTPUTABLE n pr
 pprConDeclFields fields =
   braces (sep (punctuate comma (map ppr_fld fields)))
   where
-    ppr_fld (L _ (ConDeclField { cd_fld_names = ns
-                               , cd_fld_type = ty
-                               , cd_fld_doc = doc }))
+    ppr_fld (L _ ConDeclField { cd_fld_names = ns
+                              , cd_fld_type = ty
+                              , cd_fld_doc = doc })
       = ppr_names ns <+> dcolon <+> ppr ty
         $+$ pp_mbdocp doc $+$ text ""
 #if MIN_VERSION_ghc(8,6,0)
@@ -625,7 +625,7 @@ pp_vanilla_decl_head :: (OUTPUTABLE n pr)
                      -> LexicalFixity
                      -> HsContext n
                      -> SDoc
-pp_vanilla_decl_head thing (HsQTvs {hsq_explicit=tyvars}) fixity context
+pp_vanilla_decl_head thing HsQTvs {hsq_explicit=tyvars} fixity context
   = hsep [pprHsContext context, pp_tyvars tyvars]
   where
     pp_tyvars (varl:varsr)
@@ -667,8 +667,8 @@ ppr_cdecl_body st ats at_defs methods sigs docs = body
     body = map unLoc (sortLocated body0)
     body0 =
       map (fmap (pprFamilyDecl NotTopLevel)) ats ++
-      map (\d@(L l _) -> (L l (ppr_fam_deflt_eqn d))) at_defs ++
-      map (fmap (\sig -> toHsSrc st sig)) sigs ++
+      map (\d@(L l _) -> L l (ppr_fam_deflt_eqn d)) at_defs ++
+      map (fmap (toHsSrc st)) sigs ++
       map (fmap ppr) (bagToList methods) ++
       map (fmap (toHsSrc st)) docs
 
@@ -676,15 +676,16 @@ ppr_cdecl_body st ats at_defs methods sigs docs = body
 -- contents, with first argument set to 'NonTopLevel'.
 pprFamilyDecl :: (OUTPUTABLE n pr)
               => TopLevelFlag -> FamilyDecl n -> SDoc
-pprFamilyDecl top_level (FamilyDecl { fdInfo = info, fdLName = ltycon
-                                    , fdTyVars = tyvars
-                                    , fdFixity = fixity
-                                    , fdResultSig = L _ result
-                                    , fdInjectivityAnn = mb_inj })
+pprFamilyDecl top_level FamilyDecl { fdInfo = info
+                                   , fdLName = ltycon
+                                   , fdTyVars = tyvars
+                                   , fdFixity = fixity
+                                   , fdResultSig = L _ result
+                                   , fdInjectivityAnn = mb_inj }
   = vcat [ pprFlavour info <+> pp_top_level <+>
            pp_vanilla_decl_head ltycon tyvars fixity [] <+>
            pp_kind <+> pp_inj <+> pp_where
-         , nest 2 $ pp_eqns ]
+         , nest 2 pp_eqns ]
   where
     pp_top_level = case top_level of
                      TopLevel    -> text "family"
@@ -714,18 +715,18 @@ pprFamilyDecl _ (XFamilyDecl x) = ppr x
 
 -- From 'HsDecls.pprFlavour'.
 pprFlavour :: FamilyInfo pass -> SDoc
-pprFlavour DataFamily            = text "data"
-pprFlavour OpenTypeFamily        = text "type"
-pprFlavour (ClosedTypeFamily {}) = text "type"
+pprFlavour DataFamily          = text "data"
+pprFlavour OpenTypeFamily      = text "type"
+pprFlavour ClosedTypeFamily {} = text "type"
 
 -- From 'HsDecls.ppr_fam_inst_eqn'
 ppr_fam_inst_eqn :: (OUTPUTABLE n pr) => TyFamInstEqn n -> SDoc
 #if MIN_VERSION_ghc(8,8,0)
-ppr_fam_inst_eqn (HsIB { hsib_body = FamEqn { feqn_tycon = L _ tycon
-                                            , feqn_bndrs = bndrs
-                                            , feqn_pats = pats
-                                            , feqn_fixity = fixity
-                                            , feqn_rhs = rhs }})
+ppr_fam_inst_eqn HsIB { hsib_body = FamEqn { feqn_tycon = L _ tycon
+                                           , feqn_bndrs = bndrs
+                                           , feqn_pats = pats
+                                           , feqn_fixity = fixity
+                                           , feqn_rhs = rhs }}
     = pprHsFamInstLHS tycon bndrs pats fixity noLHsContext <+>
       equals <+> ppr rhs
 #if !MIN_VERSION_ghc(9,0,0)
@@ -733,24 +734,24 @@ ppr_fam_inst_eqn (XHsImplicitBndrs x) = ppr x
 ppr_fam_inst_eqn _ = error "ppr_fam_inst_eqn"
 #endif
 #elif MIN_VERSION_ghc(8,6,0)
-ppr_fam_inst_eqn (HsIB { hsib_body = FamEqn { feqn_tycon  = tycon
-                                            , feqn_pats   = pats
-                                            , feqn_fixity = fixity
-                                            , feqn_rhs    = rhs }})
+ppr_fam_inst_eqn HsIB { hsib_body = FamEqn { feqn_tycon  = tycon
+                                           , feqn_pats   = pats
+                                           , feqn_fixity = fixity
+                                           , feqn_rhs    = rhs }}
     = pprFamInstLHS tycon pats fixity [] Nothing <+> equals <+> ppr rhs
-ppr_fam_inst_eqn (HsIB { hsib_body = XFamEqn x }) = ppr x
+ppr_fam_inst_eqn HsIB { hsib_body = XFamEqn x } = ppr x
 ppr_fam_inst_eqn (XHsImplicitBndrs x) = ppr x
 #elif MIN_VERSION_ghc(8,4,0)
-ppr_fam_inst_eqn (HsIB { hsib_body = FamEqn { feqn_tycon  = tycon
-                                            , feqn_pats   = pats
-                                            , feqn_fixity = fixity
-                                            , feqn_rhs    = rhs }})
+ppr_fam_inst_eqn HsIB { hsib_body = FamEqn { feqn_tycon  = tycon
+                                           , feqn_pats   = pats
+                                           , feqn_fixity = fixity
+                                           , feqn_rhs    = rhs }}
     = pprFamInstLHS tycon pats fixity [] Nothing <+> equals <+> ppr rhs
 #else
-ppr_fam_inst_eqn (TyFamEqn { tfe_tycon = tycon
-                           , tfe_pats  = pats
-                           , tfe_fixity = fixity
-                           , tfe_rhs   = rhs })
+ppr_fam_inst_eqn TyFamEqn { tfe_tycon = tycon
+                          , tfe_pats  = pats
+                          , tfe_fixity = fixity
+                          , tfe_rhs   = rhs }
     = pp_fam_inst_lhs tycon pats fixity [] <+> equals <+> ppr rhs
 
 -- From 'HsDecls.pp_fam_inst_lhs'
@@ -842,9 +843,9 @@ pp_headerPragmas sp = vcat sorted_pragmas
               map ghc_opt (ghcOptions sp) ++
               map haddock_opt (haddockOptions sp)
 
-    lang (L l e) = (L l (gen "LANGUAGE" e))
-    ghc_opt (L l o) = (L l (gen "OPTIONS_GHC" o))
-    haddock_opt (L l o) = (L l (gen "OPTIONS_HADDOCK" o))
+    lang (L l e) = L l (gen "LANGUAGE" e)
+    ghc_opt (L l o) = L l (gen "OPTIONS_GHC" o)
+    haddock_opt (L l o) = L l (gen "OPTIONS_HADDOCK" o)
     gen label x = text "{-#" <+> text label <+> text x <+> text "#-}"
 
 hsSrc_nonnull :: HsSrc a => SPState -> [a] -> SDoc

@@ -27,8 +27,9 @@ module Language.Finkel.Make
 
 
 -- base
-import Control.Monad                     (foldM, unless, void, when)
+import Control.Monad                     (foldM, unless, void, when, (>=>))
 import Control.Monad.IO.Class            (MonadIO (..))
+import Data.Bifunctor                    (first)
 import Data.Foldable                     (find)
 import Data.Maybe                        (isJust)
 
@@ -154,9 +155,8 @@ initSessionForMake = do
 
   -- Mangle the function name in "mainFunIs" field, to support mangled name,
   -- e.g. to support "foo-bar-buzz" instead of "foo_bar_buzz".
-  let updateMainFunIs = maybe Nothing (Just . mangle)
-      mangle = map (\c -> if c == '-' then '_' else c)
-      dflags2 = dflags1 { mainFunIs = updateMainFunIs (mainFunIs dflags1) }
+  let mangle = map (\c -> if c == '-' then '_' else c)
+      dflags2 = dflags1 { mainFunIs = fmap mangle (mainFunIs dflags1) }
 
   -- ... And setting and getting the DynFlags again.
   _preload1 <- setSessionDynFlags dflags2
@@ -269,17 +269,17 @@ updateFlagOptions options = do
 newtype MakeM a = MakeM {unMakeM :: MkSt -> Fnk (a, MkSt)}
 
 instance Functor MakeM where
-  fmap f (MakeM k) = MakeM (\st -> fmap (\(a,st') -> (f a, st')) (k st))
+  fmap f (MakeM k) = MakeM (fmap (first f) . k)
   {-# INLINE fmap #-}
 
 instance Applicative MakeM where
   pure a = MakeM (\st -> pure (a, st))
   {-# INLINE pure #-}
-  f <*> m = do {g <- f; a <- m; pure (g a)}
+  f <*> m = f >>= flip fmap m
   {-# INLINE (<*>) #-}
 
 instance Monad MakeM where
-  MakeM m >>= k = MakeM (\s0 -> m s0 >>= \(a,s1) -> unMakeM (k a) s1)
+  MakeM m >>= k = MakeM (m >=> \(a,s) -> unMakeM (k a) s)
   {-# INLINE (>>=) #-}
 
 instance MonadIO MakeM where
@@ -337,7 +337,7 @@ summariseTargets hsc_env old_summaries tus_to_summarise =
 
 -- | 'MakeM' action to summarise all 'TargetUnit's.
 summariseAll :: FnkEnv -> HscEnv -> RecompState -> MakeM RecompState
-summariseAll fnk_env hsc_env rs0 = go rs0
+summariseAll fnk_env hsc_env = go
   where
     -- When compiling object codes, macro expander will update HomePackageTable
     -- to check old interface read from file. Recursively passing the
