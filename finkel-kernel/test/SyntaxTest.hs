@@ -106,7 +106,7 @@ mkTest' path = do
         do removeArtifacts syndir
            mapM_ removeWhenExist [dotTix, aDotOut, dotHs]
       toNativeCompile =
-         takeBaseName path `elem` ["0008-ffi"]
+         takeBaseName path == "0008-ffi"
       compile =
           if toNativeCompile
             then nativeCompile
@@ -115,15 +115,21 @@ mkTest' path = do
 #if MIN_VERSION_ghc(8,8,0)
       skipThisTest _ = (False, "")
 #elif MIN_VERSION_ghc(8,6,0)
-      skipThisTest p =
-          ( takeBaseName p == "2019-overlabel"
-          , "Generated Haskell code is malformed" )
+      skipThisTest p
+         | takeBaseName p == "0008-ffi"
+         = (True, "Native code test for FFI skipped")
+         | otherwise
+         = ( takeBaseName p == "2019-overlabel"
+           , "Generated Haskell code is malformed" )
 #else
-      skipThisTest p =
-          ( or [ b == "1004-doccomment-01"
+      skipThisTest p
+         | takeBaseName p == "0008-ffi"
+         = (True, "Native code test for FFI skipped")
+         | otherwise
+         = ( or [ b == "1004-doccomment-01"
                , b == "2012-typeop"
                , b == "2019-overlabel" ]
-          , "Generated Haskell code is malformed" )
+           , "Generated Haskell code is malformed" )
           where b = takeBaseName p
 #endif
       skipOr act =
