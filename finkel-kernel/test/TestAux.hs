@@ -71,7 +71,8 @@ import           System.Process          (readProcess)
 import           Language.Finkel         (defaultFnkEnv)
 import           Language.Finkel.Builder (Builder)
 import           Language.Finkel.Expand  (expands, withExpanderSettings)
-import           Language.Finkel.Fnk     (Fnk, FnkEnv (..), failS, setDynFlags)
+import           Language.Finkel.Fnk     (Fnk, FnkEnv (..), failFnk,
+                                          setDynFlags)
 import           Language.Finkel.Lexer   (evalSP)
 import           Language.Finkel.Main    (defaultMain)
 import           Language.Finkel.Make    (buildHsSyn, initSessionForMake, make)
@@ -232,7 +233,7 @@ evalWith !label !parser !act !input = do
       !form1 <- withExpanderSettings (prepare >> expands form0)
       !hthing <- buildHsSyn parser form1
       act hthing
-    Left err -> failS err
+    Left err -> failFnk err
   where
     -- Adding 'Prelude' and 'Language.Finkel' to interactive context, since the
     -- codes in the file does not contain ':require' forms.

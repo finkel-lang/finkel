@@ -166,13 +166,13 @@ coerceMacro :: DynFlags -> Code -> Fnk Macro
 coerceMacro dflags name =
   case unCode name of
     Atom (ASymbol _) -> go
-    _                -> failS "coerceMacro: expecting name symbol"
+    _                -> failFnk "coerceMacro: expecting name symbol"
   where
     go = do
       qualify <- envQualifyQuotePrimitives <$> getFnkEnv
       case evalBuilder dflags qualify parseExpr [name] of
         Right hexpr -> unsafeCoerce# <$> evalExpr hexpr
-        Left err    -> failS (syntaxErrMsg err)
+        Left err    -> failFnk (syntaxErrMsg err)
 {-# INLINABLE coerceMacro #-}
 
 getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Fnk [TyThing]

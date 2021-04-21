@@ -115,9 +115,9 @@ exceptionTest = do
       ret <- runFnk act fnkTestEnv
       ret `shouldBe` 42
 
-  describe "running Fnk action containing `failS'" $
+  describe "running Fnk action containing `failFnk'" $
     it "should throw FinkelException" $ do
-      let act = failS "foo"
+      let act = failFnk "foo"
       runFnk act fnkTestEnv `shouldThrow` test_e_foo
 
   describe "running Fnk action containing `fail'" $

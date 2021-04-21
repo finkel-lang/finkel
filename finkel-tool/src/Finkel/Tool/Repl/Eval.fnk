@@ -38,7 +38,7 @@
    (Language.Finkel.Eval (evalDecls))
    (Language.Finkel.Make (initSessionForMake isFnkFile isHsFile))
    (Language.Finkel.Fnk
-    ((FnkEnv ..) failS modifyFnkEnv prepareInterpreter setDynFlags
+    ((FnkEnv ..) failFnk modifyFnkEnv prepareInterpreter setDynFlags
      withTmpDynFlags))
    (Language.Finkel.Syntax (parseExpr parseImports parseStmt parseTopDecls))
 
@@ -233,7 +233,7 @@ context."
   (case-do (parseName name)
     (: f _) (modifySession
              (\ he (he {hsc-IC (setInteractivePrintName (hsc-IC he) f)})))
-    _ (failS "set-print-name: parse error")))
+    _ (failFnk "set-print-name: parse error")))
 
 (defn (:: eval-form
         (-> Handle DynFlags ForeignHValue InSource [Code] (Fnk Result)))

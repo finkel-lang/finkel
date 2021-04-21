@@ -13,7 +13,7 @@ module Language.Finkel.Fnk
   , runFnk
   , toGhc
   , fromGhc
-  , failS
+  , failFnk
   , finkelSrcError
   , emptyFnkEnv
   , getFnkEnv
@@ -299,7 +299,7 @@ instance Monad Fnk where
   {-# INLINE (>>=) #-}
 
 instance MonadFail Fnk where
-  fail = failS
+  fail = failFnk
   {-# INLINE fail #-}
 
 instance MonadIO Fnk where
@@ -486,8 +486,8 @@ modifyFnkEnv f =
 {-# INLINABLE modifyFnkEnv #-}
 
 -- | Throw 'FinkelException' with given message.
-failS :: String -> Fnk a
-failS msg = liftIO (throwIO (FinkelException msg))
+failFnk :: MonadIO m => String -> m a
+failFnk msg = liftIO (throwIO (FinkelException msg))
 
 -- | Throw a 'SourceError'.
 finkelSrcError :: Code -> String -> Fnk a
