@@ -200,8 +200,7 @@
              (case (fromException e)
                (Just UserInterrupt) (loop wrapper)
                (Just ThreadKilled)  (return ())
-               _ (do (liftIO (putStrLn (++ "eval-loop: " (show e))))
-                     (loop wrapper))))))
+               _ (liftIO (throwIO e))))))
         (:: throw-async-io (-> AsyncException (Fnk a)))
         (= throw-async-io (. liftIO throwIO))
         (= withErrorHandler m
