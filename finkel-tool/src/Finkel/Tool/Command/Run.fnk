@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Run
+(defmodule Finkel.Tool.Command.Run
   (export runMain)
   (import
    ;; base
@@ -19,10 +19,10 @@
    (Finkel.Core.Functions (make-symbol))
 
    ;; Internal
-   (Finkel.Tool.CLI)
-   (Finkel.Tool.Eval)
-   (Finkel.Tool.Repl (repl-env))
-   (Finkel.Tool.Repl.IO (putErr))))
+   (Finkel.Tool.Command.Eval (eval-and-exit-with-args))
+   (Finkel.Tool.Command.Repl (repl-env))
+   (Finkel.Tool.Internal.CLI)
+   (Finkel.Tool.Internal.IO (putErr))))
 
 (defn (:: runMain (=> (CLI m) (-> [String] (m ()))))
   [args0]

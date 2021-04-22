@@ -8,7 +8,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Repl.Macro
+(defmodule Finkel.Tool.Internal.Macro
   (export repl-macro
           compile-and-import)
   (require

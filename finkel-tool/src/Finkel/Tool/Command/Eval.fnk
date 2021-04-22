@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Eval
+(defmodule Finkel.Tool.Command.Eval
   (export evalMain
           eval-and-exit
           eval-and-exit-with-args)
@@ -26,11 +26,11 @@
    (Language.Finkel.Reader (sexpr))
 
    ;; Internal
-   (Finkel.Tool.CLI)
-   (Finkel.Tool.Repl (repl-env))
-   (Finkel.Tool.Repl.Eval)
-   (Finkel.Tool.Repl.IO)
-   (Finkel.Tool.Repl.Types)))
+   (Finkel.Tool.Command.Repl (repl-env))
+   (Finkel.Tool.Internal.CLI)
+   (Finkel.Tool.Internal.Eval)
+   (Finkel.Tool.Internal.IO)
+   (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
  (GHC.Data.StringBuffer (stringToStringBuffer)))

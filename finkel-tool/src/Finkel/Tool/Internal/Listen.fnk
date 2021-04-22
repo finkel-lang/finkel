@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Repl.Listen
+(defmodule Finkel.Tool.Internal.Listen
   (export listener accept-loop run-conn)
   (require
    ;; finkel-core
@@ -33,7 +33,7 @@
    (Language.Finkel.Reader (sexpr))
 
    ;; internal
-   (Finkel.Tool.Repl.Types)))
+   (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
  (GHC.Data.StringBuffer ((StringBuffer ..))))

@@ -46,11 +46,11 @@
    (Language.Finkel.Fnk (runFnk))
 
    ;; Internal
-   (Finkel.Tool.Repl)
-   (Finkel.Tool.Repl.Eval)
-   (Finkel.Tool.Repl.Loop)
-   (Finkel.Tool.Repl.IO)
-   (Finkel.Tool.Repl.Types)
+   (Finkel.Tool.Command.Repl)
+   (Finkel.Tool.Internal.Loop)
+   (Finkel.Tool.Internal.IO)
+   (Finkel.Tool.Internal.Types)
+   (Finkel.Tool.Internal.Eval)
    (TestAux)))
 
 (imports-from-ghc

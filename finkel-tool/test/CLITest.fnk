@@ -27,7 +27,7 @@
    (Test.Hspec)
 
    ;; Internal
-   (Finkel.Tool.CLI)))
+   (Finkel.Tool.Internal.CLI)))
 
 (defn (:: cliTests Spec)
   (do (describe "IO instance" io-tests)

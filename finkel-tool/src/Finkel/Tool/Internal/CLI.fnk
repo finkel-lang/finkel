@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.CLI
+(defmodule Finkel.Tool.Internal.CLI
   (export
    (CLI ..)
    (ExitCode ..)

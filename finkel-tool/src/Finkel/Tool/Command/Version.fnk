@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Version
+(defmodule Finkel.Tool.Command.Version
   (export versionMain)
   (require
    ;; finkel-core
@@ -15,7 +15,7 @@
     (Finkel.Prelude)
 
     ;; Internal
-    (Finkel.Tool.Version.Commit))
+    (Finkel.Tool.Internal.Commit))
   (import
    ;; base
    (Control.Monad.IO.Class ((MonadIO ..)))
@@ -29,7 +29,7 @@
    (qualified Paths_finkel_core)
 
    ;; Internal
-   (Finkel.Tool.CLI)))
+   (Finkel.Tool.Internal.CLI)))
 
 (imports-from-ghc
  (GHC.Settings.Config (cProjectVersion)))

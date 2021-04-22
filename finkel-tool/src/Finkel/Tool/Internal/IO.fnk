@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Repl.IO
+(defmodule Finkel.Tool.Internal.IO
   (export
    read-form
    read-print-loop
@@ -38,8 +38,8 @@
    (Finkel.Core.Functions (make-symbol))
 
    ;; Internal
-   (Finkel.Tool.CLI)
-   (Finkel.Tool.Repl.Types)))
+   (Finkel.Tool.Internal.CLI)
+   (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
  (GHC.Data.StringBuffer (appendStringBuffers stringToStringBuffer)))

@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Make
+(defmodule Finkel.Tool.Command.Make
   (export makeMain)
   (import-when [:compile]
     ;; finkel-core

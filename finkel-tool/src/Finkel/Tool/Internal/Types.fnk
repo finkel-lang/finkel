@@ -5,7 +5,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Repl.Types
+(defmodule Finkel.Tool.Internal.Types
   (export
    ;; repl
    (Repl ..) run-repl put-repl-state get-repl-state

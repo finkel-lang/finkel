@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Repl.Eval
+(defmodule Finkel.Tool.Internal.Eval
   (export eval-loop eval-once)
   (require
    ;; finkel-core
@@ -43,9 +43,9 @@
    (Language.Finkel.Syntax (parseExpr parseImports parseStmt parseTopDecls))
 
    ;; internal
-   (Finkel.Tool.Repl.IO)
-   (Finkel.Tool.Repl.Macro)
-   (Finkel.Tool.Repl.Types)))
+   (Finkel.Tool.Internal.IO)
+   (Finkel.Tool.Internal.Macro)
+   (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
  (GHC

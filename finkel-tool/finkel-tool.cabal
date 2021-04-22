@@ -18,7 +18,8 @@ build-type:          Custom
 extra-source-files:  README.md
                      finkel.hsfiles
                      src/Finkel/Tool/*.fnk
-                     src/Finkel/Tool/Repl/*.fnk
+                     src/Finkel/Tool/Command/*.fnk
+                     src/Finkel/Tool/Internal/*.fnk
                      test/*.fnk
                      test/data/*.fnk
                      test/data/input01.txt
@@ -43,20 +44,22 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Finkel.Tool.CLI
-                       Finkel.Tool.Eval
-                       Finkel.Tool.Help
-                       Finkel.Tool.Make
-                       Finkel.Tool.Repl.Types
-                       Finkel.Tool.Repl.IO
-                       Finkel.Tool.Repl.Listen
-                       Finkel.Tool.Repl.Eval
-                       Finkel.Tool.Repl.Loop
-                       Finkel.Tool.Repl.Macro
-                       Finkel.Tool.Repl
-                       Finkel.Tool.Run
-                       Finkel.Tool.Version
-                       Finkel.Tool.Version.Commit
+  exposed-modules:
+                       Finkel.Tool.Command
+                       Finkel.Tool.Command.Eval
+                       Finkel.Tool.Command.Help
+                       Finkel.Tool.Command.Make
+                       Finkel.Tool.Command.Repl
+                       Finkel.Tool.Command.Run
+                       Finkel.Tool.Command.Version
+                       Finkel.Tool.Internal.CLI
+                       Finkel.Tool.Internal.Commit
+                       Finkel.Tool.Internal.Eval
+                       Finkel.Tool.Internal.IO
+                       Finkel.Tool.Internal.Listen
+                       Finkel.Tool.Internal.Loop
+                       Finkel.Tool.Internal.Macro
+                       Finkel.Tool.Internal.Types
                        Finkel.Tool.Main
                        Paths_finkel_tool
   autogen-modules:     Paths_finkel_tool

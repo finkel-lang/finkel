@@ -34,11 +34,11 @@
    (Language.Finkel.Fnk (setDynFlags))
 
    ;; Internal
-   (Finkel.Tool.CLI)
-   (Finkel.Tool.Repl)
-   (Finkel.Tool.Repl.Eval)
-   (Finkel.Tool.Repl.Loop)
-   (Finkel.Tool.Repl.Types)))
+   (Finkel.Tool.Command.Repl)
+   (Finkel.Tool.Internal.CLI)
+   (Finkel.Tool.Internal.Eval)
+   (Finkel.Tool.Internal.Loop)
+   (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
  (GHC.Settings.Config (cProjectVersion))

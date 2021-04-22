@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Repl.Loop
+(defmodule Finkel.Tool.Internal.Loop
   (export start-repl acquire-repl cleanup-repl)
   (import-when [:compile]
    ;; finkel-core
@@ -28,10 +28,10 @@
    (Language.Finkel.Fnk ((FnkEnv ..) runFnk))
 
    ;; internal
-   (Finkel.Tool.Repl.Eval)
-   (Finkel.Tool.Repl.Listen)
-   (Finkel.Tool.Repl.IO)
-   (Finkel.Tool.Repl.Types)))
+   (Finkel.Tool.Internal.Eval)
+   (Finkel.Tool.Internal.Listen)
+   (Finkel.Tool.Internal.IO)
+   (Finkel.Tool.Internal.Types)))
 
 ;;; Extra imports
 

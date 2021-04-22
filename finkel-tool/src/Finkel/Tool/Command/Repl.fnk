@@ -8,14 +8,14 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Repl
+(defmodule Finkel.Tool.Command.Repl
   (export replMain repl-env)
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
   (import-when [:compile :load]
     ;; Internal
-    (Finkel.Tool.Repl.Macro))
+    (Finkel.Tool.Internal.Macro))
   (import
    ;; base
    (Control.Monad (mplus))
@@ -35,9 +35,9 @@
    (Finkel.Core)
 
    ;; Internal
-   (Finkel.Tool.CLI)
-   (Finkel.Tool.Repl.Loop)
-   (Finkel.Tool.Repl.Types)))
+   (Finkel.Tool.Internal.CLI)
+   (Finkel.Tool.Internal.Loop)
+   (Finkel.Tool.Internal.Types)))
 
 
 
@@ -160,5 +160,5 @@ loading compiled modules."
   (macrolet ((the-macros ()
                `[,@(map (\ mac `(, ,mac ,(make-symbol mac)))
                         (++ (exported-macros Finkel.Core)
-                            (exported-macros Finkel.Tool.Repl.Macro)))]))
+                            (exported-macros Finkel.Tool.Internal.Macro)))]))
     (makeEnvMacros (the-macros))))

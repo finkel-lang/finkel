@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Help
+(defmodule Finkel.Tool.Command.Help
   (export
    ;; Commands with brief description
    (Command ..)
@@ -19,7 +19,7 @@
    (System.Environment (getProgName))
 
    ;; Internal
-   (Finkel.Tool.CLI)))
+   (Finkel.Tool.Internal.CLI)))
 
 ;;; Data type to wrap an IO action taking string arguments with name and
 ;;; description.

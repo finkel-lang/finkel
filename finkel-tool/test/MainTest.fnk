@@ -23,11 +23,12 @@
    (Test.Hspec)
 
    ;; Internal
-   (Finkel.Tool.CLI)
-   (Finkel.Tool.Help)
+   (Finkel.Tool.Command)
+   (Finkel.Tool.Command.Help)
+   (Finkel.Tool.Command.Version)
+   (Finkel.Tool.Internal.CLI)
+   (Finkel.Tool.Internal.Commit)
    (Finkel.Tool.Main)
-   (Finkel.Tool.Version)
-   (Finkel.Tool.Version.Commit)
    (TestAux)))
 
 ;;; Tests

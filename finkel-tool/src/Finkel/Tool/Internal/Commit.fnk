@@ -2,7 +2,7 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Version.Commit
+(defmodule Finkel.Tool.Internal.Commit
   (export get-git-commit)
   (import
    ;; base
