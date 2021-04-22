@@ -490,7 +490,7 @@ failFnk :: MonadIO m => String -> m a
 failFnk msg = liftIO (throwIO (FinkelException msg))
 
 -- | Throw a 'SourceError'.
-finkelSrcError :: Code -> String -> Fnk a
+finkelSrcError :: GhcMonad m => Code -> String -> m a
 finkelSrcError (LForm (L l _)) msg = do
   dflags <- getSessionDynFlags
   let em = mkErrMsg dflags l neverQualify (text msg)
@@ -561,7 +561,7 @@ prepareInterpreter = do
   setDynFlags dflags4
 
 -- | Set context modules in current session to given modules.
-setContextModules :: [String] -> Fnk ()
+setContextModules :: GhcMonad m => [String] -> m ()
 setContextModules names =
   setContext (map (IIDecl . simpleImportDecl . mkModuleName) names)
 
@@ -624,7 +624,7 @@ macroFunction mac form =
   in  fn form
 
 -- | Generate unique symbol with @gensym'@.
-gensym :: Fnk Code
+gensym :: MonadUnique m => m Code
 gensym = gensym' "gensym_var"
 
 -- | Generate unique symbol with given prefix.
@@ -632,7 +632,7 @@ gensym = gensym' "gensym_var"
 -- Note that although this function does not generate same symbol twice,
 -- generated symbol has a chance to have a same name from symbols entered from
 -- codes written by arbitrary users.
-gensym' :: String -> Fnk Code
+gensym' :: MonadUnique m => String -> m Code
 gensym' prefix = do
   u <- getUniqueM
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))

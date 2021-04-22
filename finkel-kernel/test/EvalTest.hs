@@ -66,7 +66,7 @@ exprTest file =
                 (\se -> printException se >> liftIO (throwIO se))
                 (doEval ftr "<exprTest>" parseExpr act buf))
              evalFnkEnv
-    act !expr = unsafeCoerce# $! evalExpr expr
+    act = fmap unsafeCoerce# . evalExpr
 
 exprTypeTest :: FnkSpec
 exprTypeTest =

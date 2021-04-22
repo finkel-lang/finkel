@@ -222,8 +222,8 @@ withShadowing toShadow act = do
   let emacros = envMacros fnk_env
       tmacros = envTmpMacros fnk_env
       f name _ = name `notElem` toShadow
-  putFnkEnv (fnk_env { envMacros = Map.filterWithKey f emacros
-                      , envTmpMacros = map (Map.filterWithKey f) tmacros })
+  putFnkEnv fnk_env { envMacros = Map.filterWithKey f emacros
+                    , envTmpMacros = map (Map.filterWithKey f) tmacros }
   result <- act
   modifyFnkEnv (\e -> e { envMacros = emacros
                         , envTmpMacros = tmacros })

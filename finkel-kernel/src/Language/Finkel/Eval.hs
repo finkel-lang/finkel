@@ -11,7 +11,7 @@ module Language.Finkel.Eval
 #include "ghc_modules.h"
 
 -- base
-import Control.Monad.IO.Class  (liftIO)
+import Control.Monad.IO.Class  (MonadIO (..))
 
 #if MIN_VERSION_ghc(8,4,0) && !MIN_VERSION_ghc(8,8,0)
 import Data.IORef              (readIORef)
@@ -66,7 +66,6 @@ import GHCi.RemoteTypes        (HValue, localRef, withForeignRef)
 
 -- internal
 import Language.Finkel.Builder
-import Language.Finkel.Fnk
 
 
 -- ---------------------------------------------------------------------
@@ -76,14 +75,14 @@ import Language.Finkel.Fnk
 -- ---------------------------------------------------------------------
 
 -- | Evaluate given expression to haskell value.
-evalExpr :: HExpr -> Fnk HValue
+evalExpr :: GhcMonad m => HExpr -> m HValue
 evalExpr expr = do
   fhv <- compileParsedExprRemote expr
   liftIO (withForeignRef fhv localRef)
 {-# INLINABLE evalExpr #-}
 
 -- | Evaluate the type of given expression.
-evalExprType :: HExpr -> Fnk Type
+evalExprType :: GhcMonad m => HExpr -> m Type
 evalExprType expr = do
   -- See `InteractiveEval.exprType' and `HscMain.hscTcExpr'. As in `evalDecls',
   -- taking HExpr instead of Haskell source code String.
@@ -98,7 +97,7 @@ evalExprType expr = do
 
 -- | Evaluate the kind of given type.  Returned values is a pair of the
 -- argument type and the kind of that type.
-evalTypeKind :: HType -> Fnk (Type, Kind)
+evalTypeKind :: GhcMonad m => HType -> m (Type, Kind)
 evalTypeKind ty = do
   -- See `InteractiveEval.typeKind' and `HscMain.hscKcType'.
   --
@@ -110,7 +109,7 @@ evalTypeKind ty = do
 
 -- | Evaluate given declarations. The returned value is resulting 'TyThing's of
 -- declarations and updated interactive context.
-evalDecls :: [HDecl] -> Fnk ([TyThing], InteractiveContext)
+evalDecls :: GhcMonad m => [HDecl] -> m ([TyThing], InteractiveContext)
 #if MIN_VERSION_ghc(8,8,0)
 evalDecls decls =
   withSession (\hsc_env -> liftIO (hscParsedDecls hsc_env decls))
@@ -163,7 +162,7 @@ evalDecls decls = do
   return (new_tythings, new_ictxt)
 
 -- | Like 'HscMain.hscDesugar'', but for 'Fnk'.
-fnkcDesugar' :: ModLocation -> TcGblEnv -> Fnk ModGuts
+fnkcDesugar' :: GhcMonad m => ModLocation -> TcGblEnv -> m ModGuts
 fnkcDesugar' mod_location tc_result = do
   hsc_env <- getSession
   r <- ioMsgMaybe (deSugar hsc_env mod_location tc_result)
@@ -207,7 +206,7 @@ corePrepPgm' hsc_env this_mod mod_loc binds data_tycons =
 -- ---------------------------------------------------------------------
 
 -- | Like 'HscMain.ioMsgMaybe', but for 'Fnk'.
-ioMsgMaybe :: IO (Messages, Maybe a) -> Fnk a
+ioMsgMaybe :: MonadIO m => IO (Messages, Maybe a) -> m a
 ioMsgMaybe ioA = do
   -- XXX: Show warning messages with DynFlags settings.
   ((_warns, errs), mb_r) <- liftIO ioA

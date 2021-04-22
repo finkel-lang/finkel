@@ -34,7 +34,8 @@ import GHC_Driver_Main                 (Messager, hscTcRnLookupRdrName,
                                         showModuleIndex)
 import GHC_Driver_Monad                (GhcMonad (..), modifySession)
 import GHC_Driver_Session              (DynFlags (..), GeneralFlag (..),
-                                        getDynFlags, unSetGeneralFlag')
+                                        HasDynFlags (..), getDynFlags,
+                                        unSetGeneralFlag')
 import GHC_Driver_Types                (FindResult (..), HscEnv (..),
                                         InteractiveImport (..), ModSummary (..),
                                         ModuleGraph, lookupHpt, showModMsg)
@@ -175,7 +176,7 @@ coerceMacro dflags name =
         Left err    -> failFnk (syntaxErrMsg err)
 {-# INLINABLE coerceMacro #-}
 
-getTyThingsFromIDecl :: HImportDecl -> ModuleInfo -> Fnk [TyThing]
+getTyThingsFromIDecl :: GhcMonad m => HImportDecl -> ModuleInfo -> m [TyThing]
 getTyThingsFromIDecl (L _ idecl) minfo = do
   -- 'toImportList' borrowed from local definition in
   -- 'TcRnDriver.tcPreludeClashWarn'.
@@ -506,7 +507,7 @@ concatS qual =
 {-# INLINABLE concatS #-}
 
 -- | Debug function for this module
-debug :: FnkEnv -> MsgDoc -> [MsgDoc] -> Fnk ()
+debug :: (MonadIO m, HasDynFlags m) => FnkEnv -> MsgDoc -> [MsgDoc] -> m ()
 debug fnk_env fn msgs =
   debugWhen fnk_env
             Fnk_trace_spf

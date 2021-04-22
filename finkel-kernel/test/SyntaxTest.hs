@@ -186,7 +186,7 @@ compileWith is_interpreting ini_args ftr file mb_dir = do
           -- Flush the stdout used by the compiled expression to get the string
           -- output, which is captured later.
           setContext [mkIIDecl "Main", mkIIDecl "System.IO"]
-          let act = unsafeCoerce# . evalExpr
+          let act = fmap unsafeCoerce# . evalExpr
               buf = stringToStringBuffer "(>> main (hFlush stdout))"
           evalWith (file ++ ":main") parseExpr act buf
         else return (return ())
