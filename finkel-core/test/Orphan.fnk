@@ -31,20 +31,16 @@
                    (fmap aSymbol symbolG)
                    (fmap (AChar NoSourceText) arbitraryUnicodeChar)
                    (fmap (aString NoSourceText) stringG)
-                   (fmap (. AInteger mkI) arbitrary)
+                   (fmap aIntegral (:: arbitrary (Gen Integer)))
                    (fmap aFractional (:: arbitrary (Gen Double)))])
       (= headChars
         (++ [#'A .. #'Z] [#'a .. #'z] "_!$%*+./<=>?@^~:"))
       (= tailChars
         (++ headChars "0123456789'-"))
       (= symbolG
-        (do (<- x (elements headChars))
-            (<- xs (listOf (elements tailChars)))
-            (return (: x xs))))
+        (<*> (pure :) (elements headChars) (listOf (elements tailChars))))
       (= stringG
-        (fmap getUnicodeString arbitrary))
-      (:: mkI (-> Integer IntegralLit))
-      (= mkI mkIntegralLit))))
+        (fmap getUnicodeString arbitrary)))))
 
 (instance (=> (Arbitrary a) (Arbitrary (Form a)))
   (= arbitrary

@@ -7,9 +7,10 @@ module Orphan where
 #include "ghc_modules.h"
 
 -- ghc
-import GHC_Data_FastString  (unpackFS)
+import GHC_Data_FastString  (fsLit, unpackFS)
 import GHC_Types_Basic      (FractionalLit (..), SourceText (..))
-import GHC_Types_SrcLoc     (GenLocated (..))
+import GHC_Types_SrcLoc     (GenLocated (..), interactiveSrcSpan, mkSrcLoc,
+                             mkSrcSpan, noSrcSpan, wiredInSrcSpan)
 
 -- QuickCheck
 import Test.QuickCheck      (Arbitrary (..), CoArbitrary (..), Gen,
@@ -26,18 +27,13 @@ instance Arbitrary Atom where
           , aSymbol <$> symbolG
           , AChar NoSourceText <$> arbitraryUnicodeChar
           , aString NoSourceText <$> stringG
-          , AInteger . mkI <$> arbitrary
+          , aIntegral <$> (arbitrary :: Gen Integer)
           , aFractional <$> (arbitrary :: Gen Double) ]
     where
       headChars = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ "_!$&*+./<=>?@^~:"
       tailChars = headChars ++ "0123456789'_"
-      symbolG = do
-        x <- elements headChars
-        xs <- listOf (elements tailChars)
-        return (x:xs)
+      symbolG = (:) <$> elements headChars <*> listOf (elements tailChars)
       stringG = getUnicodeString <$> arbitrary
-      mkI :: Integer -> IntegralLit
-      mkI = mkIntegralLit
 
 instance CoArbitrary Atom where
   coarbitrary x =
@@ -76,7 +72,19 @@ instance CoArbitrary a => CoArbitrary (Form a) where
       var = variant
 
 instance Arbitrary a => Arbitrary (LForm a) where
-  arbitrary = LForm . genSrc <$> arbitrary
+  arbitrary = LForm <$> (L <$> aloc <*> arbitrary)
+    where
+      aloc = oneof [real, unhelpful]
+      real = do
+         file <- fsLit <$> arbitrary
+         sl <- arbitrary
+         sc <- arbitrary
+         ec <- arbitrary
+         let sloc = mkSrcLoc file sl sc
+             eloc = mkSrcLoc file (sl + 1) ec
+         pure (mkSrcSpan sloc eloc)
+      unhelpful =
+        oneof (map pure [noSrcSpan, wiredInSrcSpan, interactiveSrcSpan])
 
 instance CoArbitrary a => CoArbitrary (LForm a) where
   coarbitrary (LForm (L _ form)) = coarbitrary form
