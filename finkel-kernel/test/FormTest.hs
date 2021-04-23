@@ -1,5 +1,8 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 -- | Tests for forms.
 module FormTest where
 
@@ -24,6 +27,7 @@ import           Data.Ratio
 import qualified Data.Semigroup               as Semigroup
 import           Data.Version
 import           Data.Word
+import           GHC.Generics                 (Generic (..))
 import           Numeric.Natural
 import           Text.Show.Functions          ()
 
@@ -63,6 +67,7 @@ import           Test.QuickCheck
 import           Language.Finkel.Fnk
 import           Language.Finkel.Form
 import           Language.Finkel.Homoiconic
+import qualified Language.Finkel.Homoiconic   as Homoiconic
 import           Language.Finkel.Lexer
 import           Language.Finkel.Reader
 import           Language.Finkel.SpecialForms
@@ -122,8 +127,10 @@ formTests = do
   alternativeTest
 
   fromCodeTest
+  fromCodeErrorTest
 
   dataToCodeTest
+  genericHomoiconicTest
 
   unquoteSpliceTest
 
@@ -648,10 +655,9 @@ alternativeTest =
 
 data Foo = Foo deriving (Eq, Show)
 
-instance ToCode Foo where
+instance Homoiconic Foo where
   toCode foo = toCode (aSymbol (show foo))
-
-instance FromCode Foo
+  parseCode _ = Homoiconic.Failure "Foo"
 
 fromCodeTest :: Spec
 fromCodeTest = do
@@ -692,68 +698,191 @@ fromCodeTest = do
     ng "Proxy ()" (fromCode foo :: Maybe (Proxy ()))
     ng "Atom" (fromCode foo1 :: Maybe Atom)
 
-data D1 = D1a | D1b | D1c
-  deriving (Eq, Show, Data, Typeable)
+fromCodeErrorTest :: Spec
+fromCodeErrorTest = do
+  let err :: Homoiconic a => a -> String -> Spec
+      err a ty = it ("should show error message containing " ++ ty) $ do
+        case parseCode x `asTypeOf` Homoiconic.Success a of
+          Homoiconic.Failure e -> e `shouldSatisfy` isSubsequenceOf ty
+          _           -> expectationFailure "parser unexpectedly succeeded"
+      x = toCode (List [ toCode (aSymbol "foo")
+                       , toCode (aSymbol "x") ])
+  describe "Failing to parse Code" $ do
+    err (1 :: Integer) "integral"
+    err (1 :: Double) "fractional"
+    err () "()"
+    err 'a' "Char"
+    err "string" "String"
+    err False "Bool"
+    err EQ "Ordering"
+    err (Just False) "Maybe"
+    err (Right True `asTypeOf` Left "foo") "Either"
+    err ((),()) ","
+    err ((),(),()) "(,,)"
+    err ((),(),(),()) "(,,,)"
+    err ((),(),(),(),()) "(,,,,)"
+    err ((),(),(),(),(),()) "(,,,,,)"
+    err (Sum.InL (Just True) `asTypeOf` Sum.InR (Just False)) "Sum"
+    err (All True) "All"
+    err (Proxy :: Proxy Int) "Proxy"
+    err (aSymbol "foo") "Atom"
 
-instance ToCode D1
-instance FromCode D1
+data D1 = D1a | D1b | D1c
+  deriving (Eq, Show, Data, Typeable, Generic)
+
+instance Homoiconic D1
+instance Arbitrary D1 where
+  arbitrary = oneof (map pure [D1a, D1b, D1c])
 
 data D2 a = D2a a | D2b a a
-  deriving (Eq, Show, Data, Typeable)
+  deriving (Eq, Show, Data, Typeable, Generic)
 
-instance Data a => ToCode (D2 a)
-instance Data a => FromCode (D2 a)
+instance Homoiconic a => Homoiconic (D2 a)
+instance Arbitrary a => Arbitrary (D2 a) where
+  arbitrary = oneof [D2a <$> arbitrary, D2b <$> arbitrary <*> arbitrary]
 
 data D3 a b = D3a Int a b
-  deriving (Eq, Show, Data, Typeable)
+  deriving (Eq, Show, Data, Typeable, Generic)
 
-instance (Data a, Data b) => ToCode (D3 a b)
-instance (Data a, Data b) => FromCode (D3 a b)
+instance (Homoiconic a, Homoiconic b) => Homoiconic (D3 a b)
+instance (Arbitrary a, Arbitrary b) => Arbitrary (D3 a b) where
+  arbitrary = D3a <$> arbitrary <*> arbitrary <*> arbitrary
 
 data D4 a = D4a (a, a, a, a)
-  deriving (Eq, Show, Data, Typeable)
+  deriving (Eq, Show, Data, Typeable, Generic)
 
-instance Data a => ToCode (D4 a)
-instance Data a => FromCode (D4 a)
+instance Homoiconic a => Homoiconic (D4 a)
+instance Arbitrary a => Arbitrary (D4 a) where
+  arbitrary =
+    D4a <$> ((,,,) <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary)
 
 dataToCodeTest :: Spec
 dataToCodeTest = do
   let s = toCode . aSymbol
   describe "D1 to Code" $
     it "should match D1 values" $ do
-      let e1 = toCode (HsList (map s ["D1a", "D1b", "D1c"]))
-      toCode [D1a, D1b, D1c] `shouldBe` e1
+      let e1a = s "D1a"
+          e1b = s "D1b"
+          e1c = s "D1c"
+      dataToCode D1a `shouldBe` e1a
+      dataToCode D1b `shouldBe` e1b
+      dataToCode D1c `shouldBe` e1c
   describe "D2 to Code" $
-   it "should match `D2 Char' values"$ do
-     let e2 = toCode
-                (HsList
-                   [ toCode (List [s "D2a", toCode 'x'])
-                   , toCode (List [s "D2b", toCode 'y', toCode 'z'])])
-     toCode [D2a 'x', D2b 'y' 'z'] `shouldBe` e2
+    it "should match `D2 Char' values"$ do
+      let e2a = toCode (List [s "D2a", toCode 'x'])
+          e2b = toCode (List [s "D2b", toCode 'y', toCode 'z'])
+      dataToCode (D2a 'x') `shouldBe` e2a
+      dataToCode (D2b 'y' 'z') `shouldBe` e2b
   describe "D2 with D1 to Code" $
-   it "should match `D2 D1' values" $ do
-     let e2b = toCode (List [s "D2b", s "D1a", s "D1b"])
-     toCode (D2b D1a D1b) `shouldBe` e2b
+    it "should match `D2 D1' values" $ do
+      let e2b = toCode (List [s "D2b", s "D1a", s "D1b"])
+      dataToCode (D2b D1a D1b) `shouldBe` e2b
   describe "D2 with Double to Code" $
-   it "should match `D2 Double' values" $ do
-     let e2c = toCode (List [s "D2a", toCode (1.23 :: Double)])
-     toCode (D2a (1.23 :: Double)) `shouldBe` e2c
+    it "should match `D2 Double' values" $ do
+      let e2c = toCode (List [s "D2a", toCode (1.23 :: Double)])
+      dataToCode (D2a (1.23 :: Double)) `shouldBe` e2c
   describe "D3 to Code" $
-   it "should match `D3' value" $ do
-     let e3 = toCode (List [ s "D3a"
-                           , toCode (42 :: Int)
-                           , toCode False
-                           , toCode 'a' ])
-     toCode (D3a 42 False 'a') `shouldBe` e3
+    it "should match `D3' value" $ do
+      let e3 = toCode (List [ s "D3a"
+                            , toCode (42 :: Int)
+                            , toCode False
+                            , toCode 'a' ])
+      dataToCode (D3a 42 False 'a') `shouldBe` e3
   describe "D4 to Code" $
-   it "should match `D4' value" $ do
-      let e4 = toCode (List [ s "D4a"
-                            , toCode (List [ s ","
-                                           , toCode 'w'
-                                           , toCode 'x'
-                                           , toCode 'y'
-                                           , toCode 'z'])])
-      toCode (D4a ('w', 'x', 'y', 'z')) `shouldBe` e4
+    it "should match `D4' value" $ do
+       let e4 = toCode (List [ s "D4a"
+                             , toCode (List [ s ","
+                                            , toCode 'w'
+                                            , toCode 'x'
+                                            , toCode 'y'
+                                            , toCode 'z'])])
+       dataToCode (D4a ('w', 'x', 'y', 'z')) `shouldBe` e4
+
+genericHomoiconicTest :: Spec
+genericHomoiconicTest = do
+  describe "Result data type for parsing" $ do
+    let s1, s2, f1 :: Homoiconic.Result Bool
+        s1 = Homoiconic.Success True
+        s2 = Homoiconic.Success False
+        f1 = Homoiconic.Failure "foo"
+    it "should equal to itself" $ do
+      s1 `shouldBe` s1
+      s1 `shouldNotBe` s2
+      f1 `shouldNotBe` s2
+    it "should show its conteints" $ do
+      show s1 `shouldBe` "Success True"
+      show f1 `shouldBe` "Failure \"foo\""
+    let isFailure (Homoiconic.Failure _) = True
+        isFailure _                      = False
+    it "should fail on binding Failure" $
+      ((Homoiconic.Failure "X_X" >>= pure) :: Homoiconic.Result Bool)
+        `shouldSatisfy` isFailure
+
+  describe "parseCode failure" $ do
+    let d2a_sym = toCode $ aSymbol "D2a"
+        d3a_sym = toCode $ aSymbol "D3a"
+        unit_sym = toCode ()
+        fail_with substring r = case r of
+          Homoiconic.Failure msg -> substring `isSubsequenceOf` msg
+          _                      -> False
+
+    it "should fail on non list Code" $ do
+      let r = parseCode @(D2 ()) d2a_sym
+      r `shouldSatisfy` fail_with "Not a list"
+    it "should fail on unexpected field constructor" $ do
+      let r = parseCode @(D3 (D2 Bool) Bool) x
+          x = toCode (List [d3a_sym, unit_sym])
+      r `shouldSatisfy` fail_with "()"
+    it "should fail on unexpected leftover values" $ do
+      let r = parseCode @(D2 ()) x
+          x = toCode (List [d2a_sym, unit_sym, unit_sym])
+      r `shouldSatisfy` fail_with "leftover"
+    it "should fail on invalid constructor (no arg)" $ do
+      let r = parseCode @FormTest.D1 (toCode (aSymbol "foo"))
+      r `shouldSatisfy` fail_with "foo"
+    it "should fail on invalid constructor (with args)" $ do
+      let r = parseCode @(D2 Bool) (toCode (List [toCode (aSymbol "foo")]))
+      r `shouldSatisfy` fail_with "foo"
+
+  describe "genericFromCode" $ do
+    it "should result in Code value" $ do
+      let d2 :: D2 Int
+          d2 = D2a 42
+      genericFromCode (toCode d2) `shouldBe` Just d2
+    it "should fail with invalid value" $ do
+      genericFromCode (toCode ()) `shouldBe` (Nothing :: Maybe (D2 Int))
+
+  describe "To/from code via Generic" $ do
+    it "should return itself" $
+      let g_to_from :: D4 (D3 (D2 Int) D1) -> Bool
+          g_to_from x = Just x == fromCode (toCode x)
+      in  property g_to_from
+    it "should return itself with nested Maybe data type" $
+      let g_to_from :: D3 (Maybe (Maybe (Maybe Int))) (Maybe (Maybe Bool))
+                    -> Bool
+          g_to_from x = Just x == fromCode (toCode x)
+      in  property g_to_from
+
+  let s = toCode . aSymbol
+      noParse :: (Eq a, Show a, Homoiconic a) => Maybe a -> IO ()
+      noParse = (`shouldBe` Nothing)
+
+  describe "Malformed codes via Generic" $ do
+    it "result to Nothing with invalid constructor" $
+      noParse (fromCode (s "Foo") :: Maybe D1)
+    it "result to Nothing with arity mismatch" $
+      noParse
+        (fromCode (toCode (List [s "D2a", toCode False, toCode False]))
+          :: Maybe (D2 Bool))
+    it "result to Nothing with invalid field value" $
+      noParse
+        (fromCode (toCode (List [s "D2a", s "FOO"])) :: Maybe (D2 Bool))
+    it "result to Nothing with non list" $
+      noParse (fromCode (toCode "FOO") :: Maybe (D2 Bool))
+    it "result to Nothing with invalid form" $
+      noParse
+        (fromCode (toCode (List [s "D2a", toCode (List [s "Just", s "___"])]))
+           :: Maybe (D2 (Maybe Bool)))
 
 unquoteSpliceTest :: Spec
 unquoteSpliceTest =

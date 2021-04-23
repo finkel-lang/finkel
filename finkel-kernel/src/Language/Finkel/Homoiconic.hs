@@ -1,16 +1,36 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
--- | Module containing 'Homoiconic' type class and its instances declarations.
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DefaultSignatures   #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators       #-}
+-- | Module containing 'Homoiconic' and 'FromCode' type classes and its instance
+-- declarations.
 module Language.Finkel.Homoiconic
-  ( ToCode(..)
-  , FromCode(..)
+  ( -- * Homoiconic class
+    Homoiconic(..)
+  , fromCode
+  , Result(..)
+
+    -- * Generic functions
+  , genericToCode
+  , genericFromCode
+  , genericParseCode
+
+    -- * Generic classes
+  , GToCode(..)
+  , GParseCode(..)
+
+    -- * Data.Data function
+  , dataToCode
   ) where
 
 #include "ghc_modules.h"
 
 -- base
+import           Control.Applicative   (Alternative (..))
 import           Data.Complex          (Complex (..))
 import           Data.Data
 import           Data.Fixed            (Fixed (..))
@@ -25,16 +45,24 @@ import           Data.Monoid           (All (..), Alt (..), Any (..), Dual (..),
 import           Data.Ratio            (Ratio, denominator, numerator, (%))
 import           Data.Version          (Version (..))
 import           Data.Word             (Word16, Word32, Word64, Word8)
+import           GHC.Generics          (C, Constructor (..), D, Generic (..),
+                                        K1 (..), M1 (..), S, U1 (..), V1,
+                                        (:*:) (..), (:+:) (..))
 import           Numeric.Natural       (Natural)
 
 import qualified Data.Functor.Product  as Product
 import qualified Data.Functor.Sum      as Sum
 import qualified Data.Semigroup        as Semigroup
 
+#if !MIN_VERSION_ghc(8,8,0)
+import           Control.Monad.Fail    (MonadFail (..))
+import           Prelude               hiding (fail)
+#endif
+
 -- ghc
 import           GHC_Data_FastString   (FastString, unpackFS)
 import           GHC_Types_Basic       (SourceText (..), fl_value)
-import           GHC_Types_SrcLoc      (GenLocated (..), getLoc)
+import           GHC_Types_SrcLoc      (GenLocated (..), SrcSpan, getLoc)
 
 -- internal
 import           Language.Finkel.Form
@@ -46,18 +74,46 @@ import           Language.Finkel.Form
 --
 -- -------------------------------------------------------------------
 
--- | Class for handling Haskell value as code.
+-- | Class for handling Haskell value as 'Code'.
 --
--- The function 'listToCode' is used when handling Haskell values specially
--- (e.g., 'Char'). This function have default implementation which simply
--- applies 'toCode' to elements of the argument list.
+-- Instance of 'Homoiconic' should satisfy the following property:
 --
-class ToCode a where
+-- @
+-- 'parseCode' . 'toCode' ≡ 'Success'
+-- @
+--
+-- The function 'listToCode' and 'parseHsListCode' are used when handling
+-- Haskell list values specially (e.g., 'Char'). These functions have default
+-- implementations, which simply applies 'toCode' to elements of the argument
+-- list, and which parses elements of 'HsList', respectively.
+--
+-- One can implement 'Homoiconic' instance with 'GHC.Generics.Generic', e.g.:
+--
+-- @
+-- {-# LANGUAGE DeriveGeneric #-}
+--
+-- data MyData
+--   = MyInt Int
+--   | MyChar Char
+--   deriving (Generic)
+--
+-- instance Homoiconic MyData
+-- @
+--
+-- Sample snippet using above @MyData@:
+--
+-- >>> toCode (MyInt 42)
+-- (MyInt 42)
+-- >>> fromCode (toCode (MyChar 'a')) :: Maybe MyData
+-- Just (MyChar 'a')
+---
+class Homoiconic a where
   -- | Convert Haskell value to 'Code'.
   toCode :: a -> Code
   {-# INLINE toCode #-}
-  default toCode :: Data a => a -> Code
-  toCode = dataToCode
+
+  default toCode :: (Generic a, GToCode (Rep a)) => a -> Code
+  toCode = genericToCode
 
   -- | Convert list of Haskell values to 'Code'.
   listToCode :: [a] -> Code
@@ -67,553 +123,676 @@ class ToCode a where
      in  LForm (L l (HsList xs'))
   {-# INLINE listToCode #-}
 
--- | Class for handling code as Haskell value.
---
--- The function 'listFromCode' is used when handling list of code
--- specially. This function have default implementation which simply applies
--- 'fromCode' to elements of the elements of the 'HsList'.
---
-class FromCode a where
-
-  -- | Convert 'Code' to 'Just' Haskell value, or 'Nothing' if the code could
+  -- | Convert 'Code' to Haskell value, or 'Failure' if the code could
   -- not be converted.
-  fromCode :: Code -> Maybe a
-  fromCode _ = Nothing
-  {-# INLINE fromCode #-}
+  parseCode :: Code -> Result a
+  {-# INLINE parseCode #-}
 
-  -- | Convert 'Code' to 'Just' list of Haskell values, or 'Nothing' if the code
+  default parseCode :: (Generic a, GParseCode (Rep a)) => Code -> Result a
+  parseCode = genericParseCode
+
+  -- | Convert 'Code' to list of Haskell values, or 'Failure' if the code
   -- could not be converted.
-  listFromCode :: Code -> Maybe [a]
-  listFromCode xs =
+  parseHsListCode :: Code -> Result [a]
+  parseHsListCode xs =
     case unCode xs of
-      HsList as -> mapM fromCode as
-      _         -> Nothing
-  {-# INLINE listFromCode #-}
+      HsList as -> mapM parseCode as
+      _         -> fail "got non HsList value"
+  {-# INLINE parseHsListCode #-}
+
+-- | Like 'parseCode', but the result wrapped with 'Maybe' instead of 'Result'.
+fromCode :: Homoiconic a => Code -> Maybe a
+fromCode code = case parseCode code of
+  Success a -> Just a
+  _         -> Nothing
+
+
+-- -------------------------------------------------------------------
+--
+-- Instances of Homoiconic
+--
+-- -------------------------------------------------------------------
 
 --
 -- Prelude
 --
 
-instance ToCode () where
+instance Homoiconic () where
   toCode _ = LForm (genSrc (Atom AUnit))
-
-instance FromCode () where
-  fromCode a =
+  parseCode a =
     case unCode a of
-      Atom AUnit -> Just ()
-      _          -> Nothing
+      Atom AUnit -> pure ()
+      _          -> failedToParse "()"
 
-instance ToCode Char where
+instance Homoiconic Char where
   toCode = LForm . genSrc . Atom . AChar NoSourceText
   listToCode = LForm . genSrc . Atom . aString NoSourceText
-
-instance FromCode Char where
-  fromCode a =
+  parseCode a =
     case unCode a of
-      Atom (AChar _ x) -> Just x
-      _                -> Nothing
-  listFromCode a = case unCode a of
-                     Atom (AString _ s) -> Just (unpackFS s)
-                     _                  -> Nothing
+      Atom (AChar _ x) -> pure x
+      _                -> failedToParse "Char"
+  parseHsListCode a = case unCode a of
+                      Atom (AString _ s) -> pure (unpackFS s)
+                      _                  -> failedToParse "String"
 
-instance ToCode Int where
-  toCode = integralToCode
+instance Homoiconic Int where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance FromCode Int where
-  fromCode = integralFromCode
+instance Homoiconic Word where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance ToCode Word where
-  toCode = integralToCode
+instance Homoiconic Integer where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance FromCode Word where
-  fromCode = integralFromCode
+instance Homoiconic Float where
+  toCode = realFracHomoiconic
+  parseCode = fractionalFromCode
 
-instance ToCode Integer where
-  toCode = integralToCode
+instance Homoiconic Double where
+  toCode = realFracHomoiconic
+  parseCode = fractionalFromCode
 
-instance FromCode Integer where
-  fromCode = integralFromCode
-
-instance ToCode Float where
-  toCode = realFracToCode
-
-instance FromCode Float where
-  fromCode = fractionalFromCode
-
-instance ToCode Double where
-  toCode = realFracToCode
-
-instance FromCode Double where
-  fromCode = fractionalFromCode
-
-instance ToCode a => ToCode [a] where
+instance Homoiconic a => Homoiconic [a] where
   toCode = listToCode
+  parseCode = parseHsListCode
 
-instance FromCode a => FromCode [a] where
-  fromCode = listFromCode
-
-instance ToCode Bool where
+instance Homoiconic Bool where
   toCode = showAsSymbolCode
-
-instance FromCode Bool where
-  fromCode a =
+  parseCode a =
     case unCode a of
-      Atom (ASymbol sym) | sym == "True"  -> Just True
-                         | sym == "False" -> Just False
-      _                                   -> Nothing
+      Atom (ASymbol sym) | sym == "True"  -> pure True
+                         | sym == "False" -> pure False
+      _                                   -> failedToParse "Bool"
 
-instance ToCode Ordering where
+instance Homoiconic Ordering where
   toCode = showAsSymbolCode
-
-instance FromCode Ordering where
-  fromCode a =
+  parseCode a =
     case unCode a of
-      Atom (ASymbol sym) | sym == "EQ" -> Just EQ
-                         | sym == "LT" -> Just LT
-                         | sym == "GT" -> Just GT
-      _                                -> Nothing
+      Atom (ASymbol sym) | sym == "EQ" -> pure EQ
+                         | sym == "LT" -> pure LT
+                         | sym == "GT" -> pure GT
+      _                                -> failedToParse "Ordering"
 
-instance ToCode a => ToCode (Maybe a) where
+instance Homoiconic a => Homoiconic (Maybe a) where
   toCode a =
     case a of
       Nothing -> toCode (aSymbol "Nothing")
       Just x  -> toCode1 "Just" x
-
-instance FromCode a => FromCode (Maybe a) where
-  fromCode a =
+  parseCode a =
     case unCode a of
-      Atom (ASymbol "Nothing")                      -> Just Nothing
-      List [LForm (L _ (Atom (ASymbol "Just"))), x] -> Just (fromCode x)
-      _                                             -> Nothing
+      Atom (ASymbol "Nothing")                      -> pure Nothing
+      List [LForm (L _ (Atom (ASymbol "Just"))), x] -> pure <$> parseCode x
+      _                                             -> failedToParse "Maybe"
 
-instance (ToCode a, ToCode b) => ToCode (Either a b) where
+instance (Homoiconic a, Homoiconic b) => Homoiconic (Either a b) where
   toCode a =
     case a of
       Right x -> toCode1 "Right" x
       Left x  -> toCode1 "Left" x
-
-instance (FromCode a, FromCode b) => FromCode (Either a b) where
-  fromCode a =
+  parseCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol x))), y]
-        | x == "Right" -> fmap Right (fromCode y)
-        | x == "Left"  -> fmap Left (fromCode y)
-      _                -> Nothing
+        | x == "Right" -> fmap Right (parseCode y)
+        | x == "Left"  -> fmap Left (parseCode y)
+      _                -> failedToParse "Either"
 
-instance (ToCode a, ToCode b) => ToCode (a, b) where
+instance (Homoiconic a, Homoiconic b) => Homoiconic (a, b) where
   toCode (a1, a2) = toCode2 "," a1 a2
+  parseCode = parseCode2 "," (,)
 
-instance (FromCode a, FromCode b) => FromCode (a, b) where
-  fromCode = fromCode2 "," (,)
-
-instance (ToCode a, ToCode b, ToCode c)
-         => ToCode (a, b, c) where
+instance (Homoiconic a, Homoiconic b, Homoiconic c)
+         => Homoiconic (a, b, c) where
   toCode (a1, a2, a3) =
     toCode (List [symbolCode ",", toCode a1, toCode a2, toCode a3])
-
-instance (FromCode a, FromCode b, FromCode c)
-         => FromCode (a, b, c) where
-  fromCode a =
+  parseCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3]
-        -> (,,) <$> fromCode a1 <*> fromCode a2 <*> fromCode a3
-      _ -> Nothing
+        -> (,,) <$> parseCode a1 <*> parseCode a2 <*> parseCode a3
+      _ -> failedToParse "(,,)"
 
-instance (ToCode a, ToCode b, ToCode c, ToCode d)
-         => ToCode (a, b, c, d) where
+instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d)
+         => Homoiconic (a, b, c, d) where
   toCode (a1, a2, a3, a4) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4])
-
-instance (FromCode a, FromCode b, FromCode c, FromCode d)
-         => FromCode (a, b, c, d) where
-  fromCode a =
+  parseCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4]
         -> (,,,) <$>
-           fromCode a1 <*> fromCode a2 <*> fromCode a3 <*> fromCode a4
-      _ -> Nothing
+           parseCode a1 <*> parseCode a2 <*> parseCode a3 <*> parseCode a4
+      _ -> failedToParse "(,,,)"
 
-instance (ToCode a, ToCode b, ToCode c, ToCode d, ToCode e)
-         => ToCode (a, b, c, d, e) where
+instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d, Homoiconic e)
+         => Homoiconic (a, b, c, d, e) where
   toCode (a1, a2, a3, a4, a5) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4, toCode a5])
-
-instance (FromCode a, FromCode b, FromCode c, FromCode d, FromCode e)
-         => FromCode (a, b, c, d, e) where
-  fromCode a =
+  parseCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4, a5]
         -> (,,,,) <$>
-           fromCode a1 <*> fromCode a2 <*> fromCode a3 <*>
-           fromCode a4 <*> fromCode a5
-      _ -> Nothing
+           parseCode a1 <*> parseCode a2 <*> parseCode a3 <*>
+           parseCode a4 <*> parseCode a5
+      _ -> failedToParse "(,,,,)"
 
-instance (ToCode a, ToCode b, ToCode c, ToCode d, ToCode e, ToCode f)
-         => ToCode (a, b, c, d, e, f) where
+instance (Homoiconic a, Homoiconic b, Homoiconic c, Homoiconic d, Homoiconic e, Homoiconic f)
+         => Homoiconic (a, b, c, d, e, f) where
   toCode (a1, a2, a3, a4, a5, a6) =
     toCode (List [ symbolCode ",", toCode a1, toCode a2, toCode a3
                  , toCode a4, toCode a5, toCode a6])
-
-instance ( FromCode a, FromCode b, FromCode c, FromCode d, FromCode e
-         , FromCode f)
-         => FromCode (a, b, c, d, e, f) where
-  fromCode a =
+  parseCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol ","))), a1, a2, a3, a4, a5, a6]
         -> (,,,,,) <$>
-           fromCode a1 <*> fromCode a2 <*> fromCode a3 <*>
-           fromCode a4 <*> fromCode a5 <*> fromCode a6
-      _ -> Nothing
+           parseCode a1 <*> parseCode a2 <*> parseCode a3 <*>
+           parseCode a4 <*> parseCode a5 <*> parseCode a6
+      _ -> failedToParse "(,,,,,)"
 
 
 --
 -- Data.Complex
 --
 
-instance ToCode a => ToCode (Complex a) where
+instance Homoiconic a => Homoiconic (Complex a) where
   toCode (a :+ b) = toCode2 ":+" a b
-
-instance FromCode a => FromCode (Complex a) where
-  fromCode = fromCode2 ":+" (:+)
+  parseCode = parseCode2 ":+" (:+)
 
 --
 -- Data.Fixed
 --
 
-instance ToCode (Fixed a) where
+instance Homoiconic (Fixed a) where
   toCode (MkFixed a) = toCode1 "MkFixed" a
-
-instance FromCode (Fixed a) where
-  fromCode = fromCode1 "MkFixed" MkFixed
+  parseCode = parseCode1 "MkFixed" MkFixed
 
 --
 -- Data.Functor.Compose
 
-instance ToCode (f (g a)) => ToCode (Compose f g a) where
+instance Homoiconic (f (g a)) => Homoiconic (Compose f g a) where
   toCode (Compose a) = toCode1 "Compose" a
-
-instance FromCode (f (g a)) => FromCode (Compose f g a) where
-  fromCode = fromCode1 "Compose" Compose
+  parseCode = parseCode1 "Compose" Compose
 
 --
 -- Data.Functor.Const
 --
 
-instance ToCode a => ToCode (Const a b) where
+instance Homoiconic a => Homoiconic (Const a b) where
   toCode (Const a) = toCode1 "Const" a
-
-instance FromCode a => FromCode (Const a b) where
-  fromCode = fromCode1 "Const" Const
+  parseCode = parseCode1 "Const" Const
 
 --
 -- Data.Functor.Identity
 --
 
-instance ToCode a=> ToCode (Identity a) where
+instance Homoiconic a=> Homoiconic (Identity a) where
   toCode (Identity a) = toCode1 "Identity" a
-
-instance FromCode a=> FromCode (Identity a) where
-  fromCode = fromCode1 "Identity" Identity
+  parseCode = parseCode1 "Identity" Identity
 
 --
 -- Data.Functor.Product
 --
 
-instance (ToCode (f a), ToCode (g a))
-         => ToCode (Product.Product f g a) where
+instance (Homoiconic (f a), Homoiconic (g a))
+         => Homoiconic (Product.Product f g a) where
   toCode (Product.Pair a b) = toCode2 "Pair" a b
-
-instance (FromCode (f a), FromCode (g a))
-         => FromCode (Product.Product f g a) where
-  fromCode = fromCode2 "Pair" Product.Pair
+  parseCode = parseCode2 "Pair" Product.Pair
 
 --
 -- Data.Functor.Sum
 --
 
-instance (ToCode (f a), ToCode (g a)) => ToCode (Sum.Sum f g a) where
+instance (Homoiconic (f a), Homoiconic (g a)) => Homoiconic (Sum.Sum f g a) where
   toCode a =
     case a of
       Sum.InL x -> toCode1 "InL" x
       Sum.InR x -> toCode1 "InR" x
-
-instance (FromCode (f a), FromCode (g a)) => FromCode (Sum.Sum f g a) where
-  fromCode a =
+  parseCode a =
     case unCode a of
       List [LForm (L _ (Atom (ASymbol tag))), b]
-        | tag == "InL" -> Sum.InL <$> fromCode b
-        | tag == "InR" -> Sum.InR <$> fromCode b
-      _ -> Nothing
+        | tag == "InL" -> Sum.InL <$> parseCode b
+        | tag == "InR" -> Sum.InR <$> parseCode b
+      _ -> failedToParse "Sum"
 
 --
 -- Data.Int
 --
 
-instance ToCode Int8 where
-  toCode = integralToCode
+instance Homoiconic Int8 where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance FromCode Int8 where
-  fromCode = integralFromCode
+instance Homoiconic Int16 where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance ToCode Int16 where
-  toCode = integralToCode
+instance Homoiconic Int32 where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance FromCode Int16 where
-  fromCode = integralFromCode
-
-instance ToCode Int32 where
-  toCode = integralToCode
-
-instance FromCode Int32 where
-  fromCode = integralFromCode
-
-instance ToCode Int64 where
-  toCode = integralToCode
-
-instance FromCode Int64 where
-  fromCode = integralFromCode
+instance Homoiconic Int64 where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
 --
 -- Data.List.NonEmpty
 --
 
-instance ToCode a => ToCode (NonEmpty a) where
+instance Homoiconic a => Homoiconic (NonEmpty a) where
   toCode (a :| as) = toCode2 ":|" a as
-
-instance FromCode a => FromCode (NonEmpty a) where
-  fromCode = fromCode2 ":|" (:|)
+  parseCode = parseCode2 ":|" (:|)
 
 --
 -- Data.Monoid
 --
 
-instance ToCode All where
+instance Homoiconic All where
   toCode (All a) = toCode1 "All" a
+  parseCode = parseCode1 "All" All
 
-instance FromCode All where
-  fromCode = fromCode1 "All" All
-
-instance ToCode (f a) => ToCode (Alt f a) where
+instance Homoiconic (f a) => Homoiconic (Alt f a) where
   toCode (Alt a) = toCode1 "Alt" a
+  parseCode = parseCode1 "Alt" Alt
 
-instance FromCode (f a) => FromCode (Alt f a) where
-  fromCode = fromCode1 "Alt" Alt
-
-instance ToCode Any where
+instance Homoiconic Any where
   toCode (Any a) = toCode1 "Any" a
+  parseCode = parseCode1 "Any" Any
 
-instance FromCode Any where
-  fromCode = fromCode1 "Any" Any
-
-instance ToCode a => ToCode (Dual a) where
+instance Homoiconic a => Homoiconic (Dual a) where
   toCode (Dual a) = toCode1 "Dual" a
+  parseCode = parseCode1 "Dual" Dual
 
-instance FromCode a => FromCode (Dual a) where
-  fromCode = fromCode1 "Dual" Dual
-
-instance ToCode a => ToCode (First a) where
+instance Homoiconic a => Homoiconic (First a) where
   toCode (First a) = toCode1 "First" a
+  parseCode = parseCode1 "First" First
 
-instance FromCode a => FromCode (First a) where
-  fromCode = fromCode1 "First" First
-
-instance ToCode a => ToCode (Last a) where
+instance Homoiconic a => Homoiconic (Last a) where
   toCode (Last a) = toCode1 "Last" a
+  parseCode = parseCode1 "Last" Last
 
-instance FromCode a => FromCode (Last a) where
-  fromCode = fromCode1 "Last" Last
-
-instance ToCode a => ToCode (Product a) where
+instance Homoiconic a => Homoiconic (Product a) where
   toCode (Product a) = toCode1 "Product" a
+  parseCode = parseCode1 "Product" Product
 
-instance FromCode a => FromCode (Product a) where
-  fromCode = fromCode1 "Product" Product
-
-instance ToCode a => ToCode (Sum a) where
+instance Homoiconic a => Homoiconic (Sum a) where
   toCode (Sum a) = toCode1 "Sum" a
-
-instance FromCode a => FromCode (Sum a) where
-  fromCode = fromCode1 "Sum" Sum
+  parseCode = parseCode1 "Sum" Sum
 
 --
 -- Data.Proxy
 --
 
-instance ToCode a => ToCode (Proxy a) where
+instance Homoiconic a => Homoiconic (Proxy a) where
   toCode _ = symbolCode "Proxy"
-
-instance FromCode a => FromCode (Proxy a) where
-  fromCode a = case unCode a of
-                 Atom (ASymbol "Proxy") -> Just Proxy
-                 _                      -> Nothing
+  parseCode a = case unCode a of
+                 Atom (ASymbol "Proxy") -> pure Proxy
+                 _                      -> failedToParse "Proxy"
 
 --
 -- Data.Version
 --
 
-instance ToCode Version where
+instance Homoiconic Version where
   toCode (Version b t) = toCode2 "Version" b t
-
-instance FromCode Version where
-  fromCode = fromCode2 "Version" Version
+  parseCode = parseCode2 "Version" Version
 
 --
 -- Data.Ratio
 --
 
-instance (Integral a, ToCode a) => ToCode (Ratio a) where
+instance (Integral a, Homoiconic a) => Homoiconic (Ratio a) where
   toCode a =
     let n = toCode (numerator a)
         d = toCode (denominator a)
     in toCode (List [symbolCode ":%", n, d])
-
-instance (Integral a, FromCode a) => FromCode (Ratio a) where
-  fromCode = fromCode2 ":%" (%)
+  parseCode = parseCode2 ":%" (%)
 
 
 --
 -- Data.Semigroup
 --
 
-instance (ToCode a, ToCode b) => ToCode (Semigroup.Arg a b) where
+instance (Homoiconic a, Homoiconic b) => Homoiconic (Semigroup.Arg a b) where
   toCode (Semigroup.Arg a b) = toCode2 "Arg" a b
+  parseCode = parseCode2 "Arg" Semigroup.Arg
 
-instance (FromCode a, FromCode b) => FromCode (Semigroup.Arg a b) where
-  fromCode = fromCode2 "Arg" Semigroup.Arg
-
-instance ToCode a => ToCode (Semigroup.First a) where
+instance Homoiconic a => Homoiconic (Semigroup.First a) where
   toCode (Semigroup.First a) = toCode1 "First" a
+  parseCode = parseCode1 "First" Semigroup.First
 
-instance FromCode a => FromCode (Semigroup.First a) where
-  fromCode = fromCode1 "First" Semigroup.First
-
-instance ToCode a => ToCode (Semigroup.Last a) where
+instance Homoiconic a => Homoiconic (Semigroup.Last a) where
   toCode (Semigroup.Last a) = toCode1 "Last" a
+  parseCode = parseCode1 "Last" Semigroup.Last
 
-instance FromCode a => FromCode (Semigroup.Last a) where
-  fromCode = fromCode1 "Last" Semigroup.Last
-
-instance ToCode a => ToCode (Semigroup.Max a) where
+instance Homoiconic a => Homoiconic (Semigroup.Max a) where
   toCode (Semigroup.Max a) = toCode1 "Max" a
+  parseCode = parseCode1 "Max" Semigroup.Max
 
-instance FromCode a => FromCode (Semigroup.Max a) where
-  fromCode = fromCode1 "Max" Semigroup.Max
-
-instance ToCode a => ToCode (Semigroup.Min a) where
+instance Homoiconic a => Homoiconic (Semigroup.Min a) where
   toCode (Semigroup.Min a) = toCode1 "Min" a
-
-instance FromCode a => FromCode (Semigroup.Min a) where
-  fromCode = fromCode1 "Min" Semigroup.Min
+  parseCode = parseCode1 "Min" Semigroup.Min
 
 #if !MIN_VERSION_ghc(9,0,0)
-instance ToCode a => ToCode (Semigroup.Option a) where
+instance Homoiconic a => Homoiconic (Semigroup.Option a) where
   toCode (Semigroup.Option a) = toCode1 "Option" a
-
-instance FromCode a => FromCode (Semigroup.Option a) where
-  fromCode = fromCode1 "Option" Semigroup.Option
+  parseCode = parseCode1 "Option" Semigroup.Option
 #endif
 
-instance ToCode a => ToCode (Semigroup.WrappedMonoid a) where
+instance Homoiconic a => Homoiconic (Semigroup.WrappedMonoid a) where
   toCode (Semigroup.WrapMonoid a) = toCode1 "WrapMonoid" a
-
-instance FromCode a => FromCode (Semigroup.WrappedMonoid a) where
-  fromCode = fromCode1 "WrapMonoid" Semigroup.WrapMonoid
+  parseCode = parseCode1 "WrapMonoid" Semigroup.WrapMonoid
 
 --
 -- Data.Word
 --
 
-instance ToCode Word8 where
-  toCode = integralToCode
+instance Homoiconic Word8 where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance FromCode Word8 where
-  fromCode = integralFromCode
+instance Homoiconic Word16 where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance ToCode Word16 where
-  toCode = integralToCode
+instance Homoiconic Word32 where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
-instance FromCode Word16 where
-  fromCode = integralFromCode
-
-instance ToCode Word32 where
-  toCode = integralToCode
-
-instance FromCode Word32 where
-  fromCode = integralFromCode
-
-instance ToCode Word64 where
-  toCode = integralToCode
-
-instance FromCode Word64 where
-  fromCode = integralFromCode
+instance Homoiconic Word64 where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
 --
 -- Numeric.Natural
 --
 
-instance ToCode Natural where
-  toCode = integralToCode
-
-instance FromCode Natural where
-  fromCode = integralFromCode
+instance Homoiconic Natural where
+  toCode = integralHomoiconic
+  parseCode = integralFromCode
 
 --
 -- Language.Finkel.Form
 --
 
-instance ToCode Atom where
+instance Homoiconic Atom where
   toCode = LForm . genSrc . Atom
-
-instance FromCode Atom where
-  fromCode a =
+  parseCode a =
     case unCode a of
-      Atom x -> Just x
-      _      -> Nothing
+      Atom x -> pure x
+      _      -> failedToParse "Atom"
 
-instance ToCode (Form Atom) where
+instance Homoiconic (Form Atom) where
   toCode = LForm . genSrc
+  parseCode = pure . unCode
 
-instance FromCode (Form Atom) where
-  fromCode = Just . unCode
-
-instance ToCode (LForm Atom) where
+instance Homoiconic (LForm Atom) where
   toCode = id
-
-instance FromCode (LForm Atom) where
-  fromCode = Just
+  parseCode = pure
 
 
 -- -------------------------------------------------------------------
 --
--- Auxiliary
+-- Generic toCode
 --
 -- -------------------------------------------------------------------
 
-realFracToCode :: (Real a, Show a) => a -> Code
-realFracToCode a = LForm (genSrc (Atom (aFractional a)))
+-- | Generic variant of 'toCode'.
+genericToCode :: (Generic a, GToCode (Rep a)) => a -> Code
+genericToCode = unCodeArgs . gToCode . from
+{-# INLINABLE genericToCode #-}
 
-fractionalFromCode :: Fractional a => Code -> Maybe a
-fractionalFromCode a =
-  case unCode a of
-    Atom (AFractional x) -> Just (fromRational (fl_value x))
-    _                    -> Nothing
+-- | To distinguish arguments of constructor from non-argument.
+data CodeArgs
+  = NonArg Code
+  | Args [Code]
 
-symbolCode :: String -> Code
-symbolCode = LForm . genSrc . Atom . aSymbol
+unCodeArgs :: CodeArgs -> Code
+unCodeArgs ca = case ca of
+  NonArg c -> c
+  Args cs  -> toCode (List cs)
+{-# INLINABLE unCodeArgs #-}
 
-showAsSymbolCode :: Show a => a -> Code
-showAsSymbolCode = symbolCode . show
+instance Semigroup.Semigroup CodeArgs where
+  Args xs <> Args ys   = Args (xs Semigroup.<> ys)
+  Args xs <> NonArg y  = Args (xs Semigroup.<> [y])
+  NonArg x <> Args ys  = Args (x : ys)
+  NonArg x <> NonArg y = Args [x, y]
+  {-# INLINE (<>) #-}
 
-integralToCode :: Integral a => a -> Code
-integralToCode = LForm . genSrc . Atom . aIntegral
+-- | For making 'Code' with 'Generic' instances.
+class GToCode f where
+  gToCode :: f a -> CodeArgs
 
-integralFromCode :: Integral a => Code -> Maybe a
-integralFromCode a =
-  case unCode a of
-    Atom (AInteger n) -> Just (fromIntegral (il_value n))
-    _                 -> Nothing
+instance GToCode V1 where
+  gToCode _ = NonArg undefined
+  {-# INLINE gToCode #-}
+
+instance GToCode U1 where
+  gToCode U1 = NonArg nil
+  {-# INLINE gToCode #-}
+
+instance (GToCode f, GToCode g) => GToCode (f :+: g) where
+  gToCode lr = case lr of
+    L1 x -> gToCode x
+    R1 x -> gToCode x
+  {-# INLINE gToCode #-}
+
+instance (GToCode f, GToCode g) => GToCode (f :*: g) where
+  gToCode (f :*: g) = gToCode f Semigroup.<> gToCode g
+  {-# INLINE gToCode #-}
+
+instance Homoiconic c => GToCode (K1 i c) where
+  gToCode (K1 x) = NonArg (toCode x)
+  {-# INLINE gToCode #-}
+
+instance GToCode f => GToCode (M1 D c f) where
+  gToCode (M1 x) = gToCode x
+  {-# INLINE gToCode #-}
+
+instance (Constructor c, GToCode f) => GToCode (M1 C c f) where
+  gToCode m1@(M1 x) =
+    let constr = toCode (aSymbol (conName m1))
+    in  case gToCode x of
+      NonArg c -> if null c
+        then NonArg constr
+        else NonArg (toCode (List [constr, c]))
+      Args cs -> NonArg (toCode (List (constr : cs)))
+  {-# INLINE gToCode #-}
+
+instance GToCode f => GToCode (M1 S c f) where
+  gToCode (M1 x) = gToCode x
+  {-# INLINE gToCode #-}
+
+
+-- -------------------------------------------------------------------
+--
+-- Generic FromCode
+--
+-- -------------------------------------------------------------------
+
+-- | Generic variant of 'fromCode'.
+genericFromCode :: (Generic a, GParseCode (Rep a)) => Code -> Maybe a
+genericFromCode x = case genericParseCode x of
+  Success a -> Just a
+  _         -> Nothing
+{-# INLINABLE genericFromCode #-}
+
+-- | Generic function to get result value from 'Code'.
+genericParseCode :: (Generic a, GParseCode (Rep a)) => Code -> Result a
+genericParseCode =
+  let f a xs = if null xs
+                 then pure (to a)
+                 else fail "Unexpected leftover"
+  in  runCodeP gParseCode fail f
+{-# INLINABLE genericParseCode #-}
+
+-- | For getting value from 'Code' with 'Generic' instances.
+class GParseCode f where
+  gParseCode :: CodeP (f a)
+
+instance GParseCode V1 where
+  gParseCode = pure undefined
+  {-# INLINE gParseCode #-}
+
+instance GParseCode U1 where
+  gParseCode = pure U1
+  {-# INLINE gParseCode #-}
+
+instance (GParseCode f, GParseCode g) => GParseCode (f :+: g) where
+  gParseCode = fmap L1 gParseCode <|> fmap R1 gParseCode
+  {-# INLINE gParseCode #-}
+
+instance (GParseCode f, GParseCode g) => GParseCode (f :*: g) where
+  gParseCode = (:*:) <$> gParseCode <*> gParseCode
+  {-# INLINE gParseCode #-}
+
+instance Homoiconic c => GParseCode (K1 i c) where
+  gParseCode =
+    unconsP (\l c cs ->
+              case parseCode c of
+                Success a -> contP (K1 a) (LForm (L l (List cs)))
+                _         -> failP ("Unexpected: " ++ show c))
+  {-# INLINE gParseCode #-}
+
+instance GParseCode f => GParseCode (M1 D c f) where
+  gParseCode = fmap M1 gParseCode
+  {-# INLINE gParseCode #-}
+
+instance {-# OVERLAPPABLE #-} Constructor c => GParseCode (M1 C c U1) where
+  gParseCode =
+    let c1 :: M1 C c U1 a
+        c1 = undefined
+    in  eqP (toCode (aSymbol (conName c1))) *> fmap M1 gParseCode
+  {-# INLINE gParseCode #-}
+
+instance {-# OVERLAPPABLE #-} (Constructor c, GParseCode f)
+  => GParseCode (M1 C c f) where
+  gParseCode =
+    let c1 :: M1 C c f a
+        c1 = undefined
+    in  eqCarP (toCode (aSymbol (conName c1))) *> fmap M1 gParseCode
+  {-# INLINE gParseCode #-}
+
+instance GParseCode f => GParseCode (M1 S c f) where
+  gParseCode = fmap M1 gParseCode
+  {-# INLINE gParseCode #-}
+
+
+-- -------------------------------------------------------------------
+--
+-- Code parser for GParseCode
+--
+-- -------------------------------------------------------------------
+
+-- | Dedicated data type to hold parsed result of 'Code'.
+--
+-- Using dedicated data type when parsing 'Code' data type for 'parseCode'. This
+-- data type is intentionally not defined as an instance of 'Homoiconic', so
+-- that the user defined data types can tell the parse error from explicit
+-- failure constructor of the target type, e,g, 'Nothing' for 'Maybe', 'Left'
+-- for 'Either', ... etc.
+data Result a
+  = Success a
+  | Failure String
+  deriving (Eq, Show)
+
+instance Functor Result where
+  fmap f r = case r of
+    Success a -> Success (f a)
+    Failure e -> Failure e
+  {-# INLINE fmap #-}
+
+instance Applicative Result where
+  pure a = Success a
+  {-# INLINE pure #-}
+  f <*> m = f >>= flip fmap m
+  {-# INLINE (<*>) #-}
+
+instance Monad Result where
+  m >>= k = case m of
+    Success a -> k a
+    Failure e -> Failure e
+  {-# INLINE (>>=) #-}
+
+instance MonadFail Result where
+  fail = Failure
+  {-# INLINE fail #-}
+
+failedToParse :: String -> Result a
+failedToParse ty = Failure ("Failed to parse " ++ ty)
+{-# INLINABLE failedToParse #-}
+
+-- | Simple parser for 'Code'.
+newtype CodeP a =
+  CodeP {runCodeP :: forall r. (String -> r) -- On failure
+                  -> (a -> Code -> r)        -- On success
+                  -> Code                    -- Input
+                  -> r}
+
+instance Functor CodeP where
+  fmap f p = CodeP (\err go -> runCodeP p err (go . f))
+  {-# INLINE fmap #-}
+
+instance Applicative CodeP where
+  pure a = CodeP (\_ go -> go a)
+  {-# INLINE pure #-}
+
+  f <*> p = f >>= flip fmap p
+  {-# INLINE (<*>) #-}
+
+instance Monad CodeP where
+  m >>= k = CodeP (\err go -> runCodeP m err (\a -> runCodeP (k a) err go))
+  {-# INLINE (>>=) #-}
+
+instance Alternative CodeP where
+  empty = failP "Alternative.empty"
+  {-# INLINE empty #-}
+
+  p1 <|> p2 =
+    CodeP (\err go cs ->
+            runCodeP p1 (\_ -> runCodeP p2 err go cs) go cs)
+  {-# INLINE (<|>) #-}
+
+failP :: String -> CodeP a
+failP msg = CodeP (\err _ _ -> err msg)
+{-# INLINABLE failP #-}
+
+contP :: a -> Code -> CodeP a
+contP a cs = CodeP (\_ go _ -> go a cs)
+{-# INLINEABLE contP #-}
+
+unconsP :: (SrcSpan -> Code -> [Code] -> CodeP a) -> CodeP a
+unconsP f =
+  CodeP (\err go cs ->
+    case cs of
+      LForm (L l (List (x : xs))) -> runCodeP (f l x xs) err go cs
+      _                           -> err "Not a list")
+{-# INLINEABLE unconsP #-}
+
+eqP :: Code -> CodeP ()
+eqP x =
+  CodeP (\err go cs ->
+    if cs == x
+      then go () nil
+      else err ("eqP: unexpected " ++ show cs))
+{-# INLINABLE eqP #-}
+
+eqCarP :: Code -> CodeP ()
+eqCarP x =
+  unconsP (\l c cs ->
+             if x == c
+               then contP () (LForm (L l (List cs)))
+               else failP ("eqCarP: unexpected " ++ show c))
+{-# INLINABLE eqCarP #-}
+
+
+-- -------------------------------------------------------------------
+--
+-- Data to Code
+--
+-- -------------------------------------------------------------------
 
 dataToCode :: Data d => d -> Code
 dataToCode x =
@@ -638,32 +817,61 @@ dataToCode x =
              [] -> hd
              _  -> toCode (List (hd:gmapQ dataToCode x))
 
-toCode1 :: ToCode a => FastString -> a -> Code
+
+-- -------------------------------------------------------------------
+--
+-- Auxiliary
+--
+-- -------------------------------------------------------------------
+
+realFracHomoiconic :: (Real a, Show a) => a -> Code
+realFracHomoiconic a = LForm (genSrc (Atom (aFractional a)))
+
+fractionalFromCode :: Fractional a => Code -> Result a
+fractionalFromCode a =
+  case unCode a of
+    Atom (AFractional x) -> pure (fromRational (fl_value x))
+    _                    -> failedToParse "fractional"
+
+symbolCode :: String -> Code
+symbolCode = LForm . genSrc . Atom . aSymbol
+
+showAsSymbolCode :: Show a => a -> Code
+showAsSymbolCode = symbolCode . show
+
+integralHomoiconic :: Integral a => a -> Code
+integralHomoiconic = LForm . genSrc . Atom . aIntegral
+
+integralFromCode :: Integral a => Code -> Result a
+integralFromCode a =
+  case unCode a of
+    Atom (AInteger n) -> pure (fromIntegral (il_value n))
+    _                 -> failedToParse "integral"
+
+toCode1 :: Homoiconic a => FastString -> a -> Code
 toCode1 tag arg1 =
   toCode (List [LForm (genSrc (Atom (ASymbol tag))), toCode arg1])
 {-# INLINABLE toCode1 #-}
 
-toCode2 :: (ToCode a, ToCode b) =>
-           FastString -> a -> b -> Code
+toCode2 :: (Homoiconic a, Homoiconic b) => FastString -> a -> b -> Code
 toCode2 tag arg1 arg2 =
   toCode (List [ LForm (genSrc (Atom (ASymbol tag)))
                , toCode arg1, toCode arg2 ])
 {-# INLINABLE toCode2 #-}
 
-fromCode1 :: (FromCode a) =>
-             FastString -> (a -> h) -> Code -> Maybe h
-fromCode1 tag f a =
+parseCode1 :: (Homoiconic a) => FastString -> (a -> h) -> Code -> Result h
+parseCode1 tag f a =
   case unCode a of
     List [LForm (L _ (Atom (ASymbol tag'))), x]
-      | tag == tag' -> f <$> fromCode x
-    _               -> Nothing
-{-# INLINABLE fromCode1 #-}
+      | tag == tag' -> f <$> parseCode x
+    _               -> failedToParse (unpackFS tag)
+{-# INLINABLE parseCode1 #-}
 
-fromCode2 :: (FromCode a, FromCode b) =>
-             FastString -> (a -> b -> h) -> Code -> Maybe h
-fromCode2 tag f a =
+parseCode2 :: (Homoiconic a, Homoiconic b)
+          => FastString -> (a -> b -> h) -> Code -> Result h
+parseCode2 tag f a =
   case unCode a of
     List [LForm (L _ (Atom (ASymbol tag'))), x, y]
-      | tag == tag' -> f <$> fromCode x <*> fromCode y
-    _               -> Nothing
-{-# INLINABLE fromCode2 #-}
+      | tag == tag' -> f <$> parseCode x <*> parseCode y
+    _               -> failedToParse (unpackFS tag)
+{-# INLINABLE parseCode2 #-}

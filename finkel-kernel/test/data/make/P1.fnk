@@ -1,4 +1,5 @@
 %p(LANGUAGE DeriveDataTypeable
+            DeriveGeneric
             OverloadedStrings)
 
 (module P1
@@ -6,18 +7,12 @@
 
 (import Language.Finkel)
 (import Data.Data)
+(import GHC.Generics ((Generic ..)))
 
 (data D D1 D2 D3
-  (deriving Bounded Enum Eq Ord Show Read Data Typeable))
+  (deriving Bounded Enum Eq Ord Show Read Data Typeable Generic))
 
-(instance (ToCode D))
-(instance (FromCode D)
-  (= fromCode x
-    (case (unCode x)
-      (Atom (ASymbol s)) (| ((== s "D1") (Just D1))
-                            ((== s "D2") (Just D2))
-                            ((== s "D3") (Just D3)))
-      _ Nothing)))
+(instance (Homoiconic D))
 
 (:: dmac (-> Code (Fnk Code)))
 (= dmac form

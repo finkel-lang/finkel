@@ -14,8 +14,8 @@ module Language.Finkel
 
   , Code
   , unCode
-  , ToCode(..)
-  , FromCode(..)
+  , Homoiconic(..)
+  , fromCode
 
   , QuoteFn
   , qSymbol

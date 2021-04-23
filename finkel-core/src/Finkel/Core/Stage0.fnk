@@ -55,7 +55,7 @@ will create a new 'List' instead of a /dotted-pair/.
 ([a b] c d)
 >>> (cons 'a 'b)
 (a b)")
-(:: cons (=> (ToCode a) (ToCode b) (-> a b Code)))
+(:: cons (=> (Homoiconic a) (Homoiconic b) (-> a b Code)))
 (= cons a b
   (let ((= (@ hd (LForm (L l0 _))) (toCode a))
         (= (@ whole (LForm (L _ xs))) (toCode b)))

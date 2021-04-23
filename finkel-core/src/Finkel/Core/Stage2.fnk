@@ -451,7 +451,7 @@ Like `mb_symbol_name', but returns `FastString'"
     (case (mkLocatedForm (reverse xs))
       (L l ys) (LForm (L l (List ys))))))
 
-(instance (=> (ToCode elem) (Listable l)
+(instance (=> (Homoiconic elem) (Listable l)
               (Listable (-> elem l)))
   (= list_ acc
     (\ x (list_ (: (toCode x) acc)))))

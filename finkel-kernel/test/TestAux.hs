@@ -140,6 +140,8 @@ makeMain pkg_args other_args =
             Just ExitSuccess -> return ()
             _                -> print e >> throw e)
 
+-- XXX: Ignoring all messages, including messages for reporting error.
+-- Might be better to implement an option to redirect log outputs.
 quietly :: IO a -> IO a
 quietly = hSilence [stderr, stdout]
 
