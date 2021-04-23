@@ -15,6 +15,7 @@ module TestAux
   , fnkTestEnv
   , getTestFiles
   , beforeAllWith
+  , quietly
   ) where
 
 #include "ghc_modules.h"
@@ -29,6 +30,7 @@ import           Data.Version            (showVersion)
 import           System.Environment      (getExecutablePath, lookupEnv,
                                           withArgs)
 import           System.Exit             (ExitCode (..))
+import           System.IO               (stderr, stdout)
 
 #if !MIN_VERSION_hspec(2,7,6)
 import           Control.Concurrent      (MVar, modifyMVar, newMVar)
@@ -66,6 +68,9 @@ import           Test.Hspec              (beforeWith, runIO)
 
 -- process
 import           System.Process          (readProcess)
+
+-- silently
+import           System.IO.Silently      (hSilence)
 
 -- fnk-kernel
 import           Language.Finkel         (defaultFnkEnv)
@@ -130,10 +135,13 @@ getFnkTestResource = do
 
 makeMain :: [String] -> [String] -> IO ()
 makeMain pkg_args other_args =
-  catch (withArgs (pkg_args ++ other_args) defaultMain)
+  catch (withArgs (pkg_args ++ other_args) (quietly defaultMain))
         (\e -> case fromException e of
             Just ExitSuccess -> return ()
             _                -> print e >> throw e)
+
+quietly :: IO a -> IO a
+quietly = hSilence [stderr, stdout]
 
 makeInit :: [String] -> Fnk ()
 makeInit pkg_args = resetPackageEnv pkg_args >> initSessionForMake

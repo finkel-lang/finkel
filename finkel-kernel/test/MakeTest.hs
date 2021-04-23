@@ -422,7 +422,8 @@ buildReload the_file fname files1 files2 before_str after_str =
                else do_work' use_obj tmpdir ftr
 
     do_work' use_obj tmpdir ftr = do
-       (ret1, ret2) <- runFnk (fnk_work use_obj tmpdir ftr) reloadFnkEnv
+       let act = runFnk (fnk_work use_obj tmpdir ftr) reloadFnkEnv
+       (ret1, ret2) <- quietly act
        (ret1, ret2) `shouldBe` (before_str, after_str)
 
     reloadFnkEnv = fnkTestEnv {envVerbosity = 3}

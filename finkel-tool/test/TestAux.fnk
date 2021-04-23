@@ -4,7 +4,7 @@
 
 (defmodule TestAux
   (export (TestIO ..) (TestIOState ..) runTestIO
-          (EvalTestFns ..) makeEvalTestFns)
+          (EvalTestFns ..) makeEvalTestFns quietly)
   (require
    ;; finkel-core
    (Finkel.Core.Ghc))
@@ -19,6 +19,7 @@
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.Function (on))
    (System.Environment (lookupEnv))
+   (System.IO (stderr stdout))
 
    ;; directory
    (System.Directory (getHomeDirectory))
@@ -28,6 +29,9 @@
 
    ;; hspec
    (Test.Hspec)
+
+   ;; silently
+   (System.IO.Silently (hSilence))
 
    ;; finkel-kernel
    (Language.Finkel)
@@ -186,17 +190,19 @@
       (let ((= eval-form right-or-left form expect
               (describe (++ "evaluate " (show form))
                 (it "evaluates to expected result"
-                  (do (putMVar in-mv (Input Connection form out-mv))
-                      (<- ret (takeMVar out-mv))
-                      (shouldBe ret (right-or-left expect))))))
+                  (quietly
+                   (do (putMVar in-mv (Input Connection form out-mv))
+                       (<- ret (takeMVar out-mv))
+                       (shouldBe ret (right-or-left expect)))))))
             (= ok (eval-form Right))
             (= ng (eval-form Left))
             (= satisfy form test
               (describe (++ "evaluate " (show form))
                 (it "satisfies predicate"
-                  (do (putMVar in-mv (Input Connection form out-mv))
-                      (<- ret (takeMVar out-mv))
-                      (shouldSatisfy ret test)))))
+                  (quietly
+                   (do (putMVar in-mv (Input Connection form out-mv))
+                       (<- ret (takeMVar out-mv))
+                       (shouldSatisfy ret test))))))
             (= cleanup
               (do (killThread etid)
                   (cleanup-repl resources)))))
@@ -207,3 +213,6 @@
                             etf-satisfy satisfy
                             etf-cleanup cleanup
                             etf-tid etid}))))
+
+(defn (:: quietly (-> (IO a) (IO a)))
+  (hSilence [stderr stdout]))

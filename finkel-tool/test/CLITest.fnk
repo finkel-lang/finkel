@@ -27,7 +27,8 @@
    (Test.Hspec)
 
    ;; Internal
-   (Finkel.Tool.Internal.CLI)))
+   (Finkel.Tool.Internal.CLI)
+   (TestAux)))
 
 (defn (:: cliTests Spec)
   (do (describe "IO instance" io-tests)
@@ -56,17 +57,13 @@
                            expected))))
       (d "putString"
          (it "should run successfully"
-           (shouldReturn (toIO (putString "foo"))
-                         ())))
+           (quietly (toIO (putString "foo")))))
       (d "handleInterrupt"
          (it "should run the given action"
-           (shouldReturn (toIO (handleInterrupt (return ())
-                                                (return ())))
-                         ())))
+           (toIO (handleInterrupt (return ()) (return ())))))
       (d "withInterrupt"
          (it "should run the given action"
-           (shouldReturn (toIO (withInterrupt (return ())))
-                         ())))
+           (toIO (withInterrupt (return ())))))
       (d "exitWith"
          (it "should throw exit failure"
            (shouldThrow (toIO (exitWith (ExitFailure 1)))
