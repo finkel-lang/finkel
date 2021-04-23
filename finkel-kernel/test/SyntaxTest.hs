@@ -112,8 +112,11 @@ mkTest' path = do
             then nativeCompile
             else byteCompile
 
-#if MIN_VERSION_ghc(8,8,0)
+#if MIN_VERSION_ghc(8,10,0)
       skipThisTest _ = (False, "")
+#elif MIN_VERSION_ghc(8,8,0)
+      skipThisTest p
+         = (takeBaseName p == "0008-ffi", "Native code for FFI skipped")
 #elif MIN_VERSION_ghc(8,6,0)
       skipThisTest p
          | takeBaseName p == "0008-ffi"
