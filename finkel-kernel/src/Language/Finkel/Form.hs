@@ -51,11 +51,14 @@ import Data.Function        (on)
 import Data.Maybe           (fromMaybe)
 import GHC.Generics         (Generic)
 
+import Data.Binary          (Binary (..), Get, Put, getWord8, putWord8)
+
 -- ghc
 import GHC_Data_FastString  (FastString, fsLit, unpackFS)
 import GHC_Types_Basic      (FractionalLit (..), SourceText (..))
-import GHC_Types_SrcLoc     (GenLocated (..), Located, SrcSpan (..),
-                             combineLocs, combineSrcSpans, mkSrcLoc, mkSrcSpan,
+import GHC_Types_SrcLoc     (GenLocated (..), Located, RealSrcSpan (..),
+                             SrcSpan (..), combineLocs, combineSrcSpans,
+                             mkRealSrcLoc, mkRealSrcSpan, mkSrcLoc, mkSrcSpan,
                              srcSpanEndCol, srcSpanEndLine, srcSpanFile,
                              srcSpanFileName_maybe, srcSpanStartCol,
                              srcSpanStartLine)
@@ -63,12 +66,23 @@ import GHC_Utils_Outputable (Outputable (..), brackets, cat, char, double,
                              doubleQuotes, fsep, integer, parens, text)
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Types_SrcLoc     (UnhelpfulSpanReason (..), unhelpfulSpanFS)
+import GHC_Types_SrcLoc     (BufPos (..), BufSpan (..),
+                             UnhelpfulSpanReason (..), unhelpfulSpanFS)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+import GHC_Data_FastString  (fastStringToShortByteString,
+                             mkFastStringShortByteString)
+#elif MIN_VERSION_ghc(8,10,0)
+import GHC_Data_FastString  (bytesFS, mkFastStringByteString)
+#else
+import GHC_Data_FastString  (fastStringToByteString, mkFastStringByteString)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
 import GHC_Types_Basic      (IntegralLit (..), mkFractionalLit, mkIntegralLit)
 #endif
+
 
 -- deepseq
 import Control.DeepSeq      (NFData (..))
@@ -404,6 +418,217 @@ instance Fractional Code where
   recip = liftLF recip
   fromRational = LForm . genSrc . fromRational
 
+
+-- -------------------------------------------------------------------
+--
+-- Instances for classes from binary package
+--
+-- -------------------------------------------------------------------
+
+instance Binary Atom where
+  put x = case x of
+    AUnit          -> putWord8 0
+    ASymbol fs     -> putWord8 1 >> putFastString fs
+    AChar st c     -> putWord8 2 >> putSourceText st >> put c
+    AString st fs  -> putWord8 3 >> putSourceText st >> putFastString fs
+    AInteger il    -> putWord8 4 >> putIntegralLit il
+    AFractional fl -> putWord8 5 >> putFractionalLit fl
+  {-# INLINE put #-}
+
+  get = do
+    t <- getWord8
+    case t of
+      0 -> pure AUnit
+      1 -> ASymbol <$> getFastString
+      2 -> AChar <$> getSourceText <*> get
+      3 -> AString <$> getSourceText <*> getFastString
+      4 -> AInteger <$> getIntegralLit
+      5 -> AFractional <$> getFractionalLit
+      _ -> error $ "get: unknown tag " ++ show t
+  {-# INLINE get #-}
+
+#if MIN_VERSION_ghc(9,0,0)
+putFastString :: FastString -> Put
+putFastString = put . fastStringToShortByteString
+
+getFastString :: Get FastString
+getFastString = fmap mkFastStringShortByteString get
+#elif MIN_VERSION_ghc(8,10,0)
+putFastString :: FastString -> Put
+putFastString = put . bytesFS
+
+getFastString :: Get FastString
+getFastString = fmap mkFastStringByteString get
+#else
+putFastString :: FastString -> Put
+putFastString = put . fastStringToByteString
+
+getFastString :: Get FastString
+getFastString = fmap mkFastStringByteString get
+#endif
+
+{-# INLINABLE getFastString #-}
+{-# INLINABLE putFastString #-}
+
+putSourceText :: SourceText -> Put
+putSourceText st = case st of
+  SourceText str -> putWord8 0 >> put str
+  NoSourceText   -> putWord8 1
+{-# INLINABLE putSourceText #-}
+
+getSourceText :: Get SourceText
+getSourceText = do
+  t <- getWord8
+  case t of
+    0 -> SourceText <$> get
+    1 -> pure NoSourceText
+    _ -> error $ "getSourceText: unknown tag " ++ show t
+{-# INLINABLE getSourceText #-}
+
+putIntegralLit :: IntegralLit -> Put
+putIntegralLit il =
+  putSourceText (il_text il) *> put (il_neg il) *> put (il_value il)
+{-# INLINABLE putIntegralLit #-}
+
+getIntegralLit :: Get IntegralLit
+getIntegralLit = IL <$> getSourceText <*> get <*> get
+{-# INLINABLE getIntegralLit #-}
+
+#if MIN_VERSION_ghc(8,4,0)
+putFractionalLit :: FractionalLit -> Put
+putFractionalLit fl =
+  putSourceText (fl_text fl) *> put (fl_neg fl) *> put (fl_value fl)
+
+getFractionalLit :: Get FractionalLit
+getFractionalLit = FL <$> getSourceText <*> get <*> get
+#else
+putFractionalLit :: FractionalLit -> Put
+putFractionalLit fl = put (fl_text fl) *> put (fl_value fl)
+
+getFractionalLit :: Get FractionalLit
+getFractionalLit = FL <$> get <*> get
+#endif
+
+{-# INLINABLE putFractionalLit #-}
+{-# INLINABLE getFractionalLit #-}
+
+instance Binary a => Binary (Form a) where
+  put form = case form of
+    Atom x    -> putWord8 0 *> put x
+    List xs   -> putWord8 1 *> put xs
+    HsList xs -> putWord8 2 *> put xs
+    TEnd      -> putWord8 3
+  {-# INLINE put #-}
+
+  get = do
+    t <- getWord8
+    case t of
+      0 -> Atom <$> get
+      1 -> List <$> get
+      2 -> HsList <$> get
+      3 -> pure TEnd
+      _ -> error $ "getForm: unknown tag " ++ show t
+  {-# INLINE get #-}
+
+instance Binary a => Binary (LForm a) where
+  put (LForm (L l a)) = putSrcSpan l *> put a
+  {-# INLINE put #-}
+
+  get = LForm <$> (L <$> getSrcSpan <*> get)
+  {-# INLINE get #-}
+
+#if MIN_VERSION_ghc(9,0,0)
+putSrcSpan :: SrcSpan -> Put
+putSrcSpan s = case s of
+  RealSrcSpan p mb     -> putWord8 0 *> putRealSrcSpan p *> putMbBufSpan mb
+  UnhelpfulSpan reason -> putWord8 1 *> putUnhelpfulSpanReason reason
+
+getSrcSpan :: Get SrcSpan
+getSrcSpan = do
+  t <- getWord8
+  case t of
+    0 -> RealSrcSpan <$> getRealSrcSpan <*> getMbBufSpan
+    1 -> UnhelpfulSpan <$> getUnhelpfulSpanReason
+    _ -> error $ "getSrcSpan: unknown tag " ++ show t
+
+putMbBufSpan :: Maybe BufSpan -> Put
+putMbBufSpan mb_bs = case mb_bs of
+  Just (BufSpan s e) -> putWord8 0 *> putBufPos s *> putBufPos e
+  Nothing            -> putWord8 1
+{-# INLINABLE putMbBufSpan #-}
+
+getMbBufSpan :: Get (Maybe BufSpan)
+getMbBufSpan = do
+  t <- getWord8
+  case t of
+    0 -> Just <$> (BufSpan <$> getBufPos <*> getBufPos)
+    1 -> pure Nothing
+    _ -> error $ "getMbBufSpan: unknown tag " ++ show t
+{-# INLINABLE getMbBufSpan #-}
+
+putBufPos :: BufPos -> Put
+putBufPos (BufPos p) = put p
+{-# INLINABLE putBufPos #-}
+
+getBufPos :: Get BufPos
+getBufPos = BufPos <$> get
+{-# INLINABLE getBufPos #-}
+
+putUnhelpfulSpanReason :: UnhelpfulSpanReason -> Put
+putUnhelpfulSpanReason r = case r of
+  UnhelpfulNoLocationInfo -> putWord8 0
+  UnhelpfulWiredIn        -> putWord8 1
+  UnhelpfulInteractive    -> putWord8 2
+  UnhelpfulGenerated      -> putWord8 3
+  UnhelpfulOther fs       -> putWord8 4 *> putFastString fs
+{-# INLINABLE putUnhelpfulSpanReason #-}
+
+getUnhelpfulSpanReason :: Get UnhelpfulSpanReason
+getUnhelpfulSpanReason = do
+  t <- getWord8
+  case t of
+    0 -> pure UnhelpfulNoLocationInfo
+    1 -> pure UnhelpfulWiredIn
+    2 -> pure UnhelpfulInteractive
+    3 -> pure UnhelpfulGenerated
+    4 -> UnhelpfulOther <$> getFastString
+    _ -> error $ "getUnhelpfulSpanReason: unknown tag " ++ show t
+{-# INLINABLE getUnhelpfulSpanReason #-}
+
+#else
+putSrcSpan :: SrcSpan -> Put
+putSrcSpan s = case s of
+  RealSrcSpan rs   -> putWord8 0 *> putRealSrcSpan rs
+  UnhelpfulSpan fs -> putWord8 1 *> putFastString fs
+
+getSrcSpan :: Get SrcSpan
+getSrcSpan = do
+  t <- getWord8
+  case t of
+    0 -> RealSrcSpan <$> getRealSrcSpan
+    1 -> UnhelpfulSpan <$> getFastString
+    _ -> error $ "getSrcSpan: unknown tag " ++ show t
+#endif
+
+{-# INLINABLE putSrcSpan #-}
+{-# INLINABLE getSrcSpan #-}
+
+putRealSrcSpan :: RealSrcSpan -> Put
+putRealSrcSpan rs = do
+  putFastString (srcSpanFile rs)
+  put (srcSpanStartLine rs)
+  put (srcSpanStartCol rs)
+  put (srcSpanEndLine rs)
+  put (srcSpanEndCol rs)
+{-# INLINEABLE putRealSrcSpan #-}
+
+getRealSrcSpan :: Get RealSrcSpan
+getRealSrcSpan = do
+  fs <- getFastString
+  mkRealSrcSpan
+    <$> (mkRealSrcLoc fs <$> get <*> get)
+    <*> (mkRealSrcLoc fs <$> get <*> get)
+{-# INLINEABLE getRealSrcSpan #-}
 
 -- -------------------------------------------------------------------
 --

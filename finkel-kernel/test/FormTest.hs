@@ -31,6 +31,9 @@ import           Text.Show.Functions          ()
 import           Data.Monoid                  ((<>))
 #endif
 
+-- binary
+import           Data.Binary                  (decode, encode)
+
 -- deepseq
 import           Control.DeepSeq
 
@@ -95,6 +98,7 @@ formTests = do
   monadTest
   foldableTest
   traversableTest
+  binaryTest
 
   eqTest "(a \"bcd\" \\e [f g] (h i))"
   eqPropTest
@@ -397,6 +401,14 @@ traversableTest = do
   describe "traversing TEnd" $
     it "should be Just TEnd" $
       mapM f TEnd `shouldBe` Just TEnd
+
+binaryTest :: Spec
+binaryTest = do
+  describe "Instances of Get and Put from binary" $ do
+    it "should return the original value" $ do
+      let to_from_bin :: Code -> Bool
+          to_from_bin x = decode (encode x) == x
+      property to_from_bin
 
 eqTest :: String -> Spec
 eqTest str =
