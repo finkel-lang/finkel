@@ -76,10 +76,10 @@ import           Language.Finkel.Form
 
 -- | Class for handling Haskell value as 'Code'.
 --
--- Instance of 'Homoiconic' should satisfy the following property:
+-- Instance of 'Homoiconic' should satisfy the law:
 --
 -- @
--- 'parseCode' . 'toCode' ≡ 'Success'
+-- 'parseCode' ('toCode' x) ≡ 'Success' x
 -- @
 --
 -- The function 'listToCode' and 'parseHsListCode' are used when handling
@@ -176,23 +176,23 @@ instance Homoiconic Char where
                       _                  -> failedToParse "String"
 
 instance Homoiconic Int where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Word where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Integer where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Float where
-  toCode = realFracHomoiconic
+  toCode = realFracToCode
   parseCode = fractionalFromCode
 
 instance Homoiconic Double where
-  toCode = realFracHomoiconic
+  toCode = realFracToCode
   parseCode = fractionalFromCode
 
 instance Homoiconic a => Homoiconic [a] where
@@ -361,19 +361,19 @@ instance (Homoiconic (f a), Homoiconic (g a)) => Homoiconic (Sum.Sum f g a) wher
 --
 
 instance Homoiconic Int8 where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Int16 where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Int32 where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Int64 where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 --
@@ -489,19 +489,19 @@ instance Homoiconic a => Homoiconic (Semigroup.WrappedMonoid a) where
 --
 
 instance Homoiconic Word8 where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Word16 where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Word32 where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 instance Homoiconic Word64 where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 --
@@ -509,7 +509,7 @@ instance Homoiconic Word64 where
 --
 
 instance Homoiconic Natural where
-  toCode = integralHomoiconic
+  toCode = integralToCode
   parseCode = integralFromCode
 
 --
@@ -824,23 +824,28 @@ dataToCode x =
 --
 -- -------------------------------------------------------------------
 
-realFracHomoiconic :: (Real a, Show a) => a -> Code
-realFracHomoiconic a = LForm (genSrc (Atom (aFractional a)))
+realFracToCode :: (Real a, Show a) => a -> Code
+realFracToCode = LForm . genSrc . Atom . aFractional
+{-# INLINABLE realFracToCode #-}
 
 fractionalFromCode :: Fractional a => Code -> Result a
 fractionalFromCode a =
   case unCode a of
     Atom (AFractional x) -> pure (fromRational (fl_value x))
     _                    -> failedToParse "fractional"
+{-# INLINABLE fractionalFromCode #-}
 
 symbolCode :: String -> Code
 symbolCode = LForm . genSrc . Atom . aSymbol
+{-# INLINABLE symbolCode #-}
 
 showAsSymbolCode :: Show a => a -> Code
 showAsSymbolCode = symbolCode . show
+{-# INLINABLE showAsSymbolCode #-}
 
-integralHomoiconic :: Integral a => a -> Code
-integralHomoiconic = LForm . genSrc . Atom . aIntegral
+integralToCode :: Integral a => a -> Code
+integralToCode = LForm . genSrc . Atom . aIntegral
+{-# INLINABLE integralToCode #-}
 
 integralFromCode :: Integral a => Code -> Result a
 integralFromCode a =
