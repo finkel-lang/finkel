@@ -244,7 +244,10 @@ main3 orig_args ghc_args = do
 
 data FinkelOption = FinkelOption
   { finkelHelp :: Maybe FinkelHelp
-  , finkelEnv  :: FnkEnv
+
+    -- Using strict field to get exception soon after command line parsing, to
+    -- show command line argument errors without GHC panic message.
+  , finkelEnv  :: !FnkEnv
   }
 
 data FinkelHelp
@@ -262,11 +265,14 @@ parseFinkelOption :: FnkEnv -> [String] -> IO (FinkelOption, [String])
 parseFinkelOption fnk_env args0 = do
   let (fnk_args, other_args) = partitionFnkEnvOptions args0
   case getOpt Permute finkelOptDescrs fnk_args of
-    (o,_,[]) -> pure (foldl (flip id) (defaultFinkelOption fnk_env) o,
-                      other_args)
-    (_,_,es) -> do
-      me <- getProgName
-      throwFinkelExceptionIO (FinkelException (me ++ ": " ++ concat es))
+    (o,_,es) ->
+      if null es
+        then do
+          -- Strictly evaluating 'FinkelOption' to show error message early as
+          -- possible.
+          let fo = foldl' (flip id) (defaultFinkelOption fnk_env) o
+          fo `seq` pure (fo, other_args)
+        else throwFinkelExceptionIO (FinkelException (concat es))
 
 finkelOptDescrs :: [OptDescr (FinkelOption -> FinkelOption)]
 finkelOptDescrs = helpOptDescrs ++ debugOptDescrs
