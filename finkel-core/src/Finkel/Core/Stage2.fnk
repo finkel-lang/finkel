@@ -242,15 +242,16 @@ When compiling above with ghc version @8.8.4@ on @x86_64@ machine running
 "
   forms
   (do (<- ghc (gensym' "_ghc"))
+      (<- tmp (gensym' "cond-expand-tmp"))
       (let ((= make-quoted-last branches
               (case (unsnoc branches)
                 (, bs b) `(,@(fmap (replace-ce ghc) bs) ',b)))))
       (pure
-       `(macrolet (($cond-expand-tmp []
+       `(macrolet ((,tmp []
                      (let ((:: ,ghc Int)
                            (= ,ghc ,(:: (read cProjectVersionInt) Int)))
                        (cond ,@(map1 make-quoted-last forms)))))
-          ($cond-expand-tmp)))))
+          (,tmp)))))
 
 
 ;;; Macros for macros
