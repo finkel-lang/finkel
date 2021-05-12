@@ -34,7 +34,7 @@ import           System.IO               (stderr, stdout)
 
 #if !MIN_VERSION_hspec(2,7,6)
 import           Control.Concurrent      (MVar, modifyMVar, newMVar)
-import           Control.Exception       (SomeException, throwIO, try)
+import           Control.Exception       (SomeException, try)
 #endif
 
 -- directory

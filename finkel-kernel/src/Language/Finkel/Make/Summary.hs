@@ -44,11 +44,6 @@ import           Data.Time                         (UTCTime)
 -- directory
 import           System.Directory                  (createDirectoryIfMissing)
 
--- exceptions
-#if !MIN_VERSION_ghc(9,0,0)
-import           Control.Monad.Catch               (MonadThrow (..))
-#endif
-
 -- filepath
 import           System.FilePath                   (takeBaseName, takeDirectory,
                                                     (<.>), (</>))

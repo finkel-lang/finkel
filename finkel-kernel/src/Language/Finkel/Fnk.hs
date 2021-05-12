@@ -128,7 +128,6 @@ import           GHC_Driver_Types          (HscEnv (..),
 import           GHC_Hs_ImpExp             (simpleImportDecl)
 import           GHC_Runtime_Eval          (setContext)
 import           GHC_Settings_Config       (cProjectVersion)
-import           GHC_Types_SrcLoc          (GenLocated (..))
 import           GHC_Types_Unique_Supply   (MonadUnique (..), UniqSupply,
                                             initUniqSupply, mkSplitUniqSupply,
                                             splitUniqSupply, takeUniqFromSupply)
