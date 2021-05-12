@@ -12,9 +12,10 @@ module Language.Finkel.Main
 #include "ghc_modules.h"
 
 -- base
+import           Control.Exception            (displayException, throwIO)
 import           Control.Monad                (unless)
 import           Control.Monad.IO.Class       (MonadIO (..))
-import           Data.List                    (intercalate, partition)
+import           Data.List                    (foldl', intercalate, partition)
 import           Data.Version                 (showVersion)
 import           System.Console.GetOpt        (ArgDescr (..), ArgOrder (..),
                                                OptDescr (..), getOpt, usageInfo)
@@ -23,7 +24,9 @@ import           System.Exit                  (exitFailure, exitWith)
 import           System.FilePath              (normalise)
 import           System.IO                    (BufferMode (..), hSetBuffering,
                                                stderr, stdout)
-import           System.Process               (rawSystem)
+import           System.Process               (CreateProcess (..),
+                                               createProcess_, proc,
+                                               waitForProcess)
 
 -- ghc
 import           GHC                          (defaultErrorHandler,
@@ -58,6 +61,7 @@ import           GHC.HandleEncoding           (configureHandleEncoding)
 #endif
 
 -- internal
+import           Language.Finkel.Exception
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make
 import           Language.Finkel.Reader       (supportedLangExts)
@@ -102,13 +106,8 @@ defaultMainWith macros = do
   args0 <- getArgs
   if any (`elem` rawGhcOptions) args0
      then rawGhc args0
-     else do
-       (fnk_opts, args1) <-
-         handleFinkelException
-           (\(FinkelException msg) ->
-              putStrLn msg >> printBriefUsage >> exitFailure)
-           (parseFinkelOption defaultFnkEnv args0)
-
+     else showBriefUsageOnException $ do
+       (fnk_opts, args1) <- parseFinkelOption defaultFnkEnv args0
        let fnk_env0 = finkelEnv fnk_opts
 
            -- Filtering out `--make' flag when exist. Otherwise make flag would be
@@ -123,13 +122,21 @@ defaultMainWith macros = do
            macros' = mergeMacros (makeEnvMacros macros)
                                  (envMacros defaultFnkEnv)
 
-           fnk_env2 = fnk_env0 { envDefaultMacros = macros'
+           fnk_env1 = fnk_env0 { envDefaultMacros = macros'
                                , envMacros = macros' }
-           next = maybe (main1 fnk_env2 args1 args3)
+           next = maybe (main1 fnk_env1 args1 args3)
                         printFinkelHelp
                         (finkelHelp fnk_opts)
 
        next
+
+showBriefUsageOnException :: IO a -> IO a
+showBriefUsageOnException =
+  handleFinkelException
+    (\e -> do me <- getProgName
+              putStrLn (me ++ ": " ++ displayException e)
+              printBriefUsage
+              exitFailure)
 
 main1 :: FnkEnv -> [String] -> [String] -> IO ()
 main1 fnk_env orig_args ghc_args = do
@@ -141,12 +148,12 @@ main1 fnk_env orig_args ghc_args = do
     defaultFatalMessager
     defaultFlushOut
     (runFnk (handleFinkelException
-              (\(FinkelException se) -> liftIO (do putStrLn se
-                                                   exitFailure))
-              (handleSourceError (\se -> do printException se
-                                            liftIO exitFailure)
-                                 (main2 orig_args ghc_args)))
-             fnk_env)
+              (\e -> do printFinkelException e
+                        liftIO exitFailure)
+              (handleSourceError (\e -> do printException e
+                                           liftIO exitFailure)
+                (main2 orig_args ghc_args)))
+            fnk_env)
 
 main2 :: [String] -> [String] -> Fnk ()
 main2 orig_arg ghc_args =
@@ -272,7 +279,7 @@ parseFinkelOption fnk_env args0 = do
           -- possible.
           let fo = foldl' (flip id) (defaultFinkelOption fnk_env) o
           fo `seq` pure (fo, other_args)
-        else throwFinkelExceptionIO (FinkelException (concat es))
+        else throwIO (FinkelException (concat es))
 
 finkelOptDescrs :: [OptDescr (FinkelOption -> FinkelOption)]
 finkelOptDescrs = helpOptDescrs ++ debugOptDescrs
@@ -336,10 +343,9 @@ printFinkelVersion = putStrLn v
 -- ---------------------------------------------------------------------
 
 rawGhc :: [String] -> IO ()
-rawGhc args = rawSystem ghc args >>= exitWith
-  where
-    -- CPP macro defined in "finkel_kernel_config.h", see "Setup.hs" for detail.
-    ghc = FINKEL_KERNEL_GHC
+rawGhc args = do
+  (_,_,_,p) <- createProcess_ "ghc" (proc "ghc" args) {delegate_ctlc=True}
+  waitForProcess p >>= exitWith
 
 -- | When any of options listed here were found, invoke raw @ghc@ without using
 -- Finkel compiler. Otherwise @ghc@ will complain with error message. These

@@ -73,7 +73,7 @@ emptyTargetUnit ts = (ts, Nothing)
 findTargetUnit
   :: MonadIO m => DynFlags -> (Located String, Maybe Phase) -> m TargetUnit
 findTargetUnit dflags (lpath,mbp) =
-  (\t -> (t, mbp)) <$> findTargetSource dflags lpath
+  (,) <$> findTargetSource dflags lpath <*> pure mbp
 
 findTargetUnitMaybe
   :: MonadIO m
@@ -196,14 +196,14 @@ findFileInImportPaths dirs modName = do
 -- | Like 'findTargetSource', but takes 'ModuleName' argument.
 findTargetModuleName
   :: MonadIO m => DynFlags -> Located ModuleName -> m TargetSource
-findTargetModuleName dflags (L l mname) =
-  findTargetSource dflags (L l (moduleNameString mname))
+findTargetModuleName dflags =
+  findTargetSource dflags . fmap moduleNameString
 
 -- | Like 'findTargetSourceMaybe', but takes 'ModuleName' argument.
 findTargetModuleNameMaybe
   :: MonadIO m => DynFlags -> Located ModuleName -> m (Maybe TargetSource)
-findTargetModuleNameMaybe dflags (L l mname) =
-  findTargetSourceMaybe dflags (L l (moduleNameString mname))
+findTargetModuleNameMaybe dflags =
+  findTargetSourceMaybe dflags . fmap moduleNameString
 
 -- | Like 'findTargetSource', but the result wrapped in 'Maybe'.
 findTargetSourceMaybe
@@ -216,7 +216,7 @@ findTargetSourceMaybe dflags modName = do
                    in  return Nothing
 
 -- | Find 'TargetSource' from command line argument. This function throws
--- 'FinkelException' when the target source was not found.
+-- 'SourceError' when the target source was not found.
 findTargetSource
   :: MonadIO m => DynFlags -> Located String -> m TargetSource
 findTargetSource dflags (L l modNameOrFilePath)= do

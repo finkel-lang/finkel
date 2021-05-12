@@ -29,6 +29,7 @@ names in older versions.")
    (, 'GHC.Core.Ppr.TyThing 'PprTyThing)
    (, 'GHC.Core.TyCo.Rep 'TyCoRep)
 
+   (, 'GHC.Data.Bag 'Bag)
    (, 'GHC.Data.FastString 'FastString)
    (, 'GHC.Data.OrdList 'OrdList)
    (, 'GHC.Data.StringBuffer 'StringBuffer)

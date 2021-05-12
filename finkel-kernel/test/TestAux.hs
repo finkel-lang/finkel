@@ -21,7 +21,7 @@ module TestAux
 #include "ghc_modules.h"
 
 -- base
-import           Control.Exception       (catch, fromException, throw)
+import           Control.Exception       (catch, fromException, throw, throwIO)
 import           Control.Monad           (when)
 import           Control.Monad.IO.Class  (MonadIO (..))
 import           Data.List               (isSubsequenceOf, sort)
@@ -76,8 +76,7 @@ import           System.IO.Silently      (hSilence)
 import           Language.Finkel         (defaultFnkEnv)
 import           Language.Finkel.Builder (Builder)
 import           Language.Finkel.Expand  (expands, withExpanderSettings)
-import           Language.Finkel.Fnk     (Fnk, FnkEnv (..), failFnk,
-                                          setDynFlags)
+import           Language.Finkel.Fnk     (Fnk, FnkEnv (..), setDynFlags)
 import           Language.Finkel.Lexer   (evalSP)
 import           Language.Finkel.Main    (defaultMain)
 import           Language.Finkel.Make    (buildHsSyn, initSessionForMake, make)
@@ -138,7 +137,7 @@ makeMain pkg_args other_args =
   catch (withArgs (pkg_args ++ other_args) (quietly defaultMain))
         (\e -> case fromException e of
             Just ExitSuccess -> return ()
-            _                -> print e >> throw e)
+            _                -> throw e)
 
 -- XXX: Ignoring all messages, including messages for reporting error.
 -- Might be better to implement an option to redirect log outputs.
@@ -243,7 +242,7 @@ evalWith !label !parser !act !input = do
       !form1 <- withExpanderSettings (prepare >> expands form0)
       !hthing <- buildHsSyn parser form1
       act hthing
-    Left err -> failFnk err
+    Left err -> liftIO (throwIO err)
   where
     -- Adding 'Prelude' and 'Language.Finkel' to interactive context, since the
     -- codes in the file does not contain ':require' forms.

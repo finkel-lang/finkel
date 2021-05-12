@@ -18,26 +18,28 @@ module Language.Finkel.Reader
 #include "ghc_modules.h"
 
 -- base
-import           Control.Monad.Fail     (MonadFail(..))
 import           Data.Char              (toLower)
 import           Data.List              (foldl')
+
+-- exceptions
+import           Control.Monad.Catch    (MonadThrow(..))
 
 -- ghc
 import           GHC_Types_Basic        (SourceText(..))
 import           GHC_Data_FastString    (FastString, fsLit, unpackFS)
 import           GHC_Hs_ImpExp          (ideclName)
 import           GHC_Unit_Module        (moduleNameString)
-import           GHC_Types_SrcLoc       (GenLocated(..), Located, SrcSpan)
+import           GHC_Types_SrcLoc       (GenLocated(..), Located, SrcSpan,
+                                         mkSrcSpan)
 import           GHC_Data_StringBuffer  (StringBuffer)
 
 -- ghc-boot
 import           GHC.LanguageExtensions (Extension(..))
 
 -- Internal
-import           Language.Finkel.Builder
 import           Language.Finkel.Form
+import           Language.Finkel.Exception
 import           Language.Finkel.Lexer
-import           Language.Finkel.Syntax
 }
 
 %name sexpr_ sexp
@@ -286,7 +288,7 @@ pragma orig@(LForm (L l form)) =
           (\sp -> sp {haddockOptions =
                         makeOptionFlags rest ++ haddockOptions sp})
         return (emptyBody l)
-    _ -> errorSP orig ("unknown pragma: " ++ show form)
+    _ -> errorSP orig ("Unknown pragma: " ++ show form)
   where
     normalize = map toLower . unpackFS
     inlinePragmas = ["inline", "noinline", "inlinable"]
@@ -379,26 +381,29 @@ dispatch (L _ (TSymbol sym)) form =
 happyError :: SP a
 happyError = lexErrorSP
 
--- | Parse sexpressions.
-parseSexprs :: MonadFail m
+-- | Parse S-expressions.
+parseSexprs :: MonadThrow m
             => Maybe FilePath -- ^ Name of input file.
             -> StringBuffer   -- ^ Contents to parse.
             -> m ([Code], SPState)
 parseSexprs = parseWith sexprs_
 
--- | Parse file header LANGUAGE pragmas.
-parseHeaderPragmas :: MonadFail m
+-- | Parse file header pragmas.
+parseHeaderPragmas :: MonadThrow m
                    => Maybe FilePath
                    -> StringBuffer
                    -> m ([Code], SPState)
 parseHeaderPragmas = parseWith pheader
 
-parseWith
-  :: MonadFail m => SP a -> Maybe FilePath -> StringBuffer -> m (a, SPState)
+parseWith :: MonadThrow m
+          => SP a
+          -> Maybe FilePath
+          -> StringBuffer
+          -> m (a, SPState)
 parseWith p mb_file contents =
-  case runSP p mb_file contents of
-    Right a  -> return a
-    Left err -> Control.Monad.Fail.fail err
+  either (throwM . toLexicalException) pure (runSP p mb_file contents)
+  where
+    toLexicalException (LexicalError l c _) = LexicalException (mkSrcSpan l l) c
 {-# INLINABLE parseWith #-}
 
 -- | Parse single S-expression.

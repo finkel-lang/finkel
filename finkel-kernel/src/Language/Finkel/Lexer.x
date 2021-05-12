@@ -9,8 +9,9 @@
 -- This file contains Alex lexical analyser for tokeninzing S-expression.
 -- Lexcial analyser is used by Happy parser in S-expression reader.
 module Language.Finkel.Lexer
-  ( -- * Token data type
+  ( -- * Types
     Token(..)
+  , LexicalError(..)
 
     -- * Lexer function
   , tokenLexer
@@ -33,6 +34,7 @@ module Language.Finkel.Lexer
 #include "ghc_modules.h"
 
 -- base
+import           Control.Exception          (Exception(..))
 import           Control.Monad              (ap, liftM, msum)
 import           Data.Char                  (GeneralCategory(..), chr,
                                              generalCategory, ord,
@@ -92,7 +94,6 @@ import           FastString                 (fastStringToByteString)
 import qualified GHC.LanguageExtensions     as LangExt
 
 -- Internal
-import           Language.Finkel.Builder
 import           Language.Finkel.Form
 }
 
@@ -216,7 +217,7 @@ initialSPState file linum colnum =
 
 data SPResult a
   = SPOK {-# UNPACK #-} !SPState a
-  | SPNG SrcLoc String
+  | SPNG SrcLoc Char String
 
 -- | A state monad newtype to pass around 'SPstate'.
 newtype SP a = SP { unSP :: SPState -> SPResult a }
@@ -236,27 +237,35 @@ instance Monad SP where
   {-# INLINE return #-}
   m >>= k = SP (\st -> case unSP m st of
                    SPOK st' a -> unSP (k a) st'
-                   SPNG l msg -> SPNG l msg)
+                   SPNG l c msg -> SPNG l c msg)
   {-# INLINE (>>=) #-}
 
 data AlexInput = AlexInput RealSrcLoc StringBuffer
+
+-- | Lexical error with location and message.
+data LexicalError = LexicalError SrcLoc Char String
+  deriving (Eq, Show)
+
+instance Exception LexicalError where
+  displayException (LexicalError _ _ m) = m
+  {-# INLINE displayException #-}
 
 -- | Perform given 'SP' computation with target file name and input contents.
 runSP :: SP a           -- ^ Computation to perform.
       -> Maybe FilePath -- ^ File name of target. If 'Nothing', assumed as
                         -- anonymous target.
       -> StringBuffer   -- ^ Input contents.
-      -> Either String (a, SPState)
+      -> Either LexicalError (a, SPState)
 runSP sp target input =
   let st0 = initialSPState target' 1 1
       st1 = st0 {buf = input}
       target' = maybe (fsLit "anon") fsLit target
   in  case unSP sp st1 of
         SPOK sp' a -> Right (a, sp')
-        SPNG _loc msg -> Left msg
+        SPNG loc c msg -> Left (LexicalError loc c msg)
 
 -- | Like 'runSP', but discard resulting 'SPState'.
-evalSP :: SP a -> Maybe FilePath -> StringBuffer -> Either String a
+evalSP :: SP a -> Maybe FilePath -> StringBuffer -> Either LexicalError a
 evalSP sp target input = fmap fst (runSP sp target input)
 
 -- | Update current 'SPState' to given value.
@@ -273,6 +282,11 @@ getSPState = SP (\st -> SPOK st st)
 modifySPState :: (SPState -> SPState) -> SP ()
 modifySPState f = SP (\st -> SPOK (f st) ())
 {-# INLINABLE modifySPState #-}
+
+-- | Get previous character in buffer from given 'SPState'.
+prevCharSP :: SPState -> Char
+prevCharSP st = prevChar (buf st) '\n'
+{-# INLINABLE prevCharSP #-}
 
 -- -- | Incrementally perform computation with parsed result and given
 -- -- function.
@@ -344,9 +358,11 @@ alexInputPrevChar (AlexInput _ buf) = prevChar buf '\NUL'
 
 alexError :: String -> SP a
 #if MIN_VERSION_ghc(9,0,0)
-alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st) Nothing) msg)
+alexError msg =
+  SP (\st -> SPNG (RealSrcLoc (currentLoc st) Nothing) (prevCharSP st) msg)
 #else
-alexError msg = SP (\st -> SPNG (RealSrcLoc (currentLoc st)) msg)
+alexError msg =
+  SP (\st -> SPNG (RealSrcLoc (currentLoc st)) (prevCharSP st) msg)
 #endif
 {-# INLINABLE alexError #-}
 
@@ -638,8 +654,8 @@ tok_char inp0 _ = do
 tok_string :: Action
 tok_string inp@(AlexInput _ buf) _l =
   -- Currently String tokenizer does not update alex input per character. This
-  -- makes the code a bit more effiicient, but getting unhelpful error message
-  -- on illegal escape sequence.
+  -- makes the code a bit more effiicient, but getting unhelpful message on
+  -- lexical error with literal string.
   case alexGetChar inp of
     Just ('"', inp1)
       | Just (TString _ str, inp2@(AlexInput _ buf2)) <- go inp1 "" ->
@@ -816,7 +832,7 @@ scanToken = do
 -- | Lex the input to list of 'Token's.
 lexTokens :: Maybe FilePath
           -> StringBuffer
-          -> Either String [Located Token]
+          -> Either LexicalError [Located Token]
 lexTokens = evalSP go
   where
      go = do

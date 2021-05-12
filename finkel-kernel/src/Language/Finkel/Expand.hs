@@ -246,7 +246,7 @@ expands forms = do
 
 -- | Internal works for 'expands'.
 expands' :: [Code] -> Fnk [Code]
-expands' forms = fmap concat (mapM expand' forms)
+expands' = fmap concat . mapM expand'
 {-# INLINABLE expands' #-}
 
 -- | Expand form to list of 'Code', supports special form /begin/.
@@ -342,11 +342,8 @@ expand form =
         sym@(LForm (L _ (Atom (ASymbol k)))) : rest -> do
           fnk_env <- getFnkEnv
           case lookupMacro k fnk_env of
-            Just (Macro f)       -> do_expand k f >>= expand
-            Just (SpecialForm f) -> do_expand k f >>= expand
-            Nothing              -> do
-              rest' <- expands' rest
-              return $! LForm (L l (List (sym:rest')))
+            Just m  -> do_expand k (macroFunction m) >>= expand
+            Nothing -> LForm . L l . List . (sym:) <$> expands' rest
         _ -> do
           forms' <- expands' forms
           return $! LForm (L l (List forms'))
@@ -378,10 +375,10 @@ expand1 form =
     L _l (List ((LForm (L _ (Atom (ASymbol k)))) : _)) -> do
       fnk_env <- getFnkEnv
       case lookupMacro k fnk_env of
-        Just (Macro f)       -> f form
-        Just (SpecialForm f) -> f form
-        Nothing              -> return form
+        Just m  -> macroFunction m form
+        Nothing -> return form
     _ -> return form
+{-# INLINABLE expand1 #-}
 
 -- | 'True' when the 'DynFlags' is using interpreter.
 isInterpreted :: DynFlags -> Bool

@@ -24,6 +24,7 @@
 
    ;; finkel-kernel
    (Language.Finkel)
+   (Language.Finkel.Exception)
    (Language.Finkel.Form (aString aIntegral))
    (Language.Finkel.Fnk ((FnkEnv ..) makeEnvMacros mergeMacros))
 
@@ -37,7 +38,6 @@
 (imports-from-ghc
  (GHC.Types.Basic ((SourceText ..)))
  (GHC.Data.FastString (fsLit headFS nullFS))
- (GHC.Driver.Types (SourceError))
  (GHC.Settings.Config (cProjectVersionInt)))
 
 (defn (:: coreTests Spec)
@@ -45,7 +45,7 @@
 
 (defn (:: macroTests Spec)
   (do
-    (let ((:: srcSubseqErr (-> String SourceError Bool))
+    (let ((:: srcSubseqErr (-> String FinkelException Bool))
           (= srcSubseqErr str e
             (isSubsequenceOf str (show e)))))
     (describe "eval-when"

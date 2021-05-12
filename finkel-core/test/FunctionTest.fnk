@@ -12,8 +12,10 @@
   (import
    ;; base
    (Data.List (isSubsequenceOf))
+
    ;; finkel-kernel
    (Language.Finkel)
+   (Language.Finkel.Exception)
 
    ;; hspec
    (Test.Hspec)
@@ -25,9 +27,6 @@
    (Finkel.Prelude)
    (Orphan ())))
 
-(imports-from-ghc
- (GHC.Driver.Types (SourceError)))
-
 (defn (:: functionTests Spec)
   (do (describe "Error" errorTests)
       (describe "Cxr" cxrTests)
@@ -36,7 +35,7 @@
 (defn (:: errorTests Spec)
   (describe "unsafeFinkelSrcError"
     (it "should throw src error"
-      (let ((:: srcError (-> SourceError Bool))
+      (let ((:: srcError (-> FinkelException Bool))
             (= srcError s (isSubsequenceOf "foo" (show s))))
         (shouldThrow (unsafeFinkelSrcError nil "foo") srcError)))))
 

@@ -12,6 +12,7 @@
   (import
    ;; base
    (Control.Concurrent (MVar newEmptyMVar newMVar takeMVar))
+   (Control.Exception (displayException))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (System.Console.GetOpt
     ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
@@ -90,7 +91,8 @@
                         (Right form) (eval-and-exit ghc-args
                                                     (eo-fnk-env eo)
                                                     form)
-                        (Left err) (>> (putErrLn err) exitFailure))
+                        (Left err) (>> (putErrLn (displayException err))
+                                       exitFailure))
            Nothing (>> print-eval-help exitFailure))))))
 
 (defn (:: separate-args (-> [String] (, [String] (Maybe String))))

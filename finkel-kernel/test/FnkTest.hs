@@ -13,7 +13,7 @@ import           Data.Maybe                   (fromMaybe, isNothing)
 -- ghc
 import           GHC_Data_FastString          (fsLit)
 import           GHC_Data_StringBuffer        (stringToStringBuffer)
-import           GHC_Driver_Types             (SourceError, ms_mod_name)
+import           GHC_Driver_Types             (ms_mod_name)
 import           GHC_Types_SrcLoc             (GenLocated (..))
 import           GHC_Unit_Module              (moduleNameString)
 
@@ -26,6 +26,7 @@ import           Test.QuickCheck
 
 -- Internal
 import           Language.Finkel.Builder
+import           Language.Finkel.Exception
 import           Language.Finkel.Expand
 import           Language.Finkel.Fnk
 import           Language.Finkel.Form
@@ -52,7 +53,16 @@ exceptionTest = do
       e_foo = FinkelException "foo"
 
       test_e_foo :: FinkelException -> Bool
-      test_e_foo (FinkelException msg) = msg == "foo"
+      test_e_foo e = case e of
+        FinkelException msg -> msg == "foo"
+        _                   -> False
+
+      fnkSrcErrorSelector :: FinkelException -> Bool
+      fnkSrcErrorSelector (FinkelSrcError {}) = True
+      fnkSrcErrorSelector _                   = False
+
+      run :: Fnk a -> IO a
+      run = flip runFnk fnkTestEnv
 
   describe "Eq and Show instance of FinkelException" $ do
     it "should return True when comparing with itself" $
@@ -82,55 +92,49 @@ exceptionTest = do
   describe "Applicative instance of Fnk" $
     it "should return 42" $ do
       let act = (*) <$> pure 6 <*> pure 7
-      ret <- runFnk act fnkTestEnv
-      ret `shouldBe` (42 :: Int)
+      run act `shouldReturn` (42 :: Int)
 
   describe "ExceptionMonad instance of Fnk" $ do
     it "should return 42 with action in bracket" $ do
       let act = bracket (return 21) return (\x -> return (x * 2))
-      ret <- runFnk act fnkTestEnv
-      ret `shouldBe` (42 :: Int)
+      run act `shouldReturn` (42 :: Int)
 
     it "should catch exception from throwM" $ do
       let act = throwM e `catch` handler
           e = FinkelException ""
           handler :: FinkelException -> Fnk Int
           handler _ = return 42
-      ret <- runFnk act fnkTestEnv
-      ret `shouldBe` 42
+      run act `shouldReturn` 42
 
     it "masks an exception" $ do
       let act = mask (\restore -> restore (throwM e_foo))
-      runFnk act fnkTestEnv `shouldThrow` test_e_foo
+      run act `shouldThrow` test_e_foo
 
     it "masks an exception (uninterruptible)" $ do
       let act = uninterruptibleMask (\restore -> restore (throwM e_foo))
-      runFnk act fnkTestEnv `shouldThrow` test_e_foo
+      run act `shouldThrow` test_e_foo
 
   describe "Handling FinkelException" $
     it "should return 42" $ do
       let act = handleFinkelException
                   (\_ -> return (42 :: Int))
                   (liftIO (throwIO (FinkelException "")))
-      ret <- runFnk act fnkTestEnv
-      ret `shouldBe` 42
+      run act `shouldReturn` 42
 
   describe "running Fnk action containing `failFnk'" $
     it "should throw FinkelException" $ do
       let act = failFnk "foo"
-      runFnk act fnkTestEnv `shouldThrow` test_e_foo
+      run act `shouldThrow` test_e_foo
 
   describe "running Fnk action containing `fail'" $
     it "should throw FinkelException" $ do
       let act = MonadFail.fail "foo"
-      runFnk act fnkTestEnv `shouldThrow` test_e_foo
+      run act `shouldThrow` test_e_foo
 
-  describe "running Fnk action containing SourceError" $
+  describe "running Fnk action containing FinkelSrcError" $
     it "should throw SourceError" $ do
       let act = finkelSrcError nil "foo"
-          p :: SourceError -> Bool
-          p = const True
-      runFnk act fnkTestEnv `shouldThrow` p
+      run act `shouldThrow` fnkSrcErrorSelector
 
   describe "applying macroNames to specialForms" $
     it "should not return name of special forms" $ do
@@ -138,15 +142,12 @@ exceptionTest = do
       ns `shouldBe` []
 
   describe "running buildHsSyn action" $
-    it "should throw SourceError" $ do
+    it "should throw FinkelSrcError" $ do
       let form = "(:: foo ->) (= foo 100)"
-          sel :: SourceError -> Bool
-          sel _ = True
-          run a = runFnk a fnkTestEnv
           form' = stringToStringBuffer form
           build = do (form'', _) <- parseSexprs Nothing form'
                      buildHsSyn parseDecls form''
-      run build `shouldThrow` sel
+      run build `shouldThrow` fnkSrcErrorSelector
 
 fromGhcTest :: Spec
 fromGhcTest =

@@ -84,7 +84,7 @@ printForms path =
   do contents <- hGetStringBuffer path
      case Lexer.evalSP Reader.sexprs (Just path) contents of
        Right forms -> mapM_ print forms
-       Left err    -> putStrLn err
+       Left err    -> print err
 
 pprFile :: FilePath -> IO ()
 pprFile path
@@ -151,14 +151,14 @@ parseFnkModuleWith act path = Fnk.runFnk go SpecialForms.defaultFnkEnv
               Right mdl -> act mdl sp
               Left  err -> liftIO (putStrLn ("error: " ++
                                              Builder.syntaxErrMsg err))
-          Left err -> liftIO (putStrLn ("error: " ++ err))
+          Left err -> liftIO (print err)
 
 printTokens :: FilePath -> IO ()
 printTokens path = do
   contents <- hGetStringBuffer path
   case Lexer.lexTokens (Just path) contents of
     Right toks -> mapM_ (print . GHC.unLoc) toks
-    Left err   -> putStrLn err
+    Left err   -> print err
 
 -- countTokens :: FilePath -> IO ()
 -- countTokens path = do

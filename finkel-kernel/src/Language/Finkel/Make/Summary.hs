@@ -35,10 +35,6 @@ import           Data.Foldable                     (find)
 import           Data.List                         (foldl', nub)
 import           System.IO                         (IOMode (..), withFile)
 
-#if !MIN_VERSION_ghc(8,8,0)
-import           Control.Monad.Fail                (MonadFail (..))
-#endif
-
 -- container
 import qualified Data.Map                          as Map
 
@@ -47,6 +43,11 @@ import           Data.Time                         (UTCTime)
 
 -- directory
 import           System.Directory                  (createDirectoryIfMissing)
+
+-- exceptions
+#if !MIN_VERSION_ghc(9,0,0)
+import           Control.Monad.Catch               (MonadThrow (..))
+#endif
 
 -- filepath
 import           System.FilePath                   (takeBaseName, takeDirectory,
@@ -194,7 +195,7 @@ compileFnkFile path modname = do
 
 -- | Parse the file header LANGUAGE pragmas and update given 'DynFlags'.
 parseFnkFileHeader
-  :: (MonadIO m, MonadFail m) => DynFlags -> FilePath -> m DynFlags
+  :: (MonadIO m, MonadThrow m) => DynFlags -> FilePath -> m DynFlags
 parseFnkFileHeader dflags path = do
   contents <- liftIO (hGetStringBuffer path)
   (_, sp) <- parseHeaderPragmas (Just path) contents
@@ -318,7 +319,7 @@ mkEmptyApiAnns = (Map.empty, Map.empty)
 
 -- | Make 'ModSummary' for recompilation check done with 'doCheckOldIface'.
 mkModSummaryForRecompile
-  :: (MonadIO m, MonadFail m) => HscEnv -> TargetUnit -> m ModSummary
+  :: (MonadIO m, MonadThrow m) => HscEnv -> TargetUnit -> m ModSummary
 mkModSummaryForRecompile hsc_env tu@(tsource, _) = do
   let path = targetSourcePath tsource
       mod_name = targetUnitName tu

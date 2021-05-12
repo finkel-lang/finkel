@@ -44,6 +44,9 @@ module Language.Finkel
   , gensym'
   , unquoteSplice
   , macroFunction
+
+  -- * Exceptions
+  , FinkelException(..)
   , finkelSrcError
 
   -- * Re-export from ghc
@@ -58,6 +61,7 @@ module Language.Finkel
 import GHC_Types_SrcLoc             (GenLocated (..), Located, SrcSpan)
 
 -- Internal
+import Language.Finkel.Exception
 import Language.Finkel.Expand
 import Language.Finkel.Fnk
 import Language.Finkel.Form

@@ -13,7 +13,8 @@
   (import
    ;; base
    (Control.Concurrent.MVar (MVar putMVar takeMVar))
-   (Control.Exception ((AsyncException ..) fromException throwIO))
+   (Control.Exception
+    ((AsyncException ..) (Exception ..) fromException throwIO))
    (Control.Monad (unless))
    (Control.Monad.IO.Class ((MonadIO ..)))
    (Data.List (intercalate))
@@ -36,6 +37,7 @@
    (Language.Finkel.Builder (HDecl HIE HImportDecl HStmt
                                    syntaxErrCode syntaxErrMsg evalBuilder))
    (Language.Finkel.Eval (evalDecls))
+   (Language.Finkel.Exception (finkelExceptionLoc))
    (Language.Finkel.Make (initSessionForMake isFnkFile isHsFile))
    (Language.Finkel.Fnk
     ((FnkEnv ..) failFnk modifyFnkEnv prepareInterpreter setDynFlags
@@ -51,10 +53,11 @@
  (GHC
   ((Target ..) (TargetId ..) getPrintUnqual parseDynamicFlags setTargets))
  (GHC.Types.Basic ((SuccessFlag ..)))
+ (GHC.Data.Bag (unitBag))
  (GHC.Driver.Session
   ((DynFlags ..) (GeneralFlag ..) (HasDynFlags ..) (HscTarget ..) (Option ..)
    gopt-set xopt-unset))
- (GHC.Utils.Error (pprErrMsgBagWithLoc))
+ (GHC.Utils.Error (mkErrMsg pprErrMsgBagWithLoc))
  (GHC.Runtime.Interpreter (evalStmt))
  (GHC.Driver.Main (hscParsedStmt))
  (GHC.Driver.Monad
@@ -71,7 +74,7 @@
  (GHC.Data.OrdList (toOL))
  (GHC.Utils.Outputable
   (SDoc PrintUnqualified ppr mkErrStyle renderWithStyle setStyleColoured
-        showPpr showSDoc vcat))
+        showPpr showSDoc text vcat))
  (GHC.Parser.PostProcess (cvTopDecls))
  (GHC.Types.SrcLoc (mkGeneralLocated unLoc))
  (GHC.Core.TyCo.Rep ((TyThing ..)))
@@ -164,9 +167,13 @@
       (unless (null srcs)
         (handle
          (\ e
-           (case (fromException e)
-             (Just se) (>>= (src-err-handler se) (. liftIO putErrLn))
-             _ (liftIO (printErr e))))
+           (cond
+             [(<- (Just se) (fromException e))
+              (>>= (make-src-err-message se) (. liftIO putErrLn))]
+             [(<- (Just fe) (fromException e))
+              (>>= (make-finkel-exception-message fe) (. liftIO putErrLn))]
+             [otherwise
+              (liftIO (printErr e))]))
          (case-do (do (setTargets (map guessFnkTarget srcs))
                       (compile-and-import srcs))
            Failed (liftIO
@@ -206,11 +213,15 @@
         (= withErrorHandler m
           (handle
            (\ e
-             (case (fromException e)
-               (Just se) (fmap Left (src-err-handler se))
-               Nothing (case (fromException e)
-                         (Just ae) (throw-async-io ae)
-                         Nothing (return (Left (show e))))))
+             (cond
+               [(<- (Just se) (fromException e))
+                (fmap Left (make-src-err-message se))]
+               [(<- (Just ae) (fromException e))
+                (throw-async-io ae)]
+               [(<- (Just fe) (fromException e))
+                (fmap Left (make-finkel-exception-message fe))]
+               [otherwise
+                ($ pure Left show e)]))
            m))
         (= eval-one wrapper
           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
@@ -391,13 +402,26 @@ to separate object files from source code files."
            (= style1 (setStyleColoured True style0)))
        (renderWithStyle dflags sdoc style1))]))
 
-(defn (:: src-err-handler (-> SourceError (Fnk String)))
+(defn (:: make-src-err-message (-> SourceError (Fnk String)))
   [src-err]
   (do (<- dflags getSessionDynFlags)
       (<- unqual getPrintUnqual)
-      (let ((= sdoc (vcat (pprErrMsgBagWithLoc emsgs)))
-            (= emsgs (srcErrorMessages src-err))))
+      (let ((= emsgs (srcErrorMessages src-err))
+            (= sdoc (vcat (pprErrMsgBagWithLoc emsgs)))))
       (return (render-with-err-style dflags unqual sdoc))))
+
+(defn (:: make-finkel-exception-message (-> FinkelException (Fnk String)))
+  [fe]
+  (do (<- dflags getDynFlags)
+      (<- unqual getPrintUnqual)
+      (let ((= msg (displayException fe))
+            (= lmsg l
+              (let ((= emsgs (unitBag (mkErrMsg dflags l unqual (text msg))))
+                    (= sdoc (vcat (pprErrMsgBagWithLoc emsgs))))
+                (render-with-err-style dflags unqual sdoc)))))
+      (case (finkelExceptionLoc fe)
+        (Just l) ($ return lmsg l)
+        _ (return msg))))
 
 (defn (:: make-eval-wrapper (-> [String] (Fnk ForeignHValue)))
   [args]

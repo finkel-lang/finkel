@@ -2,7 +2,7 @@
 module Main where
 
 -- hspec
-import Test.Hspec (hspec, beforeAll, beforeAll_, describe)
+import Test.Hspec          (beforeAll, beforeAll_, describe, hspec)
 
 -- finkel-kernel
 import Language.Finkel.Fnk (initUniqSupply')
@@ -10,6 +10,7 @@ import Language.Finkel.Fnk (initUniqSupply')
 -- Internal
 import EmitTest
 import EvalTest
+import ExceptionTest
 import FnkTest
 import FormTest
 import MainTest
@@ -32,4 +33,5 @@ main =
              describe "Eval" evalFnkTests
              describe "Main" mainFnkTests
              describe "Make" makeFnkTests
-             describe "Syntax" syntaxFnkTests))
+             describe "Syntax" syntaxFnkTests
+             describe "Exception" exceptionFnkTests))

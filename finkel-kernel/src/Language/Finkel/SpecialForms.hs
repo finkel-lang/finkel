@@ -13,6 +13,7 @@ module Language.Finkel.SpecialForms
 #include "ghc_modules.h"
 
 -- base
+import Control.Exception               (throw)
 import Control.Monad                   (foldM, unless, when)
 import Control.Monad.IO.Class          (MonadIO (..))
 import Data.Maybe                      (catMaybes)
@@ -65,6 +66,7 @@ import GHC_Driver_Types                (mgLookupModule)
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Eval
+import Language.Finkel.Exception
 import Language.Finkel.Expand          (bcoDynFlags, expand, expands')
 import Language.Finkel.Fnk
 import Language.Finkel.Form
@@ -143,18 +145,20 @@ isUnquoteSplice (LForm form) =
     _ -> False
 {-# INLINABLE isUnquoteSplice #-}
 
--- | Internally used by macro expander for @unquote-splice@ special
--- form.
+-- | Internally used by macro expander for @:unquote-splice@ special form.
+--
+-- This functions throw 'InvalidUnquoteSplice' when the given argument could not
+-- be unquote spliced.
 unquoteSplice :: Homoiconic a => a -> [Code]
 unquoteSplice form =
-  case unCode (toCode form) of
+  case unCode c of
     List xs             -> xs
     HsList xs           -> xs
     Atom AUnit          -> []
     Atom (AString _ xs) -> map toCode (unpackFS xs)
-    _                   ->
-      throwFinkelException
-        (FinkelException ("unquote splice: got " ++ show (toCode form)))
+    _                   -> throw (InvalidUnquoteSplice c)
+  where
+    c = toCode form
 
 
 -- ---------------------------------------------------------------------
@@ -218,7 +222,7 @@ addImportedMacro fnk_env dflags thing = when (isMacro dflags thing) go
           let name_str = showPpr dflags (varName var)
               name_sym = toCode (aSymbol name_str)
           coerceMacro dflags name_sym >>= insertMacro (fsLit name_str)
-        _ -> error "addImportedmacro"
+        _ -> failFnk "addImportedmacro"
 
 -- Note [Bytecode and object code for require and :eval_when_compile import]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -311,7 +315,7 @@ m_quasiquote form =
         qualify <- fmap envQualifyQuotePrimitives getFnkEnv
         let LForm (L _ body') = quasiquote qualify body
         return (LForm (L l body'))
-      _ -> finkelSrcError form ("malformed quasiquote at " ++ showLoc form)
+      _ -> finkelSrcError form "malformed quasiquote"
 
 m_withMacro :: MacroFunction
 m_withMacro form =

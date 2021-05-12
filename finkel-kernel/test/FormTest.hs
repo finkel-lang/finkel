@@ -946,7 +946,7 @@ parseE' mb_path str =
   let inp = stringToStringBuffer str
   in  case runSP sexpr mb_path inp of
         Right (expr, _) -> expr
-        Left err        -> error err
+        Left err        -> error (show err)
 
 isListL :: Code -> Bool
 isListL (LForm (L _ (List _))) = True

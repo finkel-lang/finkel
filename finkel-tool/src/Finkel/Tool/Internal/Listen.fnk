@@ -11,7 +11,7 @@
    ;; base
    (Control.Concurrent
     ((MVar) forkIO newEmptyMVar putMVar takeMVar))
-   (Control.Exception ((SomeException ..) handle))
+   (Control.Exception ((Exception ..) (SomeException ..) handle))
    (Control.Monad (void unless when))
    (Data.Char (isSpace))
    (System.IO
@@ -85,7 +85,7 @@
                                 (= sbuf (StringBuffer fp l o)))
                             (case (evalSP sexpr (Just "<interactive>") sbuf)
                               (Right form) (put-input form)
-                              (Left err) (putStrLn err))))
+                              (Left err) (putStrLn (displayException err)))))
                         read-loop))))
             (= print-loop
               (do (<- result (takeMVar my-mvar))

@@ -51,7 +51,6 @@ import Language.Finkel.Syntax (parseExpr)
 -- Internal
 import TestAux
 
-
 syntaxTests :: Spec
 syntaxTests = beforeAll getFnkTestResource syntaxFnkTests
 

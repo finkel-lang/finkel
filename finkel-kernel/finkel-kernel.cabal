@@ -55,6 +55,7 @@ library
                        Language.Finkel.Builder
                        Language.Finkel.Emit
                        Language.Finkel.Eval
+                       Language.Finkel.Exception
                        Language.Finkel.Expand
                        Language.Finkel.Form
                        Language.Finkel.Homoiconic
@@ -120,6 +121,7 @@ test-suite finkel-kernel-test
                        FnkTest
                        EmitTest
                        EvalTest
+                       ExceptionTest
                        MainTest
                        MakeTest
                        SyntaxTest

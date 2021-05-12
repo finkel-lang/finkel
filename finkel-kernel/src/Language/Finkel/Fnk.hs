@@ -1,7 +1,8 @@
--- | Wrapper for Finkel code compilation monad.
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+
+-- | Wrapper for Finkel code compilation monad.
 module Language.Finkel.Fnk
   ( -- * Finkel compiler monad
     Fnk(..)
@@ -13,8 +14,6 @@ module Language.Finkel.Fnk
   , runFnk
   , toGhc
   , fromGhc
-  , failFnk
-  , finkelSrcError
   , emptyFnkEnv
   , getFnkEnv
   , putFnkEnv
@@ -24,11 +23,10 @@ module Language.Finkel.Fnk
   , setContextModules
   , prepareInterpreter
 
-  -- * Exception
-  , FinkelException(..)
-  , throwFinkelException
-  , throwFinkelExceptionIO
-  , handleFinkelException
+  -- * Error related functions
+  , failFnk
+  , finkelSrcError
+  , printFinkelException
 
   -- * Debugging
   , FnkDebugFlag(..)
@@ -72,128 +70,106 @@ module Language.Finkel.Fnk
 #include "ghc_modules.h"
 
 -- base
-import           Control.Exception       (Exception (..), throw, throwIO)
-import           Control.Monad           (mplus, unless, when)
-import           Control.Monad.IO.Class  (MonadIO (..))
-import           Data.Bifunctor          (first)
-import           Data.Bits               (setBit, testBit, zeroBits)
-import           Data.Char               (isSpace, toLower)
-import           Data.IORef              (IORef, atomicModifyIORef',
-                                          atomicWriteIORef, newIORef, readIORef)
-import           Data.List               (isPrefixOf, partition)
-import           Data.Word               (Word8)
-import           System.Console.GetOpt   (ArgDescr (..), OptDescr (..),
-                                          usageInfo)
-import           System.Environment      (lookupEnv)
-import           System.IO               (stderr)
-import           System.IO.Unsafe        (unsafePerformIO)
+import           Control.Exception         (Exception (..), throw, throwIO)
+import           Control.Monad             (mplus, unless, when)
+import           Control.Monad.IO.Class    (MonadIO (..))
+import           Data.Bifunctor            (first)
+import           Data.Bits                 (setBit, testBit, zeroBits)
+import           Data.Char                 (isSpace, toLower)
+import           Data.IORef                (IORef, atomicModifyIORef',
+                                            atomicWriteIORef, newIORef,
+                                            readIORef)
+import           Data.List                 (isPrefixOf, partition)
+import           Data.Word                 (Word8)
+import           System.Console.GetOpt     (ArgDescr (..), OptDescr (..),
+                                            usageInfo)
+import           System.Environment        (getProgName, lookupEnv)
+import           System.Exit               (exitFailure)
+import           System.IO                 (hPutStrLn, stderr)
+import           System.IO.Unsafe          (unsafePerformIO)
 
 #if !MIN_VERSION_ghc(8,8,0)
-import           Control.Monad.Fail      (MonadFail (..))
+import           Control.Monad.Fail        (MonadFail (..))
 #endif
 
 -- containers
-import qualified Data.Map                as Map
+import qualified Data.Map                  as Map
 
-import           System.Directory        (canonicalizePath, doesFileExist,
-                                          findExecutable)
-import           System.FilePath         (takeDirectory, (</>))
+import           System.Directory          (canonicalizePath, doesFileExist,
+                                            findExecutable)
+import           System.FilePath           (takeDirectory, (</>))
 
 -- exceptions
-import           Control.Monad.Catch     (MonadCatch (..), MonadMask (..),
-                                          MonadThrow (..))
+import           Control.Monad.Catch       (MonadCatch (..), MonadMask (..),
+                                            MonadThrow (..))
 
 #if MIN_VERSION_ghc(9,0,0)
-import           Control.Monad.Catch     (bracket, handle)
+import           Control.Monad.Catch       (bracket)
 #endif
 
 -- process
-import           System.Process          (readProcess)
+import           System.Process            (readProcess)
 
 -- ghc
-import           GHC                     (runGhc)
-import           GHC_Data_Bag            (unitBag)
-import           GHC_Data_FastString     (FastString, fsLit, unpackFS)
-import           GHC_Driver_Main         (Messager, batchMsg)
-import           GHC_Driver_Monad        (Ghc (..), GhcMonad (..),
-                                          getSessionDynFlags, modifySession)
-import           GHC_Driver_Session      (DynFlags (..), GeneralFlag (..),
-                                          GhcLink (..), HasDynFlags (..),
-                                          HscTarget (..), gopt, gopt_set,
-                                          gopt_unset, picPOpts)
-import           GHC_Driver_Types        (HscEnv (..), InteractiveContext (..),
-                                          InteractiveImport (..),
-                                          ModSummary (..), TyThing (..),
-                                          mkSrcErr)
-import           GHC_Hs_ImpExp           (simpleImportDecl)
-import           GHC_Runtime_Eval        (setContext)
-import           GHC_Settings_Config     (cProjectVersion)
-import           GHC_Types_SrcLoc        (GenLocated (..))
-import           GHC_Types_Unique_Supply (MonadUnique (..), UniqSupply,
-                                          initUniqSupply, mkSplitUniqSupply,
-                                          splitUniqSupply, takeUniqFromSupply)
-import           GHC_Types_Var           (varType)
-import           GHC_Unit_Module         (mkModuleName)
-import           GHC_Utils_CliOption     (showOpt)
-import           GHC_Utils_Error         (MsgDoc, mkErrMsg)
-import           GHC_Utils_Outputable    (alwaysQualify, defaultErrStyle,
-                                          neverQualify, ppr, printSDocLn, sep,
-                                          showSDocForUser, text, vcat, (<+>))
-import qualified GHC_Utils_Ppr           as Pretty
+import           GHC                       (runGhc)
+import           GHC_Data_Bag              (unitBag)
+import           GHC_Data_FastString       (FastString, fsLit, unpackFS)
+import           GHC_Driver_Main           (Messager, batchMsg)
+import           GHC_Driver_Monad          (Ghc (..), GhcMonad (..),
+                                            modifySession)
+import           GHC_Driver_Session        (DynFlags (..), GeneralFlag (..),
+                                            GhcLink (..), HasDynFlags (..),
+                                            HscTarget (..), gopt, gopt_set,
+                                            gopt_unset, picPOpts)
+import           GHC_Driver_Types          (HscEnv (..),
+                                            InteractiveContext (..),
+                                            InteractiveImport (..),
+                                            ModSummary (..), TyThing (..))
+import           GHC_Hs_ImpExp             (simpleImportDecl)
+import           GHC_Runtime_Eval          (setContext)
+import           GHC_Settings_Config       (cProjectVersion)
+import           GHC_Types_SrcLoc          (GenLocated (..))
+import           GHC_Types_Unique_Supply   (MonadUnique (..), UniqSupply,
+                                            initUniqSupply, mkSplitUniqSupply,
+                                            splitUniqSupply, takeUniqFromSupply)
+import           GHC_Types_Var             (varType)
+import           GHC_Unit_Module           (mkModuleName)
+import           GHC_Utils_CliOption       (showOpt)
+import           GHC_Utils_Error           (MsgDoc, mkErrMsg, printBagOfErrors)
+import           GHC_Utils_Outputable      (alwaysQualify, defaultErrStyle,
+                                            neverQualify, ppr, printSDocLn, sep,
+                                            showSDocForUser, text, vcat, (<+>))
+import qualified GHC_Utils_Ppr             as Pretty
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Ways         (hostFullWays, wayGeneralFlags,
-                                          wayUnsetGeneralFlags)
-import           GHC_Driver_Session      (initSDocContext, sccProfilingEnabled)
-import           GHC_Utils_Exception     (ExceptionMonad)
+import           GHC.Driver.Ways           (hostFullWays, wayGeneralFlags,
+                                            wayUnsetGeneralFlags)
+import           GHC_Driver_Session        (initSDocContext,
+                                            sccProfilingEnabled)
 #else
-import           GHC_Driver_Ways         (interpWays, updateWays,
-                                          wayGeneralFlags, wayUnsetGeneralFlags)
-import           GHC_Utils_Exception     (ExceptionMonad (..), ghandle)
+import           GHC_Driver_Ways           (interpWays, updateWays,
+                                            wayGeneralFlags,
+                                            wayUnsetGeneralFlags)
+import           GHC_Utils_Exception       (ExceptionMonad (..))
 #endif
 
 #if !MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Session      (targetPlatform)
+import           GHC_Driver_Session        (targetPlatform)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import           GHC_Driver_Session      (IncludeSpecs (..), opt_P_signature)
+import           GHC_Driver_Session        (IncludeSpecs (..), opt_P_signature)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import qualified GHC_Data_EnumSet        as FlagSet
+import qualified GHC_Data_EnumSet          as FlagSet
 #else
-import qualified Data.IntSet             as FlagSet
+import qualified Data.IntSet               as FlagSet
 #endif
 
 -- Internal
+import           Language.Finkel.Exception
 import           Language.Finkel.Form
-
-
--- ---------------------------------------------------------------------
---
--- Exception
---
--- ---------------------------------------------------------------------
-
-newtype FinkelException = FinkelException String
-  deriving (Eq, Show)
-
-instance Exception FinkelException
-
-throwFinkelException :: FinkelException -> a
-throwFinkelException = throw
-
-throwFinkelExceptionIO :: FinkelException -> IO a
-throwFinkelExceptionIO = throwIO
-
-handleFinkelException :: ExceptionMonad m
-                      => (FinkelException -> m a) -> m a -> m a
-#if MIN_VERSION_ghc(9,0,0)
-handleFinkelException = handle
-#else
-handleFinkelException = ghandle
-#endif
 
 
 -- ---------------------------------------------------------------------
@@ -445,7 +421,7 @@ getLibDirFromGhc = do
   -- work but using "getExecutablePath".
   mb_ghc_script <- findExecutable "ghc" >>= mapM canonicalizePath
   case mb_ghc_script of
-    Nothing -> throwIO (FinkelException "cannot find ghc in current PATH")
+    Nothing -> exitWithGhcNotFound
     Just ghc_script -> do
       let ghc_top_dir = takeDirectory (takeDirectory ghc_script)
           ghc_lib_dir = ghc_top_dir </> "lib" </> "ghc-" ++ cProjectVersion
@@ -456,6 +432,13 @@ getLibDirFromGhc = do
            out  <- readProcess "ghc" ["--print-libdir"] ""
            return (reverse (dropWhile isSpace (reverse out)))
 {-# INLINABLE getLibDirFromGhc #-}
+
+-- | Show ghc not found message and exit with 'exitFailure'.
+exitWithGhcNotFound :: IO a
+exitWithGhcNotFound = do
+  me <- getProgName
+  putStrLn $ me ++ ": Cannot find GHC executable in current PATH"
+  exitFailure
 
 -- | Extract 'Ghc' from 'Fnk'.
 toGhc :: Fnk a -> FnkEnvRef -> Ghc a
@@ -487,14 +470,27 @@ modifyFnkEnv f =
 
 -- | Throw 'FinkelException' with given message.
 failFnk :: MonadIO m => String -> m a
-failFnk msg = liftIO (throwIO (FinkelException msg))
+failFnk = liftIO . throwIO . FinkelException
+{-# INLINABLE failFnk #-}
 
--- | Throw a 'SourceError'.
-finkelSrcError :: GhcMonad m => Code -> String -> m a
-finkelSrcError (LForm (L l _)) msg = do
-  dflags <- getSessionDynFlags
-  let em = mkErrMsg dflags l neverQualify (text msg)
-  liftIO (throwIO (mkSrcErr (unitBag em)))
+-- | Throw 'FinkelSrcError' with given 'Code' and message.
+finkelSrcError :: (Monad m, MonadIO m) => Code -> String -> m a
+finkelSrcError code = liftIO . throwIO . FinkelSrcError code
+{-# INLINABLE finkelSrcError #-}
+
+-- | Print 'FinkelException' with source code information when available.
+printFinkelException :: (HasDynFlags m, MonadIO m) => FinkelException -> m ()
+printFinkelException e = case finkelExceptionLoc e of
+  Just l  -> prLocErr l
+  Nothing -> pr msg
+  where
+    msg = displayException e
+    pr = liftIO . hPutStrLn stderr
+    prLocErr l = do
+      dflags <- getDynFlags
+      let em = mkErrMsg dflags l neverQualify (text msg)
+      liftIO (printBagOfErrors dflags (unitBag em))
+{-# INLINABLE printFinkelException #-}
 
 -- | Empty 'FnkEnv' for performing computation with 'Fnk'.
 emptyFnkEnv :: FnkEnv
@@ -517,7 +513,7 @@ emptyFnkEnv = FnkEnv
   where
     uninitializedUniqSupply :: UniqSupply
     uninitializedUniqSupply =
-      throwFinkelException (FinkelException "UniqSupply not initialized")
+      throw (FinkelException "UniqSupply not initialized")
 
 -- | Set current 'DynFlags' to given argument. This function also sets the
 -- 'DynFlags' in interactive context.
@@ -559,16 +555,19 @@ prepareInterpreter = do
       dflags4 = foldl gopt_unset dflags3
                       (concatMap (wayUnsetGeneralFlags platform) hostFullWays)
   setDynFlags dflags4
+{-# INLINABLE prepareInterpreter #-}
 
 -- | Set context modules in current session to given modules.
 setContextModules :: GhcMonad m => [String] -> m ()
 setContextModules names =
   setContext (map (IIDecl . simpleImportDecl . mkModuleName) names)
+{-# INLINABLE setContextModules #-}
 
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Fnk ()
 insertMacro k v =
   modifyFnkEnv (\e -> e {envMacros = Map.insert k v (envMacros e)})
+{-# INLINABLE insertMacro #-}
 
 -- | Lookup macro by name.
 --
@@ -588,14 +587,17 @@ emptyEnvMacros = Map.empty
 -- | Make 'EnvMacros' from list of pair of macro name and value.
 makeEnvMacros :: [(String, Macro)] -> EnvMacros
 makeEnvMacros = Map.fromList . map (first fsLit)
+{-# INLINABLE makeEnvMacros #-}
 
 -- | Merge macros.
 mergeMacros :: EnvMacros -> EnvMacros -> EnvMacros
 mergeMacros = Map.union
+{-# INLINABLE mergeMacros #-}
 
 -- | Delete macro by macro name.
 deleteMacro :: FastString -> EnvMacros -> EnvMacros
 deleteMacro = Map.delete
+{-# INLINABLE deleteMacro #-}
 
 -- | All macros in given macro environment, filtering out the special
 -- forms.
@@ -605,6 +607,7 @@ macroNames = Map.foldrWithKey f []
     f k m acc = case m of
                   Macro _ -> unpackFS k : acc
                   _       -> acc
+{-# INLINABLE macroNames #-}
 
 -- | 'True' when given 'TyThing' is a 'Macro'.
 isMacro :: DynFlags -> TyThing -> Bool
@@ -613,15 +616,16 @@ isMacro dflags thing =
     AnId var -> showSDocForUser dflags alwaysQualify (ppr (varType var))
                 == "Language.Finkel.Fnk.Macro"
     _        -> False
+{-# INLINABLE isMacro #-}
 
 -- | Extract function from macro and apply to given code. Uses 'emptyFnkEnv'
 -- with 'specialForms' to unwrap the macro from 'Fnk'.
 macroFunction :: Macro -> Code -> Fnk Code
-macroFunction mac form =
-  let fn = case mac of
-             Macro f       -> f
-             SpecialForm f -> f
-  in  fn form
+macroFunction mac =
+  case mac of
+    Macro f       -> f
+    SpecialForm f -> f
+{-# INLINABLE macroFunction #-}
 
 -- | Generate unique symbol with @gensym'@.
 gensym :: MonadUnique m => m Code
@@ -827,7 +831,7 @@ fnkEnvOptions =
     parseVerbosity str =
       case reads str of
         [(n, "")] -> n
-        _ -> throwFinkelException
+        _ -> throw
                (FinkelException
                  ("expecting Int value for verbosity but got " ++ show str))
 
@@ -847,4 +851,4 @@ fromFnkEnvOptions f = map (fmap f) fnkEnvOptionsWithLib
 
 -- | Usage information for 'fnkEnvOptions', without @-B@ option.
 fnkEnvOptionsUsage :: String -> String
-fnkEnvOptionsUsage header = usageInfo header fnkEnvOptions
+fnkEnvOptionsUsage = flip usageInfo fnkEnvOptions

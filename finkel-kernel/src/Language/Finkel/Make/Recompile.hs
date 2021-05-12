@@ -177,6 +177,10 @@ instance MonadFail RecompM where
   fail e = RecompM (\_ -> Control.Monad.Fail.fail e)
   {-# INLINE fail #-}
 
+instance MonadThrow RecompM where
+  throwM e = RecompM (\_ -> throwM e)
+  {-# INLINE throwM #-}
+
 instance MonadIO RecompM where
   liftIO io = RecompM (\st -> liftIO io >>= \a -> pure (Right a, st))
   {-# INLINE liftIO #-}
