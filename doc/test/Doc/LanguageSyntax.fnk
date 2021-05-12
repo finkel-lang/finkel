@@ -10,22 +10,22 @@
     (Finkel.Prelude))
   (import
    ;; base
-   (Data.List (sort))
+   (Data.List [sort])
 
    ;; directory
-   (System.Directory (listDirectory))
+   (System.Directory [listDirectory])
 
    ;; filepath
-   (System.FilePath (</> <.> dropExtension takeExtension))
+   (System.FilePath [</> <.> dropExtension takeExtension])
 
    ;; finkel-kernel
-   (Language.Finkel.Builder ((Builder) evalBuilder))
-   (Language.Finkel.Reader (parseSexprs))
+   (Language.Finkel.Builder [(Builder) evalBuilder])
+   (Language.Finkel.Reader [parseSexprs])
    (qualified Language.Finkel.Syntax as FnkParser)
 
    ;; hspec
-   (Test.Hspec ((Spec) beforeAll_ describe expectationFailure it runIO
-                shouldBe))
+   (Test.Hspec [(Spec) beforeAll_ describe expectationFailure it runIO
+                shouldBe])
 
    ;; Internal
    (Doc.TestAux)))

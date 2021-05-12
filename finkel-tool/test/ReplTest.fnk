@@ -15,35 +15,35 @@
   (import
    ;; base
    (Control.Concurrent
-    (forkIO newEmptyMVar killThread putMVar takeMVar threadDelay yield))
+    [forkIO newEmptyMVar killThread putMVar takeMVar threadDelay yield])
    (Control.Exception
-    ((IOException ..) SomeException bracket evaluate finally throwIO))
+    [(IOException ..) SomeException bracket evaluate finally throwIO])
    (qualified Control.Exception as ControlException)
-   (Control.Monad (forever replicateM_ void when))
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.List (intercalate isSubsequenceOf))
-   (Data.String ((IsString ..)))
-   (GHC.Conc ((ThreadStatus ..) threadStatus))
-   (GHC.IO.Exception ((AsyncException ..)))
+   (Control.Monad [forever replicateM_ void when])
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.List [intercalate isSubsequenceOf])
+   (Data.String [(IsString ..)])
+   (GHC.Conc [(ThreadStatus ..) threadStatus])
+   (GHC.IO.Exception [(AsyncException ..)])
 
    ;; filepath
-   (System.FilePath (</>))
+   (System.FilePath [</>])
 
    ;; haskeline
-   (System.Console.Haskeline (defaultSettings runInputT))
+   (System.Console.Haskeline [defaultSettings runInputT])
 
    ;; hspec
    (Test.Hspec)
 
    ;; network
    (Network.Socket
-    ((AddrInfo ..) (SocketType ..)
-     close connect defaultHints getAddrInfo socket))
-   (Network.Socket.ByteString (sendAll recv))
+    [(AddrInfo ..) (SocketType ..) close connect defaultHints getAddrInfo
+     socket])
+   (Network.Socket.ByteString [sendAll recv])
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Fnk (runFnk))
+   (Language.Finkel.Fnk [runFnk])
 
    ;; Internal
    (Finkel.Tool.Command.Repl)

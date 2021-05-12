@@ -11,17 +11,17 @@
     (Finkel.Prelude))
   (import
    ;; base
-   (Control.Exception (bracket))
-   (Control.Monad (replicateM))
-   (GHC.IO.Handle (hDuplicate hDuplicateTo))
-   (System.IO (Handle (IOMode ..) hClose hSetNewlineMode
-                      noNewlineTranslation openFile stdin))
+   (Control.Exception [bracket])
+   (Control.Monad [replicateM])
+   (GHC.IO.Handle [hDuplicate hDuplicateTo])
+   (System.IO [Handle (IOMode ..) hClose hSetNewlineMode
+               noNewlineTranslation openFile stdin])
 
    ;; filepath
-   (System.FilePath (</>))
+   (System.FilePath [</>])
 
    ;; haskeline
-   (System.Console.Haskeline (defaultSettings runInputT))
+   (System.Console.Haskeline [defaultSettings runInputT])
 
    ;; hspec
    (Test.Hspec)

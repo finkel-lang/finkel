@@ -4,22 +4,24 @@
   (export spec)
   (import
    ;; base
-   (Control.Exception (bracket))
-   (Control.Monad (zipWithM_))
-   (Data.List (isPrefixOf sort))
-   (System.Exit ((ExitCode ..)))
-   (System.Process ((CreateProcess ..) createProcess proc waitForProcess))
+   (Control.Exception [bracket])
+   (Control.Monad [zipWithM_])
+   (Data.Char (isSpace))
+   (Data.Function [on])
+   (Data.List [isPrefixOf sort])
+   (System.Exit [(ExitCode ..)])
+   (System.Process [(CreateProcess ..) createProcess proc waitForProcess])
 
    ;; directory
    (System.Directory
-    (canonicalizePath doesDirectoryExist doesFileExist getTemporaryDirectory
-                      listDirectory removeDirectoryRecursive))
+    [canonicalizePath doesDirectoryExist doesFileExist getTemporaryDirectory
+     listDirectory removeDirectoryRecursive])
 
    ;; filepath
-   (System.FilePath (</> takeExtension takeFileName))
+   (System.FilePath [</> takeExtension takeFileName])
 
    ;; hspec
-   (Test.Hspec ((Spec) describe expectationFailure it pendingWith shouldBe))
+   (Test.Hspec [(Spec) describe expectationFailure it pendingWith shouldBe])
 
    ;; Internal
    (Doc.TestAux)))
@@ -76,7 +78,7 @@
                   (notElem (takeFileName path1) ignored))
               (do (<- contents1 (readFile path1))
                   (<- contents2 (readFile path2))
-                  (shouldBe contents1 contents2))
+                  (on shouldBe trim contents1 contents2))
               (do (<- path1-is-dir (doesDirectoryExist path1))
                   (<- path2-is-dir (doesDirectoryExist path2))
                   (if (&& path1-is-dir path2-is-dir)
@@ -89,6 +91,10 @@
                                      ls1' ls2'))
                       (expectationFailure
                        (++ "differed: " path1 ", " path2))))))))
+
+(defn (:: trim (-> String String))
+  "Trim white spaces at the beginning and end."
+  (. (dropWhile isSpace) reverse (dropWhile isSpace) reverse))
 
 (defn (:: list-directory (-> FilePath (IO [FilePath])))
   "List directory contents, filter outs some ignored files."

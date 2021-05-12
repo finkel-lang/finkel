@@ -16,8 +16,8 @@
     (Finkel.Prelude))
   (import
    ;; base
-   (Data.List (isSubsequenceOf))
-   (System.Info (os arch))
+   (Data.List [isSubsequenceOf])
+   (System.Info [os arch])
 
    ;; hspec
    (Test.Hspec)
@@ -25,12 +25,12 @@
    ;; finkel-kernel
    (Language.Finkel)
    (Language.Finkel.Exception)
-   (Language.Finkel.Form (aString aIntegral))
-   (Language.Finkel.Fnk ((FnkEnv ..) makeEnvMacros mergeMacros))
+   (Language.Finkel.Form [aString aIntegral])
+   (Language.Finkel.Fnk [(FnkEnv ..) makeEnvMacros mergeMacros])
 
    ;; finkel-core
    (Finkel.Core)
-   (Finkel.Core.Functions (cadr))
+   (Finkel.Core.Functions [cadr])
 
    ;; Internal
    (TestAux)))
@@ -612,7 +612,7 @@
       (do (it "should expand to module header"
             (expandTo
              (defmodule Foo
-               (export (FooClass \.\.) f1 f2)
+               (export (FooClass ..) f1 f2)
                (require
                 (Data.Maybe)
                 (Data.List))
@@ -624,7 +624,7 @@
                (:require Data.Maybe)
                (:require Data.List)
                (:require Control.Monad)
-               (module Foo (FooClass \.\.) f1 f2)
+               (module Foo (FooClass ..) f1 f2)
                (import qualified Foo.Types as Types)
                (import Foo.Buzz (buzz1 buzz2))
                (import Control.Monad))))
@@ -651,7 +651,7 @@
                  (import Prelude)
                  (import Language.Finkel))
                (import Control.Monad))))
-          (it "should export ()"
+          (it "should export nothing"
             (expandTo
              (defmodule Foo
                (import (Control.Monad))
@@ -663,6 +663,14 @@
             (expandTo
              (defmodule Foo)
              (module Foo)))
+          (it "should convert [] to () for entity list"
+            (expandTo
+             (defmodule Foo
+               (import
+                (Prelude [tail head read])))
+             (:begin
+               (module Foo)
+               (import Prelude (tail head read)))))
           (it "should fail on unknown section"
             (expandFailureWith
              (defmodule Foo

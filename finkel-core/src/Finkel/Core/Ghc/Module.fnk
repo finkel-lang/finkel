@@ -99,5 +99,8 @@ This macro is for finkel internal use. The covered modules are those used by
 @finkel-core@ and @finkel-tool@ packages.")
 (:: imports-from-ghc Macro)
 (= imports-from-ghc
-  (Macro (\ form (return `(:begin
-                            ,@(map1 make-import (cdr form)))))))
+  (Macro (\ form
+           (case (unCode (cdr form))
+             (List xs) (pure `(:begin
+                                ,@(map make-import xs)))
+             _ (finkelSrcError form "imports-from-ghc: not a list")))))

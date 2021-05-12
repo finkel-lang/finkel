@@ -5,11 +5,10 @@
 
 (module Finkel.Core.Stage0
   ;; Exported from other modules.
-  (FinkelListException ..)
-  car cdr cons map1
+  (FinkelListException ..) car cdr cons
 
   ;; Internal, used in this package only.
-  non-list make-list-fn the-macro-arg)
+  non-list the-macro-arg)
 
 ;; base
 (import Control.Exception ((Exception ..) throw))
@@ -34,6 +33,8 @@
 (:: non-list (-> String Code a))
 (= non-list fname what
   (throw (NonListValue (++ fname ": non-list value `" (show what) "'"))))
+%p(INLINE non-list)
+
 
 ;;; CONS, CAR, CDR
 
@@ -122,37 +123,6 @@ nil
       _                 (non-list "cdr" lform))))
 %p(INLINABLE cdr)
 
-;;; Higher order function
-(:doc "Auxiliary function for higher order function.
-
-Make a function taking `SrcSpan' and a list of `Code' from given arguments.")
-(:: make-list-fn
-  (-> String
-      (-> SrcSpan (-> [(LForm a)] (LForm a)) [Code] b)
-      Code
-      b))
-(= make-list-fn label f (@ orig (LForm (L l form)))
-  (case form
-    (List xs) (f l (. LForm (L l) List) xs)
-    (HsList xs) (f l (. LForm (L l) HsList) xs)
-    _ (non-list label orig)))
-%p(INLINE make-list-fn)
-
-(:doc "Like `map', but for `Code'
-
-@map f x@ applies the function @f@ to each element of @x@ when the @x@ is `List'
-or `HsList'. Other @x@ value will throw a `NonListvalue' exception.
-
-==== __Examples__
-
->>> (map1 (\\ x `(x is ,x)) '(foo bar buzz))
-((x is foo) (x is bar) (x is buzz))
->>> (map1 (\\ x `(x is ,x)) 'foo)
-*** Exception: map1: non-list value `foo'")
-(:: map1 (-> (-> Code Code) Code Code))
-(= map1 f
-  (make-list-fn "map1" (\ _ c xs (c (map f xs)))))
-%p(INLINABLE map1)
 
 ;;; Special symbol
 

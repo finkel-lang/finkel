@@ -14,28 +14,28 @@
   (import
    ;; base
    (Control.Concurrent
-    (ThreadId forkIO newEmptyMVar killThread putMVar takeMVar))
-   (Control.Monad (mplus))
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.Function (on))
-   (System.Environment (lookupEnv))
-   (System.IO (stderr stdout))
+    [ThreadId forkIO newEmptyMVar killThread putMVar takeMVar])
+   (Control.Monad [mplus])
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.Function [on])
+   (System.Environment [lookupEnv])
+   (System.IO [stderr stdout])
 
    ;; directory
-   (System.Directory (getHomeDirectory))
+   (System.Directory [getHomeDirectory])
 
    ;; filepath
-   (System.FilePath (</>))
+   (System.FilePath [</>])
 
    ;; hspec
    (Test.Hspec)
 
    ;; silently
-   (System.IO.Silently (hSilence))
+   (System.IO.Silently [hSilence])
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Fnk (setDynFlags))
+   (Language.Finkel.Fnk [setDynFlags])
 
    ;; Internal
    (Finkel.Tool.Command.Repl)

@@ -6,7 +6,7 @@
   (export defaultMain)
   (import
    ;; base
-   (System.Environment (getArgs))
+   (System.Environment [getArgs])
 
    ;; Internal
    (Finkel.Tool.Command)

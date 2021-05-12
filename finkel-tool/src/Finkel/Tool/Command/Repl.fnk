@@ -18,18 +18,18 @@
     (Finkel.Tool.Internal.Macro))
   (import
    ;; base
-   (Control.Monad (mplus))
-   (Control.Monad.IO.Class ((MonadIO ..)))
+   (Control.Monad [mplus])
+   (Control.Monad.IO.Class [(MonadIO ..)])
    (System.Console.GetOpt
-    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
-   (System.Environment (getProgName))
+    [(ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo])
+   (System.Environment [getProgName])
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Fnk ((FnkEnv ..) EnvMacros
-                         fnkEnvOptionsUsage fromFnkEnvOptions
-                         makeEnvMacros mergeMacros))
-   (Language.Finkel.SpecialForms (specialForms))
+   (Language.Finkel.Fnk
+    [(FnkEnv ..) EnvMacros fnkEnvOptionsUsage fromFnkEnvOptions
+     makeEnvMacros mergeMacros])
+   (Language.Finkel.SpecialForms [specialForms])
 
    ;; finkel-core
    (Finkel.Core)

@@ -9,23 +9,23 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Concurrent (ThreadId forkIO))
-   (Control.Concurrent.MVar (MVar newEmptyMVar))
-   (Control.Exception (bracket catch throwIO))
+   (Control.Concurrent [ThreadId forkIO])
+   (Control.Concurrent.MVar [MVar newEmptyMVar])
+   (Control.Exception [bracket catch throwIO])
 
-   (System.IO (Handle hClose openTempFile))
-   (System.IO.Error (isDoesNotExistError))
+   (System.IO [Handle hClose openTempFile])
+   (System.IO.Error [isDoesNotExistError])
 
    ;; directory
-   (System.Directory (getTemporaryDirectory removeFile))
+   (System.Directory [getTemporaryDirectory removeFile])
 
    ;; haskeline
    (System.Console.Haskeline
-    (defaultBehavior defaultSettings useFile runInputTBehavior))
+    [defaultBehavior defaultSettings useFile runInputTBehavior])
 
    ;; finkel-kernel
-   (Language.Finkel.Form (Code))
-   (Language.Finkel.Fnk ((FnkEnv ..) runFnk))
+   (Language.Finkel.Form [Code])
+   (Language.Finkel.Fnk [(FnkEnv ..) runFnk])
 
    ;; internal
    (Finkel.Tool.Internal.Eval)

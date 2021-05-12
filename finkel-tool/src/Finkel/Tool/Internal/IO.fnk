@@ -16,26 +16,26 @@
   (import
    ;; base
    (Control.Concurrent
-    (MVar ThreadId killThread newEmptyMVar putMVar takeMVar throwTo))
-   (Control.Exception ((AsyncException ..) bracket catch throwIO))
-   (Control.Monad (when))
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.List (inits intercalate isPrefixOf))
-   (GHC.IO.Handle (hDuplicate hDuplicateTo))
-   (System.IO (Handle (SeekMode ..) hClose hFlush hGetLine hPutStr hPutStrLn
-                      hSeek hSetFileSize stdout stderr))
-   (System.IO.Error (isEOFError))
+    [MVar ThreadId killThread newEmptyMVar putMVar takeMVar throwTo])
+   (Control.Exception [(AsyncException ..) bracket catch throwIO])
+   (Control.Monad [when])
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.List [inits intercalate isPrefixOf])
+   (GHC.IO.Handle [hDuplicate hDuplicateTo])
+   (System.IO [Handle (SeekMode ..) hClose hFlush hGetLine hPutStr hPutStrLn
+               hSeek hSetFileSize stdout stderr])
+   (System.IO.Error [isEOFError])
 
    ;; deepseq
    (Control.DeepSeq)
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Lexer (evalSP))
-   (Language.Finkel.Reader (sexpr))
+   (Language.Finkel.Lexer [evalSP])
+   (Language.Finkel.Reader [sexpr])
 
    ;; finkel-core
-   (Finkel.Core.Functions (make-symbol))
+   (Finkel.Core.Functions [make-symbol])
 
    ;; Internal
    (Finkel.Tool.Internal.CLI)

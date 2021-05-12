@@ -16,8 +16,8 @@
   (import
    ;; QuickCheck
    (Test.QuickCheck
-    ((Arbitrary ..) (Gen)
-     arbitraryUnicodeChar elements getUnicodeString listOf oneof scale))
+    [(Arbitrary ..) (Gen) arbitraryUnicodeChar elements getUnicodeString
+     listOf oneof scale])
 
    ;; finkel-kernel
    (Language.Finkel.Form)))

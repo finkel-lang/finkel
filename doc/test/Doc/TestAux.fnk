@@ -13,30 +13,30 @@
    (Finkel.Core.Ghc))
   (import
    ;; base
-   (Control.Exception (catch throw))
-   (Control.Monad (when))
-   (Data.List (isSubsequenceOf isPrefixOf sort))
-   (Data.Maybe (fromMaybe))
-   (Data.Version ((Version ..) parseVersion))
-   (System.Environment (getExecutablePath lookupEnv))
-   (System.Exit ((ExitCode ..)))
-   (System.IO (hGetContents hGetLine))
-   (Text.ParserCombinators.ReadP (readP-to-S))
+   (Control.Exception [catch throw])
+   (Control.Monad [when])
+   (Data.List [isSubsequenceOf isPrefixOf sort])
+   (Data.Maybe [fromMaybe])
+   (Data.Version [(Version ..) parseVersion])
+   (System.Environment [getExecutablePath lookupEnv])
+   (System.Exit [(ExitCode ..)])
+   (System.IO [hGetContents hGetLine])
+   (Text.ParserCombinators.ReadP [readP-to-S])
 
    ;; directory
-   (System.Directory (listDirectory removeFile))
-   (System.Directory.Internal.Prelude (isDoesNotExistError))
+   (System.Directory [listDirectory removeFile])
+   (System.Directory.Internal.Prelude [isDoesNotExistError])
 
    ;; filepath
-   (System.FilePath (</> <.> takeExtension))
+   (System.FilePath [</> <.> takeExtension])
 
    ;; hspc
    (Test.Hspec
-    ((Expectation) (Spec) expectationFailure it pendingWith runIO shouldBe))
+    [(Expectation) (Spec) expectationFailure it pendingWith runIO shouldBe])
 
    ;; process
    (System.Process
-    ((CreateProcess ..) (StdStream ..) createProcess proc waitForProcess))))
+    [(CreateProcess ..) (StdStream ..) createProcess proc waitForProcess])))
 
 (imports-from-ghc
  (GHC.Settings.Config (cProjectVersion)))

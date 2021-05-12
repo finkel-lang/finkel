@@ -6,11 +6,11 @@
   (export get-git-commit)
   (import
    ;; base
-   (Control.Exception ((SomeException ..) handle))
-   (System.Exit ((ExitCode ..)))
+   (Control.Exception [(SomeException ..) handle])
+   (System.Exit [(ExitCode ..)])
 
    ;; process
-   (System.Process (readProcess readProcessWithExitCode))))
+   (System.Process [readProcess readProcessWithExitCode])))
 
 (defn (:: is-dirty (IO Bool))
   (do (<- (, ec _ _) (readProcessWithExitCode "git" ["diff" "--quiet"] []))

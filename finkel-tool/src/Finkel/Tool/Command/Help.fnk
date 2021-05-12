@@ -13,10 +13,10 @@
    show-usage)
   (import
    ;; base
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.Foldable (find maximumBy))
-   (Data.Function (on))
-   (System.Environment (getProgName))
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.Foldable [find maximumBy])
+   (Data.Function [on])
+   (System.Environment [getProgName])
 
    ;; Internal
    (Finkel.Tool.Internal.CLI)))

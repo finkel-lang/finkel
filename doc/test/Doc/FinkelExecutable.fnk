@@ -4,13 +4,13 @@
   (export spec)
   (import
    ;; base
-   (System.Info (os))
+   (System.Info [os])
 
    ;; filepath
-   (System.FilePath (</>))
+   (System.FilePath [</>])
 
    ;; hspc
-   (Test.Hspec ((Spec) before_ describe))
+   (Test.Hspec [(Spec) before_ describe])
 
    ;; Internal
    (Doc.TestAux)))

@@ -19,41 +19,40 @@
     (Finkel.Prelude))
   (import
    ;; base
-   (Control.Exception ((Exception ..) (SomeException ..) try))
-   (Control.Monad (filterM unless void when))
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.Function (on))
-   (Data.List
-    (find intercalate intersperse isPrefixOf partition sortBy))
-   (Data.Maybe (catMaybes))
-   (System.Console.GetOpt ((ArgOrder ..) getOpt))
-   (Text.Printf (printf))
-   (Text.Read (readMaybe))
+   (Control.Exception [(Exception ..) (SomeException ..) try])
+   (Control.Monad [filterM unless void when])
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.Function [on])
+   (Data.List [find intercalate intersperse isPrefixOf partition sortBy])
+   (Data.Maybe [catMaybes])
+   (System.Console.GetOpt [(ArgOrder ..) getOpt])
+   (Text.Printf [printf])
+   (Text.Read [readMaybe])
 
    ;; directory
    (System.Directory
-    (getCurrentDirectory getHomeDirectory setCurrentDirectory))
+    [getCurrentDirectory getHomeDirectory setCurrentDirectory])
 
    ;; filepath
-   (System.FilePath (normalise))
+   (System.FilePath [normalise])
 
    ;; exceptions
-   (Control.Monad.Catch (catch bracket))
+   (Control.Monad.Catch [catch bracket])
 
    ;; process
-   (System.Process (callProcess))
+   (System.Process [callProcess])
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Expand (discardInteractiveContext))
-   (Language.Finkel.Eval (evalExprType evalTypeKind))
-   (Language.Finkel.Form (mkLocatedForm))
-   (Language.Finkel.Make (buildHsSyn make))
+   (Language.Finkel.Expand [discardInteractiveContext])
+   (Language.Finkel.Eval [evalExprType evalTypeKind])
+   (Language.Finkel.Form [mkLocatedForm])
+   (Language.Finkel.Make [buildHsSyn make])
    (Language.Finkel.Fnk
-    ((FnkEnv ..) fnkEnvOptions getFnkEnv macroNames modifyFnkEnv
-     partitionFnkEnvOptions putFnkEnv setDynFlags setFnkVerbosity))
-   (Language.Finkel.Syntax (parseExpr parseType))
-   (Language.Finkel.Make (asModuleName))
+    [(FnkEnv ..) fnkEnvOptions getFnkEnv macroNames modifyFnkEnv
+     partitionFnkEnvOptions putFnkEnv setDynFlags setFnkVerbosity])
+   (Language.Finkel.Syntax [parseExpr parseType])
+   (Language.Finkel.Make [asModuleName])
 
    ;; finkel-core
    (Finkel.Core.Functions)))

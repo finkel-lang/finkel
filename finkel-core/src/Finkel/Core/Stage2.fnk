@@ -6,52 +6,52 @@
 (:require Finkel.Core.Stage1)
 (:require Finkel.Core.Ghc.Module)
 
-(defmodule Finkel.Core.Stage2
-  (export
-   ;; Macros
-   macroexpand macroexpand-1
-   exported-macros cond-expand macro-error
-   cond lcase case-do
+(module Finkel.Core.Stage2
+  ;; Macros
+  defmodule
+  macroexpand macroexpand-1
+  exported-macros cond-expand macro-error
+  cond lcase case-do
 
-   ;; Functions
-   is-atom is-pair is-list is-hslist is-symbol is-string is-char
-   is-integer is-fractional is-unit
+  ;; Functions
+  is-atom is-pair is-list is-hslist is-symbol is-string is-char
+  is-integer is-fractional is-unit
 
-   make-symbol mb-symbol-name mb-symbol-name-fs
+  make-symbol mb-symbol-name mb-symbol-name-fs
 
-   list (Listable ..)
+  list (Listable ..)
 
-   caar cadr
-   caaar caadr cadar caddr
-   caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+  caar cadr
+  caaar caadr cadar caddr
+  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
 
-   cdar cddr
-   cdaar cdadr cddar cdddr
-   cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+  cdar cddr
+  cdaar cdadr cddar cdddr
+  cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
 
-   reduce reduce1 keep curve rev unsnoc
+  map1 reduce reduce1 keep curve rev unsnoc
 
-   unsafeFinkelSrcError)
+  unsafeFinkelSrcError)
 
-  (import-when [:compile]
-    ;; base
-    (Prelude))
+(eval-when [:compile]
+  ;; base
+  (import Prelude))
 
-  (import-when [:compile :load]
-    ;; finkel-kernel
-    (Language.Finkel)
-    (Language.Finkel.Form (aSymbol genSrc)))
+(eval-when [:compile :load]
+  ;; finkel-kernel
+  (import Language.Finkel)
+  (import Language.Finkel.Form (aSymbol genSrc)))
 
-  (import
-   ;; base
-   (System.IO.Unsafe (unsafePerformIO))
-   (qualified System.Info)
+;; base
+(import Control.Monad (foldM))
+(import System.IO.Unsafe (unsafePerformIO))
+(import qualified System.Info)
 
-   ;; finkel-kernel
-   (Language.Finkel.Form (aString mkLocatedForm))
+;; finkel-kernel
+(import Language.Finkel.Form (aString mkLocatedForm))
 
-   ;; Internal
-   (Finkel.Core.Stage0)))
+;; Internal
+(import Finkel.Core.Stage0)
 
 (imports-from-ghc
  (GHC (getModuleInfo lookupModule lookupName modInfoExports))
@@ -180,6 +180,130 @@ Is same as:
   (do (<- tmp gensym)
       (return `(do (<- ,tmp ,(car args))
                    (case ,tmp ,@(cdr args))))))
+
+(defmacroM defmodule
+  "Macro to define header of module named /NAME/. The /IMPEXP/ are forms
+for imports and exports. Imports and exports forms can appear in any
+order, and starts with one of the following symbols:
+
+[@import@]: The form elements expand to @import@ declaration.
+
+[@import-when@]: Like @import@, but the form elements are wrapped with
+@eval-when@ with given phases.
+
+[@require@]: The form elements expand to @:require@ declaration.
+
+[@require-and-import@]: The form elements are expanded to both
+@import@ and @:require@.
+
+[@export@]: The form elements expand to export entities.
+
+==== __Syntax__
+
+> DEFMODULE ::= 'defmodule' NAME IMPEXP*
+> NAME      ::= modid
+> IMPEXP    ::= '(' 'import' form+ ')'
+>             | '(' 'import-when' phases form+ ')'
+>             | '(' 'require' form+ ')'
+>             | '(' 'require-and-import' form+ ')'
+>             | '(' 'export' form* ')'
+
+==== __Examples__
+
+Sample module header:
+
+@
+(defmodule Foo
+  (require (Finkel.Prelude hiding (head tail)))
+  (import-when [:compile]
+    (Control.Monad (foldM)))
+  (import (Control.Monad (when))
+          (qualified Data.ByteString as BS))
+  (export foo bar buzz))
+@
+
+Expands to:
+
+@
+(:begin
+  (:require Finkel.Prelude hiding (head tail))
+  (module Foo foo bar buzz)
+  (eval-when [:compile]
+    (import Control.Monad (foldM)))
+  (import Control.Monad (when))
+  (import qualified Data.ByteString as BS)
+  (import Control.Monad (foldM)))
+@
+"
+  form
+  (case (unCode form)
+    (List [name])
+    (return `(module ,name))
+
+    (List (: name rest1))
+    (do (let ((= merge-sections acc lst
+                (let ((= label (car lst))
+                      (= payload (cdr lst)))
+                  (case ()
+                    _ (| ((== label 'export)
+                          (return
+                           (if (null (cdr lst))
+                               (: (, 'export (cons '() nil)) acc)
+                               (: (, 'export payload) acc))))
+                         ((|| (== label 'use)
+                              (== label 'import))
+                          (return
+                           (: (, 'import
+                                 (map1 (\ es `(import ,@(curve-el es)))
+                                       payload))
+                              acc)))
+                         ((|| (== label 'load)
+                              (== label 'require))
+                          (return
+                           (: (, ':require (map1 (\ es `(:require ,@es))
+                                                 payload))
+                              acc)))
+                         ((|| (== label 'require-and-import)
+                              (== label 'load-use))
+                          (return (: (, 'require-and-import payload) acc)))
+                         ((== label 'import-when)
+                          (let ((= phases (car payload))
+                                (= body0 (cdr payload))
+                                (= body1 (map1 (\ e `(import ,@(curve-el e)))
+                                               body0)))
+                            (return (: (, 'eval-when (cons phases body1))
+                                       acc))))
+                         (otherwise
+                          (finkelSrcError lst
+                                          "defmodule: unknown section"))))))
+              (= curve-el
+                (map1 curve))))
+        (<- alist (foldM merge-sections [] rest1))
+        (let ((= emit add-load-too header
+                (let ((= e1 (maybe nil id (lookup header alist)))
+                      (= e2 (maybe nil
+                                   (map1 (\ es `(,header ,@es)))
+                                   (lookup 'require-and-import alist))))
+                  (if add-load-too
+                      (mappend e1 e2)
+                      e1)))))
+        (return
+         `(:begin
+            ,@(emit True ':require)
+
+            (module ,name ,@(emit False 'export))
+
+            ,@(let ((= evalwhens (filter (\ (, k _) (== k 'eval-when))
+                                         alist))
+                    (= f (, _ phases-mdls)
+                      (let ((= phases (car phases-mdls))
+                            (= mdls (cdr phases-mdls)))
+                        `(eval-when ,phases ,@mdls))))
+                (map f evalwhens))
+
+            ,@(emit True 'import))))
+
+    _ (finkelSrcError form "defmodule: invalid form")))
 
 
 ;;; Compilation context macros
@@ -519,6 +643,37 @@ and the definition of 'cdadr' is:
 
 ;;; List and HsList functions
 
+(defn (:: make-list-fn
+        (-> String
+            (-> SrcSpan (-> [(LForm a)] (LForm a)) [Code] b)
+            Code
+            b))
+  "Auxiliary function for higher order function.
+
+Make a function taking `SrcSpan' and a list of `Code' from given arguments."
+  [label f (@ orig (LForm (L l form)))]
+  (case form
+    (List xs) (f l (. LForm (L l) List) xs)
+    (HsList xs) (f l (. LForm (L l) HsList) xs)
+    _ (non-list label orig)))
+%p(INLINE make-list-fn)
+
+(defn (:: map1 (-> (-> Code Code) Code Code))
+  "Like `map', but for `Code'
+
+@map f x@ applies the function @f@ to each element of @x@ when the @x@ is `List'
+or `HsList'. Other @x@ value will throw a `NonListvalue' exception.
+
+==== __Examples__
+
+>>> (map1 (\\ x `(x is ,x)) '(foo bar buzz))
+((x is foo) (x is bar) (x is buzz))
+>>> (map1 (\\ x `(x is ,x)) 'foo)
+*** Exception: map1: non-list value `foo'"
+  [f]
+  (make-list-fn "map1" (\ _ c xs (c (map f xs)))))
+%p(INLINABLE map1)
+
 (defn (:: reduce (-> (-> Code a a) a Code a))
   "Like `foldr', but for `Code'.
 
@@ -558,7 +713,7 @@ Throws an exception if the second argument was not a list.
 (defn (:: keep (-> (-> Code Bool) Code Code))
   "Like `filter', but for `Code'.
 
-Filter out immediate element of `List' if the test result is `False'.
+Filter out immediate elements of `List' if the test result is `False'.
 
 ==== __Examples__
 

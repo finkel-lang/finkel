@@ -9,28 +9,27 @@
    (Finkel.Core.Ghc))
   (import
    ;; base
-   (Control.Concurrent
-    ((MVar) forkIO newEmptyMVar putMVar takeMVar))
-   (Control.Exception ((Exception ..) (SomeException ..) handle))
-   (Control.Monad (void unless when))
-   (Data.Char (isSpace))
+   (Control.Concurrent [(MVar) forkIO newEmptyMVar putMVar takeMVar])
+   (Control.Exception [(Exception ..) (SomeException ..) handle])
+   (Control.Monad [void unless when])
+   (Data.Char [isSpace])
    (System.IO
-    ((BufferMode ..) (IOMode ..) hClose hFlush hPutStr hSetBuffering
-     hSetEncoding utf8))
+    [(BufferMode ..) (IOMode ..) hClose hFlush hPutStr hSetBuffering
+     hSetEncoding utf8])
 
    ;; bytestring
-   (Data.ByteString.Internal (toForeignPtr))
+   (Data.ByteString.Internal [toForeignPtr])
    (qualified Data.ByteString.Char8 as BS)
 
    ;; network
    (Network.Socket
-    ((AddrInfo ..) (AddrInfoFlag ..) PortNumber Socket (SocketOption ..)
+    [(AddrInfo ..) (AddrInfoFlag ..) PortNumber Socket (SocketOption ..)
      (SocketType ..) accept bind defaultHints getAddrInfo listen socket
-     socketToHandle setSocketOption withSocketsDo))
+     socketToHandle setSocketOption withSocketsDo])
 
    ;; finkel-kernel
-   (Language.Finkel.Lexer (evalSP))
-   (Language.Finkel.Reader (sexpr))
+   (Language.Finkel.Lexer [evalSP])
+   (Language.Finkel.Reader [sexpr])
 
    ;; internal
    (Finkel.Tool.Internal.Types)))

@@ -8,13 +8,13 @@
     (Finkel.Prelude))
   (import
    ;; base
-   (Control.Exception (bracket))
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.Version (showVersion))
-   (System.Environment (getEnvironment setEnv withArgs))
+   (Control.Exception [bracket])
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.Version [showVersion])
+   (System.Environment [getEnvironment setEnv withArgs])
 
    ;; filepath
-   (System.FilePath (</>))
+   (System.FilePath [</>])
 
    ;; finkel-core
    (qualified Paths_finkel_core)

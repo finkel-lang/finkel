@@ -2,7 +2,7 @@
 
 (defmodule Lib
   (export someFunc)
-  (import (HsCodes (hsfactorial fnkfactorial))))
+  (import (HsCodes [hsfactorial fnkfactorial])))
 
 (defn (:: someFunc (IO ()))
   (putStrLn

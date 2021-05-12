@@ -9,11 +9,11 @@
     (Finkel.Prelude))
   (import
    ;; base
-   (System.Console.GetOpt ((OptDescr ..) (ArgDescr ..) (ArgOrder ..) getOpt))
-   (System.Environment (getProgName withArgs withProgName))
+   (System.Console.GetOpt [(OptDescr ..) (ArgDescr ..) (ArgOrder ..) getOpt])
+   (System.Environment [getProgName withArgs withProgName])
 
    ;; finkel-kernel
-   (Language.Finkel.Main (defaultMainWith))
+   (Language.Finkel.Main [defaultMainWith])
 
    ;; finkel-core
    (Finkel.Core)))

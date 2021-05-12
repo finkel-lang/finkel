@@ -26,17 +26,17 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Concurrent (MVar))
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.Function (on))
-   (Data.IORef (IORef atomicWriteIORef newIORef readIORef))
+   (Control.Concurrent [MVar])
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.Function [on])
+   (Data.IORef [IORef atomicWriteIORef newIORef readIORef])
 
 
    ;; transformers
-   (Control.Monad.Trans.Class ((MonadTrans ..)))
+   (Control.Monad.Trans.Class [(MonadTrans ..)])
 
    ;; finkel-kernel
-   (Language.Finkel (Code))))
+   (Language.Finkel [Code])))
 
 (imports-from-ghc
  (GHC.Data.StringBuffer (StringBuffer appendStringBuffers))

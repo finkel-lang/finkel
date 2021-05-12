@@ -12,37 +12,37 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Concurrent.MVar (MVar putMVar takeMVar))
+   (Control.Concurrent.MVar [MVar putMVar takeMVar])
    (Control.Exception
-    ((AsyncException ..) (Exception ..) fromException throwIO))
+    [(AsyncException ..) (Exception ..) fromException throwIO])
    (Control.Monad (unless))
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.List (intercalate))
-   (System.IO (Handle))
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.List [intercalate])
+   (System.IO [Handle])
    (qualified System.Exit)
 
    ;; exceptions
-   (Control.Monad.Catch (handle))
+   (Control.Monad.Catch [handle])
 
    ;; ghc-boot
-   (GHC.LanguageExtensions ((Extension ..)))
+   (GHC.LanguageExtensions [(Extension ..)])
 
    ;; ghci
-   (GHCi.Message ((EvalExpr ..) (EvalResult ..) (EvalStatus_ ..)
-                  (SerializableException ..)))
+   (GHCi.Message [(EvalExpr ..) (EvalResult ..) (EvalStatus_ ..)
+                  (SerializableException ..)])
    (GHCi.RemoteTypes (ForeignHValue))
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Builder (HDecl HIE HImportDecl HStmt
-                                   syntaxErrCode syntaxErrMsg evalBuilder))
-   (Language.Finkel.Eval (evalDecls))
-   (Language.Finkel.Exception (finkelExceptionLoc))
-   (Language.Finkel.Make (initSessionForMake isFnkFile isHsFile))
+   (Language.Finkel.Builder [HDecl HIE HImportDecl HStmt
+                             syntaxErrCode syntaxErrMsg evalBuilder])
+   (Language.Finkel.Eval [evalDecls])
+   (Language.Finkel.Exception [finkelExceptionLoc])
+   (Language.Finkel.Make [initSessionForMake isFnkFile isHsFile])
    (Language.Finkel.Fnk
-    ((FnkEnv ..) failFnk modifyFnkEnv prepareInterpreter setDynFlags
-     withTmpDynFlags))
-   (Language.Finkel.Syntax (parseExpr parseImports parseStmt parseTopDecls))
+    [(FnkEnv ..) failFnk modifyFnkEnv prepareInterpreter setDynFlags
+     withTmpDynFlags])
+   (Language.Finkel.Syntax [parseExpr parseImports parseStmt parseTopDecls])
 
    ;; internal
    (Finkel.Tool.Internal.IO)

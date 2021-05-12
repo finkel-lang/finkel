@@ -19,14 +19,14 @@
    (Finkel.Core.Ghc))
   (import
    ;; base
-   (Control.Exception ((SomeException ..) try))
-   (Data.Function (on))
+   (Control.Exception [(SomeException ..) try])
+   (Data.Function [on])
 
    ;; hspec
-   (Test.Hspec (Expectation expectationFailure shouldBe shouldSatisfy))
+   (Test.Hspec [Expectation expectationFailure shouldBe shouldSatisfy])
 
    ;; finkel-kernel
-   (Language.Finkel.Fnk ((FnkEnv ..)))
+   (Language.Finkel.Fnk [(FnkEnv ..)])
 
    ;; finkel-core
    (Finkel.Prelude)))

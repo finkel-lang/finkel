@@ -13,17 +13,17 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Exception (throwIO))
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.List (isPrefixOf))
-   (System.Console.GetOpt ((ArgDescr ..) (OptDescr ..)))
-   (System.Exit ((ExitCode ..)))
-   (System.IO.Error (isEOFError))
+   (Control.Exception [throwIO])
+   (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.List [isPrefixOf])
+   (System.Console.GetOpt [(ArgDescr ..) (OptDescr ..)])
+   (System.Exit [(ExitCode ..)])
+   (System.IO.Error [isEOFError])
    (qualified Control.Exception)
    (qualified System.Exit as Exit)
 
    ;; haskeline
-   (System.Console.Haskeline (InputT))
+   (System.Console.Haskeline [InputT])
    (qualified System.Console.Haskeline as Haskeline)))
 
 (cond-expand

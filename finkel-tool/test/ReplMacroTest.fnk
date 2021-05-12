@@ -9,16 +9,15 @@
     (Finkel.Prelude))
   (import
    ;; base
-   (Control.Exception (catch throw))
-   (Data.List (intercalate isSubsequenceOf))
-   (System.IO.Error (isDoesNotExistError))
+   (Control.Exception [catch throw])
+   (Data.List [intercalate isSubsequenceOf])
+   (System.IO.Error [isDoesNotExistError])
 
    ;; filepath
-   (System.FilePath (</>))
+   (System.FilePath [</>])
 
    ;; directory
-   (System.Directory
-    (getCurrentDirectory getTemporaryDirectory removeFile))
+   (System.Directory [getCurrentDirectory getTemporaryDirectory removeFile])
 
    ;; hspec
    (Test.Hspec)

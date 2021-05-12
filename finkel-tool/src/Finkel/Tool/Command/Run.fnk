@@ -6,23 +6,23 @@
   (export runMain)
   (import
    ;; base
-   (Control.Monad.IO.Class ((MonadIO ..)))
+   (Control.Monad.IO.Class [(MonadIO ..)])
    (System.Console.GetOpt
-    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt' usageInfo))
-   (System.Environment (getProgName))
-   (System.Exit (exitFailure))
+    [(ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt' usageInfo])
+   (System.Environment [getProgName])
+   (System.Exit [exitFailure])
 
    ;; finkel-kernel
-   (Language.Finkel.Fnk (FnkEnv fromFnkEnvOptions fnkEnvOptionsUsage))
+   (Language.Finkel.Fnk [FnkEnv fromFnkEnvOptions fnkEnvOptionsUsage])
 
    ;; finkel-core
-   (Finkel.Core.Functions (make-symbol))
+   (Finkel.Core.Functions [make-symbol])
 
    ;; Internal
-   (Finkel.Tool.Command.Eval (eval-and-exit-with-args))
-   (Finkel.Tool.Command.Repl (repl-env))
+   (Finkel.Tool.Command.Eval [eval-and-exit-with-args])
+   (Finkel.Tool.Command.Repl [repl-env])
    (Finkel.Tool.Internal.CLI)
-   (Finkel.Tool.Internal.IO (putErr))))
+   (Finkel.Tool.Internal.IO [putErr])))
 
 (defn (:: runMain (=> (CLI m) (-> [String] (m ()))))
   [args0]

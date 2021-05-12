@@ -4,14 +4,14 @@
   (export spec)
   (import
    ;; base
-   (Data.Version (makeVersion))
-   (System.Info (os))
+   (Data.Version [makeVersion])
+   (System.Info [os])
 
    ;; filepath
-   (System.FilePath (</>))
+   (System.FilePath [</>])
 
    ;; hspec
-   (Test.Hspec ((Spec) beforeAll_ describe))
+   (Test.Hspec [(Spec) beforeAll_ describe])
 
    ;; Internal
    (Doc.TestAux)))

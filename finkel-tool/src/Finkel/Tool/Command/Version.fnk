@@ -7,10 +7,10 @@
   (require
    ;; finkel-core
    (Finkel.Core.Ghc))
-  (import-when [:compile]
+  (import-when [:compile :load]
     ;; base
-    (Control.Monad.IO.Class ((MonadIO ..)))
-
+    (Control.Monad.IO.Class [(MonadIO ..)]))
+  (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude)
 
@@ -18,12 +18,11 @@
     (Finkel.Tool.Internal.Commit))
   (import
    ;; base
-   (Control.Monad.IO.Class ((MonadIO ..)))
-   (Data.Version (showVersion))
+   (Data.Version [showVersion])
    (System.Console.GetOpt
-    ((ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo))
-   (System.Environment (getProgName))
-   (System.Info (arch os))
+    [(ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo])
+   (System.Environment [getProgName])
+   (System.Info [arch os])
 
    ;; finkel-core
    (qualified Paths_finkel_core)
