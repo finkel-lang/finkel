@@ -105,9 +105,13 @@
           (it "should evaluate file contents after loading module"
             (main' ["repl" "--quiet" (++ "--file=" print-load-me) load-me]))
           (it "should show compilation error when loading invalid module"
-            (main' ["repl" "--quiet" (++ "--file=" print-int) print-int]))
+            (shouldThrow
+             (main' ["repl" "--quiet" (++ "--file=" print-int) print-int])
+             anyExitFailure))
           (it "should show load failure with type error on load"
-            (main' ["repl" "--quiet" (++ "--file=" print-int) err001]))
+            (shouldThrow
+             (main' ["repl" "--quiet" (++ "--file=" print-int) err001])
+             anyExitFailure))
           (it "should compilain missing argument"
             (shouldThrow
              (main' ["repl" (++ "--file=" print-int) "--prompt"])

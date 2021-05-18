@@ -5,7 +5,9 @@
 (defmodule Finkel.Tool.Internal.CLI
   (export
    (CLI ..)
+   (Command ..)
    (ExitCode ..)
+   find-command
    partition-descrs
    others-passed-to-ghc)
   (import-when [:compile]
@@ -15,6 +17,7 @@
    ;; base
    (Control.Exception [throwIO])
    (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.Foldable [find])
    (Data.List [isPrefixOf])
    (System.Console.GetOpt [(ArgDescr ..) (OptDescr ..)])
    (System.Exit [(ExitCode ..)])
@@ -91,6 +94,22 @@
      %p(INLINE withInterrupt)
      (= exitWith (. liftIO Exit.exitWith))
      %p(INLINE exitWith))])
+
+
+;;; Command data type
+
+;;; Data type to wrap an IO action taking string arguments with name and
+;;; description.
+(data Command
+  (Command {cmd-name String
+            cmd-descr String
+            cmd-act (-> [String] (IO ()))}))
+
+(defn (:: find-command (-> [Command] String (Maybe Command)))
+  "Find the command by command name."
+  [cmds name]
+  (find (. (== name) cmd-name) cmds))
+
 
 ;;; Command line option helper
 

@@ -55,6 +55,7 @@ library
                        Finkel.Tool.Internal.CLI
                        Finkel.Tool.Internal.Commit
                        Finkel.Tool.Internal.Eval
+                       Finkel.Tool.Internal.Exception
                        Finkel.Tool.Internal.IO
                        Finkel.Tool.Internal.Listen
                        Finkel.Tool.Internal.Loop

@@ -10,12 +10,15 @@
 
    ;; Internal
    (Finkel.Tool.Command)
-   (Finkel.Tool.Command.Help)))
+   (Finkel.Tool.Command.Help)
+   (Finkel.Tool.Internal.CLI)
+   (Finkel.Tool.Internal.Exception)))
 
 (defn (:: defaultMain (IO ()))
   "Main entry point function for the executable."
-  (case-do getArgs
-    (: name rest) (maybe (show-usage commands)
-                         (flip cmd-act rest)
-                         (find-command commands name))
-    _ (show-usage commands)))
+  (finkel-tool-exception-handler
+   (case-do getArgs
+     (: name rest) (maybe (show-usage commands)
+                          (flip cmd-act rest)
+                          (find-command commands name))
+     _ (show-usage commands))))

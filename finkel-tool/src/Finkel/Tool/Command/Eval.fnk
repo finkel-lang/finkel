@@ -12,12 +12,11 @@
   (import
    ;; base
    (Control.Concurrent [MVar newEmptyMVar newMVar takeMVar])
-   (Control.Exception [displayException])
+   (Control.Exception [displayException throwIO])
    (Control.Monad.IO.Class [(MonadIO ..)])
    (System.Console.GetOpt
     [(ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo])
    (System.Environment [getProgName])
-   (System.Exit [exitFailure])
 
    ;; finkel-kernel
    (Language.Finkel.Fnk
@@ -30,7 +29,7 @@
    (Finkel.Tool.Command.Repl [repl-env])
    (Finkel.Tool.Internal.CLI)
    (Finkel.Tool.Internal.Eval)
-   (Finkel.Tool.Internal.IO)
+   (Finkel.Tool.Internal.Exception)
    (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
@@ -43,10 +42,12 @@
 (defn (:: evalMain (=> (CLI m) (-> [String] (m ()))))
   [args]
   (let ((= all-opts (++ eval-opts eval-fnk-env-opts))
-        (= (, es gs) (partition-descrs all-opts args))
+        (= (, os gs) (partition-descrs all-opts args))
         (= mk-opt (foldl (flip id) initial-eval-option)))
-    (case (getOpt Permute all-opts es)
-      (, o _ _) (do-eval (mk-opt o) gs))))
+    (case (getOpt Permute all-opts os)
+      (, o _ es) (case es
+                   [] (do-eval (mk-opt o) gs)
+                   _ (liftIO (throwIO (ArgumentErrors "eval" es)))))))
 
 
 ;;; Internal
@@ -91,9 +92,9 @@
                         (Right form) (eval-and-exit ghc-args
                                                     (eo-fnk-env eo)
                                                     form)
-                        (Left err) (>> (putErrLn (displayException err))
-                                       exitFailure))
-           Nothing (>> print-eval-help exitFailure))))))
+                        (Left err) ($ throwIO FinkelToolException
+                                      displayException err))
+           Nothing (throwIO NoEvalInput))))))
 
 (defn (:: separate-args (-> [String] (, [String] (Maybe String))))
   [args]
@@ -117,7 +118,7 @@
        (eval-once wrapper-args ghc-args-1 hdl in-mv)
        (liftIO (case-do (takeMVar out-mv)
                  (Right msg) (putStr msg)
-                 (Left errs) (>> (putErrLn errs) exitFailure))))
+                 (Left errs) ($ throwIO FinkelToolException errs))))
    fnk-env))
 
 (defn (:: make-in-and-out (-> Code (Fnk (, (MVar Input) (MVar Result)))))

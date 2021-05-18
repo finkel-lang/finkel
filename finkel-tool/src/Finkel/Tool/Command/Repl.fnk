@@ -18,6 +18,7 @@
     (Finkel.Tool.Internal.Macro))
   (import
    ;; base
+   (Control.Exception [throwIO])
    (Control.Monad [mplus])
    (Control.Monad.IO.Class [(MonadIO ..)])
    (System.Console.GetOpt
@@ -36,6 +37,7 @@
 
    ;; Internal
    (Finkel.Tool.Internal.CLI)
+   (Finkel.Tool.Internal.Exception)
    (Finkel.Tool.Internal.Loop)
    (Finkel.Tool.Internal.Types)))
 
@@ -51,7 +53,7 @@
         (= initial-option (make-initial-option ghc-opts)))
     (case (getOpt Permute all-descrs repl-opts)
       (, o _other []) (act (foldl (flip id) initial-option o))
-      (, _ _ es) (print-errors es))))
+      (, _ _ es) (liftIO (throwIO (ArgumentErrors "repl" es))))))
 
 (defn (:: repl-env FnkEnv)
   "Environment value used by the Finkel REPL."
@@ -135,12 +137,6 @@
   "Form containing initial message for the REPL."
   '(System.IO.putStrLn
     "Hit `Ctrl-d' or type ,q to quit, type ,? for help."))
-
-(defn (:: print-errors (=> (CLI m) (-> [String] (m ()))))
-  [errs]
-  (do (putString (concat errs))
-      print-usage
-      (exitWith (ExitFailure 1))))
 
 (defn (:: print-usage (=> (CLI m) (m ())))
   (do (<- name (liftIO getProgName))

@@ -167,26 +167,24 @@
     (Just _) set-act
     Nothing  not-set-act))
 
-(defn (:: init-etf-for-cabal (Fnk ()))
-  "Initialization work for running eval tests with `cabal-install' 3.0.0."
-  (do (<- dflags0 getDynFlags)
-      (<- home (liftIO getHomeDirectory))
+(defn (:: init-etf-args-for-cabal (IO [String]))
+  "Initialization arguments for running eval tests with `cabal-install'."
+  (do (<- home (liftIO getHomeDirectory))
       (let ((= ghc-ver (++ "ghc-" cProjectVersion))
             (= inplacedb
               (</> ".." "dist-newstyle" "packagedb" ghc-ver))
-            (= args (map noLoc ["-package-db" inplacedb]))))
-      (<- (, dflags1 _ _) (parseDynamicFlagsCmdLine dflags0 args))
-      (setDynFlags dflags1)))
+            (= args ["-package-db" inplacedb])))
+      (pure args)))
 
-(defn (:: init-etf (Fnk ()))
-  "Initialization work for `EvalTestFns'."
-  (if-ghc-package-path-is-set (return ()) init-etf-for-cabal))
+(defn (:: init-etf-args (IO [String]))
+  "Initialization arguments for `EvalTestFns'."
+  (if-ghc-package-path-is-set (return []) init-etf-args-for-cabal))
 
 (defn (:: makeEvalTestFns (IO EvalTestFns))
   (do (<- out-mv newEmptyMVar)
       (<- (@ resources (, _tmpfile hdl in-mv)) acquire-repl)
-      (<- etid
-        (forkIO (runFnk (>> init-etf (eval-loop [] hdl in-mv)) repl-env)))
+      (<- ghc-args init-etf-args)
+      (<- etid (fork-eval-loop ghc-args hdl in-mv repl-env))
       (let ((= eval-form right-or-left form expect
               (describe (++ "evaluate " (show form))
                 (it "evaluates to expected result"

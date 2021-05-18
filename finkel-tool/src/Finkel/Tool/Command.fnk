@@ -10,7 +10,8 @@
    (Finkel.Tool.Command.Make)
    (Finkel.Tool.Command.Repl)
    (Finkel.Tool.Command.Run)
-   (Finkel.Tool.Command.Version)))
+   (Finkel.Tool.Command.Version)
+   (Finkel.Tool.Internal.CLI)))
 
 (defn (:: commands [Command])
   "Available commands in the `finkel' executable."

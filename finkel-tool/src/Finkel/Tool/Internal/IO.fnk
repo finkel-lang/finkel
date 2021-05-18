@@ -6,10 +6,7 @@
   (export
    read-form
    read-print-loop
-   with-io-redirect
-   putErr
-   putErrLn
-   printErr)
+   with-io-redirect)
   (require
    ;; finkel-core
    (Finkel.Core.Ghc))
@@ -20,10 +17,10 @@
    (Control.Exception [(AsyncException ..) bracket catch throwIO])
    (Control.Monad [when])
    (Control.Monad.IO.Class [(MonadIO ..)])
-   (Data.List [inits intercalate isPrefixOf])
+   (Data.List [intercalate isPrefixOf isSubsequenceOf])
    (GHC.IO.Handle [hDuplicate hDuplicateTo])
-   (System.IO [Handle (SeekMode ..) hClose hFlush hGetLine hPutStr hPutStrLn
-               hSeek hSetFileSize stdout stderr])
+   (System.IO
+    [Handle (SeekMode ..) hClose hFlush hGetLine hSeek hSetFileSize stdout])
    (System.IO.Error [isEOFError])
 
    ;; deepseq
@@ -68,28 +65,26 @@ reading the input until successful parse result."
                 (handleInterrupt (do (putReplState (reset-pending st0))
                                      (return (Just [])))
                                  (withInterrupt (getString prompt))))
-              (maybe (quit eval-tid) (go1 st0 result-mv) mb-input)))
+              (maybe quit (go1 st0 result-mv) mb-input)))
         (= go1 st0 result-mv line
           (case line
             (: h tl) (| ((== line "(quit)")
-                         (quit eval-tid))
+                         quit)
                         ((null (pending-input st0))
                          (== #', h)
-                         (if (elem tl (tail (inits "quit")))
-                             (quit eval-tid)
+                         (if (isSubsequenceOf tl "quit")
+                             quit
                              (go-command result-mv tl)))
                         (otherwise
                          (go-line result-mv line)))
             [] (go result-mv)))
         (= go-command result-mv lin
-          ;; Using raw symbol for REPL commands other than name-mangled
-          ;; commands, to skip replacing hyphens to underscores.  Otherwise,
-          ;; command arguments like "ghc-pkg" will be replaced to "ghc_pkg" by
-          ;; the parser.
-          (| ((mangled-command lin)
-              (go-line result-mv (concat ["(repl-macro " lin ")"])))
-             (otherwise
-              (go-form result-mv (as-repl-macro lin)))))
+          ;; Using raw symbol for non-mangled REPL commands, to skip replacing
+          ;; hyphens to underscores.  Otherwise, command arguments like
+          ;; "ghc-boot" will be replaced to "ghc_boot" by the parser.
+          (if (mangled-command lin)
+              (go-line result-mv (concat ["(repl-macro " lin ")"]))
+              (go-form result-mv (as-repl-macro lin))))
         (= go-line result-mv line
           (do (<- mb-form (read-form line))
               (maybe (go result-mv) (go-form result-mv) mb-form)))
@@ -101,10 +96,11 @@ reading the input until successful parse result."
                (do (liftIO (throwTo eval-tid UserInterrupt))
                    (print-io result-mv))
                (withInterrupt
-                (do (let ((= input (Input Prompt form result-mv))))
-                    (liftIO (putMVar to-mvar input))
+                (do (liftIO (putMVar to-mvar (Input Prompt form result-mv)))
                     (print-io result-mv))))
-              (go result-mv))))
+              (go result-mv)))
+        (= quit
+          ($ liftIO killThread eval-tid)))
 
     ;; Print the result from boot expression, then start the loop.
     (do (<- result-mv (liftIO newEmptyMVar))
@@ -115,10 +111,10 @@ reading the input until successful parse result."
 (defn (:: print-io (=> (MonadIO m) (CLI m)
                        (-> (MVar Result) (m ()))))
   [result-mv]
-  (do (<- result (liftIO (takeMVar result-mv)))
-      (let ((= pr str
+  (do (let ((= pr str
               (when (not (null str))
                 (putString str)))))
+      (<- result (liftIO (takeMVar result-mv)))
       (case result
         (Right str) (pr str)
         (Left str) (pr str))
@@ -174,22 +170,7 @@ reading the input until successful parse result."
     (go [])))
 
 
-;;; Printing errors
-
-(defn (:: putErr (-> String (IO ())))
-  (hPutStr stderr))
-
-(defn (:: putErrLn (-> String (IO ())))
-  (hPutStrLn stderr))
-
-(defn (:: printErr (=> (Show a) (-> a (IO ()))))
-  (. putErrLn show))
-
-
 ;;; Auxiliary
-
-(defn (:: quit (=> (MonadIO m) (-> ThreadId (m ()))))
-  (. liftIO killThread))
 
 (defn (:: mangled-command (-> String Bool))
   [lin]

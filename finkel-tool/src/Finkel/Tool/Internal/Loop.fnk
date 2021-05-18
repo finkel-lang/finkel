@@ -12,7 +12,6 @@
    (Control.Concurrent [ThreadId forkIO])
    (Control.Concurrent.MVar [MVar newEmptyMVar])
    (Control.Exception [bracket catch throwIO])
-
    (System.IO [Handle hClose openTempFile])
    (System.IO.Error [isDoesNotExistError])
 
@@ -25,7 +24,7 @@
 
    ;; finkel-kernel
    (Language.Finkel.Form [Code])
-   (Language.Finkel.Fnk [(FnkEnv ..) runFnk])
+   (Language.Finkel.Fnk [(FnkEnv ..)])
 
    ;; internal
    (Finkel.Tool.Internal.Eval)
@@ -84,7 +83,7 @@
   "Inner work for `start-repl'."
   [ghc-opts mb-path mb-port fnk-env repl-st init-form (, _ hdl in-mv)]
   (do (mapM- (start-listener in-mv) mb-port)
-      (<- tid (forkIO (runFnk (eval-loop ghc-opts hdl in-mv) fnk-env)))
+      (<- tid (fork-eval-loop ghc-opts hdl in-mv fnk-env))
       (let ((= rpl (read-print-loop init-form in-mv tid))
             (= behavior (maybe defaultBehavior useFile mb-path))
             (= run (runInputTBehavior behavior defaultSettings))))

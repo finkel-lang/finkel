@@ -3,7 +3,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Internal.Eval
-  (export eval-loop eval-once)
+  (export eval-loop eval-once fork-eval-loop)
   (require
    ;; finkel-core
    (Finkel.Core.Ghc))
@@ -12,17 +12,18 @@
    (Finkel.Prelude))
   (import
    ;; base
-   (Control.Concurrent.MVar [MVar putMVar takeMVar])
+   (Control.Concurrent [MVar ThreadId forkIOWithUnmask putMVar takeMVar])
    (Control.Exception
-    [(AsyncException ..) (Exception ..) fromException throwIO])
+    [(AsyncException ..) (Exception ..) fromException throwIO throwTo])
    (Control.Monad (unless))
    (Control.Monad.IO.Class [(MonadIO ..)])
    (Data.List [intercalate])
+   (GHC.Conc [myThreadId])
    (System.IO [Handle])
    (qualified System.Exit)
 
    ;; exceptions
-   (Control.Monad.Catch [handle])
+   (Control.Monad.Catch [catch handle])
 
    ;; ghc-boot
    (GHC.LanguageExtensions [(Extension ..)])
@@ -45,6 +46,7 @@
    (Language.Finkel.Syntax [parseExpr parseImports parseStmt parseTopDecls])
 
    ;; internal
+   (Finkel.Tool.Internal.Exception)
    (Finkel.Tool.Internal.IO)
    (Finkel.Tool.Internal.Macro)
    (Finkel.Tool.Internal.Types)))
@@ -130,6 +132,18 @@
 
 ;;; Eval loop
 
+(defn (:: fork-eval-loop
+        (-> [String] Handle (MVar Input) FnkEnv (IO ThreadId)))
+  [ghc-args hdl in-mv fnk-env]
+  (do (<- me myThreadId)
+      (forkIOWithUnmask
+       (\ unmask
+         (catch (unmask (runFnk (eval-loop ghc-args hdl in-mv) fnk-env))
+           (\ e
+             (case (fromException e)
+               (Just fe) (throwTo me (:: fe FinkelToolException))
+               _ (throwTo me e))))))))
+
 (defn (:: init-eval-loop (-> [String] [String] (Fnk ForeignHValue)))
   "Initialization works for evaluation loop."
   [eval-wrapper-opts ghc-opts]
@@ -167,18 +181,20 @@
       (unless (null srcs)
         (handle
          (\ e
-           (cond
-             [(<- (Just se) (fromException e))
-              (>>= (make-src-err-message se) (. liftIO putErrLn))]
-             [(<- (Just fe) (fromException e))
-              (>>= (make-finkel-exception-message fe) (. liftIO putErrLn))]
-             [otherwise
-              (liftIO (printErr e))]))
+           (let ((= err (=<< (. liftIO throwIO FinkelToolException))))
+             (cond
+               [(<- (Just se) (fromException e))
+                ($ err make-src-err-message se)]
+               [(<- (Just fe) (fromException e))
+                ($ err make-finkel-exception-message fe)]
+               [otherwise
+                ($ err pure displayException e)])))
          (case-do (do (setTargets (map guessFnkTarget srcs))
                       (compile-and-import srcs))
            Failed (liftIO
-                   (putErrLn (++ "failed loading: "
-                                 (intercalate ", " (map unLoc fileish)))))
+                   (throwIO (FinkelToolException
+                             (++ "Failed loading: "
+                                 (intercalate ", " (map unLoc fileish))))))
            Succeeded (return ()))))
 
       ;; XXX: Currently the printer function and the arguments returned from
@@ -210,7 +226,7 @@
                _ (liftIO (throwIO e))))))
         (:: throw-async-io (-> AsyncException (Fnk a)))
         (= throw-async-io (. liftIO throwIO))
-        (= withErrorHandler m
+        (= withErrorHandler
           (handle
            (\ e
              (cond
@@ -221,8 +237,7 @@
                [(<- (Just fe) (fromException e))
                 (fmap Left (make-finkel-exception-message fe))]
                [otherwise
-                ($ pure Left show e)]))
-           m))
+                ($ pure Left show e)]))))
         (= eval-one wrapper
           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
               (<- ret (withErrorHandler

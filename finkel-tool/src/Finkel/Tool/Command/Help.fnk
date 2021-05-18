@@ -4,34 +4,18 @@
 
 (defmodule Finkel.Tool.Command.Help
   (export
-   ;; Commands with brief description
-   (Command ..)
-   find-command
-
    ;; Help command
    helpMain
    show-usage)
   (import
    ;; base
    (Control.Monad.IO.Class [(MonadIO ..)])
-   (Data.Foldable [find maximumBy])
+   (Data.Foldable [maximumBy])
    (Data.Function [on])
    (System.Environment [getProgName])
 
    ;; Internal
    (Finkel.Tool.Internal.CLI)))
-
-;;; Data type to wrap an IO action taking string arguments with name and
-;;; description.
-(data Command
-  (Command {cmd-name String
-            cmd-descr String
-            cmd-act (-> [String] (IO ()))}))
-
-(defn (:: find-command (-> [Command] String (Maybe Command)))
-  "Find the command by command name."
-  [cmds name]
-  (find (. (== name) cmd-name) cmds))
 
 (defn (:: helpMain (=> (CLI m) (-> [Command] [String] (m ()))))
   "Main function for help command."

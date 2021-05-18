@@ -6,11 +6,11 @@
   (export runMain)
   (import
    ;; base
+   (Control.Exception [throwIO])
    (Control.Monad.IO.Class [(MonadIO ..)])
    (System.Console.GetOpt
-    [(ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt' usageInfo])
+    [(ArgDescr ..) (ArgOrder ..) (OptDescr ..) getOpt usageInfo])
    (System.Environment [getProgName])
-   (System.Exit [exitFailure])
 
    ;; finkel-kernel
    (Language.Finkel.Fnk [FnkEnv fromFnkEnvOptions fnkEnvOptionsUsage])
@@ -22,14 +22,14 @@
    (Finkel.Tool.Command.Eval [eval-and-exit-with-args])
    (Finkel.Tool.Command.Repl [repl-env])
    (Finkel.Tool.Internal.CLI)
-   (Finkel.Tool.Internal.IO [putErr])))
+   (Finkel.Tool.Internal.Exception)))
 
 (defn (:: runMain (=> (CLI m) (-> [String] (m ()))))
   [args0]
   (let ((= (, args1 prog-args) (split-program-args args0))
         (= all-opts (++ run-opts run-fnk-env-opts))
         (= (, rargs ghc-args) (partition-descrs all-opts args1))
-        (= (, o _ _ es) (getOpt' Permute all-opts rargs))
+        (= (, o _ es) (getOpt Permute all-opts rargs))
         (= ro (foldl (flip id) initial-run-option o))
         (= main-fn (make-symbol (mangle-name (ro-main ro)))))
     (if (ro-help ro)
@@ -40,9 +40,7 @@
                                        ghc-args
                                        (ro-fnk-env ro)
                                        main-fn)
-           _ (do (mapM- putErr es)
-                 print-run-help
-                 exitFailure))))))
+           _ (throwIO (ArgumentErrors "run" es)))))))
 
 (data RunOption
   (RunOption {ro-help Bool
