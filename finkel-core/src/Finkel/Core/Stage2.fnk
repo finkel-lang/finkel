@@ -11,7 +11,7 @@
   defmodule
   macroexpand macroexpand-1
   exported-macros cond-expand macro-error
-  cond lcase case-do
+  case-do cond lcase lefn
 
   ;; Functions
   is-atom is-pair is-list is-hslist is-symbol is-string is-char
@@ -180,6 +180,60 @@ Is same as:
   (do (<- tmp gensym)
       (return `(do (<- ,tmp ,(car args))
                    (case ,tmp ,@(cdr args))))))
+
+(defmacro lefn
+  "Let-fn macro. Like @let@, but bindings take forms used in
+'Finkel.Core.Stage1.defn'.
+
+==== __Syntax__
+
+> LEFN     ::= 'lefn' BINDINGS BODY
+> BINDINGS ::= '[' BINDING* ']' | '(' BINDING* ')'
+> BINDING  ::= '(' VAR [ARGS] EXPR ')' | SIG
+> VAR      ::= varid | SIG
+> SIG      ::= '(' '::' varid typesig ')'
+> ARGS     ::= '[' varid* ']' | '(' varid* ')'
+> EXPR     ::= form
+
+==== __Examples__
+
+Following expresion:
+
+@
+(lefn [(x 100)
+       (:: f (-> Int Int Int))
+       (f [a b]
+         (+ (* a b) 2))
+       ((:: g (-> Int Int))
+         [0] 0
+         [n] (+ n 1))]
+  (g (f x 3)))
+@
+
+is same as:
+
+@
+(let ((= x 100)
+      (:: f (-> Int Int Int))
+      (= f a b
+        (+ (* a b) 2))
+      (:: g (-> Int Int))
+      (= g 0 0)
+      (= g n (+ n 1)))
+  (g (f x 3)))
+@"
+  args
+  ;; Allow empty body to support `lefn' inside `do' syntax sugar
+  (let ((= binds (car args))
+        (= body (cdr args)))
+    `(let ,(if (|| (is-unit binds) (null binds))
+             '()
+             (curve (map1 (\ bind
+                            (if (== ':: (car bind))
+                              bind
+                              `(defn ,@(curve bind))))
+                          binds)))
+       ,@body)))
 
 (defmacroM defmodule
   "Macro to define header of module named /NAME/. The /IMPEXP/ are forms

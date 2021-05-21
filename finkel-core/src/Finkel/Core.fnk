@@ -31,7 +31,7 @@ default, i.e., available without /require/-ing the \"Finkel.Core\" module.")
   macro-error
 
   (:dh1 "Expressions")
-  cond lcase case-do)
+  case-do cond lcase lefn)
 
 ;; Internal
 (import Finkel.Core.Stage1)

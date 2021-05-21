@@ -558,6 +558,44 @@
                "hello" (putStrLn "hi")
                line (putStrLn (++ "Got: " line)))))))
 
+    (describe "lefn"
+      (do (it "should expand to let"
+            (expandTo
+             (lefn [(v1 1)
+                    ((:: v2 Int) 2)
+                    (:: f (-> Int Int))
+                    (f
+                      [0] 0
+                      [1] 1
+                      [n] (+ (f (- n 1)) (f (- n 2))))
+                    ((:: g (-> Int Int))
+                      [n]
+                      (+ n 1))]
+               (f (g (+ v1 v2))))
+             (let ((defn v1 1)
+                   (defn (:: v2 Int) 2)
+                   (:: f (-> Int Int))
+                   (defn f
+                     [0] 0
+                     [1] 1
+                     [n] (+ (f (- n 1)) (f (- n 2))))
+                   (defn (:: g (-> Int Int))
+                     [n]
+                     (+ n 1)))
+               (f (g (+ v1 v2))))))
+          (it "should expand to let without body"
+            (expandTo
+             (lefn [(a 1) (b 2)])
+             (let ((defn a 1) (defn b 2)))))
+          (it "should expand to let with empty binds"
+            (expandTo
+             (lefn [] True)
+             (let () True)))
+          (it "should expand to let with units"
+            (expandTo
+             (lefn () True)
+             (let () True)))))
+
     (describe "macroexpand-1"
       (do (it "should expand to '(toCode 3)"
             (expandTo
