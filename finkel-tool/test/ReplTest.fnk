@@ -104,8 +104,8 @@
 ;;; Internal
 
 (defn (:: replStateTests Spec)
-  (do (let ((= rs1 (mempty {pending-input (Just "(foo")}))
-            (= rs2 (mempty {pending-input (Just " bar)")}))))
+  (do (lept [rs1 (mempty {pending-input (Just "(foo")})
+             rs2 (mempty {pending-input (Just " bar)")})])
       (describe "Show instance"
         (it "should show pending inputs"
           (shouldBe
@@ -123,16 +123,12 @@
               (shouldBe (<> (<> rs1 mempty) rs2)
                         (<> rs1 (<> mempty rs2))))))
       (describe "get and put ReplState for InputT"
-        (do (let ((= act
-                    (run-repl (runInputT defaultSettings work)
-                              mempty))
-                  (= work
-                    (do (putReplState mempty)
-                        getReplState))))
+        (do (lept [act (run-repl (runInputT defaultSettings work) mempty)
+                   work (>> (putReplState mempty) getReplState)])
             (it "should return the given ReplState"
               (shouldReturn act mempty))))
-      (let ((= run-repl' (flip run-repl mempty))
-            (= repl1 (pure True))))
+      (lept [run-repl' (flip run-repl mempty)
+             repl1 (pure True)])
       (describe "Functor instance of Repl"
         (do (it "should satisfy identity law"
               (shouldReturn (run-repl' (fmap id repl1)) True))
@@ -157,32 +153,30 @@
   (describe "exceptions instances for REPL"
     (cond-expand
       [(<= 810 :ghc)
-       (do (let ((= throw-sof-on-no-input
-                   (>>= getReplState
-                        (. (maybe (throwM StackOverflow)
-                                  (const (return 42)))
-                           pending-input)))))
+       (do (lept [throw-sof-on-no-input
+                  (>>= getReplState
+                       (. (maybe (throwM StackOverflow)
+                                 (const (return 42)))
+                          pending-input))])
            (it "should throw exception"
              (shouldThrow (do-repl (throwM StackOverflow)) anyException))
            (it "should catch exception"
-             (let ((= act (catch throw-sof-on-no-input handler))
-                   (:: handler (-> AsyncException (Repl Int)))
-                   (= handler ae
-                     (do (<- st getReplState)
-                         (case (, ae (pending-input st))
-                           (, StackOverflow Nothing) (return 42)
-                           _ (throwM ae)))))
+             (lefn [(act (catch throw-sof-on-no-input handler))
+                    (:: handler (-> AsyncException (Repl Int)))
+                    (handler [ae]
+                      (do (<- st getReplState)
+                          (case (, ae (pending-input st))
+                            (, StackOverflow Nothing) (return 42)
+                            _ (throwM ae))))]
                (shouldReturn (do-repl act) 42)))
            (it "should throw exception from mask when unmasked"
-             (let ((= act
-                     (mask (\ unmask
-                             (unmask throw-sof-on-no-input)))))
+             (lept [act (mask (\ unmask
+                                (unmask throw-sof-on-no-input)))]
                (shouldThrow (do-repl act) anyException)))
            (it "should throw exception from uninterruptibleMask when unmasked"
-             (let ((= act
-                     (uninterruptibleMask
-                      (\ unmask
-                        (unmask throw-sof-on-no-input)))))
+             (lept [act (uninterruptibleMask
+                         (\ unmask
+                           (unmask throw-sof-on-no-input)))]
                (shouldThrow (do-repl act) anyException))))]
       [otherwise
        (it "should throw, catch, and mask exceptions as necessary"
@@ -210,12 +204,11 @@
 
 (defn (:: rptest (-> String [String] Spec))
   [label inputs]
-  (let ((= run
-          (do (<- in-mv newEmptyMVar)
-              (<- tid (forkIO (forever
-                               (do (<- (Input _ _ out-mv) (takeMVar in-mv))
-                                   (putMVar out-mv (Right ""))))))
-              (return (, in-mv tid)))))
+  (lept [run (do (<- in-mv newEmptyMVar)
+                 (<- tid (forkIO (forever
+                                  (do (<- (Input _ _ out-mv) (takeMVar in-mv))
+                                      (putMVar out-mv (Right ""))))))
+                 (return (, in-mv tid)))]
     (describe label
       (it "should have no pending inputs"
         (do (<- (, in-mv tid) run)
@@ -290,59 +283,60 @@
 
 (defn (:: listenTests1 (-> EvalTestFns Spec))
   [(EvalTestFns {etf-tid etid})]
-  (let ((= with-repl-connection
-          (bracket acquire release))
-        (= short-pause (threadDelay 50000))
-        (= wait-until-killed tid
-          (do (<- st (threadStatus tid))
-              (putStrLn (++ "listenTests1: " (show st)))
-              (when (notElem st [ThreadFinished ThreadDied])
-                (do short-pause
-                    (wait-until-killed tid)))))
-        (= acquire
-          (do (wait-until-killed etid)
-              (<- tid (forkIO
-                       ;; Passing a file to work for, so that the REPL thread
-                       ;; will not terminate before the testing client connect.
-                       (replMain [(++ "--listen=" port)
-                                  (++ "--file=" input-file)
-                                  "--prompt="
-                                  "--quiet"])))
-              ;; Pause for a bit after forking the server action.
-              (replicateM_ 5 short-pause)
-              (<- addr (resolve "127.0.0.1" port))
-              (<- conn (socket (addrFamily addr)
-                               (addrSocketType addr)
-                               (addrProtocol addr)))
-              (with-retry 20
-                (connect conn (addrAddress addr)))
-              (return (, conn tid))))
-        (= with-retry n act
-          (ControlException.catch act
-            (\ e
-              (if (< 0 n)
-                  (do yield
-                      short-pause
-                      (with-retry (- n 1) act))
-                  (throwIO (:: e IOException))))))
-        (= release (, conn tid)
-          (do (sendAll conn ",quit")
-              (<- _msg (recv conn 1024))
-              (close conn)
-              (killThread tid)))
-        (= port "50322")
-        (= input-file (</> "test" "data" "sleep-for-while.fnk"))
-        (= resolve host port
-          (let ((= hints (defaultHints {addrSocketType Stream})))
-            (case-do (getAddrInfo (Just hints) (Just host) (Just port))
-              (: addr _) (return addr)
-              _ (error "REPL client: address error"))))
-        (= work (, conn _)
-          (do (<- _msg1 (recv conn 1024))
-              (sendAll conn "(* 7 (+ 4 2))")
-              (recv conn 1024)))
-        (= listener-test
-          (describe "listener"
-            (it "evaluates a form sent from connected client"
-              (\ args (shouldReturn (work args) "42"))))))
+  (lefn [(with-repl-connection
+             (bracket acquire release))
+         (short-pause
+           (threadDelay 50000))
+         (wait-until-killed [tid]
+           (do (<- st (threadStatus tid))
+               (putStrLn (++ "listenTests1: " (show st)))
+               (when (notElem st [ThreadFinished ThreadDied])
+                 (do short-pause
+                     (wait-until-killed tid)))))
+         (acquire
+           (do (wait-until-killed etid)
+               (<- tid (forkIO
+                        ;; Passing a file to work for, so that the REPL thread
+                        ;; will not terminate before the testing client connect.
+                        (replMain [(++ "--listen=" port)
+                                   (++ "--file=" input-file)
+                                   "--prompt="
+                                   "--quiet"])))
+               ;; Pause for a bit after forking the server action.
+               (replicateM_ 5 short-pause)
+               (<- addr (resolve "127.0.0.1" port))
+               (<- conn (socket (addrFamily addr)
+                                (addrSocketType addr)
+                                (addrProtocol addr)))
+               (with-retry 20
+                 (connect conn (addrAddress addr)))
+               (return (, conn tid))))
+         (with-retry [n act]
+           (ControlException.catch act
+                                   (\ e
+                                     (if (< 0 n)
+                                         (do yield
+                                             short-pause
+                                             (with-retry (- n 1) act))
+                                         (throwIO (:: e IOException))))))
+         (release [(, conn tid)]
+           (do (sendAll conn ",quit")
+               (<- _msg (recv conn 1024))
+               (close conn)
+               (killThread tid)))
+         (port "50322")
+         (input-file (</> "test" "data" "sleep-for-while.fnk"))
+         (resolve [host port]
+           (lefn [(hints (defaultHints {addrSocketType Stream}))]
+             (case-do (getAddrInfo (Just hints) (Just host) (Just port))
+               (: addr _) (return addr)
+               _ (error "REPL client: address error"))))
+         (work [(, conn _)]
+           (do (<- _msg1 (recv conn 1024))
+               (sendAll conn "(* 7 (+ 4 2))")
+               (recv conn 1024)))
+         (listener-test
+           (describe "listener"
+             (it "evaluates a form sent from connected client"
+               (\ args (shouldReturn (work args) "42")))))]
     (before acquire (after release listener-test))))

@@ -124,13 +124,13 @@
   (= getString _prompt
     (TestIO (\ tst
               (case (tst-inputs tst)
-                (: s rest) (let ((= tst' (tst {tst-inputs rest})))
+                (: s rest) (lept [tst' (tst {tst-inputs rest})]
                              (pure (, (Just s) tst')))
                 [] (pure (, Nothing tst))))))
 
   (= putString str
     (TestIO
-     (\ st (let ((= tst-outputs' (<> (tst-outputs st) [str])))
+     (\ st (lept [tst-outputs' (<> (tst-outputs st) [str])]
              (pure (, () (st {tst-outputs tst-outputs'})))))))
 
   ;;; XXX: Does nothing.
@@ -169,12 +169,10 @@
 
 (defn (:: init-etf-args-for-cabal (IO [String]))
   "Initialization arguments for running eval tests with `cabal-install'."
-  (do (<- home (liftIO getHomeDirectory))
-      (let ((= ghc-ver (++ "ghc-" cProjectVersion))
-            (= inplacedb
-              (</> ".." "dist-newstyle" "packagedb" ghc-ver))
-            (= args ["-package-db" inplacedb])))
-      (pure args)))
+  (lept [ghc-ver (++ "ghc-" cProjectVersion)
+         inplacedb (</> ".." "dist-newstyle" "packagedb" ghc-ver)
+         args ["-package-db" inplacedb]]
+    (pure args)))
 
 (defn (:: init-etf-args (IO [String]))
   "Initialization arguments for `EvalTestFns'."
@@ -185,25 +183,25 @@
       (<- (@ resources (, _tmpfile hdl in-mv)) acquire-repl)
       (<- ghc-args init-etf-args)
       (<- etid (fork-eval-loop ghc-args hdl in-mv repl-env))
-      (let ((= eval-form right-or-left form expect
-              (describe (++ "evaluate " (show form))
-                (it "evaluates to expected result"
-                  (quietly
-                   (do (putMVar in-mv (Input Connection form out-mv))
-                       (<- ret (takeMVar out-mv))
-                       (shouldBe ret (right-or-left expect)))))))
-            (= ok (eval-form Right))
-            (= ng (eval-form Left))
-            (= satisfy form test
-              (describe (++ "evaluate " (show form))
-                (it "satisfies predicate"
-                  (quietly
-                   (do (putMVar in-mv (Input Connection form out-mv))
-                       (<- ret (takeMVar out-mv))
-                       (shouldSatisfy ret test))))))
-            (= cleanup
-              (do (killThread etid)
-                  (cleanup-repl resources)))))
+      (lefn [(eval-form [right-or-left form expect]
+               (describe (++ "evaluate " (show form))
+                 (it "evaluates to expected result"
+                   (quietly
+                    (do (putMVar in-mv (Input Connection form out-mv))
+                        (<- ret (takeMVar out-mv))
+                        (shouldBe ret (right-or-left expect)))))))
+             (ok (eval-form Right))
+             (ng (eval-form Left))
+             (satisfy [form test]
+               (describe (++ "evaluate " (show form))
+                 (it "satisfies predicate"
+                   (quietly
+                    (do (putMVar in-mv (Input Connection form out-mv))
+                        (<- ret (takeMVar out-mv))
+                        (shouldSatisfy ret test))))))
+             (cleanup
+               (do (killThread etid)
+                   (cleanup-repl resources)))])
       (putMVar in-mv (Input Connection '(:begin) out-mv))
       (<- _ (takeMVar out-mv))
       (return (EvalTestFns {etf-ok ok

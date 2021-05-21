@@ -40,8 +40,8 @@
 
 (defn (:: makeMain (-> [String] (IO ())))
   [args]
-  (let ((= (, o _ _) (getOpt Permute make-options args))
-        (= mo (foldl (flip id) initial-make-option o)))
+  (lept [(, o _ _) (getOpt Permute make-options args)
+         mo (foldl (flip id) initial-make-option o)]
     (if (mo-help mo)
-        (runMain ["--fnk-help"])
-        (runMain args))))
+      (runMain ["--fnk-help"])
+      (runMain args))))

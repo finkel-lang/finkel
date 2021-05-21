@@ -43,31 +43,30 @@
 (defn (:: make-cli-tests
         (=> (CLI m) (-> (forall a (-> (m a) (IO a))) Spec)))
   [toIO]
-  (do (let ((= d describe)))
-      (d "getString"
-         (let ((= expected
-                 (cond-expand
-                   [(== :os "mingw32")
-                    [(Just "First line\r") (Just "Second line\r") Nothing]]
-                   [otherwise
-                     [(Just "First line") (Just "Second line") Nothing]])))
-           (it "should end with Nothing"
-             (shouldReturn (with-test-stdin "input01.txt"
-                             (toIO (replicateM 3 (getString ""))))
-                           expected))))
-      (d "putString"
-         (it "should run successfully"
-           (quietly (toIO (putString "foo")))))
-      (d "handleInterrupt"
-         (it "should run the given action"
-           (toIO (handleInterrupt (return ()) (return ())))))
-      (d "withInterrupt"
-         (it "should run the given action"
-           (toIO (withInterrupt (return ())))))
-      (d "exitWith"
-         (it "should throw exit failure"
-           (shouldThrow (toIO (exitWith (ExitFailure 1)))
-                        (== (ExitFailure 1)))))))
+  (do (describe "getString"
+        (lept [expected
+               (cond-expand
+                 [(== :os "mingw32")
+                  [(Just "First line\r") (Just "Second line\r") Nothing]]
+                 [otherwise
+                  [(Just "First line") (Just "Second line") Nothing]])]
+          (it "should end with Nothing"
+            (shouldReturn (with-test-stdin "input01.txt"
+                            (toIO (replicateM 3 (getString ""))))
+                          expected))))
+      (describe "putString"
+        (it "should run successfully"
+          (quietly (toIO (putString "foo")))))
+      (describe "handleInterrupt"
+        (it "should run the given action"
+          (toIO (handleInterrupt (return ()) (return ())))))
+      (describe "withInterrupt"
+        (it "should run the given action"
+          (toIO (withInterrupt (return ())))))
+      (describe "exitWith"
+        (it "should throw exit failure"
+          (shouldThrow (toIO (exitWith (ExitFailure 1)))
+                       (== (ExitFailure 1)))))))
 
 (defn (:: with-test-stdin (-> String (IO a) (IO a)))
   [path act]

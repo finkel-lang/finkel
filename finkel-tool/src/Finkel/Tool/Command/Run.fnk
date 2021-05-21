@@ -26,21 +26,21 @@
 
 (defn (:: runMain (=> (CLI m) (-> [String] (m ()))))
   [args0]
-  (let ((= (, args1 prog-args) (split-program-args args0))
-        (= all-opts (++ run-opts run-fnk-env-opts))
-        (= (, rargs ghc-args) (partition-descrs all-opts args1))
-        (= (, o _ es) (getOpt Permute all-opts rargs))
-        (= ro (foldl (flip id) initial-run-option o))
-        (= main-fn (make-symbol (mangle-name (ro-main ro)))))
+  (lept [(, args1 prog-args) (split-program-args args0)
+         all-opts (++ run-opts run-fnk-env-opts)
+         (, rargs ghc-args) (partition-descrs all-opts args1)
+         (, o _ es) (getOpt Permute all-opts rargs)
+         ro (foldl (flip id) initial-run-option o)
+         main-fn (make-symbol (mangle-name (ro-main ro)))]
     (if (ro-help ro)
-        print-run-help
-        (liftIO
-         (case es
-           [] (eval-and-exit-with-args prog-args
-                                       ghc-args
-                                       (ro-fnk-env ro)
-                                       main-fn)
-           _ (throwIO (ArgumentErrors "run" es)))))))
+      print-run-help
+      (liftIO
+       (case es
+         [] (eval-and-exit-with-args prog-args
+                                     ghc-args
+                                     (ro-fnk-env ro)
+                                     main-fn)
+         _ (throwIO (ArgumentErrors "run" es)))))))
 
 (data RunOption
   (RunOption {ro-help Bool
@@ -85,6 +85,6 @@
     (, pre _) (, pre [])))
 
 (defn (:: mangle-name (-> String String))
-  (let ((= replace #'- #'_)
-        (= replace c c))
+  (lefn [(replace [c]
+           (if (== c #'-) #'_ c))]
     (map replace)))

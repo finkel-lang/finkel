@@ -48,16 +48,16 @@
 (defn (:: replMain (=> (CLI m) (-> [String] (m ()))))
   "Main entry point function for REPL."
   [args]
-  (let ((= all-descrs (++ repl-options repl-fnk-env-options))
-        (= (, repl-opts ghc-opts) (partition-descrs all-descrs args))
-        (= initial-option (make-initial-option ghc-opts)))
+  (lept [all-descrs (++ repl-options repl-fnk-env-options)
+         (, repl-opts ghc-opts) (partition-descrs all-descrs args)
+         initial-option (make-initial-option ghc-opts)]
     (case (getOpt Permute all-descrs repl-opts)
-      (, o _other []) (act (foldl (flip id) initial-option o))
+      (, o _other []) (do-repl (foldl (flip id) initial-option o))
       (, _ _ es) (liftIO (throwIO (ArgumentErrors "repl" es))))))
 
 (defn (:: repl-env FnkEnv)
   "Environment value used by the Finkel REPL."
-  (let ((= macros (mergeMacros specialForms replMacros)))
+  (lept [macros (mergeMacros specialForms replMacros)]
     (defaultFnkEnv {envContextModules ["Prelude"]
                     envMacros macros
                     envDefaultMacros macros
@@ -97,9 +97,7 @@
            "Show this help and exit")
    (Option [] ["listen"]
            (OptArg (\ mb-port o
-                     (let ((= port
-                             (mplus (fmap read mb-port)
-                                    (Just 50321))))
+                     (lept [port (mplus (fmap read mb-port) (Just 50321))]
                        (o {repl-mode Run
                            repl-listen-port port})))
                    "PORT")
@@ -119,9 +117,10 @@
            "Suppress message from REPL")])
 
 (defn (:: repl-fnk-env-options [(OptDescr (-> ReplOption ReplOption))])
-  (fromFnkEnvOptions (\ f o (o {repl-fnk-env (f (repl-fnk-env o))}))))
+  (fromFnkEnvOptions (\ f o
+                       (o {repl-fnk-env (f (repl-fnk-env o))}))))
 
-(defn (:: act (=> (CLI m) (-> ReplOption (m ()))))
+(defn (:: do-repl (=> (CLI m) (-> ReplOption (m ()))))
   [ro]
   (case (repl-mode ro)
     Help print-usage

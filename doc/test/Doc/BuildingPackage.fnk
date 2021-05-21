@@ -84,10 +84,10 @@
                   (if (&& path1-is-dir path2-is-dir)
                       (do (<- ls1 (list-directory path1))
                           (<- ls2 (list-directory path2))
-                          (let ((= add-dir dir (map (</> dir)))
-                                (= ls1' (add-dir path1 ls1))
-                                (= ls2' (add-dir path2 ls2))))
-                          (zipWithM_ (compare-directory-contents ignored)
+                          (lept [add-dir (. map </>)
+                                 ls1' (add-dir path1 ls1)
+                                 ls2' (add-dir path2 ls2)])
+                          (zipWithM- (compare-directory-contents ignored)
                                      ls1' ls2'))
                       (expectationFailure
                        (++ "differed: " path1 ", " path2))))))))
@@ -98,9 +98,9 @@
 
 (defn (:: list-directory (-> FilePath (IO [FilePath])))
   "List directory contents, filter outs some ignored files."
-  (let ((= ignored path
-          (&& (/= ".stack-work" path)
-              (/= ".tix" (takeExtension path)))))
+  (lefn [(ignored [path]
+           (&& (/= ".stack-work" path)
+               (/= ".tix" (takeExtension path))))]
     (. (fmap (. sort (filter ignored))) listDirectory)))
 
 (defn (:: stack-new (-> FilePath String (IO (Either String ExitCode))))
@@ -128,12 +128,10 @@
 (defn (:: get-resolver-version (-> String (IO (Maybe String))))
   "Get stack resolver version from YAML file used in `my-new-package'."
   [pkgname]
-  (let ((= yaml-path
-          (</> "include" "building-package" pkgname "stack.yaml"))
-        (= resolver-line
-          (. (concatMap words)
-             (filter (isPrefixOf "resolver:"))
-             lines)))
+  (lept [yaml-path (</> "include" "building-package" pkgname "stack.yaml")
+         resolver-line (. (concatMap words)
+                          (filter (isPrefixOf "resolver:"))
+                          lines)]
     (case-do (fmap resolver-line (readFile yaml-path))
       [_ version] (return (Just version))
       _ (return Nothing))))

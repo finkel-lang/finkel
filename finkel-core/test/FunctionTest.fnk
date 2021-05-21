@@ -35,18 +35,16 @@
 (defn (:: errorTests Spec)
   (describe "unsafeFinkelSrcError"
     (it "should throw src error"
-      (let ((:: srcError (-> FinkelException Bool))
-            (= srcError s (isSubsequenceOf "foo" (show s))))
+      (lept [(:: srcError (-> FinkelException Bool))
+             (. (isSubsequenceOf "foo") show)]
         (shouldThrow (unsafeFinkelSrcError nil "foo") srcError)))))
 
 (defn (:: cxrTests Spec)
-  (do (let ((= d describe)
-            (= t 't)
-            (= tt '(t t))
-            (= caxr x
-              (it "should be t" (== t x)))
-            (= cdxr x
-              (it "should be (t t)" (== tt x)))))
+  (do (lept [d describe
+             t 't
+             tt '(t t)
+             caxr (. (it "should be t") (== 't))
+             cdxr (. (it "should be (t t)") (== '(t t)))])
       (d "car"
          (do (caxr (car (cons t tt)))
              (it "returns t when arg was '[t t]"

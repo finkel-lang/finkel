@@ -52,55 +52,55 @@
 Tracks the state of intermediate S-expression from input, and continue
 reading the input until successful parse result."
   [init-form to-mvar eval-tid]
-  (let ((= go result-mv
-          (do (<- st0 getReplState)
-              (let ((= prompt
-                      (if (null (pending-input st0)) (prompt-string st0) ""))
-                    (= reset-pending st
-                      (st {pending-input Nothing}))))
-              (<- mb-input
-                ;; Handle interrupt signals thrown while waiting for input, to
-                ;; handle `Ctrl-C' key presses without valid evaluation form,
-                ;; and to refresh intermediate user inputs in Repl state.
-                (handleInterrupt (do (putReplState (reset-pending st0))
-                                     (return (Just [])))
-                                 (withInterrupt (getString prompt))))
-              (maybe quit (go1 st0 result-mv) mb-input)))
-        (= go1 st0 result-mv line
-          (case line
-            (: h tl) (| ((== line "(quit)")
-                         quit)
-                        ((null (pending-input st0))
-                         (== #', h)
-                         (if (isSubsequenceOf tl "quit")
-                             quit
-                             (go-command result-mv tl)))
-                        (otherwise
-                         (go-line result-mv line)))
-            [] (go result-mv)))
-        (= go-command result-mv lin
-          ;; Using raw symbol for non-mangled REPL commands, to skip replacing
-          ;; hyphens to underscores.  Otherwise, command arguments like
-          ;; "ghc-boot" will be replaced to "ghc_boot" by the parser.
-          (if (mangled-command lin)
-              (go-line result-mv (concat ["(repl-macro " lin ")"]))
-              (go-form result-mv (as-repl-macro lin))))
-        (= go-line result-mv line
-          (do (<- mb-form (read-form line))
-              (maybe (go result-mv) (go-form result-mv) mb-form)))
-        (= go-form result-mv form
-          ;; Handle interrupt signals thrown while evaluation thread is
-          ;; working. Give a chance to interrupt here, after parsing input and
-          ;; before printing outputs.
-          (do (handleInterrupt
-               (do (liftIO (throwTo eval-tid UserInterrupt))
-                   (print-io result-mv))
-               (withInterrupt
-                (do (liftIO (putMVar to-mvar (Input Prompt form result-mv)))
-                    (print-io result-mv))))
-              (go result-mv)))
-        (= quit
-          ($ liftIO killThread eval-tid)))
+  (lefn [(go [result-mv]
+           (do (<- st0 getReplState)
+               (lefn [(prompt
+                        (if (null (pending-input st0)) (prompt-string st0) ""))
+                      (reset-pending [st]
+                        (st {pending-input Nothing}))])
+               (<- mb-input
+                 ;; Handle interrupt signals thrown while waiting for input, to
+                 ;; handle `Ctrl-C' key presses without valid evaluation form,
+                 ;; and to refresh intermediate user inputs in Repl state.
+                 (handleInterrupt (do (putReplState (reset-pending st0))
+                                      (return (Just [])))
+                                  (withInterrupt (getString prompt))))
+               (maybe quit (go1 st0 result-mv) mb-input)))
+         (go1 [st0 result-mv line]
+           (case line
+             (: h tl) (| ((== line "(quit)")
+                          quit)
+                         ((null (pending-input st0))
+                          (== #', h)
+                          (if (isSubsequenceOf tl "quit")
+                            quit
+                            (go-command result-mv tl)))
+                         (otherwise
+                          (go-line result-mv line)))
+             [] (go result-mv)))
+         (go-command [result-mv lin]
+           ;; Using raw symbol for non-mangled REPL commands, to skip replacing
+           ;; hyphens to underscores.  Otherwise, command arguments like
+           ;; "ghc-boot" will be replaced to "ghc_boot" by the parser.
+           (if (mangled-command lin)
+             (go-line result-mv (concat ["(repl-macro " lin ")"]))
+             (go-form result-mv (as-repl-macro lin))))
+         (go-line [result-mv line]
+           (do (<- mb-form (read-form line))
+               (maybe (go result-mv) (go-form result-mv) mb-form)))
+         (go-form [result-mv form]
+           ;; Handle interrupt signals thrown while evaluation thread is
+           ;; working. Give a chance to interrupt here, after parsing input and
+           ;; before printing outputs.
+           (do (handleInterrupt
+                (do (liftIO (throwTo eval-tid UserInterrupt))
+                    (print-io result-mv))
+                (withInterrupt
+                 (do (liftIO (putMVar to-mvar (Input Prompt form result-mv)))
+                     (print-io result-mv))))
+               (go result-mv)))
+         (quit
+           ($ liftIO killThread eval-tid))]
 
     ;; Print the result from boot expression, then start the loop.
     (do (<- result-mv (liftIO newEmptyMVar))
@@ -111,24 +111,22 @@ reading the input until successful parse result."
 (defn (:: print-io (=> (MonadIO m) (CLI m)
                        (-> (MVar Result) (m ()))))
   [result-mv]
-  (do (let ((= pr str
-              (when (not (null str))
-                (putString str)))))
-      (<- result (liftIO (takeMVar result-mv)))
-      (case result
-        (Right str) (pr str)
-        (Left str) (pr str))
-      (liftIO (hFlush stdout))))
+  (lefn [(pr [str]
+           (when (not (null str))
+             (>> (putString str) (liftIO (hFlush stdout)))))]
+    (case-do (liftIO (takeMVar result-mv))
+      (Right str) (pr str)
+      (Left str) (pr str))))
 
-(defn (:: read-form (=> (HasReplState repl) (Monad repl) (MonadIO repl)
+(defn (:: read-form (=> (HasReplState repl) (MonadIO repl)
                         (-> String (repl (Maybe Code)))))
   "Read single S-expression form."
   [input0]
   (do (<- st getReplState)
-      (let ((= input1 (stringToStringBuffer (: #'\n input0)))
-            (= put-and-return pending ret
-              (do (putReplState (st {pending-input pending}))
-                  (return ret)))))
+      (lefn [(input1 (stringToStringBuffer (: #'\n input0)))
+             (put-and-return [pending ret]
+               (do (putReplState (st {pending-input pending}))
+                   (return ret)))])
       (<- input2
         (liftIO (maybe (pure input1)
                        (flip appendStringBuffers input1)
@@ -156,17 +154,17 @@ reading the input until successful parse result."
         (hFlush stdout)
         (hSeek hdl AbsoluteSeek 0)
         (<- ls (get-lines hdl))
-        (let ((= contents (intercalate "\n" ls))))
+        (lefn [(contents (intercalate "\n" ls))])
         (deepseq contents (return (, x contents)))))))
 
 (defn (:: get-lines (-> Handle (IO [String])))
-  (let ((= go acc hdl
-          (catch (do (<- l (hGetLine hdl))
-                     (go (: l acc) hdl))
-            (\ e
-              (if (isEOFError e)
-                  (return (reverse acc))
-                  (throwIO e))))))
+  (lefn [(go [acc hdl]
+           (catch (do (<- l (hGetLine hdl))
+                      (go (: l acc) hdl))
+             (\ e
+               (if (isEOFError e)
+                 (return (reverse acc))
+                 (throwIO e)))))]
     (go [])))
 
 
@@ -174,7 +172,7 @@ reading the input until successful parse result."
 
 (defn (:: mangled-command (-> String Bool))
   [lin]
-  (let ((= commands ["expand" "expand!" "info" "kind" "load" "type"]))
+  (lefn [(commands ["expand" "expand!" "info" "kind" "load" "type"])]
     (case (words lin)
       (: w _) (any (isPrefixOf w) commands)
       _ False)))

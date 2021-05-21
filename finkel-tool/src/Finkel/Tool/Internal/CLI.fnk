@@ -60,8 +60,8 @@
     (Control.Exception.catch
      (>> (putStr prompt) (fmap Just getLine))
      (\ e (if (isEOFError e)
-              (return Nothing)
-              (throwIO e)))))
+            (return Nothing)
+            (throwIO e)))))
   (= putString putStrLn)
   (= handleInterrupt _handler act act)
   (= withInterrupt act act)
@@ -137,55 +137,51 @@
 (defn (:: partition-descrs
         (-> [(OptDescr a)] [String] (, [String] [String])))
   [descrs]
-  (let ((= go xs0
-          (cond
-            [(<- (: x0 x1 rest) xs0)
-             (req-arg x0)
-             (case (go rest)
-               (, as bs) (, (: x0 x1 as) bs))]
-            [(<- (: x0 rest) xs0)
-             (case (go rest)
-               (, as bs) (if (|| (req-arg x0) (no-arg x0) (opt-arg x0)
-                                 (req-arg-short-no-space x0))
-                             (, (: x0 as) bs)
-                             (, as (: x0 bs))))]
-            [(<- [] xs0)
-             (, [] [])]))
-        (= no-arg x
-          (case x
-            (: #'- #'- cs) (elem cs long-nos)
-            (: #'- [c]) (elem c short-nos)
-            _ False))
-        (= req-arg x
-          (case x
-            (: #'- #'- cs) (elem cs long-reqs)
-            (: #'- c []) (elem c short-reqs)
-            _ False))
-        (= req-arg-short-no-space x
-          (case x
-            (: #'- c _) (elem c short-reqs)
-            _ False))
-        (= opt-arg x
-          (case x
-            (: #'- #'- cs) (any (flip isPrefixOf cs) long-eqs)
-            _ False))
-        (= (, short-nos long-nos short-reqs long-reqs long-eqs)
-          (group-descrs descrs)))
+  (lefn [(go [xs0]
+           (cond
+             [(<- (: x0 x1 rest) xs0)
+              (req-arg x0)
+              (case (go rest)
+                (, as bs) (, (: x0 x1 as) bs))]
+             [(<- (: x0 rest) xs0)
+              (case (go rest)
+                (, as bs) (if (|| (req-arg x0) (no-arg x0) (opt-arg x0)
+                                  (req-arg-short-no-space x0))
+                            (, (: x0 as) bs)
+                            (, as (: x0 bs))))]
+             [(<- [] xs0)
+              (, [] [])]))
+         (no-arg
+           [(: #'- #'- cs)] (elem cs long-nos)
+           [(: #'- [c])] (elem c short-nos)
+           [_] False)
+         (req-arg
+           [(: #'- #'- cs)] (elem cs long-reqs)
+           [(: #'- [c])] (elem c short-reqs)
+           [_] False)
+         (req-arg-short-no-space
+           [(: #'- c _)] (elem c short-reqs)
+           [_] False)
+         (opt-arg
+           [(: #'- #'- cs)] (any (flip isPrefixOf cs) long-eqs)
+           [_] False)
+         ((, short-nos long-nos short-reqs long-reqs long-eqs)
+           (group-descrs descrs))]
     go))
 
 (defn (:: group-descrs
         (-> [(OptDescr a)] (, String [String] String [String] [String])))
   [descrs]
-  (let ((= long-eq cs
-          (++ cs "="))
-        (= oflags cs acc
-          (++ (map long-eq cs) acc))
-        (= f (Option ss ls adescr _) (, sns lns srs lrs les)
-          (case adescr
-            (NoArg {}) (, (++ ss sns) (++ ls lns) srs lrs les)
-            (ReqArg {}) (let ((= srs' (++ ss srs))
-                              (= lrs' (++ ls lrs))
-                              (= les' (oflags ls les)))
-                          (, sns lns srs' lrs' les'))
-            (OptArg {}) (, sns lns srs lrs (oflags ls les)))))
+  (lefn [(long-eq [cs]
+           (++ cs "="))
+         (oflags [cs acc]
+           (++ (map long-eq cs) acc))
+         (f [(Option ss ls adescr _) (, sns lns srs lrs les)]
+           (case adescr
+             (NoArg {}) (, (++ ss sns) (++ ls lns) srs lrs les)
+             (ReqArg {}) (lefn [(srs' (++ ss srs))
+                                (lrs' (++ ls lrs))
+                                (les' (oflags ls les))]
+                           (, sns lns srs' lrs' les'))
+             (OptArg {}) (, sns lns srs lrs (oflags ls les))))]
     (foldr f (, [] [] [] [] []) descrs)))

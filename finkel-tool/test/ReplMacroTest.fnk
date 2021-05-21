@@ -40,19 +40,20 @@
   [(EvalTestFns {etf-ok ok etf-ng ng etf-satisfy satisfy})]
   (do (<- current-dir (runIO getCurrentDirectory))
       (<- tmp-dir (runIO getTemporaryDirectory))
-      (let ((= testdata name (</> "test" "data" name))
-            (= delines (intercalate "\n"))
-            (= m02-dot-fnk (</> tmp-dir "m02.fnk"))
-            (= m02-dot-hi (</> tmp-dir "m02.hi"))
-            (= main-dot-o (</> tmp-dir "Main.o"))
-            (= clear-m02-files
-              (mapM_ remove-if-exist [m02-dot-fnk m02-dot-hi main-dot-o]))
-            (= with-right form test
-              (satisfy form (either (const False) test)))
-            (= with-left form test
-              (satisfy form (either test (const False))))
-            (= with-left-subseq form str0
-              (satisfy form (either (isSubsequenceOf str0) (const False))))))
+      (lefn [(testdata [name]
+               (</> "test" "data" name))
+             (delines (intercalate "\n"))
+             (m02-dot-fnk (</> tmp-dir "m02.fnk"))
+             (m02-dot-hi (</> tmp-dir "m02.hi"))
+             (main-dot-o (</> tmp-dir "Main.o"))
+             (clear-m02-files
+               (mapM_ remove-if-exist [m02-dot-fnk m02-dot-hi main-dot-o]))
+             (with-right [form test]
+               (satisfy form (either (const False) test)))
+             (with-left [form test]
+               (satisfy form (either test (const False))))
+             (with-left-subseq [form str0]
+               (satisfy form (either (isSubsequenceOf str0) (const False))))])
       (beforeAll_
        clear-m02-files
        (afterAll_
@@ -206,7 +207,7 @@
               "Verbosity level set to 1")
 
           ;; load and reload
-          (let ((= m01-dot-fnk (testdata "m01.fnk"))))
+          (lept [m01-dot-fnk (testdata "m01.fnk")])
           (ok `(:begin
                  (repl-macro load ,(make-symbol m01-dot-fnk))
                  main)

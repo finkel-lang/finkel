@@ -14,7 +14,7 @@
   (import
    ;; base
    (Control.Exception [catch throw])
-   (Control.Monad [when])
+   (Control.Monad [unless when])
    (Data.List [isSubsequenceOf isPrefixOf sort])
    (Data.Maybe [fromMaybe])
    (Data.Version [(Version ..) parseVersion])
@@ -48,27 +48,36 @@
   "Remove given compiled files if exist.
 Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
   [name]
-  (let ((= go0 exe
-          (mapM go1 [exe
-                     (<.> exe "o")
-                     (<.> exe "hi")
-                     (<.> exe "dyn_o")
-                     (<.> exe "dyn_hi")]))
-        (= go1 file
-          (catch (removeFile file)
-            (\ e (if (isDoesNotExistError e)
-                     (return ())
-                     (throw e))))))
+  (lefn [(go0 [exe]
+           (mapM go1 [exe
+                      (<.> exe "o")
+                      (<.> exe "hi")
+                      (<.> exe "dyn_o")
+                      (<.> exe "dyn_hi")]))
+         (go1 [file]
+           (catch (removeFile file)
+             (\ e
+               (unless (isDoesNotExistError e)
+                 (throw e))
+               ;; (if (isDoesNotExistError e)
+               ;;   (return ())
+               ;;   (throw e))
+               )))]
     (mapM_ go0 name)))
 
 (defn (:: get-build-tool (IO BuildTool))
   "Get the running `BuildTool'."
   (do (<- me getExecutablePath)
-      (return (if (isSubsequenceOf ".stack" me)
-                  Stack
-                  (if (isSubsequenceOf "dist-newstyle" me)
-                      Cabal
-                      Raw)))))
+      (pure (cond
+              [(isSubsequenceOf ".stack" me) Stack]
+              [(isSubsequenceOf "dist-newstyle" me) Cabal]
+              [otherwise Raw]))
+      ;; (return (if (isSubsequenceOf ".stack" me)
+      ;;             Stack
+      ;;             (if (isSubsequenceOf "dist-newstyle" me)
+      ;;                 Cabal
+      ;;                 Raw)))
+      ))
 
 (defn (:: get-stack-resolver (IO String))
   "Return @RESOLVER@ environment variable."
@@ -83,7 +92,7 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
                     (return (proc "stack" ["--resolver" resolver "exec" "--"
                                            "ghc" "--print-libdir"])))
           Raw (return (proc "ghc" ["--print-libdir"]))))
-      (let ((= p1 (p0 {std-out CreatePipe}))))
+      (lept [p1 (p0 {std-out CreatePipe})])
       (<- (, _mb-in mb-out _mb-err ph) (createProcess p1))
       (<- _ec (waitForProcess ph))
       (case mb-out
@@ -98,25 +107,24 @@ be skipped.")
 (type ConsoleSkip [(, String (-> Version BuildTool Bool))])
 
 (defn (:: get-console-files (-> FilePath (IO [FilePath])))
-  (let ((= is-console-file
-          (. (== ".console") takeExtension)))
+  (lept [is-console-file (. (== ".console") takeExtension)]
     (. (fmap (. sort (filter is-console-file))) listDirectory)))
 
 (defn (:: run-console-tests (-> FilePath ConsoleSkip Spec))
   "Run test for @*.console@ files in given directory."
   [dir skips]
-  (do (let ((= test build-tool file
-              (it (++ "runs " file " successfully")
-                (case (do (<- f (lookup file skips))
-                          (<- v mb-ghc-version)
-                          (return (f v build-tool)))
-                  (Just True) (pendingWith "skipped")
-                  _ (run-console-test dir file))))
-            (= mb-ghc-version
-              (case (filter (. null snd)
-                            (readP-to-S parseVersion cProjectVersion))
-                (: (, v _) _) (Just v)
-                _ Nothing))))
+  (do (lefn [(test [build-tool file]
+               (it (++ "runs " file " successfully")
+                 (case (do (<- f (lookup file skips))
+                           (<- v mb-ghc-version)
+                           (return (f v build-tool)))
+                   (Just True) (pendingWith "skipped")
+                   _ (run-console-test dir file))))
+             (mb-ghc-version
+               (case (filter (. null snd)
+                             (readP-to-S parseVersion cProjectVersion))
+                 (: (, v _) _) (Just v)
+                 _ Nothing))])
       (<- console-files (runIO (get-console-files dir)))
       (<- build-tool (runIO get-build-tool))
       (mapM_ (test build-tool) console-files)))
@@ -145,8 +153,8 @@ be skipped.")
                     (return (, "stack" ["--resolver" resolver "--silent"
                                         "exec" "--" "finkel"])))
           Raw (return (, "finkel" []))))
-      (let ((= tests (parse-console contents))
-            (= aliases [(, "finkel" finkel)])))
+      (lept [tests (parse-console contents)
+             aliases [(, "finkel" finkel)]])
       (mapM_ (run-console dir aliases) tests)))
 
 (data ConsoleTest
@@ -161,10 +169,9 @@ be skipped.")
             ConsoleTest                      ; ^ The test.
             (IO ())))
   [dir aliases (ConsoleTest cmd args expected)]
-  (do (let ((= (, cmd' args')
-              (case (lookup cmd aliases)
-                (Just (, rc ra)) (, rc (++ ra args))
-                Nothing (, cmd args)))))
+  (do (lept [(, cmd' args') (case (lookup cmd aliases)
+                              (Just (, rc ra)) (, rc (++ ra args))
+                              Nothing (, cmd args))])
       (<- (, _mbin mbout mberr ph)
         (createProcess ((proc cmd' args') {cwd (Just dir)
                                            std-out CreatePipe})))
@@ -177,7 +184,7 @@ be skipped.")
       (<- outs0 (case mbout
                  (Just out) (fmap lines (hGetContents out))
                  Nothing (return [])))
-      (let ((= outs1 (remove-loaded-package-env outs0))))
+      (lept [outs1 (remove-loaded-package-env outs0)])
       (case ec
         ExitSuccess (shouldBe (unlines outs1) (unlines expected))
         _ (expectationFailure (++ "Got exit code " (show ec))))))
@@ -190,15 +197,15 @@ be skipped.")
 
 (defn (:: parse-console (-> String [ConsoleTest]))
   "Parse the contents of console file."
-  (let ((= go ls
-          (case (span is-cmd-line ls)
-            (, (: cl _) r0) (case (words (tail cl))
-                              (: cmd args) (case (break is-cmd-line r0)
-                                             (, os r1) (: (ct cmd args os)
-                                                          (go r1)))
-                              _ (go r0))
-            _ []))
-        (= ct ConsoleTest))
+  (lefn [(go [ls]
+           (case (span is-cmd-line ls)
+             (, (: cl _) r0) (case (words (tail cl))
+                               (: cmd args) (case (break is-cmd-line r0)
+                                              (, os r1) (: (ct cmd args os)
+                                                           (go r1)))
+                               _ (go r0))
+             _ []))
+         (ct ConsoleTest)]
     (. go lines)))
 
 (defn (:: is-cmd-line (-> String Bool))

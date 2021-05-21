@@ -36,8 +36,8 @@
   (++ "Try `" (unsafePerformIO getProgName) " help " cmd "' for usage."))
 
 (defn (:: finkel-tool-exception-handler (-> (IO a) (IO a)))
-  (let ((:: handler (-> FinkelToolException (IO a)))
-        (= handler e
-          (do ($ (hPutStrLn stderr) displayException e)
-              exitFailure)))
+  (lefn [(:: handler (-> FinkelToolException (IO a)))
+         (handler [e]
+           (do ($ (hPutStrLn stderr) displayException e)
+               exitFailure))]
     (handle handler)))

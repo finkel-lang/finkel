@@ -152,8 +152,8 @@
 
       ;; Parse the ghc options from argument, assuming that the arguments are
       ;; passed from the command line.
-      (let ((= on-the-commandline (mkGeneralLocated "on the commmandline"))
-            (= lghc-opts (map on-the-commandline ghc-opts))))
+      (lept [on-the-commandline (mkGeneralLocated "on the commandline")
+             lghc-opts (map on-the-commandline ghc-opts)])
       (<- (, dflags0 fileish warns)
         (parseDynamicFlags (hsc-dflags hsc-env0) lghc-opts))
       (liftIO (handleFlagWarnings dflags0 warns))
@@ -161,11 +161,11 @@
       ;; As done in the Main.hs in "ghc-bin" package, updating the `ldInputs'
       ;; field o the `DynFlags' with `FileOption', to support linking object
       ;; files.
-      (let ((= dflags1 (foldl gopt-set dflags0 optional-dynflags))
-            (= (, srcs objs) (partition-args fileish))
-            (= dflags2
-              (dflags1 {ldInputs (++ (map (. (FileOption "") unLoc) objs)
-                                     (ldInputs dflags1))}))))
+      (lept [dflags1 (foldl gopt-set dflags0 optional-dynflags)
+             (, srcs objs) (partition-args fileish)
+             dflags2 (dflags1 {ldInputs
+                               (++ (map (. (FileOption "") unLoc) objs)
+                                   (ldInputs dflags1))})])
 
       ;; Initializing plugins with dflags from updated session.
       (setDynFlags dflags2)
@@ -181,7 +181,7 @@
       (unless (null srcs)
         (handle
          (\ e
-           (let ((= err (=<< (. liftIO throwIO FinkelToolException))))
+           (lept [err (=<< (. liftIO throwIO FinkelToolException))]
              (cond
                [(<- (Just se) (fromException e))
                 ($ err make-src-err-message se)]
@@ -217,38 +217,38 @@
         (-> Bool [String] [String] Handle (MVar Input) (Fnk ())))
   "Evaluate expressions, and loop or return."
   [once-only wrapper-args ghc-opts hdl in-mvar]
-  (let ((= withAsyncHandler wrapper
-          (handle
-           (\ e
-             (case (fromException e)
-               (Just UserInterrupt) (loop wrapper)
-               (Just ThreadKilled)  (return ())
-               _ (liftIO (throwIO e))))))
-        (:: throw-async-io (-> AsyncException (Fnk a)))
-        (= throw-async-io (. liftIO throwIO))
-        (= withErrorHandler
-          (handle
-           (\ e
-             (cond
-               [(<- (Just se) (fromException e))
-                (fmap Left (make-src-err-message se))]
-               [(<- (Just ae) (fromException e))
-                (throw-async-io ae)]
-               [(<- (Just fe) (fromException e))
-                (fmap Left (make-finkel-exception-message fe))]
-               [otherwise
-                ($ pure Left show e)]))))
-        (= eval-one wrapper
-          (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
-              (<- ret (withErrorHandler
-                       (do (<- expanded (expands [form]))
-                           (<- dflags getDynFlags)
-                           (eval-form hdl dflags wrapper itype expanded))))
-              (liftIO (putMVar out-mv ret))))
-        (= loop wrapper
-          (withAsyncHandler wrapper
-                            (>> (eval-one wrapper)
-                                (loop wrapper)))))
+  (lefn [(withAsyncHandler [wrapper]
+           (handle
+            (\ e
+              (case (fromException e)
+                (Just UserInterrupt) (loop wrapper)
+                (Just ThreadKilled) (return ())
+                _ (liftIO (throwIO e))))))
+         (:: throw-async-io (-> AsyncException (Fnk a)))
+         (throw-async-io (. liftIO throwIO))
+         (withErrorHandler
+           (handle
+            (\ e
+              (cond
+                [(<- (Just se) (fromException e))
+                 (fmap Left (make-src-err-message se))]
+                [(<- (Just ae) (fromException e))
+                 (throw-async-io ae)]
+                [(<- (Just fe) (fromException e))
+                 (fmap Left (make-finkel-exception-message fe))]
+                [otherwise
+                 ($ pure Left show e)]))))
+         (eval-one [wrapper]
+           (do (<- (Input itype form out-mv) (liftIO (takeMVar in-mvar)))
+               (<- ret (withErrorHandler
+                        (do (<- expanded (expands [form]))
+                            (<- dflags getDynFlags)
+                            (eval-form hdl dflags wrapper itype expanded))))
+               (liftIO (putMVar out-mv ret))))
+         (loop [wrapper]
+           (withAsyncHandler wrapper
+                             (>> (eval-one wrapper)
+                                 (loop wrapper))))]
     (>>= (init-eval-loop wrapper-args ghc-opts)
          (if once-only eval-one loop))))
 
@@ -285,32 +285,32 @@ context."
 
 (defn (:: eval-imports (-> DynFlags [HImportDecl] (Fnk Result)))
   [dflags imports]
-  (do (<- ctx0 getContext)
-      (let ((= mkIIDecl (L _ idecl)
-              (IIDecl idecl))
-            (= imps (map (. (showSDoc dflags) ppr) imports))
-            (= mdls (++ "; " (intercalate ", " imps)))
-            (= ctx1 (foldr (\ mdl (add-gt-ii (mkIIDecl mdl)))
-                           ctx0 imports))))
-      (setContext ctx1)
-      (return (Right mdls))))
+  (lefn [(mkIIDecl [(L _ idecl)]
+           (IIDecl idecl))
+         (imps (map (. (showSDoc dflags) ppr) imports))
+         (mdls (++ "; " (intercalate ", " imps)))
+         (add-imports [ctx]
+           (foldr (\ mdl (add-gt-ii (mkIIDecl mdl))) ctx imports))]
+    (do (<- ctx0 getContext)
+        (setContext (add-imports ctx0))
+        (return (Right mdls)))))
 
 (defn (:: eval-decls (-> [HDecl] (Fnk Result)))
   [decls]
   (do (<- hsc-env getSession)
-      (let ((= decls' (cvTopDecls (toOL decls)))
-            (= dflags (hsc-dflags hsc-env))
-            (= pr tt
-              (case tt
-                (AnId var) (var-name-and-type dflags (getName var) var)
-                _ (++ "; " (showSDoc dflags (ppr tt)))))
-            (= show-tything tt acc
-              (let ((= nstr (showSDoc dflags (ppr (getName tt)))))
-                (if (== "$trModule" nstr)
-                    acc
-                    (: (pr tt) acc))))
-            (= tystr tt
-              (intercalate "\n" (foldr show-tything [] tt)))))
+      (lefn [(decls' (cvTopDecls (toOL decls)))
+             (dflags (hsc-dflags hsc-env))
+             (pr [tt]
+               (case tt
+                 (AnId var) (var-name-and-type dflags (getName var) var)
+                 _ (++ "; " (showSDoc dflags (ppr tt)))))
+             (show-tything [tt acc]
+               (lefn [(nstr (showSDoc dflags (ppr (getName tt))))]
+                 (if (== "$trModule" nstr)
+                   acc
+                   (: (pr tt) acc))))
+             (tystr [tt]
+               (intercalate "\n" (foldr show-tything [] tt)))])
 
       ;; In "ghc/GHCi/UI.hs", the `runStmt' function is wrapping declarations
       ;; with `let' expression and passing to `execStmt'' as a work around for
@@ -332,42 +332,42 @@ context."
   [hdl wrapper itype hsc-env ids hvals-io fixity-env]
   ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
   ;; `iservCmd' in its implementation.
-  (let ((= success fhvals _elapsed ret
-          (do (let ((= ic (hsc-IC hsc-env))
-                    (= ic2 (extendInteractiveContextWithIds ic ids))
-                    (= ic3 (ic2 {ic-fix-env fixity-env}))
-                    (= names (map getName ids))
-                    (= hsc-env-2 (hsc-env {hsc-IC ic3}))))
-              (<- dflags getSessionDynFlags)
-              (extend-link-env hsc-env (zip names fhvals))
+  (lefn [(success [fhvals _elapsed ret]
+           (do (lefn [(ic (hsc-IC hsc-env))
+                      (ic2 (extendInteractiveContextWithIds ic ids))
+                      (ic3 (ic2 {ic-fix-env fixity-env}))
+                      (names (map getName ids))
+                      (hsc-env-2 (hsc-env {hsc-IC ic3}))])
+               (<- dflags getSessionDynFlags)
+               (extend-link-env hsc-env (zip names fhvals))
 
-              ;; InteractiveEval does not export `rttiEnvironment'.
-              ;;
-              ;; (<- hsc-env-3
-              ;;     (liftIO
-              ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
+               ;; InteractiveEval does not export `rttiEnvironment'.
+               ;;
+               ;; (<- hsc-env-3
+               ;;     (liftIO
+               ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
 
-              (setSession hsc-env-2)
-              (case names
-                [name] (| ((== (occNameString (nameOccName name)) "it")
-                           (return (Right ret))))
-                _ (return
-                   (Right (names-and-types dflags names ids))))))
-        (= exception serialized
-          (case serialized
-            (EOtherException e) (return (Left (++ "*** Exception: " e)))
-            (EExitCode ecode) (liftIO (System.Exit.exitWith ecode))
-            EUserInterrupt (return (Left "Interrupted."))))
-        (= incomplete
-          (return (Left "update-hsc-env failed.")))
-        (= eval-hvals-io
-          (evalStmt hsc-env False (EvalApp (EvalThis wrapper)
-                                           (EvalThis hvals-io))))
-        (= eval-for-prompt
-          (do (<- status (liftIO eval-hvals-io))
-              (return (, status ""))))
-        (= eval-for-connection
-          (liftIO (with-io-redirect hdl eval-hvals-io))))
+               (setSession hsc-env-2)
+               (case names
+                 [name] (| ((== (occNameString (nameOccName name)) "it")
+                            (return (Right ret))))
+                 _ (return
+                    (Right (names-and-types dflags names ids))))))
+         (exception [serialized]
+           (case serialized
+             (EOtherException e) (return (Left (++ "*** Exception: " e)))
+             (EExitCode ecode) (liftIO (System.Exit.exitWith ecode))
+             EUserInterrupt (return (Left "Interrupted."))))
+         (incomplete
+           (return (Left "update-hsc-env failed.")))
+         (eval-hvals-io
+           (evalStmt hsc-env False (EvalApp (EvalThis wrapper)
+                                            (EvalThis hvals-io))))
+         (eval-for-prompt
+           (do (<- status (liftIO eval-hvals-io))
+               (return (, status ""))))
+         (eval-for-connection
+           (liftIO (with-io-redirect hdl eval-hvals-io)))]
     (do (<- (, status ret)
           ;; Switching behaviour between prompt and network connection. Getting
           ;; printed result as `String' for connection by wrapping the execution
@@ -387,97 +387,96 @@ context."
   "Simple function to do similar work done in `GHC.guessTarget', to support
 source code file paths with @.fnk@ extension."
   [lsrc]
-  (let ((= src (unLoc lsrc))
-        (= tid (if (looksLikeModuleName src)
-                   (TargetModule (mkModuleName src))
-                   (TargetFile src Nothing))))
+  (lept [src (unLoc lsrc)
+         tid (if (looksLikeModuleName src)
+               (TargetModule (mkModuleName src))
+               (TargetFile src Nothing))]
     (Target tid True Nothing)))
 
 (defn (:: partition-args
         (-> [(Located String)] (, [(Located String)] [(Located String)])))
   "Simplified version of the function with same name defined in @ghc/Main.hs@,
 to separate object files from source code files."
-  (let ((= f (L l arg) (, srcs objs)
-          (if (|| (isFnkFile arg)
-                  (isHsFile arg)
-                  (looksLikeModuleName arg))
-              (, (: (L l arg) srcs) objs)
-              (, srcs (: (L l arg) objs)))))
+  (lefn [(f [(L l arg) (, srcs objs)]
+           (if (|| (isFnkFile arg)
+                   (isHsFile arg)
+                   (looksLikeModuleName arg))
+             (, (: (L l arg) srcs) objs)
+             (, srcs (: (L l arg) objs))))]
     (foldr f (, [] []))))
 
 (defn (:: render-with-err-style (-> DynFlags PrintUnqualified SDoc String))
   [dflags unqual sdoc]
   (cond-expand
     [(<= 900 :ghc)
-     (let ((= style0 (mkErrStyle unqual))
-           (= style1 (setStyleColoured True style0)))
+     (lept [style0 (mkErrStyle unqual)
+            style1 (setStyleColoured True style0)]
        (renderWithStyle (initSDocContext dflags style1) sdoc))]
     [otherwise
-     (let ((= style0 (mkErrStyle dflags unqual))
-           (= style1 (setStyleColoured True style0)))
+     (lept [style0 (mkErrStyle dflags unqual)
+            style1 (setStyleColoured True style0)]
        (renderWithStyle dflags sdoc style1))]))
 
 (defn (:: make-src-err-message (-> SourceError (Fnk String)))
   [src-err]
-  (do (<- dflags getSessionDynFlags)
-      (<- unqual getPrintUnqual)
-      (let ((= emsgs (srcErrorMessages src-err))
-            (= sdoc (vcat (pprErrMsgBagWithLoc emsgs)))))
-      (return (render-with-err-style dflags unqual sdoc))))
+  (lept [emsgs (srcErrorMessages src-err)
+         sdoc (vcat (pprErrMsgBagWithLoc emsgs))]
+    (do (<- dflags getSessionDynFlags)
+        (<- unqual getPrintUnqual)
+        (return (render-with-err-style dflags unqual sdoc)))))
 
 (defn (:: make-finkel-exception-message (-> FinkelException (Fnk String)))
   [fe]
-  (do (<- dflags getDynFlags)
-      (<- unqual getPrintUnqual)
-      (let ((= msg (displayException fe))
-            (= lmsg l
-              (let ((= emsgs (unitBag (mkErrMsg dflags l unqual (text msg))))
-                    (= sdoc (vcat (pprErrMsgBagWithLoc emsgs))))
-                (render-with-err-style dflags unqual sdoc)))))
-      (case (finkelExceptionLoc fe)
-        (Just l) ($ return lmsg l)
-        _ (return msg))))
+  (lept [msg (displayException fe)]
+    (do (<- dflags getDynFlags)
+        (<- unqual getPrintUnqual)
+        (lefn [(lmsg [l]
+                 (lept [emsgs (unitBag (mkErrMsg dflags l unqual (text msg)))
+                        sdoc (vcat (pprErrMsgBagWithLoc emsgs))]
+                   (render-with-err-style dflags unqual sdoc)))])
+        (case (finkelExceptionLoc fe)
+          (Just l) ($ return lmsg l)
+          _ (return msg)))))
 
 (defn (:: make-eval-wrapper (-> [String] (Fnk ForeignHValue)))
   [args]
-  (do (let ((= form
-              `(\ m (do (<- r (System.Environment.withArgs ,args m))
+  (lept [form `(\ m (do (<- r (System.Environment.withArgs ,args m))
                         (System.IO.hFlush System.IO.stdout)
                         (System.IO.hFlush System.IO.stderr)
-                        (Control.Monad.return r))))
-            (= no-rb-hsc hsc-env
-              (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
-                                               RebindableSyntax)}))))
-      (<- dflags getDynFlags)
-      (case (evalBuilder dflags True parseExpr [form])
-        (Right expr) (withTempSession no-rb-hsc
-                                      (compileParsedExprRemote expr))
-        (Left err) (finkelSrcError (syntaxErrCode err)
-                                   (syntaxErrMsg err)))))
+                        (Control.Monad.return r)))
+         no-rb-hsc (\ hsc-env
+                     (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
+                                                      RebindableSyntax)}))]
+    (do (<- dflags getDynFlags)
+        (case (evalBuilder dflags True parseExpr [form])
+          (Right expr) (withTempSession no-rb-hsc
+                                        (compileParsedExprRemote expr))
+          (Left err) (finkelSrcError (syntaxErrCode err)
+                                     (syntaxErrMsg err))))))
 
 (defn (:: var-name-and-type (-> DynFlags Name Var String))
   [dflags name var]
-  (let ((= nstr (occNameString (nameOccName name)))
-        (= typ (showPpr dflags (varType var))))
+  (lept [nstr (occNameString (nameOccName name))
+         typ (showPpr dflags (varType var))]
     (if (== nstr "it")
-        ""
-        (intercalate "\n"
-                     (map (++ "; ")
-                          (lines (++ nstr (++ " :: " typ))))))))
+      ""
+      (intercalate "\n"
+                   (map (++ "; ")
+                        (lines (++ nstr (++ " :: " typ))))))))
 
 (defn (:: names-and-types (-> DynFlags [Name] [Var] String))
   [dflags names vars]
-  (let ((= tvs (zipWith (var-name-and-type dflags) names vars)))
+  (lept [tvs (zipWith (var-name-and-type dflags) names vars)]
     (if (all null tvs)
-        ""
-        (intercalate "\n" tvs))))
+      ""
+      (intercalate "\n" tvs))))
 
 (defn (:: add-gt-ii (-> InteractiveImport [InteractiveImport]
                         [InteractiveImport]))
   [mdl acc]
   (if (any (subsume-ii mdl) acc)
-      acc
-      (: mdl acc)))
+    acc
+    (: mdl acc)))
 
 (defn (:: subsume-ii (-> InteractiveImport InteractiveImport Bool))
   ;; See `GHCi.UI.iiSubsumes'.

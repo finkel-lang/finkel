@@ -60,13 +60,13 @@
   (deriving Show))
 
 (instance (Eq ReplState)
-  (= ==
+  (defn ==
     (where (on eqStringBuffer pending-input)
       (= eqStringBuffer (on == show)))))
 
 (instance (Monoid ReplState)
-  (= mempty initial-repl-state)
-  (= mappend r1 r2
+  (defn mempty initial-repl-state)
+  (defn mappend [r1 r2]
     (where (ReplState {pending-input (on unsafeAppendStringBuffers
                                          pending-input r1 r2)
                        prompt-string (prompt-string r2)})
@@ -94,25 +94,27 @@
   (Repl {unRepl (-> (IORef ReplState) (IO a))}))
 
 (instance (Functor Repl)
-  (= fmap f (Repl repl)
+  (defn fmap [f (Repl repl)]
     (Repl (. (fmap f) repl)))
   %p(INLINE fmap))
 
 (instance (Applicative Repl)
-  (= pure x (Repl (\ _ (pure x))))
+  (defn pure [x]
+    (Repl (\ _ (pure x))))
   %p(INLINE pure)
 
-  (= <*> (Repl mf) (Repl mx)
+  (defn <*> [(Repl mf) (Repl mx)]
     (Repl (\ ref (<*> (mf ref) (mx ref)))))
   %p(INLINE <*>))
 
 (instance (Monad Repl)
-  (= >>= (Repl repl) k
+  (defn >>= [(Repl repl) k]
     (Repl (\ ref (>>= (repl ref) (. (flip unRepl ref) k)))))
   %p(INLINE >>=))
 
 (instance (MonadIO Repl)
-  (= liftIO io (Repl (\ _ io)))
+  (defn liftIO [io]
+    (Repl (\ _ io)))
   %p(INLINE liftIO))
 
 ;;; In ghc-8.10.1, `haskeline' switched to use `MonadThrow', `MonadCatch', and
@@ -124,35 +126,35 @@
   [(<= 810 :ghc)
    (:begin
      (instance (MonadThrow Repl)
-       (= throwM (. liftIO throwM))
+       (defn throwM (. liftIO throwM))
        %p(INLINE throwM))
 
      (instance (MonadCatch Repl)
-       (= catch (Repl repl) f
+       (defn catch [(Repl repl) f]
          (Repl (\ ref
                  (catch (repl ref)
                    (\ e (unRepl (f e) ref))))))
        %p(INLINE catch))
 
      (instance (MonadMask Repl)
-       (= mask a
-         (let ((:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
-               (= q unmask (Repl repl)
-                 (Repl (. unmask repl))))
+       (defn mask [a]
+         (lefn [(:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
+                (q [unmask (Repl repl)]
+                  (Repl (. unmask repl)))]
            (Repl (\ ref
                    (mask
                     (\ unmask (unRepl (a (q unmask)) ref)))))))
        %p(INLINE mask)
-       (= uninterruptibleMask a
-         (let ((:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
-               (= q unmask (Repl repl)
-                 (Repl (. unmask repl))))
+       (defn uninterruptibleMask [a]
+         (lefn [(:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
+                (q [unmask (Repl repl)]
+                  (Repl (. unmask repl)))]
            (Repl (\ ref
                    (uninterruptibleMask
                     (\ unmask
                       (unRepl (a (q unmask)) ref)))))))
        %p(INLINE uninterruptibleMask)
-       (= generalBracket acquire release use
+       (defn generalBracket [acquire release use]
          (Repl (\ ref
                  (generalBracket
                   (unRepl acquire ref)
@@ -164,13 +166,12 @@
 
   [otherwise
     (instance (MonadException Repl)
-      (= controlIO f
+      (defn controlIO [f]
         (Repl (\ ref
                 (controlIO
                  (\ (RunIO run)
-                   (let ((= run'
-                           (RunIO (. (fmap (. Repl const))
-                                     (. run (flip unRepl ref))))))
+                   (lept [run' (RunIO (. (fmap (. Repl const))
+                                         (. run (flip unRepl ref))))]
                      (fmap (flip unRepl ref) (f run'))))))))
       %p(INLINE controlIO))])
 

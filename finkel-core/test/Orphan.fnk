@@ -26,28 +26,25 @@
  (GHC.Types.Basic ((SourceText ..))))
 
 (instance (Arbitrary Atom)
-  (= arbitrary
-    (where (oneof [(return AUnit)
-                   (fmap aSymbol symbolG)
-                   (fmap (AChar NoSourceText) arbitraryUnicodeChar)
-                   (fmap (aString NoSourceText) stringG)
-                   (fmap aIntegral (:: arbitrary (Gen Integer)))
-                   (fmap aFractional (:: arbitrary (Gen Double)))])
-      (= headChars
-        (++ [#'A .. #'Z] [#'a .. #'z] "_!$%*+./<=>?@^~:"))
-      (= tailChars
-        (++ headChars "0123456789'-"))
-      (= symbolG
-        (<*> (pure :) (elements headChars) (listOf (elements tailChars))))
-      (= stringG
-        (fmap getUnicodeString arbitrary)))))
+  (defn arbitrary
+    (lept [headChars (++ [#'A .. #'Z] [#'a .. #'z] "_!$%*+./<=>?@^~:")
+           tailChars (++ headChars "0123456789'-")
+           symbolG (<*> (pure :) (elements headChars)
+                        (listOf (elements tailChars)))
+           stringG (fmap getUnicodeString arbitrary)]
+      (oneof [(return AUnit)
+              (fmap aSymbol symbolG)
+              (fmap (AChar NoSourceText) arbitraryUnicodeChar)
+              (fmap (aString NoSourceText) stringG)
+              (fmap aIntegral (:: arbitrary (Gen Integer)))
+              (fmap aFractional (:: arbitrary (Gen Double)))]))))
 
 (instance (=> (Arbitrary a) (Arbitrary (Form a)))
-  (= arbitrary
+  (defn arbitrary
     (oneof [(fmap Atom arbitrary)
             (fmap List (listOf (scale (flip div 3) arbitrary)))
             (fmap HsList (listOf (scale (flip div 3) arbitrary)))]))
-  (= shrink x
+  (defn shrink [x]
     (case x
       (Atom _)    []
       (List xs)   (++ (map unCode xs) (map List (shrink xs)))
@@ -55,4 +52,4 @@
       TEnd        [])))
 
 (instance (=> (Arbitrary a) (Arbitrary (LForm a)))
-  (= arbitrary (fmap (. LForm genSrc) arbitrary)))
+  (defn arbitrary (fmap (. LForm genSrc) arbitrary)))

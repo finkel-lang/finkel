@@ -629,17 +629,17 @@
             (expandTo (macroexpand-1 42) 42))
 
           (it "should expand to form containing :begin"
-            (let ((= m1
-                    (Macro (\ form
-                             (return `(:begin
-                                        (:: foo String)
-                                        (= foo ,(show (cadr form))))))))
-                  (= my-macros
-                    (mergeMacros
-                     (envMacros defaultFnkEnv)
-                     (makeEnvMacros [(, "m1" m1)])))
-                  (= my-env
-                    (defaultFnkEnv {envMacros my-macros})))
+            (lefn [(m1
+                     (Macro (\ form
+                              (return `(:begin
+                                         (:: foo String)
+                                         (= foo ,(show (cadr form))))))))
+                   (my-macros
+                     (mergeMacros
+                      (envMacros defaultFnkEnv)
+                      (makeEnvMacros [(, "m1" m1)])))
+                   (my-env
+                     (defaultFnkEnv {envMacros my-macros}))]
               (expand-form-with-env my-env
                                     shouldBe
                                     macroexpand-1

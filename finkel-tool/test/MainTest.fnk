@@ -66,8 +66,8 @@
   (describe "help command"
     (it "should contain command names in usage message"
       (do (<- (, _ lns) (runTestIO (show-usage commands) []))
-          (let ((= messageShouldContain
-                  (shouldContain (unlines (tst-outputs lns))))))
+          (lept [messageShouldContain (shouldContain
+                                       (unlines (tst-outputs lns)))])
           (messageShouldContain "eval")
           (messageShouldContain "repl")
           (messageShouldContain "make")
@@ -75,8 +75,8 @@
 
 (defn (:: evalTests Spec)
   (describe "eval command"
-    (do (let ((= failure args
-                (shouldThrow (main' args) anyExitFailure))))
+    (do (lefn [(failure [args]
+                 (shouldThrow (main' args) anyExitFailure))])
         (it "should show help with --help"
           (main' ["eval" "--help"]))
         (it "should understand debug option"
@@ -94,9 +94,9 @@
           (failure ["eval" "(+ 1 True)))"])))))
 
 (defn (:: replTests Spec)
-  (let ((= print-int (test-data "print-int.fnk"))
-        (= print-load-me (test-data "print-load-me.fnk"))
-        (= err001 (test-data "Err001.fnk")))
+  (lept [print-int (test-data "print-int.fnk")
+         print-load-me (test-data "print-load-me.fnk")
+         err001 (test-data "Err001.fnk")]
     (describe "repl command"
       (do (it "should show help on --help"
             (main' ["repl" "--help"]))
@@ -118,33 +118,35 @@
              anyExitFailure))))))
 
 (defn (:: runTests Spec)
-  (describe "run command"
-    (do (let ((= run args (main' (: "run" args)))
-              (= failure args (shouldThrow (run args) anyExitFailure))))
-        (it "should show help on --help"
-          (run ["--help"]))
-        (it "should run run-me.fnk"
-          (run ["-v0" (test-data "run-me.fnk")]))
-        (it "should search directory with ghc option"
-          (run ["-v0" (++ "-i" test-data-dir) "run-me.fnk"]))
-        (it "should run given function"
-          (run ["-v0" "--main" "main-two" (test-data "RunMeToo.fnk")]))
-        (it "should pass arguments after `--'"
-          (run ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
-                "--" "dog"]))
-        (it "should complain with malformed argument"
-          (failure ["-v0" "--main"]))
-        (it "should fail when input file does not exist"
-          (failure ["-v0" "no-such-file.fnk"]))
-        (it "should exit with status from given script"
-          (failure ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
-                    "--" "elephant"])))))
+  (lefn [(run [args]
+           (main' (: "run" args)))
+         (failure [args]
+           (shouldThrow (run args) anyExitFailure))]
+    (describe "run command"
+      (do (it "should show help on --help"
+            (run ["--help"]))
+          (it "should run run-me.fnk"
+            (run ["-v0" (test-data "run-me.fnk")]))
+          (it "should search directory with ghc option"
+            (run ["-v0" (++ "-i" test-data-dir) "run-me.fnk"]))
+          (it "should run given function"
+            (run ["-v0" "--main" "main-two" (test-data "RunMeToo.fnk")]))
+          (it "should pass arguments after `--'"
+            (run ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
+                  "--" "dog"]))
+          (it "should complain with malformed argument"
+            (failure ["-v0" "--main"]))
+          (it "should fail when input file does not exist"
+            (failure ["-v0" "no-such-file.fnk"]))
+          (it "should exit with status from given script"
+            (failure ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
+                      "--" "elephant"]))))))
 
 (defn (:: versionTests Spec)
   (describe "version command"
-    (do (let ((= version args
-                (fmap (. unlines (. tst-outputs snd))
-                      (liftIO (runTestIO (versionMain args) []))))))
+    (do (lefn [(version [args]
+                 (fmap (. unlines (. tst-outputs snd))
+                       (liftIO (runTestIO (versionMain args) []))))])
         (it "should not throw exceptions with git command"
           (do (<- commit-id (liftIO get-git-commit))
               (quietly (print commit-id))))

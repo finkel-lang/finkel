@@ -16,16 +16,16 @@
    (Doc.TestAux)))
 
 (defn (:: spec Spec)
-  (let ((= dir (</> "include" "finkel-executable"))
-        (= const2 x _ _  x)
-        (= is-osx (== os "darwin"))
-        (= is-win (== os "mingw32"))
-        (= skips
-          [(, "finkel-help-make.console" (const2 is-win))
-           (, "hello.console" (const2 (|| is-osx is-win)))
-           (, "hello-prof.console"
-              (\ _version build-tool
-                (|| is-win (== build-tool Cabal))))]))
+  (lept [dir (</> "include" "finkel-executable")
+         const2 (\ x _ _ x)
+         is-osx (== os "darwin")
+         is-win (== os "mingw32")
+         skips
+         [(, "finkel-help-make.console" (const2 is-win))
+          (, "hello.console" (const2 (|| is-osx is-win)))
+          (, "hello-prof.console"
+             (\ _version build-tool
+               (|| is-win (== build-tool Cabal))))]]
     (before_
      (remove-compiled [(</> dir "hello")])
      (describe "using the finkel executable"

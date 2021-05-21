@@ -68,9 +68,10 @@
   [(, path hdl _)]
   (catch (do (hClose hdl)
              (removeFile path))
-    (\ e (if (isDoesNotExistError e)
-             (return ())
-             (throwIO e)))))
+    (\ e
+      (if (isDoesNotExistError e)
+        (return ())
+        (throwIO e)))))
 
 (defn (:: use-repl (-> [String]
                        (Maybe FilePath)
@@ -84,9 +85,9 @@
   [ghc-opts mb-path mb-port fnk-env repl-st init-form (, _ hdl in-mv)]
   (do (mapM- (start-listener in-mv) mb-port)
       (<- tid (fork-eval-loop ghc-opts hdl in-mv fnk-env))
-      (let ((= rpl (read-print-loop init-form in-mv tid))
-            (= behavior (maybe defaultBehavior useFile mb-path))
-            (= run (runInputTBehavior behavior defaultSettings))))
+      (lept [rpl (read-print-loop init-form in-mv tid)
+             behavior (maybe defaultBehavior useFile mb-path)
+             run (runInputTBehavior behavior defaultSettings)])
 
       ;; Using UTF-8 for Windows. See "GHCi.UI.interactiveUI"
       (cond-expand

@@ -28,22 +28,21 @@
 (defn (:: show-usage (=> (CLI m) (-> [Command] (m ()))))
   "Show usage message generated from given commands."
   [cmds]
-  (do (<- name (liftIO getProgName))
-      (let ((= max-len
-              (length (maximumBy (on compare length)
-                                 (fmap cmd-name cmds))))
-            (= pad n str
-              (++ str (replicate (- n (length str)) #'\SP)))
-            (= descr n cmd
-              (concat ["  " (pad n (cmd-name cmd))
-                       "  " (cmd-descr cmd)]))))
-      (putString
-       (unlines
-        (++ [(concat ["USAGE:\n\n   " name " <command> [arguments]"])
-             ""
-             (concat ["Run \"" name " help <command>\""
-                      " for more information."])
-             ""
-             "COMMANDS:"
-             ""]
-            (fmap (descr max-len) cmds))))))
+  (lefn [(max-len
+           (length (maximumBy (on compare length) (fmap cmd-name cmds))))
+         (pad [n str]
+           (++ str (replicate (- n (length str)) #'\SP)))
+         (descr [n cmd]
+           (concat ["  " (pad n (cmd-name cmd))
+                    "  " (cmd-descr cmd)]))]
+    (do (<- name (liftIO getProgName))
+        (putString
+         (unlines
+          (++ [(concat ["USAGE:\n\n   " name " <command> [arguments]"])
+               ""
+               (concat ["Run \"" name " help <command>\""
+                        " for more information."])
+               ""
+               "COMMANDS:"
+               ""]
+              (fmap (descr max-len) cmds)))))))

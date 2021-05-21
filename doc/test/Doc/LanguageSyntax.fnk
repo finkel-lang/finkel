@@ -56,10 +56,9 @@
    (do (<- mb-ghc-lib get-ghc-lib)
        (runGhc mb-ghc-lib (return ())))
    (describe "language syntax"
-     (do (let ((= expFromECP
-                 (cond-expand
-                   ((<= 810 :ghc) runECP-P)
-                   [otherwise return]))))
+     (do (lept [expFromECP (cond-expand
+                             ((<= 810 :ghc) runECP-P)
+                             [otherwise return])])
          (describe "expression"
            (parser-tests "expr" (Parsers (>>= GhcParser.parseExpression
                                               expFromECP)
@@ -81,9 +80,9 @@
 (defn (:: parser-tests
         (=> (Outputable a) (-> FilePath (Parsers a) Spec)))
   [subdir parsers]
-  (do (let ((= run-it name
-              (it (++ "should parse tests in " name)
-                (parser-test parsers (</> (language-dir subdir) name))))))
+  (do (lefn [(run-it [name]
+               (it (++ "should parse tests in " name)
+                 (parser-test parsers (</> (language-dir subdir) name))))])
       (<- files (runIO (list-base-names (language-dir subdir))))
       (mapM_ run-it files)))
 
@@ -94,12 +93,12 @@
 (defn (:: parser-test
         (=> (Outputable a) (-> (Parsers a) FilePath (IO ()))))
   [parsers basename]
-  (do (let ((= fnk (<.> basename "fnk"))
-            (= hs (<.> basename "hs"))))
+  (do (lept [fnk (<.> basename "fnk")
+             hs (<.> basename "hs")])
       (<- buf (hGetStringBuffer hs))
-      (let ((= loc (mkRealSrcLoc (fsLit "<test>") 1 1))
-            (= dflags unsafeGlobalDynFlags)
-            (= ps (Lexer.mkPState dflags buf loc))))
+      (lept [loc (mkRealSrcLoc (fsLit "<test>") 1 1)
+             dflags unsafeGlobalDynFlags
+             ps (Lexer.mkPState dflags buf loc)])
       (case (Lexer.unP (hs-parser parsers) ps)
         (POk _st hres) (do (<- fstr (parse-fnk dflags parsers fnk))
                            (shouldBe fstr (showPpr dflags hres)))
