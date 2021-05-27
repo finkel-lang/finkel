@@ -11,7 +11,7 @@
   defmodule
   macroexpand macroexpand-1
   exported-macros cond-expand macro-error
-  case-do cond lcase lefn
+  case-do cond lcase lefn lept
 
   ;; Functions
   is-atom is-pair is-list is-hslist is-symbol is-string is-char
@@ -101,10 +101,9 @@ Sample runs:
 ;;; Expression
 
 (defmacro cond
-  "The 'cond' macro, found in many Lisp languages.
-
-The behaviour is same as wrapping the body with @case@ expression with dummy
-unit, or @if@ with @MultiWayIf@ GHC language extension.
+  "The 'cond' macro, found in many Lisp languages. The behaviour is same as
+wrapping the body with @case@ expression with dummy unit, or @if@ with
+@MultiWayIf@ GHC language extension.
 
 ==== __Syntax__
 
@@ -189,11 +188,10 @@ Is same as:
 
 > LEFN     ::= 'lefn' BINDINGS BODY
 > BINDINGS ::= '[' BINDING* ']' | '(' BINDING* ')'
-> BINDING  ::= '(' VAR [ARGS] EXPR ')' | SIG
+> BINDING  ::= '(' VAR [ARGS] expr ')' | SIG
 > VAR      ::= varid | SIG
-> SIG      ::= '(' '::' varid typesig ')'
+> SIG      ::= '(' '::' varid type ')'
 > ARGS     ::= '[' varid* ']' | '(' varid* ')'
-> EXPR     ::= form
 
 ==== __Examples__
 
@@ -210,7 +208,7 @@ Following expresion:
   (g (f x 3)))
 @
 
-is same as:
+expands to:
 
 @
 (let ((= x 100)
@@ -223,17 +221,67 @@ is same as:
   (g (f x 3)))
 @"
   args
-  ;; Allow empty body to support `lefn' inside `do' syntax sugar
-  (let ((= binds (car args))
+  ;; Allow empty body to support `lefn' inside `do' syntax.
+  (let ((= binds0 (car args))
+        (= binds1 (if (|| (is-unit binds0) (null binds0))
+                    '()
+                    (curve (map1 (\ bind
+                                   (if (== ':: (car bind))
+                                     bind
+                                     (cons 'defn (curve bind))))
+                                 binds0))))
         (= body (cdr args)))
-    `(let ,(if (|| (is-unit binds) (null binds))
-             '()
-             (curve (map1 (\ bind
-                            (if (== ':: (car bind))
-                              bind
-                              `(defn ,@(curve bind))))
-                          binds)))
-       ,@body)))
+    (cons 'let (cons binds1 body))))
+
+(defmacro lept
+  "Let-pattern macro. Like @let@, but for pattern bindings only, does not
+support function bindings. Patterns and expressions are concatenated to make a
+flat bindings list with even number of elements. The pattern in the bindings
+list could be a varid symbol, or a type signature list form.
+
+==== __Syntax__
+
+> lept     ::= 'lept' BINDINGS expr
+> BINDINGS ::= '[' BINDING+ ']' | '(' BINDING+ ')'
+> BINDING  ::= PATTERN expr
+> PATTERN  ::= varid | '(' '::' varid type ')'
+
+==== __Example__
+
+Following expression:
+
+@
+(lept [a 1
+       (:: b Int) 2
+       (, c d) (, 3 4)
+       f (\\\\ w x y z
+           (+ w (* x (+ y z))))]
+  (f a b c d))
+@
+
+expands to:
+
+@
+(let ((= a 1)
+      (:: b Int)
+      (= b 2)
+      (= (, c d) (, 3 4))
+      (= f (\\\\ w x y z
+             (+ w (* x (+ y z))))))
+  (f a b c d))
+@"
+  args
+  (let ((= body (cdr args))
+        (= f x (, mb-expr acc)
+          (case mb-expr
+            (Just expr) (, Nothing
+                           (if (&& (is-list x) (== ':: (car x)))
+                             (: x `(= ,(cadr x) ,expr) acc)
+                             (: `(= ,x ,expr) acc)))
+            Nothing (, (Just x) acc)))
+        (= z (, Nothing []))
+        (= binds ($ curve toCode snd (reduce f z) car args)))
+    (cons 'let (cons binds body))))
 
 (defmacroM defmodule
   "Macro to define header of module named /NAME/. The /IMPEXP/ are forms
@@ -302,8 +350,8 @@ Expands to:
                     _ (| ((== label 'export)
                           (return
                            (if (null (cdr lst))
-                               (: (, 'export (cons '() nil)) acc)
-                               (: (, 'export payload) acc))))
+                             (: (, 'export (cons '() nil)) acc)
+                             (: (, 'export payload) acc))))
                          ((|| (== label 'use)
                               (== label 'import))
                           (return
@@ -339,8 +387,8 @@ Expands to:
                                    (map1 (\ es `(,header ,@es)))
                                    (lookup 'require-and-import alist))))
                   (if add-load-too
-                      (mappend e1 e2)
-                      e1)))))
+                    (mappend e1 e2)
+                    e1)))))
         (return
          `(:begin
             ,@(emit True ':require)
@@ -376,13 +424,11 @@ Expands to:
     _ form))
 
 (defmacroM cond-expand
-  "Macro for conditional compilation.
-
-The `cond-expand' macro has same syntax as the `cond' macro, but the evaluation
-of the tests are done at compilation time. To gather compilation context
-information, the tests sections in the `cond-expand' macro uses special keywords
-for getting such information. These keywords are replaced by the described
-values:
+  "Macro for conditional compilation. The `cond-expand' macro has same syntax as
+the `cond' macro, but the evaluation of the tests are done at compilation
+time. To gather compilation context information, the tests sections in the
+`cond-expand' macro uses special keywords for getting such information. These
+keywords are replaced by the described values:
 
 [@:ghc@]: An `Int' value of `cProjectVersionInt', which is the major and minor
 version of the @ghc@ used during the compilation.
@@ -478,8 +524,8 @@ forms.
                      (let ((= go expr
                              (do (<- expr' (expand1 expr))
                                  (if (== expr expr')
-                                     (return `',expr)
-                                     (go expr')))))
+                                   (return `',expr)
+                                   (go expr')))))
                        (go x))))
     _ (return form)))
 
@@ -636,10 +682,8 @@ Like `mb_symbol_name', but returns `FastString'"
     (\ x (list_ (: (toCode x) acc)))))
 
 (defn (:: list (=> (Listable lst) lst))
-  "Make a list from given arguments.
-
-This function can take variable number of arguments, but requires
-resulting type to be a concrete type.
+  "Make a list from given arguments. This function can take variable number of
+arguments, but requires resulting type to be a concrete type.
 
 ==== __Examples__
 
@@ -702,10 +746,9 @@ and the definition of 'cdadr' is:
             (-> SrcSpan (-> [(LForm a)] (LForm a)) [Code] b)
             Code
             b))
-  "Auxiliary function for higher order function.
-
-Make a function taking `SrcSpan' and a list of `Code' from given arguments."
-  [label f (@ orig (LForm (L l form)))]
+  "Auxiliary function for higher order function. Make a function taking
+`SrcSpan' and a list of `Code' from given arguments."  [label f (@
+  orig (LForm (L l form)))]
   (case form
     (List xs) (f l (. LForm (L l) List) xs)
     (HsList xs) (f l (. LForm (L l) HsList) xs)
@@ -713,10 +756,9 @@ Make a function taking `SrcSpan' and a list of `Code' from given arguments."
 %p(INLINE make-list-fn)
 
 (defn (:: map1 (-> (-> Code Code) Code Code))
-  "Like `map', but for `Code'
-
-@map f x@ applies the function @f@ to each element of @x@ when the @x@ is `List'
-or `HsList'. Other @x@ value will throw a `NonListvalue' exception.
+  "Like `map', but for `Code' @map f x@ applies the function @f@ to each element
+of @x@ when the @x@ is `List' or `HsList'. Other @x@ value will throw a
+`NonListvalue' exception.
 
 ==== __Examples__
 
@@ -729,9 +771,8 @@ or `HsList'. Other @x@ value will throw a `NonListvalue' exception.
 %p(INLINABLE map1)
 
 (defn (:: reduce (-> (-> Code a a) a Code a))
-  "Like `foldr', but for `Code'.
-
-Throws an exception if the second argument was not a list.
+  "Like `foldr', but for `Code'. Throws an exception if the second argument was
+not a list.
 
 ==== __Examples__
 
@@ -765,9 +806,8 @@ Throws an exception if the second argument was not a list.
 %p(INLINABLE reduce1)
 
 (defn (:: keep (-> (-> Code Bool) Code Code))
-  "Like `filter', but for `Code'.
-
-Filter out immediate elements of `List' if the test result is `False'.
+  "Like `filter', but for `Code'. Filter out immediate elements of `List' if the
+test result is `False'.
 
 ==== __Examples__
 
@@ -780,9 +820,15 @@ Filter out immediate elements of `List' if the test result is `False'.
 %p(INLINABLE keep)
 
 (defn (:: curve (-> Code Code))
-  "Convert `HsList' to `List'.
+  "Convert `HsList' to `List'. The original value is retained if the given
+argument was not a `HsList' value.
 
-The original value is retained if the given argument was not a `HsList' value."
+==== __Examples__
+
+>>> (curve '[a b c])
+(a b c)
+>>> (curve 'foo)
+foo"
   [(@ orig (LForm (L l form)))]
   (case form
     (HsList xs) (LForm (L l (List xs)))
@@ -790,9 +836,8 @@ The original value is retained if the given argument was not a `HsList' value."
 %p(INLINABLE curve)
 
 (defn (:: rev (-> Code Code))
-  "Like `reverse', but for `Code'.
-
-Reverse the given `List' or `HsList'. Other values are kept as-is.
+  "Like `reverse', but for `Code'. Reverse the given `List' or `HsList'. Other
+values are kept as-is.
 
 ==== __Examples__
 

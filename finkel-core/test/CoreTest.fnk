@@ -596,6 +596,23 @@
              (lefn () True)
              (let () True)))))
 
+    (describe "lept"
+      (do (it "should expand to let"
+            (expandTo
+             (lept [a 1 b 2 c 3]
+               (+ a b c))
+             (let ((= a 1) (= b 2) (= c 3))
+               (+ a b c))))
+          (it "should expand to let with signatures"
+            (expandTo
+             (lept [(:: a Int) 1 (:: b Double) 1]
+               (>> (print a) (print b)))
+             (let ((:: a Int)
+                   (= a 1)
+                   (:: b Double)
+                   (= b 1))
+               (>> (print a) (print b)))))))
+
     (describe "macroexpand-1"
       (do (it "should expand to '(toCode 3)"
             (expandTo
