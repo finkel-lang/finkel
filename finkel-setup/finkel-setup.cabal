@@ -20,8 +20,9 @@ extra-source-files:  README.md
                      test/data/p01/p01.cabal
                      test/data/p01/Setup.hs
                      test/data/p01/exec/p01.hs
-                     test/data/p01/src/P01/*.hs
                      test/data/p01/src/P01/*.fnk
+                     test/data/p01/src/P01/*.hs
+                     test/data/p01/test/*.fnk
                      test/data/p01/test/*.hs
 
 tested-with:           GHC == 8.2.2

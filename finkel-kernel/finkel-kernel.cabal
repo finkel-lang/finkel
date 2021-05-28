@@ -19,6 +19,7 @@ extra-source-files:  README.md
                      include/*.h
                      --
                      test/data/eval/*.fnk
+                     test/data/exception/*.fnk
                      test/data/syntax/*.fnk
                      test/data/main/*.c
                      test/data/main/*.hs
