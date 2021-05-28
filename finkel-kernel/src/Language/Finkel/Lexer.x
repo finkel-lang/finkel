@@ -50,9 +50,6 @@ import qualified GHC.Char                   as Char
 import qualified Data.ByteString            as W8
 import qualified Data.ByteString.Char8      as C8
 
--- containers
-import qualified Data.Map                   as Map
-
 -- ghc
 import           GHC_Data_FastString        (FastString,
                                              fsLit, headFS, nullFS,
