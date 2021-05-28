@@ -10,6 +10,9 @@ module Distribution.Simple.Finkel
   -- * UserHooks
   , fnkHooksWith
 
+  -- * Suffix handler
+  , finkelPPHandler
+
    -- * Reexport from Cabal
   , UserHooks
   , defaultMainWithHooks
@@ -114,7 +117,7 @@ fnkHooksWith :: FilePath -- ^ Compiler executable.
              -> Bool     -- ^ Debug flag.
              -> UserHooks
 fnkHooksWith exec args debug = simpleUserHooks
-  { hookedPreProcessors = [registerFinkelPPHandler]
+  { hookedPreProcessors = finkelPPHandler : knownSuffixHandlers
   , confHook            = fnkConfHookWith exec args debug
   , haddockHook         = fnkHaddockHooks
   }
@@ -128,8 +131,8 @@ fnkHooksWith exec args debug = simpleUserHooks
 
 -- | Preprocessor suffix handler to merely register files with @"*.fnk"@
 -- files.
-registerFinkelPPHandler :: PPSuffixHandler
-registerFinkelPPHandler = ("fnk", doNothingPP)
+finkelPPHandler :: PPSuffixHandler
+finkelPPHandler = ("fnk", doNothingPP)
   where
     doNothingPP _ _ _ = PreProcessor
       { platformIndependent = True

@@ -13,6 +13,9 @@
    (Data.Version [showVersion])
    (System.Environment [getEnvironment setEnv withArgs])
 
+   ;; directory
+   (System.Directory [makeAbsolute withCurrentDirectory])
+
    ;; filepath
    (System.FilePath [</>])
 
@@ -39,6 +42,7 @@
       evalTests
       replTests
       runTests
+      sdistTests
       versionTests))
 
 (defn (:: cliTests Spec)
@@ -141,6 +145,28 @@
           (it "should exit with status from given script"
             (failure ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
                       "--" "elephant"]))))))
+
+(defn (:: sdistTests Spec)
+  (describe "sdist command"
+    (do (lept [sdist (. main' (: "sdist"))
+               failure (. (flip shouldThrow anyExitFailure) sdist)])
+        (it "should show help message"
+          (sdist ["--help"]))
+        (it "should list options"
+          (sdist ["--list-options"]))
+        (it "should list sources"
+          (sdist ["--list-sources=sources" (test-data "p02")]))
+        (it "should make tarball with .cabal in current directory"
+          (sdist []))
+        (it "should make tarball with .cabal in given directory"
+          (do (<- builddir (makeAbsolute (test-data "sdist")))
+              (sdist ["--verbose=2"
+                      (++ "--builddir=" builddir)
+                      (test-data "p02")])))
+        (it "should fail without .cabal file in current directory"
+          (withCurrentDirectory ".." (failure [])))
+        (it "should show error on invalid argument"
+          (failure ["--foo"])))))
 
 (defn (:: versionTests Spec)
   (describe "version command"
