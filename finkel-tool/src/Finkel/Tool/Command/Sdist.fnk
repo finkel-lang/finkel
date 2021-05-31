@@ -48,6 +48,8 @@
    (import Distribution.Simple.Configure (findDistPrefOrDefault))])
 
 (cond-expand
+  [(<= 808 :ghc)
+   (import Distribution.Simple.Flag (fromFlag))]
   [(<= 806 :ghc)
    (import Distribution.Simple.Flag (fromFlag toFlag))]
   [otherwise
