@@ -43,8 +43,8 @@
   (import Language.Finkel.Form (aSymbol genSrc)))
 
 ;; base
+(import Control.Exception (throw))
 (import Control.Monad (foldM))
-(import System.IO.Unsafe (unsafePerformIO))
 (import qualified System.Info)
 
 ;; finkel-kernel
@@ -865,7 +865,7 @@ foo"
 %p(INLINABLE unsnoc)
 
 (defn (:: unsafeFinkelSrcError (-> Code String a))
-  "Throw exception with 'finkelSrcError', with given code and message. This
-function uses `unsafePerformIO'."
+  "Throw exception with 'FinkelSrcError', with given code and message. This
+function uses `Control.Exception.throw' from the @base@ package."
   [code msg]
-  (unsafePerformIO (runFnk (finkelSrcError code msg) defaultFnkEnv)))
+  (throw (FinkelSrcError code msg)))
