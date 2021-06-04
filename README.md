@@ -4,10 +4,10 @@
 [![Documentation][doc-badge]][doc]
 [![Codecov][codecov-badge]][codecov]
 
-Finkel is a statically typed, purely functional, non-strict-by-default
-dialect of the [Lisp][lisp] programming language.
+Finkel is a statically typed, purely functional, and non-strict-by-default
+[LISP][lisp] flavored programming language.
 
-Or in other words, [Haskell][haskell] in S-expression.
+Or in other words, **[Haskell][haskell] in S-expression**.
 
 
 ## Features
@@ -32,7 +32,7 @@ input and print the fibonacci number of the argument.")
 
 (defmodule Main
   (import
-   (System.Environment (getArgs))))
+   (System.Environment [getArgs])))
 
 (defn (:: main (IO ()))
   "The main entry point function."

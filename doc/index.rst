@@ -4,10 +4,10 @@ The Finkel Documentation
 Introduction
 ------------
 
-Finkel is a statically typed, purely functional, and
-non-strict-by-default dialect of the `Lisp
+Finkel is a statically typed, purely functional,
+and non-strict-by-default `LISP
 <https://en.wikipedia.org/wiki/Lisp_(programming_language)>`_
-programming language. Or in other words, `Haskell
+flavored programming language. Or in other words, `Haskell
 <https://haskell.org>`_ **in S-expression**. [#f1]_
 
 Finkel has the following features:
