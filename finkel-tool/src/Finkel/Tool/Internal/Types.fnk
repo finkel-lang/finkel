@@ -43,7 +43,7 @@
  (GHC.Utils.IO.Unsafe (inlinePerformIO)))
 
 (cond-expand
-  [(<= 810 :ghc)
+  [(:min-version "haskeline" 0 8 0)
    ;; exceptions
    (import Control.Monad.Catch
            ((MonadThrow ..) (MonadCatch ..) (MonadMask ..)))]
@@ -79,7 +79,7 @@
            (otherwise Nothing))))))
 
 (cond-expand
-  [(<= 804 :ghc)
+  [(:min-version "base" 4 11 0)
    (instance (Semigroup ReplState)
      (= <> mappend))]
   [otherwise
@@ -123,7 +123,7 @@
 ;;; is used with codes for the `InputT' from `haskeline' package, defining
 ;;; instances of type classes from `exceptions'.
 (cond-expand
-  [(<= 810 :ghc)
+  [(:min-version "haskeline" 0 8 0)
    (:begin
      (instance (MonadThrow Repl)
        (defn throwM (. liftIO throwM))

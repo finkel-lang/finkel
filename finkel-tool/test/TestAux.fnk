@@ -53,7 +53,7 @@
 ;;; Extra imports
 
 (cond-expand
-  [(<= 804 :ghc)
+  [(:min-version "base" 4 11 0)
    (:begin)]
   [otherwise
    (import Data.Monoid (<>))])
@@ -77,7 +77,7 @@
       tst-replstate (on mappend tst-replstate s1 s2)})))
 
 (cond-expand
-  [(<= 804 :ghc)
+  [(:min-version "base" 4 11 0)
    (instance (Semigroup TestIOState)
      (= <> mappend))]
   [otherwise

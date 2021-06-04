@@ -209,67 +209,90 @@
                (&& (== (car ret2) x)
                    (== (cdr ret2) '(b))))))
 
+      (d "caris"
+         (do (it "returns True"
+               (== (caris 'a '(a b c)) True))
+             (it "returns False"
+               (== (caris 'a '(c b a)) False))))
+
       (d "make-symbol"
          (it "returns a symbol"
-           (== 'foo (make-symbol "foo"))))
+           (== (make-symbol "foo") 'foo)))
 
       (d "mb-symbol-name"
          (do (it "returns a Just String from symbol"
-               (== (Just "foo") (mb-symbol-name 'foo)))
+               (== (mb-symbol-name 'foo) (Just "foo")))
              (it "returns a Nothing from non-symbol"
                (== Nothing (mb-symbol-name '(foo bar buzz))))))
 
       (d "curve"
          (do (it "returns list from hslist"
-               (== '(a b c) (curve '[a b c])))
+               (== (curve '[a b c]) '(a b c)))
              (it "returns original value otherwise"
                (== 'foo (curve 'foo)))))
 
       (d "list"
          (do (it "returns list"
-               (== '(a b c) (list 'a 'b 'c)))
+               (== (list 'a 'b 'c) '(a b c)))
              (it "returns nil with no arguments"
                (== nil (list)))))
 
       (d "reduce"
          (do (it "returns the original list"
-               (== '(a b c d e) (reduce cons nil '(a b c d e))))
+               (== (reduce cons nil '(a b c d e)) '(a b c d e)))
              (it "should throw exception on non-list"
                (expectFailure (=== nil (reduce cons nil 'foo))))))
 
       (d "reduce1"
          (do (it "returns the original list"
-               (== '(a b c d e) (reduce1 cons '(a b c d e))))
+               (== (reduce1 cons '(a b c d e)) '(a b c d e)))
              (it "should throw exception on non-list"
                (expectFailure (=== nil (reduce1 cons 'foo))))))
 
       (d "map1"
          (do (it "replaces non-symbols"
-               (== '(foo bar _ buzz _ _)
-                   (map1 (\ x (if (is-symbol x) x '_))
-                           '(foo bar (a b c) buzz 3 "string"))))
+               (== (map1 (\ x (if (is-symbol x) x '_))
+                         '(foo bar (a b c) buzz 3 "string"))
+                   '(foo bar _ buzz _ _)))
              (it "replaces non-symbols in HsList"
-               (== '[foo bar _ buzz _ _]
-                   (map1 (\ x (if (is-symbol x) x '_))
-                           '[foo bar (a b c) buzz 3 "string"])))
+               (== (map1 (\ x (if (is-symbol x) x '_))
+                         '[foo bar (a b c) buzz 3 "string"])
+                   '[foo bar _ buzz _ _]))
              (it "throws an exception on non-list arg2"
                (expectFailure
                 (=== nil (map1 (\ x (cons x x)) 'foo))))))
 
       (d "keep"
          (do (it "removes non atom"
-               (== '(a d e) (keep is-atom '(a (b c) d e (f g h)))))
+               (== (keep is-atom '(a (b c) d e (f g h))) '(a d e)))
              (it "throws an exception on non-list"
                (expectFailure (=== nil (keep is-atom '"string"))))))
 
       (d "rev"
          (do (it "reverses List"
-               (== '(c b a) (rev '(a b c))))
+               (== (rev '(a b c)) '(c b a)))
              (it "reverses HsList"
-               (== '[c b a] (rev '[a b c])))
+               (== (rev '[a b c]) '[c b a]))
              (it "does nothing to non-list values"
-               (== 'foo (rev 'foo)))))
+               (== (rev 'foo) 'foo))))
 
       (d "unsnoc"
          (it "should split the last element"
-           (== (, '(a b c d) 'e) (unsnoc '(a b c d e)))))))
+           (== (unsnoc '(a b c d e)) (, '(a b c d) 'e))))
+
+      (d "trav1"
+         (it "should traverse list"
+           (== (trav1 Just '(a b c)) (Just '(a b c)))))
+
+      (d "omni"
+         (it "should replace `a' to `b'"
+           (== (omni (\ x (if (== 'a x) 'b x))
+                     '(a a (x a x) [y a y] a))
+               '(b b (x b x) [y b y] b))))
+
+      (d "omniM"
+         (it "should replace `a' to `b'"
+           (shouldReturn
+            (omniM (\ x (>> (print x) (return x)))
+                   '(a a (x a x) [y a y] a))
+            '(a a (x a x) [y a y] a))))))

@@ -29,7 +29,9 @@
   cdaar cdadr cddar cdddr
   cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
 
-  map1 reduce reduce1 keep curve rev unsnoc
+  map1 reduce reduce1 keep curve rev unsnoc trav1 omni omniM
+
+  caris
 
   unsafeFinkelSrcError)
 
@@ -44,22 +46,22 @@
 
 ;; base
 (import Control.Exception (throw))
-(import Control.Monad (foldM))
+(import Control.Monad (>=> foldM))
+(import Data.Version ((Version ..)))
 (import qualified System.Info)
 
 ;; finkel-kernel
-(import Language.Finkel.Form (aString mkLocatedForm))
+(import Language.Finkel.Form (mkLocatedForm))
 
 ;; Internal
 (import Finkel.Core.Stage0)
+(import Finkel.Core.Ghc.Version)
 
 (imports-from-ghc
  (GHC (getModuleInfo lookupModule lookupName modInfoExports))
  (GHC.Core.TyCo.Rep ((TyThing ..)))
- (GHC.Driver.Session ((HasDynFlags ..)))
- (GHC.Data.FastString (FastString fsLit unpackFS))
- (GHC.Settings.Config (cProjectVersionInt))
- (GHC.Types.Basic ((SourceText ..)))
+ (GHC.Driver.Session ((DynFlags) (HasDynFlags ..)))
+ (GHC.Data.FastString (FastString unpackFS))
  (GHC.Types.Var (varName))
  (GHC.Unit.Module (mkModuleName))
  (GHC.Utils.Outputable (ppr showSDoc)))
@@ -93,7 +95,7 @@ Sample runs:
 >>> (macroexpand '(e1 9))
 10
 >>> (macroexpand '(e1 foo))
-<interactive>:2:15: error: got non-integer literal: (e1 foo)
+<interactive>:2:15: error: got non-integer literal
 "
   [msg]
   `(unsafeFinkelSrcError ,the-macro-arg ,msg))
@@ -130,7 +132,7 @@ Sample run:
 "
   body
   `(case ()
-     _ (| ,@(map1 curve body))))
+     _ ,(cons '| (map1 curve body))))
 
 (defmacroM lcase
   "Same as @\\\\case@ enabled with the @LambdaCase@ extension.
@@ -146,7 +148,9 @@ Sample run:
 [\"zero\", \"one\", \"many\",\"many\"]
 "
   args
-  (fmap (\ g `(\ ,g (case ,g ,@args))) gensym))
+  (do (<- tmp (gensym' "lcasearg"))
+      (pure `(\ ,tmp
+               ,(cons 'case (cons tmp args))))))
 
 (defmacroM case-do
   "Like @case@, but takes an expression with 'Monad' type.
@@ -226,7 +230,7 @@ expands to:
         (= binds1 (if (|| (is-unit binds0) (null binds0))
                     '()
                     (curve (map1 (\ bind
-                                   (if (== ':: (car bind))
+                                   (if (caris ':: bind)
                                      bind
                                      (cons 'defn (curve bind))))
                                  binds0))))
@@ -275,7 +279,7 @@ expands to:
         (= f x (, mb-expr acc)
           (case mb-expr
             (Just expr) (, Nothing
-                           (if (&& (is-list x) (== ':: (car x)))
+                           (if (caris ':: x)
                              (: x `(= ,(cadr x) ,expr) acc)
                              (: `(= ,x ,expr) acc)))
             Nothing (, (Just x) acc)))
@@ -410,18 +414,24 @@ Expands to:
 
 ;;; Compilation context macros
 
-(defn (:: replace-ce (-> Code Atom Atom))
+(defn (:: replace-cond-expand-keywords (-> Int DynFlags Code (Fnk Code)))
   "Auxiliary function for `cond-expand'."
-  [ghc form]
-  (case form
-    (ASymbol s)
-    (| ((== s (fsLit ":ghc"))
-        (aSymbol (show ghc)))
-       ((== s (fsLit ":os"))
-        (aString (SourceText ":os") System.Info.os))
-       ((== s (fsLit ":arch"))
-        (aString (SourceText ":arch") System.Info.arch)))
-    _ form))
+  [ghc-version dflags]
+  (let ((= f x
+          (case ()
+            _ (| ((== x ':ghc)
+                  (pure `(:: ,ghc-version Int)))
+                 ((== x ':os)
+                  (pure (toCode System.Info.os)))
+                 ((== x ':arch)
+                  (pure (toCode System.Info.arch)))
+                 ((caris ':min-version x)
+                  (do (<- v (getVersion dflags (cadr x)))
+                      (pure `(<= (:: [,@(cddr x)] [Int])
+                                 ,(versionBranch v)))))
+                 (otherwise
+                  (pure x))))))
+    (omniM f)))
 
 (defmacroM cond-expand
   "Macro for conditional compilation. The `cond-expand' macro has same syntax as
@@ -465,16 +475,18 @@ When compiling above with ghc version @8.8.4@ on @x86_64@ machine running
 @
 "
   forms
-  (do (<- ghc (gensym' "_ghc"))
-      (<- tmp (gensym' "cond-expand-tmp"))
+  (do (<- tmp (gensym' "cond-expand-tmp"))
+      (<- df getDynFlags)
       (let ((= make-quoted-last branches
               (case (unsnoc branches)
-                (, bs b) `(,@(fmap (replace-ce ghc) bs) ',b)))))
+                (, bs b) (do (<- bs2 (replace-cond-expand-keywords v df bs))
+                             (pure `(,bs2 ',b)))))
+            (:: v Int)
+            (= v (read cProjectVersionInt))))
+      (<- body (trav1 make-quoted-last forms))
       (pure
-       `(macrolet ((,tmp []
-                     (let ((:: ,ghc Int)
-                           (= ,ghc ,(:: (read cProjectVersionInt) Int)))
-                       (cond ,@(map1 make-quoted-last forms)))))
+       `(macrolet [(,tmp []
+                     (cond ,@body))]
           (,tmp)))))
 
 
@@ -597,27 +609,13 @@ False"
     (Atom _)  True
     (List []) True
     _         False))
+%p(INLINABLE is-atom)
 
 (defn (:: is-pair (-> Code Bool))
   "True when the argument is a non-nil 'List'."
-  [(LForm (L _ form))]
-  (case form
-    (List []) False
-    (List _)  True
-    _         False))
-
-;;; Note [`:with-macro' instead of `macrolet']
-;;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-;;;
-;;; The use of `:with-macro' below is an adhoc workaround for "-O2 -prof"
-;;; compilation. The bytecode interpreter cannot find `finkelSrcerror' during
-;;; macro expansion when `macrolet' was used.
-;;;
-;;; Maybe this is happening because, when this module is compiled with "-O2",
-;;; the fkc compiler reset the package env and uses fresh packages state, and
-;;; loads the dependency packages with "-O0" option. But the "finkel-kernel"
-;;; package compiled with "-O0" does not contain "finkelSrcError_closure" in the
-;;; object code.
+  [(LForm (L _ (List (: _ _))))] True
+  [_] False)
+%p(INLINABLE is-pair)
 
 (macrolet [(defpred [doc name pat]
                 `(:begin
@@ -644,6 +642,24 @@ False"
   (defpred "True when the argument is an `Atom' of `AUnit'."
       is-unit (Atom AUnit)))
 
+(defn (:: caris (-> Code Code Bool))
+  "`True' when the first argument equal to the `car' of the second argument.
+
+==== __Examples__
+
+>>> (caris 'foo '(foo bar buzz))
+True
+>>> (caris 'foo '(a b c))
+False
+>>> (caris 'foo 'foo)
+False"
+  [x lst]
+  (&& (is-list lst) (== (car lst) x)))
+%p(INLINABLE caris)
+
+
+;;; Symbol functions
+
 (defn (:: make-symbol (-> String Code))
   "Make an `Atom' of `ASymbol' from given `String'."
   (. LForm genSrc Atom aSymbol))
@@ -666,6 +682,9 @@ Like `mb_symbol_name', but returns `FastString'"
     (LForm (L _ (Atom (ASymbol name)))) (Just name)
     _ Nothing))
 %p(INLINABLE mb-symbol-name-fs)
+
+
+;;; Constructing list
 
 (:doc "Type class for constructing 'List' with polyvariadic function.")
 (class (Listable l)
@@ -747,8 +766,8 @@ and the definition of 'cdadr' is:
             Code
             b))
   "Auxiliary function for higher order function. Make a function taking
-`SrcSpan' and a list of `Code' from given arguments."  [label f (@
-  orig (LForm (L l form)))]
+`SrcSpan' and a list of `Code' from given arguments."
+  [label f (@ orig (LForm (L l form)))]
   (case form
     (List xs) (f l (. LForm (L l) List) xs)
     (HsList xs) (f l (. LForm (L l) HsList) xs)
@@ -756,8 +775,8 @@ and the definition of 'cdadr' is:
 %p(INLINE make-list-fn)
 
 (defn (:: map1 (-> (-> Code Code) Code Code))
-  "Like `map', but for `Code' @map f x@ applies the function @f@ to each element
-of @x@ when the @x@ is `List' or `HsList'. Other @x@ value will throw a
+  "Like `map', but for `Code'.  @map f x@ applies the function @f@ to each
+element of @x@ when the @x@ is `List' or `HsList'. Other @x@ value will throw a
 `NonListvalue' exception.
 
 ==== __Examples__
@@ -766,8 +785,7 @@ of @x@ when the @x@ is `List' or `HsList'. Other @x@ value will throw a
 ((x is foo) (x is bar) (x is buzz))
 >>> (map1 (\\ x `(x is ,x)) 'foo)
 *** Exception: map1: non-list value `foo'"
-  [f]
-  (make-list-fn "map1" (\ _ c xs (c (map f xs)))))
+  [f] (make-list-fn "map1" (\ _ c (. c (map f)))))
 %p(INLINABLE map1)
 
 (defn (:: reduce (-> (-> Code a a) a Code a))
@@ -784,14 +802,12 @@ not a list.
 15
 >>> (reduce cons nil 'foo)
 *** Exception: reduce: non-list value `foo'"
-  [f z]
-  (make-list-fn "reduce" (\ _ _ (foldr f z))))
+  [f z] (make-list-fn "reduce" (\ _ _ (foldr f z))))
 %p(INLINABLE reduce)
 
 (defn (:: reduce1 (-> (-> Code Code Code) Code Code))
-  "Like `foldr1', but for `Code'.
-
-Throws an exception if the second argument was not a list.
+  "Like `foldr1', but for `Code'. Throws an exception if the second argument
+was not a list.
 
 ==== __Examples__
 
@@ -801,13 +817,12 @@ Throws an exception if the second argument was not a list.
 ((x is a) (x is b) c)
 >>> (reduce1 cons 'foo)
 *** Exception: reduce1: non-list value `foo'"
-  [f]
-  (make-list-fn "reduce1" (\ _ _ (foldr1 f))))
+  [f] (make-list-fn "reduce1" (\ _ _ (foldr1 f))))
 %p(INLINABLE reduce1)
 
 (defn (:: keep (-> (-> Code Bool) Code Code))
-  "Like `filter', but for `Code'. Filter out immediate elements of `List' if the
-test result is `False'.
+  "Like `filter', but for `Code'. Filter out immediate elements of `List' if
+the test result is `False'.
 
 ==== __Examples__
 
@@ -815,8 +830,7 @@ test result is `False'.
 (b r c d b r)
 >>> (keep (/= 'a) 'foo)
 *** Exception: keep: non-list value `foo'"
-  [test]
-  (make-list-fn "keep" (\ _ c (. c (filter test)))))
+  [test] (make-list-fn "keep" (\ _ c (. c (filter test)))))
 %p(INLINABLE keep)
 
 (defn (:: curve (-> Code Code))
@@ -864,8 +878,58 @@ foo"
     mrof (, (rev (cdr mrof)) (car mrof))))
 %p(INLINABLE unsnoc)
 
+(defn (:: trav1 (=> (Applicative f) (-> (-> Code (f Code)) Code (f Code))))
+  "Like `traverse', but for `Code'. Applies given function to the direct element
+of the given `Code'."
+  [f] (make-list-fn "trav1" (\ _ c (. (fmap c) (traverse f)))))
+%p(INLINABLE trav1)
+
+(defn (:: omni (-> (-> Code Code) Code Code))
+  "Applies given function to every elements.
+
+==== __Examples__
+
+>>> (omni (\\ x (if (== 'foo x) 'bar x)) '(a foo (b foo) [e (foo f)]))
+(a bar (b bar) [e (bar f)])
+>>> (omni (\\ x (if (caris 'foo x) (cons 'bar (cdr x)) x)) '(a foo (foo b c) (e foo)))
+(a foo (bar b c) (e foo))
+>>> (omni (\\ x (if (== x 'foo) 'bar x)) nil)
+nil"
+  [f (@ lform (LForm (L l form)))]
+  (let ((= fs lst
+          (. f LForm (L l) lst (map (omni f)))))
+    (case form
+      (List xs) (fs List xs)
+      (HsList xs) (fs HsList xs)
+      _ (f lform))))
+%p(INLINABLE omni)
+
+(defn (:: omniM (=> (Monad m) (-> (-> Code (m Code)) Code (m Code))))
+  "Applies given monadic function to every elements.
+
+==== __Examples__
+
+>>> (omniM (\\ x (>> (print x) (return x))) '(a (b c) d))
+a
+b
+c
+(b c)
+d
+(a (b c) d)
+(a (b c) d)
+"
+  [f (@ lform (LForm (L l form)))]
+  (let ((= fs lst
+          (>=> (traverse (omniM f)) (. f LForm (L l) lst))))
+    (case form
+      (List xs) (fs List xs)
+      (HsList xs) (fs HsList xs)
+      _ (f lform))))
+%p(INLINABLE omniM)
+
+;;; Error
+
 (defn (:: unsafeFinkelSrcError (-> Code String a))
   "Throw exception with 'FinkelSrcError', with given code and message. This
 function uses `Control.Exception.throw' from the @base@ package."
-  [code msg]
-  (throw (FinkelSrcError code msg)))
+  (. (fmap throw) FinkelSrcError))

@@ -18,6 +18,21 @@
 
 ;;; Auxiliary functions
 
+(:: rename (-> Code Code))
+(= rename name
+  (if (<= (:: 900 Int) (read cProjectVersionInt))
+    name
+    (case (lookup name ghc-module-names-pre-900)
+      (Just found) (asLocOf found name)
+      _ (error (++ "rename: cannot find " (show name))))))
+
+(:: make-import (-> Code Code))
+(= make-import form
+  `(import ,(rename (car form)) ,@(cdr form)))
+
+
+;;; Exported
+
 (:doc "List of `Code' pairs, to relate module names in ghc 9.0.1 with module
 names in older versions.")
 (:: ghc-module-names-pre-900 [(, Code Code)])
@@ -67,23 +82,6 @@ names in older versions.")
    (, 'GHC.Utils.Lexeme 'Lexeme)
    (, 'GHC.Utils.Misc 'Util)
    (, 'GHC.Utils.Outputable 'Outputable)])
-
-(:: rename (-> Code Code))
-(= rename name
-  (case (reads cProjectVersionInt)
-    [(, v "")] (if (<= (:: 900 Int) v)
-                   name
-                   (case (lookup name ghc-module-names-pre-900)
-                     (Just found) (asLocOf found name)
-                     _ (error (++ "rename: cannot find " (show name)))))
-    _ (error "rename: panic")))
-
-(:: make-import (-> Code Code))
-(= make-import form
-  `(import ,(rename (car form)) ,@(cdr form)))
-
-
-;;; Exported
 
 (:doc "Macro to get module name from @ghc@ package.")
 (:: ghc-module-name Macro)

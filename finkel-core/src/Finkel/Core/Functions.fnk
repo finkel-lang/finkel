@@ -9,6 +9,7 @@ with code values when writing macros.")
   (:dh1 "Predicates")
   is-atom is-pair is-list is-hslist
   is-symbol is-string is-char is-integer is-fractional is-unit
+  caris
 
   (:dh1 "Atom constructors")
   make-symbol
@@ -38,25 +39,22 @@ with code values when writing macros.")
   curve rev unsnoc
 
   (:dh1 "Higher order functions")
-  reduce reduce1 map1 keep
+  reduce reduce1 map1 keep trav1 omni omniM
 
   (:dh1 "Exceptions")
-  (FinkelListException ..)
-
-  (:dh1 "Unsafe functions")
-  unsafeFinkelSrcError)
+  (FinkelListException ..) unsafeFinkelSrcError)
 
 ;; Internal
 (import Finkel.Core.Stage0)
 (import Finkel.Core.Stage2)
 
 (:doc$ cxr "The `car' and `cdr' are the basic of /cxr/ functions.
-Rest of the /cxr/ functions are composed from 'car' and 'cdr'.
+Rest of the /cxr/ functions are composed from `car' and `cdr'.
 
-E.g., definition of 'cadr' is:
+E.g., definition of `cadr' is:
 
 > (cadr x) == (car (cdr x))
 
-and the definition of 'cdadr' is:
+and the definition of `cdadr' is:
 
 > (cdadr x) == (cdr (car (cdr x)))")

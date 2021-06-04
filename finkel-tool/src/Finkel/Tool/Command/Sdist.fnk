@@ -38,25 +38,22 @@
 
 ;;; Extra imports for version compatibility
 
-;;; XXX: Better to use the version of `Cabal' package in the `cond-expand'
-;;; macros, not the version of `ghc'.
-
 (cond-expand
-  [(<= 808 :ghc)
+  [(:min-version "Cabal" 3 0 1)
    (:begin)]
   [otherwise
    (import Distribution.Simple.Configure (findDistPrefOrDefault))])
 
 (cond-expand
-  [(<= 808 :ghc)
+  [(:min-version "Cabal" 3 0 1)
    (import Distribution.Simple.Flag (fromFlag))]
-  [(<= 806 :ghc)
+  [(:min-version "Cabal" 2 4 0)
    (import Distribution.Simple.Flag (fromFlag toFlag))]
   [otherwise
    (import Distribution.Simple.Setup (fromFlag toFlag))])
 
 (cond-expand
-  [(<= 804 :ghc)
+  [(:min-version "Cabal" 2 2 0)
    (import Distribution.PackageDescription.Parsec
            (readGenericPackageDescription))]
   [otherwise
@@ -88,7 +85,7 @@
                (withCurrentDirectory dir sd))))
          (update-dist-pref [flags]
            (cond-expand
-             [(<= 808 :ghc)
+             [(:min-version "Cabal" 3 0 0)
               (pure flags)]
              [otherwise
               ;; Until Cabal 3.x, seems like the "sDistDistPref" field was set
@@ -98,7 +95,7 @@
          (run-sdist [pd flags]
            (lept [sufs (: finkelPPHandler knownSuffixHandlers)]
              (cond-expand
-               [(<= 900 :ghc)
+               [(:min-version "Cabal" 3 4 0)
                 (sdist pd flags srcPref sufs)]
                [otherwise
                 (sdist pd Nothing flags srcPref sufs)])))

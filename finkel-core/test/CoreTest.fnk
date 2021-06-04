@@ -16,6 +16,7 @@
     (Finkel.Prelude))
   (import
    ;; base
+   (Control.Exception [(SomeException)])
    (Data.List [isSubsequenceOf])
    (System.Info [os arch])
 
@@ -43,11 +44,12 @@
 (defn (:: coreTests Spec)
   (describe "Macro" macroTests))
 
+(defn (:: subseqErr (-> String SomeException Bool))
+  [str e]
+  (isSubsequenceOf str (show e)))
+
 (defn (:: macroTests Spec)
   (do
-    (let ((:: srcSubseqErr (-> String FinkelException Bool))
-          (= srcSubseqErr str e
-            (isSubsequenceOf str (show e)))))
     (describe "eval-when"
       (do
         (it "should expand to (:begin (:eval-when-compile ...) ...)"
@@ -90,13 +92,13 @@
            (eval-when (:foo :bar :buzz)
              (:: foo Int)
              (= foo 42))
-           (srcSubseqErr "invalid phase")))
+           (subseqErr "invalid phase")))
         (it "throws and exception on non-list phase"
           (expandFailureWith
            (eval-when :compile
              (:: foo Int)
              (= foo 42))
-           (srcSubseqErr "eval-when")))))
+           (subseqErr "eval-when")))))
 
     (describe "eval-and-compile"
       (it "should expand to (eval-when ...)"
@@ -259,7 +261,7 @@
             (expandFailureWith
              (defmacroM m1 "string"
                (return 'True))
-             (srcSubseqErr "defmacroM")))
+             (subseqErr "defmacroM")))
           (it "should detect invalid form"
             (expandFailure
              (defmacroM m1 too many parameters passed)))
@@ -312,7 +314,7 @@
           (expandFailureWith
            (defmacro m1 [arg1 arg2]
              too many body forms)
-           (srcSubseqErr "defmacro")))))
+           (subseqErr "defmacro")))))
 
     (describe "defmacro'"
       (it "expands to (eval-and-compile (...) (defmacro ...))"
@@ -390,13 +392,13 @@
         (it "should detect invalid form"
           (expandFailureWith
            (macroletM)
-           (srcSubseqErr "macroletM")))
+           (subseqErr "macroletM")))
         (it "should detect invalid local macro form"
           (expandFailureWith
            (macroletM ((m1 ()
                          foo bar buzz))
              (m1))
-           (srcSubseqErr "invalid form")))))
+           (subseqErr "invalid form")))))
 
     (describe "macrolet"
       (do
@@ -424,7 +426,7 @@
         (it "should detect invalid form"
           (expandFailureWith
            (macrolet)
-           (srcSubseqErr "macrolet")))))
+           (subseqErr "macrolet")))))
 
     (describe "macro-error"
       (it "should expand to (unsafeFinkelSrcError ...)"
@@ -503,19 +505,19 @@
         (it "should detect invalid form"
           (expandFailureWith
            (defn foo)
-           (srcSubseqErr "defn")))
+           (subseqErr "defn")))
         (it "should fail on invalid signature"
           (expandFailureWith
            (defn (foo (Int) (Int)) (a b)
              (+ a b))
-           (srcSubseqErr "invalid signature")))
+           (subseqErr "invalid signature")))
         (it "should fail on odd number of body forms"
           (expandFailureWith
            (defn (:: foo (-> Int Int))
              0 1
              2 3
              4)
-           (srcSubseqErr "wrong number of forms")))))
+           (subseqErr "wrong number of forms")))))
 
     (describe "defn'"
       (it "should expand to (eval-and-compile (..) (defn ...))"
@@ -629,17 +631,14 @@
             (expandTo (macroexpand-1 42) 42))
 
           (it "should expand to form containing :begin"
-            (lefn [(m1
-                     (Macro (\ form
-                              (return `(:begin
-                                         (:: foo String)
-                                         (= foo ,(show (cadr form))))))))
-                   (my-macros
-                     (mergeMacros
-                      (envMacros defaultFnkEnv)
-                      (makeEnvMacros [(, "m1" m1)])))
-                   (my-env
-                     (defaultFnkEnv {envMacros my-macros}))]
+            (lept [m1 (Macro (\ form
+                               (return `(:begin
+                                          (:: foo String)
+                                          (= foo ,(show (cadr form)))))))
+                   my-macros (mergeMacros
+                              (envMacros defaultFnkEnv)
+                              (makeEnvMacros [(, "m1" m1)]))
+                   my-env (defaultFnkEnv {envMacros my-macros})]
               (expand-form-with-env my-env
                                     shouldBe
                                     macroexpand-1
@@ -731,20 +730,46 @@
              (defmodule Foo
                (bar-buzz-quux
                 (Control.Monad)))
-             (srcSubseqErr "unknown section")))
+             (subseqErr "unknown section")))
           (it "should fail on too few parameters"
             (expandFailure
              (defmodule)))))
 
     (describe "cond-expand"
-      (it "should contain compile time information"
-        (expandSatisfy
-         (cond-expand
-           [(<= 700 :ghc) (== :arch "x86_64") (== :os "linux")
-            "ghc newer than 7.0.0, x86_64-linux"]
-           [otherwise
-            "other"])
-         (\ form
-           (&& (elem (aIntegral (:: (read cProjectVersionInt) Int)) form)
-               (elem (aString NoSourceText arch) form)
-               (elem (aString NoSourceText os) form))))))))
+      (do (it "should contain compile time information"
+            (expandWithPackageDbSatisfy
+             (cond-expand
+               [(<= 700 :ghc) (== :arch "x86_64") (== :os "linux")
+                (:min-version "base" 3 99 99)
+                "ghc newer than 7.0.0, x86_64-linux, base > 3.99.99"]
+               [otherwise
+                "other"])
+             (\ form
+               (&& (elem (aIntegral (:: (read cProjectVersionInt) Int)) form)
+                   (elem (aString NoSourceText arch) form)
+                   (elem (aString NoSourceText os) form)
+                   (elem (aString NoSourceText "other") form)
+
+                   ;; Below test works when using "base-4.x.x" package.
+                   (elem (aIntegral (:: 4 Int)) form)))))
+
+          (it "should fail with non-string package"
+            (expandFailureWith
+             (cond-expand
+               [(:min-version 0xdeadbeaf 1 2 3)
+                "3735928495"]
+               [otherwise
+                "No such package"])
+             (\ e
+               (&& (subseqErr "want package name" e)
+                   (subseqErr "3735928495" e)))))
+          (it "should fail with non-existing package"
+            (expandFailureWith
+             (cond-expand
+               [(:min-version "no-such-package" 2 4 0)
+                "Found no-such-package"]
+               [otherwise
+                "No such package"])
+             (\ e
+               (&& (subseqErr "cannot find package" e)
+                   (subseqErr "no-such-package" e)))))))))

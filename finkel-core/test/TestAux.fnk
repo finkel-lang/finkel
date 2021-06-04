@@ -11,10 +11,12 @@
    expand-form-satisfies
    expand-form-with
    expand-form-with-env
+   expand-form-with-package-db-satisfies
    expandTo
    expandFailure
    expandFailureWith
-   expandSatisfy)
+   expandSatisfy
+   expandWithPackageDbSatisfy)
   (require
    (Finkel.Core.Ghc))
   (import
@@ -26,6 +28,7 @@
    (Test.Hspec [Expectation expectationFailure shouldBe shouldSatisfy])
 
    ;; finkel-kernel
+   (Language.Finkel.Make [initSessionForMake])
    (Language.Finkel.Fnk [(FnkEnv ..)])
 
    ;; finkel-core
@@ -90,6 +93,15 @@
        (either (. expectationFailure (show @ SomeException))
                (flip test out-form))))
 
+(defn (:: expand-form-with-package-db-satisfies
+        (-> Macro Code (-> Code Bool) Expectation))
+  [macro in-form test]
+  (>>= (try (runFnk (do initSessionForMake
+                        (macroFunction macro in-form))
+                    defaultFnkEnv))
+       (either (. expectationFailure (show @ SomeException))
+               (flip shouldSatisfy test))))
+
 ;;; Macros
 
 (defmacro expandTo
@@ -108,3 +120,7 @@
 (defmacro expandSatisfy
   [in test]
   `(expand-form-satisfies ,(car in) ',in ,test))
+
+(defmacro expandWithPackageDbSatisfy
+  [in test]
+  `(expand-form-with-package-db-satisfies ,(car in) ',in ,test))
