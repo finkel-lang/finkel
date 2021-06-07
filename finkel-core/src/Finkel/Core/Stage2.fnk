@@ -768,36 +768,36 @@ and the definition of 'cdadr' is:
 ;;; List and HsList functions
 
 (defn (:: make-list-fn
-        (-> String
-            (-> SrcSpan (-> [(LForm a)] (LForm a)) [Code] b)
+        (-> (-> Code b)
+            (-> (-> [(LForm a)] (LForm a)) [Code] b)
             Code
             b))
-  "Auxiliary function for higher order function. Make a function taking
+  "Auxiliary function for making higher order function. Make a function taking
 `SrcSpan' and a list of `Code' from given arguments."
-  [label f (@ orig (LForm (L l form)))]
+  [g f (@ orig (LForm (L l form)))]
   (case form
-    (List xs) (f l (. LForm (L l) List) xs)
-    (HsList xs) (f l (. LForm (L l) HsList) xs)
-    _ (non-list label orig)))
+    (List xs) (f (. LForm (L l) List) xs)
+    (HsList xs) (f (. LForm (L l) HsList) xs)
+    _ (g orig)))
 %p(INLINE make-list-fn)
 
 (defn (:: map1 (-> (-> Code Code) Code Code))
   "Like `map', but for `Code'.  @map f x@ applies the function @f@ to each
-element of @x@ when the @x@ is `List' or `HsList'. Other @x@ value will throw a
-`NonListvalue' exception.
+element of @x@ when the @x@ is `List' or `HsList'. Otherwise directly applies
+@f@ to @x@.
 
 ==== __Examples__
 
 >>> (map1 (\\ x `(x is ,x)) '(foo bar buzz))
 ((x is foo) (x is bar) (x is buzz))
 >>> (map1 (\\ x `(x is ,x)) 'foo)
-*** Exception: map1: non-list value `foo'"
-  [f] (make-list-fn "map1" (\ _ c (. c (map f)))))
+(x is foo)"
+  [f] (make-list-fn f (\ c (. c (map f)))))
 %p(INLINABLE map1)
 
 (defn (:: reduce (-> (-> Code a a) a Code a))
-  "Like `foldr', but for `Code'. Throws an exception if the second argument was
-not a list.
+  "Like `foldr', but for `Code'. If the second argument was not a list, applies
+the function to the second argument and the initial value.
 
 ==== __Examples__
 
@@ -808,8 +808,8 @@ not a list.
 >>> (reduce + 0 '(1 2 3 4 5))
 15
 >>> (reduce cons nil 'foo)
-*** Exception: reduce: non-list value `foo'"
-  [f z] (make-list-fn "reduce" (\ _ _ (foldr f z))))
+(foo)"
+  [f z] (make-list-fn (flip f z) (\ _ (foldr f z))))
 %p(INLINABLE reduce)
 
 (defn (:: reduce1 (-> (-> Code Code Code) Code Code))
@@ -824,7 +824,7 @@ was not a list.
 ((x is a) (x is b) c)
 >>> (reduce1 cons 'foo)
 *** Exception: reduce1: non-list value `foo'"
-  [f] (make-list-fn "reduce1" (\ _ _ (foldr1 f))))
+  [f] (make-list-fn (non-list "reduce1") (\ _ (foldr1 f))))
 %p(INLINABLE reduce1)
 
 (defn (:: keep (-> (-> Code Bool) Code Code))
@@ -837,7 +837,7 @@ the test result is `False'.
 (b r c d b r)
 >>> (keep (/= 'a) 'foo)
 *** Exception: keep: non-list value `foo'"
-  [test] (make-list-fn "keep" (\ _ c (. c (filter test)))))
+  [test] (make-list-fn (non-list "keep") (\ c (. c (filter test)))))
 %p(INLINABLE keep)
 
 (defn (:: curve (-> Code Code))
@@ -866,11 +866,7 @@ values are kept as-is.
 (c b a)
 >>> (rev 'foo)
 foo"
-  [(LForm (L l x))]
-  (LForm (L l (case x
-                (List xs) (List (reverse xs))
-                (HsList xs) (HsList (reverse xs))
-                _ x))))
+  (make-list-fn id (\ c (. c reverse))))
 %p(INLINABLE rev)
 
 (defn (:: unsnoc (-> Code (, Code Code)))
@@ -887,8 +883,18 @@ foo"
 
 (defn (:: trav1 (=> (Applicative f) (-> (-> Code (f Code)) Code (f Code))))
   "Like `traverse', but for `Code'. Applies given function to the direct element
-of the given `Code'."
-  [f] (make-list-fn "trav1" (\ _ c (. (fmap c) (traverse f)))))
+of the given `Code'.
+
+==== __Examples__
+
+>>> (trav1 (\\ x (>> (print x) (pure x))) '(a (b c) d))
+a
+(b c)
+d
+(a (b c) d)
+>>> (trav1 Just 'foo)
+Just foo"
+  [f] (make-list-fn f (\ c (. (fmap c) (traverse f)))))
 %p(INLINABLE trav1)
 
 (defn (:: omni (-> (-> Code Code) Code Code))
@@ -896,19 +902,16 @@ of the given `Code'."
 
 ==== __Examples__
 
->>> (omni (\\ x (if (== 'foo x) 'bar x)) '(a foo (b foo) [e (foo f)]))
-(a bar (b bar) [e (bar f)])
->>> (omni (\\ x (if (caris 'foo x) (cons 'bar (cdr x)) x)) '(a foo (foo b c) (e foo)))
-(a foo (bar b c) (e foo))
+>>> (omni (\\ x (if (== 'foo x) 'bar x)) '(a foo (foo b c) (d foo)))
+(a bar (bar b c) (d bar))
+>>> (omni (\\ x (if (caris 'foo x) (cons 'bar (cdr x)) x)) '(a foo (foo b c) (d foo)))
+(a foo (bar b c) (d foo))
+>>> (omni (\\ x (if (== x 'foo) 'bar x)) 'foo)
+bar
 >>> (omni (\\ x (if (== x 'foo) 'bar x)) nil)
 nil"
-  [f (@ lform (LForm (L l form)))]
-  (let ((= fs lst
-          (. f LForm (L l) lst (map (omni f)))))
-    (case form
-      (List xs) (fs List xs)
-      (HsList xs) (fs HsList xs)
-      _ (f lform))))
+  [f]
+  (make-list-fn f (\ c (. f c (map (omni f))))))
 %p(INLINABLE omni)
 
 (defn (:: omniM (=> (Monad m) (-> (-> Code (m Code)) Code (m Code))))
@@ -925,13 +928,8 @@ d
 (a (b c) d)
 (a (b c) d)
 "
-  [f (@ lform (LForm (L l form)))]
-  (let ((= fs lst
-          (>=> (traverse (omniM f)) (. f LForm (L l) lst))))
-    (case form
-      (List xs) (fs List xs)
-      (HsList xs) (fs HsList xs)
-      _ (f lform))))
+  [f]
+  (make-list-fn f (\ c (>=> (traverse (omniM f)) (. f c)))))
 %p(INLINABLE omniM)
 
 ;;; Error

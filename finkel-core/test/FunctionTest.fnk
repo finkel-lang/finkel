@@ -240,14 +240,14 @@
       (d "reduce"
          (do (it "returns the original list"
                (== (reduce cons nil '(a b c d e)) '(a b c d e)))
-             (it "should throw exception on non-list"
-               (expectFailure (=== nil (reduce cons nil 'foo))))))
+             (it "should apply given function on non-list"
+               (== (reduce cons nil 'foo) '(foo)))))
 
       (d "reduce1"
          (do (it "returns the original list"
                (== (reduce1 cons '(a b c d e)) '(a b c d e)))
              (it "should throw exception on non-list"
-               (expectFailure (=== nil (reduce1 cons 'foo))))))
+               (expectFailure (shouldBe (reduce1 cons 'foo) nil)))))
 
       (d "map1"
          (do (it "replaces non-symbols"
@@ -258,15 +258,14 @@
                (== (map1 (\ x (if (is-symbol x) x '_))
                          '[foo bar (a b c) buzz 3 "string"])
                    '[foo bar _ buzz _ _]))
-             (it "throws an exception on non-list arg2"
-               (expectFailure
-                (=== nil (map1 (\ x (cons x x)) 'foo))))))
+             (it "apply given function on non-list arg2"
+               (== (map1 (\ x (cons x x)) 'foo) '(foo foo)))))
 
       (d "keep"
          (do (it "removes non atom"
                (== (keep is-atom '(a (b c) d e (f g h))) '(a d e)))
              (it "throws an exception on non-list"
-               (expectFailure (=== nil (keep is-atom '"string"))))))
+               (expectFailure (shouldBe (keep is-atom '"string") nil)))))
 
       (d "rev"
          (do (it "reverses List"
@@ -281,18 +280,22 @@
            (== (unsnoc '(a b c d e)) (, '(a b c d) 'e))))
 
       (d "trav1"
-         (it "should traverse list"
-           (== (trav1 Just '(a b c)) (Just '(a b c)))))
+         (do (it "should traverse list"
+               (== (trav1 Just '(a b c)) (Just '(a b c))))
+             (it "should apply given function on non-list"
+               (== (trav1 Just 'foo) (Just 'foo)))))
 
       (d "omni"
-         (it "should replace `a' to `b'"
-           (== (omni (\ x (if (== 'a x) 'b x))
-                     '(a a (x a x) [y a y] a))
-               '(b b (x b x) [y b y] b))))
+         (do (it "should replace `a' to `b'"
+               (== (omni (\ x (if (== 'a x) 'b x))
+                         '(a a (x a x) [y a y] a))
+                   '(b b (x b x) [y b y] b)))
+             (it "should apply given function on non-list argument"
+               (== (omni (\ x (cons x x)) 'foo) '(foo foo)))))
 
       (d "omniM"
-         (it "should replace `a' to `b'"
-           (shouldReturn
-            (omniM (\ x (>> (print x) (return x)))
-                   '(a a (x a x) [y a y] a))
-            '(a a (x a x) [y a y] a))))))
+         (do (it "should print all elements"
+               (== (omniM Just '(a a (x a x) [y a y] a))
+                    (Just '(a a (x a x) [y a y] a))))
+             (it "should apply given function to non-list argument"
+               (== (omniM Just 'foo) (Just 'foo)))))))
