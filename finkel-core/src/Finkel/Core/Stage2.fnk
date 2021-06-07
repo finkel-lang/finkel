@@ -447,6 +447,11 @@ version of the @ghc@ used during the compilation.
 
 [@:os@]: A `String' value from `System.Info.os'.
 
+[@:(:min-version \"PKGNAME\" V1 V2 V3 ...)@]: An expression resulting as a
+`Bool' value. Compare the version of @PKGNAME@ with the version made from
+integer values @N1@, @V2@, @V3@ and so on. This keyword resembles to the
+@MIN_VERSION@ CPP macro.
+
 ==== __Syntax__
 
 See `cond'.
@@ -462,6 +467,8 @@ Simple usage to show message:
      \"ghc is newer than 8.10.0\"]
     [(== 808 :ghc) (== :arch \"x86_64\") (== :os \"linux\")
      \"ghc version 8.8.x, x86_64-linux\"]
+    [(:min-version \"base\" 4 0 0)
+     \"base version newer than or equals to 4.0.0\"]
     [otherwise
      \"unknown\"]))
 @
