@@ -22,17 +22,18 @@
 
 (:doc "List related exception.")
 (data FinkelListException
-  (NonListValue String))
+  (NonListValue Code String))
 
 (instance (Show FinkelListException)
-  (= show (NonListValue str) str))
+  (= show (NonListValue _ str) str))
 
 (instance (Exception FinkelListException))
 
 (:doc "Throw a `NonListValue' with label and cause.")
 (:: non-list (-> String Code a))
 (= non-list fname what
-  (throw (NonListValue (++ fname ": non-list value `" (show what) "'"))))
+  (let ((= msg (++ fname ": non-list value `" (show what) "'")))
+    (throw (NonListValue what msg))))
 %p(INLINE non-list)
 
 
