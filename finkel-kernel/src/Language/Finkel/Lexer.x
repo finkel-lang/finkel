@@ -165,7 +165,7 @@ $white+  ;
 \,   { tok_unquote }
 
 -- Lambda
-\\ { tok_lambda }
+\\ ~$white* { tok_lambda }
 
 --- Literal values
 \"                         { tok_string }
@@ -583,7 +583,18 @@ tok_doc_group (AlexInput _ s) l =
 {-# INLINABLE tok_doc_group #-}
 
 tok_lambda :: Action
-tok_lambda _ _ = return $ TSymbol $! fsLit "\\"
+tok_lambda inp0@(AlexInput _ buf) l = do
+  let return_lam_sym = return $ TSymbol $! fsLit "\\"
+  if l == 1
+     then return_lam_sym
+     else case alexGetChar inp0 of
+       Just (_, inp1) | Just (c, _) <- alexGetChar inp1 ->
+         -- Decide whether the token is a varsym starting with "\", or lambda
+         -- and argument pattern.
+         if startsVarSym c
+           then return $ TSymbol $! takeUtf8FS l buf
+           else alexSetInput inp1 >> return_lam_sym
+       _ -> error "tok_lambda: panic"
 {-# INLINABLE tok_lambda #-}
 
 -- | Make token symbol.  When the given symbol starts with non-operatator
