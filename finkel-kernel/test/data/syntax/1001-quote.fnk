@@ -31,7 +31,7 @@
     (print '"string")
     (print '42)
     (print '1.23)
-    (print '\c)
+    (print '#'c)
     (print '[1 2 3])
     (print '())
 

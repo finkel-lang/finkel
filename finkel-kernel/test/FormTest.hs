@@ -78,10 +78,10 @@ import           Orphan                       ()
 formTests :: Spec
 formTests = do
   mapM_ readShow
-    [ "foo", "\a", "12345", "6.789", "0.001"
+    [ "foo", "#'a", "12345", "6.789", "0.001"
     , "(foo bar buzz)"
-    , "(\\a \\\\SP \\\\ \"bcd\")"
-    , "[\\\\BEL \\\\BS \\\\FF \\\\LF \\\\CR \\\\HT \\\\VT]"
+    , "(#'a #'\\SP #'\\ \"bcd\")"
+    , "[#'\\BEL #'\\BS #'\\FF #'\\LF #'\\CR #'\\HT #'\\VT]"
     , "[()]"
     , "(1 -2 345 6.789 0.001)" ]
 

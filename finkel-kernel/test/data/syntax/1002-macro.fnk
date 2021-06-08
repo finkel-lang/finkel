@@ -110,7 +110,7 @@
   (= fracmac
     (do (putStrLn (m1 1.1))
         (putStrLn (m1 0.9))
-        (putStrLn (m1 \x)))))
+        (putStrLn (m1 #'x)))))
 
 ;;; Macro returning haskell list.
 (let-macro ((m2 form
