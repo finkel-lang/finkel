@@ -149,7 +149,7 @@ Sample run:
 "
   args
   (do (<- tmp (gensym' "lcasearg"))
-      (pure `(\ ,tmp
+      (pure `(\,tmp
                ,(cons 'case (cons tmp args))))))
 
 (defmacroM case-do
@@ -229,7 +229,7 @@ expands to:
   (let ((= binds0 (car args))
         (= binds1 (if (|| (is-unit binds0) (null binds0))
                     '()
-                    (curve (map1 (\ bind
+                    (curve (map1 (\bind
                                    (if (caris ':: bind)
                                      bind
                                      (cons 'defn (curve bind))))
@@ -360,13 +360,13 @@ Expands to:
                               (== label 'import))
                           (return
                            (: (, 'import
-                                 (map1 (\ es `(import ,@(curve-el es)))
+                                 (map1 (\es `(import ,@(curve-el es)))
                                        payload))
                               acc)))
                          ((|| (== label 'load)
                               (== label 'require))
                           (return
-                           (: (, ':require (map1 (\ es `(:require ,@es))
+                           (: (, ':require (map1 (\es `(:require ,@es))
                                                  payload))
                               acc)))
                          ((|| (== label 'require-and-import)
@@ -375,7 +375,7 @@ Expands to:
                          ((== label 'import-when)
                           (let ((= phases (car payload))
                                 (= body0 (cdr payload))
-                                (= body1 (map1 (\ e `(import ,@(curve-el e)))
+                                (= body1 (map1 (\e `(import ,@(curve-el e)))
                                                body0)))
                             (return (: (, 'eval-when (cons phases body1))
                                        acc))))
@@ -388,7 +388,7 @@ Expands to:
         (let ((= emit add-load-too header
                 (let ((= e1 (maybe nil id (lookup header alist)))
                       (= e2 (maybe nil
-                                   (map1 (\ es `(,header ,@es)))
+                                   (map1 (\es `(,header ,@es)))
                                    (lookup 'require-and-import alist))))
                   (if add-load-too
                     (mappend e1 e2)
@@ -705,7 +705,7 @@ Like `mb_symbol_name', but returns `FastString'"
 (instance (=> (Homoiconic elem) (Listable l)
               (Listable (-> elem l)))
   (= list_ acc
-    (\ x (list_ (: (toCode x) acc)))))
+    (\x (list_ (: (toCode x) acc)))))
 
 (defn (:: list (=> (Listable lst) lst))
   "Make a list from given arguments. This function can take variable number of
@@ -735,7 +735,7 @@ and the definition of 'cdadr' is:
 
 (eval-when [:compile]
   (defn (:: ads [String])
-    (let ((= f (concatMap (\ x [(: #'a x) (: #'d x)]))))
+    (let ((= f (concatMap (\x [(: #'a x) (: #'d x)]))))
       (concat (take 3 (tail (iterate f [[#'a] [#'d]]))))))
 
   (defn (:: cxr-name (-> String Code))
@@ -745,7 +745,7 @@ and the definition of 'cdadr' is:
   (defn (:: doc (-> String Code))
     [xs]
     (let ((= f x (++ "`c" x "r'"))
-          (= g ys (foldr1 (\ y acc (++ y " of " acc))
+          (= g ys (foldr1 (\y acc (++ y " of " acc))
                           (map (. f pure) ys))))
       (toCode (++ "Get the " (g xs) "."))))
 
@@ -792,7 +792,7 @@ element of @x@ when the @x@ is `List' or `HsList'. Otherwise directly applies
 ((x is foo) (x is bar) (x is buzz))
 >>> (map1 (\\ x `(x is ,x)) 'foo)
 (x is foo)"
-  [f] (make-list-fn f (\ c (. c (map f)))))
+  [f] (make-list-fn f (\c (. c (map f)))))
 %p(INLINABLE map1)
 
 (defn (:: reduce (-> (-> Code a a) a Code a))
@@ -809,7 +809,7 @@ the function to the second argument and the initial value.
 15
 >>> (reduce cons nil 'foo)
 (foo)"
-  [f z] (make-list-fn (flip f z) (\ _ (foldr f z))))
+  [f z] (make-list-fn (flip f z) (\_ (foldr f z))))
 %p(INLINABLE reduce)
 
 (defn (:: reduce1 (-> (-> Code Code Code) Code Code))
@@ -824,7 +824,7 @@ was not a list.
 ((x is a) (x is b) c)
 >>> (reduce1 cons 'foo)
 *** Exception: reduce1: non-list value `foo'"
-  [f] (make-list-fn (non-list "reduce1") (\ _ (foldr1 f))))
+  [f] (make-list-fn (non-list "reduce1") (\_ (foldr1 f))))
 %p(INLINABLE reduce1)
 
 (defn (:: keep (-> (-> Code Bool) Code Code))
@@ -837,7 +837,7 @@ the test result is `False'.
 (b r c d b r)
 >>> (keep (/= 'a) 'foo)
 *** Exception: keep: non-list value `foo'"
-  [test] (make-list-fn (non-list "keep") (\ c (. c (filter test)))))
+  [test] (make-list-fn (non-list "keep") (\c (. c (filter test)))))
 %p(INLINABLE keep)
 
 (defn (:: curve (-> Code Code))
@@ -866,7 +866,7 @@ values are kept as-is.
 (c b a)
 >>> (rev 'foo)
 foo"
-  (make-list-fn id (\ c (. c reverse))))
+  (make-list-fn id (\c (. c reverse))))
 %p(INLINABLE rev)
 
 (defn (:: unsnoc (-> Code (, Code Code)))
@@ -894,7 +894,7 @@ d
 (a (b c) d)
 >>> (trav1 Just 'foo)
 Just foo"
-  [f] (make-list-fn f (\ c (. (fmap c) (traverse f)))))
+  [f] (make-list-fn f (\c (. (fmap c) (traverse f)))))
 %p(INLINABLE trav1)
 
 (defn (:: omni (-> (-> Code Code) Code Code))
@@ -911,7 +911,7 @@ bar
 >>> (omni (\\ x (if (== x 'foo) 'bar x)) nil)
 nil"
   [f]
-  (make-list-fn f (\ c (. f c (map (omni f))))))
+  (make-list-fn f (\c (. f c (map (omni f))))))
 %p(INLINABLE omni)
 
 (defn (:: omniM (=> (Monad m) (-> (-> Code (m Code)) Code (m Code))))
@@ -929,7 +929,7 @@ d
 (a (b c) d)
 "
   [f]
-  (make-list-fn f (\ c (>=> (traverse (omniM f)) (. f c)))))
+  (make-list-fn f (\c (>=> (traverse (omniM f)) (. f c)))))
 %p(INLINABLE omniM)
 
 ;;; Error

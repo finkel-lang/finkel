@@ -137,9 +137,9 @@
   [ghc-args hdl in-mv fnk-env]
   (do (<- me myThreadId)
       (forkIOWithUnmask
-       (\ unmask
+       (\unmask
          (catch (unmask (runFnk (eval-loop ghc-args hdl in-mv) fnk-env))
-           (\ e
+           (\e
              (case (fromException e)
                (Just fe) (throwTo me (:: fe FinkelToolException))
                _ (throwTo me e))))))))
@@ -175,12 +175,12 @@
       (<- dflags3 getDynFlags)
 
       ;; Setting the default `DynFlags' for macro expansion.
-      (modifyFnkEnv (\ e (e {envDefaultDynFlags (Just dflags3)})))
+      (modifyFnkEnv (\e (e {envDefaultDynFlags (Just dflags3)})))
 
       ;; Load modules specified from command line, when given.
       (unless (null srcs)
         (handle
-         (\ e
+         (\e
            (lept [err (=<< (. liftIO throwIO FinkelToolException))]
              (cond
                [(<- (Just se) (fromException e))
@@ -219,7 +219,7 @@
   [once-only wrapper-args ghc-opts hdl in-mvar]
   (lefn [(withAsyncHandler [wrapper]
            (handle
-            (\ e
+            (\e
               (case (fromException e)
                 (Just UserInterrupt) (loop wrapper)
                 (Just ThreadKilled) (return ())
@@ -228,7 +228,7 @@
          (throw-async-io (. liftIO throwIO))
          (withErrorHandler
            (handle
-            (\ e
+            (\e
               (cond
                 [(<- (Just se) (fromException e))
                  (fmap Left (make-src-err-message se))]
@@ -258,7 +258,7 @@ context."
   [name]
   (case-do (parseName name)
     (: f _) (modifySession
-             (\ he (he {hsc-IC (setInteractivePrintName (hsc-IC he) f)})))
+             (\he (he {hsc-IC (setInteractivePrintName (hsc-IC he) f)})))
     _ (failFnk "set-print-name: parse error")))
 
 (defn (:: eval-form
@@ -290,7 +290,7 @@ context."
          (imps (map (. (showSDoc dflags) ppr) imports))
          (mdls (++ "; " (intercalate ", " imps)))
          (add-imports [ctx]
-           (foldr (\ mdl (add-gt-ii (mkIIDecl mdl))) ctx imports))]
+           (foldr (\mdl (add-gt-ii (mkIIDecl mdl))) ctx imports))]
     (do (<- ctx0 getContext)
         (setContext (add-imports ctx0))
         (return (Right mdls)))))
@@ -440,11 +440,11 @@ to separate object files from source code files."
 
 (defn (:: make-eval-wrapper (-> [String] (Fnk ForeignHValue)))
   [args]
-  (lept [form `(\ m (do (<- r (System.Environment.withArgs ,args m))
-                        (System.IO.hFlush System.IO.stdout)
-                        (System.IO.hFlush System.IO.stderr)
-                        (Control.Monad.return r)))
-         no-rb-hsc (\ hsc-env
+  (lept [form `(\m (do (<- r (System.Environment.withArgs ,args m))
+                       (System.IO.hFlush System.IO.stdout)
+                       (System.IO.hFlush System.IO.stderr)
+                       (Control.Monad.return r)))
+         no-rb-hsc (\hsc-env
                      (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
                                                       RebindableSyntax)}))]
     (do (<- dflags getDynFlags)

@@ -631,7 +631,7 @@
             (expandTo (macroexpand-1 42) 42))
 
           (it "should expand to form containing :begin"
-            (lept [m1 (Macro (\ form
+            (lept [m1 (Macro (\form
                                (return `(:begin
                                           (:: foo String)
                                           (= foo ,(show (cadr form)))))))
@@ -744,7 +744,7 @@
                 "ghc newer than 7.0.0, x86_64-linux, base > 3.99.99"]
                [otherwise
                 "other"])
-             (\ form
+             (\form
                (&& (elem (aIntegral (:: (read cProjectVersionInt) Int)) form)
                    (elem (aString NoSourceText arch) form)
                    (elem (aString NoSourceText os) form)
@@ -760,7 +760,7 @@
                 "3735928495"]
                [otherwise
                 "No such package"])
-             (\ e
+             (\e
                (&& (subseqErr "want package name" e)
                    (subseqErr "3735928495" e)))))
           (it "should fail with non-existing package"
@@ -770,6 +770,6 @@
                 "Found no-such-package"]
                [otherwise
                 "No such package"])
-             (\ e
+             (\e
                (&& (subseqErr "cannot find package" e)
                    (subseqErr "no-such-package" e)))))))))

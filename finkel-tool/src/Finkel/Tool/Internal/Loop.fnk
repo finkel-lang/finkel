@@ -68,7 +68,7 @@
   [(, path hdl _)]
   (catch (do (hClose hdl)
              (removeFile path))
-    (\ e
+    (\e
       (if (isDoesNotExistError e)
         (return ())
         (throwIO e)))))

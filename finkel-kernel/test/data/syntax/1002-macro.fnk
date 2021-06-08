@@ -11,7 +11,7 @@
 (:eval-when-compile
   (:: define-macro Macro)
   (= define-macro
-    (Macro (\ form
+    (Macro (\form
              (case (unCode form)
                (List (: _ (: name rest)))
                (let ((= __name
@@ -40,7 +40,7 @@
                                  (= ,__name ,arg ,body))
                              (Macro ,__name)))))
               _ (finkelSrcError form "let-macro: malformed macro"))))
-      (Macro (\ form
+      (Macro (\form
                (case (unCode form)
                  (List (: _self (: (LForm (L _l (List ms))) rest)))
                  (do (<- ms' (mapM f ms))

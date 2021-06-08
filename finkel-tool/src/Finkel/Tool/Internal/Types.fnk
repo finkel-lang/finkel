@@ -100,21 +100,21 @@
 
 (instance (Applicative Repl)
   (defn pure [x]
-    (Repl (\ _ (pure x))))
+    (Repl (\_ (pure x))))
   %p(INLINE pure)
 
   (defn <*> [(Repl mf) (Repl mx)]
-    (Repl (\ ref (<*> (mf ref) (mx ref)))))
+    (Repl (\ref (<*> (mf ref) (mx ref)))))
   %p(INLINE <*>))
 
 (instance (Monad Repl)
   (defn >>= [(Repl repl) k]
-    (Repl (\ ref (>>= (repl ref) (. (flip unRepl ref) k)))))
+    (Repl (\ref (>>= (repl ref) (. (flip unRepl ref) k)))))
   %p(INLINE >>=))
 
 (instance (MonadIO Repl)
   (defn liftIO [io]
-    (Repl (\ _ io)))
+    (Repl (\_ io)))
   %p(INLINE liftIO))
 
 ;;; In ghc-8.10.1, `haskeline' switched to use `MonadThrow', `MonadCatch', and
@@ -131,9 +131,9 @@
 
      (instance (MonadCatch Repl)
        (defn catch [(Repl repl) f]
-         (Repl (\ ref
+         (Repl (\ref
                  (catch (repl ref)
-                   (\ e (unRepl (f e) ref))))))
+                   (\e (unRepl (f e) ref))))))
        %p(INLINE catch))
 
      (instance (MonadMask Repl)
@@ -141,33 +141,33 @@
          (lefn [(:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
                 (q [unmask (Repl repl)]
                   (Repl (. unmask repl)))]
-           (Repl (\ ref
+           (Repl (\ref
                    (mask
-                    (\ unmask (unRepl (a (q unmask)) ref)))))))
+                    (\unmask (unRepl (a (q unmask)) ref)))))))
        %p(INLINE mask)
        (defn uninterruptibleMask [a]
          (lefn [(:: q (-> (-> (IO a) (IO a)) (Repl a) (Repl a)))
                 (q [unmask (Repl repl)]
                   (Repl (. unmask repl)))]
-           (Repl (\ ref
+           (Repl (\ref
                    (uninterruptibleMask
-                    (\ unmask
+                    (\unmask
                       (unRepl (a (q unmask)) ref)))))))
        %p(INLINE uninterruptibleMask)
        (defn generalBracket [acquire release use]
-         (Repl (\ ref
+         (Repl (\ref
                  (generalBracket
                   (unRepl acquire ref)
-                  (\ resource exit-case
+                  (\resource exit-case
                     (unRepl (release resource exit-case) ref))
-                  (\ resource
+                  (\resource
                     (unRepl (use resource) ref))))))
        %p(INLINE generalBracket)))]
 
   [otherwise
     (instance (MonadException Repl)
       (defn controlIO [f]
-        (Repl (\ ref
+        (Repl (\ref
                 (controlIO
                  (\ (RunIO run)
                    (lept [run' (RunIO (. (fmap (. Repl const))

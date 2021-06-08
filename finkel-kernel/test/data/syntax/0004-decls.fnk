@@ -205,7 +205,7 @@
   (:: myFmap (-> (-> a b) (f a) (f b))))
 
 (instance (MyFunctor (-> a))
-  (= myFmap f g (\ x (f (g x)))))
+  (= myFmap f g (\x (f (g x)))))
 
 (class (MyProfunctor pf)
   (:: myDimap (-> (-> a b) (-> c d) (pf b c) (pf a d))))
@@ -292,7 +292,7 @@
       (ts2 "BAR")
       (ts3 1 True "buzz")
       (ts3b 2 False "buzzz")
-      (print (ts4 (\ n (* (+ n 1) n))))
+      (print (ts4 (\n (* (+ n 1) n))))
       (ts5 [1 2 3])
       (print (ts6 True [1 2 3]))
       (putStrLn (ts7 False))

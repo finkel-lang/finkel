@@ -102,7 +102,7 @@
          (my-sdist-cmd
            (sdistCommand
             {commandUsage
-             (\ pname
+             (\pname
                (++ "Usage: " pname " sdist [FLAGS] [DIRS]\n"))}))]
     (liftIO
      (case (commandParseArgs my-sdist-cmd False args)

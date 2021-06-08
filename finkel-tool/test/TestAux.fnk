@@ -100,29 +100,29 @@
 
 (instance (Functor TestIO)
   (= fmap f (TestIO m)
-    (TestIO (\ st0 (fmap (\ (, a st) (, (f a) st)) (m st0))))))
+    (TestIO (\st0 (fmap (\ (, a st) (, (f a) st)) (m st0))))))
 
 (instance (Applicative TestIO)
   (= pure x
-    (TestIO (\ st (pure (, x st)))))
+    (TestIO (\st (pure (, x st)))))
   (= <*> (TestIO ft) (TestIO xt)
-    (TestIO (\ st0 (do (<- (, f st1) (ft st0))
-                       (<- (, x st2) (xt st1))
-                       (return (, (f x) st2)))))))
+    (TestIO (\st0 (do (<- (, f st1) (ft st0))
+                      (<- (, x st2) (xt st1))
+                      (return (, (f x) st2)))))))
 
 (instance (Monad TestIO)
   (= return pure)
   (= >>= (TestIO m) k
-    (TestIO (\ st0 (do (<- (, a st1) (m st0))
-                       (unTestIO (k a) st1))))))
+    (TestIO (\st0 (do (<- (, a st1) (m st0))
+                      (unTestIO (k a) st1))))))
 
 (instance (MonadIO TestIO)
   (= liftIO io
-    (TestIO (\ st (fmap (\ x (, x st)) io)))))
+    (TestIO (\st (fmap (\x (, x st)) io)))))
 
 (instance (CLI TestIO)
   (= getString _prompt
-    (TestIO (\ tst
+    (TestIO (\tst
               (case (tst-inputs tst)
                 (: s rest) (lept [tst' (tst {tst-inputs rest})]
                              (pure (, (Just s) tst')))
@@ -130,8 +130,8 @@
 
   (= putString str
     (TestIO
-     (\ st (lept [tst-outputs' (<> (tst-outputs st) [str])]
-             (pure (, () (st {tst-outputs tst-outputs'})))))))
+     (\st (lept [tst-outputs' (<> (tst-outputs st) [str])]
+            (pure (, () (st {tst-outputs tst-outputs'})))))))
 
   ;;; XXX: Does nothing.
   (= handleInterrupt _handler act act)
@@ -140,13 +140,13 @@
   (= withInterrupt act act)
 
   (= exitWith ec
-    (TestIO (\ st (pure (, () (st {tst-exitcode (Just ec)})))))))
+    (TestIO (\st (pure (, () (st {tst-exitcode (Just ec)})))))))
 
 (instance (HasReplState TestIO)
   (= putReplState rst
-    (TestIO (\ st (pure (, () (st {tst-replstate rst}))))))
+    (TestIO (\st (pure (, () (st {tst-replstate rst}))))))
   (= getReplState
-    (TestIO (\ st (pure (, (tst-replstate st) st))))))
+    (TestIO (\st (pure (, (tst-replstate st) st))))))
 
 
 ;;; Repl test environment

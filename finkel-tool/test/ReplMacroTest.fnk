@@ -294,6 +294,6 @@
 (defn (:: remove-if-exist (-> FilePath (IO ())))
   [path]
   (catch (removeFile path)
-    (\ e (if (isDoesNotExistError e)
-             (return ())
-             (throw e)))))
+    (\e (if (isDoesNotExistError e)
+          (return ())
+          (throw e)))))

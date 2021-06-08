@@ -86,7 +86,7 @@ names in older versions.")
 (:doc "Macro to get module name from @ghc@ package.")
 (:: ghc-module-name Macro)
 (= ghc-module-name
-  (Macro (\ form (return (rename (car (cdr form)))))))
+  (Macro (\form (return (rename (car (cdr form)))))))
 
 (:doc "Macro for version compatible import declaration for @ghc@.
 
@@ -97,7 +97,7 @@ This macro is for finkel internal use. The covered modules are those used by
 @finkel-core@ and @finkel-tool@ packages.")
 (:: imports-from-ghc Macro)
 (= imports-from-ghc
-  (Macro (\ form
+  (Macro (\form
            (case (unCode (cdr form))
              (List xs) (pure `(:begin
                                 ,@(map make-import xs)))

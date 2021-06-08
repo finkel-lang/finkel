@@ -59,9 +59,9 @@
   (= getString prompt
     (Control.Exception.catch
      (>> (putStr prompt) (fmap Just getLine))
-     (\ e (if (isEOFError e)
-            (return Nothing)
-            (throwIO e)))))
+     (\e (if (isEOFError e)
+           (return Nothing)
+           (throwIO e)))))
   (= putString putStrLn)
   (= handleInterrupt _handler act act)
   (= withInterrupt act act)

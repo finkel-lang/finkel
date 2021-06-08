@@ -93,31 +93,31 @@
 
 (defn (:: repl-options [OptDescr (-> ReplOption ReplOption)])
   [(Option [] ["help"]
-           (NoArg (\ o (o {repl-mode Help})))
+           (NoArg (\o (o {repl-mode Help})))
            "Show this help and exit")
    (Option [] ["listen"]
-           (OptArg (\ mb-port o
+           (OptArg (\mb-port o
                      (lept [port (mplus (fmap read mb-port) (Just 50321))]
                        (o {repl-mode Run
                            repl-listen-port port})))
                    "PORT")
            "Listen to port (default: 50321)")
    (Option [] ["file"]
-           (ReqArg (\ file o (o {repl-input-path (Just file)}))
+           (ReqArg (\file o (o {repl-input-path (Just file)}))
                    "FILE")
            "File to get input from")
    (Option [] ["prompt"]
-           (ReqArg (\ str o (o {repl-prompt (Just str)}))
+           (ReqArg (\str o (o {repl-prompt (Just str)}))
                    "TEXT")
            "Prompt for input (default: '> ')")
    (Option [] ["quiet"]
-           (NoArg (\ o (o {repl-quiet True
-                           repl-prompt (Just "")
-                           repl-init-form '(:begin)})))
+           (NoArg (\o (o {repl-quiet True
+                          repl-prompt (Just "")
+                          repl-init-form '(:begin)})))
            "Suppress message from REPL")])
 
 (defn (:: repl-fnk-env-options [(OptDescr (-> ReplOption ReplOption))])
-  (fromFnkEnvOptions (\ f o
+  (fromFnkEnvOptions (\f o
                        (o {repl-fnk-env (f (repl-fnk-env o))}))))
 
 (defn (:: do-repl (=> (CLI m) (-> ReplOption (m ()))))
@@ -128,7 +128,7 @@
                             (repl-input-path ro)
                             (repl-listen-port ro)
                             (repl-fnk-env ro)
-                            (maybe mempty (\ p (mempty {prompt-string p}))
+                            (maybe mempty (\p (mempty {prompt-string p}))
                                    (repl-prompt ro))
                             (repl-init-form ro)))))
 
@@ -153,7 +153,7 @@
   "Default macros imported in REPL. These macros always get imported after
 loading compiled modules."
   (macrolet ((the-macros ()
-               `[,@(map (\ mac `(, ,mac ,(make-symbol mac)))
+               `[,@(map (\mac `(, ,mac ,(make-symbol mac)))
                         (++ (exported-macros Finkel.Core)
                             (exported-macros Finkel.Tool.Internal.Macro)))]))
     (makeEnvMacros (the-macros))))

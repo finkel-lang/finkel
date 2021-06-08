@@ -146,10 +146,10 @@ reading the input until successful parse result."
        (hSeek hdl AbsoluteSeek 0)
        (hDuplicateTo hdl stdout)
        (return stdout2))
-   (\ stdout2
+   (\stdout2
      (do (hDuplicateTo stdout2 stdout)
          (hClose stdout2)))
-   (\ _stdout2
+   (\_stdout2
     (do (<- x action)
         (hFlush stdout)
         (hSeek hdl AbsoluteSeek 0)
@@ -161,7 +161,7 @@ reading the input until successful parse result."
   (lefn [(go [acc hdl]
            (catch (do (<- l (hGetLine hdl))
                       (go (: l acc) hdl))
-             (\ e
+             (\e
                (if (isEOFError e)
                  (return (reverse acc))
                  (throwIO e)))))]

@@ -251,8 +251,8 @@
           (return (, dflags fnk-env))))
     (defn cleanup [(, dflags fnk-env)]
       (do (setDynFlags dflags)
-          (modifyFnkEnv (\ e (e {envQualifyQuotePrimitives
-                                 (envQualifyQuotePrimitives fnk-env)})))))
+          (modifyFnkEnv (\e (e {envQualifyQuotePrimitives
+                                (envQualifyQuotePrimitives fnk-env)})))))
     (defn work [(, dflags fnk-env)]
       (do (putFnkEnv (fnk-env {envQualifyQuotePrimitives False}))
           (lept [force-recomp (gopt Opt-ForceRecomp dflags)])
@@ -317,7 +317,7 @@ object code."
 (defn (:: env-context-on-exception (-> (Fnk Code) (Fnk Code)))
   [action]
   (catch action
-    (\ e
+    (\e
       (do (lefn [(print-se [se]
                    (do (<- dflags getSessionDynFlags)
                        (liftIO
@@ -360,7 +360,7 @@ object code."
   [label f forms]
   (case forms
     [] (return '(:begin))
-    [expr] (>>= (f expr) (\ x (return `(System.IO.print ',x))))
+    [expr] (>>= (f expr) (\x (return `(System.IO.print ',x))))
     _ (invalid-form label forms)))
 
 ;;; Mostly translated from `GHCi.UI.infoThing'.
@@ -545,7 +545,7 @@ object code."
              (default-dflags
                (gen-default-dflags dflags))
              ((, ghciFlags others)
-               (partition (\ f (elem (flagSpecFlag f) flgs)) fFlags))
+               (partition (\f (elem (flagSpecFlag f) flgs)) fFlags))
              (flgs
                [Opt_PrintExplicitForalls
                 Opt_PrintExplicitKinds
@@ -615,7 +615,7 @@ object code."
 \\n\
 \COMMANDS:\n\
 \\n" (unlines
-      (map (\ rc
+      (map (\rc
              (lept [pre (unwords (: (rc-name rc) (rc-args rc)))]
                (concat
                 ["  ," (printf "%-14s" pre) " - " (rc-help rc)])))
@@ -742,8 +742,8 @@ paths from import directories."
                             (do do-clear-all
                                 (<- hsc-env-2 getSession)
                                 (modifyFnkEnv
-                                 (\ e (e {envSessionForExpand
-                                          (Just hsc-env-2)}))))))
+                                 (\e (e {envSessionForExpand
+                                         (Just hsc-env-2)}))))))
          (do-clear-all []
            ;; See `loadModule'' in "ghc/GHCi/UI.hs". Clearing various states:
            ;; finder cache, targets, interactive context ... etc.
@@ -766,7 +766,7 @@ paths from import directories."
       [form] (maybe
               (finkelSrcError form (++ "load: not a FilePath: "
                                        (show form)))
-              (\ path
+              (\path
                 ;; Clear current state first. Then find the source file
                 ;; path and compile, load, and link.
                 (env-context-on-exception
@@ -813,7 +813,7 @@ paths from import directories."
     ;; Always using `setSessionDynFlags' for `set' REPL command to support
     ;; `-package' flag.
     (do (lefn [(all-flags
-                 (foldr (\ form acc
+                 (foldr (\form acc
                           (case (mb-symbol-name form)
                             (Just name) (: name acc)
                             _ acc))
@@ -847,9 +847,9 @@ paths from import directories."
                    (hsc-env {hsc-dflags dflags2
                              hsc-IC ic2})))])
         (modifyFnkEnv
-         (\ e (e {envDefaultDynFlags (Just dflags2)
-                  envSessionForExpand (fmap update-session-for-expand
-                                            (envSessionForExpand e))})))
+         (\e (e {envDefaultDynFlags (Just dflags2)
+                 envSessionForExpand (fmap update-session-for-expand
+                                           (envSessionForExpand e))})))
         (return '(:begin)))
     _ (finkelSrcError nil "set: empty form")))
 

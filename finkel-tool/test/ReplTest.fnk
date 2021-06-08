@@ -170,12 +170,12 @@
                             _ (throwM ae))))]
                (shouldReturn (do-repl act) 42)))
            (it "should throw exception from mask when unmasked"
-             (lept [act (mask (\ unmask
+             (lept [act (mask (\unmask
                                 (unmask throw-sof-on-no-input)))]
                (shouldThrow (do-repl act) anyException)))
            (it "should throw exception from uninterruptibleMask when unmasked"
              (lept [act (uninterruptibleMask
-                         (\ unmask
+                         (\unmask
                            (unmask throw-sof-on-no-input)))]
                (shouldThrow (do-repl act) anyException))))]
       [otherwise
@@ -261,22 +261,19 @@
 
     ;; Exported macros
     (satisfy '(exported-macros Finkel.Core)
-             (\ result
-               (case result
-                 (Right str) (isSubsequenceOf "defmacro" str)
-                 _ False)))
+             (lcase
+               (Right str) (isSubsequenceOf "defmacro" str)
+               _ False))
 
     ;; Errors
     (satisfy 'buzz
-             (\ result
-               (case result
-                 (Left str) (isSubsequenceOf "Variable not in scope: buzz" str)
-                 _ False)))
+             (lcase
+               (Left str) (isSubsequenceOf "Variable not in scope: buzz" str)
+               _ False))
     (satisfy '(= f a (+ a 1) (+ a 2))
-             (\ result
-               (case result
-                 (Left str) (isSubsequenceOf "syntax error on input" str)
-                 _ False)))
+             (lcase
+               (Left str) (isSubsequenceOf "syntax error on input" str)
+               _ False))
 
     (ng '(head [])
         "*** Exception: Prelude.head: empty list")))
@@ -313,12 +310,12 @@
                (return (, conn tid))))
          (with-retry [n act]
            (ControlException.catch act
-                                   (\ e
+                                   (\e
                                      (if (< 0 n)
-                                         (do yield
-                                             short-pause
-                                             (with-retry (- n 1) act))
-                                         (throwIO (:: e IOException))))))
+                                       (do yield
+                                           short-pause
+                                           (with-retry (- n 1) act))
+                                       (throwIO (:: e IOException))))))
          (release [(, conn tid)]
            (do (sendAll conn ",quit")
                (<- _msg (recv conn 1024))
@@ -338,5 +335,5 @@
          (listener-test
            (describe "listener"
              (it "evaluates a form sent from connected client"
-               (\ args (shouldReturn (work args) "42")))))]
+               (\args (shouldReturn (work args) "42")))))]
     (before acquire (after release listener-test))))

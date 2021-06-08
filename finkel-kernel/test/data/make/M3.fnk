@@ -9,7 +9,7 @@
 
 (:: greet Macro)
 (= greet
-  (Macro (\ form
+  (Macro (\form
            (case (unCode form)
              (List [_ body]) (return `(putStrLn ,body))
              _ (finkelSrcError form "greet: malformed body")))))

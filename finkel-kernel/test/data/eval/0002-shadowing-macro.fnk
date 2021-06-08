@@ -4,7 +4,7 @@
 ;;; to macro with `with-macro' and locally declared function with `let'.
 
 (:with-macro ((= foo
-                (Macro (\ form
+                (Macro (\form
                          (case form
                            (LForm (L _ (List [_ body])))
                            (return `(++ "with-macro: " ,body))
@@ -50,12 +50,12 @@
 
            ;; Bind `foo' to lambda argument.
            (== (let ((= f2
-                       (\ foo (foo "bar"))))
+                       (\foo (foo "bar"))))
                  (f2 (++ "let: ")))
                "let: bar")
 
            ;; Bind `foo' in do-notation.
-           (== (do (<- foo (return (\ x (Just (++ "do: " x)))))
+           (== (do (<- foo (return (\x (Just (++ "do: " x)))))
                    (foo "bar"))
                (Just "do: bar"))
 
@@ -63,7 +63,7 @@
            ;; of `foo' is from `with-macro', and the second use is
            ;; locally bounded function.
            (== (do (<- x (return (foo "bar")))
-                   (<- foo (return (\ x (++ "do: " x))))
+                   (<- foo (return (\x (++ "do: " x))))
                    (return (, x (foo "buzz"))))
                (Just (, "with-macro: bar" "do: buzz")))
 

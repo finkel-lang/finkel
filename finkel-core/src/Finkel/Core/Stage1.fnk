@@ -49,7 +49,7 @@
 
 (:with-macro ((= eval-when-compile-and-load
                 (Macro
-                 (\ form
+                 (\form
                    (case (unCode form)
                      (List (: _ rest)) (return `(:begin
                                                   (:eval-when-compile ,@rest)
@@ -225,14 +225,14 @@ See 'eval_when'.")
 
 (:: subst-gensyms (-> [(, Atom Atom)] Code Code))
 (= subst-gensyms kvs
-  (fmap (\ x (case (lookup x kvs)
-               (Just y) y
-               Nothing  x))))
+  (fmap (\x (case (lookup x kvs)
+              (Just y) y
+              Nothing  x))))
 %p(INLINE subst-gensyms)
 
 (:: replace-hyphens (-> String String))
 (= replace-hyphens
-  (map (\ x (if (== x #'-) #'_ x))))
+  (map (\x (if (== x #'-) #'_ x))))
 %p(INLINE replace-hyphens)
 
 (:: acc-gensym-names (-> [(, Atom Atom)] Atom (Fnk [(, Atom Atom)])))
@@ -398,7 +398,7 @@ Temporary macros can refer other temporary macros:
 @
 ")
 (define-macro macrolet form
-  (make-macrolet-body "macrolet" form (\ body `(return ,body))))
+  (make-macrolet-body "macrolet" form (\body `(return ,body))))
 
 (:doc "A macro similar to 'defmacro', but the body expression need to be a value
 of type 'Fnk' 'Code'. This macro has full access to the 'Fnk' environment in
@@ -526,7 +526,7 @@ Expansions of /m3/:
 (do (print False) (print #'x) (print \"bar\"))
 ")
 (define-macro defmacro form
-  (make-defmacro-body "defmacro" form (\ x `(return ,x))))
+  (make-defmacro-body "defmacro" form (\x `(return ,x))))
 
 (define-macro defmacro'
   "Variant of 'defmacro', wrapped in 'eval_and_compile'.

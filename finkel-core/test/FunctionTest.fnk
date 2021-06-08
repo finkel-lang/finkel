@@ -139,7 +139,7 @@
 
       (d "filtering pair"
          (it "should be pair"
-           (property (\ x
+           (property (\x
                        (or [(&& (is-atom x) (not (is-pair x)))
                             (&& (== nil x) (not (is-pair x)))
                             (&& (is-hslist x) (not (is-pair x)))
@@ -147,7 +147,7 @@
 
       (d "filtering string"
          (it "should be AString"
-           (property (\ x
+           (property (\x
                        (==> (is-string (toCode x))
                             (case x
                               (AString _ _) True
@@ -155,7 +155,7 @@
 
       (d "filtering char"
          (it "should be AChar"
-           (property (\ x
+           (property (\x
                        (==> (is-char (toCode x))
                             (case x
                               (AChar _ _) True
@@ -163,7 +163,7 @@
 
       (d "filtering integer"
          (it "should be AInteger"
-           (property (\ x
+           (property (\x
                        (==> (is-integer (toCode x))
                             (case x
                               (AInteger _) True
@@ -171,7 +171,7 @@
 
       (d "filtering fractional"
          (it "should be AFractional"
-           (property (\ x
+           (property (\x
                        (==> (is-fractional (toCode x))
                             (case x
                               (AFractional _) True
@@ -179,7 +179,7 @@
 
       (d "filtering ()"
          (it "should be AUnit"
-           (property (\ x
+           (property (\x
                        (==> (is-unit (toCode x))
                             (case x
                               AUnit True
@@ -251,15 +251,15 @@
 
       (d "map1"
          (do (it "replaces non-symbols"
-               (== (map1 (\ x (if (is-symbol x) x '_))
+               (== (map1 (\x (if (is-symbol x) x '_))
                          '(foo bar (a b c) buzz 3 "string"))
                    '(foo bar _ buzz _ _)))
              (it "replaces non-symbols in HsList"
-               (== (map1 (\ x (if (is-symbol x) x '_))
+               (== (map1 (\x (if (is-symbol x) x '_))
                          '[foo bar (a b c) buzz 3 "string"])
                    '[foo bar _ buzz _ _]))
              (it "apply given function on non-list arg2"
-               (== (map1 (\ x (cons x x)) 'foo) '(foo foo)))))
+               (== (map1 (\x (cons x x)) 'foo) '(foo foo)))))
 
       (d "keep"
          (do (it "removes non atom"
@@ -287,11 +287,11 @@
 
       (d "omni"
          (do (it "should replace `a' to `b'"
-               (== (omni (\ x (if (== 'a x) 'b x))
+               (== (omni (\x (if (== 'a x) 'b x))
                          '(a a (x a x) [y a y] a))
                    '(b b (x b x) [y b y] b)))
              (it "should apply given function on non-list argument"
-               (== (omni (\ x (cons x x)) 'foo) '(foo foo)))))
+               (== (omni (\x (cons x x)) 'foo) '(foo foo)))))
 
       (d "omniM"
          (do (it "should print all elements"

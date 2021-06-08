@@ -54,15 +54,15 @@
 
 (defn (:: run-opts [(OptDescr (-> RunOption RunOption))])
   [(Option [] ["help"]
-           (NoArg (\ o (o {ro-help True})))
+           (NoArg (\o (o {ro-help True})))
            "Show this help and exit")
    (Option [] ["main"]
-           (ReqArg (\ name o (o {ro-main name}))
+           (ReqArg (\name o (o {ro-main name}))
                    "NAME")
            "Name of the function to run (default: main)")])
 
 (defn (:: run-fnk-env-opts [(OptDescr (-> RunOption RunOption))])
-  (fromFnkEnvOptions (\ f o (o {ro-fnk-env (f (ro-fnk-env o))}))))
+  (fromFnkEnvOptions (\f o (o {ro-fnk-env (f (ro-fnk-env o))}))))
 
 (defn (:: print-run-help (=> (CLI m) (m ())))
   (do (<- me (liftIO getProgName))

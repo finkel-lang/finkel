@@ -62,11 +62,11 @@
 
 (defn (:: eval-opts [(OptDescr (-> EvalOption EvalOption))])
   [(Option [] ["help"]
-           (NoArg (\ o (o {eo-help True})))
+           (NoArg (\o (o {eo-help True})))
            "Show this help and exit")])
 
 (defn (:: eval-fnk-env-opts [(OptDescr (-> EvalOption EvalOption))])
-  (fromFnkEnvOptions (\ f o (o {eo-fnk-env (f (eo-fnk-env o))}))))
+  (fromFnkEnvOptions (\f o (o {eo-fnk-env (f (eo-fnk-env o))}))))
 
 (defn (:: print-eval-help (=> (CLI m) (m ())))
   (do (<- me (liftIO getProgName))

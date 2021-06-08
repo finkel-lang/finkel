@@ -6,7 +6,7 @@
 
 (:eval-when-compile
   (:: m1 Macro)
-  (= m1 (Macro (\ _ (return `(putStrLn "From m1"))))))
+  (= m1 (Macro (\_ (return `(putStrLn "From m1"))))))
 
 (:: main (IO ()))
 (= main (m1))

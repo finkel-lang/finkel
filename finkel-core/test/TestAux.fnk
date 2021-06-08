@@ -79,7 +79,7 @@
 
 (defn (:: expand-form-satisfies (-> Macro Code (-> Code Bool) Expectation))
   [macro in-form test]
-  (expand-form-with (\ a _ (shouldSatisfy a test)) macro in-form nil))
+  (expand-form-with (\a _ (shouldSatisfy a test)) macro in-form nil))
 
 (defn (:: expand-form-with (-> (-> Code Code Expectation)
                                Macro Code Code Expectation))

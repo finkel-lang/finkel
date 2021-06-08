@@ -32,8 +32,14 @@
 
 ;;; Calls `lam1' defined above.
 (= lam2
-  (print (lam1 (\ a b
-                 (* a (+ a b))))))
+  (>>
+   ;; Lambda WITH spaces between '\' and the first argument.
+   (print (lam1 (\ a b
+                  (* a (+ a b)))))
+
+   ;; Lambda WITHOUT spaces between '\' and the first argument.
+   (print (lam1 (\a b
+                  (* a (+ a b)))))))
 
 (= lamexprs
   lam2)
@@ -141,7 +147,7 @@
         (= f x y
           (+ x y))
         (:: g (-> Int Int))
-        (= g (\ x (* x 2))))
+        (= g (\x (* x 2))))
     (g (f n a))))
 
 ;;; Using non-reserved special value names (e.g. `as', `hiding' ...).
@@ -309,7 +315,7 @@
          (t316a (- n 2)))))
 
 (= t316b xs
-  (print (map (:: (\ x (+ x 1)) (=> (Num a) (-> a a))) xs)))
+  (print (map (:: (\x (+ x 1)) (=> (Num a) (-> a a))) xs)))
 
 (= tsigexprs
   (do (print (t316a 10))
