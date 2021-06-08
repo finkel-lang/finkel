@@ -229,9 +229,9 @@ function:
 Lambda
 ^^^^^^
 
-Lambda expression starts with ``\``. At least one space after ``\`` is
-mandatory. The last form in the lambda expression the body expression
-of entire lambda abstraction, others forms are argument patterns:
+Lambda expression starts with ``\``. The last form in the lambda expression the
+body expression of entire lambda abstraction, others forms are argument
+patterns:
 
 .. literalinclude:: ../include/language-syntax/expr/lambda.fnk
    :language: finkel
