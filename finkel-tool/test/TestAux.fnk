@@ -61,20 +61,20 @@
 ;;; Test IO
 
 (data TestIOState
-  (TestIOState {tst-inputs [String]
-                tst-outputs [String]
-                tst-exitcode (Maybe ExitCode)
-                tst-replstate ReplState}))
+  (TestIOState {(:: tst-inputs [String])
+                (:: tst-outputs [String])
+                (:: tst-exitcode (Maybe ExitCode))
+                (:: tst-replstate ReplState)}))
 
 (instance (Monoid TestIOState)
   (= mempty
     emptyTestIOState)
   (= mappend s1 s2
     (TestIOState
-     {tst-inputs (on mappend tst-inputs s1 s2)
-      tst-outputs (on mappend tst-outputs s1 s2)
-      tst-exitcode (mplus (tst-exitcode s2) (tst-exitcode s1))
-      tst-replstate (on mappend tst-replstate s1 s2)})))
+     {(= tst-inputs (on mappend tst-inputs s1 s2))
+      (= tst-outputs (on mappend tst-outputs s1 s2))
+      (= tst-exitcode (mplus (tst-exitcode s2) (tst-exitcode s1)))
+      (= tst-replstate (on mappend tst-replstate s1 s2))})))
 
 (cond-expand
   [(:min-version "base" 4 11 0)
@@ -84,19 +84,19 @@
    (:begin)])
 
 (defn (:: emptyTestIOState TestIOState)
-  (TestIOState {tst-inputs []
-                tst-outputs []
-                tst-exitcode Nothing
-                tst-replstate initial-repl-state}))
+  (TestIOState {(= tst-inputs [])
+                (= tst-outputs [])
+                (= tst-exitcode Nothing)
+                (= tst-replstate initial-repl-state)}))
 
 ;;; Newtype wrapper to test IO actions, combination of TestIOState state
 ;;; monad and IO.
 (newtype (TestIO a)
-  (TestIO {unTestIO (-> TestIOState (IO (, a TestIOState)))}))
+  (TestIO {(:: unTestIO (-> TestIOState (IO (, a TestIOState))))}))
 
 (defn (:: runTestIO (-> (TestIO a) [String] (IO (, a TestIOState))))
   [test-io inputs]
-  (unTestIO test-io (mempty {tst-inputs inputs})))
+  (unTestIO test-io (mempty {(= tst-inputs inputs)})))
 
 (instance (Functor TestIO)
   (= fmap f (TestIO m)
@@ -124,14 +124,14 @@
   (= getString _prompt
     (TestIO (\tst
               (case (tst-inputs tst)
-                (: s rest) (lept [tst' (tst {tst-inputs rest})]
+                (: s rest) (lept [tst' (tst {(= tst-inputs rest)})]
                              (pure (, (Just s) tst')))
                 [] (pure (, Nothing tst))))))
 
   (= putString str
     (TestIO
      (\st (lept [tst-outputs' (<> (tst-outputs st) [str])]
-            (pure (, () (st {tst-outputs tst-outputs'})))))))
+            (pure (, () (st {(= tst-outputs tst-outputs')})))))))
 
   ;;; XXX: Does nothing.
   (= handleInterrupt _handler act act)
@@ -140,11 +140,11 @@
   (= withInterrupt act act)
 
   (= exitWith ec
-    (TestIO (\st (pure (, () (st {tst-exitcode (Just ec)})))))))
+    (TestIO (\st (pure (, () (st {(= tst-exitcode (Just ec))})))))))
 
 (instance (HasReplState TestIO)
   (= putReplState rst
-    (TestIO (\st (pure (, () (st {tst-replstate rst}))))))
+    (TestIO (\st (pure (, () (st {(= tst-replstate rst)}))))))
   (= getReplState
     (TestIO (\st (pure (, (tst-replstate st) st))))))
 
@@ -153,11 +153,11 @@
 
 (data EvalTestFns
   (EvalTestFns
-   {etf-ok (-> Code String Spec)
-    etf-ng (-> Code String Spec)
-    etf-satisfy (-> Code (-> Result Bool) Spec)
-    etf-cleanup (IO ())
-    etf-tid ThreadId}))
+   {(:: etf-ok (-> Code String Spec))
+    (:: etf-ng (-> Code String Spec))
+    (:: etf-satisfy (-> Code (-> Result Bool) Spec))
+    (:: etf-cleanup (IO ()))
+    (:: etf-tid ThreadId)}))
 
 (defn (:: if-ghc-package-path-is-set (=> (MonadIO m) (-> (m a) (m a) (m a))))
   "Perform the first action if @GHC_PACKAGE_PATH@ is set in environment
@@ -204,11 +204,11 @@
                    (cleanup-repl resources)))])
       (putMVar in-mv (Input Connection '(:begin) out-mv))
       (<- _ (takeMVar out-mv))
-      (return (EvalTestFns {etf-ok ok
-                            etf-ng ng
-                            etf-satisfy satisfy
-                            etf-cleanup cleanup
-                            etf-tid etid}))))
+      (return (EvalTestFns {(= etf-ok ok)
+                            (= etf-ng ng)
+                            (= etf-satisfy satisfy)
+                            (= etf-cleanup cleanup)
+                            (= etf-tid etid)}))))
 
 (defn (:: quietly (-> (IO a) (IO a)))
   (hSilence [stderr stdout]))

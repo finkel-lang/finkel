@@ -135,9 +135,9 @@ mollit anim id est laborum.")
 
 (data (D3 a)
   (:doc "Documentation for 'D3a'.")
-  (D3a {d3_f1 Int (:doc^ "Documentation for 'd3_f1' field.")
+  (D3a {(:: d3_f1 Int) (:doc^ "Documentation for 'd3_f1' field.")
 
-        d3_f2 a (:doc^ "Documentation for 'd3_f2' field.
+        (:: d3_f2 a) (:doc^ "Documentation for 'd3_f2' field.
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
 tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
@@ -146,7 +146,7 @@ commodo consequat. Duis aute irure dolor in reprehenderit in voluptate
 velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint
 occaecat cupidatat non proident, sunt in culpa qui officia deserunt
 mollit anim id est laborum.")
-        (d3_f3 d3_f4) a
+        (:: d3_f3 d3_f4 a)
         (:doc^ "Documentation for 'd3_f3' and 'd3_f4' fields.")})
 
   (:doc "Documentation for 'D3b'.")
@@ -159,9 +159,9 @@ mollit anim id est laborum.")
 (data (D4 a)
   (:doc "Documentation for `D4a'.")
   (D4a {(:doc "Documentation for `d4_f1'.")
-        d4-f1 Int
+        (:: d4-f1 Int)
         (:doc "Documentation for `d4_f2' and `d4_f3'.")
-        (d4-f2 d4-f3) a})
+        (:: d4-f2 d4-f3 a)})
   (:doc "Documentation for `D4b'")
   D4b
   (deriving Eq Show))

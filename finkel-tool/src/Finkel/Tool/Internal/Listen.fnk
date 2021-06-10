@@ -40,8 +40,8 @@
 (defn (:: listener (-> PortNumber (MVar Input) (IO ())))
   [pnum mvar]
   (withSocketsDo
-   (lefn [(hints (defaultHints {addrFlags [AI_PASSIVE]
-                                addrSocketType Stream}))
+   (lefn [(hints (defaultHints {(= addrFlags [AI_PASSIVE])
+                                (= addrSocketType Stream)}))
           (start-loop [addr]
             (do (<- sock (socket (addrFamily addr)
                                  (addrSocketType addr)

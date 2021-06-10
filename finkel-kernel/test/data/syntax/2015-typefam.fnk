@@ -106,7 +106,7 @@
   (:: lookupKey (-> (Key v) v (Maybe Bool))))
 
 (newtype IBAL
-  (IBAL {unIBAL [(, Int Bool)]}))
+  (IBAL {(:: unIBAL [(, Int Bool)])}))
 
 (instance (IsBoolMap IBAL)
   (= lookupKey k (. (lookup k) unIBAL)))

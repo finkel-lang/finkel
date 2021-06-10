@@ -12,10 +12,11 @@
     (concat ["(AnyShow " (show a) ")"])))
 
 (data AnyShow2
-  (forall a b (=> (Show a) (Show b) (AnyShow2 {as2a a as2b b}))))
+  (forall a b (=> (Show a) (Show b)
+                  (AnyShow2 {(:: as2a a) (:: as2b b)}))))
 
 (instance (Show AnyShow2)
-  (= show (AnyShow2 {as2a a as2b b})
+  (= show (AnyShow2 {(= as2a a) (= as2b b)})
     (concat ["(AnyShow2 " (show a) " " (show b) ")"])))
 
 (data (AnyShow3 a)

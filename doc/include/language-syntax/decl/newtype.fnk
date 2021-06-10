@@ -1,1 +1,1 @@
-(newtype N (N {unN Int})) ; Finkel
+(newtype N (N {(:: unN Int)})) ; Finkel

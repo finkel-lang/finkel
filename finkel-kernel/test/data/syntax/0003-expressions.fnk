@@ -270,23 +270,23 @@
 ;;; 3.15 Datatypes with Field Labels
 
 (data R1
-  (Con1 {field1 Int
-         field2 Bool})
+  (Con1 {(:: field1 Int)
+         (:: field2 Bool)})
   (deriving Eq Show))
 
 (:: mkR1 (-> Int (-> Bool R1)))
 (= mkR1 a b
-  (Con1 {field1 a field2 b}))
+  (Con1 {(= field1 a) (= field2 b)}))
 
 (:: fe_01 (IO ()))
 (= fe_01
   (do (let ((:: r1 r2 R1)
-            (= r1 (Con1 {field2 False
-                         field1 42}))
-            (= r2 (r1 {field1 (* (field1 r1) 2)}))
-            (= r3 ((mkR1 21 True) {field1 12}))
-            (= as (r1 {field1 (* (field1 r1) 2)}))
-            (= bs (as {field1 (* (field1 as) 2)}))))
+            (= r1 (Con1 {(= field2 False)
+                         (= field1 42)}))
+            (= r2 (r1 {(= field1 (* (field1 r1) 2))}))
+            (= r3 ((mkR1 21 True) {(= field1 12)}))
+            (= as (r1 {(= field1 (* (field1 r1) 2))}))
+            (= bs (as {(= field1 (* (field1 as) 2))}))))
       (print r1)
       (print r2)
       (print r3)
@@ -296,9 +296,9 @@
 (:: fe_02 (IO ()))
 (= fe_02
   (do (let ((:: as bs R1)
-            (= as (Con1 {field2 True
-                         field1 3}))
-            (= bs (as {field1 (* (field1 as) 2)}))))
+            (= as (Con1 {(= field2 True)
+                         (= field1 3)}))
+            (= bs (as {(= field1 (* (field1 as) 2))}))))
       (print as)
       (print bs)))
 
@@ -310,9 +310,9 @@
 
 (= t316a n
   (if (< n (:: 2 Int))
-      n
-      (+ (t316a (- n 1))
-         (t316a (- n 2)))))
+    n
+    (+ (t316a (- n 1))
+       (t316a (- n 2)))))
 
 (= t316b xs
   (print (map (:: (\x (+ x 1)) (=> (Num a) (-> a a))) xs)))
@@ -494,7 +494,7 @@
 
 (= lfp2 r1
   (case r1
-    (Con1 {field1 i field2 b}) (if b (* i 7) i)))
+    (Con1 {(= field1 i) (= field2 b)}) (if b (* i 7) i)))
 
 (= patexprs5
   (do (print (lfp1 Nothing))

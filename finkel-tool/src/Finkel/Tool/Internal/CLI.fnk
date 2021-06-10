@@ -101,9 +101,9 @@
 ;;; Data type to wrap an IO action taking string arguments with name and
 ;;; description.
 (data Command
-  (Command {cmd-name String
-            cmd-descr String
-            cmd-act (-> [String] (IO ()))}))
+  (Command {(:: cmd-name String)
+            (:: cmd-descr String)
+            (:: cmd-act (-> [String] (IO ())))}))
 
 (defn (:: find-command (-> [Command] String (Maybe Command)))
   "Find the command by command name."

@@ -55,8 +55,8 @@
 
 ;;; Repl state type to hold intermediate line-wise inputs.
 (data ReplState
-  (ReplState {pending-input (Maybe StringBuffer)
-              prompt-string String})
+  (ReplState {(:: pending-input (Maybe StringBuffer))
+              (:: prompt-string String)})
   (deriving Show))
 
 (instance (Eq ReplState)
@@ -67,9 +67,9 @@
 (instance (Monoid ReplState)
   (defn mempty initial-repl-state)
   (defn mappend [r1 r2]
-    (where (ReplState {pending-input (on unsafeAppendStringBuffers
-                                         pending-input r1 r2)
-                       prompt-string (prompt-string r2)})
+    (where (ReplState {(= pending-input (on unsafeAppendStringBuffers
+                                            pending-input r1 r2))
+                       (= prompt-string (prompt-string r2))})
       ;; Note the use of `inlinePerformIO'.
       (= unsafeAppendStringBuffers mb-s1 mb-s2
         (| ((<- (Just s1) mb-s1) (<- (Just s2) mb-s2)
@@ -86,12 +86,12 @@
    (:begin)])
 
 (defn (:: initial-repl-state ReplState)
-  (ReplState {pending-input Nothing
-              prompt-string "> "}))
+  (ReplState {(= pending-input Nothing)
+              (= prompt-string "> ")}))
 
 ;;; Newtype wrapper for REPL prompt.
 (newtype (Repl a)
-  (Repl {unRepl (-> (IORef ReplState) (IO a))}))
+  (Repl {(:: unRepl (-> (IORef ReplState) (IO a)))}))
 
 (instance (Functor Repl)
   (defn fmap [f (Repl repl)]

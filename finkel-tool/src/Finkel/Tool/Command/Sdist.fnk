@@ -91,7 +91,7 @@
               ;; Until Cabal 3.x, seems like the "sDistDistPref" field was set
               ;; by "configure" command, setting it manually.
               (do (<- pref (findDistPrefOrDefault (sDistDistPref flags)))
-                  (pure (flags {sDistDistPref (toFlag pref)})))]))
+                  (pure (flags {(= sDistDistPref (toFlag pref))})))]))
          (run-sdist [pd flags]
            (lept [sufs (: finkelPPHandler knownSuffixHandlers)]
              (cond-expand
@@ -101,9 +101,9 @@
                 (sdist pd Nothing flags srcPref sufs)])))
          (my-sdist-cmd
            (sdistCommand
-            {commandUsage
-             (\pname
-               (++ "Usage: " pname " sdist [FLAGS] [DIRS]\n"))}))]
+            {(= commandUsage
+               (\pname
+                 (++ "Usage: " pname " sdist [FLAGS] [DIRS]\n")))}))]
     (liftIO
      (case (commandParseArgs my-sdist-cmd False args)
        (CommandHelp f) (>>= getProgName (. putStrLn f))

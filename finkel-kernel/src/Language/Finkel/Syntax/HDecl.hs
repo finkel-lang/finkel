@@ -263,9 +263,8 @@ b_recFieldsD :: [HConDeclField] -> HConDeclDetails
 b_recFieldsD = RecCon . mkLocatedList
 {-# INLINABLE b_recFieldsD #-}
 
-b_recFieldD :: [Code] -> HType -> Maybe LHsDocString
-            -> Builder HConDeclField
-b_recFieldD names ty mb_doc = do
+b_recFieldD :: Maybe LHsDocString -> ([Code], HType) -> Builder HConDeclField
+b_recFieldD mb_doc (names, ty) = do
   let f (LForm (L l form)) =
         case form of
           Atom (ASymbol name) ->

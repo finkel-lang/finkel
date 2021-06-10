@@ -87,8 +87,8 @@
       (mapM_ run-it files)))
 
 (data (Parsers a)
-  (Parsers {hs-parser (P a)
-            fnk-parser (Builder a)}))
+  (Parsers {(:: hs-parser (P a))
+            (:: fnk-parser (Builder a))}))
 
 (defn (:: parser-test
         (=> (Outputable a) (-> (Parsers a) FilePath (IO ()))))

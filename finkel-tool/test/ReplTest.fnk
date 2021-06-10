@@ -104,8 +104,8 @@
 ;;; Internal
 
 (defn (:: replStateTests Spec)
-  (do (lept [rs1 (mempty {pending-input (Just "(foo")})
-             rs2 (mempty {pending-input (Just " bar)")})])
+  (do (lept [rs1 (mempty {(= pending-input (Just "(foo"))})
+             rs2 (mempty {(= pending-input (Just " bar)"))})])
       (describe "Show instance"
         (it "should show pending inputs"
           (shouldBe
@@ -218,7 +218,7 @@
              (killThread tid)))))))
 
 (defn (:: evalTests (-> EvalTestFns Spec))
-  [(EvalTestFns {etf-ok ok etf-ng ng etf-satisfy satisfy})]
+  [(EvalTestFns {(= etf-ok ok) (= etf-ng ng) (= etf-satisfy satisfy)})]
   (do
     ;; Statements and declarations
     (ok '(+ 10 32) "42")
@@ -279,7 +279,7 @@
         "*** Exception: Prelude.head: empty list")))
 
 (defn (:: listenTests1 (-> EvalTestFns Spec))
-  [(EvalTestFns {etf-tid etid})]
+  [(EvalTestFns {(= etf-tid etid)})]
   (lefn [(with-repl-connection
              (bracket acquire release))
          (short-pause
@@ -324,7 +324,7 @@
          (port "50322")
          (input-file (</> "test" "data" "sleep-for-while.fnk"))
          (resolve [host port]
-           (lefn [(hints (defaultHints {addrSocketType Stream}))]
+           (lefn [(hints (defaultHints {(= addrSocketType Stream)}))]
              (case-do (getAddrInfo (Just hints) (Just host) (Just port))
                (: addr _) (return addr)
                _ (error "REPL client: address error"))))

@@ -58,10 +58,10 @@
 (defn (:: repl-env FnkEnv)
   "Environment value used by the Finkel REPL."
   (lept [macros (mergeMacros specialForms replMacros)]
-    (defaultFnkEnv {envContextModules ["Prelude"]
-                    envMacros macros
-                    envDefaultMacros macros
-                    envQualifyQuotePrimitives True})))
+    (defaultFnkEnv {(= envContextModules ["Prelude"])
+                    (= envMacros macros)
+                    (= envDefaultMacros macros)
+                    (= envQualifyQuotePrimitives True)})))
 
 
 ;;; Internal
@@ -71,54 +71,54 @@
   Run)
 
 (data ReplOption
-  (ReplOption {repl-mode ReplMode
-               repl-listen-port (Maybe Int)
-               repl-input-path (Maybe FilePath)
-               repl-prompt (Maybe String)
-               repl-quiet Bool
-               repl-init-form Code
-               repl-ghc-options [String]
-               repl-fnk-env FnkEnv}))
+  (ReplOption {(:: repl-mode ReplMode)
+               (:: repl-listen-port (Maybe Int))
+               (:: repl-input-path (Maybe FilePath))
+               (:: repl-prompt (Maybe String))
+               (:: repl-quiet Bool)
+               (:: repl-init-form Code)
+               (:: repl-ghc-options [String])
+               (:: repl-fnk-env FnkEnv)}))
 
 (defn (:: make-initial-option (-> [String] ReplOption))
   [ghc-options]
-  (ReplOption {repl-mode Run
-               repl-listen-port Nothing
-               repl-input-path Nothing
-               repl-prompt Nothing
-               repl-quiet False
-               repl-init-form greet
-               repl-ghc-options ghc-options
-               repl-fnk-env repl-env}))
+  (ReplOption {(= repl-mode Run)
+               (= repl-listen-port Nothing)
+               (= repl-input-path Nothing)
+               (= repl-prompt Nothing)
+               (= repl-quiet False)
+               (= repl-init-form greet)
+               (= repl-ghc-options ghc-options)
+               (= repl-fnk-env repl-env)}))
 
 (defn (:: repl-options [OptDescr (-> ReplOption ReplOption)])
   [(Option [] ["help"]
-           (NoArg (\o (o {repl-mode Help})))
+           (NoArg (\o (o {(= repl-mode Help)})))
            "Show this help and exit")
    (Option [] ["listen"]
            (OptArg (\mb-port o
                      (lept [port (mplus (fmap read mb-port) (Just 50321))]
-                       (o {repl-mode Run
-                           repl-listen-port port})))
+                       (o {(= repl-mode Run)
+                           (= repl-listen-port port)})))
                    "PORT")
            "Listen to port (default: 50321)")
    (Option [] ["file"]
-           (ReqArg (\file o (o {repl-input-path (Just file)}))
+           (ReqArg (\file o (o {(= repl-input-path (Just file))}))
                    "FILE")
            "File to get input from")
    (Option [] ["prompt"]
-           (ReqArg (\str o (o {repl-prompt (Just str)}))
+           (ReqArg (\str o (o {(= repl-prompt (Just str))}))
                    "TEXT")
            "Prompt for input (default: '> ')")
    (Option [] ["quiet"]
-           (NoArg (\o (o {repl-quiet True
-                          repl-prompt (Just "")
-                          repl-init-form '(:begin)})))
+           (NoArg (\o (o {(= repl-quiet True)
+                          (= repl-prompt (Just ""))
+                          (= repl-init-form '(:begin))})))
            "Suppress message from REPL")])
 
 (defn (:: repl-fnk-env-options [(OptDescr (-> ReplOption ReplOption))])
   (fromFnkEnvOptions (\f o
-                       (o {repl-fnk-env (f (repl-fnk-env o))}))))
+                       (o {(= repl-fnk-env (f (repl-fnk-env o)))}))))
 
 (defn (:: do-repl (=> (CLI m) (-> ReplOption (m ()))))
   [ro]
@@ -128,7 +128,7 @@
                             (repl-input-path ro)
                             (repl-listen-port ro)
                             (repl-fnk-env ro)
-                            (maybe mempty (\p (mempty {prompt-string p}))
+                            (maybe mempty (\p (mempty {(= prompt-string p)}))
                                    (repl-prompt ro))
                             (repl-init-form ro)))))
 

@@ -12,8 +12,8 @@
   (deriving Eq Show))
 
 (data D2
-  (C2 {c2field1 %p(UNPACK) !Int
-       c2field2 %p(UNPACK) (! Char)})
+  (C2 {(:: c2field1 %p(UNPACK) !Int)
+       (:: c2field2 %p(UNPACK) (! Char))})
   (deriving Eq Show))
 
 (:: unpackprgm (IO ()))

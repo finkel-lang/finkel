@@ -17,11 +17,13 @@
   (deriving Eq Show))
 
 (data (MyData3 a)
-  (MyD3Con1 {d3f1 a
-             d3f2 (Maybe FilePath)})
+  (MyD3Con1 {(:: d3f1 a)
+             (:: d3f2 (Maybe FilePath))})
   (MyD3Con2 Int Int Int)
-  (MyD3Con3 {(d3f1 d3f1b d3f1c) a
-             d3f4 (Either Bool Char)})
+  ;; (MyD3Con3 {(:: (d3f1 d3f1b d3f1c) a)
+  ;;            (:: d3f4 (Either Bool Char))})
+  (MyD3Con3 {(:: d3f1 d3f1b d3f1c a)
+             (:: d3f4 (Either Bool Char))})
   (deriving Eq Show))
 
 (data MyData4
@@ -42,8 +44,8 @@
   (deriving Eq Show))
 
 (data MyData7
-  (M7a {m7aF1 !Int
-        m7aF2 !(Maybe String)})
+  (M7a {(:: m7aF1 !Int)
+        (:: m7aF2 !(Maybe String))})
   (deriving Eq Show))
 
 ;; Using non-reserved special names in type variable.
@@ -67,7 +69,7 @@
       (print [M4A M4B M4C])
       (print (:: undefined MyData5))
       (print [(M6L 42) (M6S1 42) (M6S2 Nothing)])
-      (print (M7a {m7aF1 100 m7aF2 (Just "strict Maybe field")}))
+      (print (M7a {(= m7aF1 100) (= m7aF2 (Just "strict Maybe field"))}))
       (print (M8a True True True True True))))
 
 ;;; 4.2.2 Type Synonym Declarations
@@ -96,13 +98,13 @@
 
 (newtype (N2 a) (N2 a) (deriving Eq Show))
 
-(newtype (N3 a) (N3 {unN3 a}))
+(newtype (N3 a) (N3 {(:: unN3 a)}))
 
 (instance (=> (Show a) (Show (N3 a)))
   (= show (N3 a)
     (++ "N3 " (show a))))
 
-(newtype (N4 a) (N4 {unN4 a}) (deriving Eq Show))
+(newtype (N4 a) (N4 {(:: unN4 a)}) (deriving Eq Show))
 
 (:: s4_2_3 (IO ()))
 (= s4_2_3
@@ -173,7 +175,7 @@
 ;;; 4.3.2 Instance Declarations
 
 (data (MyF a)
-  (MyF {unMyF a})
+  (MyF {(:: unMyF a)})
   (deriving Eq Show))
 
 (instance (Functor MyF)

@@ -92,7 +92,7 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
                     (return (proc "stack" ["--resolver" resolver "exec" "--"
                                            "ghc" "--print-libdir"])))
           Raw (return (proc "ghc" ["--print-libdir"]))))
-      (lept [p1 (p0 {std-out CreatePipe})])
+      (lept [p1 (p0 {(= std-out CreatePipe)})])
       (<- (, _mb-in mb-out _mb-err ph) (createProcess p1))
       (<- _ec (waitForProcess ph))
       (case mb-out
@@ -173,8 +173,8 @@ be skipped.")
                               (Just (, rc ra)) (, rc (++ ra args))
                               Nothing (, cmd args))])
       (<- (, _mbin mbout mberr ph)
-        (createProcess ((proc cmd' args') {cwd (Just dir)
-                                           std-out CreatePipe})))
+        (createProcess ((proc cmd' args') {(= cwd (Just dir))
+                                           (= std-out CreatePipe)})))
       (<- ec (waitForProcess ph))
       (<- errs (case mberr
                  (Just hdl) (hGetContents hdl)

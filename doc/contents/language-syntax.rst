@@ -377,7 +377,7 @@ expressed with ``<-``:
 Datatypes with field labels
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Field labels are enclosed with ``{`` and ``}``. Does not use ``=``:
+Field labels are enclosed with ``{`` and ``}``:
 
 .. literalinclude:: ../include/language-syntax/expr/fieldlabels.fnk
    :language: finkel

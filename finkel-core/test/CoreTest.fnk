@@ -638,7 +638,7 @@
                    my-macros (mergeMacros
                               (envMacros defaultFnkEnv)
                               (makeEnvMacros [(, "m1" m1)]))
-                   my-env (defaultFnkEnv {envMacros my-macros})]
+                   my-env (defaultFnkEnv {(= envMacros my-macros)})]
               (expand-form-with-env my-env
                                     shouldBe
                                     macroexpand-1

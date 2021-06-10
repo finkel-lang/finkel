@@ -140,10 +140,10 @@
 (type ReplAction (-> [Code] (Fnk Code)))
 
 (data ReplCmd
-  (ReplCmd {rc-name String
-            rc-args [String]
-            rc-action ReplAction
-            rc-help String}))
+  (ReplCmd {(:: rc-name String)
+            (:: rc-args [String])
+            (:: rc-action ReplAction)
+            (:: rc-help String)}))
 
 
 ;;; Auxiliary functions
@@ -251,10 +251,10 @@
           (return (, dflags fnk-env))))
     (defn cleanup [(, dflags fnk-env)]
       (do (setDynFlags dflags)
-          (modifyFnkEnv (\e (e {envQualifyQuotePrimitives
-                                (envQualifyQuotePrimitives fnk-env)})))))
+          (modifyFnkEnv (\e (e {(= envQualifyQuotePrimitives
+                                  (envQualifyQuotePrimitives fnk-env))})))))
     (defn work [(, dflags fnk-env)]
-      (do (putFnkEnv (fnk-env {envQualifyQuotePrimitives False}))
+      (do (putFnkEnv (fnk-env {(= envQualifyQuotePrimitives False)}))
           (lept [force-recomp (gopt Opt-ForceRecomp dflags)])
           (<- success-flag
             (make (zip lstrs (repeat Nothing)) force-recomp Nothing))
@@ -742,8 +742,8 @@ paths from import directories."
                             (do do-clear-all
                                 (<- hsc-env-2 getSession)
                                 (modifyFnkEnv
-                                 (\e (e {envSessionForExpand
-                                         (Just hsc-env-2)}))))))
+                                 (\e (e {(= envSessionForExpand
+                                           (Just hsc-env-2))}))))))
          (do-clear-all []
            ;; See `loadModule'' in "ghc/GHCi/UI.hs". Clearing various states:
            ;; finder cache, targets, interactive context ... etc.
@@ -843,13 +843,13 @@ paths from import directories."
         ;; in the `HscEnv' used by the macro expander.
         (lefn [(update-session-for-expand [hsc-env]
                  (lept [ic1 (hsc-IC hsc-env)
-                        ic2 (ic1 {ic-dflags dflags2})]
-                   (hsc-env {hsc-dflags dflags2
-                             hsc-IC ic2})))])
+                        ic2 (ic1 {(= ic-dflags dflags2)})]
+                   (hsc-env {(= hsc-dflags dflags2)
+                             (= hsc-IC ic2)})))])
         (modifyFnkEnv
-         (\e (e {envDefaultDynFlags (Just dflags2)
-                 envSessionForExpand (fmap update-session-for-expand
-                                           (envSessionForExpand e))})))
+         (\e (e {(= envDefaultDynFlags (Just dflags2))
+                 (= envSessionForExpand (fmap update-session-for-expand
+                                              (envSessionForExpand e)))})))
         (return '(:begin)))
     _ (finkelSrcError nil "set: empty form")))
 

@@ -140,5 +140,5 @@
   "Run command and wait."
   [mb-dir cmd args]
   (do (<- (, _mbin _mbout _mberr ph)
-        (createProcess ((proc cmd args) {cwd mb-dir})))
+        (createProcess ((proc cmd args) {(= cwd mb-dir)})))
       (waitForProcess ph)))

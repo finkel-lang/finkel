@@ -70,9 +70,9 @@
   (D4c c))
 
 (data (D5 a)
-  (D5a {d5f1 a d5f2 a d5f3 Int})
-  (D5b {d5f1 a})
-  (D5c {d5f2 a}))
+  (D5a {(:: d5f1 a) (:: d5f2 a) (:: d5f3 Int)})
+  (D5b {(:: d5f1 a)})
+  (D5c {(:: d5f2 a)}))
 
 ;;; Typeclasses
 

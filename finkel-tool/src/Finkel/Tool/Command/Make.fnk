@@ -19,14 +19,14 @@
    (Finkel.Core)))
 
 (data MakeOption
-  (MakeOption {mo-help Bool}))
+  (MakeOption {(:: mo-help Bool)}))
 
 (defn (:: initial-make-option MakeOption)
-  (MakeOption {mo-help False}))
+  (MakeOption {(= mo-help False)}))
 
 (defn (:: make-options [(OptDescr (-> MakeOption MakeOption))])
   [(Option [] ["help"]
-           (NoArg (\o (o {mo-help True})))
+           (NoArg (\o (o {(= mo-help True)})))
            "Show this help and exit")])
 
 (defn (:: runMain (-> [String] (IO ())))

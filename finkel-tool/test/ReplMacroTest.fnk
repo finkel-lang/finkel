@@ -37,7 +37,7 @@
     [otherwise (replMacroTests-1 etf)]))
 
 (defn (:: replMacroTests-1 (-> EvalTestFns Spec))
-  [(EvalTestFns {etf-ok ok etf-ng ng etf-satisfy satisfy})]
+  [(EvalTestFns {(= etf-ok ok) (= etf-ng ng) (= etf-satisfy satisfy)})]
   (do (<- current-dir (runIO getCurrentDirectory))
       (<- tmp-dir (runIO getTemporaryDirectory))
       (lefn [(testdata [name]

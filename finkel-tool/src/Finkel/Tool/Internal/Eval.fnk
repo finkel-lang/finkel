@@ -163,9 +163,9 @@
       ;; files.
       (lept [dflags1 (foldl gopt-set dflags0 optional-dynflags)
              (, srcs objs) (partition-args fileish)
-             dflags2 (dflags1 {ldInputs
-                               (++ (map (. (FileOption "") unLoc) objs)
-                                   (ldInputs dflags1))})])
+             dflags2 (dflags1 {(= ldInputs
+                                 (++ (map (. (FileOption "") unLoc) objs)
+                                     (ldInputs dflags1)))})])
 
       ;; Initializing plugins with dflags from updated session.
       (setDynFlags dflags2)
@@ -175,7 +175,7 @@
       (<- dflags3 getDynFlags)
 
       ;; Setting the default `DynFlags' for macro expansion.
-      (modifyFnkEnv (\e (e {envDefaultDynFlags (Just dflags3)})))
+      (modifyFnkEnv (\e (e {(= envDefaultDynFlags (Just dflags3))})))
 
       ;; Load modules specified from command line, when given.
       (unless (null srcs)
@@ -258,7 +258,7 @@ context."
   [name]
   (case-do (parseName name)
     (: f _) (modifySession
-             (\he (he {hsc-IC (setInteractivePrintName (hsc-IC he) f)})))
+             (\he (he {(= hsc-IC (setInteractivePrintName (hsc-IC he) f))})))
     _ (failFnk "set-print-name: parse error")))
 
 (defn (:: eval-form
@@ -321,10 +321,10 @@ context."
       ;; `HscInterpreted' as target when evaluating declarations to support
       ;; declaring functions and values when REPL were using `-fobject-code'.
       (<- (, tythings ic)
-        (withTmpDynFlags (dflags {hscTarget HscInterpreted})
+        (withTmpDynFlags (dflags {(= hscTarget HscInterpreted)})
                          (evalDecls decls')))
 
-      (setSession (hsc-env {hsc-IC ic}))
+      (setSession (hsc-env {(= hsc-IC ic)}))
       (return (Right (tystr tythings)))))
 
 (defn (:: update-hsc-env (-> Handle ForeignHValue InSource HscEnv
@@ -335,9 +335,9 @@ context."
   (lefn [(success [fhvals _elapsed ret]
            (do (lefn [(ic (hsc-IC hsc-env))
                       (ic2 (extendInteractiveContextWithIds ic ids))
-                      (ic3 (ic2 {ic-fix-env fixity-env}))
+                      (ic3 (ic2 {(= ic-fix-env fixity-env)}))
                       (names (map getName ids))
-                      (hsc-env-2 (hsc-env {hsc-IC ic3}))])
+                      (hsc-env-2 (hsc-env {(= hsc-IC ic3)}))])
                (<- dflags getSessionDynFlags)
                (extend-link-env hsc-env (zip names fhvals))
 
@@ -345,7 +345,7 @@ context."
                ;;
                ;; (<- hsc-env-3
                ;;     (liftIO
-               ;;      (rttiEnvironment (hscenv {hsc_IC final-ic}))))
+               ;;      (rttiEnvironment (hscenv {(= hsc_IC final-ic)}))))
 
                (setSession hsc-env-2)
                (case names
@@ -445,8 +445,8 @@ to separate object files from source code files."
                        (System.IO.hFlush System.IO.stderr)
                        (Control.Monad.return r)))
          no-rb-hsc (\hsc-env
-                     (hsc-env {hsc-dflags (xopt-unset (hsc-dflags hsc-env)
-                                                      RebindableSyntax)}))]
+                     (hsc-env {(= hsc-dflags (xopt-unset (hsc-dflags hsc-env)
+                                                         RebindableSyntax))}))]
     (do (<- dflags getDynFlags)
         (case (evalBuilder dflags True parseExpr [form])
           (Right expr) (withTempSession no-rb-hsc

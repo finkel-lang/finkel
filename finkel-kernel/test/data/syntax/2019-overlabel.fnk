@@ -20,12 +20,12 @@
 (import GHC.Records ((HasField ..)))
 (import GHC.Types ((Type)))
 
-(data Person (Person {person-name String}))
+(data Person (Person {(:: person-name String)}))
 
 (instance %p(OVERLAPPABLE) (IsLabel "name" (-> Person String))
   (= fromLabel person-name))
 
-(data Item (Item {item-name String}))
+(data Item (Item {(:: item-name String)}))
 
 (instance %p(OVERLAPPABLE) (IsLabel "name" (-> Item String))
   (= fromLabel item-name))

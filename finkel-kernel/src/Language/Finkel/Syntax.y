@@ -69,6 +69,7 @@ import Language.Finkel.Syntax.SynUtils
 %name p_decl_tsig decl_tsig
 %name p_lcdecl lcdecl
 %name p_lidecl lidecl
+%name p_field_detail field_detail
 %name p_lqtycl lqtycl
 %name p_sfsig sfsig
 %name p_lsimpletype lsimpletype
@@ -93,6 +94,7 @@ import Language.Finkel.Syntax.SynUtils
 %name p_pats pats
 %name p_pats0 pats0
 %name p_pats1 pats1
+%name p_label1p label1p
 
 %name p_expr expr
 %name p_exprs exprs
@@ -103,12 +105,11 @@ import Language.Finkel.Syntax.SynUtils
 %name p_guard guard
 %name p_where where
 %name p_lbinds0 lbinds0
+%name p_rfbind rfbind
 %name p_app app
 
 %name p_stmt stmt
 %name p_stmt1 stmt1
-
-%name p_idsyms1 idsyms1
 
 %tokentype { Code }
 %monad { Builder }
@@ -464,10 +465,15 @@ rfielddecls :: { [HConDeclField] }
     | rfielddecls fielddecl { $2:$1 }
 
 fielddecl :: { HConDeclField }
-    : idsym  type_without_doc mbdocprev {% b_recFieldD [$1] $2 $3 }
-    | idsyms type_without_doc mbdocprev {% b_recFieldD $1 $2 $3 }
-    | docnext idsym type_without_doc    {% b_recFieldD [$2] $3 (Just $1) }
-    | docnext idsyms type_without_doc   {% b_recFieldD $2 $3 (Just $1) }
+    : list_es mbdocprev {% parse p_field_detail $1 >>= b_recFieldD $2 }
+    | docnext list_es   {% parse p_field_detail $2 >>= b_recFieldD (Just $1) }
+
+field_detail :: { ([Code], HType) }
+    : '::' fields_and_type { $2 }
+
+fields_and_type :: { ([Code], HType) }
+    : type_without_doc              { ([], $1) }
+    | idsym_no_bang fields_and_type { case $2 of (ns,t) -> ($1:ns,t) }
 
 qtycl :: { ([HType], HType) }
     : list_es {% parse p_lqtycl $1 }
@@ -745,8 +751,11 @@ labelp :: { [(Code, HPat)] }
     : rlabelp { reverse $1 }
 
 rlabelp :: { [(Code, HPat)] }
-    : {- empty -}       { [] }
-    | rlabelp idsym pat { ($2, $3):$1 }
+    : {- empty -}     { [] }
+    | rlabelp list_es {% (:$1) `fmap` parse p_label1p $2 }
+
+label1p :: { (Code, HPat) }
+    : '=' idsym pat { ($2, $3) }
 
 
 -- ---------------------------------------------------------------------
@@ -811,10 +820,12 @@ fbinds :: { [(Located FastString, HExpr)] }
 
 rfbinds :: { [(Located FastString, HExpr)] }
     : {- empty -}           { [] }
-    | rfbinds 'symbol' expr { case $2 of
-                                LForm (L l (Atom (ASymbol name))) ->
-                                    (L l name, $3):$1
-                                _ -> error "rfbinds: panic" }
+    | rfbinds list_es {% (:$1) `fmap` parse p_rfbind $2 }
+
+rfbind :: { (Located FastString, HExpr) }
+    : '=' 'symbol' expr { case $2 of
+                            LForm (L l (Atom (ASymbol n))) -> (L l n, $3)
+                            _ -> error "rfbind: panic" }
 
 app :: { ([HExpr], [HType]) }
     : rapp { case $1 of (es,ts) -> (reverse es, reverse ts) }
@@ -971,6 +982,10 @@ idsym :: { Code }
     : 'symbol'   { $1 }
     | special_id { $1 }
 
+idsym_no_bang :: { Code }
+    : 'symbol'           { $1 }
+    | special_id_no_bang { $1 }
+
 special_id :: { Code }
     : '!'                { $1 }
     | special_id_no_bang { $1 }
@@ -988,9 +1003,6 @@ special_id_no_bg_fa :: { Code }
     | 'stock'       { $1 }
     | 'via'         { $1 }
     | 'qualified'   { $1 }
-
-idsyms :: { [Code] }
-    : list_es {% parse p_idsyms1 $1 }
 
 idsyms1 :: { [Code] }
     : ridsyms { reverse $1 }

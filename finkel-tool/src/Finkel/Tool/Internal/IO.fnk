@@ -57,7 +57,7 @@ reading the input until successful parse result."
                (lefn [(prompt
                         (if (null (pending-input st0)) (prompt-string st0) ""))
                       (reset-pending [st]
-                        (st {pending-input Nothing}))])
+                        (st {(= pending-input Nothing)}))])
                (<- mb-input
                  ;; Handle interrupt signals thrown while waiting for input, to
                  ;; handle `Ctrl-C' key presses without valid evaluation form,
@@ -125,7 +125,7 @@ reading the input until successful parse result."
   (do (<- st getReplState)
       (lefn [(input1 (stringToStringBuffer (: #'\n input0)))
              (put-and-return [pending ret]
-               (do (putReplState (st {pending-input pending}))
+               (do (putReplState (st {(= pending-input pending)}))
                    (return ret)))])
       (<- input2
         (liftIO (maybe (pure input1)
