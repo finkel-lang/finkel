@@ -343,6 +343,7 @@ supportedLangExts =
       , OverloadedLists
       , PolyKinds
       , RankNTypes
+      , RecordPuns
       , ScopedTypeVariables
       , StandaloneDeriving
       , TypeApplications
@@ -358,7 +359,9 @@ supportedLangExts =
     f = concatMap g
     g ext = [(fsLit name, name), (fsLit noname, noname)]
       where
-        name = show ext
+        name = case ext of
+          RecordPuns -> "NamedFieldPuns"
+          _ -> show ext
         noname = "No" ++ name
 
 makeOptionFlags :: [Code] -> [Located String]

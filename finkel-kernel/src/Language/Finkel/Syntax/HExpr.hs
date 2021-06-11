@@ -23,7 +23,7 @@ import GHC_Hs_Expr                     (ArithSeqInfo (..), GRHS (..),
                                         HsStmtContext (..), HsTupArg (..),
                                         Match (..), StmtLR (..))
 import GHC_Hs_Lit                      (HsLit (..), HsOverLit (..))
-import GHC_Hs_Pat                      (HsRecFields (..))
+import GHC_Hs_Pat                      (HsRecFields (..), LHsRecField)
 import GHC_Hs_Type                     (mkHsWildCardBndrs)
 import GHC_Hs_Utils                    (mkBodyStmt, mkHsApp, mkHsComp, mkHsDo,
                                         mkHsFractional, mkHsIf, mkHsLam,
@@ -160,27 +160,37 @@ b_tsigE (LForm (L l _)) e0 (ctxt,t) =
   in  mkLHsPar (L l e1)
 {-# INLINABLE b_tsigE #-}
 
-b_recConOrUpdE :: Code -> [(Located FastString,HExpr)] -> Builder HExpr
+b_recConOrUpdE :: Code -> [(Located FastString, Maybe HExpr)] -> Builder HExpr
 b_recConOrUpdE whole@(LForm (L l form)) flds =
   case form of
     Atom (ASymbol name) | isLexCon name
       -> return (L l (mkRdrRecordCon (L l (mkVarRdrName name)) cflds))
     _ -> b_varE whole >>= \v -> return (L l (mkRdrRecordUpd v uflds))
   where
-    cflds = HsRecFields { rec_flds = map mkcfld flds
+    cflds = HsRecFields { rec_flds = map mkcfld' flds
                         , rec_dotdot = Nothing }
     uflds = map mkufld flds
-    mkufld  = cfld2ufld . mkcfld
+    mkufld  = cfld2ufld . mkcfld'
 {-# INLINABLE b_recConOrUpdE #-}
 
-b_recUpdE :: Builder HExpr -> [(Located FastString, HExpr)]
+b_recUpdE :: Builder HExpr -> [(Located FastString, Maybe HExpr)]
           -> Builder HExpr
 b_recUpdE expr flds = do
    expr' <- expr
-   let uflds = map (cfld2ufld . mkcfld) flds
+   let uflds = map (cfld2ufld . mkcfld') flds
        l = getLoc expr'
    return (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
 {-# INLINABLE b_recUpdE #-}
+
+mkcfld' :: (Located FastString, Maybe HExpr) -> LHsRecField PARSED HExpr
+mkcfld' (n,mb_e) =
+  case mb_e of
+    Just e  -> mkcfld False (n, e)
+    Nothing -> mkcfld True (n, punned)
+  where
+    punned = cL l (HsVar NOEXT (cL l pun_RDR))
+    l = getLoc n
+{-# INLINABLE mkcfld' #-}
 
 b_opOrAppE :: Code -> ([HExpr], [HType]) -> Builder HExpr
 b_opOrAppE code (args, tys) = do

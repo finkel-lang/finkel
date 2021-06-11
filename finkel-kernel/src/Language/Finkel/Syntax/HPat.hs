@@ -181,13 +181,17 @@ b_hsListP pats = p
 #endif
 {-# INLINABLE b_hsListP #-}
 
-b_labeledP :: Code -> [(Code, HPat)] -> Builder HPat
+b_labeledP :: Code -> [(Code, Maybe HPat)] -> Builder HPat
 b_labeledP (LForm (L l form)) ps
   | Atom (ASymbol name) <- form
   , isLexCon name = do
-    let mkcfld' (LForm (L nl sym), p)
-          | Atom (ASymbol n) <- sym = return (mkcfld (L nl n, p))
-          | otherwise               = builderError
+    let mkcfld' (LForm (L nl sym), mb_p)
+          | Atom (ASymbol n) <- sym, let lab = L nl n =
+            case mb_p of
+              Just p  -> return (mkcfld False (lab, p))
+              Nothing -> return (mkcfld True (lab, punned))
+          | otherwise = builderError
+        punned = cL l (VarPat NOEXT (L l pun_RDR))
     flds <- mapM mkcfld' ps
     let rc = HsRecFields { rec_flds = flds
                          , rec_dotdot = Nothing }

@@ -747,15 +747,16 @@ pats1 :: { HPat }
     | list_es pats0        {% b_conP $1 True $2 }
     | '::' pat type        { b_sigP $1 $2 $3 }
 
-labelp :: { [(Code, HPat)] }
+labelp :: { [(Code, Maybe HPat)] }
     : rlabelp { reverse $1 }
 
-rlabelp :: { [(Code, HPat)] }
+rlabelp :: { [(Code, Maybe HPat)] }
     : {- empty -}     { [] }
+    | rlabelp idsym   { (($2, Nothing):$1) }
     | rlabelp list_es {% (:$1) `fmap` parse p_label1p $2 }
 
-label1p :: { (Code, HPat) }
-    : '=' idsym pat { ($2, $3) }
+label1p :: { (Code, Maybe HPat) }
+    : '=' idsym pat { ($2, Just $3) }
 
 
 -- ---------------------------------------------------------------------
@@ -815,16 +816,19 @@ rlbinds0 :: { [HDecl] }
     : {- empty -}     { [] }
     | rlbinds0 list_es {% fmap (:$1) (parse p_decl $2) }
 
-fbinds :: { [(Located FastString, HExpr)] }
+fbinds :: { [(Located FastString, Maybe HExpr)] }
     : rfbinds { reverse $1 }
 
-rfbinds :: { [(Located FastString, HExpr)] }
-    : {- empty -}           { [] }
+rfbinds :: { [(Located FastString, Maybe HExpr)] }
+    : {- empty -}     { [] }
+    | rfbinds idsym   { case $2 of
+                          LForm (L l (Atom (ASymbol n))) -> (L l n, Nothing):$1
+                          _ -> error "rfbinds: panic" }
     | rfbinds list_es {% (:$1) `fmap` parse p_rfbind $2 }
 
-rfbind :: { (Located FastString, HExpr) }
+rfbind :: { (Located FastString, Maybe HExpr) }
     : '=' 'symbol' expr { case $2 of
-                            LForm (L l (Atom (ASymbol n))) -> (L l n, $3)
+                            LForm (L l (Atom (ASymbol n))) -> (L l n, Just $3)
                             _ -> error "rfbind: panic" }
 
 app :: { ([HExpr], [HType]) }

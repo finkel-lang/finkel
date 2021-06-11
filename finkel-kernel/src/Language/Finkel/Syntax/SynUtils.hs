@@ -220,14 +220,19 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
 {-# INLINABLE cfld2ufld #-}
 
 -- | Make 'HsRecField' with given name and located data.
-mkcfld :: (Located FastString, a) -> LHsRecField PARSED a
-mkcfld (L nl name, e) =
+mkcfld :: Bool -> (Located FastString, a) -> LHsRecField PARSED a
+mkcfld is_pun (L nl name, e) =
   L nl HsRecField { hsRecFieldLbl = mkfname name
                   , hsRecFieldArg = e
-                  , hsRecPun = False }
+                  , hsRecPun = is_pun }
   where
     mkfname n = L nl (mkFieldOcc (L nl (mkRdrName n)))
 {-# INLINABLE mkcfld #-}
+
+-- | Dummy name for named field puns. See: @GHC.Parser.PostProcess.pun_RDR@.
+pun_RDR :: RdrName
+pun_RDR = mkUnqual varName (fsLit "pun-right-hand-side")
+{-# INLINABLE pun_RDR #-}
 
 quotedSourceText :: String -> SourceText
 quotedSourceText s = SourceText $ "\"" ++ s ++ "\""
