@@ -9,6 +9,7 @@ module Language.Finkel.Syntax.HPat where
 #include "ghc_modules.h"
 
 -- base
+import Data.Either                     (partitionEithers)
 import Data.List                       (foldl')
 
 -- ghc
@@ -181,20 +182,26 @@ b_hsListP pats = p
 #endif
 {-# INLINABLE b_hsListP #-}
 
-b_labeledP :: Code -> [(Code, Maybe HPat)] -> Builder HPat
+b_labeledP :: Code -> [PreRecField HPat] -> Builder HPat
 b_labeledP (LForm (L l form)) ps
   | Atom (ASymbol name) <- form
   , isLexCon name = do
-    let mkcfld' (LForm (L nl sym), mb_p)
-          | Atom (ASymbol n) <- sym, let lab = L nl n =
-            case mb_p of
-              Just p  -> return (mkcfld False (lab, p))
-              Nothing -> return (mkcfld True (lab, punned))
-          | otherwise = builderError
+    let mkcfld' (lab, mb_p) =
+          case mb_p of
+            Just p  -> mkcfld False (lab, p)
+            Nothing -> mkcfld True (lab, punned)
         punned = cL l (VarPat NOEXT (L l pun_RDR))
-    flds <- mapM mkcfld' ps
-    let rc = HsRecFields { rec_flds = flds
-                         , rec_dotdot = Nothing }
+        (wilds, non_wilds) = partitionEithers ps
+        mb_dotdot = case wilds of
+          []                  -> Nothing
+#if MIN_VERSION_ghc(8,10,0)
+          (LForm (L wl _): _) -> Just (L wl (length non_wilds))
+#else
+          _                   -> Just (length non_wilds)
+#endif
+        flds = map mkcfld' non_wilds
+        rc = HsRecFields { rec_flds = flds
+                         , rec_dotdot = mb_dotdot }
         cid = L l (mkVarRdrName name)
         cpd = RecCon rc
     return (cL l (mkConPat cid cpd))

@@ -344,6 +344,7 @@ supportedLangExts =
       , PolyKinds
       , RankNTypes
       , RecordPuns
+      , RecordWildCards
       , ScopedTypeVariables
       , StandaloneDeriving
       , TypeApplications

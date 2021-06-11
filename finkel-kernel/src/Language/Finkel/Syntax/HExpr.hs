@@ -9,6 +9,7 @@ module Language.Finkel.Syntax.HExpr where
 #include "ghc_modules.h"
 
 -- base
+import Data.Either                     (partitionEithers)
 import Data.List                       (foldl', foldl1')
 import Data.Maybe                      (fromMaybe)
 
@@ -160,26 +161,38 @@ b_tsigE (LForm (L l _)) e0 (ctxt,t) =
   in  mkLHsPar (L l e1)
 {-# INLINABLE b_tsigE #-}
 
-b_recConOrUpdE :: Code -> [(Located FastString, Maybe HExpr)] -> Builder HExpr
+b_recConOrUpdE :: Code
+               -> [Either Code (Located FastString, Maybe HExpr)]
+               -> Builder HExpr
 b_recConOrUpdE whole@(LForm (L l form)) flds =
   case form of
     Atom (ASymbol name) | isLexCon name
       -> return (L l (mkRdrRecordCon (L l (mkVarRdrName name)) cflds))
     _ -> b_varE whole >>= \v -> return (L l (mkRdrRecordUpd v uflds))
   where
-    cflds = HsRecFields { rec_flds = map mkcfld' flds
-                        , rec_dotdot = Nothing }
-    uflds = map mkufld flds
+    cflds = HsRecFields { rec_flds = map mkcfld' non_wilds
+                        , rec_dotdot = mb_dotdot }
+    uflds = map mkufld non_wilds
     mkufld  = cfld2ufld . mkcfld'
+    (wilds, non_wilds) = partitionEithers flds
+    mb_dotdot = case wilds of
+      []                 -> Nothing
+#if MIN_VERSION_ghc(8,10,0)
+      (LForm (L wl _):_) -> Just (L wl (length non_wilds))
+#else
+      _                  -> Just (length non_wilds)
+#endif
 {-# INLINABLE b_recConOrUpdE #-}
 
-b_recUpdE :: Builder HExpr -> [(Located FastString, Maybe HExpr)]
-          -> Builder HExpr
+b_recUpdE :: Builder HExpr -> [PreRecField HExpr] -> Builder HExpr
 b_recUpdE expr flds = do
    expr' <- expr
-   let uflds = map (cfld2ufld . mkcfld') flds
+   let uflds = map (cfld2ufld . mkcfld') non_wilds
+       (wilds, non_wilds) = partitionEithers flds
        l = getLoc expr'
-   return (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
+   case wilds of
+     (_:_) -> builderError
+     []    -> return (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
 {-# INLINABLE b_recUpdE #-}
 
 mkcfld' :: (Located FastString, Maybe HExpr) -> LHsRecField PARSED HExpr

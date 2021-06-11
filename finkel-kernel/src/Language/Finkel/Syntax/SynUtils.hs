@@ -95,6 +95,28 @@ import           GHC_Hs_Doc                (HsDocString (..))
 import           Language.Finkel.Builder
 import           Language.Finkel.Form
 
+-- ------------------------------------------------------------------------
+--
+-- Types
+--
+-- ------------------------------------------------------------------------
+
+-- | An alias for record field to suuport named field puns and record wild
+-- cards.
+--
+-- @Left form@ represent a record wild pattern with @form@ being the @..@
+-- code form, @Right (fld, Nothing)@ means named field pun with @fld@ being the
+-- punned field name, and @Right (fld, Just x)@ is a traditional @field = x@
+-- style form.
+type PreRecField a = Either Code (Located FastString, Maybe a)
+
+
+-- ------------------------------------------------------------------------
+--
+-- Functions
+--
+-- ------------------------------------------------------------------------
+
 mkRdrName :: FastString -> RdrName
 mkRdrName = mkRdrName' tcName
 {-# INLINABLE mkRdrName #-}
@@ -458,3 +480,10 @@ consListWith :: [Code] -> String -> Code
 consListWith rest sym =
   LForm (genSrc (List (LForm (genSrc (Atom (aSymbol sym))) : rest)))
 {-# INLINABLE consListWith #-}
+
+fsSymbol :: Code -> Builder (Located FastString)
+fsSymbol (LForm (L l x)) =
+  case x of
+    Atom (ASymbol sym) -> pure (L l sym)
+    _                  -> builderError
+{-# INLINABLE fsSymbol #-}
