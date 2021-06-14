@@ -949,6 +949,18 @@ all_lists :: { Code }
     | 'import'   { consListWith $1 "import" }
     | 'module'   { consListWith $1 "module" }
     | 'where'    { consListWith $1 "where" }
+    | 'unpack'   { $1 }
+    | 'overlappable' { $1 }
+    | 'overlapping' { $1 }
+    | 'overlaps' { $1 }
+    | 'incoherent' { $1 }
+    | 'doc' { consListWith [$1] ":doc" }
+    | 'doc^' { consListWith [$1] ":doc^" }
+    | 'doc$' { $1 }
+    | 'dh1' { $1 }
+    | 'dh2' { $1 }
+    | 'dh3' { $1 }
+    | 'dh4' { $1 }
 
 
 -- ---------------------------------------------------------------------

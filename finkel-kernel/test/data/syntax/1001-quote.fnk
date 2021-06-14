@@ -75,6 +75,22 @@
     (print '(module))
     (print '(where))
 
+    ;; Quoting pragmas
+    (print '(UNPACK))
+    (print '(OVERLAPPABLE))
+    (print '(OVERLAPPING))
+    (print '(OVERLAPS))
+    (print '(INCOHERENT))
+
+    ;; Quoting doc comments
+    (print '(:doc "xxxx"))
+    (print '(:doc^ "xxxx"))
+    (print '(:doc$ key "xxxx"))
+    (print '(:dh1 "xxxx"))
+    (print '(:dh2 "xxxx"))
+    (print '(:dh3 "xxxx"))
+    (print '(:dh4 "xxxx"))
+
     ;; Quasiquote.
     (print `foo)
     (print (:quasiquote foo))
