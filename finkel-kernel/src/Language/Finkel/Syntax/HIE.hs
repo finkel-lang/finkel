@@ -15,7 +15,6 @@ import GHC_Hs_ImpExp                   (IE (..), IEWildcard (..),
                                         IEWrappedName (..), ImportDecl (..),
                                         simpleImportDecl)
 import GHC_Parser_PostProcess          (cvTopDecls)
-import GHC_Types_FieldLabel            (FieldLbl (..))
 import GHC_Types_Name_Occurrence       (tcClsName)
 import GHC_Types_Name_Reader           (mkQual, mkUnqual)
 import GHC_Types_SrcLoc                (GenLocated (..), SrcSpan)
@@ -141,15 +140,10 @@ b_ieWith (LForm (L l form)) names =
                   Nothing   -> mkUnqual tcClsName name
     wc = NoIEWildcard
     (ns, fs) = foldr f ([],[]) names
-    f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0) =
-      if isLexCon n0
-         then (L l0 (IEName (L l (mkUnqual tcClsName n0))) : ns0, fs0)
-         else (ns0, L l0 (fl n0) : fs0)
-    f _ acc = acc
     -- XXX: Does not support DuplicateRecordFields.
-    fl x = FieldLabel { flLabel = x
-                      , flIsOverloaded = False
-                      , flSelector = mkRdrName x }
+    f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0) =
+      (L l0 (IEName (L l (mkRdrName n0))) : ns0, fs0)
+    f _ acc = acc
     iEThingWith = IEThingWith NOEXT
 {-# INLINABLE b_ieWith #-}
 

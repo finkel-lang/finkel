@@ -274,9 +274,9 @@ export :: { HIE }
     | list_es  {% parse p_entity $1 }
 
 entity :: { HIE }
-    : conid         {% b_ieAbs $1 }
-    | conid '..'    {% b_ieAll $1 }
-    | conid idsyms1 {% b_ieWith $1 $2 }
+    : conid {- empty -} {% b_ieAbs $1 }
+    | conid '..'        {% b_ieAll $1 }
+    | conid idsyms1     {% b_ieWith $1 $2 }
 
 entities :: { [HIE] }
     : rentities { reverse $1 }

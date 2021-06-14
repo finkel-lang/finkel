@@ -9,6 +9,7 @@
 (import Control.Monad as M)
 (import Data.Array (! array))
 (import Data.Complex ((Complex ..) realPart imagPart mkPolar))
+(import Data.Monoid ((All All) (Any) (Alt getAlt)))
 (import Data.Ratio hiding (Ratio Rational numerator %))
 
 (import qualified Data.List)
