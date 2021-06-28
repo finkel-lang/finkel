@@ -50,6 +50,10 @@ import           Distribution.Simple.Setup
 import           Distribution.Simple.Utils          (installDirectoryContents)
 import           Distribution.Utils.NubList
 
+#if MIN_VERSION_Cabal(3,5,0)
+import           Distribution.Utils.Path            (getSymbolicPath)
+#endif
+
 #if MIN_VERSION_Cabal(2,4,0)
 import           Distribution.Types.ExposedModule
 #else
@@ -241,13 +245,14 @@ fnkHaddockHooks pd lbi hooks flags = do
             , ghcOptHideAllPackages  = flag True
             , ghcOptNoLink           = flag True
             }
-          hs_src_dirs' = hs_src_dirs ++ [autogen_dir]
+          hs_src_dirs' = map getSymbolicPath hs_src_dirs ++ [autogen_dir]
           flag = Setup.Flag
           cmpl = compiler lbi
           platform = hostPlatform lbi
           accumulateGeneratedFile acc m = do
             let p = toFilePath m
-            mb_found <- findFile hs_src_dirs (p <.> "fnk")
+                hs_src_dir_paths = map getSymbolicPath hs_src_dirs
+            mb_found <- findFile hs_src_dir_paths (p <.> "fnk")
             case mb_found of
               Just _found -> do
                 let dest = autogen_dir </> p <.> "hs"
@@ -312,3 +317,8 @@ allSuffixHandlers :: UserHooks -> [PPSuffixHandler]
 allSuffixHandlers hooks =
   overridesPP (hookedPreProcessors hooks) knownSuffixHandlers
     where overridesPP = unionBy ((==) `on` fst)
+
+#if !MIN_VERSION_Cabal(3,5,0)
+getSymbolicPath :: a -> a
+getSymbolicPath = id
+#endif
