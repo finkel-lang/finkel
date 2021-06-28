@@ -26,19 +26,10 @@ import           System.FilePath                   (dropExtension,
 
 -- ghc
 import           GHC_Data_FastString               (FastString)
-import           GHC_Driver_Finder                 (findObjectLinkableMaybe)
+import           GHC_Driver_Env_Types              (HscEnv (..))
 import           GHC_Driver_Phases                 (Phase (..))
 import           GHC_Driver_Session                (DynFlags (..),
                                                     HasDynFlags (..))
-import           GHC_Driver_Types                  (Dependencies (..),
-                                                    HomeModInfo (..),
-                                                    HscEnv (..),
-                                                    IsBootInterface,
-                                                    ModSummary (..),
-                                                    SourceModified (..),
-                                                    Usage (..), addToHpt,
-                                                    lookupHpt, msHiFilePath,
-                                                    ms_mod_name)
 import           GHC_IfaceToCore                   (typecheckIface)
 import           GHC_Iface_Load                    (readIface)
 import           GHC_Iface_Recomp                  (RecompileRequired (..),
@@ -51,17 +42,32 @@ import           GHC_Types_SrcLoc                  (Located, noLoc, unLoc)
 import           GHC_Types_Unique_Set              (UniqSet, addOneToUniqSet,
                                                     elementOfUniqSet,
                                                     emptyUniqSet)
+import           GHC_Unit_Finder                   (findObjectLinkableMaybe)
+import           GHC_Unit_Home_ModInfo             (HomeModInfo (..), addToHpt,
+                                                    lookupHpt)
 import           GHC_Unit_Module                   (ModLocation (..),
                                                     ModuleName, mkModuleName,
                                                     moduleName,
                                                     moduleNameString)
+import           GHC_Unit_Module_Deps              (Dependencies (..),
+                                                    Usage (..))
+import           GHC_Unit_Module_ModSummary        (ModSummary (..),
+                                                    msHiFilePath, ms_mod_name)
 import           GHC_Unit_State                    (LookupResult (..),
                                                     lookupModuleWithSuggestions)
+import           GHC_Unit_Types                    (IsBootInterface)
 import           GHC_Utils_Exception               (handleIO)
 import           GHC_Utils_Fingerprint             (Fingerprint)
 import           GHC_Utils_Outputable              (Outputable (..), (<+>))
 
 import qualified GHC_Data_Maybe                    as Maybes
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Env                    (hsc_units)
+import           GHC.Types.SourceFile              (SourceModified (..))
+#else
+import           GHC_Driver_Types                  (SourceModified (..))
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC_Unit_Types                    (GenWithIsBoot (..),
@@ -69,7 +75,7 @@ import           GHC_Unit_Types                    (GenWithIsBoot (..),
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Types                  (ModIface, ModIface_ (..),
+import           GHC_Unit_Module_ModIface          (ModIface, ModIface_ (..),
                                                     mi_flag_hash, mi_mod_hash)
 #else
 import           HscTypes                          (ModIface (..))
@@ -282,7 +288,6 @@ checkUsagePackageModules usages = getHscEnv >>= forM_ usages . go
         UsagePackageModule {usg_mod=mdl,usg_mod_hash=old_hash} -> do
           let mname = moduleName mdl
               mname_str = moduleNameString mname
-              dflags = hsc_dflags hsc_env
               check_mod_hash = do
                 -- External package modules are also stored in outdated cache,
                 -- looking up the cache before loading the interface.
@@ -293,12 +298,14 @@ checkUsagePackageModules usages = getHscEnv >>= forM_ usages . go
                   Just iface ->
                     when (mi_mod_hash' iface /= old_hash)
                          (outdate mname (mname_str ++ " hash changed"))
-#if MIN_VERSION_ghc(9,0,0)
-              lmws_arg1 = unitState
+#if MIN_VERSION_ghc(9,2,0)
+              lmws_arg1 = hsc_units
+#elif MIN_VERSION_ghc(9,0,0)
+              lmws_arg1 = unitState . hsc_dflags
 #else
-              lmws_arg1 = id
+              lmws_arg1 = hsc_dflags
 #endif
-          case lookupModuleWithSuggestions (lmws_arg1 dflags) mname Nothing of
+          case lookupModuleWithSuggestions (lmws_arg1 hsc_env) mname Nothing of
             LookupFound {}    -> check_mod_hash
             LookupMultiple {} -> check_mod_hash
             LookupHidden {}   -> check_mod_hash
@@ -366,7 +373,7 @@ collectOldIface fnk_env (mname, _is_boot) = do
       -- Comparing the DynFlags hash at this point, to trigger recompilation
       -- with changes in the DynFlag.
       iface <- loadIface hsc_env dep_ms
-      checkFlagHash dep_ms iface
+      checkFlagHash hsc_env dep_ms iface
 
       -- External packages are not in textual import of ModSummary when reusing
       -- interface, checking now.
@@ -410,14 +417,20 @@ checkTargetUnit name_and_mb_phase@(lname, _) = do
     Just tu -> return tu
 {-# INLINABLE checkTargetUnit #-}
 
-checkFlagHash :: ModSummary -> ModIface -> RecompM ()
-checkFlagHash ms iface = do
+checkFlagHash :: HscEnv -> ModSummary -> ModIface -> RecompM ()
+checkFlagHash _he ms iface = do
   -- See "checkFlagHash" function in "MkIface".
   let old_hash = mi_flag_hash' iface
       dflags0 = ms_hspp_opts ms
       dflags1 = adjustIncludePaths dflags0 ms
       mdl = mi_module iface
+#if MIN_VERSION_ghc(9,2,0)
+  new_hash <-
+    let he1 = _he {hsc_dflags = dflags1}
+    in  liftIO (fingerprintDynFlags he1 mdl putNameLiterally)
+#else
   new_hash <- liftIO (fingerprintDynFlags dflags1 mdl putNameLiterally)
+#endif
   when (old_hash /= new_hash) (outdate (moduleName mdl) "flag hash changed")
 {-# INLINABLE checkFlagHash #-}
 

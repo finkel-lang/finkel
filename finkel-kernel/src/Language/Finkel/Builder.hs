@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- | Builder functions for Haskell syntax data type.
 --
 -- This module contains 'Builder' data type and Haskell AST type synonyms. The
@@ -6,8 +8,6 @@
 -- The main purpose of AST type synonyms defined in this module are for managing
 -- ghc version compatibility.
 --
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE OverloadedStrings #-}
 module Language.Finkel.Builder
   ( -- * Builders type and functions
     Builder(..)
@@ -32,7 +32,8 @@ module Language.Finkel.Builder
   , HBinds
   , HCCallConv
   , HConDecl
-  , HConDeclDetails
+  , HConDeclGADTDetails
+  , HConDeclH98Details
   , HConDeclField
   , HDecl
   , HDeriving
@@ -49,6 +50,8 @@ module Language.Finkel.Builder
   , HModule
   , HPat
   , HSig
+  , HSigType
+  , HSigWcType
   , HStmt
   , HTyVarBndr
   , HTyVarBndrSpecific
@@ -76,14 +79,24 @@ import GHC_Data_FastString   (FastString, appendFS)
 import GHC_Driver_Session    (DynFlags)
 import GHC_Hs                (HsModule)
 import GHC_Hs_Binds          (HsLocalBinds, LHsBind, LSig)
-import GHC_Hs_Decls          (HsConDeclDetails, HsDeriving, LConDecl, LHsDecl)
+import GHC_Hs_Decls          (HsDeriving, LConDecl, LHsDecl)
 import GHC_Hs_Expr           (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
 import GHC_Hs_ImpExp         (LIE, LIEWrappedName, LImportDecl)
 import GHC_Hs_Pat            (LPat)
-import GHC_Hs_Type           (LConDeclField, LHsTyVarBndr, LHsType)
-import GHC_Parser_Lexer      (PState (..), mkPState)
+import GHC_Hs_Type           (LConDeclField, LHsSigType, LHsSigWcType,
+                              LHsTyVarBndr, LHsType)
+import GHC_Parser_Lexer      (PState (..))
 import GHC_Types_ForeignCall (CCallConv (..))
 import GHC_Types_SrcLoc      (GenLocated (..), Located, noLoc)
+
+#if MIN_VERSION_ghc(9,2,0)
+import GHC.Driver.Config     (initParserOpts)
+import GHC.Hs.Decls          (HsConDeclGADTDetails, HsConDeclH98Details)
+import GHC_Parser_Lexer      (initParserState)
+#else
+import GHC_Hs_Decls          (HsConDeclDetails)
+import GHC_Parser_Lexer      (mkPState)
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Types_Var         (Specificity (..))
@@ -150,8 +163,6 @@ instance Applicative Builder where
   {-# INLINE (<*>) #-}
 
 instance Monad Builder where
-  return x = Builder (\st0 -> return (x, st0))
-  {-# INLINE return #-}
   Builder m >>= k =
     Builder (\st0 -> do (a, st1) <- m st0
                         unBuilder (k a) st1)
@@ -166,7 +177,11 @@ runBuilder :: DynFlags
 runBuilder dflags qualify bld toks =
   let buf = error "PState StringBuffer is empty"
       rl  = error "PState RealSrcLoc is empty"
+#if MIN_VERSION_ghc(9,2,0)
+      ps  = initParserState (initParserOpts dflags) buf rl
+#else
       ps  = mkPState dflags buf rl
+#endif
   in  case unBuilder bld (BState toks ps Nothing qualify) of
         Right (a, st) -> Right (a, inputs st)
         Left err      -> Left err
@@ -275,7 +290,15 @@ type HCCallConv = Located CCallConv
 
 type HConDecl = LConDecl PARSED
 
-type HConDeclDetails = HsConDeclDetails PARSED
+#if MIN_VERSION_ghc(9,2,0)
+type HConDeclH98Details = HsConDeclH98Details PARSED
+type HConDeclGADTDetails = HsConDeclGADTDetails PARSED
+#else
+-- In ghc < 9.2, constructor details were not saparated, internal
+-- representations are same.
+type HConDeclH98Details = HsConDeclDetails PARSED
+type HConDeclGADTDetails = HsConDeclDetails PARSED
+#endif
 
 type HConDeclField = LConDeclField PARSED
 
@@ -303,7 +326,11 @@ type HImportDecl = LImportDecl PARSED
 
 type HKind = HType
 
+#if MIN_VERSION_ghc(9,2,0)
+type HLocalBinds = HsLocalBinds PARSED
+#else
 type HLocalBinds = Located (HsLocalBinds PARSED)
+#endif
 
 type HMatch = LMatch PARSED HExpr
 
@@ -317,6 +344,10 @@ type HPat = LPat PARSED
 
 type HSig = LSig PARSED
 
+type HSigType = LHsSigType PARSED
+
+type HSigWcType = LHsSigWcType PARSED
+
 type HStmt = ExprLStmt PARSED
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -328,7 +359,6 @@ type HTyVarBndrSpecific = HTyVarBndr
 #endif
 
 type HType = LHsType PARSED
-
 
 -- ---------------------------------------------------------------------
 --

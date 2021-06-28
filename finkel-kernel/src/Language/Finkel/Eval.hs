@@ -17,17 +17,24 @@ import Control.Monad.IO.Class  (MonadIO (..))
 import Data.IORef              (readIORef)
 #endif
 
-import Control.Exception       (throwIO)
-
 -- ghc
 import GHC_Core_TyCo_Rep       (Kind, Type (..))
+import GHC_Driver_Env_Types    (HscEnv (..))
 import GHC_Driver_Monad        (GhcMonad (..))
-import GHC_Driver_Types        (HscEnv (..), InteractiveContext (..),
-                                TyThing (..), mkSrcErr)
+import GHC_Runtime_Context     (InteractiveContext (..))
 import GHC_Runtime_Eval        (compileParsedExprRemote)
 import GHC_Tc_Module           (TcRnExprMode (..), tcRnExpr, tcRnType)
+import GHC_Types_TyThing       (TyThing (..))
 import GHC_Types_Var_Env       (emptyTidyEnv)
 import GHC_Utils_Error         (Messages)
+
+#if MIN_VERSION_ghc(9,2,0)
+import GHC_Types_Error         (DecoratedSDoc, partitionMessages)
+import GHC_Types_SourceError   (throwErrors)
+#else
+import Control.Exception       (throwIO)
+import GHC_Types_SourceError   (mkSrcErr)
+#endif
 
 #if MIN_VERSION_ghc(8,10,0)
 import GHC_Core_TyCo_Tidy      (tidyType)
@@ -206,16 +213,31 @@ corePrepPgm' hsc_env this_mod mod_loc binds data_tycons =
 -- ---------------------------------------------------------------------
 
 -- | Like 'HscMain.ioMsgMaybe', but for 'Fnk'.
+#if MIN_VERSION_ghc(9,2,0)
+-- XXX: Log warning messages.
+ioMsgMaybe :: MonadIO m => IO (Messages DecoratedSDoc, Maybe a) -> m a
+ioMsgMaybe ioA = do
+  (msgs, mb_r) <- liftIO ioA
+  let (_warns, errs) = partitionMessages msgs
+  case mb_r of
+    Nothing -> throwErrors errs
+    Just r  -> return r
+#else
 ioMsgMaybe :: MonadIO m => IO (Messages, Maybe a) -> m a
 ioMsgMaybe ioA = do
-  -- XXX: Show warning messages with DynFlags settings.
   ((_warns, errs), mb_r) <- liftIO ioA
   case mb_r of
     Nothing -> liftIO (throwIO (mkSrcErr errs))
     Just r  -> return r
+#endif
 
 -- | GHC version compatibility helper for 'tcRnType'.
+#if MIN_VERSION_ghc(9,2,0)
+tcRnType'
+  :: HscEnv -> Bool -> HType -> IO (Messages DecoratedSDoc, Maybe (Type, Kind))
+#else
 tcRnType' :: HscEnv -> Bool -> HType -> IO (Messages, Maybe (Type, Kind))
+#endif
 #if MIN_VERSION_ghc(8,10,0)
 tcRnType' hsc_env = tcRnType hsc_env DefaultFlexi
 #else

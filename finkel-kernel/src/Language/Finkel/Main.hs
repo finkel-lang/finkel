@@ -38,14 +38,21 @@ import           GHC_Driver_Session           (DynFlags (..), GeneralFlag (..),
                                                HasDynFlags (..), compilerInfo,
                                                defaultFatalMessager,
                                                defaultFlushOut, gopt)
-import           GHC_Driver_Types             (handleFlagWarnings,
-                                               handleSourceError)
 import           GHC_Types_Basic              (SuccessFlag (..))
 import           GHC_Types_SrcLoc             (mkGeneralLocated, unLoc)
 import           GHC_Utils_CliOption          (Option (FileOption))
 import           GHC_Utils_Misc               (looksLikeModuleName)
 import           GHC_Utils_Panic              (GhcException (..),
                                                throwGhcException)
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Errors            (handleFlagWarnings)
+import           GHC.Types.SourceError        (handleSourceError)
+import           GHC.Utils.Logger             (HasLogger (..))
+#else
+import           GHC_Driver_Types             (handleFlagWarnings,
+                                               handleSourceError)
+#endif
 
 #if MIN_VERSION_ghc(8,10,1) && !MIN_VERSION_ghc(8,10,3)
 import           GHC_Driver_Session           (HscTarget (..), gopt_set)
@@ -188,7 +195,12 @@ main3 orig_args ghc_args = do
   -- From ghc 9.0, "interpretPackageEnv" is called from "parseDynamicFlags". In
   -- older versions, package environment initialization works were done by
   -- "setSessionDynFlags" via "initPackages".
+#if MIN_VERSION_ghc(9,2,0)
+  logger <- getLogger
+  (dflags2, lfileish, warnings) <- parseDynamicFlags logger dflags1b largs
+#else
   (dflags2, lfileish, warnings) <- parseDynamicFlags dflags1b largs
+#endif
 
   let fileish = map unLoc lfileish
       platform = targetPlatform dflags2
@@ -223,7 +235,11 @@ main3 orig_args ghc_args = do
        handleSourceError
          (\e -> do printException e
                    liftIO exitFailure)
+#if MIN_VERSION_ghc(9,2,0)
+         (liftIO (handleFlagWarnings logger dflags3 warnings))
+#else
          (liftIO (handleFlagWarnings dflags3 warnings))
+#endif
 
        -- Initialization works for Finkel.
        initSessionForMake
@@ -235,9 +251,14 @@ main3 orig_args ghc_args = do
            phased_inputs = phased_srcs ++ phased_non_srcs
            phase_it path = (on_the_cmdline (normalise path), Nothing)
            force_recomp = gopt Opt_ForceRecomp dflags3
+#if MIN_VERSION_ghc(9,2,0)
+           ofile = outputFile_ dflags3
+#else
+           ofile = outputFile dflags3
+#endif
 
        -- Do the `make' work.
-       success_flag <- make phased_inputs force_recomp (outputFile dflags3)
+       success_flag <- make phased_inputs force_recomp ofile
        case success_flag of
          Succeeded -> return ()
          Failed    -> liftIO exitFailure

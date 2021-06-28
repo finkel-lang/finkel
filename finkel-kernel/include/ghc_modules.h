@@ -8,6 +8,82 @@
 From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 */
 
+#if __GLASGOW_HASKELL__ >= 902
+#define GHC_Driver_Env             GHC.Driver.Env
+#define GHC_Driver_Env_Types       GHC.Driver.Env.Types
+#define GHC_Driver_Errors          GHC.Driver.Errors
+#define GHC_Driver_Ppr             GHC.Driver.Ppr
+
+#define GHC_Platform_Ways          GHC.Platform.Ways
+#define GHC_Runtime_Context        GHC.Runtime.Context
+
+#define GHC_Types_Error            GHC.Types.Error
+#define GHC_Types_Fixity           GHC.Types.Fixity
+#define GHC_Types_SourceError      GHC.Types.SourceError
+#define GHC_Types_SourceFile       GHC.Types.SourceFile
+#define GHC_Types_SourceText       GHC.Types.SourceText
+#define GHC_Types_TyThing          GHC.Types.TyThing
+
+#define GHC_Unit_Finder            GHC.Unit.Finder
+#define GHC_Unit_Home_ModInfo      GHC.Unit.Home.ModInfo
+#define GHC_Unit_Module_Deps       GHC.Unit.Module.Deps
+#define GHC_Unit_Module_Graph      GHC.Unit.Module.Graph
+#define GHC_Unit_Module_ModIface   GHC.Unit.Module.ModIface
+#define GHC_Unit_Module_ModSummary GHC.Unit.Module.ModSummary
+/* #define GHC_Unit_Types             GHC.Unit.Types */
+
+#elif __GLASGOW_HASKELL__ >= 900
+#define GHC_Driver_Env             GHC.Driver.Types
+#define GHC_Driver_Env_Types       GHC.Driver.Types
+#define GHC_Driver_Errors          GHC.Utils.Error
+#define GHC_Driver_Ppr             GHC.Utils.Outputable
+
+#define GHC_Platform_Ways          GHC.Driver.Ways
+
+#define GHC_Runtime_Context        GHC.Driver.Types
+
+#define GHC_Types_Error            GHC.Utils.Error
+#define GHC_Types_Fixity           GHC.Types.Basic
+#define GHC_Types_SourceError      GHC.Driver.Types
+#define GHC_Types_SourceFile       GHC.Driver.Phases
+#define GHC_Types_SourceText       GHC.Types.Basic
+#define GHC_Types_TyThing          GHC.Driver.Types
+
+#define GHC_Unit_Finder            GHC.Driver.Finder
+#define GHC_Unit_Home_ModInfo      GHC.Driver.Types
+#define GHC_Unit_Module_Deps       GHC.Driver.Types
+#define GHC_Unit_Module_Graph      GHC.Driver.Types
+#define GHC_Unit_Module_ModIface   GHC.Driver.Types
+#define GHC_Unit_Module_ModSummary GHC.Driver.Types
+/* #define GHC_Unit_Types             GHC.Driver.Types */
+
+#else /* __GLASGOW_HASKELL__ < 900 */
+#define GHC_Driver_Env             HscTypes
+#define GHC_Driver_Env_Types       HscTypes
+#define GHC_Driver_Errors          ErrUtils
+#define GHC_Driver_Ppr             Outputable
+
+#define GHC_Platform_Ways          DynFlags
+
+#define GHC_Runtime_Context        HscTypes
+
+#define GHC_Types_Error            ErrUtils
+#define GHC_Types_Fixity           BasicTypes
+#define GHC_Types_SourceError      HscTypes
+#define GHC_Types_SourceFile       DriverPhases
+#define GHC_Types_SourceText       BasicTypes
+#define GHC_Types_TyThing          HscTypes
+
+#define GHC_Unit_Finder            Finder
+#define GHC_Unit_Home_ModInfo      HscTypes
+#define GHC_Unit_Module_Deps       HscTypes
+#define GHC_Unit_Module_Graph      HscTypes
+#define GHC_Unit_Module_ModIface   HscTypes
+#define GHC_Unit_Module_ModSummary HscTypes
+#endif
+
+/* Changes happened from ghc 8.10 to ghc 9.0 */
+
 #if __GLASGOW_HASKELL__ >= 900
 #define GHC_Builtin_Types         GHC.Builtin.Types
 #define GHC_Builtin_Types_Prim    GHC.Builtin.Types.Prim
@@ -25,7 +101,6 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Data_OrdList          GHC.Data.OrdList
 #define GHC_Data_StringBuffer     GHC.Data.StringBuffer
 
-#define GHC_Driver_Finder         GHC.Driver.Finder
 #define GHC_Driver_Main           GHC.Driver.Main
 #define GHC_Driver_Make           GHC.Driver.Make
 #define GHC_Driver_Monad          GHC.Driver.Monad
@@ -89,8 +164,7 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Utils_Panic           GHC.Utils.Panic
 #define GHC_Utils_Ppr             GHC.Utils.Ppr
 
-#else
-/* Pre 9.0.0 */
+#else /* __GLASGOW_HASKELL__ < 900 */
 #define GHC_Builtin_Types         TysWiredIn
 #define GHC_Builtin_Types_Prim    TysPrim
 
@@ -107,7 +181,6 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Data_OrdList          OrdList
 #define GHC_Data_StringBuffer     StringBuffer
 
-#define GHC_Driver_Finder         Finder
 #define GHC_Driver_Main           HscMain
 #define GHC_Driver_Make           GhcMake
 #define GHC_Driver_Monad          GhcMonad
@@ -115,13 +188,12 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Driver_Pipeline       DriverPipeline
 #define GHC_Driver_Session        DynFlags
 #define GHC_Driver_Types          HscTypes
-#define GHC_Driver_Ways           DynFlags /* DynFlags has splitted */
 
 #define GHC_Hs_Stats              HscStats
 
 #define GHC_Iface_Load            LoadIface
 #define GHC_Iface_Make            MkIface
-#define GHC_Iface_Recomp          MkIface /* MkIface has splitted */
+#define GHC_Iface_Recomp          MkIface
 #define GHC_Iface_Recomp_Binary   BinFingerprint
 #define GHC_Iface_Recomp_Flags    FlagChecker
 
@@ -159,6 +231,7 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 
 #define GHC_Unit_Module           Module
 #define GHC_Unit_State            Packages
+#define GHC_Unit_Types            HscTypes
 
 #define GHC_Utils_Encoding        Encoding
 #define GHC_Utils_Error           ErrUtils

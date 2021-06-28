@@ -45,14 +45,15 @@ import System.FilePath        (dropExtension, normalise, pathSeparator,
 -- ghc
 import GHC_Driver_Phases      (Phase)
 import GHC_Driver_Session     (DynFlags (..))
-import GHC_Driver_Types       (throwOneError)
+import GHC_Types_SourceError  (throwOneError)
 import GHC_Types_SrcLoc       (GenLocated (..), Located)
 import GHC_Unit_Module        (ModuleName, mkModuleName, moduleNameSlashes,
                                moduleNameString)
-import GHC_Utils_Error        (mkErrMsg)
 import GHC_Utils_Misc         (looksLikeModuleName)
 import GHC_Utils_Outputable   (Outputable (..), neverQualify, sep, text)
 
+-- Internal
+import Language.Finkel.Error
 
 -- ---------------------------------------------------------------------
 --
@@ -231,6 +232,6 @@ findTargetSource dflags (L l modNameOrFilePath)= do
   case mb_inputPath of
     Just path -> detectSource path
     Nothing   -> do
-      let err = mkErrMsg dflags l neverQualify doc
+      let err = mkWrappedMsg dflags l neverQualify doc
           doc = text ("cannot find target source: " ++ modNameOrFilePath)
       throwOneError err

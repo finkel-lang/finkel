@@ -55,22 +55,14 @@ import           GHC_Data_FastString        (FastString,
                                              fsLit, headFS, nullFS,
                                              mkFastStringByteString,
                                              unpackFS)
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC_Data_FastString        (bytesFS)
-#else
-import           GHC_Data_FastString        (tailFS)
-#endif
-
 import           GHC_Data_StringBuffer      (StringBuffer, atEnd,
                                              byteDiff, cur, currentChar,
                                              lexemeToFastString,
                                              lexemeToString, nextChar,
                                              prevChar, stepOn)
 import qualified GHC_Data_StringBuffer       as SB
-import           GHC_Parser_Annotation      (AnnotationComment(..))
 import           GHC_Parser_CharClass       (is_space)
 import           GHC_Utils_Encoding         (utf8DecodeByteString)
-import           GHC_Types_Basic            (FractionalLit(..), SourceText(..))
 import           GHC_Types_SrcLoc           (GenLocated(..), Located,
                                              RealSrcLoc, SrcLoc(..),
                                              SrcSpan(..), advanceSrcLoc,
@@ -81,7 +73,12 @@ import           GHC_Utils_Lexeme           (startsConSym, startsVarId,
                                              startsVarSym)
 import           GHC_Utils_Misc              (readRational)
 
-#if MIN_VERSION_ghc (8,10,0)
+
+#if !MIN_VERSION_ghc(9,0,0)
+import           GHC_Data_FastString        (tailFS)
+#endif
+
+#if MIN_VERSION_ghc(8,10,0)
 import           GHC_Data_FastString        (bytesFS)
 #else
 import           FastString                 (fastStringToByteString)
@@ -92,6 +89,7 @@ import qualified GHC.LanguageExtensions     as LangExt
 
 -- Internal
 import           Language.Finkel.Form
+import           Language.Finkel.Form.Fractional
 }
 
 $nl          = [\n\r\f]
@@ -230,8 +228,6 @@ instance Applicative SP where
   {-# INLINE (<*>) #-}
 
 instance Monad SP where
-  return a = SP (\st -> SPOK st a)
-  {-# INLINE return #-}
   m >>= k = SP (\st -> case unSP m st of
                    SPOK st' a -> unSP (k a) st'
                    SPNG l c msg -> SPNG l c msg)
@@ -549,27 +545,31 @@ tok_doc_with :: (FastString -> Token) -> Char -> Action
 tok_doc_with constr char (AlexInput _ s) l = do
   let fs0 = takeUtf8FS l s
       bs0 = bytesFS fs0
-      line0:bss = C8.lines bs0
-      line1 = C8.tail (C8.dropWhile (/= char) line0)
-      bs1 = C8.unlines (line1 : map (C8.dropWhile (== ';')) bss)
-      fs1 = mkFastStringByteString bs1
-  return $! constr fs1
+  case C8.lines bs0 of
+    line0:bss -> do
+      let line1 = C8.tail (C8.dropWhile (/= char) line0)
+          bs1 = C8.unlines (line1 : map (C8.dropWhile (== ':')) bss)
+          fs1 = mkFastStringByteString bs1
+      return $! constr fs1
+    _ -> alexError "tok_doc_with: panic"
 {-# INLINABLE tok_doc_with #-}
 
 tok_doc_named :: Action
-tok_doc_named (AlexInput _ s) l =
+tok_doc_named (AlexInput _ s) l = do
   let fs0 = takeUtf8FS l s
       bs0 = bytesFS fs0
-      line1:bss = C8.lines bs0
-      line2 = C8.dropWhile isSpace (C8.dropWhile (== ';') line1)
-      line3 = C8.tail line2
-      key = mkFastStringByteString line3
-      bs1 = map (C8.dropWhile (== ';')) bss
-      fs1 = mkFastStringByteString (C8.unlines bs1)
-      fs2 = case bss of
-              [] -> Nothing
-              _  -> Just fs1
-  in  return $! TDocNamed key fs2
+  case C8.lines bs0 of
+    line1:bss -> do
+      let line2 = C8.dropWhile isSpace (C8.dropWhile (== ';') line1)
+          line3 = C8.tail line2
+          key = mkFastStringByteString line3
+          bs1 = map (C8.dropWhile (== ';')) bss
+          fs1 = mkFastStringByteString (C8.unlines bs1)
+          fs2 = case bss of
+                  [] -> Nothing
+                  _  -> Just fs1
+      return $! TDocNamed key fs2
+    _ -> alexError "panic: tok_doc_named"
 {-# INLINABLE tok_doc_named #-}
 
 tok_doc_group :: Action
@@ -776,17 +776,8 @@ tok_integer (AlexInput _ buf) l =
 
 tok_fractional :: Action
 tok_fractional (AlexInput _ buf) l =
-  do let str = lexemeToString buf (fromIntegral l)
-         rat = readRational str
-#if MIN_VERSION_ghc(8,4,0)
-     let stxt = SourceText str
-         is_neg = if 0 < rat
-                     then False
-                     else True
-     return $! TFractional $! FL stxt is_neg rat
-#else
-     return $! TFractional $! FL str rat
-#endif
+  let str = lexemeToString buf $! fromIntegral l
+  in  return $! TFractional $! readFractionalLit $! str
 {-# INLINABLE tok_fractional #-}
 
 

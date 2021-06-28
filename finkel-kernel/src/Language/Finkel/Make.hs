@@ -38,24 +38,30 @@ import System.FilePath                   (splitExtension)
 
 -- ghc
 import GHC                               (setSessionDynFlags)
-import GHC_Driver_Finder                 (cannotFindModule,
-                                          findExposedPackageModule)
+import GHC_Driver_Env                    (HscEnv (..))
 import GHC_Driver_Make                   (LoadHowMuch (..), load')
 import GHC_Driver_Monad                  (GhcMonad (..))
 import GHC_Driver_Phases                 (Phase (..))
 import GHC_Driver_Session                (DynFlags (..), GeneralFlag (..),
                                           GhcMode (..), HasDynFlags (..), gopt,
-                                          gopt_set, gopt_unset, isObjectTarget)
-import GHC_Driver_Types                  (FindResult (..), HscEnv (..),
-                                          ModSummary (..), lookupHpt,
-                                          ms_mod_name, throwOneError)
+                                          gopt_set, gopt_unset)
 import GHC_Types_Basic                   (SuccessFlag (..))
+import GHC_Types_SourceError             (throwOneError)
 import GHC_Types_SrcLoc                  (Located, getLoc, unLoc)
+import GHC_Unit_Finder                   (FindResult (..),
+                                          findExposedPackageModule)
+import GHC_Unit_Home_ModInfo             (lookupHpt)
 import GHC_Unit_Module                   (ModuleName)
-import GHC_Utils_Error                   (mkPlainErrMsg)
+import GHC_Unit_Module_ModSummary        (ModSummary (..), ms_mod_name)
 import GHC_Utils_Misc                    (getModificationUTCTime)
 import GHC_Utils_Outputable              (Outputable (..), brackets, nest, text,
                                           vcat, (<+>))
+
+#if MIN_VERSION_ghc(9,2,0)
+import GHC.Iface.Load                    (cannotFindModule)
+#else
+import GHC_Unit_Finder                   (cannotFindModule)
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Unit_Types                    (moduleUnit)
@@ -64,12 +70,13 @@ import GHC_Unit_Module                   (Module (..), moduleUnitId)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import GHC_Driver_Types                  (runHsc)
+import GHC_Driver_Env                    (runHsc)
 import GHC_Plugins                       (Plugin (..), withPlugins)
 import GHC_Runtime_Loader                (initializePlugins)
 #endif
 
 -- internal
+import Language.Finkel.Error
 import Language.Finkel.Expand
 import Language.Finkel.Fnk
 import Language.Finkel.Make.Recompile
@@ -116,11 +123,15 @@ make infiles force_recomp mb_output = do
   -- this point. Some of the dump flags will turn the force recompilation flag
   -- on. Ghc does this in DynFlags.{setDumpFlag',forceRecompile}.
   dflags0 <- getDynFlags
-  let dflags1 = dflags0 { ghcMode = CompManager
-                        , outputFile = mb_output }
+  let dflags1 = set_outputFile mb_output $ dflags0 {ghcMode = CompManager}
       dflags2 = if force_recomp
                    then gopt_set dflags1 Opt_ForceRecomp
                    else gopt_unset dflags1 Opt_ForceRecomp
+#if MIN_VERSION_ghc(9,2,0)
+      set_outputFile f d = d { outputFile_ = f }
+#else
+      set_outputFile f d = d { outputFile = f }
+#endif
   setDynFlags dflags2
   dflags3 <- getDynFlags
 
@@ -147,8 +158,14 @@ initSessionForMake = do
   -- updated "DynFlags". Returned list of 'InstalledUnitId's are ignored.
   _preload0 <- setSessionDynFlags dflags0
   hsc_env <- getSession
+#if MIN_VERSION_ghc(9,2,0)
+  hsc_env1 <- liftIO $! initializePlugins hsc_env
+  setSession hsc_env1
+  let dflags1 = hsc_dflags hsc_env1
+#else
   let dflags0' = hsc_dflags hsc_env
   dflags1 <- liftIO $! initializePlugins hsc_env dflags0'
+#endif
 #else
   let dflags1 = dflags0
 #endif
@@ -446,7 +463,7 @@ makeTargetSummary fnk_env rs0 tu@(tsource,_) = do
        -- interface file and object code file are reusable when compiling to
        -- object code.
        Nothing ->
-         if not (isObjectTarget (hscTarget dflags))
+         if not (isObjectBackend dflags)
             then new_summary rs0 "non object target"
             else do
               (et_ms, rs1) <- runRecompilationCheck fnk_env rs0 tu
@@ -487,7 +504,7 @@ makeNewSummary fnk_env hsc_env tu = toMakeM $ do
           Just _  -> return ()
 
       -- To support -ddump-parsed-ast option.
-      dumpParsedAST (ms_hspp_opts ms0) ms0
+      dumpParsedAST hsc_env (ms_hspp_opts ms0) ms0
 
 #if MIN_VERSION_ghc(8,6,0)
       -- To support parsedResultAction in plugin. See "HscMain.hscParse'"
@@ -497,7 +514,11 @@ makeNewSummary fnk_env hsc_env tu = toMakeM $ do
           let do_action p opts = parsedResultAction p opts ms0
               dflags0 = hsc_dflags hsc_env
               dflags1 = adjustIncludePaths dflags0 ms0
+#if MIN_VERSION_ghc(9,2,0)
+              act = withPlugins (hsc_env {hsc_dflags=dflags1}) do_action pm
+#else
               act = withPlugins dflags1 do_action pm
+#endif
               hsc_env' = hsc_env {hsc_dflags = dflags1}
           new_pm <- liftIO (runHsc hsc_env' act)
           return $! ms0 {ms_parsed_mod = Just new_pm}
@@ -550,6 +571,10 @@ filterNotCompiled fnk_env hsc_env = foldM find_not_compiled []
               tr ["Found" <+> ppr mname <+> "in" <+> ppr mod_unit]
               return acc
             _ -> do
-              let doc = cannotFindModule dflags mname fr
-                  err = mkPlainErrMsg dflags (getLoc lmname) doc
+              let err = mkPlainWrappedMsg dflags (getLoc lmname) doc
+#if MIN_VERSION_ghc(9,2,0)
+                  doc = cannotFindModule hsc_env mname fr
+#else
+                  doc = cannotFindModule dflags mname fr
+#endif
               throwOneError err

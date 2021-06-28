@@ -28,15 +28,21 @@ import GHC_Hs_Pat                      (HsRecFields (..), LHsRecField)
 import GHC_Hs_Type                     (mkHsWildCardBndrs)
 import GHC_Hs_Utils                    (mkBodyStmt, mkHsApp, mkHsComp, mkHsDo,
                                         mkHsFractional, mkHsIf, mkHsLam,
-                                        mkLHsPar, mkLHsSigWcType,
-                                        mkLHsTupleExpr, mkMatchGroup)
-import GHC_Parser_PostProcess          (mkRdrRecordCon, mkRdrRecordUpd)
-import GHC_Types_Basic                 (Arity, Boxity (..), FractionalLit (..),
-                                        Origin (..), SourceText (..))
+                                        mkLHsPar, mkLHsTupleExpr, mkMatchGroup)
+import GHC_Parser_PostProcess          (mkRdrRecordCon)
+import GHC_Types_Basic                 (Arity, Boxity (..), Origin (..))
 import GHC_Types_Name_Reader           (RdrName, getRdrName)
 import GHC_Types_SrcLoc                (GenLocated (..), Located, SrcSpan (..),
                                         getLoc, noLoc)
 import GHC_Utils_Lexeme                (isLexCon, isLexSym, isLexVarId)
+
+#if MIN_VERSION_ghc(9,2,0)
+import GHC_Hs_Utils                    (hsTypeToHsSigWcType)
+import GHC_Parser_Annotation           (locA)
+#else
+import GHC_Hs_Utils                    (mkLHsSigWcType)
+import GHC_Parser_PostProcess          (mkRdrRecordUpd)
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Hs_Utils                    (mkPsBindStmt)
@@ -45,23 +51,18 @@ import GHC_Types_SrcLoc                (UnhelpfulSpanReason (..))
 import GHC_Hs_Utils                    (mkBindStmt)
 #endif
 
-#if MIN_VERSION_ghc(8,10,0)
-import GHC_Hs_Extension                (noExtField)
-#elif MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Extension                (noExt)
+#if MIN_VERSION_ghc(8,6,0)
+import GHC_Hs_Expr                     (parenthesizeHsExpr)
 #else
 import GHC_Hs_Expr                     (isListCompExpr, noPostTcExpr)
 import GHC_Hs_Lit                      (OverLitVal (..))
 import PlaceHolder                     (placeHolderType)
 #endif
 
-#if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Expr                     (parenthesizeHsExpr)
-#endif
-
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Form
+import Language.Finkel.Form.Fractional
 import Language.Finkel.Syntax.SynUtils
 
 
@@ -72,7 +73,12 @@ import Language.Finkel.Syntax.SynUtils
 -- ---------------------------------------------------------------------
 
 b_ifE :: Code -> HExpr -> HExpr -> HExpr -> HExpr
-b_ifE (LForm (L l _)) p t f = L l (mkHsIf p t f)
+b_ifE (LForm (L l _)) p t f =
+#if MIN_VERSION_ghc(9,2,0)
+  lA l (mkHsIf p t f unused)
+#else
+  L l (mkHsIf p t f)
+#endif
 {-# INLINABLE b_ifE #-}
 
 b_lamE :: (HExpr,[HPat]) -> HExpr
@@ -80,10 +86,14 @@ b_lamE (body,pats) = mkHsLam pats body
 {-# INLINABLE b_lamE #-}
 
 b_tupE :: Code -> [HExpr] -> HExpr
-b_tupE (LForm (L l _)) args = L l e
+b_tupE (LForm (L l _)) args = lA l e
   where
     e = explicitTuple (map mkArg args) Boxed
+#if MIN_VERSION_ghc(9,2,0)
+    mkArg x          = present x
+#else
     mkArg x@(L al _) = L al (present x)
+#endif
     explicitTuple = ExplicitTuple NOEXT
     present = Present NOEXT
 {-# INLINABLE b_tupE #-}
@@ -91,22 +101,29 @@ b_tupE (LForm (L l _)) args = L l e
 -- Expression for tuple constructor function (i.e. the (,)
 -- function). See also 'b_varE' for tuples with more elements.
 b_tupConE :: Code -> HExpr
-b_tupConE (LForm (L l _)) = L l (HsVar NOEXT (L l (tupConName Boxed 2)))
+b_tupConE (LForm (L l _)) = lA l (HsVar NOEXT (lN l (tupConName Boxed 2)))
 {-# INLINABLE b_tupConE #-}
 
 b_letE :: Code -> [HDecl] -> HExpr -> Builder HExpr
 b_letE (LForm (L l _)) decls body = do
   cd <- cvBindsAndSigs (toOL decls)
+#if MIN_VERSION_ghc(9,2,0)
   let valbinds = mkHsValBinds_compat (cd_binds cd) (cd_sigs cd)
-      hsLet = HsLet NOEXT
-  return (L l (hsLet (L l valbinds) body))
+#else
+  let valbinds = L l (mkHsValBinds_compat (cd_binds cd) (cd_sigs cd))
+#endif
+  return (lA l (HsLet NOEXT valbinds body))
 {-# INLINABLE b_letE #-}
 
 b_caseE :: Code -> HExpr -> [HMatch] -> HExpr
-b_caseE (LForm (L l _)) expr matches = L l (hsCase expr mg)
+b_caseE (LForm (L l _)) expr matches = lA l (hsCase expr mg)
   where
     hsCase = HsCase NOEXT
+#if MIN_VERSION_ghc(9,2,0)
+    mg = mkMatchGroup FromSource (lL l matches)
+#else
     mg = mkMatchGroup FromSource matches
+#endif
 {-# INCLUDE b_caseE #-}
 
 b_match :: HPat -> ([HGRHS],[HDecl]) -> HMatch
@@ -128,7 +145,7 @@ b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
   let lrhs = case gs of
         [] -> noLoc rhs
-        _  -> let l = getLoc (mkLocatedList gs) in L l rhs
+        _  -> let l = getLoc (mkLocatedListA gs) in reLoc (L l rhs)
       rhs = b_GRHS gs body
   in  (lrhs:rhss)
 {-# INLINABLE b_hgrhs #-}
@@ -138,11 +155,14 @@ b_GRHS = GRHS NOEXT
 {-# INLINABLE b_GRHS #-}
 
 b_doE :: Code -> [HStmt] -> HExpr
-#if MIN_VERSION_ghc(9,0,0)
--- XXX: Does not support "[ModuleName.].do" syntax.
-b_doE (LForm (L l _)) exprs = L l (mkHsDo (DoExpr Nothing) exprs)
+-- XXX: Does not support "[ModuleName.].do" syntax yet.
+b_doE (LForm (L l _)) exprs =
+#if MIN_VERSION_ghc(9,2,0)
+  lA l (mkHsDo (DoExpr Nothing) (reLocA (L l exprs)))
+#elif MIN_VERSION_ghc(9,0,0)
+  L l (mkHsDo (DoExpr Nothing) exprs)
 #else
-b_doE (LForm (L l _)) exprs = L l (mkHsDo DoExpr exprs)
+  L l (mkHsDo DoExpr exprs)
 #endif
 {-# INLINABLE b_doE #-}
 
@@ -150,15 +170,17 @@ b_tsigE :: Code -> HExpr -> ([HType], HType) -> HExpr
 b_tsigE (LForm (L l _)) e0 (ctxt,t) =
   let t' = case ctxt of
              [] -> t
-             _  -> L l (mkHsQualTy_compat (mkLocatedList ctxt) t)
-#if MIN_VERSION_ghc(8,8,0)
+             _  -> lA l (mkHsQualTy_compat (la2la (mkLocatedListA ctxt)) t)
+#if MIN_VERSION_ghc(9,2,0)
+      e1 = ExprWithTySig NOEXT e0 (hsTypeToHsSigWcType t')
+#elif MIN_VERSION_ghc(8,8,0)
       e1 = ExprWithTySig NOEXT e0 (mkLHsSigWcType t')
 #elif MIN_VERSION_ghc(8,6,0)
       e1 = ExprWithTySig (mkLHsSigWcType t') e0
 #else
       e1 = ExprWithTySig e0 (mkLHsSigWcType t')
 #endif
-  in  mkLHsPar (L l e1)
+  in  mkLHsPar (lA l e1)
 {-# INLINABLE b_tsigE #-}
 
 b_recConOrUpdE :: Code
@@ -166,9 +188,21 @@ b_recConOrUpdE :: Code
                -> Builder HExpr
 b_recConOrUpdE whole@(LForm (L l form)) flds =
   case form of
-    Atom (ASymbol name) | isLexCon name
-      -> return (L l (mkRdrRecordCon (L l (mkVarRdrName name)) cflds))
-    _ -> b_varE whole >>= \v -> return (L l (mkRdrRecordUpd v uflds))
+    Atom (ASymbol name) | isLexCon name ->
+#if MIN_VERSION_ghc(9,2,0)
+      pure (lA l (mkRdrRecordCon (lN l (mkVarRdrName name)) cflds unused))
+#else
+      pure (L l (mkRdrRecordCon (L l (mkVarRdrName name)) cflds))
+#endif
+    _ -> do
+      v <- b_varE whole
+#if MIN_VERSION_ghc(9,2,0)
+      pure (lA l (RecordUpd { rupd_ext = unused
+                            , rupd_expr = v
+                            , rupd_flds = Left uflds }))
+#else
+      pure (L l (mkRdrRecordUpd v uflds))
+#endif
   where
     cflds = HsRecFields { rec_flds = map mkcfld' non_wilds
                         , rec_dotdot = mb_dotdot }
@@ -192,7 +226,16 @@ b_recUpdE expr flds = do
        l = getLoc expr'
    case wilds of
      (_:_) -> builderError
-     []    -> return (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
+#if MIN_VERSION_ghc(9,2,0)
+     -- XXX: Does not support record dot syntax yet.  The return type of
+     -- 'mkRdrRecordUpd' function changed from previous ghc release, now the
+     -- function returns 'PV (HsExpr GhcPs)', formerly it was 'HsExpr GhcPs'.
+     []    -> pure (L l (RecordUpd { rupd_ext = unused
+                                   , rupd_expr = mkLHsPar expr'
+                                   , rupd_flds = Left uflds }))
+#else
+     []    -> pure (L l (mkRdrRecordUpd (mkLHsPar expr') uflds))
+#endif
 {-# INLINABLE b_recUpdE #-}
 
 mkcfld' :: (Located FastString, Maybe HExpr) -> LHsRecField PARSED HExpr
@@ -201,7 +244,7 @@ mkcfld' (n,mb_e) =
     Just e  -> mkcfld False (n, e)
     Nothing -> mkcfld True (n, punned)
   where
-    punned = cL l (HsVar NOEXT (cL l pun_RDR))
+    punned = lA l (HsVar NOEXT (lN l pun_RDR))
     l = getLoc n
 {-# INLINABLE mkcfld' #-}
 
@@ -209,7 +252,7 @@ b_opOrAppE :: Code -> ([HExpr], [HType]) -> Builder HExpr
 b_opOrAppE code (args, tys) = do
   fn <- b_varE code
   let fn' = mkAppTypes fn tys
-      mkOp loc lhs rhs = L loc (mkOpApp fn' lhs (mkLHsParOp rhs))
+      mkOp loc lhs rhs = lA loc (mkOpApp fn' lhs (mkLHsParOp rhs))
   case code of
     -- Perform operator expansion, or delegate to `b_appE' if the head of the
     -- form was non-operator.
@@ -246,7 +289,9 @@ mkAppTypes = foldl' mkAppType
 
 mkAppType :: HExpr -> HType -> HExpr
 mkAppType (dL->expr@(L l _)) ty =
-#if MIN_VERSION_ghc(8,8,0)
+#if MIN_VERSION_ghc(9,2,0)
+  L l (HsAppType (locA l) expr (mkHsWildCardBndrs ty))
+#elif MIN_VERSION_ghc(8,8,0)
   cL l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
 #elif MIN_VERSION_ghc(8,6,0)
   cL l (HsAppType (mkHsWildCardBndrs ty) expr)
@@ -257,14 +302,14 @@ mkAppType (dL->expr@(L l _)) ty =
 b_charE :: Code -> Builder HExpr
 b_charE (LForm (L l form)) =
   case form of
-    Atom (AChar st x) -> return (L l (hsLit (HsChar st x)))
+    Atom (AChar st x) -> return (lA l (hsLit (HsChar st x)))
     _                 -> builderError
 {-# INLINABLE b_charE #-}
 
 b_stringE :: Code -> Builder HExpr
 b_stringE (LForm (L l form)) =
   case form of
-    Atom (AString st x) -> return (L l (hsLit (HsString st x)))
+    Atom (AString st x) -> return (lA l (hsLit (HsString st x)))
     _                   -> builderError
 {-# INLINABLE b_stringE #-}
 
@@ -272,22 +317,22 @@ b_integerE :: Code -> Builder HExpr
 b_integerE (LForm (L l form)) =
   case form of
     Atom (AInteger x)
-      | il_value x < 0 -> return (L l (hsPar (expr x)))
+      | il_value x < 0 -> return (lA l (hsPar (expr x)))
       | otherwise      -> return (expr x)
     _                  -> builderError
   where
-    expr x = L l (hsOverLit $! mkHsIntegral_compat x)
+    expr x = lA l (hsOverLit $! mkHsIntegral_compat x)
 {-# INLINABLE b_integerE #-}
 
 b_fracE :: Code -> Builder HExpr
 b_fracE (LForm (L l form)) =
   case form of
     Atom (AFractional x)
-      | fl_value x < 0 -> return (L l (hsPar (expr x)))
+      | fl_value x < 0 -> return (lA l (hsPar (expr x)))
       | otherwise      -> return (expr x)
     _                  -> builderError
   where
-    expr x = L l (hsOverLit $! hsFractional x)
+    expr x = lA l (hsOverLit $! hsFractional x)
 {-# INLINABLE b_fracE #-}
 
 b_varE :: Code -> Builder HExpr
@@ -299,8 +344,12 @@ b_varE (LForm (L l form))
   = case hdchr of
       -- Overloaded label starts with `#'. Tail characters need to be a valid
       -- variable identifier.
-      '#' | isLexVarId tlchrs
-          -> ret (HsOverLabel NOEXT Nothing tlchrs)
+      '#' | isLexVarId tlchrs ->
+#if MIN_VERSION_ghc(9,2,0)
+          ret (HsOverLabel NOEXT tlchrs)
+#else
+          ret (HsOverLabel NOEXT Nothing tlchrs)
+#endif
 
       -- Tuple constructor function with more than two elements are written as
       -- symbol with sequence of commas, handling such case in this function.
@@ -311,12 +360,17 @@ b_varE (LForm (L l form))
       _   -> ret (var (mkVarRdrName x))
   | otherwise = builderError
   where
-    ret e = return (cL l e)
-    var n = HsVar NOEXT (cL l n)
+    ret e = return (lA l e)
+    var n = HsVar NOEXT (lN l n)
 {-# INLINABLE b_varE #-}
 
 b_unitE :: Code -> HExpr
-b_unitE (LForm (L l _)) = case mkLHsTupleExpr [] of L _ t -> L l t
+b_unitE (LForm (L l _)) =
+#if MIN_VERSION_ghc(9,2,0)
+  case mkLHsTupleExpr [] unused of L _ t -> lA l t
+#else
+  case mkLHsTupleExpr [] of L _ t -> L l t
+#endif
 {-# INLINABLE b_unitE #-}
 
 b_docString :: Code -> Builder (Located HsDocString)
@@ -329,9 +383,13 @@ b_docString (LForm (L l form)) =
 b_hsListE :: Either HExpr [HExpr] -> HExpr
 b_hsListE expr =
   case expr of
+#if MIN_VERSION_ghc(9,2,0)
+    Right exprs -> L l (ExplicitList xEXPLICITLIST exprs)
+#else
     Right exprs -> L l (ExplicitList xEXPLICITLIST Nothing exprs)
+#endif
       where
-        l = getLoc (mkLocatedList exprs)
+        l = getLoc (mkLocatedListA exprs)
 #if MIN_VERSION_ghc(8,6,0)
         xEXPLICITLIST = NOEXT
 #else
@@ -377,14 +435,14 @@ b_quoteAtomE :: SrcSpan -> Bool -> Atom -> Builder HExpr
 b_quoteAtomE l qualify atom =
   case atom of
     ASymbol s       -> mk_lapp qSymbolS (mk_sym s)
-    AChar st c      -> mk_lapp qCharS (L l (hsLit (HsChar st c)))
+    AChar st c      -> mk_lapp qCharS (lA l (hsLit (HsChar st c)))
     AString st str  -> mk_lapp qStringS (mk_str st str)
     AInteger _il    -> b_integerE orig >>= mk_lapp qIntegerS
     AFractional _fl -> b_fracE orig >>= mk_lapp qFractionalS
     AUnit           -> mk_unit
   where
-    mk_sym s = L l (hsLit (HsString (SourceText (show s)) s))
-    mk_str st str = L l (hsLit (HsString st str))
+    mk_sym s = lA l (hsLit (HsString (SourceText (show s)) s))
+    mk_str st str = lA l (hsLit (HsString st str))
     orig = LForm (L l (Atom atom))
     mk_lapp lname arg = do
       let (fname, sl, sc, el, ec) = getLocInfo l
@@ -410,8 +468,8 @@ getLocInfo l = withLocInfo l fname mk_int
     -- Using unhelpful location for file names, lines, and columns. Otherwise,
     -- hpc code coverage will mark the location information as non-evaluated
     -- expressions.
-    fname fs = L ql (hsLit (HsString (SourceText (show fs)) fs))
-    mk_int n = L ql $! hsOverLit $! mkHsIntegral_compat $! mkIntegralLit n
+    fname fs = lA ql (hsLit (HsString (SourceText (show fs)) fs))
+    mk_int n = lA ql $! hsOverLit $! mkHsIntegral_compat $! mkIntegralLit n
 #if MIN_VERSION_ghc(9,0,0)
     ql = UnhelpfulSpan (UnhelpfulOther (fsLit "<b_quoteE>"))
 #else
@@ -461,10 +519,13 @@ tupConName boxity arity = getRdrName (tupleDataCon boxity arity)
 -- ---------------------------------------------------------------------
 
 b_bindS :: Code -> HPat -> HExpr -> HStmt
-#if MIN_VERSION_ghc(9,0,0)
-b_bindS (LForm (L l _)) pat expr = L l (mkPsBindStmt pat expr)
+b_bindS (LForm (L l _)) pat expr =
+#if MIN_VERSION_ghc(9,2,0)
+  lA l (mkPsBindStmt unused pat expr)
+#elif MIN_VERSION_ghc(9,0,0)
+  L l (mkPsBindStmt pat expr)
 #else
-b_bindS (LForm (L l _)) pat expr = L l (mkBindStmt pat expr)
+  L l (mkBindStmt pat expr)
 #endif
 {-# INLINABLE b_bindS #-}
 
@@ -473,7 +534,11 @@ b_letS (LForm (L l _)) decls = do
   cd <- cvBindsAndSigs (toOL decls)
   let valbinds = mkHsValBinds_compat (cd_binds cd) (cd_sigs cd)
       letStmt = LetStmt NOEXT
+#if MIN_VERSION_ghc(9,2,0)
+  return (lA l (letStmt valbinds))
+#else
   return (L l (letStmt (L l valbinds)))
+#endif
 {-# INLINABLE b_letS #-}
 
 b_bodyS :: HExpr -> HStmt

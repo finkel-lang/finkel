@@ -60,7 +60,9 @@
 (imports-from-ghc
  (GHC (getModuleInfo lookupModule lookupName modInfoExports))
  (GHC.Core.TyCo.Rep ((TyThing ..)))
+ (GHC.Driver.Monad ((GhcMonad ..)))
  (GHC.Driver.Session ((DynFlags) (HasDynFlags ..)))
+ (GHC.Driver.Types ((HscEnv ..)))
  (GHC.Data.FastString (FastString unpackFS))
  (GHC.Types.Var (varName))
  (GHC.Unit.Module (mkModuleName))
@@ -564,11 +566,11 @@ Listing exported macros in \"Finkel.Core\" module:
 [\"eval_when\",\"eval_and_compile\", ...]
 "
   [name]
-  (let ((= f dflags mb-thing acc
+  (let ((= f hsc-env mb-thing acc
           (case mb-thing
             (Just (@ thing (AnId var)))
-            (| ((isMacro dflags thing)
-                (: (showSDoc dflags (ppr (varName var))) acc)))
+            (| ((isMacro hsc-env thing)
+                (: (showSDoc (hsc-dflags hsc-env) (ppr (varName var))) acc)))
             _ acc))
         (= get-exported-names name-str
           (do (<- mdl (lookupModule (mkModuleName name-str) Nothing))
@@ -577,8 +579,8 @@ Listing exported macros in \"Finkel.Core\" module:
                 Nothing (return [])
                 (Just mi) (do (<- mb-things
                                 (mapM lookupName (modInfoExports mi)))
-                              (<- dflags getDynFlags)
-                              (return (foldr (f dflags) [] mb-things))))))
+                              (<- hsc-env getSession)
+                              (return (foldr (f hsc-env) [] mb-things))))))
         (= invalid-err
           (++ "exported-macros: got non-module name symbol `"
               (show name) "'"))

@@ -44,48 +44,55 @@ module Language.Finkel.Form
 #include "ghc_modules.h"
 
 -- base
-import Control.Applicative  (Alternative (..))
-import Control.Monad        (MonadPlus (..))
-import Data.Data            (Data, Typeable)
-import Data.Function        (on)
-import Data.Maybe           (fromMaybe)
-import GHC.Generics         (Generic)
+import Control.Applicative             (Alternative (..))
+import Control.Monad                   (MonadPlus (..))
+import Data.Data                       (Data, Typeable)
+import Data.Function                   (on)
+import Data.Maybe                      (fromMaybe)
+import GHC.Generics                    (Generic)
 
-import Data.Binary          (Binary (..), Get, Put, getWord8, putWord8)
+import Data.Binary                     (Binary (..), Get, Put, getWord8,
+                                        putWord8)
 
 -- ghc
-import GHC_Data_FastString  (FastString, fsLit, unpackFS)
-import GHC_Types_Basic      (FractionalLit (..), SourceText (..))
-import GHC_Types_SrcLoc     (GenLocated (..), Located, RealSrcSpan (..),
-                             SrcSpan (..), combineLocs, combineSrcSpans,
-                             mkRealSrcLoc, mkRealSrcSpan, mkSrcLoc, mkSrcSpan,
-                             srcSpanEndCol, srcSpanEndLine, srcSpanFile,
-                             srcSpanFileName_maybe, srcSpanStartCol,
-                             srcSpanStartLine)
-import GHC_Utils_Outputable (Outputable (..), brackets, cat, char, double,
-                             doubleQuotes, fsep, integer, parens, text)
+import GHC_Data_FastString             (FastString, fsLit, unpackFS)
+import GHC_Types_SrcLoc                (GenLocated (..), Located,
+                                        RealSrcSpan (..), SrcSpan (..),
+                                        combineLocs, combineSrcSpans,
+                                        mkRealSrcLoc, mkRealSrcSpan, mkSrcLoc,
+                                        mkSrcSpan, srcSpanEndCol,
+                                        srcSpanEndLine, srcSpanFile,
+                                        srcSpanFileName_maybe, srcSpanStartCol,
+                                        srcSpanStartLine)
+import GHC_Utils_Outputable            (Outputable (..), brackets, cat, char,
+                                        double, doubleQuotes, fsep, integer,
+                                        parens, text)
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Types_SrcLoc     (BufPos (..), BufSpan (..),
-                             UnhelpfulSpanReason (..), unhelpfulSpanFS)
+import GHC_Types_SrcLoc                (BufPos (..), BufSpan (..),
+                                        UnhelpfulSpanReason (..),
+                                        unhelpfulSpanFS)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Data_FastString  (fastStringToShortByteString,
-                             mkFastStringShortByteString)
+import GHC_Data_FastString             (fastStringToShortByteString,
+                                        mkFastStringShortByteString)
 #elif MIN_VERSION_ghc(8,10,0)
-import GHC_Data_FastString  (bytesFS, mkFastStringByteString)
+import GHC_Data_FastString             (bytesFS, mkFastStringByteString)
 #else
-import GHC_Data_FastString  (fastStringToByteString, mkFastStringByteString)
+import GHC_Data_FastString             (fastStringToByteString,
+                                        mkFastStringByteString)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import GHC_Types_Basic      (IntegralLit (..), mkFractionalLit, mkIntegralLit)
+import GHC_Types_SourceText            (IntegralLit (..), mkIntegralLit)
 #endif
 
-
 -- deepseq
-import Control.DeepSeq      (NFData (..))
+import Control.DeepSeq                 (NFData (..))
+
+-- Internal
+import Language.Finkel.Form.Fractional
 
 
 -- -------------------------------------------------------------------
@@ -470,21 +477,6 @@ getFastString = fmap mkFastStringByteString get
 {-# INLINABLE getFastString #-}
 {-# INLINABLE putFastString #-}
 
-putSourceText :: SourceText -> Put
-putSourceText st = case st of
-  SourceText str -> putWord8 0 >> put str
-  NoSourceText   -> putWord8 1
-{-# INLINABLE putSourceText #-}
-
-getSourceText :: Get SourceText
-getSourceText = do
-  t <- getWord8
-  case t of
-    0 -> SourceText <$> get
-    1 -> pure NoSourceText
-    _ -> error $ "getSourceText: unknown tag " ++ show t
-{-# INLINABLE getSourceText #-}
-
 putIntegralLit :: IntegralLit -> Put
 putIntegralLit il =
   putSourceText (il_text il) *> put (il_neg il) *> put (il_value il)
@@ -493,24 +485,6 @@ putIntegralLit il =
 getIntegralLit :: Get IntegralLit
 getIntegralLit = IL <$> getSourceText <*> get <*> get
 {-# INLINABLE getIntegralLit #-}
-
-#if MIN_VERSION_ghc(8,4,0)
-putFractionalLit :: FractionalLit -> Put
-putFractionalLit fl =
-  putSourceText (fl_text fl) *> put (fl_neg fl) *> put (fl_value fl)
-
-getFractionalLit :: Get FractionalLit
-getFractionalLit = FL <$> getSourceText <*> get <*> get
-#else
-putFractionalLit :: FractionalLit -> Put
-putFractionalLit fl = put (fl_text fl) *> put (fl_value fl)
-
-getFractionalLit :: Get FractionalLit
-getFractionalLit = FL <$> get <*> get
-#endif
-
-{-# INLINABLE putFractionalLit #-}
-{-# INLINABLE getFractionalLit #-}
 
 instance Binary a => Binary (Form a) where
   put form = case form of
@@ -691,7 +665,7 @@ aString st = AString st . fsLit
 -- | Auxiliary function to construct an 'Atom' containing
 -- 'FractionalLit' value from literal fractional numbers.
 aFractional :: (Real a, Show a) => a -> Atom
-aFractional x = AFractional $! mkFractionalLit x
+aFractional x = AFractional $! mkFractionalLit' x
 {-# SPECIALIZE aFractional :: Double -> Atom #-}
 {-# SPECIALIZE aFractional :: Float -> Atom #-}
 
@@ -857,22 +831,7 @@ nop2 _ _ f (Atom (AFractional fl1)) (Atom (AFractional fl2)) =
   Atom (aFractional (on f fl_value fl1 fl2))
 nop2 _ _ _ _ _ = List []
 
-fl_text_compat :: FractionalLit -> String
-fl_text_compat fl = str
-  where
-#if MIN_VERSION_ghc(8,4,0)
-    str = case fl_text fl of
-            NoSourceText -> error "fractional literal with no source"
-            SourceText s -> s
-#else
-    str = fl_text fl
-#endif
-
 #if !MIN_VERSION_ghc(8,4,0)
--- | 'mkFractionalLit' did not exist in 8.2.x.
-mkFractionalLit :: Real a => a -> FractionalLit
-mkFractionalLit x = FL (show (realToFrac x :: Double)) (toRational x)
-
 -- | IntegralLit back ported to 8.2.x.
 data IntegralLit
   = IL { il_text  :: SourceText

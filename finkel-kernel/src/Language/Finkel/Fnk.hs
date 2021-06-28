@@ -10,6 +10,7 @@ module Language.Finkel.Fnk
   , FnkEnvRef(..)
   , Macro(..)
   , MacroFunction
+  , MacroName(..)
   , EnvMacros
   , runFnk
   , toGhc
@@ -22,6 +23,7 @@ module Language.Finkel.Fnk
   , withTmpDynFlags
   , setContextModules
   , prepareInterpreter
+  , useInterpreter
 
   -- * Error related functions
   , failFnk
@@ -105,51 +107,61 @@ import           Control.Monad.Catch       (MonadCatch (..), MonadMask (..),
 
 #if MIN_VERSION_ghc(9,0,0)
 import           Control.Monad.Catch       (bracket)
+#else
+import           GHC_Utils_Exception       (ExceptionMonad (..))
 #endif
 
 -- process
 import           System.Process            (readProcess)
 
 -- ghc
-import           GHC                       (runGhc)
+import           GHC                       (ModSummary (..), runGhc)
 import           GHC_Data_Bag              (unitBag)
-import           GHC_Data_FastString       (FastString, fsLit, unpackFS)
+import           GHC_Data_FastString       (FastString, fsLit, uniqueOfFS,
+                                            unpackFS)
+import           GHC_Driver_Env_Types      (HscEnv (..))
+import           GHC_Driver_Errors         (printBagOfErrors)
 import           GHC_Driver_Main           (Messager, batchMsg)
 import           GHC_Driver_Monad          (Ghc (..), GhcMonad (..),
                                             modifySession)
+import           GHC_Driver_Ppr            (showSDocForUser)
 import           GHC_Driver_Session        (DynFlags (..), GeneralFlag (..),
                                             GhcLink (..), HasDynFlags (..),
-                                            HscTarget (..), gopt, gopt_set,
-                                            gopt_unset, picPOpts)
-import           GHC_Driver_Types          (HscEnv (..),
-                                            InteractiveContext (..),
-                                            InteractiveImport (..),
-                                            ModSummary (..), TyThing (..))
+                                            gopt, gopt_set, gopt_unset,
+                                            picPOpts)
 import           GHC_Hs_ImpExp             (simpleImportDecl)
+import           GHC_Platform_Ways         (wayGeneralFlags,
+                                            wayUnsetGeneralFlags)
+import           GHC_Runtime_Context       (InteractiveContext (..),
+                                            InteractiveImport (..))
 import           GHC_Runtime_Eval          (setContext)
 import           GHC_Settings_Config       (cProjectVersion)
+import           GHC_Types_TyThing         (TyThing (..))
 import           GHC_Types_Unique_Supply   (MonadUnique (..), UniqSupply,
                                             initUniqSupply, mkSplitUniqSupply,
                                             splitUniqSupply, takeUniqFromSupply)
 import           GHC_Types_Var             (varType)
 import           GHC_Unit_Module           (mkModuleName)
 import           GHC_Utils_CliOption       (showOpt)
-import           GHC_Utils_Error           (MsgDoc, mkErrMsg, printBagOfErrors)
-import           GHC_Utils_Outputable      (alwaysQualify, defaultErrStyle,
-                                            neverQualify, ppr, printSDocLn, sep,
-                                            showSDocForUser, text, vcat, (<+>))
+import           GHC_Utils_Outputable      (SDoc, alwaysQualify,
+                                            defaultErrStyle, neverQualify, ppr,
+                                            printSDocLn, sep, text, vcat, (<+>))
 import qualified GHC_Utils_Ppr             as Pretty
 
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Backend        (Backend (..))
+import           GHC.Driver.Env            (hsc_units)
+import           GHC.Utils.Logger          (HasLogger (..))
+#else
+import           GHC_Driver_Session        (HscTarget (..))
+#endif
+
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Ways           (hostFullWays, wayGeneralFlags,
-                                            wayUnsetGeneralFlags)
 import           GHC_Driver_Session        (initSDocContext,
                                             sccProfilingEnabled)
+import           GHC_Platform_Ways         (hostFullWays)
 #else
-import           GHC_Driver_Ways           (interpWays, updateWays,
-                                            wayGeneralFlags,
-                                            wayUnsetGeneralFlags)
-import           GHC_Utils_Exception       (ExceptionMonad (..))
+import           GHC_Platform_Ways         (interpWays, updateWays)
 #endif
 
 #if !MIN_VERSION_ghc(8,10,0)
@@ -167,6 +179,7 @@ import qualified Data.IntSet               as FlagSet
 #endif
 
 -- Internal
+import           Language.Finkel.Error
 import           Language.Finkel.Exception
 import           Language.Finkel.Form
 
@@ -195,7 +208,14 @@ instance Show Macro where
       SpecialForm _ -> showString "<special-form>"
 
 -- | Type synonym to express mapping of macro name to 'Macro' data.
-type EnvMacros = Map.Map FastString Macro
+type EnvMacros = Map.Map MacroName Macro
+
+newtype MacroName = MacroName {unMacroName :: FastString}
+  deriving (Eq)
+
+instance Ord MacroName where
+  compare (MacroName a) (MacroName b) = compare (uniqueOfFS a) (uniqueOfFS b)
+  {-# INLINE compare #-}
 
 -- | Data type for debug information.
 data FnkDebugFlag
@@ -268,8 +288,6 @@ instance Applicative Fnk where
   {-# INLINE (<*>) #-}
 
 instance Monad Fnk where
-  return x = Fnk (\_ -> return x)
-  {-# INLINE return #-}
   Fnk m >>= k = Fnk (\ref -> m ref >>= \v -> unFnk (k v) ref)
   {-# INLINE (>>=) #-}
 
@@ -383,6 +401,12 @@ instance HasDynFlags Fnk where
   getDynFlags = Fnk (\_ -> getDynFlags)
   {-# INLINE getDynFlags #-}
 
+#if MIN_VERSION_ghc(9,2,0)
+instance HasLogger Fnk where
+  getLogger = Fnk (\_ -> getLogger)
+  {-# INLINE getLogger #-}
+#endif
+
 instance GhcMonad Fnk where
   getSession = Fnk (\_ -> getSession)
   {-# INLINE getSession #-}
@@ -478,7 +502,12 @@ finkelSrcError code = liftIO . throwIO . FinkelSrcError code
 {-# INLINABLE finkelSrcError #-}
 
 -- | Print 'FinkelException' with source code information when available.
+#if MIN_VERSION_ghc(9,2,0)
+printFinkelException
+  :: (HasLogger m, HasDynFlags m, MonadIO m) => FinkelException -> m ()
+#else
 printFinkelException :: (HasDynFlags m, MonadIO m) => FinkelException -> m ()
+#endif
 printFinkelException e = case finkelExceptionLoc e of
   Just l  -> prLocErr l
   Nothing -> pr msg
@@ -487,8 +516,13 @@ printFinkelException e = case finkelExceptionLoc e of
     pr = liftIO . hPutStrLn stderr
     prLocErr l = do
       dflags <- getDynFlags
-      let em = mkErrMsg dflags l neverQualify (text msg)
+      let em = mkWrappedMsg dflags l neverQualify (text msg)
+#if MIN_VERSION_ghc(9,2,0)
+      logger <- getLogger
+      liftIO (printBagOfErrors logger dflags (unitBag em))
+#else
       liftIO (printBagOfErrors dflags (unitBag em))
+#endif
 {-# INLINABLE printFinkelException #-}
 
 -- | Empty 'FnkEnv' for performing computation with 'Fnk'.
@@ -539,22 +573,33 @@ prepareInterpreter = do
   -- See: "main''" in "ghc/Main.hs".
   hsc_env <- getSession
   let dflags0 = ic_dflags (hsc_IC hsc_env)
-      platform = targetPlatform dflags0
-      dflags1 = dflags0 {ghcLink = LinkInMemory
-                        ,hscTarget = HscInterpreted
-                        ,verbosity = 1}
-#if MIN_VERSION_ghc(9,0,0)
-      updateWays = id
-#else
-      hostFullWays = interpWays
-#endif
-      dflags2 = updateWays (dflags1 {ways = hostFullWays})
-      dflags3 = foldl gopt_set dflags2
-                      (concatMap (wayGeneralFlags platform) hostFullWays)
-      dflags4 = foldl gopt_unset dflags3
-                      (concatMap (wayUnsetGeneralFlags platform) hostFullWays)
+      dflags4 = useInterpreter dflags0
   setDynFlags dflags4
 {-# INLINABLE prepareInterpreter #-}
+
+-- | Update given 'DynFlags' to use interpreter.
+useInterpreter :: DynFlags -> DynFlags
+useInterpreter dflags0 =
+  let platform = targetPlatform dflags0
+      upd_gopt setter get_flags df =
+        foldl setter df (concatMap (get_flags platform) hostFullWays)
+      dflags1 = dflags0 { ghcLink = LinkInMemory
+                        , verbosity = 1 }
+#if MIN_VERSION_ghc(9,2,0)
+      dflags2 = dflags1 { backend = Interpreter
+                        , targetWays_ = hostFullWays }
+#elif MIN_VERSION_ghc(9,0,0)
+      dflags2 = dflags1 { hscTarget = HscInterpreted
+                        , ways = hostFullWays }
+#else
+      dflags2 = updateWays (dflags1 { hscTarget = HscInterpreted
+                                    , ways = hostFullWays })
+      hostFullWays = interpWays
+#endif
+      dflags3 = upd_gopt gopt_set wayGeneralFlags dflags2
+      dflags4 = upd_gopt gopt_unset wayUnsetGeneralFlags dflags3
+  in  dflags4
+{-# INLINABLE useInterpreter #-}
 
 -- | Set context modules in current session to given modules.
 setContextModules :: GhcMonad m => [String] -> m ()
@@ -565,7 +610,7 @@ setContextModules names =
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Fnk ()
 insertMacro k v =
-  modifyFnkEnv (\e -> e {envMacros = Map.insert k v (envMacros e)})
+  modifyFnkEnv (\e -> e {envMacros = Map.insert (MacroName k) v (envMacros e)})
 {-# INLINABLE insertMacro #-}
 
 -- | Lookup macro by name.
@@ -575,8 +620,8 @@ insertMacro k v =
 lookupMacro :: FastString -> FnkEnv -> Maybe Macro
 lookupMacro name fnk_env = go (envTmpMacros fnk_env)
   where
-    go []     = Map.lookup name (envMacros fnk_env)
-    go (t:ts) = Map.lookup name t `mplus` go ts
+    go []     = Map.lookup (MacroName name) (envMacros fnk_env)
+    go (t:ts) = Map.lookup (MacroName name) t `mplus` go ts
 {-# INLINABLE lookupMacro #-}
 
 -- | Empty 'EnvMacros'.
@@ -585,7 +630,7 @@ emptyEnvMacros = Map.empty
 
 -- | Make 'EnvMacros' from list of pair of macro name and value.
 makeEnvMacros :: [(String, Macro)] -> EnvMacros
-makeEnvMacros = Map.fromList . map (first fsLit)
+makeEnvMacros = Map.fromList . map (first (MacroName . fsLit))
 {-# INLINABLE makeEnvMacros #-}
 
 -- | Merge macros.
@@ -595,7 +640,7 @@ mergeMacros = Map.union
 
 -- | Delete macro by macro name.
 deleteMacro :: FastString -> EnvMacros -> EnvMacros
-deleteMacro = Map.delete
+deleteMacro fs em = Map.delete (MacroName fs) em
 {-# INLINABLE deleteMacro #-}
 
 -- | All macros in given macro environment, filtering out the special
@@ -604,16 +649,22 @@ macroNames :: EnvMacros -> [String]
 macroNames = Map.foldrWithKey f []
   where
     f k m acc = case m of
-                  Macro _ -> unpackFS k : acc
+                  Macro _ -> unpackFS (unMacroName k) : acc
                   _       -> acc
 {-# INLINABLE macroNames #-}
 
 -- | 'True' when given 'TyThing' is a 'Macro'.
-isMacro :: DynFlags -> TyThing -> Bool
-isMacro dflags thing =
+isMacro :: HscEnv -> TyThing -> Bool
+isMacro hsc_env thing = do
+  let dflags = hsc_dflags hsc_env
+#if MIN_VERSION_ghc(9,2,0)
+      tystr = showSDocForUser dflags us alwaysQualify . ppr . varType
+      us = hsc_units hsc_env
+#else
+      tystr = showSDocForUser dflags alwaysQualify . ppr . varType
+#endif
   case thing of
-    AnId var -> showSDocForUser dflags alwaysQualify (ppr (varType var))
-                == "Language.Finkel.Fnk.Macro"
+    AnId var -> tystr var == "Language.Finkel.Fnk.Macro"
     _        -> False
 {-# INLINABLE isMacro #-}
 
@@ -647,8 +698,14 @@ gensym' prefix = do
 -- multiple times. To avoid initialization of UniqSupply multiple times, using
 -- top-level IORef to detect whether the initializatio has been done or not.
 
+#if MIN_VERSION_ghc(9,2,0)
+type InitialUnique = Word
+#else
+type InitialUnique = Int
+#endif
+
 -- | Variant of 'initUniqSupply' which does initialization only once.
-initUniqSupply' :: Int -> Int -> IO ()
+initUniqSupply' :: InitialUnique -> Int -> IO ()
 initUniqSupply' ini incr = do
   is_initialized <- readIORef uniqSupplyInitialized
   unless is_initialized
@@ -695,30 +752,35 @@ setFnkVerbosity :: Int -> FnkEnv -> FnkEnv
 setFnkVerbosity v fnk_env = fnk_env {envVerbosity = v}
 {-# INLINABLE setFnkVerbosity #-}
 
--- | Dump 'MsgDoc's when the given 'FnkDebugFlag' is turned on.
+-- | Dump 'SDoc's when the given 'FnkDebugFlag' is turned on.
 debugWhen
-  :: (MonadIO m, HasDynFlags m) => FnkEnv -> FnkDebugFlag -> [MsgDoc] -> m ()
+  :: (MonadIO m, HasDynFlags m) => FnkEnv -> FnkDebugFlag -> [SDoc] -> m ()
 debugWhen fnk_env flag mdocs =
   getDynFlags >>= \dflags -> debugWhen' dflags fnk_env flag mdocs
 {-# INLINABLE debugWhen #-}
 
 debugWhen'
-  :: MonadIO m => DynFlags -> FnkEnv -> FnkDebugFlag -> [MsgDoc] -> m ()
+  :: MonadIO m => DynFlags -> FnkEnv -> FnkDebugFlag -> [SDoc] -> m ()
 debugWhen' dflags fnk_env flag mdocs =
-  when (fopt flag fnk_env) (dumpMsgDocs dflags mdocs)
+  when (fopt flag fnk_env) (dumpSDocs dflags mdocs)
 {-# INLINABLE debugWhen' #-}
 
-dumpMsgDocs :: MonadIO m => DynFlags -> [MsgDoc] -> m ()
-dumpMsgDocs dflags mdocs = liftIO (pr (vcat mdocs))
+dumpSDocs :: MonadIO m => DynFlags -> [SDoc] -> m ()
+dumpSDocs dflags mdocs = liftIO (pr (vcat mdocs))
   where
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+    pr = printSDocLn (initSDocContext dflags err_style)
+                     (Pretty.PageMode False)
+                     stderr
+    err_style = defaultErrStyle
+#elif MIN_VERSION_ghc(9,0,0)
     pr = printSDocLn (initSDocContext dflags err_style) Pretty.PageMode stderr
     err_style = defaultErrStyle
 #else
     pr = printSDocLn Pretty.PageMode dflags stderr err_style
     err_style = defaultErrStyle dflags
 #endif
-{-# INLINABLE dumpMsgDocs #-}
+{-# INLINABLE dumpSDocs #-}
 
 -- | Get finkel debug setting from environment variable /FNK_DEBUG/.
 getFnkDebug :: MonadIO m => m Bool
@@ -731,7 +793,7 @@ getFnkDebug =
 
 -- | Show some fields in 'DynFlags'.
 dumpDynFlags
-  :: (MonadIO m, HasDynFlags m) => FnkEnv -> MsgDoc -> DynFlags -> m ()
+  :: (MonadIO m, HasDynFlags m) => FnkEnv -> SDoc -> DynFlags -> m ()
 dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
   where
     msgs =
@@ -739,8 +801,16 @@ dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
       , "DynFlags:"
       , "  ghcLink:" <+> text (show (ghcLink dflags))
       , "  ghcMode:" <+> ppr (ghcMode dflags)
+#if MIN_VERSION_ghc(9,2,0)
+      , "  backend: " <+> text (show (backend dflags))
+#else
       , "  hscTarget:" <+> text (show (hscTarget dflags))
+#endif
+#if MIN_VERSION_ghc(9,2,0)
+      , "  ways:" <+> text (show (targetWays_ dflags))
+#else
       , "  ways:" <+> text (show (ways dflags))
+#endif
       , "  forceRecomp:" <+> text (show (gopt Opt_ForceRecomp dflags))
 #if MIN_VERSION_ghc(9,0,0)
       , "  hostFullWays:" <+> text (show hostFullWays)
@@ -749,13 +819,19 @@ dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
 #endif
       , "  importPaths:" <+> sep (map text (importPaths dflags))
       , "  optLevel:" <+> text (show (optLevel dflags))
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+      , "  homeUnitId_:" <+> ppr (homeUnitId_ dflags)
+#elif MIN_VERSION_ghc(9,0,0)
       , "  homeUnitId:" <+> ppr (homeUnitId dflags)
 #else
       , "  thisInstallUnitId:" <+> ppr (thisInstalledUnitId dflags)
 #endif
       , "  ldInputs:" <+> sep (map (text . showOpt) (ldInputs dflags))
+#if MIN_VERSION_ghc(9,2,0)
+      , "  mainModuleNameIs:" <+> ppr (mainModuleNameIs dflags)
+#else
       , "  mainModIs:" <+> ppr (mainModIs dflags)
+#endif
       , "  mainFunIs:" <+> ppr (mainFunIs dflags)
       , "  safeHaskell:" <+> text (show (safeHaskell dflags))
       , "  lang:" <+> ppr (language dflags)

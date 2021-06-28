@@ -25,12 +25,12 @@ import           Data.List              (foldl')
 import           Control.Monad.Catch    (MonadThrow(..))
 
 -- ghc
-import           GHC_Types_Basic        (SourceText(..))
 import           GHC_Data_FastString    (FastString, fsLit, unpackFS)
 import           GHC_Hs_ImpExp          (ideclName)
 import           GHC_Unit_Module        (moduleNameString)
 import           GHC_Types_SrcLoc       (GenLocated(..), Located, SrcSpan,
                                          mkSrcSpan)
+import           GHC_Types_SourceText   (SourceText(..))
 import           GHC_Data_StringBuffer  (StringBuffer)
 
 -- ghc-boot

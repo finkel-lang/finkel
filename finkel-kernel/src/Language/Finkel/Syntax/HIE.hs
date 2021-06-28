@@ -26,10 +26,7 @@ import GHC_Types_SrcLoc                (LayoutInfo (..))
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import GHC_Hs_Extension                (noExtField)
 import GHC_Hs_ImpExp                   (ImportDeclQualifiedStyle (..))
-#elif MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Extension                (noExt)
 #endif
 
 -- Internal
@@ -63,13 +60,16 @@ b_module mb_form exports =
       HsModule { hsmodName = mb_name
                , hsmodExports = if null exports
                                    then Nothing
-                                   else Just (mkLocatedList  exports)
+                                   else Just (la2la (mkLocatedListA exports))
                , hsmodImports = imports
                -- Function `cvTopDecls' is used for mergeing multiple top-level
                -- FunBinds, which may take different patterns in its arguments.
                , hsmodDecls = cvTopDecls (toOL decls)
                -- XXX: Does not support DEPRECATED message.
                , hsmodDeprecMessage = Nothing
+#if MIN_VERSION_ghc(9,2,0)
+               , hsmodAnn = NOEXT
+#endif
 #if MIN_VERSION_ghc(9,0,0)
                , hsmodLayout = NoLayoutInfo
 #endif
@@ -83,18 +83,18 @@ b_implicitMainModule = b_module Nothing [] <*> pure Nothing
 b_ieSym :: Code -> Builder HIE
 b_ieSym form@(LForm (L l _)) = do
   name <- getVarOrConId form
-  let var x = L l (IEVar NOEXT (L l (IEName (L l (mkRdrName x)))))
+  let var x = lA l (IEVar NOEXT (lA l (IEName (lN l (mkRdrName x)))))
       con x = iEThingAbs l x
-  if isLexCon name
-     then return (con name)
-     else return (var name)
+  pure (if isLexCon name
+          then (con name)
+          else (var name))
 {-# INLINABLE b_ieSym #-}
 
 b_ieGroup :: Int -> Code -> Builder HIE
 b_ieGroup n form@(LForm (L l body))
   | List [_, doc_code] <- body
   , Atom (AString _ doc) <- unCode doc_code
-  = return $! L l (IEGroup NOEXT (fromIntegral n) (hsDocString doc))
+  = return $! lA l (IEGroup NOEXT (fromIntegral n) (hsDocString doc))
   | otherwise
   = setLastToken form >> failB "Invalid group documentation"
 {-# INLINABLE b_ieGroup #-}
@@ -102,7 +102,7 @@ b_ieGroup n form@(LForm (L l body))
 b_ieDoc :: Code -> Builder HIE
 b_ieDoc (LForm (L l form)) =
   case form of
-    Atom (AString _ str) -> return $! L l (IEDoc NOEXT (hsDocString str))
+    Atom (AString _ str) -> return $! lA l (IEDoc NOEXT (hsDocString str))
     _                    -> builderError
 {-# INLINABLE b_ieDoc #-}
 
@@ -110,7 +110,7 @@ b_ieDocNamed :: Code -> Builder HIE
 b_ieDocNamed (LForm (L l form))
   | List [_,name_code] <- form
   , Atom (ASymbol name) <- unCode name_code
-  = return $! L l (IEDocNamed NOEXT (unpackFS name))
+  = return $! lA l (IEDocNamed NOEXT (unpackFS name))
   | otherwise = builderError
 {-# INLINABLE b_ieDocNamed #-}
 
@@ -121,7 +121,7 @@ b_ieAbs form@(LForm (L l _)) = iEThingAbs l <$> getConId form
 b_ieAll :: Code -> Builder HIE
 b_ieAll form@(LForm (L l _)) = do
   name <- getConId form
-  let thing = L l (iEThingAll (L l (IEName (L l (uq name)))))
+  let thing = lA l (iEThingAll (lA l (IEName (lN l (uq name)))))
       iEThingAll = IEThingAll NOEXT
       uq = mkUnqual tcClsName
   return thing
@@ -133,18 +133,21 @@ b_ieWith (LForm (L l form)) names =
     Atom (ASymbol name) -> return (thing name)
     _                   -> builderError
   where
-    thing name = L l (iEThingWith (L l (IEName (L l name'))) wc ns fs)
-      where
-        name' = case splitQualName name of
-                  Just qual -> mkQual tcClsName qual
-                  Nothing   -> mkUnqual tcClsName name
-    wc = NoIEWildcard
-    (ns, fs) = foldr f ([],[]) names
     -- XXX: Does not support DuplicateRecordFields.
+#if MIN_VERSION_ghc(9,2,0)
+    thing name = lA l (iEThingWith (wrapped name) wc ns)
+#else
+    thing name = L l (iEThingWith (wrapped name) wc ns _fs)
+#endif
+    wrapped name = lA l (IEName (lN l (qn name)))
+    qn name =
+      maybe (mkUnqual tcClsName name) (mkQual tcClsName) (splitQualName name)
+    (ns, _fs) = foldr f ([],[]) names
     f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0) =
-      (L l0 (IEName (L l (mkRdrName n0))) : ns0, fs0)
+      (lA l0 (IEName (lN l (mkRdrName n0))) : ns0, fs0)
     f _ acc = acc
     iEThingWith = IEThingWith NOEXT
+    wc = NoIEWildcard
 {-# INLINABLE b_ieWith #-}
 
 b_ieMdl :: [Code] -> Builder HIE
@@ -153,7 +156,7 @@ b_ieMdl xs =
     [LForm (L l (Atom (ASymbol name)))] -> return (thing l name)
     _                                   -> builderError
   where
-    thing l n = L l (iEModuleContents (L l (mkModuleNameFS n)))
+    thing l n = lA l (iEModuleContents (L l (mkModuleNameFS n)))
     iEModuleContents = IEModuleContents NOEXT
 {-# INLINABLE b_ieMdl #-}
 
@@ -180,8 +183,8 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
           hiding' =
             case mb_entities of
               Nothing       -> Nothing
-              Just entities -> Just (hiding, L l entities)
-      in  return (L l decl')
+              Just entities -> Just (hiding, lL l entities)
+      in  return (lA l decl')
     _ -> builderError
 {-# INLINABLE b_importD #-}
 
@@ -194,5 +197,5 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
 
 iEThingAbs :: SrcSpan -> FastString -> HIE
 iEThingAbs l name =
-  L l (IEThingAbs NOEXT (L l (IEName (L l (mkUnqual tcClsName name)))))
+  lA l (IEThingAbs NOEXT (lA l (IEName (lN l (mkUnqual tcClsName name)))))
 {-# INLINABLE iEThingAbs #-}

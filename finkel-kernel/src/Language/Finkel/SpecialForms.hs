@@ -19,6 +19,11 @@ import Control.Monad.IO.Class          (MonadIO (..))
 import Data.Maybe                      (catMaybes)
 import GHC.Exts                        (unsafeCoerce#)
 
+#if MIN_VERSION_ghc(9,2,0)
+import GHC.Utils.Outputable            ((<>))
+import Prelude                         hiding ((<>))
+#endif
+
 -- containers
 import Data.Map                        (fromList)
 
@@ -28,39 +33,46 @@ import Control.Monad.Catch             (bracket)
 -- ghc
 import GHC                             (ModuleInfo, getModuleInfo, lookupModule,
                                         lookupName, modInfoExports, setContext)
-import GHC_Core_TyCo_Rep               (TyThing (..))
 import GHC_Data_FastString             (FastString, fsLit, unpackFS)
-import GHC_Driver_Finder               (findImportedModule)
+import GHC_Driver_Env_Types            (HscEnv (..))
 import GHC_Driver_Main                 (Messager, hscTcRnLookupRdrName,
                                         showModuleIndex)
 import GHC_Driver_Monad                (GhcMonad (..), modifySession)
+import GHC_Driver_Ppr                  (showPpr)
 import GHC_Driver_Session              (DynFlags (..), GeneralFlag (..),
                                         HasDynFlags (..), getDynFlags,
                                         unSetGeneralFlag')
-import GHC_Driver_Types                (FindResult (..), HscEnv (..),
-                                        InteractiveImport (..), ModSummary (..),
-                                        ModuleGraph, lookupHpt, showModMsg)
 import GHC_Hs                          (HsModule (..))
 import GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
 import GHC_Iface_Recomp                (RecompileRequired (..),
                                         recompileRequired)
+import GHC_Runtime_Context             (InteractiveImport (..))
 import GHC_Runtime_Eval                (getContext)
-import GHC_Types_Basic                 (SourceText (..))
 import GHC_Types_Name                  (nameOccName, occName)
 import GHC_Types_Name_Occurrence       (occNameFS)
 import GHC_Types_Name_Reader           (rdrNameOcc)
+import GHC_Types_SourceText            (SourceText (..))
 import GHC_Types_SrcLoc                (GenLocated (..), SrcSpan (..), unLoc)
+import GHC_Types_TyThing               (TyThing (..))
 import GHC_Types_Var                   (varName)
+import GHC_Unit_Finder                 (FindResult (..), findImportedModule)
+import GHC_Unit_Home_ModInfo           (lookupHpt)
 import GHC_Unit_Module                 (Module, moduleNameString)
-import GHC_Utils_Error                 (MsgDoc, compilationProgressMsg)
-import GHC_Utils_Outputable            (hcat, ppr, showPpr)
+import GHC_Unit_Module_Graph           (ModuleGraph, showModMsg)
+import GHC_Unit_Module_ModSummary      (ModSummary (..))
+import GHC_Utils_Error                 (compilationProgressMsg)
+import GHC_Utils_Outputable            (SDoc, hcat, ppr)
+
+#if MIN_VERSION_ghc(9,2,0)
+import GHC_Utils_Outputable            (text)
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Types_SrcLoc                (UnhelpfulSpanReason (..))
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import GHC_Driver_Types                (mgLookupModule)
+import GHC_Unit_Module_Graph           (mgLookupModule)
 #endif
 
 -- Internal
@@ -74,13 +86,7 @@ import Language.Finkel.Homoiconic
 import Language.Finkel.Make            (findTargetModuleNameMaybe,
                                         makeFromRequire)
 import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModule)
-import Language.Finkel.Syntax.SynUtils (cL, dL)
-
-#if MIN_VERSION_ghc(9,0,0)
-#define _MB_BUF_POS _
-#else
-#define _MB_BUF_POS {- empty -}
-#endif
+import Language.Finkel.Syntax.SynUtils
 
 -- ---------------------------------------------------------------------
 --
@@ -185,7 +191,7 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
   -- 'toImportList' borrowed from local definition in
   -- 'TcRnDriver.tcPreludeClashWarn'.
   let exportedNames = modInfoExports minfo
-      ieName' (dL->L l ie) = cL l (ieName ie)
+      ieName' (dL->L l ie) = la2la (cL l (ieName ie))
       toImportList (h, dL->L _ loc) = (h, map ieName' loc)
       getNames =
         case fmap toImportList (ideclHiding idecl) of
@@ -208,8 +214,8 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
 
   catMaybes <$> (getNames >>= mapM lookupName)
 
-addImportedMacro :: FnkEnv -> DynFlags -> TyThing -> Fnk ()
-addImportedMacro fnk_env dflags thing = when (isMacro dflags thing) go
+addImportedMacro :: FnkEnv -> HscEnv -> TyThing -> Fnk ()
+addImportedMacro fnk_env hsc_env thing = when (isMacro hsc_env thing) go
   where
     go =
       case thing of
@@ -223,14 +229,15 @@ addImportedMacro fnk_env dflags thing = when (isMacro dflags thing) go
               name_sym = toCode (aSymbol name_str)
           coerceMacro dflags name_sym >>= insertMacro (fsLit name_str)
         _ -> failFnk "addImportedmacro"
+    dflags = hsc_dflags hsc_env
 
 -- Note [Bytecode and object code for require and :eval_when_compile import]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --
 -- Use of object codes are not working well for importing home package modules
 -- when optimization option were enabled.  Conservatively using bytecode by
--- delegating further works to 'makeFromRequire' with 'withRequiredSettings' for such
--- cases.
+-- delegating further works to 'makeFromRequire' via 'withRequiredSettings' for
+-- such cases.
 
 setRequiredSettings :: Fnk ()
 setRequiredSettings = do
@@ -255,22 +262,33 @@ withRequiredSettings act =
     (const (setRequiredSettings >> act))
 
 requiredMessager :: Messager
-requiredMessager hsc_env mod_index recomp mod_summary =
+requiredMessager hsc_env mod_index recomp node =
+  -- See: GHC.Driver.Main.batchMsg
   case recomp of
     MustCompile       -> showMsg "Compiling " " [required]"
     UpToDate          -> when (verbosity dflags >= 2) (showMsg "Skipping " "")
-    RecompBecause why -> showMsg "Compiling " (" [required, " ++ why ++ "]")
+    RecompBecause why ->
+#if MIN_VERSION_ghc(9,2,0)
+      showMsg "Compiling " (" [required, " <> text why <> "]")
+#else
+      showMsg "Compiling " (" [required, " ++ why ++ "]")
+#endif
   where
     dflags = hsc_dflags hsc_env
     showMsg msg reason =
-      compilationProgressMsg
-        dflags
-        (showModuleIndex mod_index ++
-         msg ++
+#if MIN_VERSION_ghc(9,2,0)
+      compilationProgressMsg (hsc_logger hsc_env) dflags
+        (showModuleIndex mod_index <> msg <>
+         showModMsg dflags (recompileRequired recomp) node <>
+         reason)
+#else
+      compilationProgressMsg dflags
+        (showModuleIndex mod_index ++ msg ++
          showModMsg dflags (hscTarget dflags)
                     (recompileRequired recomp)
-                     mod_summary ++
+                    node ++
          reason)
+#endif
 
 makeMissingHomeMod :: HImportDecl -> Fnk ()
 makeMissingHomeMod (L _ idecl) = do
@@ -322,17 +340,17 @@ m_withMacro form =
   case unLForm form of
     L l1 (List (_:LForm (L _ (List forms)):rest)) -> do
       fnkc_env0 <- getFnkEnv
-      dflags <- getDynFlags
+      hsc_env <- getSession
 
       -- Expand body of `with-macro' with temporary macros.
-      macros <- fromList <$> evalMacroDefs dflags forms
+      macros <- fromList <$> evalMacroDefs hsc_env forms
       let tmpMacros0 = envTmpMacros fnkc_env0
       putFnkEnv (fnkc_env0 {envTmpMacros = macros : tmpMacros0})
       expanded <- expands' rest
 
-      -- Getting 'FnkEnv' again, so that persistent macros defined inside the
-      -- `with-macro' body could be used hereafter. Restoring tmporary macros to
-      -- preserved value.
+      -- Getting 'FnkEnv' again, so that the persistent macros defined inside
+      -- the `with-macro' body could be used from here. Then restoring tmporary
+      -- macros to preserved value.
       fnkc_env1 <- getFnkEnv
       putFnkEnv (fnkc_env1 {envTmpMacros = tmpMacros0})
 
@@ -341,22 +359,22 @@ m_withMacro form =
         _   -> return (tList l1 (tSym l1 ":begin" : expanded))
     _ -> finkelSrcError form ("with-macro: malformed args:\n" ++ show form)
   where
-    evalMacroDefs dflags forms = do
+    evalMacroDefs hsc_env forms = do
       forms' <- mapM expand forms
       qualify <- envQualifyQuotePrimitives <$> getFnkEnv
-      case evalBuilder dflags qualify parseModule forms' of
+      case evalBuilder (hsc_dflags hsc_env) qualify parseModule forms' of
         Right HsModule {hsmodDecls=decls} -> do
           (tythings, ic) <- evalDecls decls
-          modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
-          foldM (asMacro dflags) [] tythings
+          modifySession (\he -> he {hsc_IC=ic})
+          foldM (asMacro hsc_env) [] tythings
         Left err -> finkelSrcError form (syntaxErrMsg err)
-    asMacro dflags acc tything =
+    asMacro hsc_env acc tything =
       case tything of
-        AnId var | isMacro dflags tything ->
+        AnId var | isMacro hsc_env tything ->
           do let name_fs = occNameFS (occName (varName var))
                  name_sym = toCode (ASymbol name_fs)
-             macro <- coerceMacro dflags name_sym
-             return ((name_fs, macro):acc)
+             macro <- coerceMacro (hsc_dflags hsc_env) name_sym
+             return ((MacroName name_fs, macro):acc)
         _ -> return acc
 
 m_require :: MacroFunction
@@ -403,7 +421,8 @@ m_require form =
              case mb_minfo of
                Just minfo -> do
                  things <- getTyThingsFromIDecl lidecl minfo
-                 mapM_ (addImportedMacro fnk_env dflags) things
+                 hsc_env <- getSession
+                 mapM_ (addImportedMacro fnk_env hsc_env) things
                  return emptyForm
                Nothing ->
                  finkelSrcError form
@@ -437,7 +456,8 @@ m_evalWhenCompile form =
             (tythings, ic) <- evalDecls decls
             modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
             fnk_env <- getFnkEnv
-            mapM_ (addImportedMacro fnk_env dflags) tythings
+            hsc_env <- getSession
+            mapM_ (addImportedMacro fnk_env hsc_env) tythings
 
           return emptyForm
 
@@ -511,7 +531,7 @@ concatS qual =
 {-# INLINABLE concatS #-}
 
 -- | Debug function for this module
-debug :: (MonadIO m, HasDynFlags m) => FnkEnv -> MsgDoc -> [MsgDoc] -> m ()
+debug :: (MonadIO m, HasDynFlags m) => FnkEnv -> SDoc -> [SDoc] -> m ()
 debug fnk_env fn msgs =
   debugWhen fnk_env
             Fnk_trace_spf

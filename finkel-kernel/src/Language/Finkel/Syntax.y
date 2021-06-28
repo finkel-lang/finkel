@@ -28,13 +28,14 @@ module Language.Finkel.Syntax
 #include "ghc_modules.h"
 
 -- ghc
-import GHC_Types_Basic ( Activation(..), FixityDirection(..), InlineSpec(..)
-                       , OverlapMode(..), SourceText(..) )
 import GHC_Data_FastString (FastString)
-import GHC_Types_ForeignCall (Safety)
 import GHC_Hs_Doc (LHsDocString)
 import GHC_Hs_Expr (GRHS(..))
+import GHC_Types_Basic ( Activation(..), InlineSpec(..), OverlapMode(..) )
+import GHC_Types_Fixity (FixityDirection (..))
+import GHC_Types_ForeignCall (Safety)
 import GHC_Types_SrcLoc (GenLocated(..), Located, getLoc, noLoc)
+import GHC_Types_SourceText (SourceText (..))
 
 #if MIN_VERSION_ghc(8,6,0)
 import GHC_Hs_Decls (DerivStrategy(..))
@@ -358,10 +359,10 @@ top_decl :: { HDecl }
 
 overlap :: { Maybe (Located OverlapMode) }
     : {- empty -}    { Nothing }
-    | 'overlappable' { b_overlapP $1 }
-    | 'overlapping'  { b_overlapP $1 }
-    | 'overlaps'     { b_overlapP $1 }
-    | 'incoherent'   { b_overlapP $1 }
+    | 'overlappable' {% b_overlapP $1 }
+    | 'overlapping'  {% b_overlapP $1 }
+    | 'overlaps'     {% b_overlapP $1 }
+    | 'incoherent'   {% b_overlapP $1 }
 
 sfsig :: { (Code, HType) }
     : '::' idsym type { ($2, $3) }
@@ -388,14 +389,14 @@ constr :: { HConDecl }
     | docnext list_es   {% addConDoc'' $1 `fmap` parse p_lconstr $2 }
 
 deriving :: { HDeriving }
-    : {- empty -}         { noLoc [] }
+    : {- empty -}         { b_emptyDeriving }
     | 'deriving' deriving {% do { ds1 <- parse p_deriving_clause $1
                                 ; return (b_derivsD ds1 $2) } }
 
 deriving_clause :: { HDeriving }
-    : 'anyclass' types { b_derivD (Just (uL $1 AnyclassStrategy)) $2 }
-    | 'newtype' types  { b_derivD (Just (uL $1 NewtypeStrategy)) $2 }
-    | 'stock' types    { b_derivD (Just (uL $1 StockStrategy)) $2 }
+    : 'anyclass' types { b_derivD (Just (uL $1 anyclassStrategy)) $2 }
+    | 'newtype' types  { b_derivD (Just (uL $1 newtypeStrategy)) $2 }
+    | 'stock' types    { b_derivD (Just (uL $1 stockStrategy)) $2 }
     | types mb_via     { b_derivD $2 $1 }
 
 mb_via :: { Maybe HDerivStrategy }
@@ -404,17 +405,17 @@ mb_via :: { Maybe HDerivStrategy }
 
 standalone_deriv :: { HDecl }
     : 'anyclass' 'instance' overlap type
-      { b_standaloneD (Just (uL $1 AnyclassStrategy)) $3 $4 }
+      { b_standaloneD (Just (uL $1 anyclassStrategy)) $3 $4 }
     | 'newtype' 'instance' overlap type
-      { b_standaloneD (Just (uL $1 NewtypeStrategy)) $3 $4 }
+      { b_standaloneD (Just (uL $1 newtypeStrategy)) $3 $4 }
     | 'stock' 'instance' overlap type
-      { b_standaloneD (Just (uL $1 StockStrategy)) $3 $4}
+      { b_standaloneD (Just (uL $1 stockStrategy)) $3 $4}
     | mb_via 'instance' overlap type
       { b_standaloneD $1 $3 $4 }
 
 lconstr :: { HConDecl }
     : '::' conid dtype   {% b_gadtD $2 $3 }
-    | 'forall' forallcon { b_forallD (fst $2) (snd $2) }
+    | 'forall' forallcon {% b_forallD (fst $2) (snd $2) }
     | lqtycon            { b_qtyconD $1 }
 
 forallcon :: { ([HTyVarBndrSpecific], (HConDecl, [HType])) }
@@ -451,10 +452,10 @@ lh98constr :: { HConDecl }
     : conid condetails         {% b_conD $1 $2 }
     | conid '{' fielddecls '}' {% b_conD $1 $3 }
 
-condetails :: { HConDeclDetails }
+condetails :: { HConDeclH98Details }
     : type_args { b_conDeclDetails $1 }
 
-fielddecls :: { HConDeclDetails }
+fielddecls :: { HConDeclH98Details }
     : fielddecls1 { b_recFieldsD $1 }
 
 fielddecls1 :: { [HConDeclField] }
@@ -871,11 +872,11 @@ hlist0 :: { [HExpr] }
 guards :: { ([HGRHS],[HDecl]) }
     : 'where' {% parse p_where $1 }
     | list_es {% parse p_guards0 $1 >>= \gs -> return (gs,[]) }
-    | atom    { ([L (getLoc $1) (b_GRHS [] $1)], []) }
+    | atom    { ([reLoc (L (getLoc $1) (b_GRHS [] $1))], []) }
 
 guards0 :: { [HGRHS] }
     : '|' guards1 { $2 }
-    | exprs       { [L (getLoc $1) (b_GRHS [] $1)] }
+    | exprs       { [reLoc (L (getLoc $1) (b_GRHS [] $1))] }
 
 guards1 :: { [HGRHS] }
     : list_es         {% b_hgrhs [] `fmap` parse p_guard $1 }
@@ -887,7 +888,7 @@ guard :: { (HExpr, [HGuardLStmt]) }
 
 where :: { ([HGRHS],[HDecl]) }
     : list_es lbinds0 {% parse p_guards0 $1 >>= \gs -> return (gs,$2) }
-    | atom lbinds0    { ([L (getLoc $1) (b_GRHS [] $1)], $2) }
+    | atom lbinds0    { ([reLoc (L (getLoc $1) (b_GRHS [] $1))], $2) }
 
 -- Quoted form
 

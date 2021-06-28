@@ -32,23 +32,33 @@ import           Control.Monad.Catch    (bracket)
 
 -- ghc
 import           GHC_Data_FastString    (FastString, headFS)
+import           GHC_Driver_Env_Types   (HscEnv (..))
 import           GHC_Driver_Main        (newHscEnv)
 import           GHC_Driver_Monad       (getSession, setSession)
 import           GHC_Driver_Session     (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
-                                         HscTarget (..), unSetGeneralFlag',
-                                         updOptLevel)
-import           GHC_Driver_Types       (HscEnv (..), InteractiveContext (..),
+                                         unSetGeneralFlag', updOptLevel)
+import           GHC_Runtime_Context    (InteractiveContext (..),
                                          emptyInteractiveContext)
 import           GHC_Types_Name         (nameIsFromExternalPackage)
 import           GHC_Types_SrcLoc       (GenLocated (..))
-import           GHC_Utils_Error        (MsgDoc)
-import           GHC_Utils_Outputable   (Outputable (..), cat, fsep, nest, vcat)
+import           GHC_Utils_Outputable   (Outputable (..), SDoc, cat, fsep, nest,
+                                         vcat)
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Backend     (Backend (..))
+import           GHC.Driver.Env         (hsc_home_unit)
+#else
+import           GHC_Driver_Session     (HscTarget (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0) && MIN_VERSION_ghc(9,0,0)
+import           GHC_Driver_Session     (homeUnit)
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC                    (setSessionDynFlags)
-import           GHC_Driver_Session     (homeUnit)
-import           GHC_Driver_Ways        (Way (..), hostFullWays)
+import           GHC_Platform_Ways      (Way (..), hostFullWays)
 #else
 import           GHC_Driver_Session     (Way (..), interpWays, thisPackage)
 #endif
@@ -111,9 +121,15 @@ withExpanderSettings' discard_ic act =
     new_hsc_env fnk_env dflags0 = do
       debug fnk_env Nothing ["Making new session for expand"]
       let dflags1 = bcoDynFlags dflags0
+#if MIN_VERSION_ghc(9,2,0)
+          ways1 = targetWays_ dflags1
+          dflags1b = dflags1 {targetWays_ = removeWayDyn ways1}
+#else
           ways1 = ways dflags1
+          dflags1b = dflags1 {ways = removeWayDyn ways1}
+#endif
           dflags2 = if interp_has_no_way_dyn
-                       then dflags1 {ways = removeWayDyn ways1}
+                       then dflags1b
                        else dflags1
 
       when interp_has_no_way_dyn $
@@ -157,7 +173,9 @@ discardInteractiveContext hsc_env =
            else ic_name empty_ic
         where
          old_name = ic_name old_ic
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+      this_pkg = hsc_home_unit hsc_env
+#elif MIN_VERSION_ghc(9,0,0)
       this_pkg = homeUnit dflags
 #else
       this_pkg = thisPackage dflags
@@ -168,11 +186,18 @@ discardInteractiveContext hsc_env =
 bcoDynFlags :: DynFlags -> DynFlags
 -- XXX: See: 'GhcMake.enableCodeGenForUnboxedTupleOrSums'.
 bcoDynFlags dflags0 =
-  let dflags1 = dflags0 { hscTarget = HscInterpreted
-                        , ghcLink = LinkInMemory }
+  let dflags1 = dflags0 { ghcLink = LinkInMemory
+#if MIN_VERSION_ghc(9,2,0)
+                        , backend = Interpreter
+#else
+                        , hscTarget = HscInterpreted
+#endif
+                        }
       dflags2 = foldr unSetGeneralFlag' dflags1 [ Opt_Hpc
                                                 , Opt_BuildDynamicToo ]
-#if MIN_VERSION_ghc(8,10,3)
+#if MIN_VERSION_ghc(9,2,0)
+      dflags3 = setGeneralFlag' Opt_ByteCode dflags2
+#elif MIN_VERSION_ghc(8,10,3)
       dflags3 = setGeneralFlag' Opt_ByteCodeIfUnboxed dflags2
 #elif MIN_VERSION_ghc(8,10,1)
       dflags3 = setGeneralFlag' Opt_ByteCode dflags2
@@ -221,7 +246,7 @@ withShadowing toShadow act = do
   fnk_env <- getFnkEnv
   let emacros = envMacros fnk_env
       tmacros = envTmpMacros fnk_env
-      f name _ = name `notElem` toShadow
+      f name _ = unMacroName name `notElem` toShadow
   putFnkEnv fnk_env { envMacros = Map.filterWithKey f emacros
                     , envTmpMacros = map (Map.filterWithKey f) tmacros }
   result <- act
@@ -236,7 +261,7 @@ expands forms = do
   let macro_names me =
         if null me
            then nest 2 "None"
-           else nest 2 (fsep (map ppr (Map.keys me)))
+           else nest 2 (fsep (map (ppr . unMacroName) (Map.keys me)))
       tmp_macros = Map.unions (envTmpMacros fnk_env)
   debug fnk_env
         Nothing
@@ -382,11 +407,15 @@ expand1 form =
 
 -- | 'True' when the 'DynFlags' is using interpreter.
 isInterpreted :: DynFlags -> Bool
+#if MIN_VERSION_ghc(9,2,0)
+isInterpreted dflags = backend dflags == Interpreter
+#else
 isInterpreted dflags = hscTarget dflags == HscInterpreted
+#endif
 {-# INLINABLE isInterpreted #-}
 
 -- | Debug function fot this module.
-debug :: FnkEnv -> Maybe MsgDoc -> [MsgDoc] -> Fnk ()
+debug :: FnkEnv -> Maybe SDoc -> [SDoc] -> Fnk ()
 debug fnk_env mb_extra msgs0 =
   let msgs1 = maybe msgs0 (: msgs0) mb_extra
   in  debugWhen fnk_env Fnk_trace_expand msgs1
