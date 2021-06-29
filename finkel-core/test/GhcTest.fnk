@@ -32,7 +32,7 @@
     (it "should return actual version for Ghc.Util.Outputable"
       (cond-expand
         [(<= 900 :ghc)
-         (mapM- (\ (, name _ )
+         (mapM- (\ (, name _)
                   (expand-form ghc-module-name
                                `(ghc-module-name ,name)
                                name))
@@ -41,7 +41,9 @@
          (mapM- (\ (, in-name out-name)
                   (expand-form ghc-module-name
                                `(ghc-module-name ,in-name)
-                               out-name))
+                               (case out-name
+                                 (Pre900 name-pre900) name-pre900
+                                 _ (error "NYI"))))
                 ghc-module-names-pre-900)]))))
 
 (defn (:: imports-from-ghc-test Spec)

@@ -1,12 +1,17 @@
 ;;; Module containing ghc version compatibililty macro.
 
 (module Finkel.Core.Ghc.Module
+  ;; Type
+  (GhcModuleName ..)
+
   ;; Functions
   ghc-module-names-pre-900
+  rename-ghc-module
 
   ;; Macros
   ghc-module-name
   imports-from-ghc)
+
 
 ;;; finkel-kernel
 (import Language.Finkel)
@@ -18,75 +23,139 @@
 
 ;;; Auxiliary functions
 
-(:: rename (-> Code Code))
-(= rename name
-  (if (<= (:: 900 Int) (read cProjectVersionInt))
+(:: rename-ghc-module (-> Code Code))
+(= rename-ghc-module name
+  (if (<= 902 __glasgow_haskell__)
     name
     (case (lookup name ghc-module-names-pre-900)
-      (Just found) (asLocOf found name)
-      _ (error (++ "rename: cannot find " (show name))))))
+      (Just (Pre902and900 p902 p900)) (if (<= 900 __glasgow_haskell__)
+                                        (asLocOf p902 name)
+                                        (asLocOf p900 name))
+      (Just (Pre900 p900)) (if (<= 900 __glasgow_haskell__)
+                             name
+                             (asLocOf p900 name))
+      _ (error (++ "rename-ghc-module: cannot find " (show name))))))
 
 (:: make-import (-> Code Code))
 (= make-import form
-  `(import ,(rename (car form)) ,@(cdr form)))
+  `(import ,(rename-ghc-module (car form)) ,@(cdr form)))
 
 
 ;;; Exported
 
+(data GhcModuleName
+  (Pre902and900 Code Code)
+  (Pre900 Code))
+
 (:doc "List of `Code' pairs, to relate module names in ghc 9.0.1 with module
 names in older versions.")
-(:: ghc-module-names-pre-900 [(, Code Code)])
+(:: ghc-module-names-pre-900 [(, Code GhcModuleName)])
 (= ghc-module-names-pre-900
-  [(, 'GHC 'GHC)
+  [(, 'GHC (Pre900 'GHC))
 
-   (, 'GHC.Core.FamInstEnv 'FamInstEnv)
-   (, 'GHC.Core.InstEnv 'InstEnv)
-   (, 'GHC.Core.Ppr.TyThing 'PprTyThing)
-   (, 'GHC.Core.TyCo.Rep 'TyCoRep)
+   (, 'GHC.Core.FamInstEnv (Pre900 'FamInstEnv))
+   (, 'GHC.Core.InstEnv (Pre900 'InstEnv))
+   (, 'GHC.Core.Ppr.TyThing (Pre900 'PprTyThing))
+   (, 'GHC.Core.TyCo.Rep (Pre900 'TyCoRep))
 
-   (, 'GHC.Data.Bag 'Bag)
-   (, 'GHC.Data.FastString 'FastString)
-   (, 'GHC.Data.OrdList 'OrdList)
-   (, 'GHC.Data.StringBuffer 'StringBuffer)
+   (, 'GHC.Data.Bag (Pre900 'Bag))
+   (, 'GHC.Data.FastString (Pre900 'FastString))
+   (, 'GHC.Data.OrdList (Pre900 'OrdList))
+   (, 'GHC.Data.StringBuffer (Pre900 'StringBuffer))
 
-   (, 'GHC.Driver.Finder 'Finder)
-   (, 'GHC.Driver.Main 'HscMain)
-   (, 'GHC.Driver.Make 'GhcMake)
-   (, 'GHC.Driver.Monad 'GhcMonad)
-   (, 'GHC.Driver.Session 'DynFlags)
-   (, 'GHC.Driver.Types 'HscTypes)
+   ;; (, 'GHC.Driver.Finder (Pre900 'Finder))
+   (, 'GHC.Unit.Finder (Pre902and900 'GHC.Driver.Finder
+                                     'Finder))
+   (, 'GHC.Driver.Main (Pre900 'HscMain))
+   (, 'GHC.Driver.Make (Pre900 'GhcMake))
+   (, 'GHC.Driver.Monad (Pre900 'GhcMonad))
+   (, 'GHC.Driver.Ppr (Pre902and900 'GHC.Utils.Outputable
+                                    'Outputable))
+   (, 'GHC.Driver.Session (Pre900 'DynFlags))
+   (, 'GHC.Driver.Env (Pre902and900 'GHC.Driver.Types
+                                    'HscTypes))
 
-   (, 'GHC.Iface.Syntax 'IfaceSyn)
+   (, 'GHC.Iface.Syntax (Pre900 'IfaceSyn))
 
-   (, 'GHC.Parser 'Parser)
-   (, 'GHC.Parser.Lexer 'Lexer)
-   (, 'GHC.Parser.PostProcess 'RdrHsSyn)
+   (, 'GHC.Parser (Pre900 'Parser))
+   (, 'GHC.Parser.Lexer (Pre900 'Lexer))
+   (, 'GHC.Parser.PostProcess (Pre900 'RdrHsSyn))
 
-   (, 'GHC.Runtime.Debugger 'Debugger)
-   (, 'GHC.Runtime.Eval 'InteractiveEval)
-   (, 'GHC.Runtime.Interpreter 'GHCi)
-   (, 'GHC.Runtime.Linker 'Linker)
+   (, 'GHC.Runtime.Debugger (Pre900 'Debugger))
+   (, 'GHC.Runtime.Eval (Pre900 'InteractiveEval))
+   (, 'GHC.Runtime.Interpreter (Pre900 'GHCi))
+   (, 'GHC.Runtime.Linker (Pre900 'Linker))
 
-   (, 'GHC.Settings.Config 'Config)
+   (, 'GHC.Settings.Config (Pre900 'Config))
 
-   (, 'GHC.Types.Basic 'BasicTypes)
-   (, 'GHC.Types.Name 'Name)
-   (, 'GHC.Types.Name.Set 'NameSet)
-   (, 'GHC.Types.SrcLoc 'SrcLoc)
-   (, 'GHC.Types.Var 'Var)
+   (, 'GHC.Types.Basic (Pre900 'BasicTypes))
+   (, 'GHC.Types.Name (Pre900 'Name))
+   (, 'GHC.Types.Name.Set (Pre900 'NameSet))
+   (, 'GHC.Types.SrcLoc (Pre900 'SrcLoc))
+   (, 'GHC.Types.TyThing (Pre902and900 'GHC.Driver.Types
+                                       'HscTypes))
+   (, 'GHC.Types.Var (Pre900 'Var))
 
-   (, 'GHC.Unit.Module 'Module)
+   (, 'GHC.Unit.Module (Pre900 'Module))
 
-   (, 'GHC.Utils.Error 'ErrUtils)
-   (, 'GHC.Utils.IO.Unsafe 'FastFunctions)
-   (, 'GHC.Utils.Lexeme 'Lexeme)
-   (, 'GHC.Utils.Misc 'Util)
-   (, 'GHC.Utils.Outputable 'Outputable)])
+   (, 'GHC.Utils.Error (Pre900 'ErrUtils))
+   (, 'GHC.Utils.IO.Unsafe (Pre900 'FastFunctions))
+   (, 'GHC.Utils.Lexeme (Pre900 'Lexeme))
+   (, 'GHC.Utils.Misc (Pre900 'Util))
+   (, 'GHC.Utils.Outputable (Pre900 'Outputable))])
+
+;; (:: ghc-module-names-pre-900 [(, Code Code)])
+;; (= ghc-module-names-pre-900
+;;   [(, 'GHC 'GHC)
+
+;;    (, 'GHC.Core.FamInstEnv 'FamInstEnv)
+;;    (, 'GHC.Core.InstEnv 'InstEnv)
+;;    (, 'GHC.Core.Ppr.TyThing 'PprTyThing)
+;;    (, 'GHC.Core.TyCo.Rep 'TyCoRep)
+
+;;    (, 'GHC.Data.Bag 'Bag)
+;;    (, 'GHC.Data.FastString 'FastString)
+;;    (, 'GHC.Data.OrdList 'OrdList)
+;;    (, 'GHC.Data.StringBuffer 'StringBuffer)
+
+;;    (, 'GHC.Driver.Finder 'Finder)
+;;    (, 'GHC.Driver.Main 'HscMain)
+;;    (, 'GHC.Driver.Make 'GhcMake)
+;;    (, 'GHC.Driver.Monad 'GhcMonad)
+;;    (, 'GHC.Driver.Session 'DynFlags)
+;;    (, 'GHC.Driver.Types 'HscTypes)
+
+;;    (, 'GHC.Iface.Syntax 'IfaceSyn)
+
+;;    (, 'GHC.Parser 'Parser)
+;;    (, 'GHC.Parser.Lexer 'Lexer)
+;;    (, 'GHC.Parser.PostProcess 'RdrHsSyn)
+
+;;    (, 'GHC.Runtime.Debugger 'Debugger)
+;;    (, 'GHC.Runtime.Eval 'InteractiveEval)
+;;    (, 'GHC.Runtime.Interpreter 'GHCi)
+;;    (, 'GHC.Runtime.Linker 'Linker)
+
+;;    (, 'GHC.Settings.Config 'Config)
+
+;;    (, 'GHC.Types.Basic 'BasicTypes)
+;;    (, 'GHC.Types.Name 'Name)
+;;    (, 'GHC.Types.Name.Set 'NameSet)
+;;    (, 'GHC.Types.SrcLoc 'SrcLoc)
+;;    (, 'GHC.Types.Var 'Var)
+
+;;    (, 'GHC.Unit.Module 'Module)
+
+;;    (, 'GHC.Utils.Error 'ErrUtils)
+;;    (, 'GHC.Utils.IO.Unsafe 'FastFunctions)
+;;    (, 'GHC.Utils.Lexeme 'Lexeme)
+;;    (, 'GHC.Utils.Misc 'Util)
+;;    (, 'GHC.Utils.Outputable 'Outputable)])
 
 (:doc "Macro to get module name from @ghc@ package.")
 (:: ghc-module-name Macro)
 (= ghc-module-name
-  (Macro (\form (return (rename (car (cdr form)))))))
+  (Macro (\form (return (rename-ghc-module (car (cdr form)))))))
 
 (:doc "Macro for version compatible import declaration for @ghc@.
 

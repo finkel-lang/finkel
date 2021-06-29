@@ -1,8 +1,11 @@
-;;;; Macros related to ghc
+;;;; Macros and functions related to ghc
 
 (module Finkel.Core.Ghc
+  (GhcModuleName ..)
   ghc-module-names-pre-900
   ghc-module-name
+  __glasgow_haskell__
   imports-from-ghc)
 
 (import Finkel.Core.Ghc.Module)
+(import Finkel.Core.Ghc.Version)

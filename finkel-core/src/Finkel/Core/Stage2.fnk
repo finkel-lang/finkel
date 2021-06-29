@@ -59,14 +59,14 @@
 
 (imports-from-ghc
  (GHC (getModuleInfo lookupModule lookupName modInfoExports))
- (GHC.Core.TyCo.Rep ((TyThing ..)))
+ (GHC.Types.TyThing ((TyThing ..)))
+ (GHC.Driver.Env ((HscEnv ..)))
  (GHC.Driver.Monad ((GhcMonad ..)))
- (GHC.Driver.Session ((DynFlags) (HasDynFlags ..)))
- (GHC.Driver.Types ((HscEnv ..)))
+ (GHC.Driver.Ppr (showSDoc))
  (GHC.Data.FastString (FastString unpackFS))
  (GHC.Types.Var (varName))
  (GHC.Unit.Module (mkModuleName))
- (GHC.Utils.Outputable (ppr showSDoc)))
+ (GHC.Utils.Outputable (ppr)))
 
 
 ;;; ------------------------------------------------------------------------
@@ -416,19 +416,19 @@ Expands to:
 
 ;;; Compilation context macros
 
-(defn (:: replace-cond-expand-keywords (-> Int DynFlags Code (Fnk Code)))
+(defn (:: cond-expand-aux (-> HscEnv Code (Fnk Code)))
   "Auxiliary function for `cond-expand'."
-  [ghc-version dflags]
+  [hsc-env]
   (let ((= f x
           (case ()
             _ (| ((== x ':ghc)
-                  (pure `(:: ,ghc-version Int)))
+                  (pure `(:: ,__glasgow_haskell__ Int)))
                  ((== x ':os)
                   (pure (toCode System.Info.os)))
                  ((== x ':arch)
                   (pure (toCode System.Info.arch)))
                  ((caris ':min-version x)
-                  (do (<- v (getVersion dflags (cadr x)))
+                  (do (<- v (getPackageVersion hsc-env (cadr x)))
                       (pure `(<= (:: [,@(cddr x)] [Int])
                                  ,(versionBranch v)))))
                  (otherwise
@@ -485,18 +485,15 @@ When compiling above with ghc version @8.8.4@ on @x86_64@ machine running
 "
   forms
   (do (<- tmp (gensym' "cond-expand-tmp"))
-      (<- df getDynFlags)
+      (<- hsc-env getSession)
       (let ((= make-quoted-last branches
               (case (unsnoc branches)
-                (, bs b) (do (<- bs2 (replace-cond-expand-keywords v df bs))
-                             (pure `(,bs2 ',b)))))
-            (:: v Int)
-            (= v (read cProjectVersionInt))))
+                (, bs b) (do (<- bs2 (cond-expand-aux hsc-env bs))
+                             (pure `(,bs2 ',b)))))))
       (<- body (trav1 make-quoted-last forms))
-      (pure
-       `(macrolet [(,tmp []
-                     (cond ,@body))]
-          (,tmp)))))
+      (pure `(macrolet [(,tmp []
+                          (cond ,@body))]
+               (,tmp)))))
 
 
 ;;; Macros for macros

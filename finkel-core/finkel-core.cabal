@@ -30,7 +30,7 @@ tested-with:           GHC == 8.2.2
 
 custom-setup
   setup-depends:       base         >= 4.10 && < 5
-                     , Cabal        >= 2.0  && < 3.5
+                     , Cabal        >= 2.0  && < 3.7
                      , finkel-setup == 0.0.0
 
 library
@@ -47,7 +47,7 @@ library
                        Finkel.Core.Ghc.Version
   autogen-modules:     Paths_finkel_core
   build-depends:       base          >= 4.7   && < 5
-                     , ghc           >= 8.2.0 && < 9.1
+                     , ghc           >= 8.2.0 && < 9.3
                      , finkel-kernel == 0.0.0
 
   -- To import "GHC.PackageDb.packageVersion"
@@ -59,6 +59,8 @@ library
   ghc-options:         -Wall
 
 test-suite finkel-core-test
+  if impl (ghc >= 9.2.0)
+    buildable: False
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
