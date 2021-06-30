@@ -7,7 +7,7 @@
           (EvalTestFns ..) makeEvalTestFns quietly)
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
@@ -45,9 +45,7 @@
    (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
- (GHC.Settings.Config (cProjectVersion))
- (GHC.Driver.Session ((HasDynFlags ..) parseDynamicFlagsCmdLine))
- (GHC.Types.SrcLoc (noLoc)))
+ (GHC.Settings.Config (cProjectVersion)))
 
 
 ;;; Extra imports

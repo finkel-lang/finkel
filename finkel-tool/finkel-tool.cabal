@@ -47,13 +47,12 @@ flag dynamic
 
 custom-setup
   setup-depends:       base         >= 4.7 && < 5
-                     , Cabal        >= 2.0 && < 3.5
+                     , Cabal        >= 2.0 && < 3.7
                      , finkel-setup == 0.0.0
 
 library
   hs-source-dirs:      src
-  exposed-modules:
-                       Finkel.Tool.Command
+  exposed-modules:     Finkel.Tool.Command
                        Finkel.Tool.Command.Eval
                        Finkel.Tool.Command.Help
                        Finkel.Tool.Command.Make
@@ -68,22 +67,23 @@ library
                        Finkel.Tool.Internal.IO
                        Finkel.Tool.Internal.Listen
                        Finkel.Tool.Internal.Loop
-                       Finkel.Tool.Internal.Macro
+                       Finkel.Tool.Internal.Macro.Ghc
+                       Finkel.Tool.Internal.Macro.Repl
                        Finkel.Tool.Internal.Types
                        Finkel.Tool.Main
                        Paths_finkel_tool
   autogen-modules:     Paths_finkel_tool
   build-depends:       base          >= 4.7    && < 5
-                     , bytestring    >= 0.10.8 && < 0.11
-                     , Cabal         >= 2.0    && < 3.5
+                     , bytestring    >= 0.10.8 && < 0.12
+                     , Cabal         >= 2.0    && < 3.7
                      , deepseq       >= 1.4.3  && < 1.5
                      , directory     >= 1.3.0  && < 1.4
                      , exceptions    >= 0.8.3  && < 0.11
                      , filepath      >= 1.4.1  && < 1.5
                      , haskeline     >= 0.7.4  && < 0.9
-                     , ghc           >= 8.2.0  && < 9.1.0
-                     , ghc-boot      >= 8.2.0  && < 9.1.0
-                     , ghci          >= 8.2.0  && < 9.1.0
+                     , ghc           >= 8.2.0  && < 9.3.0
+                     , ghc-boot      >= 8.2.0  && < 9.3.0
+                     , ghci          >= 8.2.0  && < 9.3.0
                      , network       >= 2.6.3  && < 3.2
                      , process       >= 1.6.1  && < 1.7
                      , transformers  >= 0.5.2  && < 0.5.7
@@ -95,6 +95,8 @@ library
   ghc-options:       -Wall
 
 test-suite finkel-tool-test
+  if impl (ghc >= 9.2.0)
+    buildable: False
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
@@ -117,6 +119,7 @@ test-suite finkel-tool-test
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
   other-modules:       CLITest
+                       GhcTest
                        MainTest
                        ReplTest
                        ReplMacroTest

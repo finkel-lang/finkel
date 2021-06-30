@@ -7,37 +7,33 @@ module Finkel.Core.Ghc.Version
   ) where
 
 -- base
-import Data.Version        (Version)
+import Data.Version           (Version)
 
 -- finkel-kernel
-import Language.Finkel     (Code, Fnk, finkelSrcError, fromCode)
+import Language.Finkel        (Code, Fnk, finkelSrcError, fromCode)
 
 -- ghc
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Driver.Env      (HscEnv (..), hsc_units)
+import GHC.Driver.Env         (hsc_units)
 #elif MIN_VERSION_ghc(9,0,0)
-import GHC.Driver.Session  (unitState)
-import GHC.Driver.Types    (HscEnv (..))
-#else
-import HscTypes            (HscEnv (..))
+import GHC.Driver.Session     (unitState)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC.Data.FastString (fsLit)
-import GHC.Settings.Config (cProjectVersionInt)
-import GHC.Unit.State      (PackageName (..), lookupPackageName, lookupUnitId,
-                            unitPackageVersion)
-import GHC.Unit.Types      (indefUnit)
+import GHC.Unit.State         (PackageName (..), lookupPackageName,
+                               lookupUnitId, unitPackageVersion)
+import GHC.Unit.Types         (indefUnit)
 #else
-import Config              (cProjectVersionInt)
-import FastString          (fsLit)
-import Module              (componentIdToInstalledUnitId)
-import Packages            (PackageName (..), lookupInstalledPackage,
-                            lookupPackageName)
+import Module                 (componentIdToInstalledUnitId)
+import Packages               (PackageName (..), lookupInstalledPackage,
+                               lookupPackageName)
 
 -- ghc-boot
-import GHC.PackageDb       (packageVersion)
+import GHC.PackageDb          (packageVersion)
 #endif
+
+-- Internal
+import Finkel.Core.Ghc.Compat
 
 -- | Function version of @__GLASGOW_HASKELL__@ C preprocessor macro.
 __glasgow_haskell__ :: Int

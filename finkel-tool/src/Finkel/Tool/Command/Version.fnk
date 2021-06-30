@@ -6,7 +6,7 @@
   (export versionMain)
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import-when [:compile :load]
     ;; base
     (Control.Monad.IO.Class [(MonadIO ..)]))

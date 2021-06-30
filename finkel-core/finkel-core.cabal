@@ -39,11 +39,11 @@ library
                        Finkel.Core
                        Finkel.Core.Functions
                        Finkel.Core.Ghc
+                       Finkel.Core.Ghc.Compat
                        Finkel.Prelude
   other-modules:       Finkel.Core.Stage0
                        Finkel.Core.Stage1
                        Finkel.Core.Stage2
-                       Finkel.Core.Ghc.Module
                        Finkel.Core.Ghc.Version
   autogen-modules:     Paths_finkel_core
   build-depends:       base          >= 4.7   && < 5
@@ -76,7 +76,6 @@ test-suite finkel-core-test
   other-modules:       Orphan
                        CoreTest
                        FunctionTest
-                       GhcTest
                        TestAux
   default-language:    Haskell2010
 

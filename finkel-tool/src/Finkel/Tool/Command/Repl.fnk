@@ -15,7 +15,7 @@
     (Finkel.Prelude))
   (import-when [:compile :load]
     ;; Internal
-    (Finkel.Tool.Internal.Macro))
+    (Finkel.Tool.Internal.Macro.Repl))
   (import
    ;; base
    (Control.Exception [throwIO])
@@ -155,5 +155,6 @@ loading compiled modules."
   (macrolet ((the-macros ()
                `[,@(map (\mac `(, ,mac ,(make-symbol mac)))
                         (++ (exported-macros Finkel.Core)
-                            (exported-macros Finkel.Tool.Internal.Macro)))]))
+                            (exported-macros
+                             Finkel.Tool.Internal.Macro.Repl)))]))
     (makeEnvMacros (the-macros))))

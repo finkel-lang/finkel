@@ -1,11 +1,6 @@
-;;;; Macros and functions related to ghc
+;;;; Module for re-exporting `__GLASGOW_HASKELL__'.
 
 (module Finkel.Core.Ghc
-  (GhcModuleName ..)
-  ghc-module-names-pre-900
-  ghc-module-name
-  __glasgow_haskell__
-  imports-from-ghc)
+  __glasgow_haskell__)
 
-(import Finkel.Core.Ghc.Module)
 (import Finkel.Core.Ghc.Version)

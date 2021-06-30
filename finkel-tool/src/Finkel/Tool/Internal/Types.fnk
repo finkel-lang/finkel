@@ -20,7 +20,7 @@
    (MonadTrans ..))
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import-when [:compile]
    ;; finkel-core
    (Finkel.Prelude))

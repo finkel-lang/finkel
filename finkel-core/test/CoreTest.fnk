@@ -6,9 +6,6 @@
   (export coreTests
           macroTests)
   (require
-   ;; finkel-core
-   (Finkel.Core.Ghc)
-
    ;; Internal
    (TestAux))
   (import-when [:compile]
@@ -32,14 +29,10 @@
    ;; finkel-core
    (Finkel.Core)
    (Finkel.Core.Functions [cadr])
+   (Finkel.Core.Ghc.Compat)
 
    ;; Internal
    (TestAux)))
-
-(imports-from-ghc
- (GHC.Types.Basic ((SourceText ..)))
- (GHC.Data.FastString (fsLit headFS nullFS))
- (GHC.Settings.Config (cProjectVersionInt)))
 
 (defn (:: coreTests Spec)
   (describe "Macro" macroTests))

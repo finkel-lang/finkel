@@ -2,6 +2,7 @@ module Main where
 
 -- Internal
 import CLITest
+import GhcTest
 import MainTest
 import ReplMacroTest
 import ReplTest
@@ -16,6 +17,7 @@ main = do
   hspec $
     do afterAll_ (etf_cleanup etf)
                  (do describe "CLITest" cliTests
+                     describe "GhcTest" ghcTests
                      describe "MainTest" mainTests
                      describe "ReplTest" (replTests etf)
                      describe "ReplMacroTest" (replMacroTests etf))

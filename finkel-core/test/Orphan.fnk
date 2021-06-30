@@ -10,9 +10,6 @@
 (:require Finkel.Core)
 
 (defmodule Orphan
-  (require
-   ;; finkel-core
-   (Finkel.Core.Ghc))
   (import
    ;; QuickCheck
    (Test.QuickCheck
@@ -20,10 +17,10 @@
      listOf oneof scale])
 
    ;; finkel-kernel
-   (Language.Finkel.Form)))
+   (Language.Finkel.Form)
 
-(imports-from-ghc
- (GHC.Types.Basic ((SourceText ..))))
+   ;; finkel-core
+   (Finkel.Core.Ghc.Compat)))
 
 (instance (Arbitrary Atom)
   (defn arbitrary

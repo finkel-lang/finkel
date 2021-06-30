@@ -9,7 +9,7 @@
    with-io-redirect)
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import
    ;; base
    (Control.Concurrent

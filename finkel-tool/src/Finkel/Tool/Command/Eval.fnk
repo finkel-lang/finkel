@@ -8,7 +8,7 @@
           eval-and-exit-with-args)
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import
    ;; base
    (Control.Concurrent [MVar newEmptyMVar newMVar takeMVar])

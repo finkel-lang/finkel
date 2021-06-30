@@ -7,8 +7,8 @@
 (defmodule ReplTest
   (export replTests listenTests)
   (require
-   ;; finkel-core
-   (Finkel.Core.Ghc))
+   ;; finkel-tool
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))

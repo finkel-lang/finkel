@@ -5,8 +5,8 @@
 (defmodule Finkel.Tool.Internal.Eval
   (export eval-loop eval-once fork-eval-loop)
   (require
-   ;; finkel-core
-   (Finkel.Core.Ghc))
+   ;; Internal
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import-when [:compile]
    ;; finkel-core
    (Finkel.Prelude))
@@ -48,7 +48,7 @@
    ;; internal
    (Finkel.Tool.Internal.Exception)
    (Finkel.Tool.Internal.IO)
-   (Finkel.Tool.Internal.Macro)
+   (Finkel.Tool.Internal.Macro.Repl)
    (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
@@ -64,7 +64,7 @@
  (GHC.Driver.Main (hscParsedStmt))
  (GHC.Driver.Monad
   ((GhcMonad ..) getSessionDynFlags modifySession withTempSession))
- (GHC.Driver.Types
+ (GHC.Driver.Env
   ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
    FixityEnv SourceError extendInteractiveContextWithIds
    handleFlagWarnings setInteractivePrintName srcErrorMessages))

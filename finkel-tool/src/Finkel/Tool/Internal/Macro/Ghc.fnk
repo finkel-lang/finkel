@@ -1,6 +1,6 @@
 ;;; Module containing ghc version compatibililty macro.
 
-(module Finkel.Core.Ghc.Module
+(module Finkel.Tool.Internal.Macro.Ghc
   ;; Type
   (GhcModuleName ..)
 
@@ -17,9 +17,15 @@
 (import Language.Finkel)
 
 ;;; Internal
-(import Finkel.Core.Ghc.Version)
-(import Finkel.Core.Stage0)
+(import Finkel.Prelude)
+(import Finkel.Core.Ghc (__glasgow_haskell__))
 
+
+;;; Type
+
+(data GhcModuleName
+  (Pre902 Code Code)
+  (Pre900 Code))
 
 ;;; Auxiliary functions
 
@@ -28,9 +34,9 @@
   (if (<= 902 __glasgow_haskell__)
     name
     (case (lookup name ghc-module-names-pre-900)
-      (Just (Pre902and900 p902 p900)) (if (<= 900 __glasgow_haskell__)
-                                        (asLocOf p902 name)
-                                        (asLocOf p900 name))
+      (Just (Pre902 p902 p900)) (if (<= 900 __glasgow_haskell__)
+                                  (asLocOf p902 name)
+                                  (asLocOf p900 name))
       (Just (Pre900 p900)) (if (<= 900 __glasgow_haskell__)
                              name
                              (asLocOf p900 name))
@@ -42,10 +48,6 @@
 
 
 ;;; Exported
-
-(data GhcModuleName
-  (Pre902and900 Code Code)
-  (Pre900 Code))
 
 (:doc "List of `Code' pairs, to relate module names in ghc 9.0.1 with module
 names in older versions.")
@@ -63,17 +65,16 @@ names in older versions.")
    (, 'GHC.Data.OrdList (Pre900 'OrdList))
    (, 'GHC.Data.StringBuffer (Pre900 'StringBuffer))
 
-   ;; (, 'GHC.Driver.Finder (Pre900 'Finder))
-   (, 'GHC.Unit.Finder (Pre902and900 'GHC.Driver.Finder
-                                     'Finder))
+   (, 'GHC.Unit.Finder (Pre902 'GHC.Driver.Finder
+                               'Finder))
    (, 'GHC.Driver.Main (Pre900 'HscMain))
    (, 'GHC.Driver.Make (Pre900 'GhcMake))
    (, 'GHC.Driver.Monad (Pre900 'GhcMonad))
-   (, 'GHC.Driver.Ppr (Pre902and900 'GHC.Utils.Outputable
-                                    'Outputable))
+   (, 'GHC.Driver.Ppr (Pre902 'GHC.Utils.Outputable
+                              'Outputable))
    (, 'GHC.Driver.Session (Pre900 'DynFlags))
-   (, 'GHC.Driver.Env (Pre902and900 'GHC.Driver.Types
-                                    'HscTypes))
+   (, 'GHC.Driver.Env (Pre902 'GHC.Driver.Types
+                              'HscTypes))
 
    (, 'GHC.Iface.Syntax (Pre900 'IfaceSyn))
 
@@ -92,8 +93,8 @@ names in older versions.")
    (, 'GHC.Types.Name (Pre900 'Name))
    (, 'GHC.Types.Name.Set (Pre900 'NameSet))
    (, 'GHC.Types.SrcLoc (Pre900 'SrcLoc))
-   (, 'GHC.Types.TyThing (Pre902and900 'GHC.Driver.Types
-                                       'HscTypes))
+   (, 'GHC.Types.TyThing (Pre902 'GHC.Driver.Types
+                                 'HscTypes))
    (, 'GHC.Types.Var (Pre900 'Var))
 
    (, 'GHC.Unit.Module (Pre900 'Module))
@@ -162,8 +163,8 @@ names in older versions.")
 Expects module names in latest released @ghc@, returns old module name as
 necessary. Takes multiple modules in single form.
 
-This macro is for finkel internal use. The covered modules are those used by
-@finkel-core@ and @finkel-tool@ packages.")
+This macro is for internal use. The covered modules are used by @finkel-core@
+and @finkel-tool@ packages.")
 (:: imports-from-ghc Macro)
 (= imports-from-ghc
   (Macro (\form

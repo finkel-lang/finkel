@@ -4,7 +4,6 @@
             TypeSynonymInstances)
 
 (:require Finkel.Core.Stage1)
-(:require Finkel.Core.Ghc.Module)
 
 (module Finkel.Core.Stage2
   ;; Macros
@@ -56,17 +55,7 @@
 ;; Internal
 (import Finkel.Core.Stage0)
 (import Finkel.Core.Ghc.Version)
-
-(imports-from-ghc
- (GHC (getModuleInfo lookupModule lookupName modInfoExports))
- (GHC.Types.TyThing ((TyThing ..)))
- (GHC.Driver.Env ((HscEnv ..)))
- (GHC.Driver.Monad ((GhcMonad ..)))
- (GHC.Driver.Ppr (showSDoc))
- (GHC.Data.FastString (FastString unpackFS))
- (GHC.Types.Var (varName))
- (GHC.Unit.Module (mkModuleName))
- (GHC.Utils.Outputable (ppr)))
+(import Finkel.Core.Ghc.Compat)
 
 
 ;;; ------------------------------------------------------------------------

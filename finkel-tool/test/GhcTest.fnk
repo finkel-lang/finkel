@@ -1,0 +1,82 @@
+%p(LANGUAGE TypeApplications)
+
+(:require Finkel.Core)
+
+(defmodule GhcTest
+  (export ghcTests)
+  (import-when [:compile]
+    ;; Internal
+    (Finkel.Prelude)
+    (Finkel.Tool.Internal.Macro.Ghc))
+  (import
+   ;; base
+   (Control.Exception [(SomeException ..) try])
+
+   ;; hspec
+   (Test.Hspec)
+
+   ;; finkel-kernel
+   (Language.Finkel)
+   (Language.Finkel.Fnk [FnkEnv])
+
+   ;; finkel-tool
+   (Finkel.Tool.Internal.Macro.Ghc)
+
+   ;; Internal
+   (TestAux)))
+
+(defn (:: ghcTests Spec)
+  imports-from-ghc-test)
+
+(defn (:: expand-form (-> Macro Code Code Expectation))
+  (expand-form-with shouldBe))
+
+(defn (:: expand-form-with (-> (-> Code Code Expectation)
+                               Macro Code Code Expectation))
+  (expand-form-with-env defaultFnkEnv))
+
+(defn (:: expand-form-with-env (-> FnkEnv
+                                   (-> Code Code Expectation)
+                                   Macro Code Code Expectation))
+  [fnk-env test macro in-form out-form]
+  (>>= (try (runFnk (macroFunction macro in-form) fnk-env))
+       (either (. expectationFailure (show @ SomeException))
+               (flip test out-form))))
+
+;; (defn (:: ghc-module-name-test Spec)
+;;   (describe "ghc-module-name-test"
+;;     (it "should return actual version for Ghc.Util.Outputable"
+;;       (cond-expand
+;;         [(<= 900 :ghc)
+;;          (mapM- (\ (, name _)
+;;                   (expand-form ghc-module-name
+;;                                `(ghc-module-name ,name)
+;;                                name))
+;;                 ghc-module-names-pre-900)]
+;;         [otherwise
+;;          (mapM- (\ (, in-name out-name)
+;;                   (expand-form ghc-module-name
+;;                                `(ghc-module-name ,in-name)
+;;                                (case out-name
+;;                                  (Pre900 name-pre900) name-pre900
+;;                                  _ (error "NYI"))))
+;;                 ghc-module-names-pre-900)]))))
+
+(defn (:: imports-from-ghc-test Spec)
+  (describe "imports-from-ghc-test"
+    (it "should return import declarations"
+      (cond-expand
+        [(<= 900 :ghc)
+         (expand-form
+          imports-from-ghc
+          '(imports-from-ghc
+            (GHC.Types.Basic ((SourceText ..))))
+          '(:begin
+            (import GHC.Types.Basic ((SourceText ..)))))]
+        [otherwise
+         (expand-form
+          imports-from-ghc
+          '(imports-from-ghc
+            (GHC.Types.Basic ((SourceText ..))))
+          '(:begin
+            (import BasicTypes ((SourceText ..)))))]))))

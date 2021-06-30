@@ -4,8 +4,6 @@
 ;;; `defmodule', `eval-when', `macrolet' ... etc, just enough to start writing
 ;;; other macros and function in `Finkel.Core.Stage2'.
 
-(:require Finkel.Core.Ghc.Module)
-
 (module Finkel.Core.Stage1
   defmacro defmacro' defmacro-
   defmacroM defmacroM' defmacroM-
@@ -32,10 +30,7 @@
 
 ;; Internal
 (import Finkel.Core.Stage0)
-
-(imports-from-ghc
- (GHC.Data.FastString (FastString fsLit unpackFS))
- (GHC.Utils.Lexeme (isLexCon)))
+(import Finkel.Core.Ghc.Compat)
 
 
 

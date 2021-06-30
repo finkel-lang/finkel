@@ -17,8 +17,6 @@
    expandFailureWith
    expandSatisfy
    expandWithPackageDbSatisfy)
-  (require
-   (Finkel.Core.Ghc))
   (import
    ;; base
    (Control.Exception [(SomeException ..) try])
@@ -32,10 +30,8 @@
    (Language.Finkel.Fnk [(FnkEnv ..)])
 
    ;; finkel-core
-   (Finkel.Prelude)))
-
-(imports-from-ghc
- (GHC.Data.FastString (headFS nullFS)))
+   (Finkel.Prelude)
+   (Finkel.Core.Ghc.Compat)))
 
 ;;; Types
 

@@ -8,12 +8,12 @@
 
 (:require Finkel.Core)
 
-(defmodule Finkel.Tool.Internal.Macro
+(defmodule Finkel.Tool.Internal.Macro.Repl
   (export repl-macro
           compile-and-import)
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
@@ -74,10 +74,10 @@
  (GHC.Utils.Error (pprErrMsgBagWithLoc))
  (GHC.Core.FamInstEnv (FamInst pprFamInst))
  (GHC.Data.FastString (FastString fsLit unpackFS))
- (GHC.Driver.Finder (flushFinderCaches uncacheModule))
+ (GHC.Unit.Finder (flushFinderCaches uncacheModule))
  (GHC.Driver.Make ((LoadHowMuch ..)))
  (GHC.Driver.Monad ((GhcMonad ..) getSessionDynFlags withTempSession))
- (GHC.Driver.Types
+ (GHC.Driver.Env
   ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
    (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
    handleFlagWarnings ms_mod_name pprHPT pprTarget srcErrorMessages
@@ -130,7 +130,7 @@
   [(<= 804 :ghc)
    (:begin
      (import Prelude hiding (<>))
-     (import qualified (ghc-module-name GHC.Driver.Types) as HscTypes))]
+     (import qualified (ghc-module-name GHC.Driver.Env) as HscTypes))]
   [otherwise
    (:begin)])
 

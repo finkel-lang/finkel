@@ -6,7 +6,7 @@
   (export listener accept-loop run-conn)
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Tool.Internal.Macro.Ghc))
   (import
    ;; base
    (Control.Concurrent [(MVar) forkIO newEmptyMVar putMVar takeMVar])
