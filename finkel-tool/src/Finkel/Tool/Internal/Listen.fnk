@@ -35,7 +35,7 @@
    (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
- (GHC.Data.StringBuffer ((StringBuffer ..))))
+ (GHC.Data.StringBuffer [(StringBuffer ..)]))
 
 (defn (:: listener (-> PortNumber (MVar Input) (IO ())))
   [pnum mvar]

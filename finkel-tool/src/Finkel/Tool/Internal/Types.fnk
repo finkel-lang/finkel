@@ -39,8 +39,8 @@
    (Language.Finkel [Code])))
 
 (imports-from-ghc
- (GHC.Data.StringBuffer (StringBuffer appendStringBuffers))
- (GHC.Utils.IO.Unsafe (inlinePerformIO)))
+ (GHC.Data.StringBuffer [StringBuffer appendStringBuffers])
+ (GHC.Utils.IO.Unsafe [inlinePerformIO]))
 
 (cond-expand
   [(:min-version "haskeline" 0 8 0)
@@ -59,6 +59,19 @@
               (:: prompt-string String)})
   (deriving Show))
 
+(defn (:: append-repl-state (-> ReplState ReplState ReplState))
+  [r1 r2]
+  (where (ReplState {(= pending-input (on unsafeAppendStringBuffers
+                                          pending-input r1 r2))
+                     (= prompt-string (prompt-string r2))})
+    ;; Note the use of `inlinePerformIO'.
+    (= unsafeAppendStringBuffers mb-s1 mb-s2
+      (| ((<- (Just s1) mb-s1) (<- (Just s2) mb-s2)
+          (Just (inlinePerformIO (appendStringBuffers s1 s2))))
+         ((<- (Just _) mb-s1) mb-s1)
+         ((<- (Just _) mb-s2) mb-s2)
+         (otherwise Nothing)))))
+
 (instance (Eq ReplState)
   (defn ==
     (where (on eqStringBuffer pending-input)
@@ -66,22 +79,16 @@
 
 (instance (Monoid ReplState)
   (defn mempty initial-repl-state)
-  (defn mappend [r1 r2]
-    (where (ReplState {(= pending-input (on unsafeAppendStringBuffers
-                                            pending-input r1 r2))
-                       (= prompt-string (prompt-string r2))})
-      ;; Note the use of `inlinePerformIO'.
-      (= unsafeAppendStringBuffers mb-s1 mb-s2
-        (| ((<- (Just s1) mb-s1) (<- (Just s2) mb-s2)
-            (Just (inlinePerformIO (appendStringBuffers s1 s2))))
-           ((<- (Just _) mb-s1) mb-s1)
-           ((<- (Just _) mb-s2) mb-s2)
-           (otherwise Nothing))))))
+  (cond-expand
+    [(not (:min-version "base" 4 11 0))
+     (defn mappend append-repl-state)]
+    [otherwise
+     (:begin)]))
 
 (cond-expand
   [(:min-version "base" 4 11 0)
    (instance (Semigroup ReplState)
-     (= <> mappend))]
+     (= <> append-repl-state))]
   [otherwise
    (:begin)])
 

@@ -62,6 +62,7 @@ library
                        Finkel.Tool.Command.Version
                        Finkel.Tool.Internal.CLI
                        Finkel.Tool.Internal.Commit
+                       Finkel.Tool.Internal.Compat
                        Finkel.Tool.Internal.Eval
                        Finkel.Tool.Internal.Exception
                        Finkel.Tool.Internal.IO

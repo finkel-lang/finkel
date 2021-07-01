@@ -9,10 +9,9 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Internal.Macro.Repl
-  (export repl-macro
-          compile-and-import)
+  (export repl-macro compile-and-import)
   (require
-   ;; finkel-core
+   ;; Internal
    (Finkel.Tool.Internal.Macro.Ghc))
   (import-when [:compile]
     ;; finkel-core
@@ -55,74 +54,104 @@
    (Language.Finkel.Make [asModuleName])
 
    ;; finkel-core
-   (Finkel.Core.Functions)))
+   (Finkel.Core.Functions)
+
+   ;; Internal
+   (Finkel.Tool.Internal.Compat)))
 
 ;;; ghc
 (imports-from-ghc
  (GHC
-  ((ModuleInfo) findModule getBindings getModSummary getModuleGraph
+  [(ModuleInfo) findModule getBindings getModSummary getModuleGraph
    getModuleInfo getPrintUnqual getTargets isLoaded lookupName
    lookupModule modInfoExports setSessionDynFlags setTargets
-   workingDirectoryChanged))
- (GHC.Types.Basic
-  (Fixity (StringLiteral ..) (SuccessFlag ..) defaultFixity))
+   workingDirectoryChanged])
+
+ (GHC.Core.FamInstEnv [FamInst pprFamInst])
+ (GHC.Core.InstEnv [ClsInst pprInstance])
+
+ (GHC.Data.FastString [FastString fsLit unpackFS])
+
+ (GHC.Driver.Env [(HscEnv ..)])
+ (GHC.Driver.Make [(LoadHowMuch ..)])
+ (GHC.Driver.Monad [(GhcMonad ..) getSessionDynFlags withTempSession])
+ (GHC.Driver.Ppr [showSDoc showSDocForUser showPpr])
  (GHC.Driver.Session
-  ((DynFlags ..) (GhcMode ..) (HasDynFlags ..) (HscTarget ..)
-   (Language ..) (PackageFlag ..) (GeneralFlag ..)  defaultDynFlags
-   fFlags flagSpecFlag flagSpecName gopt isObjectTarget lang_set
-   parseDynamicFlagsCmdLine xFlags xopt wopt wWarningFlags))
- (GHC.Utils.Error (pprErrMsgBagWithLoc))
- (GHC.Core.FamInstEnv (FamInst pprFamInst))
- (GHC.Data.FastString (FastString fsLit unpackFS))
- (GHC.Unit.Finder (flushFinderCaches uncacheModule))
- (GHC.Driver.Make ((LoadHowMuch ..)))
- (GHC.Driver.Monad ((GhcMonad ..) getSessionDynFlags withTempSession))
- (GHC.Driver.Env
-  ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-   (ModSummary ..) ModuleGraph (Target ..) (TargetId ..)
-   handleFlagWarnings ms_mod_name pprHPT pprTarget srcErrorMessages
-   tyThingParent_maybe))
- (GHC.Iface.Syntax (showToHeader))
- (GHC.Core.InstEnv (ClsInst pprInstance))
+  [(DynFlags ..) (GhcMode ..) (HasDynFlags ..) (Language ..)
+   (PackageFlag ..) (GeneralFlag ..)  defaultDynFlags
+   fFlags flagSpecFlag flagSpecName gopt lang_set
+   parseDynamicFlagsCmdLine xFlags xopt wopt wWarningFlags])
+
+ (GHC.Iface.Syntax [showToHeader])
+
+ (GHC.Runtime.Context [(InteractiveContext ..) (InteractiveImport ..)])
+ (GHC.Runtime.Debugger [pprTypeAndContents])
  (GHC.Runtime.Eval
-  (abandonAll getContext getInfo moduleIsInterpreted parseName setContext
-              showModule))
- (GHC.Runtime.Linker (initDynLinker showLinkerState))
- (GHC.Runtime.Debugger (pprTypeAndContents))
+  [abandonAll getContext getInfo moduleIsInterpreted parseName setContext
+   showModule])
 
- (GHC.Unit.Module
-  (ModuleName mkModuleName mkModuleNameFS moduleNameString))
- (GHC.Types.Name (Name getName nameModule nameOccName nameSrcSpan pprInfixName))
- (GHC.Types.Name.Set (elemNameSet mkNameSet))
+ (GHC.Types.Basic [(SuccessFlag ..)])
+ (GHC.Types.Fixity [Fixity defaultFixity])
+ (GHC.Types.Name
+  [Name getName nameModule nameOccName nameSrcSpan pprInfixName])
+ (GHC.Types.Name.Set [elemNameSet mkNameSet])
+ (GHC.Types.SourceError [srcErrorMessages])
+ (GHC.Types.SourceText [(StringLiteral ..)])
+ (GHC.Types.SrcLoc [getLoc isGoodSrcSpan mkGeneralLocated unLoc])
+ (GHC.Types.Target [(Target ..) (TargetId ..) pprTarget])
+ (GHC.Types.TyThing [(TyThing ..) tyThingParent_maybe])
+ (GHC.Types.TyThing.Ppr [pprTyThing pprTyThingInContextLoc pprTypeForUser])
+
+ (GHC.Unit.Finder (flushFinderCaches uncacheModule))
+ (GHC.Unit.Home.ModInfo [pprHPT])
+ (GHC.Unit.Module [ModuleName mkModuleName mkModuleNameFS moduleNameString])
+ (GHC.Unit.Module.Graph [ModuleGraph])
+ (GHC.Unit.Module.ModSummary [(ModSummary ..) ms-mod-name])
+
+ (GHC.Utils.Misc [looksLikeModuleName])
  (GHC.Utils.Outputable
-  (SDoc $$ <+> <> empty dcolon hsep nest ppr sep showPpr showSDoc showSDocForUser
-        text vcat))
- (GHC.Core.Ppr.TyThing (pprTyThing pprTyThingInContextLoc pprTypeForUser))
- (GHC.Types.SrcLoc (getLoc isGoodSrcSpan mkGeneralLocated unLoc))
- (GHC.Core.TyCo.Rep ((TyThing ..)))
- (GHC.Utils.Misc (looksLikeModuleName)))
-
-(import qualified (ghc-module-name GHC.Driver.Make) as GhcMake)
-
+  [SDoc $$ <+> <> empty dcolon hsep nest ppr sep text vcat]))
 
 ;;; Extra imports
+
+(cond-expand
+  [(<= 902 :ghc)
+   (:begin
+     (import GHC.Driver.Backend (backendProducesObject))
+     (import GHC.Driver.Env (hsc-units))
+     (import GHC.Linker.Loader (initLoaderState showLoaderState)))]
+  [otherwise
+   (imports-from-ghc
+    (GHC.Driver.Session [isObjectTarget])
+    (GHC.Runtime.Linker [initDynLinker showLinkerState]))])
+
+(cond-expand
+  [(<= 902 :ghc)
+   (import GHC.Runtime.Interpreter ((Message ..) interpCmd))]
+  [(<= 810 :ghc)
+   (imports-from-ghc
+    (GHC.Runtime.Interpreter [(Message ..) iservCmd]))]
+  [otherwise
+   (:begin)])
 
 (cond-expand
   [(<= 900 :ghc)
    (:begin
      (import GHC.Types.SrcLoc (leftmost-smallest))
-     (import GHC.Unit.Module ((Module) moduleName)))]
+     (import GHC.Unit.Module ((Module) moduleName))
+     (import qualified GHC.Driver.Make as GhcMake))]
   [otherwise
-   (imports-from-ghc
-    (GHC.Unit.Module ((Module ..))))])
+   (:begin
+     (imports-from-ghc
+      (GHC.Unit.Module [(Module ..)]))
+     (import qualified GhcMake))])
 
 (cond-expand
   [(<= 810 :ghc)
    (:begin
      (import GHC.Hs.ImpExp ((ImportDecl ..) simpleImportDecl))
      (imports-from-ghc
-      (GHC.Driver.Session (settings))
-      (GHC.Runtime.Interpreter ((Message ..) iservCmd))))]
+      (GHC.Driver.Session [settings])))]
   [otherwise
    (import HsImpExp ((ImportDecl ..) simpleImportDecl))])
 
@@ -130,7 +159,8 @@
   [(<= 804 :ghc)
    (:begin
      (import Prelude hiding (<>))
-     (import qualified (ghc-module-name GHC.Driver.Env) as HscTypes))]
+     (imports-from-ghc
+      (GHC.Unit.Module.Graph [mgModSummaries])))]
   [otherwise
    (:begin)])
 
@@ -151,6 +181,8 @@
 (defn (:: showUnitId (-> DynFlags String))
   [dflags]
   (cond-expand
+    [(<= 902 :ghc)
+     (showPpr dflags (homeUnitId_ dflags))]
     [(<= 900 :ghc)
      (showPpr dflags (homeUnitId dflags))]
     [otherwise
@@ -170,14 +202,17 @@
 
 (defn (:: graph-to-summaries (-> ModuleGraph [ModSummary]))
   (cond-expand
-    [(<= 804 :ghc)
-      HscTypes.mgModSummaries]
-    [otherwise
-     id]))
+    [(<= 804 :ghc) mgModSummaries]
+    [otherwise id]))
 
 (defn (:: show-linker-state (-> HscEnv (IO ())))
   [hsc-env]
   (cond-expand
+    [(<= 902 :ghc)
+     (case (hsc-interp hsc-env)
+       (Just interp) (do (<- sdoc (showLoaderState interp))
+                         (putStrLn (showPpr (hsc-dflags hsc-env) sdoc)))
+       _ (pure ()))]
     [(<= 900 :ghc)
      (do (<- sdoc (showLinkerState (hsc-dynLinker hsc-env)))
          (putStrLn (showPpr (hsc-dflags hsc-env) sdoc)))]
@@ -188,19 +223,30 @@
 
 (defn (:: rts-revert-cafs (Fnk ()))
   (cond-expand
+    [(<= 902 :ghc)
+     (case-do (fmap hsc-interp getSession)
+       (Just interp) (liftIO (interpCmd interp RtsRevertCAFs))
+       _ (pure ()))]
     [(<= 810 :ghc)
      (do (<- hsc-env getSession)
          (liftIO (iservCmd hsc-env RtsRevertCAFs)))]
     [(== 808 :ghc)
      (liftIO (rts-revert-cafs-ffi))]
     [otherwise
-     (return ())]))
+     (pure ())]))
 
 (cond-expand
   [(== 808 :ghc)
    (foreign import ccall "revertCAFs" (:: rts-revert-cafs-ffi (IO ())))]
   [otherwise
    (:begin)])
+
+(defn (:: is-interpreting (-> DynFlags Bool))
+  (cond-expand
+    [(<= 902 :ghc)
+     (. not backendProducesObject backend)]
+    [otherwise
+     (. not isObjectTarget hscTarget)]))
 
 (defn (:: mk-ii (-> ModuleName InteractiveImport))
   (. IIDecl simpleImportDecl))
@@ -229,9 +275,16 @@
 
 (defn (:: show-sdoc-for-user-m (-> SDoc (Fnk String)))
   [sdoc]
-  (do (<- dflags getDynFlags)
+  (do (<- hsc-env getSession)
       (<- unqual getPrintUnqual)
-      (return (showSDocForUser dflags unqual sdoc))))
+      (lept [dflags (hsc-dflags hsc-env)
+             str (cond-expand
+                   [(<= 902 :ghc)
+                    (showSDocForUser dflags (hsc-units hsc-env) unqual sdoc)]
+                   [otherwise
+                    (showSDocForUser dflags unqual sdoc)])])
+
+      (pure str)))
 
 (defn (:: invalid-form (-> String [Code] (Fnk a)))
   [label forms]
@@ -309,7 +362,7 @@ object code."
                                     (IIModule current-module-name)))
                  _              ii))
              (ii-fn
-               (if (isObjectTarget (hscTarget dflags))
+               (if (not (is-interpreting dflags))
                  iimodule-to-iidecl
                  iidecl-to-iimodule))])
       (return (map ii-fn imports))))
@@ -322,9 +375,9 @@ object code."
                    (do (<- dflags getSessionDynFlags)
                        (liftIO
                         (putStr (unlines
-                                 (map (showSDoc dflags)
-                                      (pprErrMsgBagWithLoc
-                                       (srcErrorMessages se))))))))])
+                                 (map (showSDoc dflags) (msgs se)))))))
+                 (msgs [se]
+                   (ppr-wrapped-msg-bag-with-loc (srcErrorMessages se)))])
           (maybe (liftIO (print e)) print-se (fromException e))
           (<- mods (fmap envContextModules getFnkEnv))
           (setContext (map mk-ii-str mods))
@@ -447,12 +500,19 @@ object code."
         (IIDecl d) (++ ";  IIDecl: " (showSDoc dflags (ppr d)))
         (IIModule m) (++ ";  IIModule: " (moduleNameString m))))))
 
+(defn (:: show-backend (-> DynFlags String))
+  (cond-expand
+    [(<= 902 :ghc)
+     (. show backend)]
+    [otherwise
+     (. show hscTarget)]))
+
 (defn (:: show-dflags (Fnk Code))
   (lefn [(ss [dflags]
            ["; dflags:"
             (++ ";  ghcLink: " (show (ghcLink dflags)))
             (++ ";  ghcMode: " (showGhcMode (ghcMode dflags)))
-            (++ ";  hscTarget: " (show (hscTarget dflags)))
+            (++ ";  backend: " (show-backend dflags))
             (++ ";  objectDir: " (show (objectDir dflags)))
             (++ ";  homeUnitId: " (showUnitId dflags))
             (++ ";  forceRecomp: "
@@ -498,22 +558,32 @@ object code."
          (vcat [(<> (text "base language is: ")
                     (case (language dflags)
                       Nothing (text "Haskell2010")
-                      (Just Haskell98) (text "Haskell98")
-                      (Just Haskell2010) (text "Haskell2010")))
+                      (Just lang) (ppr lang)))
                 ($$ (if show-all
                       (text "all active language options:")
                       (text "with the following modifiers:"))
                     (nest 2 (vcat (map (setting xopt) xFlags))))])))
       (return `(System.IO.putStrLn ,str))))
 
+(defn (:: show-loader-state (-> HscEnv (IO ())))
+  [hsc-env]
+  (cond-expand
+    [(<= 902 :ghc)
+     (case (hsc-interp hsc-env)
+       (Just interp) (do (initLoaderState interp hsc-env)
+                         (show-linker-state hsc-env))
+       _ (pure ()))]
+    [otherwise
+     ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
+     ;; which is not exposed from the module its defined ... not sure how
+     ;; to get resulting output as `String' other than redirecting output
+     ;; to stdout.
+     (>> (initDynLinker hsc-env)
+         (show-linker-state hsc-env))]))
+
 (defn (:: show-linker (Fnk Code))
-  ;; XXX: `Linker.showLinkerState' reads from `v_PersistentLinkerState',
-  ;; which is not exposed from the module its defined ... not sure how
-  ;; to get resulting output as `String' other than redirecting output
-  ;; to stdout.
   (do (<- hsc-env getSession)
-      (liftIO (do (initDynLinker hsc-env)
-                  (show-linker-state hsc-env)))
+      (liftIO (show-loader-state hsc-env))
       (return '(:begin))))
 
 (defn (:: show-macros (Fnk Code))
@@ -757,8 +827,8 @@ paths from import directories."
                            (flushFinderCaches hsc-env)))
                (setSession (discardInteractiveContext hsc-env))))
          (make-target [path]
-           (do (<- hsc-target (fmap hscTarget getDynFlags))
-               (lept [allow-obj (not (== hsc-target HscInterpreted))
+           (do (<- dflags getDynFlags)
+               (lept [allow-obj (not (is-interpreting dflags))
                       tfile (TargetFile path Nothing)])
                (return (Target tfile allow-obj Nothing))))]
 
@@ -805,6 +875,8 @@ paths from import directories."
          Failed (return '(:begin)))))
     _ (return '(System.IO.putStrLn "; reload: invalid target"))))
 
+
+
 (defn (:: set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
   [forms]
@@ -826,11 +898,12 @@ paths from import directories."
           (case (getOpt Permute fnkEnvOptions fnk-flags)
             (, o _ []) (modifyFnkEnv (update-fnk-opts o))
             (, _ _ es) (liftIO (print es))))
-        (<- dflags0 getSessionDynFlags)
+        (<- hsc-env getSession)
+        (lept [dflags0 (hsc-dflags hsc-env)])
         (<- (, dflags1 leftovers warns)
           (parseDynamicFlagsCmdLine dflags0 (map onTheREPL hs-flags)))
         (liftIO
-         (do (handleFlagWarnings dflags1 warns)
+         (do (handle-flag-warnings hsc-env dflags1 warns)
              (unless (null leftovers)
                (putStrLn
                 (++ "Some flags have not been recognized: "
@@ -841,11 +914,11 @@ paths from import directories."
         ;; Updating two more `DynFlags', one is the default `DynFlags' used to
         ;; import modules during macro expansion, and another is the `DynFlags'
         ;; in the `HscEnv' used by the macro expander.
-        (lefn [(update-session-for-expand [hsc-env]
-                 (lept [ic1 (hsc-IC hsc-env)
+        (lefn [(update-session-for-expand [he]
+                 (lept [ic1 (hsc-IC he)
                         ic2 (ic1 {(= ic-dflags dflags2)})]
-                   (hsc-env {(= hsc-dflags dflags2)
-                             (= hsc-IC ic2)})))])
+                   (he {(= hsc-dflags dflags2)
+                        (= hsc-IC ic2)})))])
         (modifyFnkEnv
          (\e (e {(= envDefaultDynFlags (Just dflags2))
                  (= envSessionForExpand (fmap update-session-for-expand

@@ -139,7 +139,7 @@
                ["; dflags:"
                 ";  ghcLink: LinkInMemory"
                 ";  ghcMode: CompManager"
-                ";  hscTarget: HscInterpreted"
+                ";  backend: HscInterpreted"
                 ";  objectDir: Nothing"
                 ";  homeUnitId: main"
                 ";  forceRecomp: False"]))
@@ -150,7 +150,7 @@
                ["; dflags:"
                 ";  ghcLink: LinkInMemory"
                 ";  ghcMode: CompManager"
-                ";  hscTarget: HscInterpreted"
+                ";  backend: HscInterpreted"
                 ";  objectDir: Just \"/tmp\""
                 ";  homeUnitId: main"
                 ";  forceRecomp: False"]))

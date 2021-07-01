@@ -33,7 +33,7 @@
    (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
- (GHC.Data.StringBuffer (stringToStringBuffer)))
+ (GHC.Data.StringBuffer [stringToStringBuffer]))
 
 
 

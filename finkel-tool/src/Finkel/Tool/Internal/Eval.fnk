@@ -35,17 +35,19 @@
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Builder [HDecl HIE HImportDecl HStmt
+   (Language.Finkel.Builder [HDecl HImportDecl HStmt
                              syntaxErrCode syntaxErrMsg evalBuilder])
+   (Language.Finkel.Error [mkWrappedMsg])
    (Language.Finkel.Eval [evalDecls])
    (Language.Finkel.Exception [finkelExceptionLoc])
    (Language.Finkel.Make [initSessionForMake isFnkFile isHsFile])
    (Language.Finkel.Fnk
     [(FnkEnv ..) failFnk modifyFnkEnv prepareInterpreter setDynFlags
-     withTmpDynFlags])
+     useInterpreter withTmpDynFlags])
    (Language.Finkel.Syntax [parseExpr parseImports parseStmt parseTopDecls])
 
    ;; internal
+   (Finkel.Tool.Internal.Compat)
    (Finkel.Tool.Internal.Exception)
    (Finkel.Tool.Internal.IO)
    (Finkel.Tool.Internal.Macro.Repl)
@@ -53,40 +55,57 @@
 
 (imports-from-ghc
  (GHC
-  ((Target ..) (TargetId ..) getPrintUnqual parseDynamicFlags setTargets))
- (GHC.Types.Basic ((SuccessFlag ..)))
- (GHC.Data.Bag (unitBag))
+  [(Target ..) (TargetId ..) getPrintUnqual parseDynamicFlags setTargets])
+
+ (GHC.Data.Bag [unitBag])
+ (GHC.Data.OrdList [toOL])
+
+ (GHC.Driver.Env [(HscEnv ..)])
+ (GHC.Driver.Main [hscParsedStmt])
+ (GHC.Driver.Monad [(GhcMonad ..) modifySession withTempSession])
+ (GHC.Driver.Ppr [showSDoc showPpr])
  (GHC.Driver.Session
-  ((DynFlags ..) (GeneralFlag ..) (HasDynFlags ..) (HscTarget ..) (Option ..)
-   gopt-set xopt-unset))
- (GHC.Utils.Error (mkErrMsg pprErrMsgBagWithLoc))
- (GHC.Runtime.Interpreter (evalStmt))
- (GHC.Driver.Main (hscParsedStmt))
- (GHC.Driver.Monad
-  ((GhcMonad ..) getSessionDynFlags modifySession withTempSession))
- (GHC.Driver.Env
-  ((HscEnv ..) (InteractiveContext ..) (InteractiveImport ..)
-   FixityEnv SourceError extendInteractiveContextWithIds
-   handleFlagWarnings setInteractivePrintName srcErrorMessages))
- (GHC.Runtime.Eval
-  (compileParsedExprRemote getContext parseName setContext))
- (GHC.Runtime.Linker (extendLinkEnv))
- (GHC.Unit.Module (mkModuleName))
- (GHC.Types.Name ((Name) getName nameOccName occNameString))
- (GHC.Data.OrdList (toOL))
+  [(DynFlags ..) (GeneralFlag ..) (HasDynFlags ..) (Option ..)
+   gopt-set xopt-unset])
+
+ (GHC.Parser.PostProcess [cvTopDecls])
+
+ (GHC.Runtime.Context
+  [(InteractiveContext ..) (InteractiveImport ..)
+   setInteractivePrintName extendInteractiveContextWithIds])
+ (GHC.Runtime.Eval [compileParsedExprRemote getContext parseName setContext])
+ (GHC.Runtime.Interpreter [evalStmt])
+
+ (GHC.Types.Basic [(SuccessFlag ..)])
+ (GHC.Types.Fixity.Env [FixityEnv])
+ (GHC.Types.Name [(Name) getName nameOccName occNameString])
+ (GHC.Types.SourceError [SourceError srcErrorMessages])
+ (GHC.Types.SrcLoc [mkGeneralLocated unLoc])
+ (GHC.Types.TyThing [(TyThing ..)])
+ (GHC.Types.Var [Id Var varType])
+
+ (GHC.Unit.Module [mkModuleName])
+
+ (GHC.Utils.Misc [looksLikeModuleName])
  (GHC.Utils.Outputable
-  (SDoc PrintUnqualified ppr mkErrStyle renderWithStyle setStyleColoured
-        showPpr showSDoc text vcat))
- (GHC.Parser.PostProcess (cvTopDecls))
- (GHC.Types.SrcLoc (mkGeneralLocated unLoc))
- (GHC.Core.TyCo.Rep ((TyThing ..)))
- (GHC.Utils.Misc (looksLikeModuleName))
- (GHC.Types.Var (Id Var varType)))
+  [SDoc PrintUnqualified ppr mkErrStyle setStyleColoured text vcat]))
 
 
 ;;; Extra imports
 
 (cond-expand
+  [(<= 902 :ghc)
+   (:begin
+     (import GHC.Linker.Loader (extendLoadedEnv))
+     (import GHC.Utils.Outputable (renderWithContext)))]
+  [otherwise
+   (imports-from-ghc
+    (GHC.Runtime.Linker [extendLinkEnv])
+    (GHC.Utils.Outputable [renderWithStyle]))])
+
+(cond-expand
+  [(<= 902 :ghc)
+   (import GHC.Driver.Session (initSDocContext))]
   [(<= 900 :ghc)
    (import GHC.Utils.Outputable (initSDocContext))]
   [otherwise
@@ -94,33 +113,37 @@
 
 (cond-expand
   [(<= 810 :ghc)
-   ;; ghc
    (import GHC.Hs.ImpExp ((ImportDecl ..) (ImportDeclQualifiedStyle)
                           isImportDeclQualified))]
   [otherwise
-   ;; ghc
    (import HsImpExp ((ImportDecl ..)))])
 
 ;;; Version compatibility function
 
+(defn (:: extend-loaded-env (-> HscEnv [(, Name ForeignHValue)] (Fnk ())))
+  [_hsc-env names-vals]
+  (cond-expand
+    [(<= 902 :ghc)
+     (case (hsc-interp _hsc-env)
+       (Just interp) (liftIO (extendLoadedEnv interp names-vals))
+       _ (pure ()))]
+    [(<= 810 :ghc)
+     (liftIO (extendLinkEnv (hsc-dynLinker _hsc-env) names-vals))]
+    [otherwise
+     (liftIO (extendLinkEnv names-vals))]))
+
 (cond-expand
   [(<= 810 :ghc)
-   (:begin
-     (defn (:: extend-link-env (-> HscEnv [(, Name ForeignHValue)] (Fnk ())))
-       [hsc-env names-vals]
-       (liftIO (extendLinkEnv (hsc-dynLinker hsc-env) names-vals)))
-     (defn (:: is-import-decl-qualified (-> ImportDeclQualifiedStyle Bool))
-       isImportDeclQualified))]
+   (defn (:: is-import-decl-qualified (-> ImportDeclQualifiedStyle Bool))
+     isImportDeclQualified)]
   [otherwise
-   (:begin
-     (defn (:: extend-link-env (-> a [(, Name ForeignHValue)] (Fnk ())))
-       [_ names-vals]
-       (liftIO (extendLinkEnv names-vals)))
-     (defn (:: is-import-decl-qualified (-> Bool Bool))
-       id))])
+   (defn (:: is-import-decl-qualified (-> Bool Bool))
+     id)])
 
 (defn (:: optional-dynflags [GeneralFlag])
-  "Optional 'GeneralFlag' set for REPL."
+  "Optional 'GeneralFlag' set for REPL.
+
+See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
   (cond-expand
     [(<= 804 :ghc)
      [Opt_ImplicitImportQualified
@@ -128,6 +151,32 @@
       Opt_IgnoreHpcChanges]]
     [otherwise
      [Opt_ImplicitImportQualified]]))
+
+(defn (:: parse-dynamic-flags
+        (=> (MonadIO m)
+            (-> HscEnv
+                [Located String]
+                (m (, DynFlags [Located String] [WARN])))))
+  [hsc-env]
+  (cond-expand
+    [(<= 902 :ghc)
+     (parseDynamicFlags (hsc-logger hsc-env) (hsc-dflags hsc-env))]
+    [otherwise
+     (parseDynamicFlags (hsc-dflags hsc-env))]))
+
+(defn (:: render-with-err-style (-> DynFlags PrintUnqualified SDoc String))
+  [dflags unqual sdoc]
+  (lept [style0 (cond-expand
+                  [(<= 900 :ghc) (mkErrStyle unqual)]
+                  [otherwise (mkErrStyle dflags unqual)])
+         style1 (setStyleColoured True style0)]
+    (cond-expand
+      [(<= 902 :ghc)
+       (renderWithContext (initSDocContext dflags style1) sdoc)]
+      [(<= 900 :ghc)
+       (renderWithStyle (initSDocContext dflags style1) sdoc)]
+      [otherwise
+       (renderWithStyle dflags sdoc style1)])))
 
 
 ;;; Eval loop
@@ -154,9 +203,8 @@
       ;; passed from the command line.
       (lept [on-the-commandline (mkGeneralLocated "on the commandline")
              lghc-opts (map on-the-commandline ghc-opts)])
-      (<- (, dflags0 fileish warns)
-        (parseDynamicFlags (hsc-dflags hsc-env0) lghc-opts))
-      (liftIO (handleFlagWarnings dflags0 warns))
+      (<- (, dflags0 fileish warns) (parse-dynamic-flags hsc-env0 lghc-opts))
+      (liftIO (handle-flag-warnings hsc-env0 dflags0 warns))
 
       ;; As done in the Main.hs in "ghc-bin" package, updating the `ldInputs'
       ;; field o the `DynFlags' with `FileOption', to support linking object
@@ -318,11 +366,10 @@ context."
       ;; not working well when multiple declarations were entered at once.
       ;;
       ;; In finkel REPL, instead of wrapping with `let', always using
-      ;; `HscInterpreted' as target when evaluating declarations to support
-      ;; declaring functions and values when REPL were using `-fobject-code'.
+      ;; `HscInterpreted' as target when evaluating declarations, to support
+      ;; declaring functions and values when the REPL is using `-fobject-code'.
       (<- (, tythings ic)
-        (withTmpDynFlags (dflags {(= hscTarget HscInterpreted)})
-                         (evalDecls decls')))
+        (withTmpDynFlags (useInterpreter dflags) (evalDecls decls')))
 
       (setSession (hsc-env {(= hsc-IC ic)}))
       (return (Right (tystr tythings)))))
@@ -338,8 +385,8 @@ context."
                       (ic3 (ic2 {(= ic-fix-env fixity-env)}))
                       (names (map getName ids))
                       (hsc-env-2 (hsc-env {(= hsc-IC ic3)}))])
-               (<- dflags getSessionDynFlags)
-               (extend-link-env hsc-env (zip names fhvals))
+               (<- dflags getDynFlags)
+               (extend-loaded-env hsc-env (zip names fhvals))
 
                ;; InteractiveEval does not export `rttiEnvironment'.
                ;;
@@ -360,9 +407,16 @@ context."
              EUserInterrupt (return (Left "Interrupted."))))
          (incomplete
            (return (Left "update-hsc-env failed.")))
+         (eval-app (EvalApp (EvalThis wrapper) (EvalThis hvals-io)))
          (eval-hvals-io
-           (evalStmt hsc-env False (EvalApp (EvalThis wrapper)
-                                            (EvalThis hvals-io))))
+           (cond-expand
+             [(<= 902 :ghc)
+              (case (hsc-interp hsc-env)
+                (Just interp) (evalStmt interp (hsc-dflags hsc-env)
+                                        False eval-app)
+                _ (throwIO (FinkelToolException "No interpreter")))]
+             [otherwise
+              (evalStmt hsc-env False eval-app)]))
          (eval-for-prompt
            (do (<- status (liftIO eval-hvals-io))
                (return (, status ""))))
@@ -405,23 +459,11 @@ to separate object files from source code files."
              (, srcs (: (L l arg) objs))))]
     (foldr f (, [] []))))
 
-(defn (:: render-with-err-style (-> DynFlags PrintUnqualified SDoc String))
-  [dflags unqual sdoc]
-  (cond-expand
-    [(<= 900 :ghc)
-     (lept [style0 (mkErrStyle unqual)
-            style1 (setStyleColoured True style0)]
-       (renderWithStyle (initSDocContext dflags style1) sdoc))]
-    [otherwise
-     (lept [style0 (mkErrStyle dflags unqual)
-            style1 (setStyleColoured True style0)]
-       (renderWithStyle dflags sdoc style1))]))
-
 (defn (:: make-src-err-message (-> SourceError (Fnk String)))
   [src-err]
   (lept [emsgs (srcErrorMessages src-err)
-         sdoc (vcat (pprErrMsgBagWithLoc emsgs))]
-    (do (<- dflags getSessionDynFlags)
+         sdoc (vcat (ppr-wrapped-msg-bag-with-loc emsgs))]
+    (do (<- dflags getDynFlags)
         (<- unqual getPrintUnqual)
         (return (render-with-err-style dflags unqual sdoc)))))
 
@@ -431,12 +473,13 @@ to separate object files from source code files."
     (do (<- dflags getDynFlags)
         (<- unqual getPrintUnqual)
         (lefn [(lmsg [l]
-                 (lept [emsgs (unitBag (mkErrMsg dflags l unqual (text msg)))
-                        sdoc (vcat (pprErrMsgBagWithLoc emsgs))]
+                 (lept [wmsg (mkWrappedMsg dflags l unqual (text msg))
+                        emsgs (unitBag wmsg)
+                        sdoc (vcat (ppr-wrapped-msg-bag-with-loc emsgs))]
                    (render-with-err-style dflags unqual sdoc)))])
         (case (finkelExceptionLoc fe)
-          (Just l) ($ return lmsg l)
-          _ (return msg)))))
+          (Just l) ($ pure lmsg l)
+          _ (pure msg)))))
 
 (defn (:: make-eval-wrapper (-> [String] (Fnk ForeignHValue)))
   [args]
@@ -481,20 +524,22 @@ to separate object files from source code files."
 (defn (:: subsume-ii (-> InteractiveImport InteractiveImport Bool))
   ;; See `GHCi.UI.iiSubsumes'.
   [(IIModule x) (IIModule y)] (== x y)
-  [(IIDecl x) (IIDecl y)] (&& (== (unLoc (ideclName x)) (unLoc (ideclName y)))
-                              (== (ideclAs x) (ideclAs y))
-                              (|| (not (is-import-decl-qualified
-                                        (ideclQualified x)))
-                                  (is-import-decl-qualified
-                                   (ideclQualified y)))
-                              (hiding-subsumes (ideclHiding x)
-                                               (ideclHiding y)))
+  [(IIDecl x) (IIDecl y)]
+  (where (&& (== (unLoc (ideclName x)) (unLoc (ideclName y)))
+             (== (ideclAs x) (ideclAs y))
+             (|| (not (is-import-decl-qualified
+                       (ideclQualified x)))
+                 (is-import-decl-qualified
+                  (ideclQualified y)))
+             (hiding-subsumes (ideclHiding x)
+                              (ideclHiding y)))
+    (defn hiding-subsumes
+      [_ (Just (, False (L _ [])))]
+      True
+
+      [(Just (, False (L _ xs))) (Just (, False (L _ ys)))]
+      (all (flip elem xs) ys)
+
+      [a b] (== a b)))
 
   [_ _] False)
-
-(defn (:: hiding-subsumes (-> (Maybe (, Bool (Located [HIE])))
-                              (Maybe (, Bool (Located [HIE])))
-                              Bool))
-  [_                         (Just (, False (L _ [])))] True
-  [(Just (, False (L _ xs))) (Just (, False (L _ ys)))] (all (flip elem xs) ys)
-  [a                         b                        ] (== a b))

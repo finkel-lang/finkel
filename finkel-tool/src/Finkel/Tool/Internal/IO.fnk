@@ -39,7 +39,7 @@
    (Finkel.Tool.Internal.Types)))
 
 (imports-from-ghc
- (GHC.Data.StringBuffer (appendStringBuffers stringToStringBuffer)))
+ (GHC.Data.StringBuffer [appendStringBuffers stringToStringBuffer]))
 
 
 ;;; Read and print loop

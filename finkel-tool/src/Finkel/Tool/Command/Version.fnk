@@ -31,7 +31,7 @@
    (Finkel.Tool.Internal.CLI)))
 
 (imports-from-ghc
- (GHC.Settings.Config (cProjectVersion)))
+ (GHC.Settings.Config [cProjectVersion]))
 
 
 

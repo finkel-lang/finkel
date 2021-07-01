@@ -1,0 +1,59 @@
+;;;; Some commonly used version compatibility type and functions
+
+(:require Finkel.Core)
+
+(defmodule Finkel.Tool.Internal.Compat
+  (export WARN handle-flag-warnings ppr-wrapped-msg-bag-with-loc)
+  (require
+   (Finkel.Tool.Internal.Macro.Ghc))
+  (import-when [:compile]
+    ;; finkel-core
+    (Finkel.Prelude))
+  (import
+   ;; finkel-kernel
+   (Language.Finkel.Error [WrappedMsg])))
+
+;;; ghc
+
+(imports-from-ghc
+ (GHC.Data.Bag [Bag])
+ (GHC.Driver.Env [(HscEnv ..)])
+ (GHC.Driver.Session [(DynFlags ..)])
+ (GHC.Driver.Errors [handleFlagWarnings])
+ (GHC.Utils.Outputable [SDoc]))
+
+(cond-expand
+  [(<= 902 :ghc)
+   (import GHC.Utils.Error (pprMsgEnvelopeBagWithLoc))]
+  [otherwise
+   (imports-from-ghc
+    (GHC.Utils.Error [pprErrMsgBagWithLoc]))])
+
+(cond-expand
+  [(< 802 :ghc)
+   (imports-from-ghc
+    (GHC.Driver.CmdLine (Warn)))]
+  [otherwise
+   (import SrcLoc (Located))])
+
+;;; Types
+
+(type WARN
+  (cond-expand
+    [(< 802 :ghc) Warn]
+    [otherwise (Located String)]))
+
+;;; Functions
+
+(defn (:: handle-flag-warnings (-> HscEnv DynFlags [WARN] (IO ())))
+  [_hsc-env dflags warns]
+  (cond-expand
+    [(<= 902 :ghc)
+     (handleFlagWarnings (hsc-logger _hsc-env) dflags warns)]
+    [otherwise
+     (handleFlagWarnings dflags warns)]))
+
+(defn (:: ppr-wrapped-msg-bag-with-loc (-> (Bag WrappedMsg) [SDoc]))
+  (cond-expand
+    [(<= 902 :ghc) pprMsgEnvelopeBagWithLoc]
+    [otherwise pprErrMsgBagWithLoc]))

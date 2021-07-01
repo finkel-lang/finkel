@@ -6,8 +6,7 @@
   (export ghcTests)
   (import-when [:compile]
     ;; Internal
-    (Finkel.Prelude)
-    (Finkel.Tool.Internal.Macro.Ghc))
+    (Finkel.Prelude))
   (import
    ;; base
    (Control.Exception [(SomeException ..) try])
@@ -29,11 +28,7 @@
   imports-from-ghc-test)
 
 (defn (:: expand-form (-> Macro Code Code Expectation))
-  (expand-form-with shouldBe))
-
-(defn (:: expand-form-with (-> (-> Code Code Expectation)
-                               Macro Code Code Expectation))
-  (expand-form-with-env defaultFnkEnv))
+  (expand-form-with-env defaultFnkEnv shouldBe))
 
 (defn (:: expand-form-with-env (-> FnkEnv
                                    (-> Code Code Expectation)
@@ -43,40 +38,28 @@
        (either (. expectationFailure (show @ SomeException))
                (flip test out-form))))
 
-;; (defn (:: ghc-module-name-test Spec)
-;;   (describe "ghc-module-name-test"
-;;     (it "should return actual version for Ghc.Util.Outputable"
-;;       (cond-expand
-;;         [(<= 900 :ghc)
-;;          (mapM- (\ (, name _)
-;;                   (expand-form ghc-module-name
-;;                                `(ghc-module-name ,name)
-;;                                name))
-;;                 ghc-module-names-pre-900)]
-;;         [otherwise
-;;          (mapM- (\ (, in-name out-name)
-;;                   (expand-form ghc-module-name
-;;                                `(ghc-module-name ,in-name)
-;;                                (case out-name
-;;                                  (Pre900 name-pre900) name-pre900
-;;                                  _ (error "NYI"))))
-;;                 ghc-module-names-pre-900)]))))
-
 (defn (:: imports-from-ghc-test Spec)
   (describe "imports-from-ghc-test"
     (it "should return import declarations"
-      (cond-expand
-        [(<= 900 :ghc)
-         (expand-form
-          imports-from-ghc
-          '(imports-from-ghc
-            (GHC.Types.Basic ((SourceText ..))))
+      (expand-form
+       imports-from-ghc
+       '(imports-from-ghc
+         (GHC.Driver.Env [(HscEnv ..)])
+         (GHC.Types.SourceText [(SourceText ..)])
+         (GHC.Utils.Outputable [SDoc]))
+       (cond-expand
+         [(<= 902 :ghc)
           '(:begin
-            (import GHC.Types.Basic ((SourceText ..)))))]
-        [otherwise
-         (expand-form
-          imports-from-ghc
-          '(imports-from-ghc
-            (GHC.Types.Basic ((SourceText ..))))
+            (import GHC.Driver.Env ((HscEnv ..)))
+            (import GHC.Types.SourceText ((SourceText ..)))
+            (import GHC.Utils.Outputable (SDoc)))]
+         [(<= 900 :ghc)
           '(:begin
-            (import BasicTypes ((SourceText ..)))))]))))
+            (import GHC.Driver.Types ((HscEnv ..)))
+            (import GHC.Types.Basic ((SourceText ..)))
+            (import GHC.Utils.Outputable (SDoc)))]
+         [otherwise
+          '(:begin
+            (import HscTypes ((HscEnv ..)))
+            (import BasicTypes ((SourceText ..)))
+            (import Outputable (SDoc)))])))))

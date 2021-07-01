@@ -13,9 +13,6 @@
   (import-when [:compile]
     ;; finkel-core
     (Finkel.Prelude))
-  (import-when [:compile :load]
-    ;; Internal
-    (Finkel.Tool.Internal.Macro.Repl))
   (import
    ;; base
    (Control.Exception [throwIO])
@@ -39,6 +36,7 @@
    (Finkel.Tool.Internal.CLI)
    (Finkel.Tool.Internal.Exception)
    (Finkel.Tool.Internal.Loop)
+   (Finkel.Tool.Internal.Macro.Repl)
    (Finkel.Tool.Internal.Types)))
 
 
@@ -152,9 +150,7 @@
 (defn (:: replMacros EnvMacros)
   "Default macros imported in REPL. These macros always get imported after
 loading compiled modules."
-  (macrolet ((the-macros ()
+  (macrolet [(the-macros ()
                `[,@(map (\mac `(, ,mac ,(make-symbol mac)))
-                        (++ (exported-macros Finkel.Core)
-                            (exported-macros
-                             Finkel.Tool.Internal.Macro.Repl)))]))
+                        (: "repl_macro" (exported-macros Finkel.Core)))])]
     (makeEnvMacros (the-macros))))
