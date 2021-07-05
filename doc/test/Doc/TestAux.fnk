@@ -8,9 +8,9 @@
           run-console-tests
           run-console-test
           remove-compiled)
-  (require
+  (import-when [:compile]
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Prelude))
   (import
    ;; base
    (Control.Exception [catch throw])
@@ -38,9 +38,11 @@
    (System.Process
     [(CreateProcess ..) (StdStream ..) createProcess proc waitForProcess])))
 
-(imports-from-ghc
- (GHC.Settings.Config (cProjectVersion)))
-
+(cond-expand
+  [(<= 900 :ghc)
+   (import GHC.Settings.Config (cProjectVersion))]
+  [otherwise
+   (import Config (cProjectVersion))])
 
 ;;; Exported
 
@@ -56,13 +58,9 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
                       (<.> exe "dyn_hi")]))
          (go1 [file]
            (catch (removeFile file)
-             (\ e
+             (\e
                (unless (isDoesNotExistError e)
-                 (throw e))
-               ;; (if (isDoesNotExistError e)
-               ;;   (return ())
-               ;;   (throw e))
-               )))]
+                 (throw e)))))]
     (mapM_ go0 name)))
 
 (defn (:: get-build-tool (IO BuildTool))
@@ -71,13 +69,7 @@ Remove the given file @FILE@, @FILE.o@, and @FILE.hi@."
       (pure (cond
               [(isSubsequenceOf ".stack" me) Stack]
               [(isSubsequenceOf "dist-newstyle" me) Cabal]
-              [otherwise Raw]))
-      ;; (return (if (isSubsequenceOf ".stack" me)
-      ;;             Stack
-      ;;             (if (isSubsequenceOf "dist-newstyle" me)
-      ;;                 Cabal
-      ;;                 Raw)))
-      ))
+              [otherwise Raw]))))
 
 (defn (:: get-stack-resolver (IO String))
   "Return @RESOLVER@ environment variable."

@@ -1,10 +1,12 @@
 ;;;; Test codes for "language-syntax.rst"
 
+;;; This module contains codes to tests the code snippets shown in the "Language
+;;; Syntax" chapter of the documentation. The tests parses expressions and
+;;; declarations from file, and parse the Haskell code and Finkel code, then
+;;; compare the parsed results with `showPpr'.
+
 (defmodule Doc.LanguageSyntax
   (export spec)
-  (require
-   ;; finkel-core
-   (Finkel.Core.Ghc))
   (import-when [:compile]
     ;; finkel-lang
     (Finkel.Prelude))
@@ -31,24 +33,41 @@
    (Doc.TestAux)))
 
 ;; ghc
-(imports-from-ghc
- (GHC (runGhc))
- (GHC.Driver.Session ((DynFlags) unsafeGlobalDynFlags))
- (GHC.Data.FastString (fsLit))
- (GHC.Utils.Outputable ((Outputable ..) showPpr))
- (GHC.Parser.Lexer ((P ..) (ParseResult ..)))
- (GHC.Types.SrcLoc ((GenLocated ..) mkRealSrcLoc interactiveSrcSpan))
- (GHC.Data.StringBuffer (hGetStringBuffer)))
 
-(import qualified (ghc-module-name GHC.Parser) as GhcParser)
-(import qualified (ghc-module-name GHC.Parser.Lexer) as Lexer)
+(import GHC (runGhc))
 
 (cond-expand
+  [(<= 900 :ghc)
+   (:begin
+     (import GHC.Driver.Session ((DynFlags) unsafeGlobalDynFlags))
+     (import GHC.Data.FastString (fsLit))
+     (import GHC.Utils.Outputable ((Outputable ..) showPpr))
+     (import GHC.Parser.Lexer ((P ..) (ParseResult ..)))
+     (import GHC.Types.SrcLoc ((GenLocated ..) mkRealSrcLoc interactiveSrcSpan))
+     (import GHC.Data.StringBuffer (hGetStringBuffer))
+     (import qualified GHC.Parser as GhcParser)
+     (import qualified GHC.Parser.Lexer as GhcLexer))]
+  [otherwise
+   (:begin
+     (import DynFlags ((DynFlags) unsafeGlobalDynFlags))
+     (import FastString (fsLit))
+     (import Outputable ((Outputable ..) showPpr))
+     (import Lexer ((P ..) (ParseResult ..)))
+     (import SrcLoc ((GenLocated ..) mkRealSrcLoc interactiveSrcSpan))
+     (import StringBuffer (hGetStringBuffer))
+     (import qualified Parser as GhcParser)
+     (import qualified Lexer as GhcLexer))])
+
+(cond-expand
+  [(<= 900 :ghc)
+   (import GHC.Parser.PostProcess (runECP-P))]
   [(<= 810 :ghc)
-   (imports-from-ghc
-    (GHC.Parser.PostProcess (runECP-P)))]
+   (import RdrHsSyn (runECP-P))]
   [otherwise
    (:begin)])
+
+
+;;; Functions
 
 (defn (:: spec Spec)
   (beforeAll_
@@ -98,8 +117,8 @@
       (<- buf (hGetStringBuffer hs))
       (lept [loc (mkRealSrcLoc (fsLit "<test>") 1 1)
              dflags unsafeGlobalDynFlags
-             ps (Lexer.mkPState dflags buf loc)])
-      (case (Lexer.unP (hs-parser parsers) ps)
+             ps (GhcLexer.mkPState dflags buf loc)])
+      (case (GhcLexer.unP (hs-parser parsers) ps)
         (POk _st hres) (do (<- fstr (parse-fnk dflags parsers fnk))
                            (shouldBe fstr (showPpr dflags hres)))
         _ (expectationFailure "failed to parse haskell code"))))
