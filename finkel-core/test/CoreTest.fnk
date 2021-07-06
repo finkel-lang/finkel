@@ -29,6 +29,7 @@
    ;; finkel-core
    (Finkel.Core)
    (Finkel.Core.Functions [cadr])
+   (Finkel.Core.Ghc)
    (Finkel.Core.Ghc.Compat)
 
    ;; Internal
@@ -738,7 +739,7 @@
                [otherwise
                 "other"])
              (\form
-               (&& (elem (aIntegral (:: (read cProjectVersionInt) Int)) form)
+               (&& (elem (aIntegral __glasgow_haskell__) form)
                    (elem (aString NoSourceText arch) form)
                    (elem (aString NoSourceText os) form)
                    (elem (aString NoSourceText "other") form)

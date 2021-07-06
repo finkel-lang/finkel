@@ -1,8 +1,7 @@
 {-# LANGUAGE CPP #-}
 -- | Wrapper module to export version related functions.
 module Finkel.Core.Ghc.Version
-  ( cProjectVersionInt
-  , __glasgow_haskell__
+  ( __glasgow_haskell__
   , getPackageVersion
   ) where
 

@@ -431,8 +431,8 @@ time. To gather compilation context information, the tests sections in the
 `cond-expand' macro uses special keywords for getting such information. These
 keywords are replaced by the described values:
 
-[@:ghc@]: An `Int' value of `cProjectVersionInt', which is the major and minor
-version of the @ghc@ used during the compilation.
+[@:ghc@]: An `Int' value from @__GLASGOW_HASKELL__@, which is the major version
+of the @ghc@ used during the compilation.
 
 [@:arch@]: A `String' value from `System.Info.arch'.
 
