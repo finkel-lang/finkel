@@ -7,5 +7,6 @@
 (:: main (IO ()))
 (= main
   (do (print (read @ Int "42"))
+      (print (read @Double "1.23")) ; Without space after '@'
       (print (read @ (Maybe Bool) "Just True"))
       (print (foldr @ Maybe @ Int @ Int + 1 (Just 41)))))

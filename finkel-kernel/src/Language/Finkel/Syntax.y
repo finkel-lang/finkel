@@ -735,8 +735,8 @@ pat_ :: { HPat }
     | 'char'             {% b_charP $1 }
     | 'unit'             {% b_unitP $1 }
     | '_'                { b_wildP $1 }
-    | special_id_no_bang {% b_symP $1 }
-    | 'symbol'           {% b_symP $1 }
+    | idsym_no_bang      {% b_symP $1 }
+    | '@'                {% b_symP $1 }
     | 'hslist'           {% b_hsListP `fmap` parse p_pats0 (unListL $1) }
     | list_es            {% parse p_pats1 $1 }
 
@@ -776,7 +776,7 @@ expr_no_idsym :: { HExpr }
     | list_es       {% parse p_exprs $1 }
 
 atom :: { HExpr }
-    : idsym         {% b_varE $1 }
+    : idsym_with_at {% b_varE $1 }
     | atom_no_idsym { $1 }
 
 atom_no_idsym :: { HExpr }
@@ -799,7 +799,7 @@ exprs :: { HExpr }
     | idsym '{' fbinds '}'   {% b_recConOrUpdE $1 $3 }
     | list_es '{' fbinds '}' {% b_recUpdE (parse p_exprs $1) $3 }
     | ':quote' form          {% b_quoteE $2 }
-    | idsym app              {% b_opOrAppE $1 $2 }
+    | idsym_with_at app      {% b_opOrAppE $1 $2 }
     | expr_no_idsym app      { case $2 of (es,ts) -> b_appE ($1:es,ts) }
     | expr                   { $1 }
 
@@ -834,10 +834,14 @@ app :: { ([HExpr], [HType]) }
     : rapp { case $1 of (es,ts) -> (reverse es, reverse ts) }
 
 rapp :: { ([HExpr], [HType]) }
-    : expr          { ([$1], []) }
-    | '@' type      { ([], [parTyApp $2]) }
-    | rapp expr     { case $1 of (es,ts) -> ($2:es,ts) }
-    | rapp '@' type { case $1 of (es,ts) -> (es,parTyApp $3:ts) }
+    : et_tyarg      { b_rapp $1 ([], []) }
+    | '@' type      { b_rapp (Right (parTyApp $2)) ([], []) }
+    | rapp et_tyarg { b_rapp $2 $1 }
+    | rapp '@' type { b_rapp (Right (parTyApp $3)) $1 }
+
+et_tyarg :: { Either HExpr HType }
+    : idsym         {% b_exprOrTyArg $1 }
+    | expr_no_idsym { Left $1 }
 
 matches :: { [HMatch] }
     : rmatches { reverse $1 }
@@ -1000,6 +1004,10 @@ idsym :: { Code }
 idsym_no_bang :: { Code }
     : 'symbol'           { $1 }
     | special_id_no_bang { $1 }
+
+idsym_with_at :: { Code }
+    : idsym { $1 }
+    | '@'   { $1 }
 
 special_id :: { Code }
     : '!'                { $1 }

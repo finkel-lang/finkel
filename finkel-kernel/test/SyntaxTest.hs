@@ -71,6 +71,10 @@ mkTest path
   | base_name `elem` ignored
   = describe path (it "is not supported in this version of ghc"
                       (const (pendingWith "Not supported")))
+  | base_name == "0003-expressions-2"
+  , __GLASGOW_HASKELL__ < (900 :: Int)
+  = describe path (it "is pending under ghc < 9.0"
+                    (const (pendingWith "Generated Haskell code not working")))
   | otherwise = mkTest' path
   where
     base_name = takeBaseName path

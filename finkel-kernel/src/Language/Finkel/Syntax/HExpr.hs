@@ -9,6 +9,7 @@ module Language.Finkel.Syntax.HExpr where
 #include "ghc_modules.h"
 
 -- base
+import Control.Arrow                   (first, second)
 import Data.Either                     (partitionEithers)
 import Data.List                       (foldl', foldl1')
 import Data.Maybe                      (fromMaybe)
@@ -63,6 +64,7 @@ import PlaceHolder                     (placeHolderType)
 import Language.Finkel.Builder
 import Language.Finkel.Form
 import Language.Finkel.Form.Fractional
+import Language.Finkel.Syntax.HType
 import Language.Finkel.Syntax.SynUtils
 
 
@@ -476,6 +478,18 @@ getLocInfo l = withLocInfo l fname mk_int
     ql = UnhelpfulSpan (fsLit "<b_quoteE>")
 #endif
 {-# INLINABLE getLocInfo #-}
+
+b_rapp :: Either a b -> ([a],[b]) -> ([a],[b])
+b_rapp = either (first . (:)) (second . (:))
+{-# INLINABLE b_rapp #-}
+
+b_exprOrTyArg :: Code -> Builder (Either HExpr HType)
+b_exprOrTyArg lform = case lform of
+  LForm (L l (Atom (ASymbol sym)))
+    | '@' <- headFS sym, let rest = tailFS sym, not (nullFS rest)
+    -> fmap Right (b_symT (LForm (L l (Atom (ASymbol rest)))))
+  _ -> fmap Left (b_varE lform)
+{-# INLINABLE b_exprOrTyArg #-}
 
 
 -- ------------------------------------------------------------------------
