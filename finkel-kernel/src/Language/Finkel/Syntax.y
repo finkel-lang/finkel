@@ -16,6 +16,7 @@ module Language.Finkel.Syntax
 
     -- * Haskell AST parsers
     parseModule
+  , parseModuleNoHeader
   , parseImports
   , parseLImport
   , parseStmt
@@ -55,6 +56,7 @@ import Language.Finkel.Syntax.SynUtils
 }
 
 %name parse_module module
+%name parse_module_no_header module_no_header
 %name p_mod_header mod_header
 
 %name p_entity entity
@@ -127,19 +129,16 @@ import Language.Finkel.Syntax.SynUtils
 'do'       { LForm (L _ (Atom (ASymbol "do"))) }
 'foreign'  { LForm (L _ (Atom (ASymbol "foreign"))) }
 'if'       { LForm (L _ (Atom (ASymbol "if"))) }
-'import'   { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "import"))))
-                               :$$))) }
+'import'   { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "import")))):$$))) }
 'infix'    { LForm (L _ (Atom (ASymbol "infix"))) }
 'infixl'   { LForm (L _ (Atom (ASymbol "infixl"))) }
 'infixr'   { LForm (L _ (Atom (ASymbol "infixr"))) }
 'instance' { LForm (L _ (Atom (ASymbol "instance"))) }
 'let'      { LForm (L _ (Atom (ASymbol "let"))) }
-'module'   { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "module"))))
-                               :$$))) }
+'module'   { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "module")))):$$))) }
 'newtype'  { LForm (L _ (Atom (ASymbol "newtype"))) }
 'type'     { LForm (L _ (Atom (ASymbol "type"))) }
-'where'    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "where"))))
-                               :$$))) }
+'where'    { LForm (L _ (List ((LForm (L _ (Atom (ASymbol "where")))):$$))) }
 
 '!'  { LForm (L _ (Atom (ASymbol "!"))) }
 ','  { LForm (L _ (Atom (ASymbol ","))) }
@@ -217,12 +216,19 @@ import Language.Finkel.Syntax.SynUtils
 
 -- ---------------------------------------------------------------------
 --
--- Documentation
+-- For getting elements from list form
 --
 -- ---------------------------------------------------------------------
 
 list_es :: { [Code] }
     : 'list' {% case unCode $1 of List xs -> pure xs; _ -> builderError }
+
+
+-- ---------------------------------------------------------------------
+--
+-- Documentation
+--
+-- ---------------------------------------------------------------------
 
 docnext :: { LHsDocString }
     : 'doc' {% b_docString $1}
@@ -230,13 +236,9 @@ docnext :: { LHsDocString }
 docprev :: { LHsDocString }
     : 'doc^' {% b_docString $1 }
 
-mbdocnext :: { Maybe LHsDocString }
-    : docnext     { Just $1 }
-    | {- empty -} { Nothing }
-
 mbdocprev :: { Maybe LHsDocString }
     : docprev     { Just $1 }
-    | {- empty -} { Nothing}
+    | {- empty -} { Nothing }
 
 
 -- ---------------------------------------------------------------------
@@ -245,14 +247,29 @@ mbdocprev :: { Maybe LHsDocString }
 --
 -- ---------------------------------------------------------------------
 
+-- Note: [module_no_header parser]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- The top level "module_no_header" parser is used by ":eval-when-compile"
+-- special form, which does not contain module header in its body form. Since
+-- the ":eval-when-compile" allows to parse body forms consists of module
+-- imports only, using dedicated parser to support such situations.
+
 module :: { HModule }
     : mhead imports top_decls {% $1 `fmap` pure $2 <*> pure $3 }
+    | imports top_decls       {% b_implicitMainModule <*> pure $1 <*> pure $2 }
     | mhead imports           {% $1 `fmap` pure $2 <*> pure [] }
     | mhead top_decls         {% $1 `fmap` pure [] <*> pure $2 }
+    | top_decls               {% b_implicitMainModule <*> pure [] <*> pure $1 }
+
+module_no_header :: { HModule }
+    : imports           {% b_implicitMainModule <*> pure $1 <*> pure [] }
+    | imports top_decls {% b_implicitMainModule <*> pure $1 <*> pure $2 }
+    | top_decls         {% b_implicitMainModule <*> pure [] <*> pure $1 }
 
 mhead :: { [HImportDecl] -> [HDecl] -> HModule }
-    : mbdocnext          {% b_implicitMainModule }
-    | mbdocnext 'module' {% parse p_mod_header $2 <*> pure $1 }
+    : 'module'         {% parse p_mod_header $1 <*> pure Nothing }
+    | docnext 'module' {% parse p_mod_header $2 <*> pure (Just $1) }
 
 mod_header :: { Maybe LHsDocString -> [HImportDecl] -> [HDecl] -> HModule }
     : 'symbol' exports {% b_module (Just $1) $2 }
@@ -436,8 +453,7 @@ qtycon :: { (HConDecl, [HType]) }
     : list_es {% parse p_lqtycon $1 }
 
 lqtycon :: { (HConDecl, [HType]) }
-    : '=>' 'unit' lh98constr   { ($3, []) }
-    | '=>' type tys_h98constr  { let (c,ts) = $3 in (c,$2:reverse ts) }
+    : '=>' type tys_h98constr  { let (c,ts) = $3 in (c, $2:reverse ts) }
     | lh98constr               { ($1, []) }
 
 tys_h98constr :: { (HConDecl, [HType]) }
@@ -539,7 +555,6 @@ rtvbndrs :: { [HTyVarBndr] }
 tvbndr :: { HTyVarBndr }
     : idsym   { codeToUserTyVar $1 }
     | list_es {% parse p_lkindtv $1 }
-
 
 finsthd :: { (Located FastString, [HType]) }
     : list_es {% parse p_lfinsthd $1 }
@@ -692,8 +707,8 @@ rtype_args :: { [HType] }
     | rtype_args type_arg { $2 : $1 }
 
 type_arg :: { HType }
-    : special_id_no_bang {% b_symT $1 }
-    | type               { $1 }
+    : special_id_no_bang_no_at {% b_symT $1 }
+    | type                     { $1 }
 
 types :: { [HType] }
     : rtypes { reverse $1 }
@@ -730,19 +745,18 @@ pat :: { HPat }
     | pat_     { $1 }
 
 pat_ :: { HPat }
-    : 'integer'          {% b_intP $1 }
-    | 'string'           {% b_stringP $1 }
-    | 'char'             {% b_charP $1 }
-    | 'unit'             {% b_unitP $1 }
-    | '_'                { b_wildP $1 }
-    | idsym_no_bang      {% b_symP $1 }
-    | '@'                {% b_symP $1 }
-    | 'hslist'           {% b_hsListP `fmap` parse p_pats0 (unListL $1) }
-    | list_es            {% parse p_pats1 $1 }
+    : 'integer'     {% b_intP $1 }
+    | 'string'      {% b_stringP $1 }
+    | 'char'        {% b_charP $1 }
+    | 'unit'        {% b_unitP $1 }
+    | '_'           { b_wildP $1 }
+    | idsym_no_bang {% b_symP $1 }
+    | 'hslist'      {% b_hsListP `fmap` parse p_pats0 (unListL $1) }
+    | list_es       {% parse p_pats1 $1 }
 
 pats1 :: { HPat }
     : ',' pats0            { b_tupP $1 $2 }
-    | '@' idsym pat        {% b_asP $2 $3 }
+    | '@' idsym_no_at pat  {% b_asP $2 $3 }
     | conid '{' labelp '}' {% b_labeledP $1 $3 }
     | conid pats0          {% b_conP [$1] False $2 }
     | list_es pats0        {% b_conP $1 True $2 }
@@ -776,7 +790,7 @@ expr_no_idsym :: { HExpr }
     | list_es       {% parse p_exprs $1 }
 
 atom :: { HExpr }
-    : idsym_with_at {% b_varE $1 }
+    : idsym         {% b_varE $1 }
     | atom_no_idsym { $1 }
 
 atom_no_idsym :: { HExpr }
@@ -799,7 +813,7 @@ exprs :: { HExpr }
     | idsym '{' fbinds '}'   {% b_recConOrUpdE $1 $3 }
     | list_es '{' fbinds '}' {% b_recUpdE (parse p_exprs $1) $3 }
     | ':quote' form          {% b_quoteE $2 }
-    | idsym_with_at app      {% b_opOrAppE $1 $2 }
+    | idsym app              {% b_opOrAppE $1 $2 }
     | expr_no_idsym app      { case $2 of (es,ts) -> b_appE ($1:es,ts) }
     | expr                   { $1 }
 
@@ -834,13 +848,13 @@ app :: { ([HExpr], [HType]) }
     : rapp { case $1 of (es,ts) -> (reverse es, reverse ts) }
 
 rapp :: { ([HExpr], [HType]) }
-    : et_tyarg      { b_rapp $1 ([], []) }
+    : et_arg        { b_rapp $1 ([], []) }
     | '@' type      { b_rapp (Right (parTyApp $2)) ([], []) }
-    | rapp et_tyarg { b_rapp $2 $1 }
+    | rapp et_arg   { b_rapp $2 $1 }
     | rapp '@' type { b_rapp (Right (parTyApp $3)) $1 }
 
-et_tyarg :: { Either HExpr HType }
-    : idsym         {% b_exprOrTyArg $1 }
+et_arg :: { Either HExpr HType }
+    : idsym_no_at   {% b_exprOrTyArg $1 }
     | expr_no_idsym { Left $1 }
 
 matches :: { [HMatch] }
@@ -909,63 +923,63 @@ form :: { Code }
     | 'hslist'  { $1 }
 
 all_syms :: { Code }
-    : 'case' { $1 }
-    | 'class' { $1 }
-    | 'data' { $1 }
-    | 'default' { $1 }
-    | 'do' { $1 }
-    | 'foreign' { $1 }
-    | 'if' { $1 }
-    | 'infix' { $1 }
-    | 'infixl' { $1 }
-    | 'infixr' { $1 }
+    : 'case'     { $1 }
+    | 'class'    { $1 }
+    | 'data'     { $1 }
+    | 'default'  { $1 }
+    | 'do'       { $1 }
+    | 'foreign'  { $1 }
+    | 'if'       { $1 }
+    | 'infix'    { $1 }
+    | 'infixl'   { $1 }
+    | 'infixr'   { $1 }
     | 'instance' { $1 }
-    | 'let' { $1 }
-    | 'newtype' { $1 }
-    | 'type' { $1 }
+    | 'let'      { $1 }
+    | 'newtype'  { $1 }
+    | 'type'     { $1 }
 
-    | '!' { $1 }
-    | ',' { $1 }
+    | '!'  { $1 }
+    | ','  { $1 }
     | '->' { $1 }
     | '..' { $1 }
     | '::' { $1 }
     | '<-' { $1 }
-    | '=' { $1 }
+    | '='  { $1 }
     | '=>' { $1 }
-    | '@' { $1 }
+    | '@'  { $1 }
     | '\\' { $1 }
-    | '{' { $1 }
-    | '|' { $1 }
-    | '}' { $1 }
-    | '~' { $1 }
-    | '_' { $1 }
+    | '{'  { $1 }
+    | '|'  { $1 }
+    | '}'  { $1 }
+    | '~'  { $1 }
+    | '_'  { $1 }
 
-    | special_id_no_bang { $1 }
+    | special_id_no_bang_no_at { $1 }
 
-    | 'inlinable' { $1 }
-    | 'inline' { $1 }
-    | 'noinline' { $1 }
+    | 'inlinable'  { $1 }
+    | 'inline'     { $1 }
+    | 'noinline'   { $1 }
     | 'specialize' { $1 }
 
     | ':quote' { $1 }
 
 all_lists :: { Code }
-    : 'deriving' { consListWith $1 "deriving" }
-    | 'import'   { consListWith $1 "import" }
-    | 'module'   { consListWith $1 "module" }
-    | 'where'    { consListWith $1 "where" }
-    | 'unpack'   { $1 }
+    : 'deriving'     { consListWith $1 "deriving" }
+    | 'import'       { consListWith $1 "import" }
+    | 'module'       { consListWith $1 "module" }
+    | 'where'        { consListWith $1 "where" }
+    | 'unpack'       { $1 }
     | 'overlappable' { $1 }
-    | 'overlapping' { $1 }
-    | 'overlaps' { $1 }
-    | 'incoherent' { $1 }
-    | 'doc' { consListWith [$1] ":doc" }
-    | 'doc^' { consListWith [$1] ":doc^" }
-    | 'doc$' { $1 }
-    | 'dh1' { $1 }
-    | 'dh2' { $1 }
-    | 'dh3' { $1 }
-    | 'dh4' { $1 }
+    | 'overlapping'  { $1 }
+    | 'overlaps'     { $1 }
+    | 'incoherent'   { $1 }
+    | 'doc'          { consListWith [$1] ":doc" }
+    | 'doc^'         { consListWith [$1] ":doc^" }
+    | 'doc$'         { $1 }
+    | 'dh1'          { $1 }
+    | 'dh2'          { $1 }
+    | 'dh3'          { $1 }
+    | 'dh4'          { $1 }
 
 
 -- ---------------------------------------------------------------------
@@ -1002,23 +1016,26 @@ idsym :: { Code }
     | special_id { $1 }
 
 idsym_no_bang :: { Code }
-    : 'symbol'           { $1 }
-    | special_id_no_bang { $1 }
+    : 'symbol'                 { $1 }
+    | '@'                      { $1 }
+    | special_id_no_bang_no_at { $1 }
 
-idsym_with_at :: { Code }
-    : idsym { $1 }
-    | '@'   { $1 }
+idsym_no_at :: { Code }
+    : 'symbol'                 { $1 }
+    | '!'                      { $1 }
+    | special_id_no_bang_no_at { $1 }
 
 special_id :: { Code }
-    : '!'                { $1 }
-    | special_id_no_bang { $1 }
+    : '!'                      { $1 }
+    | '@'                      { $1 }
+    | special_id_no_bang_no_at { $1 }
 
-special_id_no_bang :: { Code }
+special_id_no_bang_no_at :: { Code }
     : 'forall'            { $1 }
-    | special_id_no_bg_fa { $1 }
+    | special_id_no_bg_at_fa { $1 }
 
 -- special id, no bang, no forall
-special_id_no_bg_fa :: { Code }
+special_id_no_bg_at_fa :: { Code }
     : 'anyclass'    { $1 }
     | 'as'          { $1 }
     | 'family'      { $1 }
@@ -1044,6 +1061,10 @@ happyError = builderError
 -- | Parser for Haskell module.
 parseModule :: Builder HModule
 parseModule = parse_module
+
+-- | Parser for Haskell module with out module header.
+parseModuleNoHeader  :: Builder HModule
+parseModuleNoHeader = parse_module_no_header
 
 -- | Parser for import declarations.
 parseImports :: Builder [HImportDecl]

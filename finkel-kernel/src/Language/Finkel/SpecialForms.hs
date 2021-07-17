@@ -85,7 +85,7 @@ import Language.Finkel.Form
 import Language.Finkel.Homoiconic
 import Language.Finkel.Make            (findTargetModuleNameMaybe,
                                         makeFromRequire)
-import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModule)
+import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModuleNoHeader)
 import Language.Finkel.Syntax.SynUtils
 
 -- ---------------------------------------------------------------------
@@ -362,7 +362,7 @@ m_withMacro form =
     evalMacroDefs hsc_env forms = do
       forms' <- mapM expand forms
       qualify <- envQualifyQuotePrimitives <$> getFnkEnv
-      case evalBuilder (hsc_dflags hsc_env) qualify parseModule forms' of
+      case evalBuilder (hsc_dflags hsc_env) qualify parseModuleNoHeader forms' of
         Right HsModule {hsmodDecls=decls} -> do
           (tythings, ic) <- evalDecls decls
           modifySession (\he -> he {hsc_IC=ic})
@@ -438,7 +438,7 @@ m_evalWhenCompile form =
       expanded <- expands' body
       dflags <- getDynFlags
       qualify <- envQualifyQuotePrimitives <$> getFnkEnv
-      case evalBuilder dflags qualify parseModule expanded of
+      case evalBuilder dflags qualify parseModuleNoHeader expanded of
         Right HsModule { hsmodDecls = decls
                        , hsmodImports = limps } -> do
 
