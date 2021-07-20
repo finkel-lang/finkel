@@ -27,11 +27,11 @@ jobs:
           - os: ubuntu-latest
             resolver: lts-16
           - os: ubuntu-latest
-            resolver: lts-17
+            resolver: lts-18
           - os: macos-latest
-            resolver: lts-17
+            resolver: lts-18
           - os: windows-latest
-            resolver: lts-17
+            resolver: lts-18
 
     env:
       STACK: stack --resolver=${{ matrix.resolver }}
@@ -268,7 +268,7 @@ jobs:
       - ubuntu-latest
 
     env:
-      STACK: stack --resolver=lts-17
+      STACK: stack --resolver=lts-18
 
     steps:
       - name: Checkout git repository
