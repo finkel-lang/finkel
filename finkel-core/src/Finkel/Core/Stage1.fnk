@@ -11,15 +11,6 @@
   defn defn' defn-
   eval-when eval-and-compile)
 
-;;; Compile time imports
-
-(:eval-when-compile
-  ;; base
-  (import Prelude)
-
-  ;; finkel-kernel
-  (import Language.Finkel))
-
 ;;; Imports
 
 ;; base
@@ -32,7 +23,6 @@
 (import Finkel.Core.Stage0)
 (import Finkel.Core.Ghc.Compat)
 
-
 
 ;;; [Internally used macros]
 ;;; ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -42,60 +32,69 @@
 ;;; defines some auxiliary functions, and then a macro `define-macro'' to define
 ;;; macros for this module itself and compiled result.
 
-(:with-macro ((= eval-when-compile-and-load
-                (Macro
-                 (\form
-                   (case (unCode form)
-                     (List (: _ rest)) (return `(:begin
-                                                  (:eval-when-compile ,@rest)
-                                                  ,@rest))
-                     _ (finkelSrcError form "eval-when-compile-and-load"))))))
-  (eval-when-compile-and-load
-   (:doc "Code transformer function for macro declaration.")
-   (:: macro-decl (-> Code Code Code (Fnk Code)))
-   (= macro-decl name arg body
-     (do (<- tmp (gensym' "tmp"))
-         (return `(= ,name
-                    (let ((:: ,tmp (-> Code (Fnk Code)))
-                          (= ,tmp ,arg ,body))
-                      (Macro ,tmp))))))
-   %p(INLINABLE macro-decl)
+(:eval-when-compile
+  ;; base
+  (import Prelude)
 
-   (:doc "Body function of /macro-defining-macro/.")
-   (:: dmac (-> Code (Fnk Code)))
-   (= dmac form
-     (let ((:: make-tsig (-> Code Code))
-           (= make-tsig name `(:: ,name Macro)))
+  ;; finkel-kernel
+  (import Language.Finkel)
+
+  (:: eval-when-compile-and-load Macro)
+  (= eval-when-compile-and-load
+    (Macro
+     (\form
        (case (unCode form)
-         (List [_ name arg body])
-         (do (<- decl (macro-decl name arg body))
-             (return `(:begin
-                        ,(make-tsig name)
-                        ,decl)))
+         (List (: _ rest)) (return `(:begin
+                                      (:eval-when-compile ,@rest)
+                                      ,@rest))
+         _ (finkelSrcError form "eval-when-compile-and-load"))))))
 
-         (List [_ name (@ doc (LForm (L _ (Atom (AString {}))))) arg body])
-         (do (<- decl (macro-decl name arg body))
-             (return `(:begin
-                        ,(make-tsig name)
-                        (:doc^ ,doc)
-                        ,decl)))
+(eval-when-compile-and-load
+ (:doc "Code transformer function for macro declaration.")
+ (:: macro-decl (-> Code Code Code (Fnk Code)))
+ (= macro-decl name arg body
+   (do (<- tmp (gensym' "tmp"))
+       (return `(= ,name
+                  (let ((:: ,tmp (-> Code (Fnk Code)))
+                        (= ,tmp ,arg ,body))
+                    (Macro ,tmp))))))
+ %p(INLINABLE macro-decl)
 
-         _ (finkelSrcError form "dmac: malformed macro"))))
-   %p(INLINABLE dmac)
+ (:doc "Body function of /macro-defining-macro/.")
+ (:: dmac (-> Code (Fnk Code)))
+ (= dmac form
+   (let ((:: make-tsig (-> Code Code))
+         (= make-tsig name `(:: ,name Macro)))
+     (case (unCode form)
+       (List [_ name arg body])
+       (do (<- decl (macro-decl name arg body))
+           (return `(:begin
+                      ,(make-tsig name)
+                      ,decl)))
 
-   (:doc "Function for body of `macrolet'.")
-   (:: lmac (-> Code (Fnk Code)))
-   (= lmac form
-     (let ((= f x
-             (case (unCode x)
-               (List [name arg body]) (macro-decl name arg body)
-               _ (finkelSrcError x "lmac: malformed macro"))))
-       (case (unCode form)
-         (List (: _ (LForm (L _l (List ms))) rest))
-         (do (<- ms' (mapM f ms))
-             (return `(:with-macro (,@ms') ,@rest)))
-         _ (finkelSrcError form "lmac: malformed args"))))
-   %p(INLINABLE lmac)))
+       (List [_ name (@ doc (LForm (L _ (Atom (AString {}))))) arg body])
+       (do (<- decl (macro-decl name arg body))
+           (return `(:begin
+                      ,(make-tsig name)
+                      (:doc^ ,doc)
+                      ,decl)))
+
+       _ (finkelSrcError form "dmac: malformed macro"))))
+ %p(INLINABLE dmac)
+
+ (:doc "Function for body of `macrolet'.")
+ (:: lmac (-> Code (Fnk Code)))
+ (= lmac form
+   (let ((= f x
+           (case (unCode x)
+             (List [name arg body]) (macro-decl name arg body)
+             _ (finkelSrcError x "lmac: malformed macro"))))
+     (case (unCode form)
+       (List (: _ (LForm (L _l (List ms))) rest))
+       (do (<- ms' (mapM f ms))
+           (return `(:with-macro (,@ms') ,@rest)))
+       _ (finkelSrcError form "lmac: malformed args"))))
+ %p(INLINABLE lmac))
 
 (:eval-when-compile
   (:doc "Simple macro for defining macro. This macro is used internally
