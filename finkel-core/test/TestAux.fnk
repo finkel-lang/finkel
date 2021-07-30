@@ -31,7 +31,7 @@
 
    ;; finkel-core
    (Finkel.Prelude)
-   (Finkel.Core.Ghc.Compat)))
+   (Finkel.Core.Internal)))
 
 ;;; Types
 

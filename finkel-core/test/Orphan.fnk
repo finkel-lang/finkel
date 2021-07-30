@@ -20,7 +20,7 @@
    (Language.Finkel.Form)
 
    ;; finkel-core
-   (Finkel.Core.Ghc.Compat)))
+   (Finkel.Core.Internal)))
 
 (instance (Arbitrary Atom)
   (defn arbitrary

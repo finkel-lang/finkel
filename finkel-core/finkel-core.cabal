@@ -35,16 +35,17 @@ custom-setup
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Paths_finkel_core
-                       Finkel.Core
+  exposed-modules:     Finkel.Core
                        Finkel.Core.Functions
-                       Finkel.Core.Ghc
-                       Finkel.Core.Ghc.Compat
+                       Finkel.Core.Internal
                        Finkel.Prelude
-  other-modules:       Finkel.Core.Stage0
-                       Finkel.Core.Stage1
-                       Finkel.Core.Stage2
-                       Finkel.Core.Ghc.Version
+                       Paths_finkel_core
+  other-modules:       Finkel.Core.Internal.Stage0
+                       Finkel.Core.Internal.Stage1
+                       Finkel.Core.Internal.Stage2
+                       Finkel.Core.Internal.Ghc
+                       Finkel.Core.Internal.Ghc.Compat
+                       Finkel.Core.Internal.Ghc.Version
   autogen-modules:     Paths_finkel_core
   build-depends:       base          >= 4.7   && < 5
                      , ghc           >= 8.2.0 && < 9.3

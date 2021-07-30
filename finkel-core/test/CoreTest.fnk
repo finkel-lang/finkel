@@ -29,8 +29,7 @@
    ;; finkel-core
    (Finkel.Core)
    (Finkel.Core.Functions [cadr])
-   (Finkel.Core.Ghc)
-   (Finkel.Core.Ghc.Compat)
+   (Finkel.Core.Internal)
 
    ;; Internal
    (TestAux)))

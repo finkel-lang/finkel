@@ -8,7 +8,7 @@
           listTests)
   (require
    ;; finkel-core
-   (Finkel.Core.Ghc))
+   (Finkel.Core.Internal))
   (import
    ;; base
    (Data.List [isSubsequenceOf])

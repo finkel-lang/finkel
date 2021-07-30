@@ -34,5 +34,5 @@ default, i.e., available without /require/-ing the \"Finkel.Core\" module.")
   case-do cond lcase lefn lept)
 
 ;; Internal
-(import Finkel.Core.Stage1)
-(import Finkel.Core.Stage2)
+(import Finkel.Core.Internal.Stage1)
+(import Finkel.Core.Internal.Stage2)

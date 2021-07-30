@@ -4,7 +4,7 @@
 ;;; `defmodule', `eval-when', `macrolet' ... etc, just enough to start writing
 ;;; other macros and function in `Finkel.Core.Stage2'.
 
-(module Finkel.Core.Stage1
+(module Finkel.Core.Internal.Stage1
   defmacro defmacro' defmacro-
   defmacroM defmacroM' defmacroM-
   macrolet macroletM
@@ -20,8 +20,8 @@
 (import Language.Finkel)
 
 ;; Internal
-(import Finkel.Core.Stage0)
-(import Finkel.Core.Ghc.Compat)
+(import Finkel.Core.Internal.Stage0)
+(import Finkel.Core.Internal.Ghc.Compat)
 
 
 ;;; [Internally used macros]

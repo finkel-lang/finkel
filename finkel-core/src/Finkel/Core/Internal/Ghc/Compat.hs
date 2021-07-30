@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 -- Module to re-export functions from ghc
 
-module Finkel.Core.Ghc.Compat
+module Finkel.Core.Internal.Ghc.Compat
   (
     -- GHC
     getModuleInfo, lookupModule, lookupName, modInfoExports,

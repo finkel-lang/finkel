@@ -1,6 +1,0 @@
-;;;; Module for re-exporting `__GLASGOW_HASKELL__'.
-
-(module Finkel.Core.Ghc
-  __glasgow_haskell__)
-
-(import Finkel.Core.Ghc.Version)

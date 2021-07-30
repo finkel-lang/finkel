@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 -- | Wrapper module to export version related functions.
-module Finkel.Core.Ghc.Version
+module Finkel.Core.Internal.Ghc.Version
   ( __glasgow_haskell__
   , getPackageVersion
   ) where
@@ -32,7 +32,7 @@ import GHC.PackageDb          (packageVersion)
 #endif
 
 -- Internal
-import Finkel.Core.Ghc.Compat
+import Finkel.Core.Internal.Ghc.Compat
 
 -- | Function version of @__GLASGOW_HASKELL__@ C preprocessor macro.
 __glasgow_haskell__ :: Int

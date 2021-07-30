@@ -3,9 +3,9 @@
 %p(LANGUAGE FlexibleInstances
             TypeSynonymInstances)
 
-(:require Finkel.Core.Stage1)
+(:require Finkel.Core.Internal.Stage1)
 
-(module Finkel.Core.Stage2
+(module Finkel.Core.Internal.Stage2
   ;; Macros
   defmodule
   macroexpand macroexpand-1
@@ -53,9 +53,9 @@
 (import Language.Finkel.Form (mkLocatedForm))
 
 ;; Internal
-(import Finkel.Core.Stage0)
-(import Finkel.Core.Ghc.Version)
-(import Finkel.Core.Ghc.Compat)
+(import Finkel.Core.Internal.Stage0)
+(import Finkel.Core.Internal.Ghc.Version)
+(import Finkel.Core.Internal.Ghc.Compat)
 
 
 ;;; ------------------------------------------------------------------------

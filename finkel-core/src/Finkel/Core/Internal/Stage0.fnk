@@ -1,9 +1,9 @@
 ;;;; Stage0 - functios usd in stage 1.
 
 ;;; This module contains few functions and type to work with `Code', just enough
-;;; to define some macros in the next `Finkel.Core.Stage1' module.
+;;; to define some macros in the next `Finkel.Core.Internal.Stage1' module.
 
-(module Finkel.Core.Stage0
+(module Finkel.Core.Internal.Stage0
   ;; Exported from other modules.
   (FinkelListException ..) car cdr cons
 

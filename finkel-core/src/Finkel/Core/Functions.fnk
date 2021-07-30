@@ -45,8 +45,8 @@ with code values when writing macros.")
   (FinkelListException ..) unsafeFinkelSrcError)
 
 ;; Internal
-(import Finkel.Core.Stage0)
-(import Finkel.Core.Stage2)
+(import Finkel.Core.Internal.Stage0)
+(import Finkel.Core.Internal.Stage2)
 
 (:doc$ cxr "The `car' and `cdr' are the basic of /cxr/ functions.
 Rest of the /cxr/ functions are composed from `car' and `cdr'.

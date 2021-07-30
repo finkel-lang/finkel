@@ -10,7 +10,7 @@
 
    ;; finkel-core
    (Finkel.Prelude)
-   (Finkel.Core.Ghc [__glasgow_haskell__])))
+   (Finkel.Core.Internal [__glasgow_haskell__])))
 
 ;;; Module name aliases
 
