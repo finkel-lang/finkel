@@ -121,7 +121,9 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
         beforeAll_ prepare_obj
                    (let outputs = map (<.> "o") inputs
                     in  buildObjAndExist flags inputs outputs)
-      prepare_obj = doUnload >> removeArtifacts odir
+      prepare_obj = do
+        doUnload
+        mapM_ removeArtifacts [odir, odir </> "M4", odir </> "M6"]
 
   -- Compile object codes with and without optimization option
   buildObjAndExist' [] ["P1", "P2"]
