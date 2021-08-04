@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 -- | Syntax for module header, import and export entities.
-module Language.Finkel.Syntax.HIE where
+module Language.Finkel.Syntax.HImpExp where
 
 #include "Syntax.h"
 #include "ghc_modules.h"

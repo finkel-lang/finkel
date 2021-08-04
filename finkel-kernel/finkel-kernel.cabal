@@ -79,7 +79,7 @@ library
                        Language.Finkel.Syntax.HBind
                        Language.Finkel.Syntax.HDecl
                        Language.Finkel.Syntax.HExpr
-                       Language.Finkel.Syntax.HIE
+                       Language.Finkel.Syntax.HImpExp
                        Language.Finkel.Syntax.HPat
                        Language.Finkel.Syntax.HType
   autogen-modules:     Paths_finkel_kernel

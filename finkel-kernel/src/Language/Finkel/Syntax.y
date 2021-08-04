@@ -49,7 +49,7 @@ import Language.Finkel.Builder
 import Language.Finkel.Form
 import Language.Finkel.Syntax.HDecl
 import Language.Finkel.Syntax.HExpr
-import Language.Finkel.Syntax.HIE
+import Language.Finkel.Syntax.HImpExp
 import Language.Finkel.Syntax.HPat
 import Language.Finkel.Syntax.HType
 import Language.Finkel.Syntax.SynUtils
