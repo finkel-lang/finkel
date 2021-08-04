@@ -15,8 +15,7 @@ import Data.Maybe                      (fromMaybe)
 import GHC_Core_DataCon                (SrcStrictness (..))
 import GHC_Data_FastString             (FastString, unpackFS)
 import GHC_Data_OrdList                (toOL)
-import GHC_Hs_Binds                    (FixitySig (..), HsBind, HsBindLR (..),
-                                        Sig (..))
+import GHC_Hs_Binds                    (HsBind, Sig (..))
 import GHC_Hs_Decls                    (ClsInstDecl (..), ConDecl (..),
                                         DataFamInstDecl (..), DefaultDecl (..),
                                         DerivDecl (..), DocDecl (..),
@@ -34,7 +33,7 @@ import GHC_Hs_Type                     (ConDeclField (..), HsConDetails (..),
                                         HsTyVarBndr (..), HsType (..),
                                         HsWildCardBndrs (..), mkFieldOcc,
                                         mkHsQTvs)
-import GHC_Hs_Utils                    (mkClassOpSigs, mkFunBind)
+import GHC_Hs_Utils                    (mkClassOpSigs)
 import GHC_Parser_PostProcess          (mkConDeclH98, mkGadtDecl,
                                         mkInlinePragma, parseCImport)
 import GHC_Types_Basic                 (Activation (..), InlineSpec (..),
@@ -73,7 +72,6 @@ import GHC_Types_Var                   (Specificity (..))
 
 #if MIN_VERSION_ghc(8,10,0)
 import GHC_Hs_Decls                    (LTyFamDefltDecl)
-import GHC_Types_Basic                 (Origin (..))
 #else
 import GHC_Hs_Decls                    (LTyFamDefltEqn)
 import Outputable                      (showSDocUnsafe)
@@ -97,14 +95,13 @@ import GHC_Hs_Decls                    (DerivStrategy (..))
 #else
 import GHC_Hs_Decls                    (noForeignExportCoercionYet,
                                         noForeignImportCoercionYet)
-import PlaceHolder                     (PlaceHolder (..), placeHolderNames,
-                                        placeHolderType)
+import PlaceHolder                     (PlaceHolder (..), placeHolderNames)
 #endif
-
 
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Form
+import Language.Finkel.Syntax.HBind
 import Language.Finkel.Syntax.HType
 import Language.Finkel.Syntax.SynUtils
 
@@ -628,10 +625,8 @@ b_fixityD dir (LForm (L l form)) syms =
                    InfixL -> SourceText "infixl"
                    InfixR -> SourceText "infixr"
                    InfixN -> SourceText "infix"
-          fixSig = FixSig NOEXT
-          fixitySig = FixitySig NOEXT
       names <- mapM lname syms
-      return (lA l (sigD (fixSig (fixitySig names fixity))))
+      return (lA l (sigD (mkFixSig names fixity)))
     _ -> builderError
 {-# INLINABLE b_fixityD #-}
 
@@ -745,27 +740,14 @@ b_funBindD lname0@(L l _) args grhss decls = do
                     , mc_fixity = Prefix
                       -- XXX: Get strictness from ... where?
                     , mc_strictness = NoSrcStrict }
-#if MIN_VERSION_ghc(8,10,0)
-      mkFunBind' = mkFunBind FromSource
-#else
-      mkFunBind' = mkFunBind
-#endif
-      bind = mkFunBind' lname [match]
-  return (lA l (valD bind))
+      bind = mkFunBind_compat lname [match]
+  return (lA l (ValD NOEXT bind))
 {-# INLINABLE b_funBindD #-}
 
 b_patBindD :: ([HGRHS],[HDecl]) -> HPat -> HDecl
-b_patBindD (grhss,decls) (dL->L l pat) =
-  let bind = PatBind { pat_lhs = cL l pat
-                     , pat_rhs = mkGRHSs grhss decls l
-#if MIN_VERSION_ghc(8,6,0)
-                     , pat_ext = NOEXT
-#else
-                     , pat_rhs_ty = placeHolderType
-                     , bind_fvs = placeHolderNames
-#endif
-                     , pat_ticks = ([],[]) }
-  in  L l (valD bind)
+b_patBindD (grhss,decls) lpat@(dL->L l _pat) =
+  let bind = mkPatBind_compat lpat grhss decls
+  in  L l (ValD NOEXT bind)
 {-# INLINABLE b_patBindD #-}
 
 b_tsigD :: [Code] -> ([HType], HType) -> Builder HDecl

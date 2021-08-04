@@ -31,18 +31,12 @@ import qualified Data.ByteString.Char8            as BS
 #endif
 
 -- ghc
-import           GHC_Data_Bag                     (listToBag)
 import           GHC_Data_FastString              (FastString, fsLit, headFS,
                                                    unpackFS)
-
-import           GHC_Hs_Binds                     (HsLocalBindsLR (..),
-                                                   HsValBindsLR (..),
-                                                   emptyLocalBinds)
-import           GHC_Hs_Decls                     (HsDecl (..), LConDecl,
-                                                   LDataFamInstDecl, LDocDecl,
-                                                   LFamilyDecl, LTyFamInstDecl)
+import           GHC_Hs_Decls                     (LConDecl, LDataFamInstDecl,
+                                                   LDocDecl, LFamilyDecl,
+                                                   LTyFamInstDecl)
 import           GHC_Hs_Doc                       (LHsDocString)
-import           GHC_Hs_Expr                      (GRHSs (..), LGRHS)
 import           GHC_Hs_Lit                       (HsOverLit (..))
 import           GHC_Hs_Pat                       (HsRecField' (..),
                                                    LHsRecField, LHsRecUpdField)
@@ -54,7 +48,7 @@ import           GHC_Hs_Type                      (AmbiguousFieldOcc (..),
 import           GHC_Hs_Utils                     (mkHsIntegral)
 
 import           GHC_Builtin_Types                (consDataConName)
-import           GHC_Data_OrdList                 (OrdList, toOL)
+import           GHC_Data_OrdList                 (OrdList)
 import           GHC_Parser_Lexer                 (P (..), ParseResult (..))
 import qualified GHC_Parser_PostProcess           as PostProcess
 import           GHC_Types_Name_Occurrence        (NameSpace, srcDataName,
@@ -70,8 +64,8 @@ import           GHC_Utils_Lexeme                 (isLexCon, isLexConSym,
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Hs.Extension                 (GhcPass (..))
-#else
-import           GHC_Types_SrcLoc                 (SrcSpan)
+-- #else
+-- import           GHC_Types_SrcLoc                 (SrcSpan)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -212,32 +206,6 @@ getVarOrConId orig@(LForm (L _ form)) =
       | isLexVar sym -> return sym
     _ -> setLastToken orig >> failB "invalid identifier"
 {-# INLINABLE getVarOrConId #-}
-
--- | Build 'HLocalBinds' from list of 'HDecl's.
-#if MIN_VERSION_ghc(9,2,0)
-declsToBinds :: a -> [HDecl] -> HLocalBinds
-declsToBinds _ decls = binds'
-#else
-declsToBinds :: SrcSpan -> [HDecl] -> HLocalBinds
-declsToBinds l decls = L l binds'
-#endif
-  where
-    binds' = case decls of
-      [] -> emptyLocalBinds
-      _  -> mkHsValBinds_compat (listToBag binds) sigs
-    -- Using 'PostProcess.cvTopDecls' to group same names in where
-    -- clause. Perhaps better to do similar things done in
-    -- 'PostProcess.cvBindGroup', which is dedicated for 'P' monad ...
-    decls' = PostProcess.cvTopDecls (toOL decls)
-    (binds, sigs) = go ([],[]) decls'
-    go (bs,ss) ds =
-      case ds of
-        []    -> (bs, ss)
-        d:ds' -> case d of
-          L ld (ValD _EXT b) -> go (L ld b:bs,ss) ds'
-          L ld (SigD _EXT s) -> go (bs,L ld s:ss) ds'
-          -- XXX: Ignoring.
-          _                  -> go (bs,ss) ds'
 
 -- | Convert record field constructor expression to record field update
 -- expression.
@@ -407,23 +375,6 @@ mkHsIntegral_compat il =
     mkHsIntegral (il_text il) (il_value il) placeHolderType
 #endif
 {-# INLINABLE mkHsIntegral_compat #-}
-
-#if MIN_VERSION_ghc(9,2,0)
-mkGRHSs :: [LGRHS PARSED t] -> [HDecl] -> a -> GRHSs PARSED t
-#else
-mkGRHSs :: [LGRHS PARSED t] -> [HDecl] -> SrcSpan -> GRHSs PARSED t
-#endif
-mkGRHSs grhss decls l = GRHSs NOEXT grhss (declsToBinds l decls)
-{-# INLINABLE mkGRHSs #-}
-
-mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
-mkHsValBinds_compat binds sigs =
-#if MIN_VERSION_ghc(8,6,0)
-  HsValBinds NOEXT (ValBinds NOEXT binds sigs)
-#else
-  HsValBinds (ValBindsIn binds sigs)
-#endif
-{-# INLINABLE mkHsValBinds_compat #-}
 
 mkHsQualTy_compat :: LHsContext PARSED -> HType -> HsType PARSED
 mkHsQualTy_compat ctxt body

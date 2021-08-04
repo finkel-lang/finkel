@@ -64,6 +64,7 @@ import PlaceHolder                     (placeHolderType)
 import Language.Finkel.Builder
 import Language.Finkel.Form
 import Language.Finkel.Form.Fractional
+import Language.Finkel.Syntax.HBind
 import Language.Finkel.Syntax.HType
 import Language.Finkel.Syntax.SynUtils
 
