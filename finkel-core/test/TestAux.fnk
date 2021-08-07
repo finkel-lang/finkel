@@ -106,7 +106,9 @@
 
 (defmacro expandFailureWith
   [in test]
-  `(let ((= act (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv)))
+  `(let ((= act
+           (do (<- r (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv))
+               (seq r (pure r)))))
      (shouldThrow act ,test)))
 
 (defmacro expandFailure
