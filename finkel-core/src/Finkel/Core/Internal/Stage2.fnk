@@ -10,7 +10,7 @@
   defmodule
   macroexpand macroexpand-1
   exported-macros cond-expand macro-error
-  case-do cond lcase lefn lept
+  case-do cond heredoc lcase lefn lept
 
   ;; Functions
   is-atom is-pair is-list is-hslist is-symbol is-string is-char
@@ -278,6 +278,130 @@ expands to:
         (= binds ($ curve toCode snd (reduce f z) car args)))
     (cons 'let (cons binds body))))
 
+;; Auxiliary type for `heredoc'.
+
+(data DocElem
+  (Lit String)
+  (Var String))
+
+;; Auxliary functions for `heredoc'.
+
+;;; Note [Brace character codes]
+;;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;;;
+;;; Using #'\123 for `{', and #'\125 for `}'. These use of character codes are
+;;; workaround for text editor to avoid mismatching parentheses containing forms
+;;; with literal `{' and `}' characters. When literal characters were handling
+;;; properly, character codes could be replaced with literal braces.
+
+(defn (:: subst (-> Code String [DocElem]))
+  [orig str]
+  (let ((= go acc xs
+          (case xs
+            [] acc
+            (: #'$ #'$ #'\123 rest) (case (go acc rest)
+                                      (, tmp ss) (, (: #'$ #'\123 tmp) ss))
+            (: #'$ #'\123 rest) (let ((= (, var ys) (break (== #'\125) rest))
+                                      (= (, lit ss) (go acc (tail ys))))
+                                  (if (null var)
+                                    (err "empty variable")
+                                    (if (null ys)
+                                      (err "missing `}'")
+                                      (, [] (: (Var var)
+                                               (if (null lit)
+                                                 ss
+                                                 (: (Lit lit) ss)))))))
+            (: c rest) (case (go acc rest)
+                         (, tmp ss) (, (: c tmp) ss))))
+        (= err (unsafeFinkelSrcError orig)))
+    (case (go (, [] []) str)
+      (, xs ss) (if (null xs)
+                  ss
+                  (: (Lit xs) ss)))))
+
+(defn (:: doc-elem-to-code (-> DocElem Code))
+  [(Lit s)] (toCode s)
+  [(Var v)] (make-symbol v))
+
+(defn (:: hdoc (-> [DocElem] Code))
+  [es]
+  (case es
+    [] (toCode "")
+    [e] (doc-elem-to-code e)
+    _ `(<> ,@(map doc-elem-to-code es))))
+
+(defn (:: heredoc-aux (-> Code String Code))
+  [orig]
+  (. hdoc (subst orig)))
+
+(defmacroM heredoc
+  "Macro for writing literal string value with variable replacements.
+
+The `heredoc' macro takes single literal string parameter. The format of the
+macro expanded result preserves newlines and spaces in the input string.
+
+Additionally, special syntax @${FOO}@ could be used to embed the value of the
+variable named @FOO@ in the literal string. To write literal @${@, use @$${@.
+
+Literal strings, new lines and variables are concatenated with `<>'. This will
+enable using other type than `String' which is an instance of
+`Data.String.IsString' and `Semigroup' with @OverloadedStrings@ language
+extension.
+
+==== __Syntax__
+
+> HEREDOC ::= 'heredoc' string
+
+==== __Example__
+
+The code:
+
+> (defn main
+>   (putStrLn (heredoc \"foo
+>   bar
+>     buzz\")))
+
+will print:
+
+> foo
+>   bar
+>     buzz
+
+And the code:
+
+> (defn main
+>   (lept [foo \"FOO\"
+>          bar \"BAR\"]
+>     (putStrLn (heredoc \"foo is ${foo} and bar is ${bar}\"))))
+
+will print:
+
+> foo is FOO and bar is BAR
+
+Using `Data.ByteString.ByteString' with @OverloadedStrings@ language extension:
+
+> %p(LANGUAGE OverloadedStrings)
+>
+> (defmodule Main
+>   (import
+>    (qualified Data.ByteString.Char8)))
+>
+> (defn main
+>   (lept [foo \"overloaded bytestring\"]
+>     (Data.ByteString.Char8.putStrLn (heredoc \"foo is ${foo}\"))))
+
+will print:
+
+> foo is overloaded bytestring
+
+"
+  [form]
+  (case (fromCode form)
+    (Just s) (pure (heredoc-aux form s))
+    _ (finkelSrcError form "not a string")))
+
+;;;; Module header
+
 (defmacroM defmodule
   "Macro to define header of module named /NAME/. The /IMPEXP/ are forms
 for imports and exports. Imports and exports forms can appear in any
@@ -438,9 +562,9 @@ of the @ghc@ used during the compilation.
 
 [@:os@]: A `String' value from `System.Info.os'.
 
-[@:(:min-version \"PKGNAME\" V1 V2 V3 ...)@]: An expression resulting as a
-`Bool' value. Compare the version of @PKGNAME@ with the version made from
-integer values @N1@, @V2@, @V3@ and so on. This keyword resembles to the
+[@(:min-version \"@PKGNAME@\" V1 V2 V3 ...)@]: An expression resulting as a
+`Bool' value. Compares the version of @PKGNAME@ with the version made from
+integer values @V1@, @V2@, @V3@ and so on. This keyword resembles to the
 @MIN_VERSION@ CPP macro.
 
 ==== __Syntax__

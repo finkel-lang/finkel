@@ -16,6 +16,7 @@
    (Control.Exception [(SomeException)])
    (Data.List [isSubsequenceOf])
    (System.Info [os arch])
+   (System.IO [(Newline ..) nativeNewline])
 
    ;; hspec
    (Test.Hspec)
@@ -552,6 +553,74 @@
              (case $tmp
                "hello" (putStrLn "hi")
                line (putStrLn (++ "Got: " line)))))))
+
+    (describe "heredoc"
+      (do
+        (it "should expand to literal string"
+          (expandTo
+           (heredoc "literal string")
+           "literal string"))
+
+        (it "should concat multiple lines"
+          (cond-expand
+            [(== :os "mingw32")
+             (expandTo
+              (heredoc "foo
+  bar
+    buzz")
+              "foo\r\n  bar\r\n    buzz")]
+            [otherwise
+             (expandTo
+              (heredoc "foo
+  bar
+    buzz")
+              "foo\n  bar\n    buzz")]))
+
+        (it "should preserve newline at the end"
+          (cond-expand
+            [(== :os "mingw32")
+             (expandTo
+              (heredoc "foo
+")
+              "foo\r\n")]
+            [otherwise
+             (expandTo
+              (heredoc "foo
+")
+              "foo\n")]))
+        (it "should replace variable"
+          (expandTo
+           (heredoc "foo is ${foo}")
+           (<> "foo is " foo)))
+        (it "should replace multiple variables"
+          (expandTo
+           (heredoc "foo=${foo} bar=${bar} buzz=${buzz}")
+           (<> "foo=" foo " bar=" bar " buzz=" buzz)))
+        (it "should replace variable without literal"
+          (expandTo
+           (heredoc "${foo}")
+           foo))
+        (it "should escape variable replacement"
+          (expandTo
+           (heredoc "escaping $${var}")
+           "escaping ${var}"))
+        (it "should result to empty string"
+          (expandTo
+           (heredoc "")
+           ""))
+
+        (it "should show error with empty variable name"
+          (expandFailureWith
+           (heredoc "empty var ${}")
+           (subseqErr "empty variable")))
+        (it "should show error with unbalanced brace"
+          (expandFailureWith
+           (heredoc "unbalanced ${foo")
+           (subseqErr "missing")))
+        (it "should show error on non-string parameters"
+          (expandFailureWith
+           (heredoc 42)
+           (subseqErr "not a string")))))
 
     (describe "lefn"
       (do (it "should expand to let"
