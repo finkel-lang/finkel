@@ -31,7 +31,7 @@ jobs:
           - os: macos-latest
             resolver: lts-18
           - os: windows-latest
-            resolver: lts-18.6
+            resolver: lts-18
 
     env:
       STACK: stack --resolver=${{ matrix.resolver }}
@@ -225,7 +225,7 @@ jobs:
           # - nixpkgs: "channel:nixos-20.09"
           #   compiler: "ghc884"
           - nixpkgs: "channel:nixos-unstable"
-            compiler: "ghc8106"
+            compiler: "ghc8107"
           # - nixpkgs: "channel:nixos-unstable"
           #   compiler: "ghc901"
 
@@ -245,13 +245,13 @@ jobs:
         run: nix-build --argstr compiler ${{ matrix.compiler }}
 
       - name: Build container image stream
-        if: matrix.compiler == 'ghc8106' && github.ref == 'refs/heads/master'
+        if: matrix.compiler == 'ghc8107' && github.ref == 'refs/heads/master'
         run: |
           nix-build --argstr compiler ${{ matrix.compiler }} ./nix/docker.nix
           echo "image_stream=$(readlink result)" >> $GITHUB_ENV
 
       - name: Push image to ghcr.io
-        if: matrix.compiler == 'ghc8106' && github.ref == 'refs/heads/master'
+        if: matrix.compiler == 'ghc8107' && github.ref == 'refs/heads/master'
         env:
           CRED: ${{ secrets.GHCR_USER }}:${{ secrets.GHCR_PAT }}
           FROM: docker-archive:/dev/stdin
