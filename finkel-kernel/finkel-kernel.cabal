@@ -66,6 +66,7 @@ library
                        Language.Finkel.Lexer
                        Language.Finkel.Make
                        Language.Finkel.Main
+                       Language.Finkel.Plugin
                        Language.Finkel.Reader
                        Language.Finkel.Fnk
                        Language.Finkel.SpecialForms
