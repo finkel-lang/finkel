@@ -21,7 +21,6 @@ import GHC_Hs_Pat                      (HsConPatDetails, HsRecFields (..),
 import GHC_Hs_Type                     (HsConDetails (..))
 import GHC_Hs_Utils                    (mkHsIsString, mkNPat, nlWildPat)
 import GHC_Types_Basic                 (Boxity (..))
-import GHC_Types_SourceText            (SourceText (..))
 import GHC_Types_SrcLoc                (GenLocated (..))
 import GHC_Utils_Lexeme                (isLexCon, isLexConId, isLexConSym,
                                         isLexSym)
@@ -255,7 +254,9 @@ b_conP forms is_paren rest =
 
 b_sigP :: Code -> HPat -> HType -> HPat
 b_sigP (LForm (L l _)) pat ty =
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+  lA l (SigPat NOEXT pat (mkHsPatSigType NOEXT ty))
+#elif MIN_VERSION_ghc(9,0,0)
   lA l (SigPat NOEXT pat (mkHsPatSigType ty))
 #elif MIN_VERSION_ghc(8,8,0)
   cL l (SigPat NOEXT pat (mkLHsSigWcType ty))

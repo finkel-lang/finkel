@@ -24,7 +24,6 @@ import GHC_Hs_Type                     (HsSrcBang (..), HsTupleSort (..),
 import GHC_Types_Basic                 (Boxity (..))
 import GHC_Types_Name_Occurrence       (dataName, tcName, tvName)
 import GHC_Types_Name_Reader           (getRdrName, mkQual, mkUnqual)
-import GHC_Types_SourceText            (SourceText (..))
 import GHC_Types_SrcLoc                (GenLocated (..), getLoc)
 import GHC_Utils_Lexeme                (isLexCon, isLexConSym, isLexVarSym)
 

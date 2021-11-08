@@ -69,7 +69,6 @@ import           GHC_Types_SrcLoc                (GenLocated (..), SrcSpan,
 
 -- Internal
 import           Language.Finkel.Form
-import           Language.Finkel.Form.Fractional
 
 
 -- -------------------------------------------------------------------

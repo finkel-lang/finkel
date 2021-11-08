@@ -57,8 +57,6 @@ import           GHC_Types_Name_Reader            (RdrName, mkQual, mkUnqual,
                                                    mkVarUnqual, nameRdrName)
 import           GHC_Types_SrcLoc                 (GenLocated (..), Located,
                                                    unLoc)
-
-import           GHC_Types_SourceText             (SourceText (..))
 import           GHC_Utils_Lexeme                 (isLexCon, isLexConSym,
                                                    isLexVar, isLexVarSym)
 

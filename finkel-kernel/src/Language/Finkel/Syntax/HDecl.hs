@@ -45,7 +45,6 @@ import GHC_Types_ForeignCall           (CCallConv (..), CExportSpec (..),
                                         Safety (..))
 import GHC_Types_Name_Occurrence       (dataName, tcName)
 import GHC_Types_Name_Reader           (RdrName, mkUnqual)
-import GHC_Types_SourceText            (SourceText (..))
 import GHC_Types_SrcLoc                (GenLocated (..), Located, getLoc, noLoc,
                                         unLoc)
 

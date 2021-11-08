@@ -53,7 +53,7 @@ b_module mb_form exports =
   case mb_form of
     Nothing -> return (modfn Nothing)
     Just (LForm (L l form)) | Atom (ASymbol name) <- form
-      -> return (modfn (Just (L l (mkModuleNameFS name))))
+      -> return (modfn (Just (lA l (mkModuleNameFS name))))
     _ -> builderError
   where
     modfn mb_name mbdoc imports decls =
@@ -156,7 +156,7 @@ b_ieMdl xs =
     [LForm (L l (Atom (ASymbol name)))] -> return (thing l name)
     _                                   -> builderError
   where
-    thing l n = lA l (iEModuleContents (L l (mkModuleNameFS n)))
+    thing l n = lA l (iEModuleContents (lA l (mkModuleNameFS n)))
     iEModuleContents = IEModuleContents NOEXT
 {-# INLINABLE b_ieMdl #-}
 
@@ -168,7 +168,7 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
       let decl = simpleImportDecl mname
           decl' = decl { ideclQualified = qualified'
                        , ideclAs = fmap asModName mb_as
-                       , ideclName = L l mname
+                       , ideclName = lA l mname
                        , ideclHiding = hiding' }
           mname = mkModuleNameFS m
 #if MIN_VERSION_ghc(8,10,0)
@@ -178,7 +178,7 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
           qualified' = qualified
 #endif
           asModName (LForm (L l' (Atom (ASymbol x)))) =
-            L l' (mkModuleNameFS x)
+            lA l' (mkModuleNameFS x)
           asModName _ = error "b_importD.asModName"
           hiding' =
             case mb_entities of

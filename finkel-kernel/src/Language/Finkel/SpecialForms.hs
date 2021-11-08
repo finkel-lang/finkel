@@ -51,7 +51,6 @@ import GHC_Runtime_Eval                (getContext)
 import GHC_Types_Name                  (nameOccName, occName)
 import GHC_Types_Name_Occurrence       (occNameFS)
 import GHC_Types_Name_Reader           (rdrNameOcc)
-import GHC_Types_SourceText            (SourceText (..))
 import GHC_Types_SrcLoc                (GenLocated (..), SrcSpan (..), unLoc)
 import GHC_Types_TyThing               (TyThing (..))
 import GHC_Types_Var                   (varName)
@@ -304,7 +303,7 @@ makeMissingHomeMod (L _ idecl) = do
   hsc_env <- getSession
 
   let mname = unLoc lmname
-      lmname = ideclName idecl
+      lmname = reLoc (ideclName idecl)
       smpl_mk = withRequiredSettings (makeFromRequire lmname)
       dflags = hsc_dflags hsc_env
 

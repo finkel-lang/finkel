@@ -5,7 +5,8 @@
 #pragma once
 
 /*
-From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
+Changes happend from ghc 9.0 to 9.2. Also defining the module aliases for ghc
+older than 9.0.
 */
 
 #if __GLASGOW_HASKELL__ >= 902
@@ -22,7 +23,9 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Types_SourceError      GHC.Types.SourceError
 #define GHC_Types_SourceFile       GHC.Types.SourceFile
 #define GHC_Types_SourceText       GHC.Types.SourceText
+#define GHC_Types_Target           GHC.Types.Target
 #define GHC_Types_TyThing          GHC.Types.TyThing
+#define GHC_Types_TyThing_Ppr      GHC.Types.TyThing.Ppr
 
 #define GHC_Unit_Finder            GHC.Unit.Finder
 #define GHC_Unit_Home_ModInfo      GHC.Unit.Home.ModInfo
@@ -30,7 +33,6 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Unit_Module_Graph      GHC.Unit.Module.Graph
 #define GHC_Unit_Module_ModIface   GHC.Unit.Module.ModIface
 #define GHC_Unit_Module_ModSummary GHC.Unit.Module.ModSummary
-/* #define GHC_Unit_Types             GHC.Unit.Types */
 
 #elif __GLASGOW_HASKELL__ >= 900
 #define GHC_Driver_Env             GHC.Driver.Types
@@ -47,7 +49,9 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Types_SourceError      GHC.Driver.Types
 #define GHC_Types_SourceFile       GHC.Driver.Phases
 #define GHC_Types_SourceText       GHC.Types.Basic
+#define GHC_Types_Target           GHC.Driver.Types
 #define GHC_Types_TyThing          GHC.Driver.Types
+#define GHC_Types_TyThing_Ppr      GHC.Core.Ppr.TyThing
 
 #define GHC_Unit_Finder            GHC.Driver.Finder
 #define GHC_Unit_Home_ModInfo      GHC.Driver.Types
@@ -55,7 +59,6 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Unit_Module_Graph      GHC.Driver.Types
 #define GHC_Unit_Module_ModIface   GHC.Driver.Types
 #define GHC_Unit_Module_ModSummary GHC.Driver.Types
-/* #define GHC_Unit_Types             GHC.Driver.Types */
 
 #else /* __GLASGOW_HASKELL__ < 900 */
 #define GHC_Driver_Env             HscTypes
@@ -72,7 +75,9 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Types_SourceError      HscTypes
 #define GHC_Types_SourceFile       DriverPhases
 #define GHC_Types_SourceText       BasicTypes
+#define GHC_Types_Target           HscTypes
 #define GHC_Types_TyThing          HscTypes
+#define GHC_Types_TyThing_Ppr      PprTyThing
 
 #define GHC_Unit_Finder            Finder
 #define GHC_Unit_Home_ModInfo      HscTypes
@@ -82,7 +87,10 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Unit_Module_ModSummary HscTypes
 #endif
 
-/* Changes happened from ghc 8.10 to ghc 9.0 */
+/*
+Changes happened from ghc 8.10 to ghc 9.0 From ghc 9.0.1, ghc uses "GHC.*"
+name space for its modules.
+*/
 
 #if __GLASGOW_HASKELL__ >= 900
 #define GHC_Builtin_Types         GHC.Builtin.Types
@@ -90,7 +98,6 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 
 #define GHC_Core_Class            GHC.Core.Class
 #define GHC_Core_DataCon          GHC.Core.DataCon
-#define GHC_Core_Ppr_TyThing      GHC.Core.Ppr.TyThing
 #define GHC_Core_TyCo_Rep         GHC.Core.TyCo.Rep
 #define GHC_Core_TyCo_Tidy        GHC.Core.TyCo.Tidy
 
@@ -172,7 +179,6 @@ From ghc 9.0.1, ghc uses "GHC.*" name space for its modules.
 #define GHC_Core_DataCon          DataCon
 #define GHC_Core_TyCo_Rep         TyCoRep
 #define GHC_Core_TyCo_Tidy        TyCoTidy
-#define GHC_Core_Ppr_TyThing      PprTyThing
 
 #define GHC_Data_Bag              Bag
 #define GHC_Data_FastString       FastString

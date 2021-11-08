@@ -75,8 +75,7 @@ import           GHC_Runtime_Context               (icPrintUnqual)
 import           GHC_Types_SourceError             (throwOneError)
 import           GHC_Types_SourceFile              (HscSource (..))
 import           GHC_Types_SrcLoc                  (GenLocated (..), Located,
-                                                    getLoc, mkSrcLoc, mkSrcSpan,
-                                                    unLoc)
+                                                    mkSrcLoc, mkSrcSpan, unLoc)
 import           GHC_Unit_Finder                   (addHomeModuleToFinder,
                                                     mkHomeModLocation)
 import           GHC_Unit_Home_ModInfo             (HomeModInfo (..), lookupHpt)
@@ -177,6 +176,7 @@ import           Language.Finkel.Lexer
 import           Language.Finkel.Make.TargetSource
 import           Language.Finkel.Reader
 import           Language.Finkel.Syntax
+import           Language.Finkel.Syntax.Location
 
 
 -- | Data type to represent summarised 'TargetSource'.
@@ -332,7 +332,7 @@ mkModSummary hsc_env dflags file mdl reqs = do
 
       -- XXX: PackageImports language extension not yet supported.  See
       -- 'HscTypes.ms_home_imps'
-      imports = map (\lm -> (Nothing, ideclName (unLoc lm)))
+      imports = map (\lm -> (Nothing, reLoc (ideclName (unLoc lm))))
                     (hsmodImports mdl)
 
   -- Adding file path of the required modules and file paths of imported home
@@ -459,7 +459,7 @@ assertModuleNameMatch dflags file mb_pm =
             -> let msg = text "File name does not match module"
                          $$ text "Saw:" <+> quotes (text saw)
                          $$ text "Expected:" <+> quotes (text wanted)
-                   loc = getLoc lsaw
+                   loc = getLocA lsaw
                in  throwOneError (mkPlainWrappedMsg dflags loc msg)
     _ -> return ()
 

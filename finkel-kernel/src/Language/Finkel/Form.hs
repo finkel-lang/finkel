@@ -39,6 +39,11 @@ module Language.Finkel.Form
   -- * Re-export
   , IntegralLit (..)
   , mkIntegralLit
+  , FractionalLit(..)
+#if MIN_VERSION_ghc(9,2,0)
+  , fl_value
+#endif
+  , SourceText(..)
   ) where
 
 #include "ghc_modules.h"

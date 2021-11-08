@@ -14,7 +14,7 @@ module Language.Finkel.Syntax.Extension
   ) where
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Parser.Annotation             (AnnSortKey (..), EpAnn (..),
+import GHC.Parser.Annotation             (AnnSortKey (..), EpAnn (..), EpAnnComments(..),
                                           SrcSpanAnn' (..))
 import GHC.Types.SrcLoc                  (noSrcSpan)
 import Language.Haskell.Syntax.Extension (NoExtField (..), noExtField)
@@ -32,6 +32,10 @@ class Unused a where
 #if MIN_VERSION_ghc(9,2,0)
 instance Unused (EpAnn a) where
   unused = EpAnnNotUsed
+  {-# INLINE unused #-}
+
+instance Unused EpAnnComments where
+  unused = EpaComments {priorComments = []}
   {-# INLINE unused #-}
 
 instance Unused a => Unused (SrcSpanAnn' a) where
