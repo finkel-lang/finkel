@@ -50,7 +50,7 @@ import           GHC_Data_FastString     (fsLit)
 import           GHC_Data_StringBuffer   (StringBuffer)
 import           GHC_Driver_Session      (DynFlags (..), HasDynFlags (..),
                                           parseDynamicFlagsCmdLine)
-import           GHC_Driver_Types        (InteractiveImport (..))
+import           GHC_Runtime_Context     (InteractiveImport (..))
 import           GHC_Hs_ImpExp           (simpleImportDecl)
 import           GHC_Runtime_Eval        (getContext)
 import           GHC_Types_Basic         (SuccessFlag)

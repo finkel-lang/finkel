@@ -45,10 +45,9 @@ import           Control.DeepSeq
 import           GHC_Data_FastString          (fsLit, unpackFS)
 import           GHC_Data_StringBuffer        (stringToStringBuffer)
 import           GHC_Driver_Session           (HasDynFlags (..))
-import           GHC_Types_Basic              (SourceText (..), fl_value)
 import           GHC_Types_SrcLoc             (GenLocated (..), SrcSpan (..),
                                                noSrcSpan)
-import           GHC_Utils_Outputable         (showPpr)
+import           GHC_Driver_Ppr               (showPpr)
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC_Types_SrcLoc             (UnhelpfulSpanReason (..))
@@ -158,7 +157,10 @@ readShowFormProp =
 dataInstanceTests :: Spec
 dataInstanceTests = do
   let gfoldl_self atom =
-         gfoldl (\(Just f) x -> return (f x)) return atom
+        gfoldl (\mb_f x -> case mb_f of
+                   Just f -> pure (f x)
+                   _ -> error "should not happen")
+               return atom
       t_gfoldl_self x = gfoldl_self x `shouldBe` Just x
       t_show_constr x y = show (toConstr x) `shouldBe` y
   describe "Data instance for Atom" $ do

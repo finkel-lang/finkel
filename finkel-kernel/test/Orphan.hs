@@ -8,7 +8,6 @@ module Orphan where
 
 -- ghc
 import GHC_Data_FastString  (fsLit, unpackFS)
-import GHC_Types_Basic      (FractionalLit (..), SourceText (..))
 import GHC_Types_SrcLoc     (GenLocated (..), interactiveSrcSpan, mkSrcLoc,
                              mkSrcSpan, noSrcSpan, wiredInSrcSpan)
 

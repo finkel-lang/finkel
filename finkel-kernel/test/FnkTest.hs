@@ -13,9 +13,9 @@ import           Data.Maybe                   (fromMaybe, isNothing)
 -- ghc
 import           GHC_Data_FastString          (fsLit)
 import           GHC_Data_StringBuffer        (stringToStringBuffer)
-import           GHC_Driver_Types             (ms_mod_name)
 import           GHC_Types_SrcLoc             (GenLocated (..))
 import           GHC_Unit_Module              (moduleNameString)
+import           GHC_Unit_Module_ModSummary   (ms_mod_name)
 
 -- exceptions
 import           Control.Monad.Catch          (bracket)

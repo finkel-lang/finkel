@@ -16,14 +16,22 @@ import System.FilePath         (takeBaseName)
 
 -- ghc
 import GHC                     (getPrintUnqual)
-import GHC_Core_Ppr_TyThing    (pprTypeForUser)
 import GHC_Data_StringBuffer   (StringBuffer, hGetStringBuffer,
                                 stringToStringBuffer)
 import GHC_Driver_Monad        (printException)
+import GHC_Driver_Ppr          (showSDocForUser)
 import GHC_Driver_Session      (HasDynFlags (..))
-import GHC_Driver_Types        (handleSourceError)
 import GHC_Settings_Config     (cProjectVersionInt)
-import GHC_Utils_Outputable    (showSDocForUser)
+
+import GHC_Types_SourceError   (handleSourceError)
+import GHC_Types_TyThing_Ppr   (pprTypeForUser)
+
+import GHC_Utils_Outputable    (SDoc)
+
+#if MIN_VERSION_ghc(9,2,0)
+import GHC.Driver.Env          (hsc_units)
+import GHC.Driver.Monad        (getSession)
+#endif
 
 -- hspec
 import Test.Hspec
@@ -80,9 +88,7 @@ exprTypeTest =
       in  runFnk (doEval ftr "<exprTypeTest>" parseExpr act buf) evalFnkEnv
     act expr  = do
       ty <- evalExprType expr
-      dflags <- getDynFlags
-      unqual <- getPrintUnqual
-      return (showSDocForUser dflags unqual (pprTypeForUser ty))
+      pprDocForUser (pprTypeForUser ty)
 
 typeKindTest :: FnkSpec
 typeKindTest = do
@@ -96,9 +102,7 @@ typeKindTest = do
       in  runFnk (doEval ftr "<typeKindTest>" parseType act buf) evalFnkEnv
     act expr = do
       (_, kind) <- evalTypeKind expr
-      dflags <- getDynFlags
-      unqual <- getPrintUnqual
-      return (showSDocForUser dflags unqual (pprTypeForUser kind))
+      pprDocForUser (pprTypeForUser kind)
 
 doEval :: FnkTestResource
        -> String -> Builder a -> (a -> Fnk b) -> StringBuffer -> Fnk b
@@ -110,3 +114,14 @@ evalFnkEnv :: FnkEnv
 evalFnkEnv = fnkTestEnv {envContextModules = modules}
   where
     modules = ["Prelude", "Language.Finkel"]
+
+pprDocForUser :: SDoc -> Fnk String
+pprDocForUser sdoc = do
+  dflags <- getDynFlags
+  unqual <- getPrintUnqual
+#if MIN_VERSION_ghc(9,2,0)
+  unit_state <- hsc_units <$> getSession
+  pure (showSDocForUser dflags unit_state unqual sdoc)
+#else
+  pure (showSDocForUser dflags unqual sdoc)
+#endif

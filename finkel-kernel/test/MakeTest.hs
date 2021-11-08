@@ -36,27 +36,29 @@ import System.FilePath        (takeExtension)
 import GHC                    (setTargets)
 import GHC_Data_FastString    (fsLit)
 import GHC_Driver_Monad       (GhcMonad (..))
+import GHC_Driver_Ppr         (showPpr)
 import GHC_Driver_Session     (HasDynFlags (..))
+import GHC_Types_SrcLoc       (noLoc)
+import GHC_Types_Target       (Target (..), TargetId (..))
+import GHC_Unit_Module        (mkModuleName)
+import GHC_Unit_State         (PackageName (..))
+import GHC_Utils_Outputable   (Outputable (..))
+
+#if MIN_VERSION_ghc(9,2,0)
+import GHC.Linker.Loader      (unload)
+import GHC.Runtime.Interpreter (hscInterp)
+#else
+import GHC_Runtime_Linker     (unload)
+#endif
+
 #if !MIN_VERSION_ghc(9,0,0)
 import GHC_Driver_Session     (DynFlags (..))
-#endif
-import GHC_Driver_Types       (Target (..), TargetId (..))
-import GHC_Runtime_Linker     (unload)
-import GHC_Types_SrcLoc       (noLoc)
-import GHC_Unit_Module        (mkModuleName)
-
-import GHC_Unit_State         (PackageName (..))
-#if !MIN_VERSION_ghc(9,0,0)
 import GHC_Unit_State         (lookupPackageName)
-#endif
-
-import GHC_Utils_Outputable   (Outputable (..), showPpr)
-#if !MIN_VERSION_ghc(9,0,0)
 import GHC_Utils_Outputable   (showSDoc)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC.Driver.Ways        (hostIsDynamic, hostIsProfiled)
+import GHC_Platform_Ways      (hostIsDynamic, hostIsProfiled)
 #else
 import DynFlags               (Way (..), dynamicGhc, interpWays)
 import Module                 (componentIdToInstalledUnitId)
@@ -457,7 +459,13 @@ buildReload the_file fname files1 files2 before_str after_str =
       hexpr <- buildHsSyn parseExpr [qSymbol fname fname 0 0 0 0]
       unsafeCoerce# <$> evalExpr hexpr
 
-    reset_env = getSession >>= liftIO . flip unload []
+    reset_env = do
+      hsc_env <- getSession
+#if MIN_VERSION_ghc(9,2,0)
+      liftIO (unload (hscInterp hsc_env) hsc_env [])
+#else
+      liftIO (unload hsc_env [])
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
     dynamicGhc = hostIsDynamic

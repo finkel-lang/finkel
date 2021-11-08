@@ -32,9 +32,9 @@ import System.FilePath        (takeBaseName, (<.>), (</>))
 -- ghc
 import GHC                    (setContext, setTargets)
 import GHC_Data_StringBuffer  (stringToStringBuffer)
-import GHC_Driver_Types       (Target (..), TargetId (..))
 import GHC_Settings_Config    (cProjectVersionInt)
 import GHC_Types_Basic        (SuccessFlag (..))
+import GHC_Types_Target       (Target (..), TargetId (..))
 
 -- hspec
 import Test.Hspec
