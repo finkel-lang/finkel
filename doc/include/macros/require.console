@@ -1,4 +1,4 @@
-$ finkel make -no-link -fbyte-code require.fnk
+$ finkel make -no-link -fno-code require.fnk
 [1 of 1] Compiling RequireMe        ( RequireMe.fnk, interpreted ) [required]
 
 ==================== Parser ====================
@@ -10,4 +10,4 @@ main
        putStrLn "Goodbye."
 
 
-[2 of 2] Compiling Main             ( require.fnk, interpreted )
+[1 of 1] Compiling Main             ( require.fnk, nothing )

@@ -18,10 +18,12 @@
 
 (defn (:: spec Spec)
   (lept [dir (</> "include" "macros")
-         skips [(, "begin.console" (\ v _
+         skips [(, "begin.console" (\v _
                                      (> (makeVersion [8 8 0]) v)))
-                (, "quasiquote.console" (\ _ _ (|| (== os "darwin")
-                                                   (== os "mingw32"))))]]
+                (, "quasiquote.console" (\_ _ (|| (== os "darwin")
+                                                  (== os "mingw32"))))
+                (, "require.console" (\v _
+                                       (> (makeVersion [9 2 0]) v)))]]
     (beforeAll_
      (remove-compiled [(</> dir "quasiquote")
                        (</> dir "require")
