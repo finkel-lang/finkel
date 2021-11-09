@@ -27,6 +27,13 @@ import GHC_Types_Name_Reader           (getRdrName, mkQual, mkUnqual)
 import GHC_Types_SrcLoc                (GenLocated (..), getLoc)
 import GHC_Utils_Lexeme                (isLexCon, isLexConSym, isLexVarSym)
 
+#if MIN_VERSION_ghc(9,2,0)
+import GHC_Parser_Annotation           (Anchor (..), AnchorOperation (..),
+                                        EpAnn (..), EpaLocation (..),
+                                        TrailingAnn (..))
+import GHC_Types_SrcLoc                (srcSpanToRealSrcSpan)
+#endif
+
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Builtin_Types               (unrestrictedFunTyCon)
 #else
@@ -159,7 +166,20 @@ b_funT (LForm (L l _)) ts =
   where
     f a b = addCLocAA a b (hsFunTy (parenthesizeHsType' funPrec a) b)
     -- XXX: Does not support linear type and unicode syntax.
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+    -- XXX: As of ghc 9.2.1, the 'GHC.Hs.Type.splitHsFunType' function in the
+    -- ghc package is ignoring "EpAnnNotUsed" constructor in the pattern match
+    -- during recursion. Using "EpAnn" to make a dummy EpAnn typed value with
+    -- "mkDummyAnn". Without the dummy value, GADT constructors will show compilation
+    -- errors.
+    hsFunTy = HsFunTy ann (HsUnrestrictedArrow NormalSyntax)
+    ann = maybe NOEXT mkDummyAnn (srcSpanToRealSrcSpan l)
+    mkDummyAnn real_span =
+      let dummy_anchor = Anchor real_span UnchangedAnchor
+          dummy_anns = AddRarrowAnn (EpaSpan real_span)
+          dummy_comments = NOEXT
+      in  EpAnn dummy_anchor dummy_anns dummy_comments
+#elif MIN_VERSION_ghc(9,0,0)
     hsFunTy = HsFunTy NOEXT (HsUnrestrictedArrow NormalSyntax)
 #else
     hsFunTy = HsFunTy NOEXT
