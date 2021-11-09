@@ -65,21 +65,27 @@
                 (:: tst-replstate ReplState)}))
 
 (instance (Monoid TestIOState)
-  (= mempty
-    emptyTestIOState)
-  (= mappend s1 s2
-    (TestIOState
-     {(= tst-inputs (on mappend tst-inputs s1 s2))
-      (= tst-outputs (on mappend tst-outputs s1 s2))
-      (= tst-exitcode (mplus (tst-exitcode s2) (tst-exitcode s1)))
-      (= tst-replstate (on mappend tst-replstate s1 s2))})))
+  (= mempty emptyTestIOState)
+  (cond-expand
+    [(:min-version "base" 4 16 0)
+     (:begin)]
+    [otherwise
+     (= mappend appendTestIOState)]))
 
 (cond-expand
   [(:min-version "base" 4 11 0)
    (instance (Semigroup TestIOState)
-     (= <> mappend))]
+     (= <> appendTestIOState))]
   [otherwise
    (:begin)])
+
+(defn (:: appendTestIOState (-> TestIOState TestIOState TestIOState))
+  [s1 s2]
+  (TestIOState
+   {(= tst-inputs (on mappend tst-inputs s1 s2))
+    (= tst-outputs (on mappend tst-outputs s1 s2))
+    (= tst-exitcode (mplus (tst-exitcode s2) (tst-exitcode s1)))
+    (= tst-replstate (on mappend tst-replstate s1 s2))}))
 
 (defn (:: emptyTestIOState TestIOState)
   (TestIOState {(= tst-inputs [])
