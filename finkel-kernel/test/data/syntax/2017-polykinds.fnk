@@ -34,15 +34,17 @@
   (= (F1 'False) 'True)
   (= (F1 x)      x))
 
-(type family (:: (F3 (:: a k)) k)
+(type family (:: (F3 (:: a Bool)) Bool)
   (= (F3 'True)  'False)
-  (= (F3 'False) 'True)
-  (= (F3 x)       x))
+  (= (F3 'False) 'True))
+
+(data (Proxy a) Proxy
+  (deriving Eq Show))
 
 (:: print-f3 (IO ()))
 (= print-f3
-  (let ((:: x (F3 Int))
-        (= x 42))
+  (let ((:: x (Proxy (F3 'True)))
+        (= x Proxy))
     (print x)))
 
 (class (HTestEquality (:: t (forall k (-> k Type))))
