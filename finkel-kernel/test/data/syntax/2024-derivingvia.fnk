@@ -41,18 +41,22 @@
   (= pure a (MkPair a a))
   (= <*> (MkPair f g) (MkPair a b) (MkPair (f a) (g b))))
 
-(newtype (Kleisli m a b) (Kleisli (-> a (m b)))
-  (deriving Semigroup Monoid via (-> a (App m b))))
+;;; XXX: Following `Kleisli1' and `Kleisli2' examples are taken from ghc user
+;;; guide documentation. It is shown in ghc 9.2.1 version of the documentation,
+;;; but getting errors, not only in Finkel codes but in Haskell codes too.
 
-(newtype (Kleisli2 m a b) (Klsisli2 (-> a (m b))))
-
-(deriving via (-> a (App m b)) instance
-  (=> (Applicative m) (Semigroup b)
-      (Semigroup (Kleisli2 m a b))))
-
-(deriving via (-> a (App m b)) instance
-  (=> (Applicative m) (Monoid b)
-      (Monoid (Kleisli2 m a b))))
+;; (newtype (Kleisli m a b) (Kleisli (-> a (m b)))
+;;   (deriving Semigroup Monoid via (-> a (App m b))))
+;;
+;; (newtype (Kleisli2 m a b) (Klsisli2 (-> a (m b))))
+;;
+;; (deriving via (-> a (App m b)) instance
+;;   (=> (Applicative m) (Semigroup b)
+;;       (Semigroup (Kleisli2 m a b))))
+;;
+;; (deriving via (-> a (App m b)) instance
+;;   (=> (Applicative m) (Monoid b)
+;;       (Monoid (Kleisli2 m a b))))
 
 (:: main (IO ()))
 (= main (print euroSign))
