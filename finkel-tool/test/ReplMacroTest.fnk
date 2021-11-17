@@ -130,6 +130,12 @@
             (. (elem "; Class ‘C’") lines))
           (with-right '(repl-macro show bindings)
             (. (elem "class C a") lines))
+          (lept [interpreter-backend-line
+                 (cond-expand
+                   [(<= 902 :ghc)
+                    ";  backend: Interpreter"]
+                   [otherwise
+                    ";  backend: HscInterpreted"])])
           (ok '(repl-macro show context)
               (delines
                ["; context"
@@ -139,7 +145,7 @@
                ["; dflags:"
                 ";  ghcLink: LinkInMemory"
                 ";  ghcMode: CompManager"
-                ";  backend: HscInterpreted"
+                interpreter-backend-line
                 ";  objectDir: Nothing"
                 ";  homeUnitId: main"
                 ";  forceRecomp: False"]))
@@ -150,7 +156,7 @@
                ["; dflags:"
                 ";  ghcLink: LinkInMemory"
                 ";  ghcMode: CompManager"
-                ";  backend: HscInterpreted"
+                interpreter-backend-line
                 ";  objectDir: Just \"/tmp\""
                 ";  homeUnitId: main"
                 ";  forceRecomp: False"]))
@@ -158,10 +164,15 @@
               "show: no home package table found")
           (ok '(repl-macro show language)
               (delines
-               ["base language is: Haskell2010"
-                "with the following modifiers:"
-                "  -XNoDatatypeContexts"
-                "  -XNondecreasingIndentation"]))
+               (cond-expand
+                 [(<= 902 :ghc)
+                  ["base language is: GHC2021"
+                   "with the following modifiers:"]]
+                 [otherwise
+                  ["base language is: Haskell2010"
+                   "with the following modifiers:"
+                   "  -XNoDatatypeContexts"
+                   "  -XNondecreasingIndentation"]])))
           ;; show linker command uses 'showLinkerState' from ghc package,
           ;; which does printing action, so not returning 'String' value.
           (ok '(repl-macro show linker) "")
@@ -221,7 +232,11 @@
                 "bar :: Int -> Int"]))
 
           (ok '(repl-macro show targets)
-              "; targets: test/data/m01.fnk")
+              (cond-expand
+                [(<= 902 :ghc)
+                 "; targets: *test/data/m01.fnk"]
+                [otherwise
+                 "; targets: test/data/m01.fnk"]))
           (with-right '(repl-macro show context)
             (isSubsequenceOf "IIModule: Main"))
 

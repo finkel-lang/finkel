@@ -548,16 +548,21 @@ object code."
                  (= quiet (&& (not show-all)
                               (== (test f default-dflags) is-on)))))
 
+             (default-lang
+               (cond-expand
+                 [(<= 902 :ghc) GHC2021]
+                 [otherwise Haskell2010]))
+
              (default-dflags
                (lang-set (gen-default-dflags dflags)
                          (case (language dflags)
-                           Nothing (Just Haskell2010)
+                           Nothing (Just default-lang)
                            other   other)))])
       (<- str
         (show-sdoc-for-user-m
          (vcat [(<> (text "base language is: ")
                     (case (language dflags)
-                      Nothing (text "Haskell2010")
+                      Nothing (text (show default-lang))
                       (Just lang) (ppr lang)))
                 ($$ (if show-all
                       (text "all active language options:")
