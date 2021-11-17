@@ -31,7 +31,7 @@ jobs:
           - os: macos-latest
             resolver: lts-18
           - os: windows-latest
-            resolver: lts-18
+            resolver: lts-18.16
 
     env:
       STACK: stack --resolver=${{ matrix.resolver }}
