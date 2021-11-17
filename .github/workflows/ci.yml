@@ -196,9 +196,12 @@ jobs:
       - name: Update cabal package list
         run: cabal v2-update
 
+      # XXX: Use of profiling libraries disabled at the moment, since ghcup does
+      # not provide base and other ghc bundled packages with profiling for ghc
+      # 9.2.1. In Windows, use of profiling libraries are not yet supported.
       - name: Write cabal.project.local with v2-configure (non-windows)
         if: matrix.os != 'windows-latest'
-        run: cabal v2-configure ${{ matrix.plan.flags }}
+        run: cabal v2-configure --disable-library-profiling ${{ matrix.plan.flags }}
 
       - name: Write cabal.project.local with v2-configure (windows)
         if: matrix.os == 'windows-latest'
