@@ -324,6 +324,7 @@ supportedLangExts =
 #if MIN_VERSION_ghc(8,6,0)
       , DerivingVia
 #endif
+      , EmptyCase
 #if MIN_VERSION_ghc(8,4,0)
       , EmptyDataDeriving
 #endif

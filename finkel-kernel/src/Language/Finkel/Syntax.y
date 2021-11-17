@@ -861,7 +861,7 @@ matches :: { [HMatch] }
     : rmatches { reverse $1 }
 
 rmatches :: { [HMatch] }
-    : match          { [$1] }
+    : {- empty -}    { [] }
     | rmatches match { $2 : $1 }
 
 match :: { HMatch }
