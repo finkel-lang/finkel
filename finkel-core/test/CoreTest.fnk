@@ -826,7 +826,7 @@
                (&& (subseqErr "want package name" e)
                    (subseqErr "3735928495" e)))))
           (it "should fail with non-existing package"
-            (expandFailureWith
+            (expandWithPackageDbFailure
              (cond-expand
                [(:min-version "no-such-package" 2 4 0)
                 "Found no-such-package"]

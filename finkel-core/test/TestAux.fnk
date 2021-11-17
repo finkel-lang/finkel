@@ -12,18 +12,22 @@
    expand-form-with
    expand-form-with-env
    expand-form-with-package-db-satisfies
+   expand-form-with-package-db-failure
    expandTo
    expandFailure
    expandFailureWith
    expandSatisfy
-   expandWithPackageDbSatisfy)
+   expandWithPackageDbSatisfy
+   expandWithPackageDbFailure)
   (import
    ;; base
    (Control.Exception [(SomeException ..) try])
+   (Control.Monad [unless])
    (Data.Function [on])
 
    ;; hspec
-   (Test.Hspec [Expectation expectationFailure shouldBe shouldSatisfy])
+   (Test.Hspec
+    [Expectation expectationFailure shouldBe shouldSatisfy])
 
    ;; finkel-kernel
    (Language.Finkel.Make [initSessionForMake])
@@ -85,18 +89,37 @@
                                    (-> Code Code Expectation)
                                    Macro Code Code Expectation))
   [fnk-env test macro in-form out-form]
-  (>>= (try (runFnk (macroFunction macro in-form) fnk-env))
-       (either (. expectationFailure (show @ SomeException))
-               (flip test out-form))))
+  (lept [p (either (. expectationFailure show) (flip test out-form))]
+    (expand-form-with-pre (pure ()) fnk-env p macro in-form)))
 
 (defn (:: expand-form-with-package-db-satisfies
         (-> Macro Code (-> Code Bool) Expectation))
   [macro in-form test]
-  (>>= (try (runFnk (do initSessionForMake
+  (lept [p (either (. expectationFailure show) (flip shouldSatisfy test))]
+    (expand-form-with-package-db defaultFnkEnv p macro in-form)))
+
+(defn (:: expand-form-with-package-db-failure
+        (-> Macro Code (-> SomeException Bool) Expectation))
+  [macro in-form test]
+  (lept [p (either (\e (unless (test e)
+                         (expectationFailure "test function failed")))
+                   (const (expectationFailure "no exception thrown")))]
+    (expand-form-with-package-db defaultFnkEnv p macro in-form)))
+
+(defn (:: expand-form-with-package-db
+        (-> FnkEnv
+            (-> (Either SomeException Code) Expectation)
+            Macro Code Expectation))
+  (expand-form-with-pre initSessionForMake))
+
+(defn (:: expand-form-with-pre
+        (-> (Fnk ()) FnkEnv (-> (Either SomeException Code) Expectation)
+            Macro Code Expectation))
+  [pre fnk-env test macro in-form]
+  (>>= (try (runFnk (do pre
                         (macroFunction macro in-form))
-                    defaultFnkEnv))
-       (either (. expectationFailure (show @ SomeException))
-               (flip shouldSatisfy test))))
+                    fnk-env))
+       test))
 
 ;;; Macros
 
@@ -122,3 +145,7 @@
 (defmacro expandWithPackageDbSatisfy
   [in test]
   `(expand-form-with-package-db-satisfies ,(car in) ',in ,test))
+
+(defmacro expandWithPackageDbFailure
+  [in test]
+  `(expand-form-with-package-db-failure ,(car in) ',in ,test))
