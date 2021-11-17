@@ -115,8 +115,12 @@ jobs:
             cabal: "3.4.0.0"
             flags: "-O0"
 
-          - ghc: "9.0.1"
-            cabal: "3.4.0.0"
+          - ghc: "9.2.1"
+            cabal: "3.6.2.0"
+            flags: "-O0"
+
+          - ghc: "9.2.1"
+            cabal: "3.6.2.0"
             flags: "-O2"
 
     runs-on:
