@@ -120,10 +120,6 @@ executable finkel-profile
   default-language:    Haskell2010
 
 test-suite finkel-kernel-test
-  -- XXX: QuickCheck is not yet ready for ghc >= 9.2, temporary disabling.
-  if impl (ghc >= 9.2.0)
-    buildable: False
-
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Main.hs

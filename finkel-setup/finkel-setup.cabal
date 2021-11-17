@@ -44,8 +44,6 @@ library
   ghc-options:         -Wall
 
 test-suite finkel-setup-test
-  if impl (ghc >= 9.2.0)
-    buildable: False
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Main.hs
