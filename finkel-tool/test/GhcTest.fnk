@@ -19,10 +19,7 @@
    (Language.Finkel.Fnk [FnkEnv])
 
    ;; finkel-tool
-   (Finkel.Tool.Internal.Macro.Ghc)
-
-   ;; Internal
-   (TestAux)))
+   (Finkel.Tool.Internal.Macro.Ghc)))
 
 (defn (:: ghcTests Spec)
   imports-from-ghc-test)

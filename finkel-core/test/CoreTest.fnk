@@ -16,14 +16,12 @@
    (Control.Exception [(SomeException)])
    (Data.List [isSubsequenceOf])
    (System.Info [os arch])
-   (System.IO [(Newline ..) nativeNewline])
 
    ;; hspec
    (Test.Hspec)
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Exception)
    (Language.Finkel.Form [aString aIntegral])
    (Language.Finkel.Fnk [(FnkEnv ..) makeEnvMacros mergeMacros])
 

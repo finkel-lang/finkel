@@ -2,10 +2,10 @@
 module Main where
 
 -- base
-import Control.Exception                 (SomeException (..), catch, throw)
+import Control.Exception                 (catch, throw)
 import Data.List                         (isSubsequenceOf)
-import System.Environment                (getEnv, getExecutablePath, lookupEnv,
-                                          setEnv, unsetEnv, withArgs)
+import System.Environment                (getExecutablePath, lookupEnv, setEnv,
+                                          unsetEnv, withArgs)
 
 -- ghc
 #if MIN_VERSION_ghc(9,0,0)
@@ -28,9 +28,6 @@ import System.FilePath                   (isSearchPathSeparator, joinPath,
 
 -- hspec
 import Test.Hspec
-
--- process
-import System.Process                    (readProcess)
 
 -- Internal
 import Distribution.Simple.Finkel

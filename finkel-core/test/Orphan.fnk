@@ -17,10 +17,7 @@
      listOf oneof scale])
 
    ;; finkel-kernel
-   (Language.Finkel.Form)
-
-   ;; finkel-core
-   (Finkel.Core.Internal)))
+   (Language.Finkel.Form)))
 
 (instance (Arbitrary Atom)
   (defn arbitrary

@@ -1,6 +1,7 @@
 ;;; Tests for REPL.
 
-%p(language OverloadedStrings)
+%p(LANGUAGE OverloadedStrings)
+%p(OPTIONS_GHC -Wno-orphans)
 
 (:require Finkel.Core)
 
@@ -16,12 +17,10 @@
    ;; base
    (Control.Concurrent
     [forkIO newEmptyMVar killThread putMVar takeMVar threadDelay yield])
-   (Control.Exception
-    [(IOException ..) SomeException bracket evaluate finally throwIO])
+   (Control.Exception [IOException finally throwIO])
    (qualified Control.Exception as ControlException)
-   (Control.Monad [forever replicateM_ void when])
-   (Control.Monad.IO.Class [(MonadIO ..)])
-   (Data.List [intercalate isSubsequenceOf])
+   (Control.Monad [forever replicateM_ when])
+   (Data.List [isSubsequenceOf])
    (Data.String [(IsString ..)])
    (GHC.Conc [(ThreadStatus ..) threadStatus])
    (GHC.IO.Exception [(AsyncException ..)])
@@ -43,14 +42,11 @@
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Fnk [runFnk])
 
    ;; Internal
    (Finkel.Tool.Command.Repl)
-   (Finkel.Tool.Internal.Loop)
    (Finkel.Tool.Internal.IO)
    (Finkel.Tool.Internal.Types)
-   (Finkel.Tool.Internal.Eval)
    (TestAux)))
 
 (imports-from-ghc
@@ -280,9 +276,7 @@
 
 (defn (:: listenTests1 (-> EvalTestFns Spec))
   [(EvalTestFns {(= etf-tid etid)})]
-  (lefn [(with-repl-connection
-             (bracket acquire release))
-         (short-pause
+  (lefn [(short-pause
            (threadDelay 50000))
          (wait-until-killed [tid]
            (do (<- st (threadStatus tid))
@@ -305,7 +299,7 @@
                (<- conn (socket (addrFamily addr)
                                 (addrSocketType addr)
                                 (addrProtocol addr)))
-               (with-retry 20
+               (with-retry (:: 20 Int)
                  (connect conn (addrAddress addr)))
                (return (, conn tid))))
          (with-retry [n act]
@@ -323,9 +317,9 @@
                (killThread tid)))
          (port "50322")
          (input-file (</> "test" "data" "sleep-for-while.fnk"))
-         (resolve [host port]
+         (resolve [host portnum]
            (lefn [(hints (defaultHints {(= addrSocketType Stream)}))]
-             (case-do (getAddrInfo (Just hints) (Just host) (Just port))
+             (case-do (getAddrInfo (Just hints) (Just host) (Just portnum))
                (: addr _) (return addr)
                _ (error "REPL client: address error"))))
          (work [(, conn _)]

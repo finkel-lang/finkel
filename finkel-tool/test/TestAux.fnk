@@ -14,15 +14,12 @@
   (import
    ;; base
    (Control.Concurrent
-    [ThreadId forkIO newEmptyMVar killThread putMVar takeMVar])
+    [ThreadId newEmptyMVar killThread putMVar takeMVar])
    (Control.Monad [mplus])
    (Control.Monad.IO.Class [(MonadIO ..)])
    (Data.Function [on])
    (System.Environment [lookupEnv])
    (System.IO [stderr stdout])
-
-   ;; directory
-   (System.Directory [getHomeDirectory])
 
    ;; filepath
    (System.FilePath [</>])
@@ -35,7 +32,6 @@
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Fnk [setDynFlags])
 
    ;; Internal
    (Finkel.Tool.Command.Repl)

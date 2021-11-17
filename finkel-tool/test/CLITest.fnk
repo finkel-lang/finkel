@@ -14,8 +14,8 @@
    (Control.Exception [bracket])
    (Control.Monad [replicateM])
    (GHC.IO.Handle [hDuplicate hDuplicateTo])
-   (System.IO [Handle (IOMode ..) hClose hSetNewlineMode
-               noNewlineTranslation openFile stdin])
+   (System.IO
+    [(IOMode ..) hClose hSetNewlineMode noNewlineTranslation openFile stdin])
 
    ;; filepath
    (System.FilePath [</>])

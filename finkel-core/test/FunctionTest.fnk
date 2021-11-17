@@ -15,7 +15,6 @@
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Exception)
 
    ;; hspec
    (Test.Hspec)
