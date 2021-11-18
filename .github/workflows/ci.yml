@@ -91,9 +91,9 @@ jobs:
           target: stack:all
 
       - name: Send coverage report
-        run: |
-          bash <(curl -s https://codecov.io/bash) \
-            -n stack-${{ matrix.os }}-${{ matrix.resolver }}
+        uses: codecov/codecov-action@v2
+        with:
+          name: stack-${{ matrix.os }}-${{ matrix.resolver }}
 
   cabal-install:
     strategy:
