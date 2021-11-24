@@ -28,8 +28,8 @@ import GHC_Hs_Lit                      (HsLit (..), HsOverLit (..))
 import GHC_Hs_Pat                      (HsRecFields (..), LHsRecField)
 import GHC_Hs_Type                     (mkHsWildCardBndrs)
 import GHC_Hs_Utils                    (mkBodyStmt, mkHsApp, mkHsComp, mkHsDo,
-                                        mkHsFractional, mkHsIf, mkHsLam,
-                                        mkLHsPar, mkLHsTupleExpr, mkMatchGroup)
+                                        mkHsFractional, mkHsIf, mkLHsPar,
+                                        mkLHsTupleExpr, mkMatchGroup)
 import GHC_Parser_PostProcess          (mkRdrRecordCon)
 import GHC_Types_Basic                 (Arity, Boxity (..), Origin (..))
 import GHC_Types_Name_Reader           (RdrName, getRdrName)
@@ -46,10 +46,10 @@ import GHC_Parser_PostProcess          (mkRdrRecordUpd)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Hs_Utils                    (mkPsBindStmt)
+import GHC_Hs_Utils                    (mkPsBindStmt, mkSimpleMatch)
 import GHC_Types_SrcLoc                (UnhelpfulSpanReason (..))
 #else
-import GHC_Hs_Utils                    (mkBindStmt)
+import GHC_Hs_Utils                    (mkBindStmt, mkHsLam)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -84,7 +84,22 @@ b_ifE (LForm (L l _)) p t f =
 {-# INLINABLE b_ifE #-}
 
 b_lamE :: (HExpr,[HPat]) -> HExpr
+#if MIN_VERSION_ghc(9,0,0)
+b_lamE (body,pats) = mkLHsPar (lA l (HsLam NOEXT mg))
+  -- Using 'mkHsLam' will make a 'MatchGroup' value with 'Generated' origin
+  -- instead of 'FromSource', and contains 'noLoc' location. These were causing
+  -- some issues when "-Wincomplete-patterns" flag was turned on.
+  where
+    l = getLoc (reLoc body)
+    mg = mkMatchGroup FromSource ms
+#if   MIN_VERSION_ghc(9,2,0)
+    ms = reLocA (L l [mkSimpleMatch LambdaExpr pats body])
+#else
+    ms = [mkSimpleMatch LambdaExpr pats body]
+#endif
+#else
 b_lamE (body,pats) = mkHsLam pats body
+#endif
 {-# INLINABLE b_lamE #-}
 
 b_tupE :: Code -> [HExpr] -> HExpr
