@@ -150,7 +150,7 @@ mkRdrName' upperCaseNameSpace name
   -- data constructor names.
   | isUpper x =
     case splitQualName name of
-      Nothing -> mkUnqual srcDataName name
+      Nothing -> mkUnqual upperCaseNameSpace name
       Just q@(_, name') -> if isLexCon name'
                               then mkQual upperCaseNameSpace q
                               else mkQual varName q
