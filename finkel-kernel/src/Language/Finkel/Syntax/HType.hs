@@ -170,8 +170,8 @@ b_funT (LForm (L l _)) ts =
     -- XXX: As of ghc 9.2.1, the 'GHC.Hs.Type.splitHsFunType' function in the
     -- ghc package is ignoring "EpAnnNotUsed" constructor in the pattern match
     -- during recursion. Using "EpAnn" to make a dummy EpAnn typed value with
-    -- "mkDummyAnn". Without the dummy value, GADT constructors will show compilation
-    -- errors.
+    -- "mkDummyAnn". Without the dummy value, GADT constructors will show
+    -- compilation errors.
     hsFunTy = HsFunTy ann (HsUnrestrictedArrow NormalSyntax)
     ann = maybe NOEXT mkDummyAnn (srcSpanToRealSrcSpan l)
     mkDummyAnn real_span =

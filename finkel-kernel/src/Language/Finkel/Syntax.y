@@ -390,7 +390,7 @@ simpletype :: { (FastString, [HTyVarBndr], Maybe HKind)}
 
 lsimpletype :: { (FastString, [HTyVarBndr], Maybe HKind) }
     : '::' conid type {% getConId $2 >>= \n -> return (n, [], Just $3) }
-    | ldconhead     { $1 }
+    | ldconhead       { $1 }
 
 constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs deriving { ($2,reverse $1) }
@@ -436,7 +436,7 @@ lconstr :: { HConDecl }
     | lqtycon            { b_qtyconD $1 }
 
 forallcon :: { ([HTyVarBndrSpecific], (HConDecl, [HType])) }
-    : qtycon           { ([], $1) }
+    : qtycon                    { ([], $1) }
     | tvbndr_specific forallcon { case $2 of (vs,con) -> ($1:vs,con) }
 
 lkindtv :: { HTyVarBndr }
@@ -539,7 +539,7 @@ dconhead :: { (FastString, [HTyVarBndr], Maybe HType) }
 
 ldconhead :: { (FastString, [HTyVarBndr], Maybe HType)  }
     : '::' list_es type {% do { (n,tv) <- parse p_famconhd $2
-                             ; return (n,tv,Just $3)} }
+                              ; return (n,tv,Just $3)} }
     | famconhd          { case $1 of (n,tv) -> (n,tv,Nothing) }
 
 famconhd :: { (FastString, [HTyVarBndr]) }

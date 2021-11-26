@@ -530,11 +530,9 @@ b_newtypeinstD :: Code
 b_newtypeinstD = mk_data_or_newtype_instD NewType
 {-# INCLUDE b_newtypeinsD #-}
 
-mk_data_or_newtype_instD :: NewOrData
-                         -> Code
-                         -> (Located FastString, [HType])
-                         -> (HDeriving, [HConDecl])
-                         -> HDecl
+mk_data_or_newtype_instD
+  :: NewOrData -> Code -> (Located FastString, [HType])
+  -> (HDeriving, [HConDecl]) -> HDecl
 mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats)
                          (deriv, condecls) =
   let faminst = DataFamInstD { dfid_inst = inst
