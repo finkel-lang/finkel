@@ -75,6 +75,10 @@ mkTest path
   , __GLASGOW_HASKELL__ < (900 :: Int)
   = describe path (it "is pending under ghc < 9.0"
                     (const (pendingWith "Generated Haskell code not working")))
+  | base_name == "2028-standalonekind"
+  , __GLASGOW_HASKELL__ < (810 :: Int)
+  = describe path (it "is not supported in ghc < 8.10.1"
+                    (const (pendingWith "Not supported")))
   | otherwise = mkTest' path
   where
     base_name = takeBaseName path

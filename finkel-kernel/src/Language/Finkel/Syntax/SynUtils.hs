@@ -196,6 +196,10 @@ getConId orig@(LForm (L _ form)) =
     _ -> setLastToken orig >> failB "invalid constructor identifier"
 {-# INLINABLE getConId #-}
 
+getLConId :: Code -> Builder (Located FastString)
+getLConId orig@(LForm (L l _)) = fmap (L l) (getConId orig)
+{-# INLINABLE getLConId #-}
+
 getVarOrConId :: Code -> Builder FastString
 getVarOrConId orig@(LForm (L _ form)) =
   case form of

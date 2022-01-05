@@ -76,7 +76,7 @@ import Language.Finkel.Syntax.SynUtils
 %name p_lqtycl lqtycl
 %name p_sfsig sfsig
 %name p_lsimpletype lsimpletype
-%name p_ldconhead ldconhead
+%name p_ldinsthd ldinsthd
 %name p_famconhd famconhd
 %name p_lfinsthd lfinsthd
 %name p_lfameq lfameq
@@ -361,18 +361,27 @@ top_decl_with_doc :: { HDecl }
 top_decl :: { HDecl }
     : 'data' simpletype constrs            { b_dataD $1 $2 $3 }
     | 'data' 'family' dconhead             { b_datafamD $1 $3 }
-    | 'data' 'instance' finsthd constrs    { b_datainstD $1 $3 $4 }
+    | 'data' 'instance' dinsthd constrs    { b_datainstD $1 $3 $4 }
     | 'type' simpletype type               { b_typeD $1 $2 $3 }
+    | 'type' simpletype                    {% b_standaloneKindSigD $1 $2 }
     | 'type' 'family' dconhead fameqs      { b_tyfamD $4 $1 $3 }
     | 'type' 'instance' finsthd type       { b_tyinstD $1 $3 $4 }
     | 'newtype' simpletype constrs         { b_newtypeD $1 $2 $3 }
-    | 'newtype' 'instance' finsthd constrs { b_newtypeinstD $1 $3 $4 }
+    | 'newtype' 'instance' dinsthd constrs { b_newtypeinstD $1 $3 $4 }
     | 'class' qtycl cdecls                 {% b_classD $2 $3 }
     | 'instance' overlap qtycl idecls      {% b_instD $2 $3 $4 }
     | 'default' zero_or_more_types         { b_defaultD $2 }
     | fixity 'integer' idsyms1             {% b_fixityD $1 $2 $3 }
     | foreign                              { $1 }
     | decl                                 { $1 }
+
+dinsthd :: { (Located FastString, [HType], Maybe HType) }
+  : conid   {% getLConId $1 >>= \ln -> pure (ln, [], Nothing) }
+  | list_es {% parse p_ldinsthd $1 }
+
+ldinsthd :: { (Located FastString, [HType], Maybe HType) }
+  : '::' finsthd type { case $2 of (n,ts) -> (n, ts, Just $3) }
+  | conid types       {% getLConId $1 >>= \ln -> pure (ln, $2, Nothing) }
 
 overlap :: { Maybe (Located OverlapMode) }
     : {- empty -}    { Nothing }
@@ -389,8 +398,13 @@ simpletype :: { (FastString, [HTyVarBndr], Maybe HKind)}
     | list_es {% parse p_lsimpletype $1 }
 
 lsimpletype :: { (FastString, [HTyVarBndr], Maybe HKind) }
-    : '::' conid type {% getConId $2 >>= \n -> return (n, [], Just $3) }
-    | ldconhead       { $1 }
+    : '::' conid type   {% getConId $2 >>= \n -> return (n, [], Just $3) }
+    | '::' list_es type {% do { (n,tv) <- parse p_famconhd $2
+                              ; return (n,tv,Just $3)} }
+    | famconhd          { case $1 of (n,tv) -> (n,tv,Nothing) }
+
+famconhd :: { (FastString, [HTyVarBndr]) }
+    : conid tvbndrs {% getConId $1 >>= \n -> return (n,$2) }
 
 constrs :: { (HDeriving, [HConDecl]) }
     : rconstrs deriving { ($2,reverse $1) }
@@ -531,19 +545,11 @@ idecl :: { HDecl }
 
 lidecl :: { HDecl }
     : 'type' finsthd type    { b_tyinstD $1 $2 $3 }
-    | 'data' finsthd constrs { b_datainstD $1 $2 $3 }
+    | 'data' dinsthd constrs { b_datainstD $1 $2 $3 }
     | decl                   { $1 }
 
 dconhead :: { (FastString, [HTyVarBndr], Maybe HType) }
-    : list_es {% parse p_ldconhead $1 }
-
-ldconhead :: { (FastString, [HTyVarBndr], Maybe HType)  }
-    : '::' list_es type {% do { (n,tv) <- parse p_famconhd $2
-                              ; return (n,tv,Just $3)} }
-    | famconhd          { case $1 of (n,tv) -> (n,tv,Nothing) }
-
-famconhd :: { (FastString, [HTyVarBndr]) }
-    : conid tvbndrs {% getConId $1 >>= \n -> return (n,$2) }
+    : simpletype { $1 }
 
 tvbndrs :: { [HTyVarBndr] }
     : rtvbndrs { reverse $1 }
@@ -558,11 +564,10 @@ tvbndr :: { HTyVarBndr }
 
 finsthd :: { (Located FastString, [HType]) }
     : list_es {% parse p_lfinsthd $1 }
+    | conid   {% getLConId $1 >>= \ln -> pure (ln, []) }
 
 lfinsthd :: { (Located FastString, [HType]) }
-    : conid types {% do { n <- getConId $1
-                        ; case $1 of
-                           LForm (L l _) -> return (L l n, map parTyApp $2) }}
+    : conid types {% getLConId $1 >>= \ln -> pure (ln, map parTyApp $2) }
 
 fameqs :: { [(Located FastString, [HType], HType)] }
     : rfameqs { reverse $1 }

@@ -57,6 +57,11 @@
 (instance (HTestEquality ((:~~:) a))
   (= hTestEquality HRefl HRefl (Just HRefl)))
 
+;;; Requires `PolyKinds' language extension.
+(type family (:: (TF2 a) k))
+
+(type family (:: TF3 (-> k Type)))
+
 (:: main (IO ()))
 (= main
   (do (print-a2)

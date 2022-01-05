@@ -347,6 +347,9 @@ supportedLangExts =
       , RecordPuns
       , RecordWildCards
       , ScopedTypeVariables
+#if MIN_VERSION_ghc(8,10,0)
+      , StandaloneKindSignatures
+#endif
       , StandaloneDeriving
       , TypeApplications
       , TypeFamilies

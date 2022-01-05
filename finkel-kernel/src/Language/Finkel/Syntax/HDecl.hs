@@ -64,9 +64,13 @@ import GHC_Hs_Utils                    (mkLHsSigType, mkLHsSigWcType)
 import GHC_Hs_Type                     (HsArrow (..), HsScaled (..),
                                         LHsTyVarBndr)
 import GHC_Parser_Annotation           (IsUnicodeSyntax (..))
-import GHC_Parser_Lexer                (P (..), ParseResult (..))
 import GHC_Types_SrcLoc                (LayoutInfo (..))
 import GHC_Types_Var                   (Specificity (..))
+#endif
+
+#if MIN_VERSION_ghc(8,10,0)
+import GHC_Parser_Lexer                (P (..), ParseResult (..))
+import GHC_Parser_PostProcess          (mkStandaloneKindSig)
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -180,6 +184,27 @@ b_typeD (LForm (L l _)) (name, tvs, _) ty = lA l (tyClD synonym)
 #endif
                       }
 {-# INLINABLE b_typeD #-}
+
+b_standaloneKindSigD
+  :: Code -> (FastString, [HTyVarBndr], Maybe HKind) -> Builder HDecl
+#if MIN_VERSION_ghc(8,10,0)
+b_standaloneKindSigD (LForm (L l _)) (name, _tvs, mb_knd) =
+  -- StandaloneKindSignature is not supported in ghc < 8.10.  Also the arguments
+  -- of "mkStandaloneKindSig" differ from ghc 9.0.x to ghc 9.2.x.
+#if   MIN_VERSION_ghc(9,2,0)
+  do knd <- maybe builderError (pure . hsTypeToHsSigType) mb_knd
+     let sigP = mkStandaloneKindSig l (L l [lN l (mkRdrName name)]) knd []
+#else
+  do knd <- maybe builderError pure mb_knd
+     let sigP = mkStandaloneKindSig l (L l [lN l (mkRdrName name)]) knd
+#endif
+     ps <- fmap ghcPState getBState
+     case unP sigP ps of
+       POk _ sig -> pure (lA l (KindSigD NOEXT (unLoc sig)))
+       PFailed _ -> builderError
+#else
+b_standaloneKindSigD _ _ = builderError
+#endif
 
 b_conD :: Code -> HConDeclH98Details -> Builder HConDecl
 b_conD form@(LForm (L l _)) details = do
@@ -516,24 +541,27 @@ b_dfltSigD (dL->L l decl) =
 {-# INLINABLE b_dfltSigD #-}
 
 -- See: "Convert.cvtDec".
-b_datainstD :: Code
-            -> (Located FastString, [HType])
-            -> (HDeriving, [HConDecl])
-            -> HDecl
+b_datainstD
+  :: Code
+  -> (Located FastString, [HType], Maybe HType)
+  -> (HDeriving, [HConDecl])
+  -> HDecl
 b_datainstD = mk_data_or_newtype_instD DataType
 {-# INLINABLE b_datainstD #-}
 
-b_newtypeinstD :: Code
-               -> (Located FastString, [HType])
-               -> (HDeriving, [HConDecl])
-               -> HDecl
+b_newtypeinstD
+  :: Code
+  -> (Located FastString, [HType], Maybe HType)
+  -> (HDeriving, [HConDecl])
+  -> HDecl
 b_newtypeinstD = mk_data_or_newtype_instD NewType
 {-# INCLUDE b_newtypeinsD #-}
 
 mk_data_or_newtype_instD
-  :: NewOrData -> Code -> (Located FastString, [HType])
+  :: NewOrData -> Code
+  -> (Located FastString, [HType], Maybe HType)
   -> (HDeriving, [HConDecl]) -> HDecl
-mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats)
+mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats, mb_kind)
                          (deriv, condecls) =
   let faminst = DataFamInstD { dfid_inst = inst
 #if MIN_VERSION_ghc(8,6,0)
@@ -548,7 +576,7 @@ mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats)
 #else
                        , dd_ctxt = L l []
 #endif
-                       , dd_kindSig = Nothing
+                       , dd_kindSig = mb_kind
                        , dd_cons = condecls
                        , dd_derivs = deriv
 #if MIN_VERSION_ghc(8,6,0)
