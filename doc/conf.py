@@ -20,7 +20,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Finkel'
-copyright = '2019-2021, 8c6794b6'
+copyright = '2019-2022, 8c6794b6'
 author = '8c6794b6'
 
 # The short X.Y version

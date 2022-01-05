@@ -15,7 +15,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              8c6794b6
 maintainer:          8c6794b6@gmail.com
-copyright:           2017-2021 8c6794b6
+copyright:           2017-2022 8c6794b6
 category:            Language
 build-type:          Simple
 extra-source-files:  README.md
