@@ -61,9 +61,7 @@ import GHC_Hs_Utils                    (mkLHsSigType, mkLHsSigWcType)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Hs_Type                     (HsArrow (..), HsScaled (..),
-                                        LHsTyVarBndr)
-import GHC_Parser_Annotation           (IsUnicodeSyntax (..))
+import GHC_Hs_Type                     (LHsTyVarBndr, hsLinear)
 import GHC_Types_SrcLoc                (LayoutInfo (..))
 import GHC_Types_Var                   (Specificity (..))
 #endif
@@ -308,13 +306,9 @@ b_conOnlyD name = b_conD name pcon
 -- XXX: Does not support liner types and unicode syntax (ghc >= 9.0)
 b_conDeclDetails :: [HType] -> HConDeclH98Details
 #if MIN_VERSION_ghc(9,2,0)
-b_conDeclDetails = PrefixCon [] . map (hsScaled . parTyApp)
-  where
-    hsScaled = HsScaled (HsUnrestrictedArrow NormalSyntax)
+b_conDeclDetails = PrefixCon [] . map (hsLinear . parTyApp)
 #elif MIN_VERSION_ghc(9,0,0)
-b_conDeclDetails = PrefixCon . map (hsScaled . parTyApp)
-  where
-    hsScaled = HsScaled (HsUnrestrictedArrow NormalSyntax)
+b_conDeclDetails = PrefixCon . map (hsLinear . parTyApp)
 #else
 b_conDeclDetails = PrefixCon . map parTyApp
 #endif
