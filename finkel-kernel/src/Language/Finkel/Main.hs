@@ -75,8 +75,6 @@ import           Language.Finkel.Reader       (supportedLangExts)
 import           Language.Finkel.SpecialForms (defaultFnkEnv)
 import qualified Paths_finkel_kernel
 
-#include "finkel_kernel_config.h"
-
 
 -- ---------------------------------------------------------------------
 --
