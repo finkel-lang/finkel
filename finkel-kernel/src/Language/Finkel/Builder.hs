@@ -87,7 +87,7 @@ import GHC_Hs_Type           (LConDeclField, LHsSigType, LHsSigWcType,
                               LHsTyVarBndr, LHsType)
 import GHC_Parser_Lexer      (PState (..))
 import GHC_Types_ForeignCall (CCallConv (..))
-import GHC_Types_SrcLoc      (GenLocated (..), Located, noLoc)
+import GHC_Types_SrcLoc      (Located, noLoc)
 
 #if MIN_VERSION_ghc(9,2,0)
 import GHC.Driver.Config     (initParserOpts)
@@ -240,7 +240,7 @@ formLexer :: (Code -> Builder a) -> Builder a
 formLexer cont = do
     st <- getBState
     case inputs st of
-      []   -> cont (LForm (L undefined TEnd))
+      []   -> cont (LForm (noLoc TEnd))
       x:xs -> do
         putBState (st {inputs = xs, lastToken = Just x})
         cont x
