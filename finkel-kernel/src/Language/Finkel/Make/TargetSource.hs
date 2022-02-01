@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP          #-}
 -- | Module for source code file path look up.
 module Language.Finkel.Make.TargetSource
   (
@@ -18,12 +19,14 @@ module Language.Finkel.Make.TargetSource
   , findTargetModuleNameMaybe
   , findTargetSource
   , findTargetSourceMaybe
+  , findTargetSourceWithPragma
   , findFileInImportPaths
 
-   -- * File path related functions
+   -- * File type related functions
   , asModuleName
   , isFnkFile
   , isHsFile
+  , findPragmaString
   ) where
 
 #include "ghc_modules.h"
@@ -33,6 +36,7 @@ import Control.Exception      (SomeException, try)
 import Control.Monad          (mplus)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Char              (isUpper)
+import Data.List              (isSubsequenceOf)
 
 -- directory
 import System.Directory       (doesFileExist)
@@ -43,6 +47,7 @@ import System.FilePath        (dropExtension, normalise, pathSeparator,
                                (<.>), (</>))
 
 -- ghc
+import GHC_Data_StringBuffer  (StringBuffer, atEnd, hGetStringBuffer, nextChar)
 import GHC_Driver_Phases      (Phase)
 import GHC_Driver_Session     (DynFlags (..))
 import GHC_Types_SourceError  (throwOneError)
@@ -220,18 +225,60 @@ findTargetSourceMaybe dflags modName = do
 -- 'SourceError' when the target source was not found.
 findTargetSource
   :: MonadIO m => DynFlags -> Located String -> m TargetSource
-findTargetSource dflags (L l modNameOrFilePath)= do
+-- XXX: Pass the pragma string ...
+findTargetSource = findTargetSourceWithPragma ";;;"
+
+-- | Like 'findTargetSource', but with given pragma string.
+findTargetSourceWithPragma
+  :: MonadIO m => String -> DynFlags -> Located String -> m TargetSource
+findTargetSourceWithPragma pragma dflags (L l modNameOrFilePath)= do
   mb_inputPath <- findFileInImportPaths (importPaths dflags) modNameOrFilePath
   let detectSource path
-        | isFnkFile path =
-          do let modName = mkModuleName (asModuleName modNameOrFilePath)
-             return (FnkSource path modName)
-        | isHsFile path =
-          return (HsSource path (mkModuleName (asModuleName path)))
+        | isFnkFile path = return (FnkSource path modName)
+        | isHsFile path = do
+          buf <- liftIO (hGetStringBuffer path)
+          if findPragmaString pragma buf
+            then return (FnkSource path modName)
+            else return (HsSource path modName)
         | otherwise = return (OtherSource path)
+        where
+          modName = mkModuleName (asModuleName path)
   case mb_inputPath of
     Just path -> detectSource path
     Nothing   -> do
       let err = mkWrappedMsg dflags l neverQualify doc
           doc = text ("cannot find target source: " ++ modNameOrFilePath)
       throwOneError err
+
+
+-- ------------------------------------------------------------------------
+--
+-- Finkel buffer detection
+--
+-- ------------------------------------------------------------------------
+
+findPragmaString :: String -> StringBuffer -> Bool
+findPragmaString pragma buf = findInFirstNLines buf 3 (isSubsequenceOf pragma)
+{-# INLINABLE findPragmaString #-}
+
+findInFirstNLines :: StringBuffer -> Int -> (String -> Bool) -> Bool
+findInFirstNLines buf n test = go n buf
+  where
+    -- False when the source code contained less number of lines than
+    -- the number specified by the argument.
+    go i buf0 =
+      if i == 0 || atEnd buf0
+        then False
+        else case getStringBufferLine buf0 of
+               (l, buf1) -> test l || go (i-1) buf1
+{-# INLINABLE findInFirstNLines #-}
+
+getStringBufferLine :: StringBuffer -> (String, StringBuffer)
+getStringBufferLine = go []
+  where
+    go !acc buf0 =
+      let (c, buf1) = nextChar buf0
+      in if c == '\n'
+         then (reverse acc, buf1)
+         else go (c:acc) buf1
+{-# INLINABLE getStringBufferLine #-}
