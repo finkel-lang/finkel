@@ -50,8 +50,8 @@ import           GHC_Data_FastString     (fsLit)
 import           GHC_Data_StringBuffer   (StringBuffer)
 import           GHC_Driver_Session      (DynFlags (..), HasDynFlags (..),
                                           parseDynamicFlagsCmdLine)
-import           GHC_Runtime_Context     (InteractiveImport (..))
 import           GHC_Hs_ImpExp           (simpleImportDecl)
+import           GHC_Runtime_Context     (InteractiveImport (..))
 import           GHC_Runtime_Eval        (getContext)
 import           GHC_Types_Basic         (SuccessFlag)
 import           GHC_Types_SrcLoc        (noLoc)
@@ -112,16 +112,18 @@ type FnkSpec = SpecWith FnkTestResource
 -- | Test resource for finkel-kernel package tests.
 data FnkTestResource =
   FnkTestResource
-    { ftr_main :: [String] -> IO ()
+    { ftr_main     :: [String] -> IO ()
     -- ^ Function to run 'defaultMain'.
-    , ftr_init :: Fnk ()
+    , ftr_init     :: Fnk ()
     -- ^ Initialization action inside 'Fnk'.
-    , ftr_load :: [FilePath] -> Fnk SuccessFlag
+    , ftr_load     :: [FilePath] -> Fnk SuccessFlag
     -- ^ Function to load a module.
     -- , ftr_eval :: forall a b. String -> Builder a -> (a -> Fnk b)
     --            -> StringBuffer -> Fnk b
     -- -- ^ Function to evaluate an expression string, returns a string
     -- -- representation of evaluated result.
+    , ftr_pkg_args :: [String]
+    -- ^ Arguments for package.
     }
 
 getFnkTestResource :: IO FnkTestResource
@@ -130,6 +132,7 @@ getFnkTestResource = do
   return (FnkTestResource { ftr_main = makeMain pkg_args
                           , ftr_init = makeInit pkg_args
                           , ftr_load = makeLoad
+                          , ftr_pkg_args = pkg_args
                           })
 
 makeMain :: [String] -> [String] -> IO ()

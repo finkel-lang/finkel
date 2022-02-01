@@ -134,6 +134,8 @@ test-suite finkel-kernel-test
                        ExceptionTest
                        MainTest
                        MakeTest
+                       PluginTest
+                       PreprocessTest
                        SyntaxTest
                        Orphan
                        TestAux

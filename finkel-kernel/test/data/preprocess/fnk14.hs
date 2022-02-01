@@ -1,0 +1,3 @@
+;;; -*- mode: finkel -*-
+
+(module)(Main)
