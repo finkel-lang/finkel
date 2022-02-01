@@ -17,6 +17,7 @@ module Language.Finkel.Syntax
     -- * Haskell AST parsers
     parseModule
   , parseModuleNoHeader
+  , parseHeader
   , parseImports
   , parseLImport
   , parseStmt
@@ -57,6 +58,8 @@ import Language.Finkel.Syntax.SynUtils
 
 %name parse_module module
 %name parse_module_no_header module_no_header
+%partial parse_header header
+
 %name p_mod_header mod_header
 
 %name p_entity entity
@@ -332,6 +335,13 @@ impspec :: { (Bool, Maybe [HIE]) }
                             ; return (False, Just es) } }
     | 'unit'           { (False, Just []) }
     | {- empty -}      { (False, Nothing) }
+
+-- Module declaration & imports only
+header :: { HModule }
+    : mhead imports           {% $1 `fmap` pure $2 <*> pure [] }
+    | mhead                   {% $1 `fmap` pure [] <*> pure [] }
+    | imports                 {% b_implicitMainModule <*> pure $1 <*> pure [] }
+    | {- empty -}             {% b_implicitMainModule <*> pure [] <*> pure [] }
 
 
 -- ---------------------------------------------------------------------
@@ -1070,6 +1080,10 @@ parseModule = parse_module
 -- | Parser for Haskell module with out module header.
 parseModuleNoHeader  :: Builder HModule
 parseModuleNoHeader = parse_module_no_header
+
+-- | Parse module declaration and imports only.
+parseHeader :: Builder HModule
+parseHeader = parse_header
 
 -- | Parser for import declarations.
 parseImports :: Builder [HImportDecl]
