@@ -29,6 +29,7 @@ let
     ) {
       finkel-kernel = ../finkel-kernel;
       fkc = ../fkc;
+      fnkpp = ../fnkpp;
       finkel-setup = ../finkel-setup;
       finkel-core = ../finkel-core;
       finkel-tool= ../finkel-tool;
@@ -88,7 +89,7 @@ runHook postInstallPhase
   };
 
   finkelPackages = with pkgs.haskellPackages; {
-    inherit finkel-kernel fkc finkel-setup finkel-core finkel-tool finkel doc;
+    inherit finkel-kernel fkc fnkpp finkel-setup finkel-core finkel-tool finkel doc;
   };
 
 in pkgs // { inherit finkelPackages; }

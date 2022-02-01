@@ -2,6 +2,7 @@ packages:
   -- Main components
   finkel-kernel/
   fkc/
+  fnkpp/
   finkel-setup/
   finkel-core/
   finkel-tool/

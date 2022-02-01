@@ -1,0 +1,33 @@
+cabal-version:       2.0
+name:                fnkpp
+version:             0.0.0
+synopsis:            Finkel preprocessor
+description:
+  Finkel preprocessor.
+  .
+  This package contains an executable @fnkpp@, which is used for
+  preprocessing Finkel source code.
+  .
+  See the <https://finkel.readthedocs.org documentation> for more info.
+
+homepage:            https://github.com/finkel-lang/finkel#readme
+license:             BSD3
+license-file:        LICENSE
+author:              8c6794b6
+maintainer:          8c6794b6@gmail.com
+copyright:           2022 8c6794b6
+category:            Language
+build-type:          Simple
+extra-source-files:  README.md
+
+executable fnkpp
+  main-is:            Main.hs
+  ghc-options:        -Wall -threaded
+  build-depends:      base > 4.10 && < 5
+                    , finkel-kernel
+  default-language:   Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/finkel-lang/finkel.git
+  subdir:   fnkpp

@@ -13,6 +13,7 @@ packages:
   - finkel-core/
   - finkel-tool/
   - finkel/
+  - fnkpp/
 
   # For test
   - doc
