@@ -548,7 +548,7 @@ tok_doc_with constr char (AlexInput _ s) l = do
   case C8.lines bs0 of
     line0:bss -> do
       let line1 = C8.tail (C8.dropWhile (/= char) line0)
-          bs1 = C8.unlines (line1 : map (C8.dropWhile (== ':')) bss)
+          bs1 = C8.unlines (line1 : map dropCommentBeginning bss)
           fs1 = mkFastStringByteString bs1
       return $! constr fs1
     _ -> alexError "tok_doc_with: panic"
@@ -560,10 +560,10 @@ tok_doc_named (AlexInput _ s) l = do
       bs0 = bytesFS fs0
   case C8.lines bs0 of
     line1:bss -> do
-      let line2 = C8.dropWhile isSpace (C8.dropWhile (== ';') line1)
+      let line2 = C8.dropWhile isSpace (dropCommentBeginning line1)
           line3 = C8.tail line2
           key = mkFastStringByteString line3
-          bs1 = map (C8.dropWhile (== ';')) bss
+          bs1 = map dropCommentBeginning bss
           fs1 = mkFastStringByteString (C8.unlines bs1)
           fs2 = case bss of
                   [] -> Nothing
@@ -575,7 +575,7 @@ tok_doc_named (AlexInput _ s) l = do
 tok_doc_group :: Action
 tok_doc_group (AlexInput _ s) l =
   let bs0 = bytesFS (takeUtf8FS l s)
-      bs1 = C8.dropWhile isSpace (C8.dropWhile (== ';') bs0)
+      bs1 = C8.dropWhile isSpace (dropCommentBeginning bs0)
       (stars, bs2) = C8.span (== '*') bs1
       level = C8.length stars
       fs0 = mkFastStringByteString (C8.tail bs2)
@@ -925,5 +925,9 @@ adjustChar c = fromIntegral $ ord adj_c
 bytesFS :: FastString -> W8.ByteString
 bytesFS = fastStringToByteString
 #endif
+
+dropCommentBeginning :: C8.ByteString -> C8.ByteString
+dropCommentBeginning = C8.dropWhile (== ';')
+{-# INLINABLE dropCommentBeginning #-}
 
 }
