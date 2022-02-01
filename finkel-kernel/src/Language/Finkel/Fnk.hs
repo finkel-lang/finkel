@@ -904,12 +904,7 @@ fnkEnvOptions =
     to_str = map replace . show
     replace '_' = '-'
     replace c   = toLower c
-    parseVerbosity str =
-      case reads str of
-        [(n, "")] -> n
-        _ -> throw
-               (FinkelException
-                 ("expecting Int value for verbosity but got " ++ show str))
+    parseVerbosity = readOrFinkelException "INT" "verbosity"
 
 -- | Options for @FnkEnv@ with an option to set ghc @libdir@.
 fnkEnvOptionsWithLib :: [OptDescr (FnkEnv -> FnkEnv)]

@@ -4,13 +4,14 @@
 module Language.Finkel.Exception
   ( FinkelException(..)
   , finkelExceptionLoc
+  , readOrFinkelException
   , handleFinkelException
   ) where
 
 #include "ghc_modules.h"
 
 -- base
-import Control.Exception    (Exception (..))
+import Control.Exception    (Exception (..), throw)
 
 -- ghc
 import GHC_Types_SrcLoc     (GenLocated (..), SrcSpan)
@@ -67,6 +68,14 @@ finkelExceptionLoc fe = case fe of
   _                                    -> Nothing
 {-# INLINABLE finkelExceptionLoc #-}
 
+readOrFinkelException :: Read s => String -> String -> String -> s
+readOrFinkelException what name str =
+  case reads str of
+    [(x, "")] -> x
+    _ -> throw (FinkelException ("Expecting " ++ what ++
+                                 " for " ++ name ++
+                                 ", but got " ++ show str))
+{-# INLINABLE readOrFinkelException #-}
 
 -- ------------------------------------------------------------------------
 --
