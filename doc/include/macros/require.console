@@ -1,5 +1,5 @@
 $ finkel make -no-link -fno-code require.fnk
-[1 of 1] Compiling RequireMe        ( RequireMe.fnk, interpreted ) [required]
+(*) [1 of 1] Compiling RequireMe        ( RequireMe.fnk, interpreted )
 
 ==================== Parser ====================
 module Main where

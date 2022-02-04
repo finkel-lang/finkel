@@ -62,11 +62,7 @@ import GHC_Unit_Module                   (Module, moduleNameString)
 import GHC_Unit_Module_Graph             (ModuleGraph, showModMsg)
 import GHC_Unit_Module_ModSummary        (ModSummary (..))
 import GHC_Utils_Error                   (compilationProgressMsg)
-import GHC_Utils_Outputable              (SDoc, hcat, ppr, (<+>))
-
-#if MIN_VERSION_ghc(9,2,0)
-import GHC_Utils_Outputable              (text)
-#endif
+import GHC_Utils_Outputable              (SDoc, hcat, ppr, text, (<+>))
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Types_SrcLoc                  (UnhelpfulSpanReason (..))
@@ -240,54 +236,48 @@ addImportedMacro fnk_env hsc_env thing = when (isMacro hsc_env thing) go
 --
 -- Use of object codes are not working well for importing home package modules
 -- when optimization option were enabled.  Conservatively using bytecode by
--- delegating further works to 'makeFromRequire' via 'withRequiredSettings' for
+-- delegating further works to 'makeFromRequire' via 'withInternalLoad' for
 -- such cases.
 
-setRequiredSettings :: Fnk ()
-setRequiredSettings = do
+withInternalLoad :: Fnk a -> Fnk a
+withInternalLoad act = do
   -- 'DynFlags' in the current session might be updated by the file local
   -- pragmas.  Using the 'DynFlags' from 'envDefaultDynFlags', which is
   -- initialized when entering the 'make' function in 'initSessionForMake'.
-  fnk_env <- getFnkEnv
-  let no_force_recomp = unSetGeneralFlag' Opt_ForceRecomp
+  let acquire = (,) <$> getDynFlags <*> getFnkEnv
+      restore (dflags, fnk_env) = do
+        setDynFlags dflags
+        putFnkEnv fnk_env
+      no_force_recomp = unSetGeneralFlag' Opt_ForceRecomp
       update = setDynFlags . no_force_recomp . bcoDynFlags
-  mapM_ update (envDefaultDynFlags fnk_env)
-  putFnkEnv fnk_env {envMessager = requiredMessager}
+  bracket acquire restore $ \(_dflags, fnk_env) -> do
+    mapM_ update (envDefaultDynFlags fnk_env)
+    putFnkEnv fnk_env {envMessager = internalLoadMessager}
+    act
 
-withRequiredSettings :: Fnk a -> Fnk a
-withRequiredSettings act =
-  bracket
-    (do dflags <- getDynFlags
-        fnk_env <- getFnkEnv
-        return (dflags, fnk_env))
-    (\(dflags, fnk_env) ->
-       do setDynFlags dflags
-          putFnkEnv fnk_env)
-    (const (setRequiredSettings >> act))
-
-requiredMessager :: Messager
-requiredMessager hsc_env mod_index recomp node =
+internalLoadMessager :: Messager
+internalLoadMessager hsc_env mod_index recomp node =
   -- See: GHC.Driver.Main.batchMsg
   case recomp of
-    MustCompile       -> showMsg "Compiling " " [required]"
+    MustCompile       -> showMsg "Compiling " ""
     UpToDate          -> when (verbosity dflags >= 2) (showMsg "Skipping " "")
     RecompBecause why ->
 #if MIN_VERSION_ghc(9,2,0)
-      showMsg "Compiling " (" [required, " <> text why <> "]")
+      showMsg "Compiling " (" [" <> text why <> "]")
 #else
-      showMsg "Compiling " (" [required, " ++ why ++ "]")
+      showMsg "Compiling " (" [" ++ why ++ "]")
 #endif
   where
     dflags = hsc_dflags hsc_env
     showMsg msg reason =
 #if MIN_VERSION_ghc(9,2,0)
       compilationProgressMsg (hsc_logger hsc_env) dflags
-        (showModuleIndex mod_index <> msg <>
+        (text "(*) " <> showModuleIndex mod_index <> msg <>
          showModMsg dflags (recompileRequired recomp) node <>
          reason)
 #else
       compilationProgressMsg dflags
-        (showModuleIndex mod_index ++ msg ++
+        ("(*) " ++ showModuleIndex mod_index ++ msg ++
          showModMsg dflags (hscTarget dflags)
                     (recompileRequired recomp)
                     node ++
@@ -313,7 +303,7 @@ makeMissingHomeMod (L _ idecl) = do
       mk_fn = case envInvokedMode fnk_env of
         ExecMode      -> makeFromRequire
         GhcPluginMode -> makeFromRequirePlugin
-      smpl_mk = withRequiredSettings (mk_fn lmname)
+      smpl_mk = withInternalLoad (mk_fn lmname)
       dflags = hsc_dflags hsc_env
       tr = debug fnk_env "makeMissinghomeMod"
       do_mk msgs = tr msgs >> smpl_mk
@@ -328,7 +318,7 @@ makeMissingHomeMod (L _ idecl) = do
         Nothing -> do
           fresult <- liftIO (findImportedModule hsc_env mname Nothing)
           case fresult of
-            Found {} -> dont_mk ["Found imported" <+> ppr mname]
+            Found {} -> dont_mk ["Skipping " <+> ppr mname]
             _        -> do_mk ["Module" <+> ppr mname <+> "not found"]
 
 -- ---------------------------------------------------------------------
