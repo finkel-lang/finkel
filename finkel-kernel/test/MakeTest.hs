@@ -9,65 +9,65 @@ module MakeTest
 #include "ghc_modules.h"
 
 -- base
-import Control.Exception      (SomeException (..))
-import Control.Monad          (unless, when)
-import Control.Monad.IO.Class (MonadIO (..))
-import Data.List              (isPrefixOf, tails)
-import Data.Maybe             (isJust)
-import GHC.Exts               (unsafeCoerce#)
-import System.Environment     (lookupEnv)
-import System.Info            (os)
+import Control.Exception       (SomeException (..))
+import Control.Monad           (unless, when)
+import Control.Monad.IO.Class  (MonadIO (..))
+import Data.List               (isPrefixOf, tails)
+import Data.Maybe              (isJust)
+import GHC.Exts                (unsafeCoerce#)
+import System.Environment      (lookupEnv)
+import System.Info             (os)
 
 -- directory
-import System.Directory       (copyFile, createDirectoryIfMissing,
-                               doesFileExist, getTemporaryDirectory,
-                               removeDirectoryRecursive)
+import System.Directory        (copyFile, createDirectoryIfMissing,
+                                doesFileExist, getTemporaryDirectory,
+                                removeDirectoryRecursive)
 #if !MIN_VERSION_ghc(9,0,0)
-import System.Directory       (getDirectoryContents)
+import System.Directory        (getDirectoryContents)
 #endif
 
 -- filepath
-import System.FilePath        ((<.>), (</>))
+import System.FilePath         ((<.>), (</>))
 #if !MIN_VERSION_ghc(9,0,0)
-import System.FilePath        (takeExtension)
+import System.FilePath         (takeExtension)
 #endif
 
 -- ghc
-import GHC                    (setTargets)
-import GHC_Data_FastString    (fsLit)
-import GHC_Driver_Monad       (GhcMonad (..))
-import GHC_Driver_Ppr         (showPpr)
-import GHC_Driver_Session     (HasDynFlags (..))
-import GHC_Types_SrcLoc       (noLoc)
-import GHC_Types_Target       (Target (..), TargetId (..))
-import GHC_Unit_Module        (mkModuleName)
-import GHC_Unit_State         (PackageName (..))
-import GHC_Utils_Outputable   (Outputable (..))
+import GHC                     (setTargets)
+import GHC_Data_FastString     (fsLit)
+import GHC_Driver_Monad        (GhcMonad (..))
+import GHC_Driver_Ppr          (showPpr)
+import GHC_Driver_Session      (HasDynFlags (..))
+import GHC_Types_SrcLoc        (noLoc)
+import GHC_Types_Target        (Target (..), TargetId (..))
+import GHC_Unit_Module         (mkModuleName)
+import GHC_Unit_State          (PackageName (..))
+import GHC_Utils_Outputable    (Outputable (..))
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Linker.Loader      (unload)
+import GHC.Linker.Loader       (unload)
 import GHC.Runtime.Interpreter (hscInterp)
 #else
-import GHC_Runtime_Linker     (unload)
+import GHC_Runtime_Linker      (unload)
 #endif
 
 #if !MIN_VERSION_ghc(9,0,0)
-import GHC_Driver_Session     (DynFlags (..))
-import GHC_Unit_State         (lookupPackageName)
-import GHC_Utils_Outputable   (showSDoc)
+import GHC_Driver_Session      (DynFlags (..))
+import GHC_Unit_State          (lookupPackageName)
+import GHC_Utils_Outputable    (showSDoc)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Platform_Ways      (hostIsDynamic, hostIsProfiled)
+import GHC_Platform_Ways       (hostIsDynamic, hostIsProfiled)
 #else
-import DynFlags               (Way (..), dynamicGhc, interpWays)
-import Module                 (componentIdToInstalledUnitId)
-import Packages               (InstalledPackageInfo (..), PackageConfig,
-                               lookupInstalledPackage, pprPackageConfig)
+import DynFlags                (Way (..), dynamicGhc, interpWays)
+import Module                  (componentIdToInstalledUnitId)
+import Packages                (InstalledPackageInfo (..), PackageConfig,
+                                lookupInstalledPackage, pprPackageConfig)
 #endif
 
 -- process
-import System.Process         (readProcess)
+import System.Process          (readProcess)
 
 -- hspec
 import Test.Hspec
