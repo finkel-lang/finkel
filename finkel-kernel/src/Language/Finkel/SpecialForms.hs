@@ -14,79 +14,82 @@ module Language.Finkel.SpecialForms
 #include "ghc_modules.h"
 
 -- base
-import Control.Exception               (throw)
-import Control.Monad                   (foldM, unless, when)
-import Control.Monad.IO.Class          (MonadIO (..))
-import Data.Maybe                      (catMaybes)
-import GHC.Exts                        (unsafeCoerce#)
+import Control.Exception                 (throw)
+import Control.Monad                     (foldM, unless, when)
+import Control.Monad.IO.Class            (MonadIO (..))
+import Data.Maybe                        (catMaybes)
+import GHC.Exts                          (unsafeCoerce#)
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Utils.Outputable            ((<>))
-import Prelude                         hiding ((<>))
+import GHC.Utils.Outputable              ((<>))
+import Prelude                           hiding ((<>))
 #endif
 
 -- containers
-import Data.Map                        (fromList)
+import Data.Map                          (fromList)
 
 -- exceptions
-import Control.Monad.Catch             (bracket)
+import Control.Monad.Catch               (bracket)
 
 -- ghc
-import GHC                             (ModuleInfo, getModuleInfo, lookupModule,
-                                        lookupName, modInfoExports, setContext)
-import GHC_Data_FastString             (FastString, fsLit, unpackFS)
-import GHC_Driver_Env_Types            (HscEnv (..))
-import GHC_Driver_Main                 (Messager, hscTcRnLookupRdrName,
-                                        showModuleIndex)
-import GHC_Driver_Monad                (GhcMonad (..), modifySession)
-import GHC_Driver_Ppr                  (showPpr)
-import GHC_Driver_Session              (DynFlags (..), GeneralFlag (..),
-                                        HasDynFlags (..), getDynFlags,
-                                        unSetGeneralFlag')
-import GHC_Hs                          (HsModule (..))
-import GHC_Hs_ImpExp                   (ImportDecl (..), ieName)
-import GHC_Iface_Recomp                (RecompileRequired (..),
-                                        recompileRequired)
-import GHC_Runtime_Context             (InteractiveImport (..))
-import GHC_Runtime_Eval                (getContext)
-import GHC_Types_Name                  (nameOccName, occName)
-import GHC_Types_Name_Occurrence       (occNameFS)
-import GHC_Types_Name_Reader           (rdrNameOcc)
-import GHC_Types_SrcLoc                (GenLocated (..), SrcSpan (..), unLoc)
-import GHC_Types_TyThing               (TyThing (..))
-import GHC_Types_Var                   (varName)
-import GHC_Unit_Finder                 (FindResult (..), findImportedModule)
-import GHC_Unit_Home_ModInfo           (lookupHpt)
-import GHC_Unit_Module                 (Module, moduleNameString)
-import GHC_Unit_Module_Graph           (ModuleGraph, showModMsg)
-import GHC_Unit_Module_ModSummary      (ModSummary (..))
-import GHC_Utils_Error                 (compilationProgressMsg)
-import GHC_Utils_Outputable            (SDoc, hcat, ppr)
+import GHC                               (ModuleInfo, getModuleInfo,
+                                          lookupModule, lookupName,
+                                          modInfoExports, setContext)
+import GHC_Data_FastString               (FastString, fsLit, unpackFS)
+import GHC_Driver_Env_Types              (HscEnv (..))
+import GHC_Driver_Main                   (Messager, hscTcRnLookupRdrName,
+                                          showModuleIndex)
+import GHC_Driver_Monad                  (GhcMonad (..), modifySession)
+import GHC_Driver_Ppr                    (showPpr)
+import GHC_Driver_Session                (DynFlags (..), GeneralFlag (..),
+                                          HasDynFlags (..), getDynFlags,
+                                          unSetGeneralFlag')
+import GHC_Hs                            (HsModule (..))
+import GHC_Hs_ImpExp                     (ImportDecl (..), ieName)
+import GHC_Iface_Recomp                  (RecompileRequired (..),
+                                          recompileRequired)
+import GHC_Runtime_Context               (InteractiveImport (..))
+import GHC_Runtime_Eval                  (getContext)
+import GHC_Types_Name                    (nameOccName, occName)
+import GHC_Types_Name_Occurrence         (occNameFS)
+import GHC_Types_Name_Reader             (rdrNameOcc)
+import GHC_Types_SrcLoc                  (GenLocated (..), SrcSpan (..), unLoc)
+import GHC_Types_TyThing                 (TyThing (..))
+import GHC_Types_Var                     (varName)
+import GHC_Unit_Finder                   (FindResult (..), findImportedModule)
+import GHC_Unit_Home_ModInfo             (lookupHpt)
+import GHC_Unit_Module                   (Module, moduleNameString)
+import GHC_Unit_Module_Graph             (ModuleGraph, showModMsg)
+import GHC_Unit_Module_ModSummary        (ModSummary (..))
+import GHC_Utils_Error                   (compilationProgressMsg)
+import GHC_Utils_Outputable              (SDoc, hcat, ppr, (<+>))
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC_Utils_Outputable            (text)
+import GHC_Utils_Outputable              (text)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Types_SrcLoc                (UnhelpfulSpanReason (..))
+import GHC_Types_SrcLoc                  (UnhelpfulSpanReason (..))
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import GHC_Unit_Module_Graph           (mgLookupModule)
+import GHC_Unit_Module_Graph             (mgLookupModule)
 #endif
 
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Eval
 import Language.Finkel.Exception
-import Language.Finkel.Expand          (bcoDynFlags, expand, expands')
+import Language.Finkel.Expand            (bcoDynFlags, expand, expands')
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
-import Language.Finkel.Make            (findTargetModuleNameMaybe,
-                                        makeFromRequire, makeFromRequirePlugin)
-import Language.Finkel.Syntax          (parseExpr, parseLImport,
-                                        parseModuleNoHeader)
+import Language.Finkel.Make              (findTargetModuleNameMaybe,
+                                          makeFromRequire,
+                                          makeFromRequirePlugin)
+import Language.Finkel.Make.TargetSource (targetSourcePath)
+import Language.Finkel.Syntax            (parseExpr, parseLImport,
+                                          parseModuleNoHeader)
 import Language.Finkel.Syntax.SynUtils
 
 -- ---------------------------------------------------------------------
@@ -312,18 +315,21 @@ makeMissingHomeMod (L _ idecl) = do
         GhcPluginMode -> makeFromRequirePlugin
       smpl_mk = withRequiredSettings (mk_fn lmname)
       dflags = hsc_dflags hsc_env
+      tr = debug fnk_env "makeMissinghomeMod"
+      do_mk msgs = tr msgs >> smpl_mk
+      dont_mk msgs = tr msgs
 
   case lookupHpt (hsc_HPT hsc_env) mname of
-    Just _ -> smpl_mk
+    Just _ -> do_mk ["Found" <+> ppr mname <+> "in HPT"]
     _ -> do
       mb_ts <- findTargetModuleNameMaybe dflags lmname
       case mb_ts of
-        Just _ -> smpl_mk
+        Just ts -> do_mk ["Found file" <+> text (targetSourcePath ts)]
         Nothing -> do
           fresult <- liftIO (findImportedModule hsc_env mname Nothing)
           case fresult of
-            Found {} -> return ()
-            _        -> smpl_mk
+            Found {} -> dont_mk ["Found imported" <+> ppr mname]
+            _        -> do_mk ["Module" <+> ppr mname <+> "not found"]
 
 -- ---------------------------------------------------------------------
 --
