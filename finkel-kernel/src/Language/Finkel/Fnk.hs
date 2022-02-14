@@ -12,6 +12,7 @@ module Language.Finkel.Fnk
   , MacroFunction
   , MacroName(..)
   , EnvMacros
+  , FlagSet
   , runFnk
   , toGhc
   , fromGhc
