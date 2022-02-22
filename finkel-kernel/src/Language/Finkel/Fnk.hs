@@ -792,9 +792,9 @@ getFnkDebug =
 {-# INLINABLE getFnkDebug #-}
 
 -- | Show some fields in 'DynFlags'.
-dumpDynFlags
-  :: (MonadIO m, HasDynFlags m) => FnkEnv -> SDoc -> DynFlags -> m ()
-dumpDynFlags fnk_env label dflags = debugWhen fnk_env Fnk_dump_dflags msgs
+dumpDynFlags :: (MonadIO m) => FnkEnv -> SDoc -> DynFlags -> m ()
+dumpDynFlags fnk_env label dflags =
+  debugWhen' dflags fnk_env Fnk_dump_dflags msgs
   where
     msgs =
       [ label
