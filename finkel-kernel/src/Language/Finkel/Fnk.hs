@@ -255,7 +255,7 @@ data FnkEnv = FnkEnv
      -- | Modules to import to context.
    , envContextModules         :: [String]
      -- | The default 'DynFlags', possibly containing settings from command line.
-   , envDefaultDynFlags        :: Maybe DynFlags
+   , envDefaultDynFlags        :: !(Maybe DynFlags)
 
      -- | Messager used in make.
    , envMessager               :: Messager
@@ -263,17 +263,18 @@ data FnkEnv = FnkEnv
    , envRequiredHomeModules    :: [ModSummary]
 
      -- | Directory to save generated Haskell source codes.
-   , envHsOutDir               :: Maybe FilePath
+   , envHsOutDir               :: !(Maybe FilePath)
 
      -- | Lib directory passed to 'runGhc'.
-   , envLibDir                 :: Maybe FilePath
+   , envLibDir                 :: !(Maybe FilePath)
 
      -- | Whether to use qualified name for primitive functions used in quoting
      -- codes.
-   , envQualifyQuotePrimitives :: Bool
+   , envQualifyQuotePrimitives :: !Bool
 
      -- | The 'HscEnv' used by the byte-code interpreter for macro expansion.
-   , envSessionForExpand       :: Maybe HscEnv
+   , envSessionForExpand       :: !(Maybe HscEnv)
+
      -- | The 'UniqSupply' for 'gensym'.
    , envUniqSupply             :: UniqSupply
 
