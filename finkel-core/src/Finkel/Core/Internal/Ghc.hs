@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Module for ghc related functions
 
 (:doc "Internal module for @ghc@ related functions.")

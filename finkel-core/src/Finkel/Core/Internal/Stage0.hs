@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Stage0 - functios usd in stage 1.
 
 ;;; This module contains few functions and type to work with `Code', just enough

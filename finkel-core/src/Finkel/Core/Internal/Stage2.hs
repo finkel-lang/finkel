@@ -1,9 +1,8 @@
+;;; -*- mode: finkel -*-
 ;;;; Stage2 - module containing more macros and functions.
 
 %p(LANGUAGE FlexibleInstances
             TypeSynonymInstances)
-
-(:require Finkel.Core.Internal.Stage1)
 
 (module Finkel.Core.Internal.Stage2
   ;; Macros
@@ -34,15 +33,6 @@
 
   unsafeFinkelSrcError)
 
-(eval-when [:compile]
-  ;; base
-  (import Prelude))
-
-(eval-when [:compile :load]
-  ;; finkel-kernel
-  (import Language.Finkel)
-  (import Language.Finkel.Form (aSymbol genSrc)))
-
 ;; base
 (import Control.Exception (throw))
 (import Control.Monad (>=> foldM))
@@ -50,12 +40,23 @@
 (import qualified System.Info)
 
 ;; finkel-kernel
-(import Language.Finkel.Form (mkLocatedForm))
+(import Language.Finkel)
+(import Language.Finkel.Form (mkLocatedForm aSymbol genSrc))
 
 ;; Internal
 (import Finkel.Core.Internal.Stage0)
 (import Finkel.Core.Internal.Ghc.Version)
 (import Finkel.Core.Internal.Ghc.Compat)
+
+
+(:require Finkel.Core.Internal.Stage1)
+
+(eval-when [:compile]
+  ;; base
+  (import Prelude)
+  ;; finkel-kernel
+  (import Language.Finkel)
+  (import Language.Finkel.Form (aSymbol genSrc)))
 
 
 ;;; ------------------------------------------------------------------------

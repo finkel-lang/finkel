@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Orphan instances for QuickCheck
 
 ;;; This module contains duplicated codes with `Orphan' module used by

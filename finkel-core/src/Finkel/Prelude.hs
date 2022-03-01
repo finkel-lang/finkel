@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Prelude module for Finkel.
 
 (:doc "Module exporting fundamental functions to work with Finkel macros.

@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Module to test macros.
 
 (:require Finkel.Core)

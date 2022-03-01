@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Exported functions defined in this package
 
 (:doc "Module for exporting functions defined in the @finkel-core@ package.

@@ -16,9 +16,6 @@ copyright:           2017-2022 8c6794b6
 category:            Language
 build-type:          Custom
 extra-source-files:  README.md
-                     src/Finkel/*.fnk
-                     src/Finkel/Core/*.fnk
-                     test/*.fnk
 
 tested-with:           GHC == 8.2.2
                      , GHC == 8.4.3
@@ -39,6 +36,7 @@ library
   exposed-modules:     Finkel.Core
                        Finkel.Core.Functions
                        Finkel.Core.Internal
+                       Finkel.Core.Plugin
                        Finkel.Prelude
                        Paths_finkel_core
   other-modules:       Finkel.Core.Internal.Stage0
@@ -48,22 +46,32 @@ library
                        Finkel.Core.Internal.Ghc.Compat
                        Finkel.Core.Internal.Ghc.Version
   autogen-modules:     Paths_finkel_core
+
   build-depends:       base          >= 4.7   && < 5
                      , ghc           >= 8.2.0 && < 9.3
                      , finkel-kernel == 0.0.0
-
   -- To import "GHC.PackageDb.packageVersion"
   if impl (ghc <= 9.0.0)
     build-depends:     ghc-boot      >= 8.2.0 && < 9
 
-  build-tool-depends:  fkc:fkc == 0.0.0
-  default-language:    Haskell2010
-  ghc-options:         -Wall
+  default-language:     Haskell2010
+  ghc-options:          -Wall
+  if impl (ghc >= 8.6.0)
+    build-tool-depends: fnkpp:fnkpp == 0.0.0
+    ghc-options:        -F -pgmF fnkpp -optF --warn-interp=False
+                        -fplugin Language.Finkel.Plugin
+  else
+    build-tool-depends: fkc:fkc == 0.0.0
 
 test-suite finkel-core-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
+  other-modules:       Orphan
+                       CoreTest
+                       FunctionTest
+                       PluginTest
+                       TestAux
   build-depends:       base
                      , ghc
                      , finkel-core
@@ -71,13 +79,17 @@ test-suite finkel-core-test
                      --
                      , QuickCheck >= 2.10.1 && < 2.15
                      , directory  >= 1.3.0  && < 1.4
+                     , filepath   >= 1.4.1  && < 1.5
                      , hspec      >= 2.4.8  && < 2.9
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
-  other-modules:       Orphan
-                       CoreTest
-                       FunctionTest
-                       TestAux
-  default-language:    Haskell2010
+
+  default-language:     Haskell2010
+  ghc-options:          -Wall -threaded -rtsopts -with-rtsopts=-N
+  if impl (ghc >= 8.6.0)
+    build-tool-depends: fnkpp:fnkpp == 0.0.0
+    ghc-options:        -F -pgmF fnkpp -optF --warn-interp=False
+                        -fplugin Language.Finkel.Plugin
+  else
+    build-tool-depends: fkc:fkc == 0.0.0
 
 source-repository head
   type:     git

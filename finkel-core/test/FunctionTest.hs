@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Module to test functions
 
 (:require Finkel.Core)

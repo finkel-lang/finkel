@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Stage1 - fundamental macros
 
 ;;; This module contains codes of some fundamental macros, such as `defmacro',

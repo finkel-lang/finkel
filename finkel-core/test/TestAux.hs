@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Auxiliary macros for test
 
 %p(LANGUAGE TypeApplications)

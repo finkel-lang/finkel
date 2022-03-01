@@ -18,6 +18,9 @@ module Finkel.Core.Internal.Ghc.Compat
     -- GHC.Driver.Ppr
     showSDoc,
 
+    -- GHC.Plugin
+    Plugin(..),
+
     -- GHC.Types.SourceText
     SourceText(..),
 
@@ -48,15 +51,16 @@ import GHC.Types.TyThing
 #elif MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.Types
 import GHC.Types.Basic
+import GHC.Types.Var
+import GHC.Unit.Module
+import GHC.Utils.Outputable
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC.Data.FastString
 import GHC.Driver.Monad
-import GHC.Types.Var
-import GHC.Unit.Module
+import GHC.Plugins
 import GHC.Utils.Lexeme
-import GHC.Utils.Outputable
 #else
 import BasicTypes
 import FastString
@@ -65,5 +69,6 @@ import HscTypes
 import Lexeme
 import Module
 import Outputable
+import Plugins
 import Var
 #endif

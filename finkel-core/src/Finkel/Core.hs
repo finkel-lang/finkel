@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Finkel core language macros
 
 (:doc "Core language macros.

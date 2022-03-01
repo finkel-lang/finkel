@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; For internal types and functions
 
 (:doc "Module to re-export internal types and functions.
