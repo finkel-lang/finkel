@@ -88,6 +88,7 @@ import Language.Finkel.Syntax            (parseExpr, parseLImport,
                                           parseModuleNoHeader)
 import Language.Finkel.Syntax.SynUtils
 
+
 -- ---------------------------------------------------------------------
 --
 -- Quasiquote
@@ -103,8 +104,8 @@ quasiquote :: Bool -> Code -> Code
 quasiquote qual orig@(LForm (L l form)) =
   case form of
     List [LForm (L _ (Atom (ASymbol ":unquote"))), x]
-      | isUnquoteSplice x -> x
-      | otherwise         -> tList l [tSym l (toCodeS qual), x]
+      | isUnquoteSplice x          -> x
+      | otherwise                  -> tList l [tSym l (toCodeS qual), x]
     List forms'
       | [q, body] <- forms'
       , q == tSym l ":quasiquote"  -> qq (qq body)
@@ -261,14 +262,15 @@ internalLoadMessager hsc_env mod_index recomp node =
   case recomp of
     MustCompile       -> showMsg "Compiling " ""
     UpToDate          -> when (verbosity dflags >= 2) (showMsg "Skipping " "")
-    RecompBecause why ->
+    RecompBecause why -> showWhy why
+  where
+    dflags = hsc_dflags hsc_env
+    showWhy why =
 #if MIN_VERSION_ghc(9,2,0)
       showMsg "Compiling " (" [" <> text why <> "]")
 #else
       showMsg "Compiling " (" [" ++ why ++ "]")
 #endif
-  where
-    dflags = hsc_dflags hsc_env
     showMsg msg reason =
 #if MIN_VERSION_ghc(9,2,0)
       compilationProgressMsg (hsc_logger hsc_env) dflags
@@ -300,7 +302,8 @@ makeMissingHomeMod (L _ idecl) = do
 
   let mname = unLoc lmname
       lmname = reLoc (ideclName idecl)
-      mk_fn = case envInvokedMode fnk_env of
+      invoked = envInvokedMode fnk_env
+      mk_fn = case invoked of
         ExecMode      -> makeFromRequire
         GhcPluginMode -> makeFromRequirePlugin
       smpl_mk = withInternalLoad (mk_fn lmname)
@@ -310,7 +313,12 @@ makeMissingHomeMod (L _ idecl) = do
       dont_mk msgs = tr msgs
 
   case lookupHpt (hsc_HPT hsc_env) mname of
-    Just _ -> do_mk ["Found" <+> ppr mname <+> "in HPT"]
+    -- When the compiler was invoked as ghc plugin, skipping compilation of home
+    -- module when the module was found in current home package table.
+    -- Otherwise, homeModError would be shown when loading interface file.
+    Just _ -> case invoked of
+      ExecMode      -> do_mk ["Found" <+> ppr mname <+> "in HPT"]
+      GhcPluginMode -> dont_mk ["Skipping" <+> ppr mname <+> "found in HPT"]
     _ -> do
       mb_ts <- findTargetModuleNameMaybe dflags lmname
       case mb_ts of
@@ -318,7 +326,7 @@ makeMissingHomeMod (L _ idecl) = do
         Nothing -> do
           fresult <- liftIO (findImportedModule hsc_env mname Nothing)
           case fresult of
-            Found {} -> dont_mk ["Skipping " <+> ppr mname]
+            Found {} -> dont_mk ["Skipping" <+> ppr mname]
             _        -> do_mk ["Module" <+> ppr mname <+> "not found"]
 
 -- ---------------------------------------------------------------------
