@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Starting REPL
 
 (:require Finkel.Core)

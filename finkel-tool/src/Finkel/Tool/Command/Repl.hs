@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; | Simple Finkel REPL.
 ;;;;
 ;;;; This implementation uses two threads: one for reading and printing,

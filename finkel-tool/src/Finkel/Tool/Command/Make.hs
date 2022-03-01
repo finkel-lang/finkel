@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Module for make sub command.
 
 (:require Finkel.Core)

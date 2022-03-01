@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Internal.Exception

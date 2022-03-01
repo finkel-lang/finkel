@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Tests for REPL.
 
 %p(LANGUAGE OverloadedStrings)

@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Tests for CLI type class and its instances
 
 %p(language RankNTypes)

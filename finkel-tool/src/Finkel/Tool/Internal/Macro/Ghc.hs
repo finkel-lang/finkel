@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Module containing ghc version compatibililty macro.
 
 (:require Finkel.Core)

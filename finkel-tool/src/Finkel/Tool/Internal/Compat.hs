@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Some commonly used version compatibility type and functions
 
 (:require Finkel.Core)

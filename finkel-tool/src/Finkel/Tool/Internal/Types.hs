@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 %p(LANGUAGE FlexibleInstances
             GeneralizedNewtypeDeriving)
 

@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Loop for network connection.
 
 (:require Finkel.Core)

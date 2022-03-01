@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Command line interface utilities.
 
 (:require Finkel.Core)

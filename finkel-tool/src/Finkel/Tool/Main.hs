@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Main entry point
 
 (:require Finkel.Core)

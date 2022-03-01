@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Macros used in REPL.
 
 ;;; This module contains macros accessible only from REPL. Main purpose

@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Help utility for Finkel  tool.
 
 (:require Finkel.Core)

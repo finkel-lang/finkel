@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Eval loop in REPL.
 
 (:require Finkel.Core)

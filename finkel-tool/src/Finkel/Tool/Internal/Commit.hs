@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Module containing function to get git commit ID
 
 (:require Finkel.Core)

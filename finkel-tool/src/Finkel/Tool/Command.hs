@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Commands
 
 (:require Finkel.Core)

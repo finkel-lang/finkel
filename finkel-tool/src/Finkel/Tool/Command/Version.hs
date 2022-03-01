@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Module for showing versions.
 
 (:require Finkel.Core)

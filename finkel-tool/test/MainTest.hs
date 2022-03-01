@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;; Tests for main function
 
 (:require Finkel.Core)

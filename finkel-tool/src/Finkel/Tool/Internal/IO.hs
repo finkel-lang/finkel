@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; IO related function for REPL
 
 (:require Finkel.Core)
