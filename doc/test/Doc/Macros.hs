@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Test codes for "macros.rst"
 
 (defmodule Doc.Macros

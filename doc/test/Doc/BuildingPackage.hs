@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Test codes for "building-package.rst".
 
 (defmodule Doc.BuildingPackage

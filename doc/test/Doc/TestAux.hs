@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Auxiliary codes for tests.
 
 (defmodule Doc.TestAux

@@ -9,8 +9,6 @@ maintainer:          8c6794b6@gmail.com
 copyright:           2020-2022 8c6794b6
 category:            Language
 build-type:          Custom
-extra-source-files:  test/*.fnk
-                     test/Doc/*.fnk
 
 description:
   Internal package to test the codes in the Finkel documentation.
@@ -29,6 +27,12 @@ test-suite test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
+  other-modules:       Doc
+                       Doc.TestAux
+                       Doc.FinkelExecutable
+                       Doc.BuildingPackage
+                       Doc.Macros
+                       Doc.LanguageSyntax
   build-depends:       base          >= 4.7    && < 5
                      , directory     >= 1.3.0  && < 1.4
                      , filepath      >= 1.4.1  && < 1.5
@@ -40,16 +44,17 @@ test-suite test
                      , finkel-core   == 0.0.0
                      , finkel-kernel == 0.0.0
   build-tool-depends:  finkel:finkel == 0.0.0
+  default-language:    Haskell2010
+
   ghc-options:         -Wall -threaded -rtsopts
+
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
-  other-modules:       Doc
-                       Doc.TestAux
-                       Doc.FinkelExecutable
-                       Doc.BuildingPackage
-                       Doc.Macros
-                       Doc.LanguageSyntax
-  default-language:    Haskell2010
+
+  if impl (ghc >= 8.6.0)
+    build-tool-depends:  fnkpp:fnkpp      == 0.0.0
+    ghc-options:         -F -pgmF fnkpp
+                         -fplugin Finkel.Core.Plugin
 
 source-repository head
   type:     git

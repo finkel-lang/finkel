@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Test codes for "finkel-executable.rst".
 
 (defmodule Doc.FinkelExecutable

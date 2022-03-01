@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 ;;;; Test codes for "language-syntax.rst"
 
 ;;; This module contains codes to tests the code snippets shown in the "Language

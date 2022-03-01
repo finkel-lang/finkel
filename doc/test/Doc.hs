@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 (defmodule Doc
   (export main)
   (import
