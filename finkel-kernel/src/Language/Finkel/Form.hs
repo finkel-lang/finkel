@@ -199,6 +199,7 @@ type Code = LForm Atom
 
 instance Eq a => Eq (LForm a) where
   LForm (L _ a) == LForm (L _ b) = a == b
+  {-# INLINE (==) #-}
 
 instance Show a => Show (Form a) where
   showsPrec d form =
@@ -221,6 +222,7 @@ instance Show a => Show (Form a) where
 
 instance Show a => Show (LForm a) where
   showsPrec d (LForm (L _ a)) = showsPrec d a
+  {-# INLINE showsPrec #-}
 
 instance Functor Form where
   fmap f form =
@@ -406,29 +408,47 @@ instance MonadPlus LForm
 
 instance Num (Form Atom) where
   (+) = nop2 aIntegral (+) (+)
+  {-# INLINE (+) #-}
   (*) = nop2 aIntegral (*) (*)
+  {-# INLINE (*) #-}
   negate = nop1 aIntegral negate negate
+  {-# INLINE negate #-}
   abs = nop1 aIntegral abs abs
+  {-# INLINE abs #-}
   signum = nop1 aIntegral signum signum
+  {-# INLINE signum #-}
   fromInteger = Atom . aIntegral
+  {-# INLINE fromInteger #-}
 
 instance Num Code where
   (+) = liftLF2 (+)
+  {-# INLINE (+) #-}
   (*) = liftLF2 (*)
+  {-# INLINE (*) #-}
   negate = liftLF negate
+  {-# INLINE negate #-}
   abs = liftLF abs
+  {-# INLINE abs #-}
   signum  = liftLF signum
+  {-# INLINE signum #-}
   fromInteger = LForm . genSrc . fromInteger
+  {-# INLINE fromInteger #-}
 
 instance Fractional (Form Atom) where
   (/) = nop2 aDouble ((/) `on` fromIntegral) (/)
+  {-# INLINE (/) #-}
   recip = nop1 aDouble (recip . fromInteger) recip
+  {-# INLINE recip #-}
   fromRational = Atom . aDouble. fromRational
+  {-# INLINE fromRational #-}
 
 instance Fractional Code where
   (/) = liftLF2 (/)
+  {-# INLINE (/) #-}
   recip = liftLF recip
+  {-# INLINE recip #-}
   fromRational = LForm . genSrc . fromRational
+  {-# INLINE fromRational #-}
 
 
 -- -------------------------------------------------------------------
@@ -627,34 +647,42 @@ type QuoteFn
 -- | Make quoted symbol from 'String'.
 qSymbol :: String -> QuoteFn
 qSymbol = quotedWithLoc . Atom . aSymbol
+{-# INLINABLE qSymbol #-}
 
 -- | Make quoted char from 'Char'.
 qChar :: Char -> QuoteFn
 qChar = quotedWithLoc . Atom . AChar NoSourceText
+{-# INLINABLE qChar #-}
 
 -- | Make quoted string from 'String'.
 qString :: String -> QuoteFn
 qString = quotedWithLoc . Atom . aString NoSourceText
+{-# INLINABLE qString #-}
 
 -- | Make quoted integer from 'Integer'.
 qInteger :: Integer -> QuoteFn
 qInteger = quotedWithLoc . Atom . AInteger . mkIntegralLit
+{-# INLINABLE qInteger #-}
 
 -- | Make quoted fractional from 'Real' value.
 qFractional :: (Real a, Show a) => a -> QuoteFn
 qFractional = quotedWithLoc . Atom . aFractional
+{-# INLINABLE qFractional #-}
 
 -- | Make quoted unit.
 qUnit :: QuoteFn
 qUnit = quotedWithLoc (Atom AUnit)
+{-# INLINABLE qUnit #-}
 
 -- | Make quoted list from list of 'Code'.
 qList :: [Code] -> QuoteFn
 qList = quotedWithLoc . List
+{-# INLINABLE qList #-}
 
 -- | Make quoted haskell list from list of 'Code'.
 qHsList :: [Code] -> QuoteFn
 qHsList = quotedWithLoc . HsList
+{-# INLINABLE qHsList #-}
 
 -- -- | Make quoted symbol from 'String'.
 -- | Auxiliary function to construct 'ASymbol' atom.
@@ -687,6 +715,7 @@ aIntegral x = AInteger $! mkIntegralLit x
 -- | A form with empty 'List'.
 nil :: Code
 nil = LForm (genSrc (List []))
+{-# INLINABLE nil #-}
 
 quotedWithLoc :: Form Atom -> QuoteFn
 quotedWithLoc x file start_line start_col end_line end_col =
@@ -760,6 +789,7 @@ showLoc (LForm (L l _)) =
 #else
     UnhelpfulSpan fs -> unpackFS fs ++ ": "
 #endif
+{-# INLINABLE showLoc #-}
 
 -- | Make 'List' from given code. When the given argument was already a 'List',
 -- the given 'List' is returned. If the argument was 'HsList', converted to
@@ -791,6 +821,7 @@ mkLocatedForm [] = genSrc []
 mkLocatedForm ms = L (combineLocs (unLForm (head ms))
                                   (unLForm (last ms)))
                      ms
+{-# INLINABLE mkLocatedForm #-}
 
 -- | Lift given argument to 'LForm'.
 atomForm :: a -> LForm a
@@ -820,6 +851,7 @@ nop1 :: (a -> Atom)
 nop1 c f _ (Atom (AInteger il))    = Atom (c (f (il_value il)))
 nop1 _ _ f (Atom (AFractional fl)) = Atom (aFractional (f (fl_value fl)))
 nop1 _ _ _ _                       = List []
+{-# INLINABLE nop1 #-}
 
 -- | Binary numeric operation helper.
 nop2 :: (a -> Atom)
@@ -835,6 +867,7 @@ nop2 _ _ f (Atom (AInteger il1)) (Atom (AFractional fl2)) =
 nop2 _ _ f (Atom (AFractional fl1)) (Atom (AFractional fl2)) =
   Atom (aFractional (on f fl_value fl1 fl2))
 nop2 _ _ _ _ _ = List []
+{-# INLINABLE nop2 #-}
 
 #if !MIN_VERSION_ghc(8,4,0)
 -- | IntegralLit back ported to 8.2.x.
