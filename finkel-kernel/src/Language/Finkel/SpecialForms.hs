@@ -253,7 +253,9 @@ withInternalLoad act = do
       update = setDynFlags . no_force_recomp . bcoDynFlags
   bracket acquire restore $ \(_dflags, fnk_env) -> do
     mapM_ update (envDefaultDynFlags fnk_env)
-    putFnkEnv fnk_env {envMessager = internalLoadMessager}
+    putFnkEnv fnk_env {envMessager = if 0 < envVerbosity fnk_env
+                                        then internalLoadMessager
+                                        else doNothingMessager}
     act
 
 internalLoadMessager :: Messager
@@ -262,10 +264,10 @@ internalLoadMessager hsc_env mod_index recomp node =
   case recomp of
     MustCompile       -> showMsg "Compiling " ""
     UpToDate          -> when (verbosity dflags >= 2) (showMsg "Skipping " "")
-    RecompBecause why -> showWhy why
+    RecompBecause why -> showReason why
   where
     dflags = hsc_dflags hsc_env
-    showWhy why =
+    showReason why =
 #if MIN_VERSION_ghc(9,2,0)
       showMsg "Compiling " (" [" <> text why <> "]")
 #else
@@ -285,6 +287,9 @@ internalLoadMessager hsc_env mod_index recomp node =
                     node ++
          reason)
 #endif
+
+doNothingMessager :: Messager
+doNothingMessager _hsc_env _mod_index _recomp _node = pure ()
 
 makeMissingHomeMod :: HImportDecl -> Fnk ()
 makeMissingHomeMod (L _ idecl) = do
