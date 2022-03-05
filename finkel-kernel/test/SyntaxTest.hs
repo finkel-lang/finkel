@@ -149,6 +149,7 @@ mkTest' path = do
 
   runIO (do createDirectoryIfMissing True odir
             hSetBuffering stdout NoBuffering)
+
   beforeAll_ prepare $ describe path $ do
     it "should compile .fnk file" $ \ftr -> do
       io <- runFnk (compile ftr path (Just odir)) fnkTestEnv
