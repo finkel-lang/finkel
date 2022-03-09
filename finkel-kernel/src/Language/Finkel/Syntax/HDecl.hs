@@ -723,7 +723,7 @@ b_safety (LForm (L l form)) =
 b_funOrPatD :: Code -> [HPat] -> ([HGRHS], [HDecl]) -> Builder HDecl
 b_funOrPatD eq_form pats gxd@(grhss,decls) =
   case pats of
-    [] -> setLastToken eq_form >> failB "empty binding"
+    [] -> setLastToken eq_form >> failB "Empty binding"
     lpat@(dL->L l (BangPat _EXT pat)):pats' ->
       case pats' of
         [] -> return (b_patBindD gxd lpat)
@@ -734,12 +734,12 @@ b_funOrPatD eq_form pats gxd@(grhss,decls) =
         name <- varToName pat
         b_funBindD (reLoc name) pats' grhss decls
       | null pats'   -> return (b_patBindD gxd lpat)
-      | otherwise    -> setLastToken eq_form >> failB "malformed binding"
+      | otherwise    -> setLastToken eq_form >> failB "Malformed binding"
   where
     isVarPat VarPat {} = True
     isVarPat _         = False
     varToName (VarPat _EXT lname) = return lname
-    varToName _                   = failB "invalid name"
+    varToName _                   = failB "Invalid name"
 {-# INLINABLE b_funOrPatD #-}
 
 b_funBindD :: Located RdrName -> [HPat] -> [HGRHS] -> [HDecl] -> Builder HDecl

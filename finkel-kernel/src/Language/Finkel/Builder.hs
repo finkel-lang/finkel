@@ -251,8 +251,8 @@ builderError :: Builder a
 builderError = do
   st <- getBState
   case lastToken st of
-    Nothing -> failB "syntax error"
-    Just x  -> failB ("syntax error on input `" ++ show x ++ "'")
+    Nothing -> failB "Syntax error"
+    Just x  -> failB ("Syntax error on input `" ++ show x ++ "'")
 
 
 -- ---------------------------------------------------------------------

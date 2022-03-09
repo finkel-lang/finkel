@@ -347,7 +347,7 @@ m_quasiquote form =
         qualify <- fmap envQualifyQuotePrimitives getFnkEnv
         let LForm (L _ body') = quasiquote qualify body
         return (LForm (L l body'))
-      _ -> finkelSrcError form "malformed quasiquote"
+      _ -> finkelSrcError form "Malformed quasiquote"
 
 m_withMacro :: MacroFunction
 m_withMacro form =

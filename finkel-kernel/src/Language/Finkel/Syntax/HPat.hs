@@ -137,7 +137,7 @@ b_symP orig@(LForm (L l form))
         | hdchr == '~'
         -- Lazy pattern or operator function.
         -> if nullFS tlchrs
-              then failB "invalid use of `~'"
+              then failB "Invalid use of `~'"
               else if isLexSym tlchrs
                       -- Operator function.
                       then do checkVarId orig name

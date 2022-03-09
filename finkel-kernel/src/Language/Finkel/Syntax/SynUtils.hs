@@ -183,7 +183,7 @@ checkVarId :: Code -> FastString -> Builder ()
 checkVarId orig name =
   if isLexVar name
      then return ()
-     else setLastToken orig >> failB "invalid variable identifier"
+     else setLastToken orig >> failB "Invalid variable identifier"
 {-# INLINABLE checkVarId #-}
 
 getConId :: Code -> Builder FastString
@@ -193,7 +193,7 @@ getConId orig@(LForm (L _ form)) =
        -- `isLexVarSym' is for "TypeOperators" extension.
       | isLexCon sym    -> return sym
       | isLexVarSym sym -> return sym
-    _ -> setLastToken orig >> failB "invalid constructor identifier"
+    _ -> setLastToken orig >> failB "Invalid constructor identifier"
 {-# INLINABLE getConId #-}
 
 getLConId :: Code -> Builder (Located FastString)
@@ -206,7 +206,7 @@ getVarOrConId orig@(LForm (L _ form)) =
     Atom (ASymbol sym)
       | isLexCon sym -> return sym
       | isLexVar sym -> return sym
-    _ -> setLastToken orig >> failB "invalid identifier"
+    _ -> setLastToken orig >> failB "Invalid identifier"
 {-# INLINABLE getVarOrConId #-}
 
 -- | Convert record field constructor expression to record field update
