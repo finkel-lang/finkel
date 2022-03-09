@@ -29,7 +29,7 @@ import           GHC_Data_FastString    (FastString, fsLit, unpackFS)
 import           GHC_Hs_ImpExp          (ideclName)
 import           GHC_Unit_Module        (moduleNameString)
 import           GHC_Types_SrcLoc       (GenLocated(..), Located, SrcSpan,
-                                         mkSrcSpan)
+                                         mkSrcSpan, combineSrcSpans)
 import           GHC_Types_SourceText   (SourceText(..))
 import           GHC_Data_StringBuffer  (StringBuffer)
 
@@ -94,9 +94,9 @@ sexp :: { Code }
     | '`' sexp                { mkQuasiquote $1 $2 }
     | ',' sexp                { mkUnquote $1 $2 }
     | ',@' sexp               { mkUnquoteSplice $1 $2 }
-    | '[' sexps ']'           { mkHsList $1 $2 }
+    | '[' sexps ']'           { mkHsList $1 $2 $3 }
     | 'pcommas'               { mkPcommas $1 }
-    | '(' sexps ')'           { mkUnitOrList $1 $2}
+    | '(' sexps ')'           { mkUnitOrList $1 $2 $3}
     | prag                    { $1 }
 
 sexps :: { [Code] }
@@ -157,19 +157,21 @@ mkUnquoteSplice :: Located Token -> Code -> Code
 mkUnquoteSplice (L l _) body = li l [sym l ":unquote-splice", body]
 {-# INLINABLE mkUnquoteSplice #-}
 
-mkHsList :: Located Token -> [Code] -> Code
-mkHsList (L l _) body = LForm $ L l $ HsList body
+mkHsList :: Located Token -> [Code] -> Located Token -> Code
+mkHsList (L lo _) body (L lc _) =
+  LForm $ L (combineSrcSpans lo lc) $ HsList body
 {-# INLINABLE mkHsList #-}
 
 mkPcommas :: Located Token -> Code
 mkPcommas (L l (TPcommas n)) = li l [sym l (fsLit (replicate n ','))]
 {-# INLINABLE mkPcommas #-}
 
-mkUnitOrList :: Located Token -> [Code] -> Code
-mkUnitOrList (L l _) body =
-  case body of
-    [] -> atom l AUnit
-    _  -> li l body
+mkUnitOrList :: Located Token -> [Code] -> Located Token -> Code
+mkUnitOrList (L lo _) body (L lc _) =
+  let l = combineSrcSpans lo lc
+  in  case body of
+        [] -> atom l AUnit
+        _  -> li l body
 {-# INLINABLE mkUnitOrList #-}
 
 mkASymbol :: Located Token -> Code
