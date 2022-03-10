@@ -624,8 +624,8 @@ useInterpreter dflags0 =
 
 -- | Set context modules in current session to given modules.
 setContextModules :: GhcMonad m => [String] -> m ()
-setContextModules names =
-  setContext (map (IIDecl . simpleImportDecl . mkModuleName) names)
+setContextModules =
+  setContext . map (IIDecl . simpleImportDecl . mkModuleName)
 {-# INLINABLE setContextModules #-}
 
 -- | Insert new macro. This function will override existing macro.
