@@ -4,10 +4,13 @@
 module Language.Finkel.Make
   (
     -- * Make functions
-    initSessionForMake
-  , make
+    make
   , makeFromRequire
   , makeFromRequirePlugin
+
+    -- * Session related functions
+  , initSessionForMake
+  , setContextModules
 
     -- * Syntax builder utility
   , buildHsSyn
@@ -47,13 +50,16 @@ import GHC_Driver_Phases                 (Phase (..))
 import GHC_Driver_Session                (DynFlags (..), GeneralFlag (..),
                                           GhcMode (..), HasDynFlags (..), gopt,
                                           gopt_set, gopt_unset)
+import GHC_Hs_ImpExp                     (simpleImportDecl)
+import GHC_Runtime_Context               (InteractiveImport (..))
+import GHC_Runtime_Eval                  (setContext)
 import GHC_Types_Basic                   (SuccessFlag (..))
 import GHC_Types_SourceError             (throwOneError)
 import GHC_Types_SrcLoc                  (Located, getLoc, unLoc)
 import GHC_Unit_Finder                   (FindResult (..),
                                           findExposedPackageModule)
 import GHC_Unit_Home_ModInfo             (lookupHpt)
-import GHC_Unit_Module                   (ModuleName)
+import GHC_Unit_Module                   (ModuleName, mkModuleName)
 import GHC_Unit_Module_ModSummary        (ModSummary (..), ms_mod_name)
 import GHC_Utils_Misc                    (getModificationUTCTime)
 import GHC_Utils_Outputable              (Outputable (..), brackets, nest, text,
@@ -202,6 +208,12 @@ initSessionForMake = do
   -- point.
   putFnkEnv (fnk_env { envVerbosity = vrbs2
                      , envDefaultDynFlags = Just dflags3 })
+
+-- | Set context modules in current session to given modules.
+setContextModules :: GhcMonad m => [String] -> m ()
+setContextModules =
+  setContext . map (IIDecl . simpleImportDecl . mkModuleName)
+{-# INLINABLE setContextModules #-}
 
 -- | Simple make function returning compiled home module information. Intended
 -- to be used in 'require' macro.

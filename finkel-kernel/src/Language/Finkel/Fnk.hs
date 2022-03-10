@@ -24,7 +24,6 @@ module Language.Finkel.Fnk
   , modifyFnkEnv
   , setDynFlags
   , withTmpDynFlags
-  , setContextModules
   , prepareInterpreter
   , useInterpreter
   , getLibDirFromGhc
@@ -134,19 +133,15 @@ import           GHC_Driver_Session        (DynFlags (..), GeneralFlag (..),
                                             GhcLink (..), HasDynFlags (..),
                                             gopt, gopt_set, gopt_unset,
                                             picPOpts)
-import           GHC_Hs_ImpExp             (simpleImportDecl)
 import           GHC_Platform_Ways         (wayGeneralFlags,
                                             wayUnsetGeneralFlags)
-import           GHC_Runtime_Context       (InteractiveContext (..),
-                                            InteractiveImport (..))
-import           GHC_Runtime_Eval          (setContext)
+import           GHC_Runtime_Context       (InteractiveContext (..))
 import           GHC_Settings_Config       (cProjectVersion)
 import           GHC_Types_TyThing         (TyThing (..))
 import           GHC_Types_Unique_Supply   (MonadUnique (..), UniqSupply,
                                             initUniqSupply, mkSplitUniqSupply,
                                             splitUniqSupply, takeUniqFromSupply)
 import           GHC_Types_Var             (varType)
-import           GHC_Unit_Module           (mkModuleName)
 import           GHC_Utils_CliOption       (showOpt)
 import           GHC_Utils_Outputable      (SDoc, alwaysQualify,
                                             defaultErrStyle, neverQualify, ppr,
@@ -621,12 +616,6 @@ useInterpreter dflags0 =
       dflags4 = upd_gopt gopt_unset wayUnsetGeneralFlags dflags3
   in  dflags4
 {-# INLINABLE useInterpreter #-}
-
--- | Set context modules in current session to given modules.
-setContextModules :: GhcMonad m => [String] -> m ()
-setContextModules =
-  setContext . map (IIDecl . simpleImportDecl . mkModuleName)
-{-# INLINABLE setContextModules #-}
 
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Fnk ()
