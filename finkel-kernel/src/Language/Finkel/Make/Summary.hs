@@ -10,6 +10,7 @@ module Language.Finkel.Make.Summary
   , summariseTargetUnit
   , mkModSummaryForRecompile
   , updateSummaryTimestamps
+  , compileFnkFile
   , dumpParsedAST
   , dumpModSummary
 
@@ -241,13 +242,12 @@ parseFnkFileHeader hsc_env path = do
 compileFnkModuleForm :: [Code] -> Fnk HModule
 compileFnkModuleForm form = do
   expanded <- withExpanderSettings (expands form)
-  let colons = replicate 20 ';'
+  let colons = replicate 19 ';'
   fnk_env <- getFnkEnv
   debugWhen fnk_env
             Fnk_dump_expand
             [ text ""
             , text colons <+> text "Expanded" <+> text colons
-            , text ""
             , vcat (map ppr expanded)
             , text ""]
   buildHsSyn parseModule expanded
@@ -571,9 +571,16 @@ dumpParsedAST _hsc_env dflags ms =
 -- required modules.
 
 requiredDependencies :: [ModSummary] -> Fnk [FilePath]
-requiredDependencies mss = withExpanderSettings' False $ do
-  hsc_env <- getSession
-  return $! nub $! foldl' (requiredDependency hsc_env) [] mss
+requiredDependencies mss = do
+  hsc_env0 <- getSession
+  let getDeps he = pure $! nub $! foldl' (requiredDependency he) [] mss
+  if isInterpreted (hsc_dflags hsc_env0)
+    then getDeps hsc_env0
+    else do
+      mb_hsc_env <- envSessionForExpand <$> getFnkEnv
+      case mb_hsc_env of
+        Just hsc_env -> getDeps hsc_env
+        Nothing      -> pure []
 
 requiredDependency :: HscEnv -> [FilePath] -> ModSummary -> [FilePath]
 requiredDependency hsc_env = go
@@ -581,9 +588,9 @@ requiredDependency hsc_env = go
     go acc ms =
       case ml_hs_file (ms_location ms) of
         Nothing -> acc
-        Just me -> dep_files ms (me : acc)
+        Just me -> dep_files (me : acc) ms
 
-    dep_files ms acc =
+    dep_files acc ms =
       let mg = hsc_mod_graph hsc_env
           hpt = hsc_HPT hsc_env
           acc1 = find_require_paths hpt acc ms
