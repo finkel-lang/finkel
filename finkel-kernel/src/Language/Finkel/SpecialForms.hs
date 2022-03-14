@@ -84,8 +84,9 @@ import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
 import Language.Finkel.Make            (findTargetModuleNameMaybe,
-                                        makeFromRequire)
-import Language.Finkel.Syntax          (parseExpr, parseLImport, parseModuleNoHeader)
+                                        makeFromRequire, makeFromRequirePlugin)
+import Language.Finkel.Syntax          (parseExpr, parseLImport,
+                                        parseModuleNoHeader)
 import Language.Finkel.Syntax.SynUtils
 
 -- ---------------------------------------------------------------------
@@ -302,10 +303,14 @@ makeMissingHomeMod (L _ idecl) = do
   -- not return Finkel source files for home package modules.
   --
   hsc_env <- getSession
+  fnk_env <- getFnkEnv
 
   let mname = unLoc lmname
       lmname = reLoc (ideclName idecl)
-      smpl_mk = withRequiredSettings (makeFromRequire lmname)
+      mk_fn = case envInvokedMode fnk_env of
+        ExecMode      -> makeFromRequire
+        GhcPluginMode -> makeFromRequirePlugin
+      smpl_mk = withRequiredSettings (mk_fn lmname)
       dflags = hsc_dflags hsc_env
 
   case lookupHpt (hsc_HPT hsc_env) mname of
