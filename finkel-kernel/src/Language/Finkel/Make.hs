@@ -7,6 +7,7 @@ module Language.Finkel.Make
     initSessionForMake
   , make
   , makeFromRequire
+  , makeFromRequirePlugin
 
     -- * Syntax builder utility
   , buildHsSyn
@@ -31,6 +32,7 @@ import Control.Monad                     (foldM, unless, void, when, (>=>))
 import Control.Monad.IO.Class            (MonadIO (..))
 import Data.Bifunctor                    (first)
 import Data.Foldable                     (find)
+import Data.Function                     (on)
 import Data.Maybe                        (isJust)
 
 -- filepath
@@ -74,6 +76,10 @@ import GHC_Driver_Env                    (runHsc)
 import GHC_Plugins                       (Plugin (..), withPlugins)
 import GHC_Runtime_Loader                (initializePlugins)
 #endif
+
+import GHC_Driver_Make                   (depanal)
+import GHC_Types_Target                  (Target (..), TargetId (..))
+
 
 -- internal
 import Language.Finkel.Error
@@ -215,6 +221,40 @@ makeFromRequire lmname = do
   mgraph <- hsc_mod_graph <$> getSession
   let mod_summaries = mgModSummaries' mgraph
   tr ["summaries:", nvc_or_none mod_summaries]
+
+-- | Make function used when the Finkel compiler was invoked as a ghc plugin.
+makeFromRequirePlugin :: Located ModuleName -> Fnk ()
+makeFromRequirePlugin lmname = do
+  fnk_env <- getFnkEnv
+  hsc_env <- getSession
+
+  let mname = unLoc lmname
+      target = Target { targetId = TargetModule mname
+                      , targetAllowObjCode = False
+                      , targetContents = Nothing }
+      byTargetId = ((==) `on` targetId)
+      old_targets = hsc_targets hsc_env
+      dflags = hsc_dflags hsc_env
+      messager = envMessager fnk_env
+      tr = traceMake fnk_env "makeFromRequirePlugin"
+
+  tr ["target module:" <+> ppr mname]
+  tr ["old_targets:" <+> nvc_or_none old_targets]
+
+  -- XXX: Might not necessary to check the existenc3e of target in current
+  -- session, because when the target module were found in current home package
+  -- table, this function would not be called.
+  case find (byTargetId target) old_targets of
+    Nothing -> setSession (hsc_env {hsc_targets = target : old_targets})
+    _       -> pure ()
+
+  -- XXX: Wokaround for concurrent build. Current approach does not work with
+  -- "-j" ghc option, which uses "parUpsweep" function. Explicitly specifying
+  -- the "parMakeCount" with hard coded value "Just 1" to avoid concurrent
+  -- build.
+  withTmpDynFlags (dflags {parMakeCount = Just 1}) $ do
+    mg <- depanal [] False
+    void (load' LoadAllTargets (Just messager) mg)
 
 
 -- ---------------------------------------------------------------------
