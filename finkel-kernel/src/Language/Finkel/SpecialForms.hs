@@ -8,6 +8,7 @@ module Language.Finkel.SpecialForms
   ( specialForms
   , unquoteSplice
   , defaultFnkEnv
+  , emptyForm
   ) where
 
 #include "ghc_modules.h"
