@@ -8,6 +8,7 @@ module Language.Finkel.Fnk
     Fnk(..)
   , FnkEnv(..)
   , FnkEnvRef(..)
+  , FnkInvokedMode(..)
   , Macro(..)
   , MacroFunction
   , MacroName(..)
@@ -25,6 +26,7 @@ module Language.Finkel.Fnk
   , setContextModules
   , prepareInterpreter
   , useInterpreter
+  , getLibDirFromGhc
 
   -- * Error related functions
   , failFnk
@@ -54,6 +56,7 @@ module Language.Finkel.Fnk
   , lookupMacro
   , makeEnvMacros
   , mergeMacros
+  , addMacro
   , deleteMacro
   , macroNames
   , isMacro
@@ -231,6 +234,13 @@ data FnkDebugFlag
 -- | Type synonym for holding on/off of 'FnkDebugFlag'.
 type FlagSet = Word8 -- Word8 is enough for now.
 
+-- | Data type to hold how the compiler was invoked.
+data FnkInvokedMode
+  = ExecMode
+  -- ^ Standalone executable mode.
+  | GhcPluginMode
+  -- ^ GHC plugin mode.
+
 -- | Environment state in 'Fnk'.
 data FnkEnv = FnkEnv
    { -- | Macros accessible in current compilation context.
@@ -270,6 +280,9 @@ data FnkEnv = FnkEnv
    , envVerbosity              :: {-# UNPACK #-} !Int
      -- | Dump flag settings.
    , envDumpFlags              :: {-# UNPACK #-} !FlagSet
+
+     -- | How the compiler was invoked.
+   , envInvokedMode            :: !FnkInvokedMode
    }
 
 -- | Newtype wrapper for compiling Finkel code to Haskell AST.
@@ -543,11 +556,12 @@ emptyFnkEnv = FnkEnv
   , envUniqSupply             = uninitializedUniqSupply
   , envVerbosity              = 1
   , envDumpFlags              = zeroBits
+  , envInvokedMode            = ExecMode
   }
   where
     uninitializedUniqSupply :: UniqSupply
     uninitializedUniqSupply =
-      throw (FinkelException "UniqSupply not initialized")
+      throw (FinkelException "FnkEnv: UniqSupply not initialized")
 
 -- | Set current 'DynFlags' to given argument. This function also sets the
 -- 'DynFlags' in interactive context.
@@ -611,7 +625,7 @@ setContextModules names =
 -- | Insert new macro. This function will override existing macro.
 insertMacro :: FastString -> Macro -> Fnk ()
 insertMacro k v =
-  modifyFnkEnv (\e -> e {envMacros = Map.insert (MacroName k) v (envMacros e)})
+  modifyFnkEnv (\e -> e {envMacros = addMacro k v (envMacros e)})
 {-# INLINABLE insertMacro #-}
 
 -- | Lookup macro by name.
@@ -629,7 +643,7 @@ lookupMacro name fnk_env = go (envTmpMacros fnk_env)
 emptyEnvMacros :: EnvMacros
 emptyEnvMacros = Map.empty
 
--- | Make 'EnvMacros' from list of pair of macro name and value.
+-- | Make 'EnvMacros' from list of macro name and value pairs.
 makeEnvMacros :: [(String, Macro)] -> EnvMacros
 makeEnvMacros = Map.fromList . map (first (MacroName . fsLit))
 {-# INLINABLE makeEnvMacros #-}
@@ -643,6 +657,10 @@ mergeMacros = Map.union
 deleteMacro :: FastString -> EnvMacros -> EnvMacros
 deleteMacro fs em = Map.delete (MacroName fs) em
 {-# INLINABLE deleteMacro #-}
+
+addMacro :: FastString -> Macro -> EnvMacros -> EnvMacros
+addMacro fs mcr em = Map.insert (MacroName fs) mcr em
+{-# INLINABLE addMacro #-}
 
 -- | All macros in given macro environment, filtering out the special
 -- forms.
