@@ -18,6 +18,7 @@ module Language.Finkel.Fnk
   , toGhc
   , fromGhc
   , emptyFnkEnv
+  , initFnkEnv
   , getFnkEnv
   , putFnkEnv
   , modifyFnkEnv
@@ -429,13 +430,10 @@ instance GhcMonad Fnk where
 
 -- | Run 'Fnk' with given environment.
 runFnk :: Fnk a -> FnkEnv -> IO a
-runFnk m fnk_env = do
-  us <- mkSplitUniqSupply '_'
-  ref <- newIORef $! fnk_env {envUniqSupply=us}
-  libdir <- case envLibDir fnk_env of
-    Just path -> return path
-    Nothing   -> getLibDirFromGhc
-  runGhc (Just libdir) (toGhc m (FnkEnvRef ref))
+runFnk m fnk_env0 = do
+  fnk_env1 <- initFnkEnv fnk_env0
+  ref <- newIORef fnk_env1
+  runGhc (envLibDir fnk_env1) (toGhc m (FnkEnvRef ref))
 
 -- | Get ghc lib directory by file layout lookup or invoking @ghc
 -- --print-libdir@.
@@ -538,6 +536,13 @@ printFinkelException e = case finkelExceptionLoc e of
       liftIO (printBagOfErrors dflags (unitBag em))
 #endif
 {-# INLINABLE printFinkelException #-}
+
+initFnkEnv :: FnkEnv -> IO FnkEnv
+initFnkEnv fnk_env = do
+  uniqSupply <- mkSplitUniqSupply '_'
+  libdir <- maybe getLibDirFromGhc pure (envLibDir fnk_env)
+  pure fnk_env { envLibDir = Just libdir
+               , envUniqSupply = uniqSupply }
 
 -- | Empty 'FnkEnv' for performing computation with 'Fnk'.
 emptyFnkEnv :: FnkEnv
