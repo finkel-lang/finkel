@@ -7,7 +7,6 @@ module Language.Finkel.Expand
   , expands
   , expands'
   , withExpanderSettings
-  , withExpanderSettings'
   , bcoDynFlags
   , isInterpreted
   , discardInteractiveContext
@@ -16,9 +15,15 @@ module Language.Finkel.Expand
 #include "ghc_modules.h"
 
 -- base
-import           Control.Monad          (foldM, when)
+import           Control.Concurrent     (MVar, ThreadId, modifyMVar, myThreadId,
+                                         newMVar)
+import           Control.Monad          (foldM)
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Char              (isLower)
+import           Data.Functor           (void)
+import           Data.IORef             (IORef, atomicModifyIORef', newIORef,
+                                         readIORef)
+import           System.IO.Unsafe       (unsafePerformIO)
 
 -- containers
 import qualified Data.Map               as Map
@@ -31,10 +36,12 @@ import qualified Data.Set               as Set
 import           Control.Monad.Catch    (bracket)
 
 -- ghc
+import           GHC                    (setSessionDynFlags)
 import           GHC_Data_FastString    (FastString, headFS)
 import           GHC_Driver_Env_Types   (HscEnv (..))
 import           GHC_Driver_Main        (newHscEnv)
-import           GHC_Driver_Monad       (getSession, setSession)
+import           GHC_Driver_Monad       (Ghc (..), Session (..), getSession,
+                                         setSession)
 import           GHC_Driver_Session     (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
                                          unSetGeneralFlag', updOptLevel)
@@ -57,14 +64,14 @@ import           GHC_Driver_Session     (homeUnit)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC                    (setSessionDynFlags)
 import           GHC_Platform_Ways      (Way (..), hostFullWays)
 #else
 import           GHC_Driver_Session     (Way (..), interpWays, thisPackage)
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Session     (setGeneralFlag')
+import           GHC_Driver_Session     (WarningFlag (..), setGeneralFlag',
+                                         wopt_unset)
 #endif
 
 -- Internal
@@ -81,16 +88,20 @@ import           Language.Finkel.Form
 -- | Perform given action with 'HscEnv' updated for macroexpansion with
 -- interactive evaluation, then reset to the preserved original 'HscEnv'.
 withExpanderSettings :: Fnk a -> Fnk a
-withExpanderSettings = withExpanderSettings' True
+withExpanderSettings act = do
+  fnk_env <- getFnkEnv
+  case envInvokedMode fnk_env of
+    ExecMode      -> withExpanderSettingsE act
+    GhcPluginMode -> withExpanderSettingsG act
 
 -- | Like 'withExpanderSettings', but takes a flag to discard interactive
 -- context in the session used for the expansion.
-withExpanderSettings' :: Bool -> Fnk a -> Fnk a
-withExpanderSettings' discard_ic act =
+withExpanderSettingsE :: Fnk a -> Fnk a
+withExpanderSettingsE act =
   do dflags <- getDynFlags
      -- Switching to the dedicated 'HscEnv' for macro expansion when compiling
-     -- object code. If not, assuming current session is using bytecode
-     -- interpreter, using the given action as it.
+     -- object code. If not, assuming current session is using the bytecode
+     -- interpreter, using the given action as-is.
      if isInterpreted dflags
         then act
         else bracket (prepare dflags) restore (const act)
@@ -99,14 +110,17 @@ withExpanderSettings' discard_ic act =
       fnk_env <- getFnkEnv
       hsc_env_old <- getSession
 
-      -- Reusing revious 'HscEnv' for macro expansion if exist, or making a new
+      -- Reusing previous 'HscEnv' for macro expansion if exist, or making a new
       -- 'HscEnv'. When reusing, discarding the previous 'InteractiveContext',
       -- to avoid file local compile time functions to affect other modules.
       case envSessionForExpand fnk_env of
-        Just he -> if discard_ic
-                      then setSession $! discardInteractiveContext he
-                      else setSession he
-        Nothing -> new_hsc_env fnk_env dflags >>= setSession >> postSetSession
+        Just he -> setSession $! discardInteractiveContext he
+        Nothing -> do
+          he1 <- new_hsc_env dflags
+          setSession he1
+          postSetSession
+          he2 <- getSession
+          modifyFnkEnv (\e -> e {envSessionForExpand = Just he2})
 
       return hsc_env_old
 
@@ -115,35 +129,136 @@ withExpanderSettings' discard_ic act =
       modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_new})
       setSession hsc_env_old
 
-    -- Adjusting the 'DynFlags' used by the macro expansion session, to support
-    -- evaluating expressions in dynamic and non-dynamic builds of the Finkel
-    -- compiler executable.
-    new_hsc_env fnk_env dflags0 = do
-      debug fnk_env Nothing ["Making new session for expand"]
-      let dflags1 = bcoDynFlags dflags0
-#if MIN_VERSION_ghc(9,2,0)
-          ways1 = targetWays_ dflags1
-          dflags1b = dflags1 {targetWays_ = removeWayDyn ways1}
-#else
-          ways1 = ways dflags1
-          dflags1b = dflags1 {ways = removeWayDyn ways1}
-#endif
-          dflags2 = if interp_has_no_way_dyn
-                       then dflags1b
-                       else dflags1
-
-      when interp_has_no_way_dyn $
-        debug fnk_env Nothing ["Not using WayDyn in expander session"]
-      dumpDynFlags fnk_env "Language.Finkel.Expand.new_hsc_env" dflags2
-
-      liftIO $! newHscEnv dflags2
-
 #if MIN_VERSION_ghc(9,0,0)
     -- To set the "hsc_interp" field in new session.
     postSetSession = getDynFlags >>= setSessionDynFlags
 #else
     postSetSession = return ()
 #endif
+
+-- | Make new 'HscEnv' from given 'DynFlags'.
+--
+-- Adjusting the 'DynFlags' used by the macro expansion session, to support
+-- evaluating expressions in dynamic and non-dynamic builds of the Finkel
+-- compiler executable.
+new_hsc_env :: MonadIO m => DynFlags -> m HscEnv
+new_hsc_env dflags0 = do
+  let dflags1 = bcoDynFlags dflags0
+#if MIN_VERSION_ghc(9,2,0)
+      ways1 = targetWays_ dflags1
+      dflags1_no_way_dyn = dflags1 {targetWays_ = removeWayDyn ways1}
+#else
+      ways1 = ways dflags1
+      dflags1_no_way_dyn = dflags1 {ways = removeWayDyn ways1}
+#endif
+      dflags2 = if interp_has_no_way_dyn
+                   then dflags1_no_way_dyn
+                   else dflags1
+
+  liftIO $! newHscEnv dflags2
+
+-- | Run given 'Fnk' action with macro expansion settings for 'GhcPluginMode'.
+withExpanderSettingsG :: Fnk a -> Fnk a
+withExpanderSettingsG act = do
+  is_expanding <- isExpandingThread
+  if is_expanding
+    then act
+    else withGlobalSession act
+
+-- Note: [Global HscEnv for plugin]
+-- --------------------------------
+--
+-- When compiling with ghc plugin, FnkEnv is unwrapped with "toGhc" and "unGhc"
+-- to perform the inner IO action. This way of invokation could not share the
+-- FnkEnv when compiling multiple module, so reading from and writing to a
+-- global MVar to pass around the "Session" to avoid redundant module compilation
+-- when using home package modules during macro expansion.
+
+-- | Wrapper to perform given action with global 'Session', to share the
+-- underlying 'HscEnv' when compiling as ghc plugin.
+withGlobalSession :: Fnk a -> Fnk a
+withGlobalSession act0 = do
+  fer <- Fnk pure
+  dflags0 <- getDynFlags
+
+  let prepare mex0 = do
+        let mex1 = discardInteractiveContext mex0
+        hsc_env_old <- getSession
+        setSession mex1
+        modifyFnkEnv (\e -> e {envSessionForExpand = Just mex1})
+        markExpandingThread
+        pure hsc_env_old
+
+      restore hsc_env_old = do
+        hsc_env_new <- getSession
+        modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_new})
+        unmarkExpandingThread
+        setSession hsc_env_old
+
+      act1 mex = bracket (prepare mex) restore (const act0)
+      act2 mex = (,) <$> act1 mex <*> getFnkEnv
+
+      act3 = do
+        void (getDynFlags >>= setSessionDynFlags)
+        mex <- getSession
+        toGhc (act2 mex) fer
+
+  (retval, fnk_env) <- liftIO $ do
+    modifyMVar globalSessionVar $ \mb_s0 -> do
+      s1 <- case mb_s0 of
+        Just s0 -> pure s0
+        Nothing -> do
+          hsc_env_new <- new_hsc_env dflags0
+          Session <$> newIORef hsc_env_new
+      (retval, fnk_env) <- unGhc act3 s1
+      case envSessionForExpand fnk_env of
+        Just he | Session r <- s1 -> atomicModifyIORef' r (const (he, ()))
+        _                         -> pure ()
+      pure (Just s1, (retval, fnk_env))
+
+  putFnkEnv fnk_env
+  pure retval
+
+-- | Unsafe global 'MVar' to share the 'HscEnv' when compiling as plugin.
+globalSessionVar :: MVar (Maybe Session)
+globalSessionVar = unsafePerformIO (newMVar Nothing)
+{-# NOINLINE globalSessionVar #-}
+
+-- Note: [Global list of ThreadIds]
+-- --------------------------------
+--
+-- This global variable is considered experimental, looking for better
+-- alternative solution without using unsafe global IORef.
+--
+-- The list of 'ThreadId's are used to determine whether current thread is
+-- undergoing macro expansion or not, to support recursively compiling home
+-- package modules.
+
+type ExpandingThreads = [ThreadId]
+
+globalExpandingThreadsRef :: IORef ExpandingThreads
+globalExpandingThreadsRef = unsafePerformIO (newIORef [])
+{-# NOINLINE globalExpandingThreadsRef #-}
+
+isExpandingThread :: MonadIO m => m Bool
+isExpandingThread = liftIO $ do
+  me <- myThreadId
+  elem me <$> readIORef globalExpandingThreadsRef
+{-# INLINABLE isExpandingThread #-}
+
+markExpandingThread :: MonadIO m => m ()
+markExpandingThread = liftIO $ do
+  me <- myThreadId
+  atomicModifyIORef' globalExpandingThreadsRef $ \ts ->
+    (me : ts, ())
+{-# INLINABLE markExpandingThread #-}
+
+unmarkExpandingThread :: MonadIO m => m ()
+unmarkExpandingThread = liftIO $ do
+  me <- myThreadId
+  atomicModifyIORef' globalExpandingThreadsRef $ \ts ->
+    (filter (/= me) ts, ())
+{-# INLINABLE unmarkExpandingThread #-}
 
 #if MIN_VERSION_ghc(9,0,0)
 removeWayDyn :: Set.Set Way -> Set.Set Way
@@ -205,7 +320,14 @@ bcoDynFlags dflags0 =
       dflags3 = dflags2
 #endif
       dflags4 = updOptLevel 0 dflags3
-  in  dflags4
+#if MIN_VERSION_ghc(8,10,0)
+      -- XXX: Warning message for missing home package module is shown with
+      -- -Wall option, suppressing for now ...
+      dflags5 = wopt_unset dflags4 Opt_WarnMissingHomeModules
+#else
+      dflags5 = dflags4
+#endif
+  in  dflags5
 {-# INLINABLE bcoDynFlags #-}
 
 -- | Returns a list of bounded names in let expression.
@@ -220,8 +342,8 @@ boundedNames form =
 boundedName :: Code -> [FastString]
 boundedName form =
   case unCode form of
-    List ((LForm (L _ (Atom (ASymbol "=")))):n:_) -> boundedNameOne n
-    _                                             -> []
+    List (LForm (L _ (Atom (ASymbol "="))):n:_) -> boundedNameOne n
+    _                                           -> []
 {-# INLINABLE boundedName #-}
 
 boundedNameOne :: Code -> [FastString]
