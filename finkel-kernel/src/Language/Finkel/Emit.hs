@@ -20,12 +20,16 @@ module Language.Finkel.Emit
   ( HsSrc(..)
   , Hsrc(..)
   , genHsSrc
+  , putHsSrc
   ) where
 
 #include "Syntax.h"
 #include "ghc_modules.h"
 
 -- base
+import Control.Monad.IO.Class            (MonadIO (..))
+import System.IO                         (Handle)
+
 #if !MIN_VERSION_ghc(9,2,0)
 import Data.Maybe                        (fromMaybe)
 #endif
@@ -39,7 +43,7 @@ import GHC                               (OutputableBndrId, getPrintUnqual)
 import GHC_Data_Bag                      (bagToList, isEmptyBag)
 import GHC_Driver_Env                    (HscEnv (..))
 import GHC_Driver_Monad                  (GhcMonad (..))
-import GHC_Driver_Ppr                    (showSDocForUser)
+import GHC_Driver_Ppr                    (printForUser, showSDocForUser)
 import GHC_Hs                            (HsModule (..))
 import GHC_Hs_Binds                      (LHsBinds, LSig, Sig (..), pprDeclList)
 import GHC_Hs_Decls                      (ConDecl (..), DocDecl (..),
@@ -59,13 +63,14 @@ import GHC_Types_Basic                   (TopLevelFlag (..))
 import GHC_Types_Fixity                  (LexicalFixity (..))
 import GHC_Types_Name_Reader             (RdrName)
 import GHC_Types_SrcLoc                  (GenLocated (..), sortLocated, unLoc)
-import GHC_Utils_Outputable              (Outputable (..), OutputableBndr (..),
-                                          SDoc, braces, char, comma, darrow,
-                                          dcolon, dot, empty, equals, forAllLit,
-                                          fsep, hang, hsep, interpp'SP,
-                                          interppSP, lparen, nest, parens,
-                                          pprWithCommas, punctuate, sep, text,
-                                          vbar, vcat, ($$), ($+$), (<+>), (<>))
+import GHC_Utils_Outputable              (Depth (..), Outputable (..),
+                                          OutputableBndr (..), SDoc, braces,
+                                          char, comma, darrow, dcolon, dot,
+                                          empty, equals, forAllLit, fsep, hang,
+                                          hsep, interpp'SP, interppSP, lparen,
+                                          nest, parens, pprWithCommas,
+                                          punctuate, sep, text, vbar, vcat,
+                                          ($$), ($+$), (<+>), (<>))
 
 #if MIN_VERSION_ghc(9,2,0)
 import GHC.Driver.Env                    (hsc_units)
@@ -300,6 +305,19 @@ genHsSrc st0 x = do
 #else
   return (showSDocForUser dflags unqual (toHsSrc st0 x))
 #endif
+
+-- | Print textual source code of given data to given 'Handle'.
+putHsSrc :: (GhcMonad m, HsSrc a, MonadIO m) => Handle -> SPState -> a -> m ()
+putHsSrc hdl st0 x = do
+  hsc_env <- getSession
+  unqual <- getPrintUnqual
+  let dflags = hsc_dflags hsc_env
+#if MIN_VERSION_ghc(9,0,1)
+      render = printForUser dflags hdl unqual AllTheWay
+#else
+      render = printForUser dflags hdl unqual
+#endif
+  liftIO (render (toHsSrc st0 x))
 
 
 -- ---------------------------------------------------------------------
