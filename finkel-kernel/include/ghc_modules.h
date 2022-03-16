@@ -108,6 +108,7 @@ name space for its modules.
 #define GHC_Data_OrdList          GHC.Data.OrdList
 #define GHC_Data_StringBuffer     GHC.Data.StringBuffer
 
+#define GHC_Driver_Flags          GHC.Driver.Flags
 #define GHC_Driver_Main           GHC.Driver.Main
 #define GHC_Driver_Make           GHC.Driver.Make
 #define GHC_Driver_Monad          GHC.Driver.Monad
@@ -187,6 +188,7 @@ name space for its modules.
 #define GHC_Data_OrdList          OrdList
 #define GHC_Data_StringBuffer     StringBuffer
 
+#define GHC_Driver_Flags          DynFlags
 #define GHC_Driver_Main           HscMain
 #define GHC_Driver_Make           GhcMake
 #define GHC_Driver_Monad          GhcMonad
