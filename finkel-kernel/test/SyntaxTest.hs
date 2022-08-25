@@ -79,6 +79,10 @@ mkTest path
   , __GLASGOW_HASKELL__ < (810 :: Int)
   = describe path (it "is not supported in ghc < 8.10.1"
                     (const (pendingWith "Not supported")))
+  | base_name == "2029-impredicative"
+  , __GLASGOW_HASKELL__ < (902 :: Int)
+  = describe path (it "is not reliable in ghc < 9.2"
+                    (const (pendingWith "Not supported")))
   | otherwise = mkTest' path
   where
     base_name = takeBaseName path

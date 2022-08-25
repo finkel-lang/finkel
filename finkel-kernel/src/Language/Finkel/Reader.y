@@ -337,6 +337,7 @@ supportedLangExts =
       , GADTs
       , GeneralizedNewtypeDeriving
       , ImplicitPrelude
+      , ImpredicativeTypes
       , KindSignatures
       , MultiParamTypeClasses
       , MonoLocalBinds
