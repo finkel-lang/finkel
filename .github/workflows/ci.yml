@@ -42,28 +42,28 @@ jobs:
 
     steps:
       - name: Checkout git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cache stack package database (non-windows)
         id: cache-stack-pkg-db-non-win
         # Caching under macos-latest had problem while compiling the "fkc"
         # package with the cached "~/.stack" data, disabling at the moment.
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.stack
           key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ env.cache-version }}
 
       - name: Cache directory for stack (windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: C:\Users\runneradmin\AppData\Local\Programs\stack\
           key: ${{ runner.os }}-stack-${{ env.cache-version }}
 
       - name: Cache stack packages database (windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: C:\Users\runneradmin\AppData\Roaming\stack\
           key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ env.cache-version }}
@@ -111,15 +111,15 @@ jobs:
           #   cabal: "3.2.0.0"
           #   flags: "-O2"
 
-          - ghc: "9.0.1"
+          - ghc: "9.0.2"
             cabal: "3.4.0.0"
             flags: "-O0"
 
-          - ghc: "9.2.1"
+          - ghc: "9.2.4"
             cabal: "3.6.2.0"
             flags: "-O0"
 
-          - ghc: "9.2.1"
+          - ghc: "9.2.4"
             cabal: "3.6.2.0"
             flags: "-O2"
 
@@ -128,12 +128,12 @@ jobs:
 
     steps:
       - name: Checkout project repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cache ~/.ghcup
         id: home-dot-ghcup
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.ghcup
           key: ${{ runner.os }}-ghcup-${{ matrix.plan.ghc }}-${{ env.cache-version }}
@@ -141,39 +141,10 @@ jobs:
       - name: Cache cabal package database
         id: home-dot-cabal
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.cabal
           key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}-${{ env.cache-version }}
-
-      # Manually installing ghc and bundled packages with "ghcup" for Linux and
-      # OSX, because the setup-haskell action may reuse the preinstalled GHC in
-      # the github runner, and the preinstalled GHC in GitHub runner does not
-      # contain profiling library for the "base" package. Without profiling
-      # libraries, "doc" package tests will fail.
-
-      - name: Install ghcup (ubuntu and macos)
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-        env:
-          os: ${{ matrix.os }}
-        run: |
-          case $os in
-            "ubuntu-latest")
-               ghcup_name="linux"
-               ;;
-            "macos-latest")
-               ghcup_name="apple-darwin"
-               ;;
-            *)
-               echo Unknown os: $os
-               exit 1
-               ;;
-          esac
-          url="https://downloads.haskell.org/~ghcup/x86_64-${ghcup_name}-ghcup"
-          mkdir -p ~/.ghcup/bin
-          curl -sL $url > ~/.ghcup/bin/ghcup
-          sudo chmod +x ~/.ghcup/bin/ghcup
-          echo "$HOME/.ghcup/bin" >> $GITHUB_PATH
 
       - name: Install ghc and cabal-install (linux and osx)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
@@ -231,8 +202,10 @@ jobs:
           #   compiler: "ghc865"
           # - nixpkgs: "channel:nixos-20.09"
           #   compiler: "ghc884"
-          - nixpkgs: "channel:nixos-unstable"
+          - nixpkgs: "channel:nixos-22.05"
             compiler: "ghc8107"
+          # - nixpkgs: "channel:nixos-unstable"
+          #   compiler: "ghc8107"
           # - nixpkgs: "channel:nixos-unstable"
           #   compiler: "ghc901"
 
@@ -241,7 +214,7 @@ jobs:
 
     steps:
       - name: Checkout git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install nix
         uses: cachix/install-nix-action@v12
@@ -279,7 +252,7 @@ jobs:
 
     steps:
       - name: Checkout git repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Show versions
         run: |
@@ -324,6 +297,11 @@ jobs:
           echo 'packages:' >> cabal.project
           ls *.tar.gz | sed -e 's/\(.*\)\.tar.gz/  \1/' >> cabal.project
           cat cabal.project
+
+      - name: Install and set ghc 9.2.4 via ghcup
+        run: |
+          ghcup install ghc 9.2.4
+          ghcup set ghc 9.2.4
 
       - name: Build from tarballs with cabal-install
         run: |
