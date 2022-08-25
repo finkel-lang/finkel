@@ -15,7 +15,8 @@
    ;; base
    (Control.Concurrent
     [MVar ThreadId killThread newEmptyMVar putMVar takeMVar throwTo])
-   (Control.Exception [(AsyncException ..) bracket catch throwIO])
+   (Control.Exception [(AsyncException ..) catch throwIO])
+   (Control.Monad.Catch [(MonadMask ..) bracket])
    (Control.Monad [when])
    (Control.Monad.IO.Class [(MonadIO ..)])
    (Data.List [intercalate isPrefixOf isSubsequenceOf])
@@ -138,25 +139,27 @@ reading the input until successful parse result."
 
 ;;; IO redirect
 
-(defn (:: with-io-redirect (-> Handle (IO a) (IO (, a String))))
+(defn (:: with-io-redirect
+        (=> (MonadIO m) (MonadMask m)
+            (-> Handle (m a) (m (, a String)))))
   "Execute given action with redirecting stdout to given 'Handle'."
   [hdl action]
   (bracket
-   (do (<- stdout2 (hDuplicate stdout))
-       (hSetFileSize hdl 0)
-       (hSeek hdl AbsoluteSeek 0)
-       (hDuplicateTo hdl stdout)
-       (return stdout2))
+   (liftIO (do (<- stdout2 (hDuplicate stdout))
+               (hSetFileSize hdl 0)
+               (hSeek hdl AbsoluteSeek 0)
+               (hDuplicateTo hdl stdout)
+               (return stdout2)))
    (\stdout2
-     (do (hDuplicateTo stdout2 stdout)
-         (hClose stdout2)))
+     (liftIO (do (hDuplicateTo stdout2 stdout)
+                 (hClose stdout2))))
    (\_stdout2
-    (do (<- x action)
-        (hFlush stdout)
-        (hSeek hdl AbsoluteSeek 0)
-        (<- ls (get-lines hdl))
-        (lefn [(contents (intercalate "\n" ls))])
-        (deepseq contents (return (, x contents)))))))
+     (do (<- x action)
+         (liftIO (do (hFlush stdout)
+                     (hSeek hdl AbsoluteSeek 0)
+                     (<- ls (get-lines hdl))
+                     (lept [contents (intercalate "\n" ls)])
+                     (deepseq contents (return (, x contents)))))))))
 
 (defn (:: get-lines (-> Handle (IO [String])))
   (lefn [(go [acc hdl]

@@ -15,23 +15,22 @@
    ;; base
    (Control.Concurrent [MVar ThreadId forkIOWithUnmask putMVar takeMVar])
    (Control.Exception
-    [(AsyncException ..) (Exception ..) fromException throwIO throwTo])
+    [(AsyncException ..) (Exception ..) SomeException
+     fromException throwIO throwTo])
    (Control.Monad (unless))
    (Control.Monad.IO.Class [(MonadIO ..)])
    (Data.List [intercalate])
    (GHC.Conc [myThreadId])
    (System.IO [Handle])
-   (qualified System.Exit)
 
    ;; exceptions
-   (Control.Monad.Catch [catch handle])
+   (Control.Monad.Catch [catch])
 
    ;; ghc-boot
    (GHC.LanguageExtensions [(Extension ..)])
 
    ;; ghci
-   (GHCi.Message [(EvalExpr ..) (EvalResult ..) (EvalStatus_ ..)
-                  (SerializableException ..)])
+   (GHCi.Message [(EvalExpr ..)])
    (GHCi.RemoteTypes (ForeignHValue))
 
    ;; finkel-kernel
@@ -62,7 +61,6 @@
  (GHC.Data.OrdList [toOL])
 
  (GHC.Driver.Env [(HscEnv ..)])
- (GHC.Driver.Main [hscParsedStmt])
  (GHC.Driver.Monad [(GhcMonad ..) modifySession withTempSession])
  (GHC.Driver.Ppr [showSDoc showPpr])
  (GHC.Driver.Session
@@ -71,19 +69,16 @@
 
  (GHC.Parser.PostProcess [cvTopDecls])
 
- (GHC.Runtime.Context
-  [(InteractiveContext ..) (InteractiveImport ..)
-   setInteractivePrintName extendInteractiveContextWithIds])
+ (GHC.Runtime.Context [(InteractiveImport ..) setInteractivePrintName])
  (GHC.Runtime.Eval [compileParsedExprRemote getContext parseName setContext])
- (GHC.Runtime.Interpreter [evalStmt])
 
  (GHC.Types.Basic [(SuccessFlag ..)])
- (GHC.Types.Fixity.Env [FixityEnv])
+
  (GHC.Types.Name [(Name) getName nameOccName occNameString])
  (GHC.Types.SourceError [SourceError srcErrorMessages])
  (GHC.Types.SrcLoc [mkGeneralLocated unLoc])
  (GHC.Types.TyThing [(TyThing ..)])
- (GHC.Types.Var [Id Var varType])
+ (GHC.Types.Var [Var varType])
 
  (GHC.Unit.Module [mkModuleName])
 
@@ -96,12 +91,9 @@
 
 (cond-expand
   [(<= 902 :ghc)
-   (:begin
-     (import GHC.Linker.Loader (extendLoadedEnv))
-     (import GHC.Utils.Outputable (renderWithContext)))]
+   (import GHC.Utils.Outputable (renderWithContext))]
   [otherwise
    (imports-from-ghc
-    (GHC.Runtime.Linker [extendLinkEnv])
     (GHC.Utils.Outputable [renderWithStyle]))])
 
 (cond-expand
@@ -119,19 +111,30 @@
   [otherwise
    (import HsImpExp ((ImportDecl ..)))])
 
-;;; Version compatibility function
+(cond-expand
+  [(<= 808 :ghc)
+   (imports-from-ghc
+    (GHC.Runtime.Eval
+     [(ExecOptions ..) (ExecResult ..) execStmt' execOptions]))]
+  [otherwise
+   (:begin
+     (imports-from-ghc
+      (GHC.Driver.Main [hscParsedStmt])
+      (GHC.Runtime.Context
+       [(InteractiveContext ..) extendInteractiveContextWithIds])
+      (GHC.Runtime.Interpreter [evalStmt])
+      (GHC.Runtime.Linker [extendLinkEnv])
+      (GHC.Types.Fixity.Env [FixityEnv])
+      (GHC.Types.Var [Id]))
 
-(defn (:: extend-loaded-env (-> HscEnv [(, Name ForeignHValue)] (Fnk ())))
-  [_hsc-env names-vals]
-  (cond-expand
-    [(<= 902 :ghc)
-     (case (hsc-interp _hsc-env)
-       (Just interp) (liftIO (extendLoadedEnv interp names-vals))
-       _ (pure ()))]
-    [(<= 810 :ghc)
-     (liftIO (extendLinkEnv (hsc-dynLinker _hsc-env) names-vals))]
-    [otherwise
-     (liftIO (extendLinkEnv names-vals))]))
+     ;; base
+     (import qualified System.Exit)
+
+     ;; ghci
+     (import GHCi.Message ((EvalResult ..) (EvalStatus_ ..)
+                           (SerializableException ..))))])
+
+;;; Version compatibility function
 
 (cond-expand
   [(<= 810 :ghc)
@@ -189,10 +192,7 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
       (forkIOWithUnmask
        (\unmask
          (catch (unmask (runFnk (eval-loop ghc-args hdl in-mv) fnk-env))
-           (\e
-             (case (fromException e)
-               (Just fe) (throwTo me (:: fe FinkelToolException))
-               _ (throwTo me e))))))))
+           (\e (throwTo me (:: e SomeException))))))))
 
 (defn (:: init-eval-loop (-> [String] [String] (Fnk ForeignHValue)))
   "Initialization works for evaluation loop."
@@ -227,24 +227,22 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
       (modifyFnkEnv (\e (e {(= envDefaultDynFlags (Just dflags3))})))
 
       ;; Load modules specified from command line, when given.
+      (lept [err (=<< (. liftIO throwIO FinkelToolException))])
       (unless (null srcs)
-        (handle
-         (\e
-           (lept [err (=<< (. liftIO throwIO FinkelToolException))]
-             (cond
-               [(<- (Just se) (fromException e))
-                ($ err make-src-err-message se)]
-               [(<- (Just fe) (fromException e))
-                ($ err make-finkel-exception-message fe)]
-               [otherwise
-                ($ err pure displayException e)])))
-         (case-do (do (setTargets (map guessFnkTarget srcs))
-                      (compile-and-import srcs))
-           Failed (liftIO
-                   (throwIO (FinkelToolException
-                             (++ "Failed loading: "
-                                 (intercalate ", " (map unLoc fileish))))))
-           Succeeded (return ()))))
+        (catch (do (setTargets (map guessFnkTarget srcs))
+                   (<- sflag (compile-and-import srcs))
+                   (case sflag
+                     Failed ($ err pure (++ "Failed loading: ")
+                               (intercalate ", ") (map unLoc) fileish)
+                     Succeeded (pure ())))
+          (\e
+            (cond
+              [(<- (Just se) (fromException e))
+               ($ err make-src-err-message se)]
+              [(<- (Just fe) (fromException e))
+               ($ err make-finkel-exception-message fe)]
+              [otherwise
+               ($ err pure displayException e)]))))
 
       ;; XXX: Currently the printer function and the arguments returned from
       ;; "System.Environment.getArgs" are defined here and cannot be changed.
@@ -266,17 +264,17 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
         (-> Bool [String] [String] Handle (MVar Input) (Fnk ())))
   "Evaluate expressions, and loop or return."
   [once-only wrapper-args ghc-opts hdl in-mvar]
-  (lefn [(withAsyncHandler [wrapper]
-           (handle
-            (\e
-              (case (fromException e)
-                (Just UserInterrupt) (loop wrapper)
-                (Just ThreadKilled) (return ())
-                _ (liftIO (throwIO e))))))
+  (lefn [(with-async-handler [wrapper act]
+           (catch act
+             (\e
+               (case (fromException e)
+                 (Just UserInterrupt) (loop wrapper)
+                 (Just ThreadKilled) (return ())
+                 _ (liftIO (throwIO e))))))
          (:: throw-async-io (-> AsyncException (Fnk a)))
          (throw-async-io (. liftIO throwIO))
-         (withErrorHandler
-           (handle
+         (withErrorHandler [act]
+           (catch act
             (\e
               (cond
                 [(<- (Just se) (fromException e))
@@ -295,9 +293,9 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
                             (eval-form hdl dflags wrapper itype expanded))))
                (liftIO (putMVar out-mv ret))))
          (loop [wrapper]
-           (withAsyncHandler wrapper
-                             (>> (eval-one wrapper)
-                                 (loop wrapper))))]
+            (with-async-handler wrapper
+              (>> (eval-one wrapper)
+                  (loop wrapper))))]
     (>>= (init-eval-loop wrapper-args ghc-opts)
          (if once-only eval-one loop))))
 
@@ -326,11 +324,90 @@ context."
 
 (defn (:: eval-statement
         (-> Handle ForeignHValue InSource HStmt (Fnk Result)))
-  [hdl wrapper itype stmt0]
-  (do (<- hsc-env getSession)
-      (case-do (liftIO (hscParsedStmt hsc-env stmt0))
-        (Just (, is h f)) (update-hsc-env hdl wrapper itype hsc-env is h f)
-        Nothing (return (Left "eval-statement: no result")))))
+  [hdl wrapper itype stmt]
+  (cond-expand
+    [(<= 808 :ghc)
+     ;; Reusing `execStmt'' from ghc package.
+     (lept [wrap (case itype
+                   Prompt (fmap (\r (, r "")))
+                   Connection (with-io-redirect hdl))
+            err (. pure Left (++ "*** Exception: ") show)
+            ok (. pure Right)
+            opts (execOptions {(= execWrap
+                                 (\fhv (EvalApp (EvalThis wrapper)
+                                                (EvalThis fhv))))})]
+       (case-do (wrap (execStmt' stmt "stmt-text" opts))
+         (, (ExecComplete (Right _ns) _) r) (ok r)
+         (, (ExecComplete (Left e) _) _r) (err e)
+         (, (ExecBreak {}) r) (pure (Left (++ "break: " r)))))]
+    [otherwise
+     ;; Old version of ghc does not export `execStmt'', rewriting execution
+     ;; function and updating curent HscEnv ...
+     (where exec-stmt-and-update
+       (defn exec-stmt-and-update
+         (do (<- hsc-env getSession)
+             (case-do (liftIO (hscParsedStmt hsc-env stmt))
+               (Just (, ids hvio fxty)) (update-hsc-env hsc-env ids hvio fxty)
+               Nothing (pure (Left "eval-statement: no result")))))
+       (defn (:: update-hsc-env
+               (-> HscEnv [Id] ForeignHValue FixityEnv (Fnk Result)))
+         [hsc-env ids hvals-io fixity-env]
+         ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
+         ;; `iservCmd' in its implementation.
+         (lefn [(success [fhvals _elapsed ret]
+                  (do (lefn [(ic (hsc-IC hsc-env))
+                             (ic2 (extendInteractiveContextWithIds ic ids))
+                             (ic3 (ic2 {(= ic-fix-env fixity-env)}))
+                             (names (map getName ids))
+                             (hsc-env-2 (hsc-env {(= hsc-IC ic3)}))])
+                      ;; (<- dflags getDynFlags)
+                      ($ liftIO extendLinkEnv (zip names fhvals))
+
+                      ;; InteractiveEval does not export `rttiEnvironment'.
+                      ;;
+                      ;; (<- hsc-env-3
+                      ;;     (liftIO
+                      ;;      (rttiEnvironment (hscenv {(= hsc_IC final-ic)}))))
+
+                      (setSession hsc-env-2)
+                      (case names
+                        [name] (| ((== (occNameString (nameOccName name)) "it")
+                                   (return (Right ret))))
+                        _ (pure (Right ret %_(names-and-types dflags names ids))))))
+                (exception [serialized]
+                  (case serialized
+                    (EOtherException e) (return (Left (++ "*** Exception: " e)))
+                    (EExitCode ecode) (liftIO (System.Exit.exitWith ecode))
+                    EUserInterrupt (return (Left "Interrupted."))))
+                (incomplete
+                  (return (Left "update-hsc-env failed.")))
+                (eval-app
+                  (EvalApp (EvalThis wrapper) (EvalThis hvals-io)))
+                (eval-hvals-io
+                  (cond-expand
+                    [(<= 902 :ghc)
+                     (case (hsc-interp hsc-env)
+                       (Just interp) (evalStmt interp (hsc-dflags hsc-env)
+                                               False eval-app)
+                       _ (throwIO (FinkelToolException "No interpreter")))]
+                    [otherwise
+                     (evalStmt hsc-env False eval-app)]))
+                (eval-for-prompt
+                  (do (<- status (liftIO eval-hvals-io))
+                      (return (, status ""))))
+                (eval-for-connection
+                  (liftIO (with-io-redirect hdl eval-hvals-io)))]
+           (do (<- (, status ret)
+                 ;; Switching behaviour between prompt and network connection. Getting
+                 ;; printed result as `String' for connection by wrapping the execution
+                 ;; of compiled result, which is a value of `IO [HValue]' type.
+                 (case itype
+                   Prompt eval-for-prompt
+                   Connection eval-for-connection))
+               (case status
+                 (EvalComplete et (EvalSuccess hvs)) (success hvs et ret)
+                 (EvalComplete  _ (EvalException e)) (exception e)
+                 _ incomplete)))))]))
 
 (defn (:: eval-imports (-> DynFlags [HImportDecl] (Fnk Result)))
   [dflags imports]
@@ -374,66 +451,6 @@ context."
 
       (setSession (hsc-env {(= hsc-IC ic)}))
       (return (Right (tystr tythings)))))
-
-(defn (:: update-hsc-env (-> Handle ForeignHValue InSource HscEnv
-                             [Id] ForeignHValue FixityEnv (Fnk Result)))
-  [hdl wrapper itype hsc-env ids hvals-io fixity-env]
-  ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
-  ;; `iservCmd' in its implementation.
-  (lefn [(success [fhvals _elapsed ret]
-           (do (lefn [(ic (hsc-IC hsc-env))
-                      (ic2 (extendInteractiveContextWithIds ic ids))
-                      (ic3 (ic2 {(= ic-fix-env fixity-env)}))
-                      (names (map getName ids))
-                      (hsc-env-2 (hsc-env {(= hsc-IC ic3)}))])
-               (<- dflags getDynFlags)
-               (extend-loaded-env hsc-env (zip names fhvals))
-
-               ;; InteractiveEval does not export `rttiEnvironment'.
-               ;;
-               ;; (<- hsc-env-3
-               ;;     (liftIO
-               ;;      (rttiEnvironment (hscenv {(= hsc_IC final-ic)}))))
-
-               (setSession hsc-env-2)
-               (case names
-                 [name] (| ((== (occNameString (nameOccName name)) "it")
-                            (return (Right ret))))
-                 _ (return
-                    (Right (names-and-types dflags names ids))))))
-         (exception [serialized]
-           (case serialized
-             (EOtherException e) (return (Left (++ "*** Exception: " e)))
-             (EExitCode ecode) (liftIO (System.Exit.exitWith ecode))
-             EUserInterrupt (return (Left "Interrupted."))))
-         (incomplete
-           (return (Left "update-hsc-env failed.")))
-         (eval-app (EvalApp (EvalThis wrapper) (EvalThis hvals-io)))
-         (eval-hvals-io
-           (cond-expand
-             [(<= 902 :ghc)
-              (case (hsc-interp hsc-env)
-                (Just interp) (evalStmt interp (hsc-dflags hsc-env)
-                                        False eval-app)
-                _ (throwIO (FinkelToolException "No interpreter")))]
-             [otherwise
-              (evalStmt hsc-env False eval-app)]))
-         (eval-for-prompt
-           (do (<- status (liftIO eval-hvals-io))
-               (return (, status ""))))
-         (eval-for-connection
-           (liftIO (with-io-redirect hdl eval-hvals-io)))]
-    (do (<- (, status ret)
-          ;; Switching behaviour between prompt and network connection. Getting
-          ;; printed result as `String' for connection by wrapping the execution
-          ;; of compiled result, which is a value of `IO [HValue]' type.
-          (case itype
-            Prompt eval-for-prompt
-            Connection eval-for-connection))
-        (case status
-          (EvalComplete et (EvalSuccess hvs)) (success hvs et ret)
-          (EvalComplete  _ (EvalException e)) (exception e)
-          _ incomplete))))
 
 
 ;;; Auxiliary
@@ -507,13 +524,6 @@ to separate object files from source code files."
       (intercalate "\n"
                    (map (++ "; ")
                         (lines (++ nstr (++ " :: " typ))))))))
-
-(defn (:: names-and-types (-> DynFlags [Name] [Var] String))
-  [dflags names vars]
-  (lept [tvs (zipWith (var-name-and-type dflags) names vars)]
-    (if (all null tvs)
-      ""
-      (intercalate "\n" tvs))))
 
 (defn (:: add-gt-ii (-> InteractiveImport [InteractiveImport]
                         [InteractiveImport]))
