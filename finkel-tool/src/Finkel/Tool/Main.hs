@@ -18,8 +18,10 @@
 (defn (:: defaultMain (IO ()))
   "Main entry point function for the executable."
   (finkel-tool-exception-handler
-   (case-do getArgs
-     (: name rest) (maybe (show-usage commands)
-                          (flip cmd-act rest)
-                          (find-command commands name))
-     _ (show-usage commands))))
+   (lefn [(go [name rest]
+            (maybe (show-usage commands)
+                   (flip cmd-act rest)
+                   (find-command commands name)))]
+     (case-do getArgs
+       [] (go "repl" [])
+       (: name rest) (go name rest)))))

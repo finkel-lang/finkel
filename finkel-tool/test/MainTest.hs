@@ -9,6 +9,7 @@
     (Finkel.Prelude))
   (import
    ;; base
+   (Control.Concurrent [forkIO killThread threadDelay])
    (Control.Exception [bracket])
    (Control.Monad.IO.Class [(MonadIO ..)])
    (Data.Version [showVersion])
@@ -48,8 +49,10 @@
 
 (defn (:: cliTests Spec)
   (do (describe "main with no argument"
-        (it "should show usage"
-          (main' [])))
+        (it "should start repl"
+          (do (<- tid (forkIO (main' [])))
+              (threadDelay 20000)
+              (killThread tid))))
       (describe "main with invalid command"
         (it "should show usage"
           (main' ["no-such-command"])))
