@@ -7,7 +7,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Author name here
 maintainer:          example@example.com
-copyright:           2022 Author name here
+copyright:           2023 Author name here
 category:            Data
 build-type:          Custom
 extra-source-files:  README.md

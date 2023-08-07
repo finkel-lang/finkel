@@ -66,6 +66,10 @@
      (import qualified Lexer as GhcLexer))])
 
 (cond-expand
+  [(<= 904 :ghc)
+   (:begin
+     (import GHC.Driver.Config.Parser (initParserOpts))
+     (import GHC.Parser.PostProcess ((ECP ..) runPV)))]
   [(<= 902 :ghc)
    (:begin
      (import GHC.Driver.Config (initParserOpts))

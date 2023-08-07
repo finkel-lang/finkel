@@ -1,0 +1,5 @@
+$ finkel make -o quasiquote quasiquote.fnk
+[1 of 2] Compiling Main             ( quasiquote.fnk, quasiquote.o )
+[2 of 2] Linking quasiquote
+$ ./quasiquote
+True

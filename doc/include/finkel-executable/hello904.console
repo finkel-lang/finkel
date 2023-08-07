@@ -1,0 +1,5 @@
+$ finkel make -o hello hello.fnk
+[1 of 2] Compiling Main             ( hello.fnk, hello.o )
+[2 of 2] Linking hello
+$ ./hello
+Hello, World!

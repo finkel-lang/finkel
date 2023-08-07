@@ -19,12 +19,18 @@
 
 (defn (:: spec Spec)
   (lept [dir (</> "include" "macros")
-         skips [(, "begin.console" (\v _
-                                     (> (makeVersion [8 8 0]) v)))
-                (, "quasiquote.console" (\_ _ (|| (== os "darwin")
-                                                  (== os "mingw32"))))
-                (, "require.console" (\v _
-                                       (> (makeVersion [9 2 0]) v)))]]
+         is-osx-or-win (|| (== os "darwin") (== os "mingw32"))
+         skips [(, "begin.console"
+                   (\version _
+                     (> (makeVersion [8 8 0]) version)))
+                (, "quasiquote.console"
+                   (\version _
+                     (|| is-osx-or-win
+                         (<= (makeVersion [9 4 0]) version))))
+                (, "quasiquote904.console"
+                   (\version _
+                     (|| is-osx-or-win
+                         (< version (makeVersion [9 4 0])))))]]
     (beforeAll_
      (remove-compiled [(</> dir "quasiquote")
                        (</> dir "require")
