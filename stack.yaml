@@ -24,3 +24,8 @@ packages:
 flags:
   finkel-kernel:
     dev: true
+
+custom-preprocessor-extensions:
+  - fnk
+
+require-stack-version: ">= 2.6.0"
