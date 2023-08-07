@@ -20,9 +20,12 @@ pluginTests = describe "run compiler as ghc plugin" $
 #include "ghc_modules.h"
 
 -- base
-import Control.Exception      (SomeException (..))
 import Control.Monad          (void)
 import System.Info            (os)
+
+#if !MIN_VERSION_ghc(9,4,0)
+import Control.Exception      (SomeException (..))
+#endif
 
 -- filepath
 import System.Environment     (getExecutablePath)
@@ -32,6 +35,10 @@ import System.FilePath        ((</>))
 import GHC
 import GHC_Driver_Env         (HscEnv (..))
 import GHC_Plugins            (PluginWithArgs (..), StaticPlugin (..))
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC_Plugins            (Plugins(..), emptyPlugins)
+#endif
 
 -- hspec
 import Test.Hspec
@@ -56,18 +63,18 @@ pluginTests =
     describe "run compiler as ghc plugin" $ do
       compile [] ["--verbose=3"] "p01.hs"
       compile [] [] "p02.hs"
-      compile [] ["--verbose=3"] "p03.hs"
+      compile ["-optF", "--warn-interp=False"] ["--verbose=3"] "p03.hs"
       compile ["-optF", "--ignore"] ["--ignore"] "p04.hs"
       compile ["-ddump-parsed-ast"] [] "p05.hs"
-      compile [] [] "p06.hs"
+      compile ["-optF", "--warn-interp=False"] [] "p06.hs"
       compile [] [] "p08.hs"
 
 #if !MIN_VERSION_ghc(9,2,0)
       -- XXX: Test code with macros not yet working in ghc >= 9.2.0. Required
       -- module is compiled, but macros in the required module were not added to
       -- FnkEnv.
-      compile ["-v"] ["--verbose=0"] "p09.hs"
-      compile ["-v"] ["--verbose=3"] "p09.hs"
+      compile ["-v", "--warn-interp=False"] ["--verbose=0"] "p09.hs"
+      compile ["-v", "--warn-interp=False"] ["--verbose=3"] "p09.hs"
       compile [] ["--verbose=3"] "p10.hs"
 #endif
 
@@ -95,7 +102,11 @@ compileWithFailedFlag =
 
 compileAndFail :: [String] -> [String] -> String -> FnkSpec
 compileAndFail =
+#if MIN_VERSION_ghc(9,4,0)
+  compileWithFailedFlag
+#else
   compile' "fail to" (\io -> io `shouldThrow` \(SomeException _) -> True)
+#endif
 
 -- Compile source code file. The test executable can act as preprocessor, used
 -- to compile Finkel source codes.
@@ -111,9 +122,9 @@ compile' msg wrap ghc_args plugin_args basename =
             hsc_env <- getSession
 
             let sp = StaticPlugin (PluginWithArgs plugin plugin_args)
-                fnk_args =["-F", "-pgmF", me
-                          ,"-i" ++ pdir] ++
-                          ghc_args
+                fnk_args = ["-F", "-pgmF", me
+                           ,"-i" ++ pdir] ++
+                           ghc_args
                 args = map noLoc (ftr_pkg_args ftr ++ fnk_args)
                 dflags0 = hsc_dflags hsc_env
 #if MIN_VERSION_ghc(9,2,0)
@@ -127,7 +138,11 @@ compile' msg wrap ghc_args plugin_args basename =
             hsc_env2 <- getSession
             setFinkelPlugin hsc_env2 sp
 
+#if MIN_VERSION_ghc(9,4,0)
+            t <- guessTarget (pdir </> basename) Nothing Nothing
+#else
             t <- guessTarget (pdir </> basename) Nothing
+#endif
             setTargets [t]
             load LoadAllTargets
 
@@ -135,7 +150,9 @@ compile' msg wrap ghc_args plugin_args basename =
 
 setFinkelPlugin :: GhcMonad m => HscEnv -> StaticPlugin -> m ()
 setFinkelPlugin hsc_env sp =
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+  void (setSession (hsc_env {hsc_plugins=emptyPlugins {staticPlugins=[sp]}}))
+#elif MIN_VERSION_ghc(9,2,0)
   void (setSession (hsc_env {hsc_static_plugins = [sp]}))
 #else
   void (setSessionDynFlags ((hsc_dflags hsc_env) {staticPlugins = [sp]}))

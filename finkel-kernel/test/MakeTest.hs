@@ -44,7 +44,10 @@ import GHC_Unit_Module         (mkModuleName)
 import GHC_Unit_State          (PackageName (..))
 import GHC_Utils_Outputable    (Outputable (..))
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Env          (hscActiveUnitId, hscInterp)
+import GHC.Linker.Loader       (unload)
+#elif MIN_VERSION_ghc(9,2,0)
 import GHC.Linker.Loader       (unload)
 import GHC.Runtime.Interpreter (hscInterp)
 #else
@@ -450,7 +453,16 @@ buildReload the_file fname files1 files2 before_str after_str =
       ftr_init ftr
       prepareInterpreter
       parseAndSetDynFlags args1
-      setTargets [Target tfile use_obj Nothing]
+#if MIN_VERSION_ghc(9,4,0)
+      _hsc_env <- getSession
+      let target = Target { targetId = tfile
+                          , targetAllowObjCode = use_obj
+                          , targetUnitId = hscActiveUnitId _hsc_env
+                          , targetContents = Nothing }
+#else
+      let target = Target tfile use_obj Nothing
+#endif
+      setTargets [target]
 
     make_and_eval :: Fnk String
     make_and_eval = do

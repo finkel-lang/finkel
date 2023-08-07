@@ -19,9 +19,10 @@ module Language.Finkel.Preprocess
 #include "ghc_modules.h"
 
 -- base
-import Control.Exception                 (Exception (..))
+import Control.Exception                 (Exception (..), throw)
 import Control.Monad                     (when)
 import Control.Monad.IO.Class            (MonadIO (..))
+import Data.Char                         (toLower)
 import Data.List                         (foldl')
 import Data.Maybe                        (fromMaybe)
 import System.Console.GetOpt             (ArgDescr (..), ArgOrder (..),
@@ -39,30 +40,41 @@ import System.IO                         (IOMode (..), hPutStrLn, stderr,
                                           stdout, withFile)
 
 -- ghc
-import GHC                               (getPrintUnqual)
 import GHC_Data_Bag                      (unitBag)
 import GHC_Data_FastString               (fsLit)
 import GHC_Data_StringBuffer             (StringBuffer, hGetStringBuffer)
-import GHC_Driver_Flags                  (WarnReason (..))
-import GHC_Driver_Monad                  (logWarnings)
 import GHC_Types_SrcLoc                  (GenLocated (..))
-import GHC_Utils_Error                   (makeIntoWarning, mkWarnMsg)
 import GHC_Utils_Outputable              (text, ($$), (<>))
 
-#if !MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Config.Diagnostic      (initDiagOpts)
+import GHC.Driver.Errors.Types           (ghcUnknownMessage)
+import GHC.Types.Error                   (DiagnosticReason (..), mkMessages,
+                                          mkPlainDiagnostic, noHints)
+import GHC.Utils.Error                   (mkPlainMsgEnvelope)
+import GHC_Driver_Monad                  (logDiagnostics)
+#else
+import GHC                               (getPrintUnqual)
+import GHC_Driver_Flags                  (WarnReason (..))
+import GHC_Driver_Monad                  (logWarnings)
+import GHC_Utils_Error                   (makeIntoWarning, mkWarnMsg)
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0) || MIN_VERSION_ghc(9,4,0)
 import GHC_Driver_Session                (HasDynFlags (..))
 #endif
 
 -- finkel-kernel
 import Language.Finkel.Emit              (Hsrc (..), putHsSrc)
-import Language.Finkel.Exception         (handleFinkelException,
+import Language.Finkel.Exception         (FinkelException (..),
+                                          handleFinkelException,
                                           readOrFinkelException)
-import Language.Finkel.Expand            (expands, withExpanderSettings)
+import Language.Finkel.Expand            (expands)
 import Language.Finkel.Fnk               (FnkEnv (..), Macro (..), addMacro,
-                                          initFnkEnv, lookupMacro,
-                                          macroFunction, makeEnvMacros,
-                                          mergeMacros, modifyFnkEnv,
-                                          printFinkelException, runFnk)
+                                          lookupMacro, macroFunction,
+                                          makeEnvMacros, mergeMacros,
+                                          modifyFnkEnv, printFinkelException,
+                                          runFnk)
 import Language.Finkel.Form              (Form (..), LForm (..), aSymbol,
                                           unCode)
 import Language.Finkel.Make.Summary      (buildHsSyn)
@@ -81,10 +93,7 @@ import Language.Finkel.Syntax            (parseHeader, parseModule)
 
 -- | Default main function for preprocessor.
 defaultPreprocess :: IO ()
-defaultPreprocess = do
-  args <- getArgs
-  fnk_env <- initFnkEnv defaultPreprocessEnv
-  defaultPreprocessWith fnk_env args
+defaultPreprocess = getArgs >>= defaultPreprocessWith defaultPreprocessEnv
 
 -- | 'FnkEnv' used in 'defaultPreprocess'.
 defaultPreprocessEnv :: FnkEnv
@@ -94,7 +103,7 @@ defaultPreprocessEnv = defaultFnkEnv {envMacros=myMacros}
     -- to empty macros with dummy contents, because the preprocessor does not
     -- know the module lookup paths from the command line argument.
     myMacros = foldr f z interpMacros
-    f name acc = addMacro (fsLit name) emptyFormMacro acc
+    f name = addMacro (fsLit name) emptyFormMacro
     z = addMacro (fsLit "defmodule") defmoduleForDownsweep specialForms
 
 interpMacros :: [String]
@@ -197,7 +206,7 @@ writeModule ppo buf0 ipath mb_opath =
       when warn_interp_macros $
         modifyFnkEnv (replaceWithWarnings interpMacros)
       (forms0, sp) <- parseSexprs (Just ipath) buf0
-      forms1 <- withExpanderSettings (expands forms0)
+      forms1 <- expands forms0
       mdl <- buildHsSyn parser forms1
       putHsSrc hdl sp (Hsrc mdl)
     handler e = do
@@ -248,7 +257,7 @@ defmoduleForDownsweep = Macro (pure . f)
             _                      -> acc
         hasLoadPhase xs =
           case unCode (curve xs) of
-            List ys -> any (== sym ":load") ys
+            List ys -> elem (sym ":load") ys
             _       -> False
         moduleForm n = mkL0 (List [sym "module", n])
         importForm l xs = LForm (L l (List (sym "import" : map curve xs)))
@@ -269,26 +278,35 @@ replaceWithWarnings names fnk_env = fnk_env {envMacros=added}
       Just macro -> (name, Macro (addWarning name macro)) : acc
       Nothing    -> acc
     addWarning name macro form@(LForm (L loc _)) = do
-      unqual <- getPrintUnqual
       let msg =
             text "Preprocessor does not interpret during macro expansion." $$
             text "Replacing '(" <> text name <> text " ...)' with '(:begin)'." $$
             text "Use \"--warn-interp=False\" to suppress this message."
-#if MIN_VERSION_ghc(9,2,0)
-          wmsg = mkWarnMsg loc unqual msg
-#else
-      dflags <- getDynFlags
-      let wmsg = mkWarnMsg dflags loc unqual msg
-#endif
-          warning = makeIntoWarning NoReason wmsg
 
       -- XXX: See "GHC.SysTools.Process.{builderMainLoop,readerProc}".
       --
-      -- The messages from the Finkel preprocessor command are parsed, and then
-      -- hard coded "SevError" message is printed by the logger. Although the
-      -- below "logWarnings" is using "SevWarning", the parsed message is shown
-      -- with "SevError".
+      -- Until ghc 9.4, the messages from the Finkel preprocessor command are
+      -- parsed, and then hard coded "SevError" message is printed by the
+      -- logger. Although the below "logWarnings" is using "SevWarning", the
+      -- parsed message is shown with "SevError".
+
+#if MIN_VERSION_ghc(9,4,0)
+      dflags <- getDynFlags
+      let diag = mkPlainDiagnostic WarningWithoutFlag noHints msg
+          warning = mkPlainMsgEnvelope (initDiagOpts dflags) loc diag
+      logDiagnostics (mkMessages (unitBag (fmap ghcUnknownMessage warning)))
+#elif MIN_VERSION_ghc(9,2,0)
+      unqual <- getPrintUnqual
+      let wmsg = mkWarnMsg loc unqual msg
+          warning = makeIntoWarning NoReason wmsg
       logWarnings (unitBag warning)
+#else
+      dflags <- getDynFlags
+      unqual <- getPrintUnqual
+      let wmsg = mkWarnMsg dflags loc unqual msg
+          warning = makeIntoWarning NoReason wmsg
+      logWarnings (unitBag warning)
+#endif
 
       -- Deleget to the original function
       macroFunction macro form
@@ -380,9 +398,12 @@ ppOptions =
     (ReqArg (\n o -> o {ppoVerbosity=readInt n}) "INT")
     "Set verbosity level to INT."
   , Option [] ["warn-interp"]
-    (OptArg (\mb o -> o {ppoWarnInterp=maybe True readBool mb}) "BOOL")
+    (OptArg (\mb o -> o {ppoWarnInterp=maybe True parseBoolish mb}) "BOOL")
     ("Show warning in macros using interpreter.\n" ++
      "(default: True)")
+  , Option [] ["no-warn-interp"]
+    (NoArg (\o -> o {ppoWarnInterp=False}))
+    "Do not show warning in macros using interpreter."
   , Option [] ["full"]
     (NoArg (\o -> o {ppoFull = True}))
     "Parse full module instead of module header."
@@ -391,4 +412,14 @@ ppOptions =
     fnk_src_opts = fromFnkSrcOptions wrap
     wrap f o = o {ppoFnkSrcOptions = f (ppoFnkSrcOptions o)}
     readInt = readOrFinkelException "INT" "verbosity"
-    readBool = readOrFinkelException "BOOL" "warn-interp"
+
+parseBoolish :: String -> Bool
+parseBoolish str
+  | elem low_str trueish = True
+  | elem low_str falsish = False
+  | otherwise = throw (FinkelException msg)
+  where
+     low_str = map toLower str
+     trueish = ["true", "yes", "1"]
+     falsish = ["false", "no", "0"]
+     msg = "Expecting boolean value but got \"" ++ str ++ "\""

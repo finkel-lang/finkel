@@ -45,6 +45,10 @@ import           GHC_Utils_Misc               (looksLikeModuleName)
 import           GHC_Utils_Panic              (GhcException (..),
                                                throwGhcException)
 
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Config.Diagnostic (initDiagOpts)
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Errors            (handleFlagWarnings)
 import           GHC.Types.SourceError        (handleSourceError)
@@ -233,7 +237,9 @@ main3 orig_args ghc_args = do
        handleSourceError
          (\e -> do printException e
                    liftIO exitFailure)
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+         (liftIO (handleFlagWarnings logger (initDiagOpts dflags3) warnings))
+#elif MIN_VERSION_ghc(9,2,0)
          (liftIO (handleFlagWarnings logger dflags3 warnings))
 #else
          (liftIO (handleFlagWarnings dflags3 warnings))

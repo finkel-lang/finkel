@@ -74,44 +74,49 @@ module Language.Finkel.Builder
 #include "ghc_modules.h"
 
 -- ghc
-import GHC_Data_Bag          (Bag)
-import GHC_Data_FastString   (FastString, appendFS)
-import GHC_Driver_Session    (DynFlags)
-import GHC_Hs                (HsModule)
-import GHC_Hs_Binds          (HsLocalBinds, LHsBind, LSig)
-import GHC_Hs_Decls          (HsDeriving, LConDecl, LHsDecl)
-import GHC_Hs_Expr           (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
-import GHC_Hs_ImpExp         (LIE, LIEWrappedName, LImportDecl)
-import GHC_Hs_Pat            (LPat)
-import GHC_Hs_Type           (LConDeclField, LHsSigType, LHsSigWcType,
-                              LHsTyVarBndr, LHsType)
-import GHC_Parser_Lexer      (PState (..))
-import GHC_Types_ForeignCall (CCallConv (..))
-import GHC_Types_SrcLoc      (Located, noLoc)
+import GHC_Data_Bag             (Bag)
+import GHC_Data_FastString      (FastString, appendFS)
+import GHC_Driver_Session       (DynFlags)
+import GHC_Hs                   (HsModule)
+import GHC_Hs_Binds             (HsLocalBinds, LHsBind, LSig)
+import GHC_Hs_Decls             (HsDeriving, LConDecl, LHsDecl)
+import GHC_Hs_Expr              (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
+import GHC_Hs_ImpExp            (LIE, LIEWrappedName, LImportDecl)
+import GHC_Hs_Pat               (LPat)
+import GHC_Hs_Type              (LConDeclField, LHsSigType, LHsSigWcType,
+                                 LHsTyVarBndr, LHsType)
+import GHC_Parser_Lexer         (PState (..))
+import GHC_Types_ForeignCall    (CCallConv (..))
+import GHC_Types_SrcLoc         (Located, noLoc)
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Config.Parser (initParserOpts)
+#elif MIN_VERSION_ghc(9,2,0)
+import GHC.Driver.Config        (initParserOpts)
+#endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Driver.Config     (initParserOpts)
-import GHC.Hs.Decls          (HsConDeclGADTDetails, HsConDeclH98Details)
-import GHC_Parser_Lexer      (initParserState)
+import GHC.Hs.Decls             (HsConDeclGADTDetails, HsConDeclH98Details)
+import GHC_Parser_Lexer         (initParserState)
 #else
-import GHC_Hs_Decls          (HsConDeclDetails)
-import GHC_Parser_Lexer      (mkPState)
+import GHC_Hs_Decls             (HsConDeclDetails)
+import GHC_Parser_Lexer         (mkPState)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Types_Var         (Specificity (..))
+import GHC_Types_Var            (Specificity (..))
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Decls          (LDerivStrategy)
+import GHC_Hs_Decls             (LDerivStrategy)
 #else
-import BasicTypes            (DerivStrategy)
+import BasicTypes               (DerivStrategy)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import GHC_Hs_Extension      (GhcPs)
+import GHC_Hs_Extension         (GhcPs)
 #else
-import RdrName               (RdrName)
+import RdrName                  (RdrName)
 #endif
 
 -- Internal

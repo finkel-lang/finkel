@@ -87,7 +87,7 @@ preprocessTests = around withTemporaryFile $
           , "\n"
           ])
 
-    doPreprocess [] "fnk06.hs"
+    doPreprocess ["--warn-interp=False"] "fnk06.hs"
       "module Main where\n\n"
 
     -- Haskell source code

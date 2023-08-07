@@ -9,55 +9,63 @@ module Language.Finkel.Syntax.HExpr where
 #include "ghc_modules.h"
 
 -- base
-import Control.Arrow                   (first, second)
-import Data.Either                     (partitionEithers)
-import Data.List                       (foldl', foldl1')
-import Data.Maybe                      (fromMaybe)
+import Control.Arrow                     (first, second)
+import Data.Either                       (partitionEithers)
+import Data.List                         (foldl', foldl1')
 
 -- ghc
-import GHC_Builtin_Types               (tupleDataCon)
-import GHC_Data_FastString             (FastString, fsLit, headFS, lengthFS,
-                                        nullFS, unpackFS)
-import GHC_Data_OrdList                (toOL)
-import GHC_Hs_Doc                      (HsDocString)
-import GHC_Hs_Expr                     (ArithSeqInfo (..), GRHS (..),
-                                        HsExpr (..), HsMatchContext (..),
-                                        HsStmtContext (..), HsTupArg (..),
-                                        Match (..), StmtLR (..))
-import GHC_Hs_Lit                      (HsLit (..), HsOverLit (..))
-import GHC_Hs_Pat                      (HsRecFields (..), LHsRecField)
-import GHC_Hs_Type                     (mkHsWildCardBndrs)
-import GHC_Hs_Utils                    (mkBodyStmt, mkHsApp, mkHsComp, mkHsDo,
-                                        mkHsFractional, mkHsIf, mkLHsPar,
-                                        mkLHsTupleExpr, mkMatchGroup)
-import GHC_Parser_PostProcess          (mkRdrRecordCon)
-import GHC_Types_Basic                 (Arity, Boxity (..), Origin (..))
-import GHC_Types_Name_Reader           (RdrName, getRdrName)
-import GHC_Types_SrcLoc                (GenLocated (..), Located, SrcSpan (..),
-                                        getLoc, noLoc)
-import GHC_Utils_Lexeme                (isLexCon, isLexSym, isLexVarId)
+import GHC_Builtin_Types                 (tupleDataCon)
+import GHC_Data_FastString               (FastString, fsLit, headFS, lengthFS,
+                                          nullFS, unpackFS)
+import GHC_Data_OrdList                  (toOL)
+import GHC_Hs_Doc                        (HsDocString)
+import GHC_Hs_Expr                       (ArithSeqInfo (..), GRHS (..),
+                                          HsExpr (..), HsMatchContext (..),
+                                          HsTupArg (..), Match (..),
+                                          StmtLR (..))
+import GHC_Hs_Lit                        (HsLit (..), HsOverLit (..))
+import GHC_Hs_Pat                        (HsRecFields (..), LHsRecField)
+import GHC_Hs_Type                       (mkHsWildCardBndrs)
+import GHC_Hs_Utils                      (mkBodyStmt, mkHsApp, mkHsComp, mkHsDo,
+                                          mkHsFractional, mkHsIf, mkLHsPar,
+                                          mkLHsTupleExpr, mkMatchGroup)
+import GHC_Parser_PostProcess            (mkRdrRecordCon)
+import GHC_Types_Basic                   (Arity, Boxity (..), Origin (..))
+import GHC_Types_Name_Reader             (RdrName, getRdrName)
+import GHC_Types_SrcLoc                  (GenLocated (..), Located,
+                                          SrcSpan (..), getLoc, noLoc)
+import GHC_Utils_Lexeme                  (isLexCon, isLexSym, isLexVarId)
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Hs.Expr                       (gHsPar)
+import GHC.Parser.PostProcess            (mkTokenLocation)
+import Language.Haskell.Syntax.Expr      (HsDoFlavour (..))
+import Language.Haskell.Syntax.Extension (HsToken (..))
+#else
+import GHC_Hs_Expr                       (HsStmtContext (..))
+#endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC_Hs_Utils                    (hsTypeToHsSigWcType)
-import GHC_Parser_Annotation           (locA)
+import GHC_Hs_Utils                      (hsTypeToHsSigWcType)
+import GHC_Parser_Annotation             (locA)
 #else
-import GHC_Hs_Utils                    (mkLHsSigWcType)
-import GHC_Parser_PostProcess          (mkRdrRecordUpd)
+import GHC_Hs_Utils                      (mkLHsSigWcType)
+import GHC_Parser_PostProcess            (mkRdrRecordUpd)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Hs_Utils                    (mkPsBindStmt, mkSimpleMatch)
-import GHC_Types_SrcLoc                (UnhelpfulSpanReason (..))
+import GHC_Hs_Utils                      (mkPsBindStmt, mkSimpleMatch)
+import GHC_Types_SrcLoc                  (UnhelpfulSpanReason (..))
 #else
-import GHC_Hs_Utils                    (mkBindStmt, mkHsLam)
+import GHC_Hs_Utils                      (mkBindStmt, mkHsLam)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Expr                     (parenthesizeHsExpr)
+import GHC_Hs_Expr                       (parenthesizeHsExpr)
 #else
-import GHC_Hs_Expr                     (isListCompExpr, noPostTcExpr)
-import GHC_Hs_Lit                      (OverLitVal (..))
-import PlaceHolder                     (placeHolderType)
+import GHC_Hs_Expr                       (isListCompExpr, noPostTcExpr)
+import GHC_Hs_Lit                        (OverLitVal (..))
+import PlaceHolder                       (placeHolderType)
 #endif
 
 -- Internal
@@ -92,11 +100,11 @@ b_lamE (body,pats) = mkLHsPar (lA l (HsLam NOEXT mg))
   where
     l = getLoc (reLoc body)
     mg = mkMatchGroup FromSource ms
-#if   MIN_VERSION_ghc(9,2,0)
+#  if MIN_VERSION_ghc(9,2,0)
     ms = reLocA (L l [mkSimpleMatch LambdaExpr pats body])
-#else
+#  else
     ms = [mkSimpleMatch LambdaExpr pats body]
-#endif
+#  endif
 #else
 b_lamE (body,pats) = mkHsLam pats body
 #endif
@@ -129,7 +137,13 @@ b_letE (LForm (L l _)) decls body = do
 #else
   let valbinds = L l (mkHsValBinds_compat (cd_binds cd) (cd_sigs cd))
 #endif
+#if MIN_VERSION_ghc(9,4,0)
+  let tokLet = L (mkTokenLocation l) HsTok
+      tokIn = L (mkTokenLocation l) HsTok
+  return (lA l (HsLet NOEXT tokLet valbinds tokIn body))
+#else
   return (lA l (HsLet NOEXT valbinds body))
+#endif
 {-# INLINABLE b_letE #-}
 
 b_caseE :: Code -> HExpr -> [HMatch] -> HExpr
@@ -161,8 +175,13 @@ b_match pat (grhss,decls) =
 b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
   let lrhs = case gs of
+#if MIN_VERSION_ghc(9,4,0)
+        [] -> reLocA (noLoc rhs)
+        _  -> let l = getLoc (mkLocatedListA gs) in la2la (L l rhs)
+#else
         [] -> noLoc rhs
         _  -> let l = getLoc (mkLocatedListA gs) in reLoc (L l rhs)
+#endif
       rhs = b_GRHS gs body
   in  (lrhs:rhss)
 {-# INLINABLE b_hgrhs #-}
@@ -274,7 +293,7 @@ b_opOrAppE code (args, tys) = do
     -- Perform operator expansion, or delegate to `b_appE' if the head of the
     -- form was non-operator.
     LForm (L l (Atom (ASymbol name)))
-      | let name' = fromMaybe name (snd <$> splitQualName name)
+      | let name' = maybe name snd (splitQualName name)
       , isLexSym name'
       , hd:rest@(_:_) <- args
       -> pure (foldl' (mkOp l) (mkLHsParOp hd) rest)
@@ -393,7 +412,7 @@ b_unitE (LForm (L l _)) =
 b_docString :: Code -> Builder (Located HsDocString)
 b_docString (LForm (L l form)) =
   case form of
-    Atom (AString _ x) -> return $! L l (hsDocString x)
+    Atom (AString _ x) -> return $! L l (mkHsDocString x)
     _                  -> builderError
 {-# INLINABLE b_docString #-}
 
@@ -522,7 +541,11 @@ hsLit = HsLit NOEXT
 {-# INLINABLE hsLit #-}
 
 hsPar :: HExpr -> HsExpr PARSED
+#if MIN_VERSION_ghc(9,4,0)
+hsPar = gHsPar
+#else
 hsPar = HsPar NOEXT
+#endif
 {-# INLINABLE hsPar #-}
 
 hsOverLit :: HsOverLit PARSED -> HsExpr PARSED

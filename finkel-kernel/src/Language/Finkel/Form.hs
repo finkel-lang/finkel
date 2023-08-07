@@ -49,55 +49,64 @@ module Language.Finkel.Form
 #include "ghc_modules.h"
 
 -- base
-import Control.Applicative             (Alternative (..))
-import Control.Monad                   (MonadPlus (..))
-import Data.Data                       (Data, Typeable)
-import Data.Function                   (on)
-import Data.Maybe                      (fromMaybe)
-import GHC.Generics                    (Generic)
+import           Control.Applicative             (Alternative (..))
+import           Control.Monad                   (MonadPlus (..))
+import           Data.Data                       (Data, Typeable)
+import           Data.Function                   (on)
+import           Data.Maybe                      (fromMaybe)
+import           GHC.Generics                    (Generic)
 
-import Data.Binary                     (Binary (..), Get, Put, getWord8,
-                                        putWord8)
+import           Data.Binary                     (Binary (..), Get, Put,
+                                                  getWord8, putWord8)
 
 -- ghc
-import GHC_Data_FastString             (FastString, fsLit, unpackFS)
-import GHC_Types_SrcLoc                (GenLocated (..), Located,
-                                        RealSrcSpan (..), SrcSpan (..),
-                                        combineLocs, combineSrcSpans,
-                                        mkRealSrcLoc, mkRealSrcSpan, mkSrcLoc,
-                                        mkSrcSpan, srcSpanEndCol,
-                                        srcSpanEndLine, srcSpanFile,
-                                        srcSpanFileName_maybe, srcSpanStartCol,
-                                        srcSpanStartLine)
-import GHC_Utils_Outputable            (Outputable (..), brackets, cat, char,
-                                        double, doubleQuotes, fsep, integer,
-                                        parens, text)
+import           GHC_Data_FastString             (FastString, fsLit, unpackFS)
+import           GHC_Types_SrcLoc                (GenLocated (..), Located,
+                                                  RealSrcSpan (..),
+                                                  SrcSpan (..), combineLocs,
+                                                  combineSrcSpans, mkRealSrcLoc,
+                                                  mkRealSrcSpan, mkSrcLoc,
+                                                  mkSrcSpan, srcSpanEndCol,
+                                                  srcSpanEndLine, srcSpanFile,
+                                                  srcSpanFileName_maybe,
+                                                  srcSpanStartCol,
+                                                  srcSpanStartLine)
+import           GHC_Utils_Outputable            (Outputable (..), brackets,
+                                                  cat, char, double,
+                                                  doubleQuotes, fsep, integer,
+                                                  parens, text)
 
-#if MIN_VERSION_ghc(9,0,0)
-import GHC_Types_SrcLoc                (BufPos (..), BufSpan (..),
-                                        UnhelpfulSpanReason (..),
-                                        unhelpfulSpanFS)
+#if MIN_VERSION_ghc(9,4,0)
+import qualified GHC.Data.Strict                 as Strict
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Data_FastString             (fastStringToShortByteString,
-                                        mkFastStringShortByteString)
+import           GHC_Types_SrcLoc                (BufPos (..), BufSpan (..),
+                                                  UnhelpfulSpanReason (..),
+                                                  unhelpfulSpanFS)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC_Data_FastString             (fastStringToShortByteString,
+                                                  mkFastStringShortByteString)
 #elif MIN_VERSION_ghc(8,10,0)
-import GHC_Data_FastString             (bytesFS, mkFastStringByteString)
+import           GHC_Data_FastString             (bytesFS,
+                                                  mkFastStringByteString)
 #else
-import GHC_Data_FastString             (fastStringToByteString,
-                                        mkFastStringByteString)
+import           GHC_Data_FastString             (fastStringToByteString,
+                                                  mkFastStringByteString)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import GHC_Types_SourceText            (IntegralLit (..), mkIntegralLit)
+import           GHC_Types_SourceText            (IntegralLit (..),
+                                                  mkIntegralLit)
 #endif
 
 -- deepseq
-import Control.DeepSeq                 (NFData (..))
+import           Control.DeepSeq                 (NFData (..))
 
 -- Internal
-import Language.Finkel.Form.Fractional
+import           Language.Finkel.Form.Fractional
 
 
 -- -------------------------------------------------------------------
@@ -550,11 +559,24 @@ getSrcSpan = do
     1 -> UnhelpfulSpan <$> getUnhelpfulSpanReason
     _ -> error $ "getSrcSpan: unknown tag " ++ show t
 
+#  if MIN_VERSION_ghc(9,4,0)
+putMbBufSpan :: Strict.Maybe BufSpan -> Put
+putMbBufSpan mb_bs = case mb_bs of
+  Strict.Just (BufSpan s e) -> putWord8 0 *> putBufPos s *> putBufPos e
+  Strict.Nothing            -> putWord8 1
+
+getMbBufSpan :: Get (Strict.Maybe BufSpan)
+getMbBufSpan = do
+  t <- getWord8
+  case t of
+    0 -> Strict.Just <$> (BufSpan <$> getBufPos <*> getBufPos)
+    1 -> pure Strict.Nothing
+    _ -> error $ "getMbBufSpan: unknown tag " ++ show t
+#  else
 putMbBufSpan :: Maybe BufSpan -> Put
 putMbBufSpan mb_bs = case mb_bs of
   Just (BufSpan s e) -> putWord8 0 *> putBufPos s *> putBufPos e
   Nothing            -> putWord8 1
-{-# INLINABLE putMbBufSpan #-}
 
 getMbBufSpan :: Get (Maybe BufSpan)
 getMbBufSpan = do
@@ -563,6 +585,9 @@ getMbBufSpan = do
     0 -> Just <$> (BufSpan <$> getBufPos <*> getBufPos)
     1 -> pure Nothing
     _ -> error $ "getMbBufSpan: unknown tag " ++ show t
+#  endif
+
+{-# INLINABLE putMbBufSpan #-}
 {-# INLINABLE getMbBufSpan #-}
 
 putBufPos :: BufPos -> Put

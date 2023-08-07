@@ -25,76 +25,123 @@ module Language.Finkel.Make
   , asModuleName
   , isFnkFile
   , isHsFile
+
+  -- * ParsedResult
+  , mkParsedResult
   ) where
 
 #include "ghc_modules.h"
 
 
 -- base
-import Control.Monad                     (foldM, unless, void, when, (>=>))
-import Control.Monad.IO.Class            (MonadIO (..))
-import Data.Bifunctor                    (first)
-import Data.Foldable                     (find)
-import Data.Function                     (on)
-import Data.Maybe                        (isJust)
+import           Control.Monad                     (foldM, unless, void, when,
+                                                    (>=>))
+import           Control.Monad.IO.Class            (MonadIO (..))
+import           Data.Bifunctor                    (first)
+import           Data.Foldable                     (find)
+import           Data.Maybe                        (isJust)
+
+#if MIN_VERSION_ghc(9,4,0)
+import           Data.Maybe                        (catMaybes)
+-- Module GHC.Fingerprint is from package 'base'.
+import           GHC.Fingerprint                   (getFileHash)
+#endif
+
+-- container
+#if MIN_VERSION_ghc(9,4,0)
+import qualified Data.Map                          as Map
+#endif
 
 -- filepath
-import System.FilePath                   (splitExtension)
+import           System.FilePath                   (splitExtension)
 
 -- ghc
-import GHC                               (setSessionDynFlags)
-import GHC_Driver_Env                    (HscEnv (..))
-import GHC_Driver_Make                   (LoadHowMuch (..), load')
-import GHC_Driver_Monad                  (GhcMonad (..))
-import GHC_Driver_Phases                 (Phase (..))
-import GHC_Driver_Session                (DynFlags (..), GeneralFlag (..),
-                                          GhcMode (..), HasDynFlags (..), gopt,
-                                          gopt_set, gopt_unset)
-import GHC_Hs_ImpExp                     (simpleImportDecl)
-import GHC_Runtime_Context               (InteractiveImport (..))
-import GHC_Runtime_Eval                  (setContext)
-import GHC_Types_Basic                   (SuccessFlag (..))
-import GHC_Types_SourceError             (throwOneError)
-import GHC_Types_SrcLoc                  (Located, getLoc, unLoc)
-import GHC_Unit_Finder                   (FindResult (..),
-                                          findExposedPackageModule)
-import GHC_Unit_Home_ModInfo             (lookupHpt)
-import GHC_Unit_Module                   (ModuleName, mkModuleName)
-import GHC_Unit_Module_ModSummary        (ModSummary (..), ms_mod_name)
-import GHC_Utils_Misc                    (getModificationUTCTime)
-import GHC_Utils_Outputable              (Outputable (..), brackets, nest, text,
-                                          vcat, (<+>))
+import           GHC                               (setSessionDynFlags)
+import           GHC_Driver_Env                    (HscEnv (..))
+import           GHC_Driver_Main                   (Messager)
+import           GHC_Driver_Make                   (LoadHowMuch (..), load')
+import           GHC_Driver_Monad                  (GhcMonad (..))
+import           GHC_Driver_Phases                 (Phase (..))
+import           GHC_Driver_Session                (DynFlags (..),
+                                                    GeneralFlag (..),
+                                                    GhcMode (..),
+                                                    HasDynFlags (..), gopt,
+                                                    gopt_set, gopt_unset)
+import           GHC_Hs_ImpExp                     (simpleImportDecl)
+import           GHC_Runtime_Context               (InteractiveImport (..))
+import           GHC_Runtime_Eval                  (setContext)
+import           GHC_Runtime_Loader                (initializePlugins)
+import           GHC_Types_Basic                   (SuccessFlag (..))
+import           GHC_Types_SourceError             (throwOneError)
+import           GHC_Types_SrcLoc                  (Located, getLoc, unLoc)
+import           GHC_Unit_Finder                   (FindResult (..),
+                                                    findExposedPackageModule)
+import           GHC_Unit_Home_ModInfo             (lookupHpt)
+import           GHC_Unit_Module                   (ModuleName, mkModuleName)
+import           GHC_Unit_Module_Graph             (ModuleGraph)
+import           GHC_Unit_Module_ModSummary        (ModSummary (..),
+                                                    ms_mod_name)
+import           GHC_Utils_Outputable              (Outputable (..), SDoc,
+                                                    brackets, nest, text, vcat,
+                                                    (<+>))
+
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Config.Finder          (initFinderOpts)
+import           GHC.Driver.Env                    (hscActiveUnitId,
+                                                    hscSetFlags, hsc_HPT,
+                                                    hsc_HUG, hsc_units)
+import           GHC.Driver.Plugins                (ParsedResult (..),
+                                                    PsMessages (..))
+import           GHC.Driver.Session                (GhcLink (..), ways)
+import           GHC.Hs                            (HsParsedModule)
+import           GHC.Platform.Ways                 (Way (..), hasWay)
+import           GHC.Types.Error                   (emptyMessages)
+import           GHC.Types.PkgQual                 (PkgQual (..))
+import           GHC.Types.SrcLoc                  (GenLocated (..))
+import           GHC.Unit.Env                      (homeUnitEnv_dflags,
+                                                    unitEnv_foldWithKey)
+import           GHC.Unit.Module.Graph             (ModNodeKeyWithUid (..),
+                                                    ModuleGraphNode (..),
+                                                    NodeKey (..), mkModuleGraph,
+                                                    mkNodeKey,
+                                                    moduleGraphNodeUnitId,
+                                                    msKey)
+import           GHC.Unit.Module.ModSummary        (ms_imps)
+import           GHC.Unit.Types                    (GenWithIsBoot (..),
+                                                    IsBootInterface (..))
+#else
+import           GHC_Utils_Misc                    (getModificationUTCTime)
+#endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Iface.Load                    (cannotFindModule)
+import           GHC.Iface.Load                    (cannotFindModule)
 #else
-import GHC_Unit_Finder                   (cannotFindModule)
+import           GHC_Unit_Finder                   (cannotFindModule)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Unit_Types                    (moduleUnit)
+import           GHC_Unit_Types                    (moduleUnit)
 #else
-import GHC_Unit_Module                   (Module (..), moduleUnitId)
+import           GHC_Unit_Module                   (Module (..), moduleUnitId)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import GHC_Driver_Env                    (runHsc)
-import GHC_Plugins                       (Plugin (..), withPlugins)
-import GHC_Runtime_Loader                (initializePlugins)
+import           GHC_Driver_Env                    (runHsc)
+import           GHC_Plugins                       (Plugin (..), withPlugins)
 #endif
 
-import GHC_Driver_Make                   (depanal)
-import GHC_Types_Target                  (Target (..), TargetId (..))
+import           GHC_Driver_Make                   (depanal)
+import           GHC_Types_Target                  (Target (..), TargetId (..))
 
 
 -- internal
-import Language.Finkel.Error
-import Language.Finkel.Expand
-import Language.Finkel.Fnk
-import Language.Finkel.Make.Recompile
-import Language.Finkel.Make.Summary
-import Language.Finkel.Make.TargetSource
-import Language.Finkel.Make.Trace
+import           Language.Finkel.Error
+import           Language.Finkel.Expand
+import           Language.Finkel.Fnk
+import           Language.Finkel.Make.Recompile
+import           Language.Finkel.Make.Summary
+import           Language.Finkel.Make.TargetSource
+import           Language.Finkel.Make.Trace
 
 
 -- ---------------------------------------------------------------------
@@ -170,14 +217,14 @@ initSessionForMake = do
   -- updated "DynFlags". Returned list of 'InstalledUnitId's are ignored.
   _preload0 <- setSessionDynFlags dflags0
   hsc_env <- getSession
-#if MIN_VERSION_ghc(9,2,0)
+#  if MIN_VERSION_ghc(9,2,0)
   hsc_env1 <- liftIO $! initializePlugins hsc_env
   setSession hsc_env1
   let dflags1 = hsc_dflags hsc_env1
-#else
+#  else
   let dflags0' = hsc_dflags hsc_env
   dflags1 <- liftIO $! initializePlugins hsc_env dflags0'
-#endif
+#  endif
 #else
   let dflags1 = dflags0
 #endif
@@ -211,8 +258,7 @@ initSessionForMake = do
 
 -- | Set context modules in current session to given modules.
 setContextModules :: GhcMonad m => [String] -> m ()
-setContextModules =
-  setContext . map (IIDecl . simpleImportDecl . mkModuleName)
+setContextModules = setContext . map (IIDecl . simpleImportDecl . mkModuleName)
 {-# INLINABLE setContextModules #-}
 
 -- | Simple make function returning compiled home module information. Intended
@@ -228,7 +274,9 @@ makeFromRequire lmname = do
 
   tr ["required module:" <+> ppr (unLoc lmname)]
   tu <- emptyTargetUnit <$> findTargetModuleName dflags lmname
-  _success_flag <- make1 (LoadUpTo (targetUnitName tu)) old_summaries [tu]
+
+  _success_flag <- withTmpDynFlags (setExpanding dflags) $
+    make1 LoadAllTargets old_summaries [tu]
 
   mgraph <- hsc_mod_graph <$> getSession
   let mod_summaries = mgModSummaries' mgraph
@@ -242,31 +290,39 @@ makeFromRequirePlugin lmname = do
 
   let mname = unLoc lmname
       target = Target { targetId = TargetModule mname
+
+#if MIN_VERSION_ghc(9,4,0)
+                      -- XXX: See 'GHC.Driver.Pipeline.compileOne'', when the
+                      -- targetAllowObjCode is set to False, Opt_ForceRecomp of
+                      -- the local dynflags is always turned on.
+                      --
+                      -- When the GHCi is built to prefer dynamic object, and
+                      -- when dynamic object of home package module did not
+                      -- exist, interpreter may try to load non-dynamic object
+                      -- and shows an error during macro expansion.
+
+                      -- At the moment, object code is allowed only when current
+                      -- compilation contains "-dynamic" or "-dynamic-too".
+                      , targetAllowObjCode = ways dflags `hasWay` WayDyn ||
+                                             gopt Opt_BuildDynamicToo dflags
+                      , targetUnitId = hscActiveUnitId hsc_env
+#else
                       , targetAllowObjCode = False
-                      , targetContents = Nothing }
-      byTargetId = ((==) `on` targetId)
+#endif
+                      , targetContents = Nothing
+                      }
       old_targets = hsc_targets hsc_env
       dflags = hsc_dflags hsc_env
       messager = envMessager fnk_env
       tr = traceMake fnk_env "makeFromRequirePlugin"
 
-  tr ["target module:" <+> ppr mname]
-  tr ["old_targets:" <+> nvc_or_none old_targets]
+  tr [ "target module:" <+> ppr mname
+     , "old_targets:" <+> nvc_or_none old_targets ]
 
-  -- XXX: Might not necessary to check the existenc3e of target in current
-  -- session, because when the target module were found in current home package
-  -- table, this function would not be called.
-  case find (byTargetId target) old_targets of
-    Nothing -> setSession (hsc_env {hsc_targets = target : old_targets})
-    _       -> pure ()
-
-  -- XXX: Wokaround for concurrent build. Current approach does not work with
-  -- "-j" ghc option, which uses "parUpsweep" function. Explicitly specifying
-  -- the "parMakeCount" with hard coded value "Just 1" to avoid concurrent
-  -- build.
-  withTmpDynFlags (dflags {parMakeCount = Just 1}) $ do
+  setSession (hsc_env {hsc_targets = target : old_targets})
+  withTmpDynFlags (setExpanding dflags) $ do
     mg <- depanal [] False
-    void (load' LoadAllTargets (Just messager) mg)
+    void (doLoad LoadAllTargets (Just messager) mg)
 
 
 -- ---------------------------------------------------------------------
@@ -275,10 +331,9 @@ makeFromRequirePlugin lmname = do
 --
 -- ---------------------------------------------------------------------
 
--- | Compile 'TargetUnit' to interface file and object code, and return a list
--- of compiled 'ModSummary'.
+-- | Compile 'TargetUnit' to interface file and object code.
 --
--- This function does macro expansion, conver 'TargetUnit' to 'ModSummary', and
+-- This function does macro expansion, convert 'TargetUnit' to 'ModSummary', and
 -- pass the results to 'GhcMake.load''.
 --
 make1 :: LoadHowMuch -> [ModSummary] -> [TargetUnit] -> Fnk SuccessFlag
@@ -299,16 +354,29 @@ make1 how_much old_summaries targets = do
 
   -- Make new ModuleGrpah from expanded summaries, then update the old mod
   -- summaries if the summaries were missing.
-  let mgraph0 = foldr updateMG (mkModuleGraph' mss0) old_summaries
-      updateMG ms mg = if mgElemModule' mg (ms_mod ms)
+#if MIN_VERSION_ghc(9,4,0)
+  let updateMG ms acc =
+        if any (\old -> ms_mod_name old == ms_mod_name ms) acc
+          then acc
+          else ms : acc
+      mnodes0 = foldr updateMG mss0 old_summaries
+
+      -- Additionally, fill in the NodeKeys for topological sort, and link node
+      -- to support compiling executable.
+      mnodes1 = fillInNodeKeys mnodes0
+      mnodes2 = addLinkNodesIfAny hsc_env mnodes1
+      mgraph0 = mkModuleGraph mnodes2
+#else
+  let updateMG ms mg = if mgElemModule' mg (ms_mod ms)
                           then mg
                           else extendMG' mg ms
-      messager = envMessager fnk_env
+      mgraph0 = foldr updateMG (mkModuleGraph' mss0) old_summaries
+#endif
   tr ["new summaries:", nvc_or_none (mgModSummaries' mgraph0)]
 
   -- Pass the merged ModuleGraph to the "load'" function, delegate the hard
   -- works to it.
-  success_flag <- load' how_much (Just messager) mgraph0
+  success_flag <- doLoad how_much (Just (envMessager fnk_env)) mgraph0
   tr ["done:", targets_sdoc]
 
   return success_flag
@@ -319,6 +387,41 @@ updateFlagOptions options = do
   let dflags0 = hsc_dflags hsc_env
       dflags1 = dflags0 {ldInputs = options ++ ldInputs dflags0}
   void (setSessionDynFlags dflags1)
+
+#if MIN_VERSION_ghc(9,4,0)
+-- See: local functions 'loopSummaries' and 'loopImports' in 'downsweep' in
+-- GHC.Driver.Make.
+fillInNodeKeys :: [ModSummary] -> [ModuleGraphNode]
+fillInNodeKeys mss =
+  let home_mod_map :: Map.Map ModuleName NodeKey
+      home_mod_map = Map.fromList [ (ms_mod_name ms, NodeKey_Module (msKey ms))
+                                  | ms <- mss ]
+      get_node_key (_, L _ mname) = Map.lookup mname home_mod_map
+      get_node_keys ms = catMaybes (map get_node_key (ms_imps ms))
+      convert ms = ModuleNode (get_node_keys ms) ms
+  in  map convert mss
+
+-- See: 'linkNodes' in GHC.Driver.Make.
+addLinkNodesIfAny :: HscEnv -> [ModuleGraphNode] -> [ModuleGraphNode]
+addLinkNodesIfAny hsc_env mg0 = unitEnv_foldWithKey f mg0 hug
+  where
+    hug = hsc_HUG hsc_env
+    f nodes uid hue = maybe id (:) (linkOne mg0 uid hue) nodes
+    linkOne mg uid hue =
+      let dflags = homeUnitEnv_dflags hue
+          pre_nodes = filter ((== uid) . moduleGraphNodeUnitId) mg
+          unit_nodes = map mkNodeKey pre_nodes
+          no_hs_main = gopt Opt_NoHsMain dflags
+          gwib = GWIB (mainModuleNameIs dflags) NotBoot
+          isMainModule = (== NodeKey_Module (ModNodeKeyWithUid gwib uid))
+          main_sum = any isMainModule unit_nodes
+          do_linking = main_sum || no_hs_main ||
+                       ghcLink dflags == LinkDynLib ||
+                       ghcLink dflags == LinkStaticLib
+      in  if ghcLink dflags /= NoLink && do_linking
+          then Just (LinkNode unit_nodes uid)
+          else Nothing
+#endif
 
 
 -- ------------------------------------------------------------------------
@@ -520,21 +623,28 @@ makeTargetSummary fnk_env rs0 tu@(tsource,_) = do
             else do
               (et_ms, rs1) <- runRecompilationCheck fnk_env rs0 tu
               case et_ms of
-                Left why -> new_summary rs1 (text why)
+                Left why -> new_summary rs1 why
                 Right ms -> reuse_iface rs1 ms
 
        -- Checking whether recompilation is required or not at this point, since
        -- when reompiling, may need to parse the source code to reflect the
        -- changes in macros from home package modules.
        Just ms -> do
-         mtime <- liftIO (getModificationUTCTime (targetSourcePath tsource))
-         if ms_hs_date ms < mtime
+         file_modified <- liftIO (isFileModified ms (targetSourcePath tsource))
+         if file_modified
             then new_summary rs0 "source code is new"
             else do
               summary_ok <- checkModSummary hsc_env ms
               if not summary_ok
                  then new_summary rs0 "out of date usages"
                  else reuse_summary rs0 ms
+
+isFileModified :: ModSummary -> FilePath -> IO Bool
+#if MIN_VERSION_ghc(9,4,0)
+isFileModified ms = fmap (/= ms_hs_hash ms) . getFileHash
+#else
+isFileModified ms = fmap (ms_hs_date ms <) . getModificationUTCTime
+#endif
 
 -- | Make new 'ModSummary' with required home package modules and.
 makeNewSummary :: FnkEnv -> HscEnv -> TargetUnit -> MakeM TargetSummary
@@ -566,33 +676,55 @@ makeNewSummary fnk_env hsc_env tu = toMakeM $ do
           let do_action p opts = parsedResultAction p opts ms0
               dflags0 = hsc_dflags hsc_env
               dflags1 = adjustIncludePaths dflags0 ms0
-#if MIN_VERSION_ghc(9,2,0)
-              act = withPlugins (hsc_env {hsc_dflags=dflags1}) do_action pm
-#else
-              act = withPlugins dflags1 do_action pm
-#endif
               hsc_env' = hsc_env {hsc_dflags = dflags1}
-          new_pm <- liftIO (runHsc hsc_env' act)
-          return $! ms0 {ms_parsed_mod = Just new_pm}
+#  if MIN_VERSION_ghc(9,4,0)
+              plugins = hsc_plugins (hscSetFlags dflags1 hsc_env)
+              act = parsedResultModule <$>
+                    withPlugins plugins do_action (mkParsedResult pm)
+#  elif MIN_VERSION_ghc(9,2,0)
+              act = withPlugins (hsc_env {hsc_dflags=dflags1}) do_action pm
+#  else
+              act = withPlugins dflags1 do_action pm
+#  endif
+          parsed_mod <- liftIO (runHsc hsc_env' act)
+          return $! ms0 {ms_parsed_mod = Just parsed_mod}
 #else
       -- Ghc does not support parsedResultAction.
       let ms1 = ms0
 #endif
       return $! EMS ms1 Nothing reqs
 
+#if MIN_VERSION_ghc(9,4,0)
+-- XXX: Always using empty messages
+mkParsedResult :: HsParsedModule -> ParsedResult
+mkParsedResult pm =
+  let msgs = PsMessages { psWarnings = emptyMessages
+                        , psErrors = emptyMessages }
+  in  ParsedResult { parsedResultModule = pm
+                   , parsedResultMessages = msgs }
+#else
+mkParsedResult :: a -> a
+mkParsedResult = id
+#endif
+{-# INLINABLE mkParsedResult #-}
+
 -- | Set 'dumpPrefix' from file path.
 setDumpPrefix :: GhcMonad m => FilePath -> m ()
 setDumpPrefix path = do
   dflags0 <- getDynFlags
   let (basename, _suffix) = splitExtension path
+#if MIN_VERSION_ghc(9,4,0)
+      dflags1 = dflags0 {dumpPrefix = basename ++ "."}
+#else
       dflags1 = dflags0 {dumpPrefix = Just (basename ++ ".")}
+#endif
   setDynFlags dflags1
 {-# INLINABLE setDumpPrefix #-}
 
 -- | Run the recompilation check.
 runRecompilationCheck
   :: FnkEnv -> RecompState -> TargetUnit
-  -> MakeM (Either String ModSummary, RecompState)
+  -> MakeM (Either SDoc ModSummary, RecompState)
 runRecompilationCheck fnk_env rs tu =
   toMakeM (unRecompM (checkRecompileRequired fnk_env tu) rs)
 {-# INLINABLE runRecompilationCheck #-}
@@ -603,7 +735,7 @@ filterNotCompiled
 filterNotCompiled fnk_env hsc_env = foldM find_not_compiled []
   where
     dflags = hsc_dflags hsc_env
-    tr = traceMake' dflags fnk_env "findNotCompiledImport"
+    tr = traceMake' dflags fnk_env "filterNotCompiled"
     find_not_compiled acc lmname = do
       let mname = unLoc lmname
       mb_ts <- findTargetModuleNameMaybe dflags lmname
@@ -612,7 +744,14 @@ filterNotCompiled fnk_env hsc_env = foldM find_not_compiled []
           tr ["Found" <+> ppr mname <+> "at" <+> text (targetSourcePath ts)]
           return $! (emptyTargetUnit ts : acc)
         Nothing -> do
+#if MIN_VERSION_ghc(9,4,0)
+          let fc = hsc_FC hsc_env
+              units = hsc_units hsc_env
+              fopts = initFinderOpts dflags
+          fr <- liftIO (findExposedPackageModule fc fopts units mname NoPkgQual)
+#else
           fr <- liftIO (findExposedPackageModule hsc_env mname Nothing)
+#endif
           case fr of
             Found _ mdl -> do
 #if MIN_VERSION_ghc(9,0,0)
@@ -630,3 +769,21 @@ filterNotCompiled fnk_env hsc_env = foldM find_not_compiled []
                   doc = cannotFindModule dflags mname fr
 #endif
               throwOneError err
+
+-- From ghc 9.4, the `load'' function changed to take ModIface cache.
+doLoad :: LoadHowMuch -> Maybe Messager -> ModuleGraph -> Fnk SuccessFlag
+#if MIN_VERSION_ghc(9,4,0)
+doLoad lhm mb_msgr mg = do
+  dflags <- getDynFlags
+  fnk_env <- getFnkEnv
+
+  -- ModIfaceCache is used by interpreter only.
+  let mb_hmi_cache =
+        if isInterpreted dflags
+        then envInterpModIfaceCache fnk_env
+        else Nothing
+
+  load' mb_hmi_cache lhm mb_msgr mg
+#else
+doLoad = load'
+#endif

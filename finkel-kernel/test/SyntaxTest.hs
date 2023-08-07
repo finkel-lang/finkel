@@ -32,9 +32,14 @@ import System.FilePath        (takeBaseName, (<.>), (</>))
 -- ghc
 import GHC                    (setContext, setTargets)
 import GHC_Data_StringBuffer  (stringToStringBuffer)
+import GHC_Driver_Monad       (GhcMonad (..))
 import GHC_Settings_Config    (cProjectVersionInt)
 import GHC_Types_Basic        (SuccessFlag (..))
 import GHC_Types_Target       (Target (..), TargetId (..))
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Env         (hscActiveUnitId)
+#endif
 
 -- hspec
 import Test.Hspec
@@ -191,7 +196,14 @@ compileWith is_interpreting ini_args ftr file mb_dir = do
   let update_dir dir = modifyFnkEnv (\e -> e {envHsOutDir = Just dir})
   mapM_ update_dir mb_dir
   parseAndSetDynFlags ["-v0"]
-  setTargets [Target (TargetFile file Nothing) (not is_interpreting) Nothing]
+  _hsc_env <- getSession
+  let target = Target { targetId = TargetFile file Nothing
+                      , targetAllowObjCode = not is_interpreting
+#if MIN_VERSION_ghc(9,4,0)
+                      , targetUnitId = hscActiveUnitId _hsc_env
+#endif
+                      , targetContents = Nothing }
+  setTargets [target]
   success_flag <- ftr_load ftr [file]
   case success_flag of
     Failed    -> error $ "Failed to compile: " ++ file

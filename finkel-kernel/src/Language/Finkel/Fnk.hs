@@ -23,15 +23,19 @@ module Language.Finkel.Fnk
   , putFnkEnv
   , modifyFnkEnv
   , setDynFlags
+  , updateDynFlags
   , withTmpDynFlags
   , prepareInterpreter
   , useInterpreter
-  , getLibDirFromGhc
 
   -- * Error related functions
   , failFnk
   , finkelSrcError
   , printFinkelException
+
+  -- * GHC library directory
+  , getLibDirFromGhc
+  , initializeLibDirFromGhc
 
   -- * Debugging
   , FnkDebugFlag(..)
@@ -76,106 +80,119 @@ module Language.Finkel.Fnk
 #include "ghc_modules.h"
 
 -- base
-import           Control.Exception         (Exception (..), throw, throwIO)
-import           Control.Monad             (mplus, unless, when)
-import           Control.Monad.IO.Class    (MonadIO (..))
-import           Data.Bifunctor            (first)
-import           Data.Bits                 (setBit, testBit, zeroBits)
-import           Data.Char                 (isSpace, toLower)
-import           Data.IORef                (IORef, atomicModifyIORef',
-                                            atomicWriteIORef, newIORef,
-                                            readIORef)
-import           Data.List                 (isPrefixOf, partition)
-import           Data.Word                 (Word8)
-import           System.Console.GetOpt     (ArgDescr (..), OptDescr (..),
-                                            usageInfo)
-import           System.Environment        (getProgName, lookupEnv)
-import           System.Exit               (exitFailure)
-import           System.IO                 (hPutStrLn, stderr)
-import           System.IO.Unsafe          (unsafePerformIO)
+import           Control.Exception            (Exception (..), throw, throwIO)
+import           Control.Monad                (mplus, unless, when)
+import           Control.Monad.IO.Class       (MonadIO (..))
+import           Data.Bifunctor               (first)
+import           Data.Bits                    (setBit, testBit, zeroBits)
+import           Data.Char                    (isSpace, toLower)
+import           Data.IORef                   (IORef, atomicModifyIORef',
+                                               atomicWriteIORef, newIORef,
+                                               readIORef)
+import           Data.List                    (isPrefixOf, partition)
+import           Data.Word                    (Word8)
+import           System.Console.GetOpt        (ArgDescr (..), OptDescr (..),
+                                               usageInfo)
+import           System.Environment           (getProgName, lookupEnv)
+import           System.Exit                  (exitFailure)
+import           System.IO                    (hPutStrLn, stderr)
+import           System.IO.Unsafe             (unsafePerformIO)
 
 #if !MIN_VERSION_ghc(8,8,0)
-import           Control.Monad.Fail        (MonadFail (..))
+import           Control.Monad.Fail           (MonadFail (..))
 #endif
 
 -- containers
-import qualified Data.Map                  as Map
+import qualified Data.Map                     as Map
 
-import           System.Directory          (canonicalizePath, doesFileExist,
-                                            findExecutable)
-import           System.FilePath           (takeDirectory, (</>))
+import           System.Directory             (canonicalizePath, doesFileExist,
+                                               findExecutable)
+import           System.FilePath              (takeDirectory, (</>))
 
 -- exceptions
-import           Control.Monad.Catch       (MonadCatch (..), MonadMask (..),
-                                            MonadThrow (..))
+import           Control.Monad.Catch          (MonadCatch (..), MonadMask (..),
+                                               MonadThrow (..))
 
 #if MIN_VERSION_ghc(9,0,0)
-import           Control.Monad.Catch       (bracket)
+import           Control.Monad.Catch          (bracket)
 #else
-import           GHC_Utils_Exception       (ExceptionMonad (..))
+import           GHC_Utils_Exception          (ExceptionMonad (..))
 #endif
 
 -- process
-import           System.Process            (readProcess)
+import           System.Process               (readProcess)
 
 -- ghc
-import           GHC                       (ModSummary (..), runGhc)
-import           GHC_Data_Bag              (unitBag)
-import           GHC_Data_FastString       (FastString, fsLit, uniqueOfFS,
-                                            unpackFS)
-import           GHC_Driver_Env_Types      (HscEnv (..))
-import           GHC_Driver_Errors         (printBagOfErrors)
-import           GHC_Driver_Main           (Messager, batchMsg)
-import           GHC_Driver_Monad          (Ghc (..), GhcMonad (..),
-                                            modifySession)
-import           GHC_Driver_Ppr            (showSDocForUser)
-import           GHC_Driver_Session        (DynFlags (..), GeneralFlag (..),
-                                            GhcLink (..), HasDynFlags (..),
-                                            gopt, gopt_set, gopt_unset,
-                                            picPOpts)
-import           GHC_Platform_Ways         (wayGeneralFlags,
-                                            wayUnsetGeneralFlags)
-import           GHC_Runtime_Context       (InteractiveContext (..))
-import           GHC_Settings_Config       (cProjectVersion)
-import           GHC_Types_TyThing         (TyThing (..))
-import           GHC_Types_Unique_Supply   (MonadUnique (..), UniqSupply,
-                                            initUniqSupply, mkSplitUniqSupply,
-                                            splitUniqSupply, takeUniqFromSupply)
-import           GHC_Types_Var             (varType)
-import           GHC_Utils_CliOption       (showOpt)
-import           GHC_Utils_Outputable      (SDoc, alwaysQualify,
-                                            defaultErrStyle, neverQualify, ppr,
-                                            printSDocLn, sep, text, vcat, (<+>))
-import qualified GHC_Utils_Ppr             as Pretty
+import           GHC                          (ModSummary (..), runGhc)
+import           GHC_Data_Bag                 (unitBag)
+import           GHC_Data_FastString          (FastString, fsLit, uniqueOfFS,
+                                               unpackFS)
+import           GHC_Driver_Env_Types         (HscEnv (..))
+import           GHC_Driver_Main              (Messager, batchMsg)
+import           GHC_Driver_Monad             (Ghc (..), GhcMonad (..),
+                                               modifySession)
+import           GHC_Driver_Ppr               (showSDocForUser)
+import           GHC_Driver_Session           (DynFlags (..), GeneralFlag (..),
+                                               GhcLink (..), HasDynFlags (..),
+                                               gopt, gopt_set, gopt_unset,
+                                               picPOpts)
+import           GHC_Platform_Ways            (wayGeneralFlags,
+                                               wayUnsetGeneralFlags)
+import           GHC_Runtime_Context          (InteractiveContext (..))
+import           GHC_Settings_Config          (cProjectVersion)
+import           GHC_Types_TyThing            (TyThing (..))
+import           GHC_Types_Unique_Supply      (MonadUnique (..), UniqSupply,
+                                               initUniqSupply,
+                                               mkSplitUniqSupply,
+                                               splitUniqSupply,
+                                               takeUniqFromSupply)
+import           GHC_Types_Var                (varType)
+import           GHC_Utils_CliOption          (showOpt)
+import           GHC_Utils_Outputable         (SDoc, alwaysQualify,
+                                               defaultErrStyle, neverQualify,
+                                               ppr, printSDocLn, sep, text,
+                                               vcat, (<+>))
+import qualified GHC_Utils_Ppr                as Pretty
+
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Config.Diagnostic (initDiagOpts)
+import           GHC.Driver.Env               (hscSetFlags)
+import           GHC.Driver.Errors            (printMessages)
+import           GHC.Driver.Make              (ModIfaceCache, newIfaceCache)
+import           GHC.Types.Error              (mkMessages)
+#else
+import           GHC_Driver_Errors            (printBagOfErrors)
+#endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Backend        (Backend (..))
-import           GHC.Driver.Env            (hsc_units)
-import           GHC.Utils.Logger          (HasLogger (..))
+import           GHC.Driver.Backend           (Backend (..))
+import           GHC.Driver.Env               (hsc_units)
+import           GHC.Utils.Logger             (HasLogger (..))
 #else
-import           GHC_Driver_Session        (HscTarget (..))
+import           GHC_Driver_Session           (HscTarget (..))
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC_Driver_Session        (initSDocContext,
-                                            sccProfilingEnabled)
-import           GHC_Platform_Ways         (hostFullWays)
+import           GHC_Driver_Session           (initSDocContext,
+                                               sccProfilingEnabled)
+import           GHC_Platform_Ways            (hostFullWays)
 #else
-import           GHC_Platform_Ways         (interpWays, updateWays)
+import           GHC_Platform_Ways            (interpWays, updateWays)
 #endif
 
 #if !MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Session        (targetPlatform)
+import           GHC_Driver_Session           (targetPlatform)
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import           GHC_Driver_Session        (IncludeSpecs (..), opt_P_signature)
+import           GHC_Driver_Session           (IncludeSpecs (..),
+                                               opt_P_signature)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import qualified GHC_Data_EnumSet          as FlagSet
+import qualified GHC_Data_EnumSet             as FlagSet
 #else
-import qualified Data.IntSet               as FlagSet
+import qualified Data.IntSet                  as FlagSet
 #endif
 
 -- Internal
@@ -280,6 +297,9 @@ data FnkEnv = FnkEnv
 
      -- | How the compiler was invoked.
    , envInvokedMode            :: !FnkInvokedMode
+
+     -- | ModIFaceCache used by GHC's load function, for interpreter.
+   , envInterpModIfaceCache    :: !(Maybe ModIfaceCache)
    }
 
 -- | Newtype wrapper for compiling Finkel code to Haskell AST.
@@ -409,17 +429,17 @@ instance MonadUnique Fnk where
   {-# INLINE getUniqueM #-}
 
 instance HasDynFlags Fnk where
-  getDynFlags = Fnk (\_ -> getDynFlags)
+  getDynFlags = Fnk (const getDynFlags)
   {-# INLINE getDynFlags #-}
 
 #if MIN_VERSION_ghc(9,2,0)
 instance HasLogger Fnk where
-  getLogger = Fnk (\_ -> getLogger)
+  getLogger = Fnk (const getLogger)
   {-# INLINE getLogger #-}
 #endif
 
 instance GhcMonad Fnk where
-  getSession = Fnk (\_ -> getSession)
+  getSession = Fnk (const getSession)
   {-# INLINE getSession #-}
   setSession hsc_env = Fnk (\_ -> setSession hsc_env)
   {-# INLINE setSession #-}
@@ -430,46 +450,6 @@ runFnk m fnk_env0 = do
   fnk_env1 <- initFnkEnv fnk_env0
   ref <- newIORef fnk_env1
   runGhc (envLibDir fnk_env1) (toGhc m (FnkEnvRef ref))
-
--- | Get ghc lib directory by file layout lookup or invoking @ghc
--- --print-libdir@.
-getLibDirFromGhc :: IO FilePath
-getLibDirFromGhc = do
-  -- Manually lookup the path of "ghc" executable, then try finding the
-  -- "settings" file in installed ghc. Assuming file layouts are:
-  -- is located at:
-  --
-  --   .../bin/ghc        <- symlink to ghc wrapper script
-  --   .../lib/ghc-X.Y.Z  <- $topdir
-  --
-  -- To confirm that the "ghc-X.Y.Z" is indeed the library directory to return,
-  -- checking the existence of "settings" file in the directory.  If the
-  -- "settings" file was not found, delegating the work by invoking the "ghc"
-  -- command with "--print-libdir". This is slower than additional directory and
-  -- file lookups, but should be safer and more reliable.
-  --
-  -- See "GHC.BaseDir.getBaseDir" in "ghc-boot" package, which is doing similar
-  -- work but using "getExecutablePath".
-  mb_ghc_script <- findExecutable "ghc" >>= mapM canonicalizePath
-  case mb_ghc_script of
-    Nothing -> exitWithGhcNotFound
-    Just ghc_script -> do
-      let ghc_top_dir = takeDirectory (takeDirectory ghc_script)
-          ghc_lib_dir = ghc_top_dir </> "lib" </> "ghc-" ++ cProjectVersion
-      settings_found <- doesFileExist (ghc_lib_dir </> "settings")
-      if settings_found
-         then return ghc_lib_dir
-         else do
-           out  <- readProcess "ghc" ["--print-libdir"] ""
-           return (reverse (dropWhile isSpace (reverse out)))
-{-# INLINABLE getLibDirFromGhc #-}
-
--- | Show ghc not found message and exit with 'exitFailure'.
-exitWithGhcNotFound :: IO a
-exitWithGhcNotFound = do
-  me <- getProgName
-  putStrLn $ me ++ ": Cannot find GHC executable in current PATH"
-  exitFailure
 
 -- | Extract 'Ghc' from 'Fnk'.
 toGhc :: Fnk a -> FnkEnvRef -> Ghc a
@@ -525,7 +505,11 @@ printFinkelException e = case finkelExceptionLoc e of
     prLocErr l = do
       dflags <- getDynFlags
       let em = mkWrappedMsg dflags l neverQualify (text msg)
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+      logger <- getLogger
+      let ghc_msg = mkMessages (unitBag em)
+      liftIO (printMessages logger (initDiagOpts dflags) ghc_msg)
+#elif MIN_VERSION_ghc(9,2,0)
       logger <- getLogger
       liftIO (printBagOfErrors logger dflags (unitBag em))
 #else
@@ -537,8 +521,11 @@ initFnkEnv :: FnkEnv -> IO FnkEnv
 initFnkEnv fnk_env = do
   uniqSupply <- mkSplitUniqSupply '_'
   libdir <- maybe getLibDirFromGhc pure (envLibDir fnk_env)
+  interpModIfaceCache <- getNewModIfaceCache
   pure fnk_env { envLibDir = Just libdir
-               , envUniqSupply = uniqSupply }
+               , envUniqSupply = uniqSupply
+               , envInterpModIfaceCache = Just interpModIfaceCache }
+{-# INLINABLE initFnkEnv #-}
 
 -- | Empty 'FnkEnv' for performing computation with 'Fnk'.
 emptyFnkEnv :: FnkEnv
@@ -558,19 +545,34 @@ emptyFnkEnv = FnkEnv
   , envVerbosity              = 1
   , envDumpFlags              = zeroBits
   , envInvokedMode            = ExecMode
+  , envInterpModIfaceCache    = Nothing
   }
   where
     uninitializedUniqSupply :: UniqSupply
     uninitializedUniqSupply =
       throw (FinkelException "FnkEnv: UniqSupply not initialized")
+{-# INLINABLE emptyFnkEnv #-}
 
 -- | Set current 'DynFlags' to given argument. This function also sets the
 -- 'DynFlags' in interactive context.
 setDynFlags :: GhcMonad m => DynFlags -> m ()
-setDynFlags dflags =
-  modifySession (\h -> h { hsc_dflags = dflags
-                         , hsc_IC = (hsc_IC h) {ic_dflags = dflags}})
+setDynFlags dflags = modifySession (updateDynFlags dflags)
 {-# INLINABLE setDynFlags #-}
+
+-- | Update 'DynFlags' to given argument. This function also sets the 'DynFlags'
+-- in interactive context.
+updateDynFlags :: DynFlags -> HscEnv -> HscEnv
+updateDynFlags dflags hsc_env =
+  -- From ghc 9.4, HomeUnitEnv data type contains its own homeUnitEnv_dflags
+  -- field. HomeUnitEnv data type could be reached from hsc_unit_env field of
+  -- HscEnv. Using 'hscSetFlags' function to update hsc_dflags and
+  -- homeUnitEnv_dflags at once.
+#if MIN_VERSION_ghc(9,4,0)
+  hscSetFlags dflags (hsc_env {hsc_IC = (hsc_IC hsc_env) {ic_dflags = dflags}})
+#else
+  hsc_env { hsc_dflags = dflags
+          , hsc_IC = (hsc_IC hsc_env) {ic_dflags = dflags}}
+#endif
 
 -- | Run given action with temporary 'DynFlags'.
 withTmpDynFlags :: GhcMonad m => DynFlags -> m a -> m a
@@ -650,11 +652,11 @@ mergeMacros = Map.union
 
 -- | Delete macro by macro name.
 deleteMacro :: FastString -> EnvMacros -> EnvMacros
-deleteMacro fs em = Map.delete (MacroName fs) em
+deleteMacro fs = Map.delete (MacroName fs)
 {-# INLINABLE deleteMacro #-}
 
 addMacro :: FastString -> Macro -> EnvMacros -> EnvMacros
-addMacro fs mcr em = Map.insert (MacroName fs) mcr em
+addMacro fs = Map.insert (MacroName fs)
 {-# INLINABLE addMacro #-}
 
 -- | All macros in given macro environment, filtering out the special
@@ -694,6 +696,7 @@ macroFunction mac =
 -- | Generate unique symbol with @gensym'@.
 gensym :: MonadUnique m => m Code
 gensym = gensym' "gensym_var"
+{-# INLINABLE gensym #-}
 
 -- | Generate unique symbol with given prefix.
 --
@@ -704,6 +707,7 @@ gensym' :: MonadUnique m => String -> m Code
 gensym' prefix = do
   u <- getUniqueM
   return (LForm (genSrc (Atom (aSymbol (prefix ++ show u)))))
+{-# INLINABLE gensym' #-}
 
 -- Note: [Initialization of UniqSupply]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -725,12 +729,97 @@ initUniqSupply' ini incr = do
   unless is_initialized
          (do initUniqSupply ini incr
              atomicModifyIORef' uniqSupplyInitialized (const (True, ())))
+{-# INLINABLE initUniqSupply' #-}
 
 -- | Top level 'IORef' for book keeping 'UniqSupply' initialization, obtained
 -- with 'unsafePerformIO'.
 uniqSupplyInitialized :: IORef Bool
 uniqSupplyInitialized = unsafePerformIO (newIORef False)
 {-# NOINLINE uniqSupplyInitialized #-}
+
+-- ModIfaceCache does not exist in ghc < 9.4.
+#if MIN_VERSION_ghc(9,4,0)
+getNewModIfaceCache :: MonadIO m => m ModIfaceCache
+getNewModIfaceCache = liftIO newIfaceCache
+#else
+type ModIfaceCache = ()
+getNewModIfaceCache :: MonadIO m => m ModIfaceCache
+getNewModIfaceCache = pure ()
+#endif
+{-# INLINABLE getNewModIfaceCache #-}
+
+
+-- ------------------------------------------------------------------------
+--
+-- GHC lib directory
+--
+-- ------------------------------------------------------------------------
+
+-- | Read cached ghc libdir from top-level 'IORef'.
+--
+-- If the libdir is not cached, invoke /ghc/ command to get the libdir.
+getLibDirFromGhc :: IO FilePath
+getLibDirFromGhc = do
+  mb_path <- readIORef globalLibDirRef
+  case mb_path of
+    Just path -> pure path
+    Nothing -> do
+      path <- initializeLibDirFromGhc
+      atomicModifyIORef' globalLibDirRef $ const (Just path, path)
+{-# INLINABLE getLibDirFromGhc #-}
+
+-- | Get ghc lib directory by file layout lookup or invoking @ghc
+-- --print-libdir@.
+initializeLibDirFromGhc :: IO FilePath
+initializeLibDirFromGhc = do
+  -- Manually lookup the path of "ghc" executable, then try finding the
+  -- "settings" file in installed ghc. Assuming file layouts are:
+  -- is located at:
+  --
+  --   .../bin/ghc        <- symlink to ghc wrapper script
+  --   .../lib/ghc-X.Y.Z  <- $topdir
+  --
+  -- To confirm that the "ghc-X.Y.Z" is indeed the library directory to return,
+  -- checking the existence of "settings" file in the directory.  If the
+  -- "settings" file was not found, delegating the work by invoking the "ghc"
+  -- command with "--print-libdir". This is slower than additional directory and
+  -- file lookups, but should be safer and more reliable.
+  --
+  -- See "GHC.BaseDir.getBaseDir" in "ghc-boot" package, which is doing similar
+  -- work but using "getExecutablePath".
+  mb_ghc_script <- findExecutable "ghc" >>= mapM canonicalizePath
+  case mb_ghc_script of
+    Nothing -> exitWithGhcNotFound
+    Just ghc_script -> do
+      let ghc_top_dir = takeDirectory (takeDirectory ghc_script)
+          ghc_lib_dir0 = ghc_top_dir </> "lib" </> "ghc-" ++ cProjectVersion
+#if MIN_VERSION_ghc(9,4,0)
+          -- Output of "ghc --print-libdir" changed in ghc 9.4.
+          ghc_lib_dir1 = ghc_lib_dir0 </> "lib"
+#else
+          ghc_lib_dir1 = ghc_lib_dir0
+#endif
+      settings_found <- doesFileExist (ghc_lib_dir1 </> "settings")
+      if settings_found
+         then return ghc_lib_dir1
+         else do
+           out <- readProcess "ghc" ["--print-libdir"] ""
+           return (reverse (dropWhile isSpace (reverse out)))
+{-# INLINABLE initializeLibDirFromGhc #-}
+
+-- | Show ghc not found message and exit with 'exitFailure'.
+exitWithGhcNotFound :: IO a
+exitWithGhcNotFound = do
+  me <- getProgName
+  putStrLn $ me ++ ": Cannot find GHC executable in current PATH"
+  exitFailure
+{-# INLINABLE exitWithGhcNotFound #-}
+
+-- Note: This global ghc libdir is obtained and cached at runtime, not at
+-- compile time.
+globalLibDirRef :: IORef (Maybe FilePath)
+globalLibDirRef = unsafePerformIO $ newIORef Nothing
+{-# NOINLINE globalLibDirRef #-}
 
 
 -- ---------------------------------------------------------------------
@@ -832,7 +921,9 @@ dumpDynFlags fnk_env label dflags =
       , "  interpWays:" <+> text (show interpWays)
 #endif
       , "  importPaths:" <+> sep (map text (importPaths dflags))
+#if !MIN_VERSION_ghc(9,4,0)
       , "  optLevel:" <+> text (show (optLevel dflags))
+#endif
 #if MIN_VERSION_ghc(9,2,0)
       , "  homeUnitId_:" <+> ppr (homeUnitId_ dflags)
 #elif MIN_VERSION_ghc(9,0,0)
@@ -913,7 +1004,7 @@ fnkEnvOptions =
   ]
   where
     opt = Option []
-    debug_opt flag descr = opt [to_str flag] (NoArg (fopt_set flag)) descr
+    debug_opt flag = opt [to_str flag] (NoArg (fopt_set flag))
     to_str = map replace . show
     replace '_' = '-'
     replace c   = toLower c

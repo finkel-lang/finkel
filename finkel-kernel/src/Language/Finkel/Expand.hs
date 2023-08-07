@@ -6,7 +6,10 @@ module Language.Finkel.Expand
   , expand1
   , expands
   , expands'
+  , newHscEnvForExpand
   , withExpanderSettings
+  , setExpanding
+  , isExpanding
   , bcoDynFlags
   , isInterpreted
   , discardInteractiveContext
@@ -15,14 +18,12 @@ module Language.Finkel.Expand
 #include "ghc_modules.h"
 
 -- base
-import           Control.Concurrent     (MVar, ThreadId, modifyMVar, myThreadId,
-                                         newMVar)
-import           Control.Monad          (foldM)
+import           Control.Concurrent     (MVar, modifyMVar, newMVar)
 import           Control.Monad.IO.Class (MonadIO (..))
 import           Data.Char              (isLower)
-import           Data.Functor           (void)
-import           Data.IORef             (IORef, atomicModifyIORef', newIORef,
-                                         readIORef)
+import           Data.Foldable          (foldlM, for_)
+import           Data.IORef             (atomicModifyIORef', newIORef)
+import           Data.Maybe             (isJust)
 import           System.IO.Unsafe       (unsafePerformIO)
 
 -- containers
@@ -36,42 +37,59 @@ import qualified Data.Set               as Set
 import           Control.Monad.Catch    (bracket)
 
 -- ghc
-import           GHC                    (setSessionDynFlags)
 import           GHC_Data_FastString    (FastString, headFS)
 import           GHC_Driver_Env_Types   (HscEnv (..))
 import           GHC_Driver_Main        (newHscEnv)
-import           GHC_Driver_Monad       (Ghc (..), Session (..), getSession,
-                                         setSession)
+import           GHC_Driver_Monad       (Ghc (..), GhcMonad (..), Session (..),
+                                         getSession, setSession)
 import           GHC_Driver_Session     (DynFlags (..), GeneralFlag (..),
                                          GhcLink (..), HasDynFlags (..),
-                                         unSetGeneralFlag', updOptLevel)
-import           GHC_Runtime_Context    (InteractiveContext (..),
-                                         emptyInteractiveContext)
-import           GHC_Types_Name         (nameIsFromExternalPackage)
+                                         setGeneralFlag', unSetGeneralFlag',
+                                         updOptLevel)
 import           GHC_Types_SrcLoc       (GenLocated (..))
 import           GHC_Utils_Outputable   (Outputable (..), SDoc, cat, fsep, nest,
                                          vcat)
 
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Env         (discardIC)
+#else
+import           GHC_Runtime_Context    (InteractiveContext (..),
+                                         emptyInteractiveContext)
+import           GHC_Types_Name         (nameIsFromExternalPackage)
+#endif
+
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Env         (hsc_home_unit)
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Backend     (Backend (..))
-import           GHC.Driver.Env         (hsc_home_unit)
 #else
+-- ghc
 import           GHC_Driver_Session     (HscTarget (..))
 #endif
 
-#if !MIN_VERSION_ghc(9,2,0) && MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
 import           GHC_Driver_Session     (homeUnit)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC                    (setSessionDynFlags)
 import           GHC_Platform_Ways      (Way (..), hostFullWays)
 #else
 import           GHC_Driver_Session     (Way (..), interpWays, thisPackage)
 #endif
 
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Runtime.Loader     (initializePlugins)
+#elif MIN_VERSION_ghc(8,6,0)
+import           DynamicLoading         (initializePlugins)
+#endif
+
 #if MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Session     (WarningFlag (..), setGeneralFlag',
-                                         wopt_unset)
+import           GHC_Driver_Session     (WarningFlag (..), wopt_unset)
+#else
+import           GHC_Driver_Session     (Settings (..), rawSettings)
 #endif
 
 -- Internal
@@ -81,7 +99,7 @@ import           Language.Finkel.Form
 
 -- ---------------------------------------------------------------------
 --
--- Macro expander
+-- Session management
 --
 -- ---------------------------------------------------------------------
 
@@ -116,7 +134,7 @@ withExpanderSettingsE act =
       case envSessionForExpand fnk_env of
         Just he -> setSession $! discardInteractiveContext he
         Nothing -> do
-          he1 <- new_hsc_env dflags
+          he1 <- newHscEnvForExpand dflags
           setSession he1
           postSetSession
           he2 <- getSession
@@ -130,7 +148,7 @@ withExpanderSettingsE act =
       setSession hsc_env_old
 
 #if MIN_VERSION_ghc(9,0,0)
-    -- To set the "hsc_interp" field in new session.
+    -- To set the "hsc_interp" field in the new session.
     postSetSession = getDynFlags >>= setSessionDynFlags
 #else
     postSetSession = return ()
@@ -141,27 +159,19 @@ withExpanderSettingsE act =
 -- Adjusting the 'DynFlags' used by the macro expansion session, to support
 -- evaluating expressions in dynamic and non-dynamic builds of the Finkel
 -- compiler executable.
-new_hsc_env :: MonadIO m => DynFlags -> m HscEnv
-new_hsc_env dflags0 = do
+newHscEnvForExpand :: MonadIO m => DynFlags -> m HscEnv
+newHscEnvForExpand dflags0 = do
   let dflags1 = bcoDynFlags dflags0
-#if MIN_VERSION_ghc(9,2,0)
-      ways1 = targetWays_ dflags1
-      dflags1_no_way_dyn = dflags1 {targetWays_ = removeWayDyn ways1}
-#else
-      ways1 = ways dflags1
-      dflags1_no_way_dyn = dflags1 {ways = removeWayDyn ways1}
-#endif
-      dflags2 = if interp_has_no_way_dyn
-                   then dflags1_no_way_dyn
+      dflags2 = if interpHasNoWayDyn
+                   then removeWayDyn dflags1
                    else dflags1
-
   liftIO $! newHscEnv dflags2
 
 -- | Run given 'Fnk' action with macro expansion settings for 'GhcPluginMode'.
 withExpanderSettingsG :: Fnk a -> Fnk a
 withExpanderSettingsG act = do
-  is_expanding <- isExpandingThread
-  if is_expanding
+  dflags <- getDynFlags
+  if isExpanding dflags
     then act
     else withGlobalSession act
 
@@ -181,102 +191,134 @@ withGlobalSession act0 = do
   fer <- Fnk pure
   dflags0 <- getDynFlags
 
-  let prepare mex0 = do
+  let prepare = initializeGlobalSession
+      restore = setSession
+      act1 = bracket prepare restore $ \mex0 -> do
         let mex1 = discardInteractiveContext mex0
-        hsc_env_old <- getSession
         setSession mex1
-        modifyFnkEnv (\e -> e {envSessionForExpand = Just mex1})
-        markExpandingThread
-        pure hsc_env_old
 
-      restore hsc_env_old = do
-        hsc_env_new <- getSession
-        modifyFnkEnv (\e -> e {envSessionForExpand = Just hsc_env_new})
-        unmarkExpandingThread
-        setSession hsc_env_old
+        -- XXX: Shoud keep the old `envDefaultDynFlags' as-is?
+        modifyFnkEnv (\e -> e { envSessionForExpand = Just mex1
+                              , envDefaultDynFlags = Just (hsc_dflags mex1) })
 
-      act1 mex = bracket (prepare mex) restore (const act0)
-      act2 mex = (,) <$> act1 mex <*> getFnkEnv
-
-      act3 = do
-        void (getDynFlags >>= setSessionDynFlags)
-        mex <- getSession
-        toGhc (act2 mex) fer
+        retval <- act0
+        mex2 <- getSession
+        modifyFnkEnv (\e -> e { envSessionForExpand = Just mex2 })
+        fnk_env <- getFnkEnv
+        pure (retval, fnk_env)
 
   (retval, fnk_env) <- liftIO $ do
     modifyMVar globalSessionVar $ \mb_s0 -> do
-      s1 <- case mb_s0 of
+      s1@(Session r1) <- case mb_s0 of
         Just s0 -> pure s0
-        Nothing -> do
-          hsc_env_new <- new_hsc_env dflags0
-          Session <$> newIORef hsc_env_new
-      (retval, fnk_env) <- unGhc act3 s1
-      case envSessionForExpand fnk_env of
-        Just he | Session r <- s1 -> atomicModifyIORef' r (const (he, ()))
-        _                         -> pure ()
+        Nothing -> newHscEnvForExpand dflags0 >>= fmap Session . newIORef
+      (retval, fnk_env) <- unGhc (toGhc act1 fer) s1
+      for_ (envSessionForExpand fnk_env) $ \he ->
+        atomicModifyIORef' r1 (const (he, ()))
       pure (Just s1, (retval, fnk_env))
 
   putFnkEnv fnk_env
   pure retval
+
+initializeGlobalSession :: GhcMonad m => m HscEnv
+initializeGlobalSession = do
+  -- Avoid 'setSessionDynFlags' in ghc < 9.0, since it redundantly loads package
+  -- environment.
+  --
+  -- In ghc >= 9.0, 'setSessionDynFlags' is initializing the interpreter, and
+  -- seems like 'setSessionDynFlags' need to be called before initializing
+  -- plugins, so calling at the time of session initialization, from GhcMonad.
+  initialized <- liftIO $ modifyMVar globalSessionInitializedVar $
+    \initialized -> pure (True, initialized)
+
+  if initialized
+    then getSession
+    else do
+#if MIN_VERSION_ghc(9,0,0)
+      _ <- getDynFlags >>= setSessionDynFlags
+#endif
+      getSession >>= initializePlugin'
+{-# INLINABLE initializeGlobalSession #-}
+
+-- Version compatible variant of 'initializePlugins'.
+initializePlugin' :: MonadIO m => HscEnv -> m HscEnv
+#if MIN_VERSION_ghc(9,2,0)
+initializePlugin' = liftIO . initializePlugins
+#elif MIN_VERSION_ghc(8,6,0)
+initializePlugin' hsc_env = do
+  plugin_dflags <- liftIO $ initializePlugins hsc_env (hsc_dflags hsc_env)
+  return (updateDynFlags plugin_dflags hsc_env)
+#else
+initializePlugin' = pure
+#endif
+{-# INLINABLE initializePlugin' #-}
+
+-- | Unsafe global 'Mvar' to track initialization of 'globalSessionVar'.
+globalSessionInitializedVar :: MVar Bool
+globalSessionInitializedVar = unsafePerformIO (newMVar False)
+{-# NOINLINE globalSessionInitializedVar #-}
 
 -- | Unsafe global 'MVar' to share the 'HscEnv' when compiling as plugin.
 globalSessionVar :: MVar (Maybe Session)
 globalSessionVar = unsafePerformIO (newMVar Nothing)
 {-# NOINLINE globalSessionVar #-}
 
--- Note: [Global list of ThreadIds]
--- --------------------------------
+-- XXX: Workaround for passing state to recursively called "load'" function
+-- defined in GHC driver. Modifying the "rawSettings" field in the DynFlags with
+-- dummy String value, so that recursive call to the "load'" function can tell
+-- whether current module is compiled for macro expansion or not.
 --
--- This global variable is considered experimental, looking for better
--- alternative solution without using unsafe global IORef.
---
--- The list of 'ThreadId's are used to determine whether current thread is
--- undergoing macro expansion or not, to support recursively compiling home
--- package modules.
+-- The "parMakeCount" field update is a wokaround for concurrent build. Current
+-- approach does not work with "-j" ghc option, which could cause race
+-- conditions when multiple mudoles were requiring same home package module,
+-- since the HscEnv is shared between all home package modules.
 
-type ExpandingThreads = [ThreadId]
+-- | Modify given 'DynFlags' as in macro expansion state.
+setExpanding :: DynFlags -> DynFlags
+setExpanding dflags0 =
+  let dflags1 = dflags0 {parMakeCount = Just 1}
+      raw_settings = rawSettings dflags1
+#if MIN_VERSION_ghc(8,10,0)
+      dflags2 = dflags1 {rawSettings = expandingKey : raw_settings}
+#else
+      add_key s = s {sRawSettings = expandingKey : raw_settings}
+      dflags2 = dflags1 {settings = add_key (settings dflags1)}
+#endif
+  in  dflags2
+{-# INLINABLE setExpanding #-}
 
-globalExpandingThreadsRef :: IORef ExpandingThreads
-globalExpandingThreadsRef = unsafePerformIO (newIORef [])
-{-# NOINLINE globalExpandingThreadsRef #-}
+-- | 'True' if given 'DynFlags' is in macro expansion state.
+isExpanding :: DynFlags -> Bool
+isExpanding = isJust . lookup (fst expandingKey) . rawSettings
+{-# INLINABLE isExpanding #-}
 
-isExpandingThread :: MonadIO m => m Bool
-isExpandingThread = liftIO $ do
-  me <- myThreadId
-  elem me <$> readIORef globalExpandingThreadsRef
-{-# INLINABLE isExpandingThread #-}
+-- | Internally used key value pair to mark macro expansion state.
+expandingKey :: (String, String)
+expandingKey = ("FNK_MEX", "1")
+{-# INLINABLE expandingKey #-}
 
-markExpandingThread :: MonadIO m => m ()
-markExpandingThread = liftIO $ do
-  me <- myThreadId
-  atomicModifyIORef' globalExpandingThreadsRef $ \ts ->
-    (me : ts, ())
-{-# INLINABLE markExpandingThread #-}
-
-unmarkExpandingThread :: MonadIO m => m ()
-unmarkExpandingThread = liftIO $ do
-  me <- myThreadId
-  atomicModifyIORef' globalExpandingThreadsRef $ \ts ->
-    (filter (/= me) ts, ())
-{-# INLINABLE unmarkExpandingThread #-}
+removeWayDyn :: DynFlags -> DynFlags
+#if MIN_VERSION_ghc(9,2,0)
+removeWayDyn df = df {targetWays_ = removeDynFromWays (targetWays_ df)}
+#else
+removeWayDyn df = df {ways = removeDynFromWays (ways df)}
+#endif
+{-# INLINABLE removeWayDyn #-}
 
 #if MIN_VERSION_ghc(9,0,0)
-removeWayDyn :: Set.Set Way -> Set.Set Way
-removeWayDyn = Set.filter (/= WayDyn)
+removeDynFromWays :: Set.Set Way -> Set.Set Way
+removeDynFromWays = Set.filter (/= WayDyn)
 #else
-removeWayDyn :: [Way] -> [Way]
-removeWayDyn = filter (/= WayDyn)
+removeDynFromWays :: [Way] -> [Way]
+removeDynFromWays = filter (/= WayDyn)
 #endif
-
-interp_has_no_way_dyn :: Bool
-#if MIN_VERSION_ghc(9,0,0)
-interp_has_no_way_dyn = WayDyn `notElem` hostFullWays
-#else
-interp_has_no_way_dyn = WayDyn `notElem` interpWays
-#endif
+{-# INLINABLE removeDynFromWays #-}
 
 -- | From `discardIC'.
 discardInteractiveContext :: HscEnv -> HscEnv
+#if MIN_VERSION_ghc(9,4,0)
+discardInteractiveContext = discardIC
+#else
 discardInteractiveContext hsc_env =
   let dflags = hsc_dflags hsc_env
       empty_ic = emptyInteractiveContext dflags
@@ -288,14 +330,16 @@ discardInteractiveContext hsc_env =
            else ic_name empty_ic
         where
          old_name = ic_name old_ic
-#if MIN_VERSION_ghc(9,2,0)
+#  if MIN_VERSION_ghc(9,2,0)
       this_pkg = hsc_home_unit hsc_env
-#elif MIN_VERSION_ghc(9,0,0)
+#  elif MIN_VERSION_ghc(9,0,0)
       this_pkg = homeUnit dflags
-#else
+#  else
       this_pkg = thisPackage dflags
-#endif
+#  endif
   in  hsc_env {hsc_IC = empty_ic {ic_monad = new_ic_monad}}
+#endif
+{-# INLINABLE discardInteractiveContext #-}
 
 -- | Setup 'DynFlags' for interactive evaluation.
 bcoDynFlags :: DynFlags -> DynFlags
@@ -308,8 +352,8 @@ bcoDynFlags dflags0 =
                         , hscTarget = HscInterpreted
 #endif
                         }
-      dflags2 = foldr unSetGeneralFlag' dflags1 [ Opt_Hpc
-                                                , Opt_BuildDynamicToo ]
+      dflags2 = unSetGeneralFlag' Opt_Hpc $
+                unSetGeneralFlag' Opt_BuildDynamicToo dflags1
 #if MIN_VERSION_ghc(9,2,0)
       dflags3 = setGeneralFlag' Opt_ByteCode dflags2
 #elif MIN_VERSION_ghc(8,10,3)
@@ -319,7 +363,9 @@ bcoDynFlags dflags0 =
 #else
       dflags3 = dflags2
 #endif
-      dflags4 = updOptLevel 0 dflags3
+      dflags4 = setGeneralFlag' Opt_IgnoreOptimChanges $
+                setGeneralFlag' Opt_IgnoreHpcChanges $
+                updOptLevel 0 dflags3
 #if MIN_VERSION_ghc(8,10,0)
       -- XXX: Warning message for missing home package module is shown with
       -- -Wall option, suppressing for now ...
@@ -329,6 +375,30 @@ bcoDynFlags dflags0 =
 #endif
   in  dflags5
 {-# INLINABLE bcoDynFlags #-}
+
+interpHasNoWayDyn :: Bool
+#if MIN_VERSION_ghc(9,0,0)
+interpHasNoWayDyn = WayDyn `notElem` hostFullWays
+#else
+interpHasNoWayDyn = WayDyn `notElem` interpWays
+#endif
+{-# INLINABLE interpHasNoWayDyn #-}
+
+-- | 'True' when the 'DynFlags' is using interpreter.
+isInterpreted :: DynFlags -> Bool
+#if MIN_VERSION_ghc(9,2,0)
+isInterpreted dflags = backend dflags == Interpreter
+#else
+isInterpreted dflags = hscTarget dflags == HscInterpreted
+#endif
+{-# INLINABLE isInterpreted #-}
+
+
+-- ---------------------------------------------------------------------
+--
+-- Macro expander
+--
+-- ---------------------------------------------------------------------
 
 -- | Returns a list of bounded names in let expression.
 boundedNames :: Code -> [FastString]
@@ -446,7 +516,7 @@ expand form =
       return $! LForm (L l (List (kw:binds':body')))
 
     expandDo l kw body = do
-      (_, body') <- foldM expandInDo ([], []) body
+      (_, body') <- foldlM expandInDo ([], []) body
       return $! LForm (L l (List (kw:reverse body')))
 
     expandFunBind l kw rest = do
@@ -527,17 +597,9 @@ expand1 form =
     _ -> return form
 {-# INLINABLE expand1 #-}
 
--- | 'True' when the 'DynFlags' is using interpreter.
-isInterpreted :: DynFlags -> Bool
-#if MIN_VERSION_ghc(9,2,0)
-isInterpreted dflags = backend dflags == Interpreter
-#else
-isInterpreted dflags = hscTarget dflags == HscInterpreted
-#endif
-{-# INLINABLE isInterpreted #-}
-
 -- | Debug function fot this module.
 debug :: FnkEnv -> Maybe SDoc -> [SDoc] -> Fnk ()
 debug fnk_env mb_extra msgs0 =
   let msgs1 = maybe msgs0 (: msgs0) mb_extra
   in  debugWhen fnk_env Fnk_trace_expand msgs1
+{-# INLINABLE debug #-}

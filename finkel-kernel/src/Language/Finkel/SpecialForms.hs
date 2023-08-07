@@ -62,7 +62,18 @@ import GHC_Unit_Module                   (Module, moduleNameString)
 import GHC_Unit_Module_Graph             (ModuleGraph, showModMsg)
 import GHC_Unit_Module_ModSummary        (ModSummary (..))
 import GHC_Utils_Error                   (compilationProgressMsg)
-import GHC_Utils_Outputable              (SDoc, hcat, ppr, text, (<+>))
+import GHC_Utils_Outputable              (SDoc, fsep, nest, ppr, text, vcat,
+                                          (<+>))
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Env                    (hsc_HPT, hsc_units)
+import GHC.Iface.Recomp                  (CompileReason (..))
+import GHC.Types.PkgQual                 (PkgQual (..))
+import GHC.Unit.Module.Graph             (ModuleGraphNode (..))
+import GHC.Unit.State                    (pprWithUnitState)
+import GHC.Utils.Logger                  (logVerbAtLeast)
+import GHC.Utils.Outputable              (empty)
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Types_SrcLoc                  (UnhelpfulSpanReason (..))
@@ -215,17 +226,12 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
 
   catMaybes <$> (getNames >>= mapM lookupName)
 
-addImportedMacro :: FnkEnv -> HscEnv -> TyThing -> Fnk ()
-addImportedMacro fnk_env hsc_env thing = when (isMacro hsc_env thing) go
+addImportedMacro :: HscEnv -> TyThing -> Fnk ()
+addImportedMacro hsc_env thing = go
   where
     go =
       case thing of
         AnId var -> do
-          debug fnk_env
-                "addImportedMacro"
-                [hcat [ "Adding macro `"
-                      , ppr (varName var)
-                      , "' to current compiler session" ]]
           let name_str = showPpr dflags (varName var)
               name_sym = toCode (aSymbol name_str)
           coerceMacro dflags name_sym >>= insertMacro (fsLit name_str)
@@ -245,13 +251,20 @@ withInternalLoad act = do
   -- 'DynFlags' in the current session might be updated by the file local
   -- pragmas.  Using the 'DynFlags' from 'envDefaultDynFlags', which is
   -- initialized when entering the 'make' function in 'initSessionForMake'.
-  let acquire = (,) <$> getDynFlags <*> getFnkEnv
-      restore (dflags, fnk_env) = do
+  --
+  -- Updating the current context in HscEnv, to avoid home module import errors,
+  -- which may happen when compiling with bytecode interpreter (e.g., done when
+  -- generating Haddock documentation) in ghc 9.4.2.
+  --
+  let acquire = (,,) <$> getContext <*> getDynFlags <*> getFnkEnv
+      restore (context, dflags, fnk_env) = do
+        setContext context
         setDynFlags dflags
         putFnkEnv fnk_env
       no_force_recomp = unSetGeneralFlag' Opt_ForceRecomp
       update = setDynFlags . no_force_recomp . bcoDynFlags
-  bracket acquire restore $ \(_dflags, fnk_env) -> do
+  bracket acquire restore $ \(_context, _dflags, fnk_env) -> do
+    setContext []
     mapM_ update (envDefaultDynFlags fnk_env)
     putFnkEnv fnk_env {envMessager = if 0 < envVerbosity fnk_env
                                         then internalLoadMessager
@@ -261,20 +274,39 @@ withInternalLoad act = do
 internalLoadMessager :: Messager
 internalLoadMessager hsc_env mod_index recomp node =
   -- See: GHC.Driver.Main.batchMsg
+#if MIN_VERSION_ghc(9,4,0)
+  case recomp of
+    UpToDate -> when (logVerbAtLeast (hsc_logger hsc_env) 2)
+                     (showMsg (text "Skipping ") "")
+    NeedsRecompile reason0 ->
+      let herald = case node of
+            LinkNode {}          -> "Linking "
+            InstantiationNode {} -> "Instantiating "
+            ModuleNode {}        -> "Compiling "
+      in  showMsg (text herald) $ case reason0 of
+        MustCompile -> empty
+        (RecompBecause reason1) ->
+          let state = hsc_units hsc_env
+          in  text " [" <> pprWithUnitState state (ppr reason1) <> text "]"
+#else
   case recomp of
     MustCompile       -> showMsg "Compiling " ""
     UpToDate          -> when (verbosity dflags >= 2) (showMsg "Skipping " "")
-    RecompBecause why -> showReason why
+#  if MIN_VERSION_ghc(9,2,0)
+    RecompBecause why -> showMsg "Compiling " (" [" <> text why <> "]")
+#  else
+    RecompBecause why -> showMsg "Compiling " (" [" ++ why ++ "]")
+#  endif
+#endif
   where
     dflags = hsc_dflags hsc_env
-    showReason why =
-#if MIN_VERSION_ghc(9,2,0)
-      showMsg "Compiling " (" [" <> text why <> "]")
-#else
-      showMsg "Compiling " (" [" ++ why ++ "]")
-#endif
     showMsg msg reason =
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+      compilationProgressMsg (hsc_logger hsc_env)
+        (text "(*) " <> showModuleIndex mod_index <> msg <>
+         showModMsg dflags (recompileRequired recomp) node <>
+         reason)
+#elif MIN_VERSION_ghc(9,2,0)
       compilationProgressMsg (hsc_logger hsc_env) dflags
         (text "(*) " <> showModuleIndex mod_index <> msg <>
          showModMsg dflags (recompileRequired recomp) node <>
@@ -315,7 +347,7 @@ makeMissingHomeMod (L _ idecl) = do
       dflags = hsc_dflags hsc_env
       tr = debug fnk_env "makeMissinghomeMod"
       do_mk msgs = tr msgs >> smpl_mk
-      dont_mk msgs = tr msgs
+      dont_mk = tr
 
   case lookupHpt (hsc_HPT hsc_env) mname of
     -- When the compiler was invoked as ghc plugin, skipping compilation of home
@@ -329,10 +361,16 @@ makeMissingHomeMod (L _ idecl) = do
       case mb_ts of
         Just ts -> do_mk ["Found file" <+> text (targetSourcePath ts)]
         Nothing -> do
-          fresult <- liftIO (findImportedModule hsc_env mname Nothing)
+#if MIN_VERSION_ghc(9,4,0)
+          let no_pkg_qual = NoPkgQual
+#else
+          let no_pkg_qual = Nothing
+#endif
+          fresult <- liftIO (findImportedModule hsc_env mname no_pkg_qual)
           case fresult of
             Found {} -> dont_mk ["Skipping" <+> ppr mname]
             _        -> do_mk ["Module" <+> ppr mname <+> "not found"]
+
 
 -- ---------------------------------------------------------------------
 --
@@ -417,8 +455,14 @@ m_require form =
              -- Handle home modules.
              makeMissingHomeMod lidecl
              context <- getContext
-             setContext (IIDecl idecl : context)
+             tr (case context of
+                   [] -> ["Got empty context"]
+                   _  -> "Got context: " : [nest 2 (vcat (map ppr context))])
+             let new_context = IIDecl idecl : context
+             tr ("Calling setContext with:" : [nest 2 (vcat (map ppr new_context))])
+             setContext new_context
              mgraph <- hsc_mod_graph <$> getSession
+             tr ["Calling lookupModule"]
              mdl <- lookupModule mname Nothing
 
              -- Update required module names and compiled home modules in
@@ -431,12 +475,17 @@ m_require form =
              modifyFnkEnv (\e -> e {envRequiredHomeModules = reqs1})
 
              -- Look up Macros in parsed module, add to FnkEnv when found.
+             tr ["Getting module info"]
              mb_minfo <- getModuleInfo mdl
              case mb_minfo of
                Just minfo -> do
+                 tr ["Getting TyThings from IDecl:" <+> ppr lidecl]
                  things <- getTyThingsFromIDecl lidecl minfo
                  hsc_env <- getSession
-                 mapM_ (addImportedMacro fnk_env hsc_env) things
+                 let macros = filter (isMacro hsc_env) things
+                 tr ["Number of TyThings:" <+> text (show (length things))]
+                 tr ["Adding macros:", nest 2 (fsep (map ppr macros))]
+                 mapM_ (addImportedMacro hsc_env) macros
                  return emptyForm
                Nothing ->
                  finkelSrcError form
@@ -471,7 +520,10 @@ m_evalWhenCompile form =
             modifySession (\hsc_env -> hsc_env {hsc_IC=ic})
             fnk_env <- getFnkEnv
             hsc_env <- getSession
-            mapM_ (addImportedMacro fnk_env hsc_env) tythings
+            let macros = filter (isMacro hsc_env) tythings
+            debug fnk_env "m_evalWhenCompile"
+                  ["Adding macros:", nest 2 (fsep (map ppr macros))]
+            mapM_ (addImportedMacro hsc_env) macros
 
           return emptyForm
 
@@ -546,10 +598,7 @@ concatS qual =
 
 -- | Debug function for this module
 debug :: (MonadIO m, HasDynFlags m) => FnkEnv -> SDoc -> [SDoc] -> m ()
-debug fnk_env fn msgs =
-  debugWhen fnk_env
-            Fnk_trace_spf
-            (hcat [";;; [Language.Finkel.SpecialForms.", fn, "]:"] : msgs)
+debug fnk_env _fn = debugWhen fnk_env Fnk_trace_spf
 
 mgLookupModule' :: ModuleGraph -> Module -> Maybe ModSummary
 #if MIN_VERSION_ghc (8,4,0)

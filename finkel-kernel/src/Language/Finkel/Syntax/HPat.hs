@@ -27,6 +27,10 @@ import GHC_Utils_Lexeme                (isLexCon, isLexConId, isLexConSym,
 
 import GHC_Types_SrcLoc                (Located)
 
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Hs.Pat                      (gParPat)
+#endif
+
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Hs_Pat                      (ConLikeP)
 #elif MIN_VERSION_ghc(8,4,0)
@@ -277,10 +281,14 @@ mkTuplePat' ps =
 {-# INLINABLE mkTuplePat' #-}
 
 mkParPat' :: HPat -> HPat
+#if MIN_VERSION_ghc(9,4,0)
+mkParPat' pat@(L l _) = cL l (gParPat pat)
+#else
 mkParPat' (dL->L l p) =
   -- This newline is mandatory to support 'NOEXT' CPP macro. Seems like, the C
   -- preprocessor is not working well with view pattern.
   cL l (ParPat NOEXT (cL l p))
+#endif
 {-# INLINABLE mkParPat' #-}
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -295,7 +303,9 @@ mkConPat = ConPatIn
 #endif
 
 mkNPat' :: Located (HsOverLit PARSED) -> Pat PARSED
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+mkNPat' li = mkNPat (reLocA li) Nothing unused
+#elif MIN_VERSION_ghc(9,2,0)
 mkNPat' li = mkNPat li Nothing unused
 #else
 mkNPat' li = mkNPat li Nothing

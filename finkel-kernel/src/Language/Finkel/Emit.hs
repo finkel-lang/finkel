@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- | Emit Haskell source code from Haskell AST value.
@@ -52,7 +53,6 @@ import GHC_Hs_Decls                      (ConDecl (..), DocDecl (..),
                                           HsDecl (..), InjectivityAnn (..),
                                           LConDecl, LDocDecl, LFamilyDecl,
                                           TyClDecl (..), TyFamInstEqn)
-import GHC_Hs_Doc                        (LHsDocString)
 import GHC_Hs_ImpExp                     (IE (..), LIE)
 import GHC_Hs_Type                       (ConDeclField (..), HsConDetails (..),
                                           HsContext, HsType (..),
@@ -63,14 +63,19 @@ import GHC_Types_Basic                   (TopLevelFlag (..))
 import GHC_Types_Fixity                  (LexicalFixity (..))
 import GHC_Types_Name_Reader             (RdrName)
 import GHC_Types_SrcLoc                  (GenLocated (..), sortLocated, unLoc)
-import GHC_Utils_Outputable              (Depth (..), Outputable (..),
-                                          OutputableBndr (..), SDoc, braces,
-                                          char, comma, darrow, dcolon, dot,
-                                          empty, equals, forAllLit, fsep, hang,
-                                          hsep, interpp'SP, interppSP, lparen,
-                                          nest, parens, pprWithCommas,
-                                          punctuate, sep, text, vbar, vcat,
-                                          ($$), ($+$), (<+>), (<>))
+import GHC_Utils_Outputable              (Outputable (..), OutputableBndr (..),
+                                          SDoc, braces, char, comma, darrow,
+                                          dcolon, dot, empty, equals, forAllLit,
+                                          fsep, hang, hsep, interpp'SP,
+                                          interppSP, lparen, nest, parens,
+                                          pprWithCommas, punctuate, sep, text,
+                                          vbar, vcat, ($$), ($+$), (<+>), (<>))
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Hs.Doc                        (LHsDoc, hsDocString)
+#else
+import GHC_Hs_Doc                        (LHsDocString)
+#endif
 
 #if MIN_VERSION_ghc(9,2,0)
 import GHC.Driver.Env                    (hsc_units)
@@ -115,6 +120,7 @@ import OccName                           (HasOccName (..))
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Hs_Type                       (HsForAllTelescope (..), HsScaled (..),
                                           hsScaledThing, mkHsForAllInvisTele)
+import GHC_Utils_Outputable              (Depth (..))
 #elif MIN_VERSION_ghc(8,10,0)
 import GHC_Types_Var                     (ForallVisFlag (..))
 #endif
@@ -135,7 +141,9 @@ import GHC_Hs_Decls                      (pprHsFamInstLHS)
 import GHC_Hs_Decls                      (pprFamInstLHS)
 #endif
 
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(9,4,0)
+import GHC_Hs_Doc                        (HsDocString, renderHsDocString)
+#elif MIN_VERSION_ghc(8,6,0)
 import GHC_Hs_Doc                        (HsDocString, unpackHDS)
 #else
 import GHC_Data_FastString               (unpackFS)
@@ -335,7 +343,7 @@ instance (HsSrc b) => HsSrc (GenLocated a b) where
 #if MIN_VERSION_ghc(9,2,0)
 #define HSMODANN _hsmodAnn
 #else
-#define HSMODANN {- no hsmodAnn #-}
+#define HSMODANN {- no hsmodAnn -}
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -380,8 +388,8 @@ instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (IE a)) where
   toHsSrc _st (Hsrc ie) =
     case ie of
       IEGroup _EXT n doc  -> commentWithHeader ("-- " ++ replicate n '*')
-                                                doc
-      IEDoc _EXT doc      -> commentWithHeader "-- |" doc
+                                               (getHsDocString doc)
+      IEDoc _EXT doc      -> commentWithHeader "-- |" (getHsDocString doc)
       IEDocNamed _EXT doc -> text ("-- $" ++ doc)
       _                   -> ppr ie
 
@@ -451,7 +459,11 @@ instance (OUTPUTABLE a pr) => HsSrc (HsType a) where
     HsForAllTy {hst_bndrs=tvs, hst_body=ty1} ->
       sep [pprHsForAllTvs tvs, hsrc ty1]
 #endif
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+    HsQualTy {hst_ctxt=ctxt, hst_body=ty1} ->
+      sep [ pprHsContextAlways (unLoc ctxt)
+          , hsrc ty1 ]
+#elif MIN_VERSION_ghc(9,2,0)
     HsQualTy {hst_ctxt=ctxt, hst_body=ty1} ->
       sep [ maybe (parens empty <+> darrow) (pprHsContextAlways . unLoc) ctxt
           , hsrc ty1]
@@ -464,8 +476,12 @@ instance (OUTPUTABLE a pr) => HsSrc (HsType a) where
 #else
     HsFunTy _EXT ty1 ty2 -> t_arr_t ty1 ty2
 #endif
-    HsDocTy _EXT ty' (L _ docstr) ->
-      ppr ty' $+$ commentWithHeader "-- ^" docstr
+    HsDocTy _EXT ty1 (L _ docstr) ->
+#if MIN_VERSION_ghc(9,4,0)
+      ppr ty1 $+$ commentWithHeader "-- ^" (hsDocString docstr)
+#else
+      ppr ty1 $+$ commentWithHeader "-- ^" docstr
+#endif
     HsParTy _EXT ty1 -> parens (hsrc ty1)
     _ -> ppr ty
     where
@@ -594,12 +610,8 @@ pp_data_defn
   = hang (ppr new_or_data <+> pp_ct <+> pp_hdr context <+> pp_sig)
        2 (pp_condecls st condecls $$ pp_derivings derivings)
   where
-    pp_ct = case mb_ct of
-              Nothing -> empty
-              Just ct -> ppr ct
-    pp_sig = case mb_sig of
-               Nothing   -> empty
-               Just kind -> dcolon <+> ppr kind
+    pp_ct = maybe empty ppr mb_ct
+    pp_sig = maybe empty ((dcolon <+>) . ppr) mb_sig
 #if MIN_VERSION_ghc(9,2,0)
     pp_derivings ds       = vcat (map ppr ds)
 #else
@@ -701,13 +713,16 @@ pprConDecl st ConDeclGADT { con_names = cons
     hforall = pprHsForAll' (hsq_explicit qvars) cxt
     cxt = fromMaybe (noLoc []) mcxt
 #endif
-#if MIN_VERSION_ghc(9,2,0)
-    get_args (PrefixConGADT csts) = map hsrc csts
-    get_args (RecConGADT fields)  = [pprConDeclFields (unLoc fields)]
+#if MIN_VERSION_ghc(9,4,0)
+    get_args (PrefixConGADT csts)  = map hsrc csts
+    get_args (RecConGADT fields _) = [pprConDeclFields (unLoc fields)]
+#elif MIN_VERSION_ghc(9,2,0)
+    get_args (PrefixConGADT csts)  = map hsrc csts
+    get_args (RecConGADT fields)   = [pprConDeclFields (unLoc fields)]
 #else
-    get_args (PrefixCon as)       = map hsrc as
-    get_args (RecCon fields)      = [pprConDeclFields (unLoc fields)]
-    get_args (InfixCon {})        = pprPanic "pprConDecl:GADT" (ppr cons)
+    get_args (PrefixCon as)        = map hsrc as
+    get_args (RecCon fields)       = [pprConDeclFields (unLoc fields)]
+    get_args (InfixCon {})         = pprPanic "pprConDecl:GADT" (ppr cons)
 #endif
     ppr_arrow_chain []     = empty
     ppr_arrow_chain (a:as) = sep (a : map (arrow <+>) as)
@@ -742,9 +757,9 @@ pprConDeclFields fields =
   where
     ppr_fld (L _ ConDeclField { cd_fld_names = ns
                               , cd_fld_type = ty
-                              , cd_fld_doc = doc })
+                              , cd_fld_doc = mb_doc })
       = ppr_names ns <+> dcolon <+> ppr ty
-        $+$ pp_mbdocp doc $+$ text ""
+        $+$ pp_mbdocp mb_doc $+$ text ""
 #if MIN_VERSION_ghc(8,6,0)
     ppr_fld (L _ (XConDeclField x)) = ppr x
 #endif
@@ -976,14 +991,23 @@ ppr_fam_deflt_eqn (L _ (XFamEqn x)) = ppr x
 --
 -- ---------------------------------------------------------------------
 
-instance HsSrc DocDecl where
+#if MIN_VERSION_ghc(9,4,0)
+#define DOCDECL (DocDecl pass)
+#else
+#define DOCDECL DocDecl
+#endif
+
+instance HsSrc DOCDECL where
   toHsSrc _st d = case d of
-    DocCommentNext ds       -> text "" $+$ commentWithHeader "-- |" ds
-    DocCommentPrev ds       -> text "" $+$ commentWithHeader "-- ^" ds
+    DocCommentNext ds       -> text ""
+                               $+$ commentWithHeader "-- |" (getHsDocString ds)
+    DocCommentPrev ds       -> text ""
+                               $+$ commentWithHeader "-- ^" (getHsDocString ds)
                                $+$ text ""
-    DocCommentNamed name ds -> namedDoc name ds
+    DocCommentNamed name ds -> namedDoc name (getHsDocString ds)
     DocGroup n ds           -> let stars = replicate n '*'
-                               in  commentWithHeader ("-- " ++ stars) ds
+                               in  commentWithHeader ("-- " ++ stars)
+                                     (getHsDocString ds)
     where
       namedDoc name doc =
         let body = map (\x -> text "--" <+> text x)
@@ -1001,11 +1025,19 @@ pp_nonnull :: Outputable t => [t] -> SDoc
 pp_nonnull [] = empty
 pp_nonnull xs = vcat (map ppr xs)
 
+#if MIN_VERSION_ghc(9,4,0)
+pp_mbdocn :: Maybe (LHsDoc pass) -> SDoc
+pp_mbdocn = maybe empty (commentWithHeader "-- |" . getHsDocString)
+
+pp_mbdocp :: Maybe (LHsDoc pass) -> SDoc
+pp_mbdocp = maybe empty (commentWithHeader "-- ^" . getHsDocString)
+#else
 pp_mbdocn :: Maybe LHsDocString -> SDoc
 pp_mbdocn = maybe empty (commentWithHeader "-- |" . unLoc)
 
 pp_mbdocp :: Maybe LHsDocString -> SDoc
 pp_mbdocp = maybe empty (commentWithHeader "-- ^" . unLoc)
+#endif
 
 pp_headerPragmas :: SPState -> SDoc
 pp_headerPragmas sp = vcat sorted_pragmas
@@ -1067,7 +1099,10 @@ isDocIE ie =
 
 -- | GHC version compatible function for unpacking 'HsDocString'.
 unpackHDS' :: HsDocString -> String
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(9,4,0)
+-- XXX: Consider using 'exactPrintHsDocString' or 'pprHsDocString'.
+unpackHDS' = renderHsDocString
+#elif MIN_VERSION_ghc(8,6,0)
 unpackHDS' = unpackHDS
 #else
 unpackHDS' (HsDocString fs) = unpackFS fs
@@ -1099,3 +1134,12 @@ pprHsForAll' = pprHsForAll ForallInvis
 pprHsForAll' = pprHsForAll
 #endif
 #endif
+
+#if MIN_VERSION_ghc(9,4,0)
+getHsDocString :: LHsDoc pass -> HsDocString
+getHsDocString = hsDocString . unLoc
+#else
+getHsDocString :: HsDocString -> HsDocString
+getHsDocString = id
+#endif
+{-# INLINABLE getHsDocString #-}

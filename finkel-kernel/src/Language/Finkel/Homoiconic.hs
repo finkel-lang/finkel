@@ -30,42 +30,38 @@ module Language.Finkel.Homoiconic
 #include "ghc_modules.h"
 
 -- base
-import           Control.Applicative             (Alternative (..))
-import           Data.Complex                    (Complex (..))
+import           Control.Applicative   (Alternative (..))
+import           Data.Complex          (Complex (..))
 import           Data.Data
-import           Data.Fixed                      (Fixed (..))
-import           Data.Functor.Compose            (Compose (..))
-import           Data.Functor.Const              (Const (..))
-import           Data.Functor.Identity           (Identity (..))
-import           Data.Int                        (Int16, Int32, Int64, Int8)
-import           Data.List.NonEmpty              (NonEmpty (..))
-import           Data.Monoid                     (All (..), Alt (..), Any (..),
-                                                  Dual (..), First (..),
-                                                  Last (..), Product (..),
-                                                  Sum (..))
-import           Data.Ratio                      (Ratio, denominator, numerator,
-                                                  (%))
-import           Data.Version                    (Version (..))
-import           Data.Word                       (Word16, Word32, Word64, Word8)
-import           GHC.Generics                    (C, Constructor (..), D,
-                                                  Generic (..), K1 (..),
-                                                  M1 (..), S, U1 (..), V1,
-                                                  (:*:) (..), (:+:) (..))
-import           Numeric.Natural                 (Natural)
+import           Data.Fixed            (Fixed (..))
+import           Data.Functor.Compose  (Compose (..))
+import           Data.Functor.Const    (Const (..))
+import           Data.Functor.Identity (Identity (..))
+import           Data.Int              (Int16, Int32, Int64, Int8)
+import           Data.List.NonEmpty    (NonEmpty (..))
+import           Data.Monoid           (All (..), Alt (..), Any (..), Dual (..),
+                                        First (..), Last (..), Product (..),
+                                        Sum (..))
+import           Data.Ratio            (Ratio, denominator, numerator, (%))
+import           Data.Version          (Version (..))
+import           Data.Word             (Word16, Word32, Word64, Word8)
+import           GHC.Generics          (C, Constructor (..), D, Generic (..),
+                                        K1 (..), M1 (..), S, U1 (..), V1,
+                                        (:*:) (..), (:+:) (..))
+import           Numeric.Natural       (Natural)
 
-import qualified Data.Functor.Product            as Product
-import qualified Data.Functor.Sum                as Sum
-import qualified Data.Semigroup                  as Semigroup
+import qualified Data.Functor.Product  as Product
+import qualified Data.Functor.Sum      as Sum
+import qualified Data.Semigroup        as Semigroup
 
 #if !MIN_VERSION_ghc(8,8,0)
-import           Control.Monad.Fail              (MonadFail (..))
-import           Prelude                         hiding (fail)
+import           Control.Monad.Fail    (MonadFail (..))
+import           Prelude               hiding (fail)
 #endif
 
 -- ghc
-import           GHC_Data_FastString             (FastString, unpackFS)
-import           GHC_Types_SrcLoc                (GenLocated (..), SrcSpan,
-                                                  getLoc)
+import           GHC_Data_FastString   (FastString, unpackFS)
+import           GHC_Types_SrcLoc      (GenLocated (..), SrcSpan, getLoc)
 
 -- Internal
 import           Language.Finkel.Form
@@ -708,7 +704,7 @@ instance Functor Result where
   {-# INLINE fmap #-}
 
 instance Applicative Result where
-  pure a = Success a
+  pure = Success
   {-# INLINE pure #-}
   f <*> m = f >>= flip fmap m
   {-# INLINE (<*>) #-}

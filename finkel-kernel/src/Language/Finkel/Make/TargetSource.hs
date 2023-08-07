@@ -223,9 +223,7 @@ findTargetSourceMaybe dflags modName = do
 
 -- | Find 'TargetSource' from command line argument. This function throws
 -- 'SourceError' when the target source was not found.
-findTargetSource
-  :: MonadIO m => DynFlags -> Located String -> m TargetSource
--- XXX: Pass the pragma string ...
+findTargetSource :: MonadIO m => DynFlags -> Located String -> m TargetSource
 findTargetSource = findTargetSourceWithPragma ";;;"
 
 -- | Like 'findTargetSource', but with given pragma string.

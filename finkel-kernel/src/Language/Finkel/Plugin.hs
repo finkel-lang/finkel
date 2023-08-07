@@ -9,8 +9,8 @@ where
 
 #include "ghc_modules.h"
 
--- Requires parsedResultaction field in Plugin data type, which is supported
--- from ghc 8.6.0.
+-- Requires parsedResultaction field in the 'Plugin' data type, which is
+-- supported from ghc 8.6.0.
 #if MIN_VERSION_ghc(8,6,0)
 
 -- base
@@ -36,6 +36,10 @@ import GHC_Unit_Module                   (ModLocation (..), ModuleName)
 import GHC_Unit_Module_ModSummary        (ModSummary (..), ms_mod_name)
 import GHC_Utils_Outputable              (text)
 
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Plugins                       (ParsedResult)
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import GHC.Hs                            (HsParsedModule (..))
 #else
@@ -59,6 +63,8 @@ import Language.Finkel.Preprocess        (FnkSrcOptions (..),
                                           fromFnkSrcOptions)
 import Language.Finkel.SpecialForms      (defaultFnkEnv)
 
+import Language.Finkel.Make              (mkParsedResult)
+
 
 -- ------------------------------------------------------------------------
 --
@@ -78,7 +84,8 @@ pluginWith
 pluginWith mod_name fnk_env =
   defaultPlugin
     { parsedResultAction = fnkParsedResultAction mod_name fnk_env
-    , pluginRecompile = flagRecompile }
+    , pluginRecompile = flagRecompile
+    }
 
 
 -- ------------------------------------------------------------------------
@@ -129,9 +136,16 @@ adjustFnkEnvOptions = foldr f []
       so == ['B'] ||
       any (`elem` lo) ["fnk-dump-hs", "fnk-dump-dflags", "fnk-hsdir"]
 
+#if MIN_VERSION_ghc(9,4,0)
+fnkParsedResultAction
+  :: String -> FnkEnv -> [CommandLineOption] -> ModSummary -> ParsedResult
+  -> Hsc ParsedResult
+#else
 fnkParsedResultAction
   :: String -> FnkEnv -> [CommandLineOption] -> ModSummary -> HsParsedModule
   -> Hsc HsParsedModule
+#endif
+
 fnkParsedResultAction mod_name fnk_env args0 ms pm =
   case getOpt Permute fnkPluginOptions args1 of
     (_,    _, es@(_:_)) -> liftIO (exitWithBriefUsage mod_name es)
@@ -149,28 +163,29 @@ fnkParsedResultAction mod_name fnk_env args0 ms pm =
                   fnk_env' = fpoFnkEnv fpo
               ts <- findTargetSourceWithPragma pragma dflags lpath
               case ts of
-                FnkSource {} -> parseFnkModule fnk_env' path mname
+                FnkSource {} -> mkPR <$> parseFnkModule fnk_env' path mname
                 _            -> pure pm
   where
     args1 = concatMap words args0
     mname = ms_mod_name ms
     dflags = ms_hspp_opts ms
+    mkPR = mkParsedResult
 
 parseFnkModule :: FnkEnv -> FilePath -> ModuleName -> Hsc HsParsedModule
 parseFnkModule fenv0 path mname = do
   henv <- getHscEnv
-  let handler e = throwOneError (mkPlainWrappedMsg dflags (mb_loc e)
-                                  (text (displayException e)))
-      mb_loc = fromMaybe noSrcSpan . finkelExceptionLoc
+  let mb_loc = fromMaybe noSrcSpan . finkelExceptionLoc
       dflags = hsc_dflags henv
       fenv1 = fenv0 { envInvokedMode = GhcPluginMode
                     , envDefaultDynFlags = Just dflags }
-      fnk = handleFinkelException handler (compileFnkFile path mname)
+      handler e = throwOneError (mkPlainWrappedMsg dflags (mb_loc e)
+                                  (text (displayException e)))
+      fnk = handleFinkelException handler $ compileFnkFile path mname
 
   summary <- liftIO $ do
     fer <- initFnkEnv fenv1 >>= newIORef
-    session <- newIORef henv
-    unGhc (toGhc fnk (FnkEnvRef fer)) (Session session)
+    session <- Session <$> newIORef henv
+    unGhc (toGhc fnk (FnkEnvRef fer)) session
 
   case summary of
     EMS ms _mb_sp _reqs | Just pm <- ms_parsed_mod ms -> do

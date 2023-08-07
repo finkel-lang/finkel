@@ -73,6 +73,9 @@ import           GHC_Utils_Lexeme           (startsConSym, startsVarId,
                                              startsVarSym)
 import           GHC_Utils_Misc              (readRational)
 
+#if MIN_VERSION_ghc(9,4,0)
+import qualified GHC.Data.Strict as Strict
+#endif
 
 #if !MIN_VERSION_ghc(9,0,0)
 import           GHC_Data_FastString        (tailFS)
@@ -350,7 +353,12 @@ alexInputPrevChar (AlexInput _ buf) = prevChar buf '\NUL'
 {-# INLINABLE alexInputPrevChar #-}
 
 alexError :: String -> SP a
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,4,0)
+alexError msg =
+  SP (\st ->
+        let rloc = RealSrcLoc (currentLoc st) Strict.Nothing
+        in  SPNG rloc (prevCharSP st) msg)
+#elif MIN_VERSION_ghc(9,0,0)
 alexError msg =
   SP (\st -> SPNG (RealSrcLoc (currentLoc st) Nothing) (prevCharSP st) msg)
 #else
@@ -790,11 +798,13 @@ tok_fractional (AlexInput _ buf) l =
 -- | Lexical analyzer for S-expression. Intended to be used with a parser made
 -- from Happy. This functions will not pass comment tokens to continuation.
 tokenLexer :: (Located Token -> SP a) -> SP a
-tokenLexer cont = do
-  ltok@(L _span tok) <- scanToken
-  case tok of
-    TComment -> SP (\st -> unSP (tokenLexer cont) st)
-    _        -> cont ltok
+tokenLexer cont = go
+  where
+    go = do
+      ltok@(L _span tok) <- scanToken
+      case tok of
+        TComment -> go
+        _        -> cont ltok
 {-# INLINABLE tokenLexer #-}
 
 scanToken :: SP (Located Token)
@@ -808,7 +818,9 @@ scanToken = do
       -- Getting current location again after invoking 'act', to update
       -- location information of String tokens.
       loc1 <- fmap currentLoc getSPState
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,4,0)
+      let span = RealSrcSpan (mkRealSrcSpan loc0 loc1) Strict.Nothing
+#elif MIN_VERSION_ghc(9,0,0)
       let span = RealSrcSpan (mkRealSrcSpan loc0 loc1) Nothing
 #else
       let span = RealSrcSpan (mkRealSrcSpan loc0 loc1)

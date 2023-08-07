@@ -48,6 +48,10 @@ import GHC_Types_Name_Reader           (RdrName, mkUnqual)
 import GHC_Types_SrcLoc                (GenLocated (..), Located, getLoc, noLoc,
                                         unLoc)
 
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Parser.Annotation           (l2l)
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import GHC_Hs_Decls                    (DerivClauseTys (..),
                                         XViaStrategyPs (..))
@@ -243,11 +247,11 @@ b_forallD vars (L l cdecl@ConDeclH98{}, cxts) = pure d
   where
 #if MIN_VERSION_ghc(8,6,0)
     d = L l cdecl { con_ex_tvs = vars
-#if MIN_VERSION_ghc(9,2,0)
+#  if MIN_VERSION_ghc(9,2,0)
                   , con_forall = True
-#else
+#  else
                   , con_forall = noLoc True
-#endif
+#  endif
                   , con_mb_cxt = Just (la2la (mkLocatedListA cxts)) }
 #else
     d = L l cdecl { con_qvars = Just (mkHsQTvs vars)
@@ -323,15 +327,20 @@ b_recFieldD mb_doc (names, ty) = do
   let f (LForm (L l form)) =
         case form of
           Atom (ASymbol name) ->
+#if MIN_VERSION_ghc(9,4,0)
+            return (reLocA (L l (mkFieldOcc (lN l (mkRdrName name)))))
+#else
             return (L l (mkFieldOcc (lN l (mkRdrName name))))
+#endif
           _ -> builderError
+  let mb_doc' = fmap lHsDocString2LHsDoc mb_doc
   names' <- mapM f names
   let field = ConDeclField { cd_fld_names = names'
 #if MIN_VERSION_ghc(8,6,0)
                            , cd_fld_ext = NOEXT
 #endif
                            , cd_fld_type = ty
-                           , cd_fld_doc = mb_doc }
+                           , cd_fld_doc = mb_doc' }
       loc = getLoc (mkLocatedForm names)
   return (lA loc field)
 {-# INLINABLE b_recFieldD #-}
@@ -339,14 +348,16 @@ b_recFieldD mb_doc (names, ty) = do
 b_derivD :: Maybe HDerivStrategy -> [HType] -> HDeriving
 b_derivD mb_strat tys = hds
   where
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+    hds = [la2la (L l dc)]
+    clauses = la2la (L l (DctMulti NOEXT (map hsTypeToHsSigType tys)))
+#elif MIN_VERSION_ghc(9,2,0)
     hds = [reLoc (L l dc)]
     clauses = la2la (L l (DctMulti NOEXT (map hsTypeToHsSigType tys)))
 #else
     hds = L l [L l dc]
     clauses = L l (map hsTypeToHsSigType tys)
 #endif
-    -- dcs = [la2la (L l dc)]
     dc = HsDerivingClause NOEXT mb_strat clauses
     l = getLoc (mkLocatedListA tys)
 {-# INLINABLE b_derivD #-}
@@ -368,7 +379,12 @@ b_emptyDeriving = noLoc []
 {-# INLINABLE b_emptyDeriving #-}
 
 b_viaD :: HType -> Builder (Maybe HDerivStrategy)
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+b_viaD ty@(L l _) =
+  pure (Just (L (l2l l) (ViaStrategy (XViaStrategyPs NOEXT sig))))
+  where
+    sig = hsTypeToHsSigType ty
+#elif MIN_VERSION_ghc(9,2,0)
 b_viaD ty@(L l _) =
   pure (Just (reLoc (L l (ViaStrategy (XViaStrategyPs NOEXT sig)))))
   where
@@ -507,7 +523,11 @@ mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
         , fdLName = lname
         , fdTyVars = hsqtyvars
         , fdFixity = Prefix
+#if MIN_VERSION_ghc(9,4,0)
+        , fdResultSig = reLocA (L l rsig)
+#else
         , fdResultSig = L l rsig
+#endif
         , fdInjectivityAnn = Nothing
 #if MIN_VERSION_ghc(8,6,0)
         , fdExt = NOEXT
@@ -519,10 +539,8 @@ mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
         }
       lname = lN l (mkUnqual tcName name)
       hsqtyvars = mkHsQTvs bndrs
-      rsig = case mb_kind of
-                -- XXX: Does not ssupport 'TyVarsig'.
-                Nothing   -> NoSig NOEXT
-                Just lsig -> KindSig NOEXT lsig
+      -- XXX: Does not support 'TyVarsig'.
+      rsig = maybe (NoSig NOEXT) (KindSig NOEXT) mb_kind
   in  lA l (TyClD NOEXT (FamDecl NOEXT fam))
 {-# INLINABLE mkFamilyDecl #-}
 
@@ -787,7 +805,12 @@ b_tsigD names (ctxts,typ0) = do
   return (lA l (sigD (typeSig names' typ')))
 {-# INLINABLE b_tsigD #-}
 
+#if MIN_VERSION_ghc(9,4,0)
+b_inlineD ::
+  (SourceText -> InlineSpec) -> Maybe Activation -> Code -> Builder HDecl
+#else
 b_inlineD :: InlineSpec -> Maybe Activation -> Code -> Builder HDecl
+#endif
 b_inlineD ispec mb_act (LForm (L l form)) =
   case form of
     Atom (ASymbol name) ->
@@ -795,11 +818,20 @@ b_inlineD ispec mb_act (LForm (L l form)) =
       in  return (lA l (sigD (inlineSig (lN l (mkRdrName name)) ipragma)))
     _ -> builderError
   where
-    ipragma = mkInlinePragma (SourceText source) (ispec, FunLike) mb_act
-    source = case ispec of
-               NoInline  -> "{-# NOINLINE"
-               Inlinable -> "{-# INLINABLE"
-               _         -> "{-# INLINE"
+    ipragma = mkInlinePragma stxt (ispec', FunLike) mb_act
+    source =
+      case ispec'' (SourceText "") of
+        NoInline {}  -> "{-# NOINLINE"
+        Inlinable {} -> "{-# INLINABLE"
+        _            -> "{-# INLINE"
+    stxt = SourceText source
+#if MIN_VERSION_ghc(9,4,0)
+    ispec' = ispec (SourceText source)
+    ispec'' = ispec
+#else
+    ispec' = ispec
+    ispec'' = const ispec
+#endif
 {-# INLINABLE b_inlineD #-}
 
 b_activation :: (SourceText -> PhaseNum -> Activation)
@@ -821,7 +853,13 @@ b_specializeD = specializeBuilder noUserInline "{-# SPECIALISE"
 
 b_specializeInlineD :: Code -> Maybe Activation -> (Code, HType)
                     -> Builder HDecl
+#if MIN_VERSION_ghc(9,4,0)
+b_specializeInlineD =
+  let str = "{-# SPECIALISE INLINE"
+  in  specializeBuilder (Inline (SourceText str)) str
+#else
 b_specializeInlineD = specializeBuilder Inline "{-# SPECIALISE INLINE"
+#endif
 {-# INLINABLE b_specializeInlineD #-}
 
 specializeBuilder
@@ -840,7 +878,7 @@ specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig)
 b_docnextD :: Code -> Builder HDecl
 b_docnextD (LForm (L l form)) =
   case form of
-    Atom (AString _ str) -> return $! lA l (DocD NOEXT (docCommentNext str))
+    Atom (AString _ str) -> return $! lA l (DocD NOEXT (docCommentNext (L l str)))
     _                    -> builderError
 {-# INLINABLE b_docnextD #-}
 
@@ -848,7 +886,7 @@ b_docprevD :: Code -> Builder HDecl
 b_docprevD (LForm (L l form)) =
   case form of
     Atom (AString _ str) ->
-      return $! lA l (DocD NOEXT (DocCommentPrev (hsDocString str)))
+      return $! lA l (DocD NOEXT (DocCommentPrev (mkLHsDoc l str)))
     _ -> builderError
 {-# INLINABLE b_docprevD #-}
 
@@ -856,8 +894,7 @@ b_docGroupD :: Int -> Code -> Builder HDecl
 b_docGroupD n form@(LForm (L l _))
   | List [_,doc_code] <- unCode form
   , Atom (AString _ doc) <- unCode doc_code
-  = return $! lA l (DocD NOEXT (DocGroup (fromIntegral n)
-                                         (hsDocString doc)))
+  = return $! lA l (DocD NOEXT (DocGroup (fromIntegral n) (mkLHsDoc l doc)))
   | otherwise = setLastToken form >> failB "Invalid group doc"
 {-# INLINABLE b_docGroupD #-}
 
@@ -867,14 +904,17 @@ b_docNamed form@(LForm (L l body))
   , Atom (ASymbol name) <- unCode name_code
   , Atom (AString _ doc) <- unCode doc_code
   = let name' = unpackFS name
-        doc' = hsDocString doc
-    in return $! lA l (DocD NOEXT (DocCommentNamed name' doc'))
+    in return $! lA l (DocD NOEXT (DocCommentNamed name' (mkLHsDoc l doc)))
   | otherwise
   = setLastToken form >> failB "Invalid named doc"
 {-# INLINABLE b_docNamed #-}
 
-docCommentNext :: FastString -> DocDecl
-docCommentNext = DocCommentNext . hsDocString
+#if MIN_VERSION_ghc(9,4,0)
+docCommentNext :: Located FastString -> DocDecl PARSED
+#else
+docCommentNext :: Located FastString -> DocDecl
+#endif
+docCommentNext (L l fs) = DocCommentNext . mkLHsDoc l $ fs
 {-# INLINABLE docCommentNext #-}
 
 tyClD :: TyClDecl PARSED -> HsDecl PARSED
@@ -938,19 +978,19 @@ mkFamEqn tycon pats rhs =
          , feqn_rhs = rhs
          -- Type synonym "HsTyPats" for `feqn_pats' field changed from
          -- `HsTyPats' to `HsTypeArg' in 8.8.0.
-#if   MIN_VERSION_ghc(8,8,0)
+#  if MIN_VERSION_ghc(8,8,0)
          , feqn_pats = map HsValArg pats
-#if     MIN_VERSION_ghc(9,2,0)
+#    if MIN_VERSION_ghc(9,2,0)
          , feqn_bndrs = mkHsOuterImplicit
-#else
+#    else
          , feqn_bndrs = Nothing
-#endif
-#else
+#    endif
+#  else
          , feqn_pats = pats
-#endif
-#if   MIN_VERSION_ghc(8,6,0)
+#  endif
+#  if   MIN_VERSION_ghc(8,6,0)
          , feqn_ext = NOEXT
-#endif
+#  endif
          }
 {-# INLINABLE mkFamEqn #-}
 #endif
@@ -970,6 +1010,7 @@ noUserInline = NoUserInline
 #else
 noUserInline = EmptyInlineSpec
 #endif
+{-# INLINABLE noUserInline #-}
 
 #if MIN_VERSION_ghc(8,10,0)
 cd2atdefs :: CategorizedDecls -> Builder [LTyFamDefltDecl PARSED]
@@ -981,17 +1022,20 @@ cd2atdefs cd = mapM toATDef (cd_tfis cd)
      toATDef d = case mkATDefault' d of
                    Right lty      -> return lty
                    Left (_, sdoc) -> failB (showSDocUnsafe sdoc)
-#if MIN_VERSION_ghc(8,8,0)
+#  if MIN_VERSION_ghc(8,8,0)
      mkATDefault' = fmap fst . mkATDefault
-#else
+#  else
      mkATDefault' = mkATDefault
+#  endif
 #endif
-#endif
+{-# INLINABLE cd2atdefs #-}
 
 #if !MIN_VERSION_ghc(9,2,0)
 hsTypeToHsSigType :: HType -> HSigType
 hsTypeToHsSigType = mkLHsSigType
+{-# INLINABLE hsTypeToHsSigType #-}
 
 hsTypeToHsSigWcType :: HType -> HSigWcType
 hsTypeToHsSigWcType = mkLHsSigWcType
+{-# INLINABLE hsTypeToHsSigWcType #-}
 #endif

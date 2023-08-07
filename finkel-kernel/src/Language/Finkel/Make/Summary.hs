@@ -53,14 +53,13 @@ import           System.FilePath                   (takeBaseName, takeDirectory,
                                                     (<.>), (</>))
 
 -- ghc
-import           GHC_Data_FastString               (FastString, fsLit)
+import           GHC_Data_FastString               (fsLit)
 import           GHC_Data_StringBuffer             (StringBuffer,
                                                     hGetStringBuffer)
 import           GHC_Driver_Env_Types              (HscEnv (..))
 import           GHC_Driver_Monad                  (GhcMonad (..))
 import           GHC_Driver_Phases                 (Phase (..))
-import           GHC_Driver_Pipeline               (compileFile, preprocess,
-                                                    writeInterfaceOnlyMode)
+import           GHC_Driver_Pipeline               (compileFile, preprocess)
 import           GHC_Driver_Ppr                    (printForUser)
 import           GHC_Driver_Session                (DumpFlag (..),
                                                     DynFlags (..),
@@ -90,33 +89,71 @@ import           GHC_Unit_Module_Graph             (ModuleGraph)
 import           GHC_Unit_Module_ModSummary        (ModSummary (..),
                                                     ms_mod_name)
 import           GHC_Utils_CliOption               (Option (..))
-import           GHC_Utils_Misc                    (getModificationUTCTime,
-                                                    looksLikeModuleName,
+import           GHC_Utils_Misc                    (looksLikeModuleName,
                                                     modificationTimeIfExists)
 import           GHC_Utils_Outputable              (Outputable (..), SDoc, hcat,
                                                     quotes, text, vcat, ($$),
                                                     (<+>))
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Config.Diagnostic      (initDiagOpts)
+import           GHC.Driver.Config.Finder          (initFinderOpts)
+import           GHC.Driver.Env                    (hscSetFlags, hsc_HPT)
+import           GHC.Driver.Phases                 (StopPhase (..))
+import           GHC.Parser.Header                 (mkPrelImports)
+import           GHC.Rename.Names                  (renameRawPkgQual)
+import           GHC.Types.PkgQual                 (PkgQual (..),
+                                                    RawPkgQual (..))
+import           GHC.Unit.Module.Graph             (ModuleGraphNode (..))
+import qualified GHC.Unit.Module.Graph             as Graph
+import           GHC.Unit.Module.ModSummary        (ms_imps)
+import           GHC.Utils.Fingerprint             (getFileHash)
+#else
+import           GHC_Data_FastString               (FastString)
+import           GHC_Driver_Pipeline               (writeInterfaceOnlyMode)
+import           GHC_Unit_Module_Graph             (mgElemModule)
+import           GHC_Utils_Misc                    (getModificationUTCTime)
+#endif
+
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Config.Parser          (initParserOpts)
+import           GHC.Driver.Errors.Types           (GhcMessage (..))
+import           GHC.Utils.Logger                  (putDumpFileMaybe)
+#elif MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Config                 (initParserOpts)
+import           GHC.Parser.Errors.Ppr             (pprError)
+import           GHC.Utils.Logger                  (dumpIfSet_dyn)
+#else
+import           GHC_Utils_Error                   (dumpIfSet_dyn)
+#endif
+
+#if !MIN_VERSION_ghc(9,4,0) && MIN_VERSION_ghc(8,10,0)
+import           GHC_Unit_Module_ModSummary        (ms_home_allimps)
+#endif
+
+#if !MIN_VERSION_ghc(9,4,0) && MIN_VERSION_ghc(9,2,0)
+import           GHC.Unit.Module.ModSummary        (extendModSummaryNoDeps)
+#endif
+
+#if !MIN_VERSION_ghc(9,4,0) && MIN_VERSION_ghc(8,4,0)
+import           GHC_Unit_Module_Graph             (extendMG)
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env                    (hsc_home_unit)
 import           GHC.Driver.Session                (xopt)
 import           GHC.Hs.Dump                       (BlankEpAnnotations (..))
 import           GHC.LanguageExtensions            (Extension (ImplicitPrelude))
-import           GHC.Parser.Errors.Ppr             (pprError)
-import           GHC.Unit.Module.ModSummary        (extendModSummaryNoDeps)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Backend                (backendProducesObject)
 import           GHC.Driver.Errors                 (handleFlagWarnings)
 import           GHC.Hs                            (HsParsedModule (..))
-import           GHC.Utils.Logger                  (dumpIfSet_dyn)
 #else
 import           GHC_Driver_Session                (isObjectTarget)
 import           GHC_Driver_Types                  (HsParsedModule (..),
                                                     handleFlagWarnings)
-import           GHC_Utils_Error                   (dumpIfSet_dyn)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -150,7 +187,6 @@ import           GHC_Utils_Outputable              (Depth (..))
 
 #if MIN_VERSION_ghc(8,10,0)
 import           GHC_Unit_Module_ModIface          (ModIface_ (..))
-import           GHC_Unit_Module_ModSummary        (ms_home_allimps)
 #else
 import           GHC_Unit_Module_ModIface          (ModIface (..), ms_imps)
 #endif
@@ -160,8 +196,7 @@ import           GHC_Types_SourceError             (throwErrors)
 #endif
 
 #if MIN_VERSION_ghc(8,4,0)
-import           GHC_Unit_Module_Graph             (extendMG, mgElemModule,
-                                                    mgLookupModule,
+import           GHC_Unit_Module_Graph             (mgLookupModule,
                                                     mgModSummaries,
                                                     mkModuleGraph)
 #endif
@@ -190,6 +225,13 @@ data TargetSummary
     -- | Link time file option, from 'OtherSource'.
   | LdInput !Option
 
+#if !MIN_VERSION_ghc(9,4,0)
+-- PkgQual and RawPkgQual did not exist until ghc 9.4, instead, Maybe FastString
+-- were used for both types of package qualified imports.
+type PkgQual = Maybe FastString
+type RawPkgQual = Maybe FastString
+#endif
+
 -- | Make 'EMS' with no 'SPState' and empty list of required 'ModSummary'.
 plainEMS :: ModSummary -> TargetSummary
 plainEMS ms = EMS ms Nothing []
@@ -205,11 +247,13 @@ summariseTargetUnit (tsrc, mbphase) =
 -- | Compile Finkel source.
 compileFnkFile :: FilePath -> ModuleName -> Fnk TargetSummary
 compileFnkFile path modname = do
+  fnk_env0 <- getFnkEnv
+  hsc_env <- getSession
+
   contents <- liftIO (hGetStringBuffer path)
   (forms, sp) <- parseSexprs (Just path) contents
-  hsc_env <- getSession
   dflags1 <- getDynFlagsFromSPState hsc_env sp
-  fnk_env0 <- getFnkEnv
+
   let tr = traceSummary fnk_env0 "compileFnkFile"
       mname_str = moduleNameString modname
       mname_sdoc = text (mname_str ++ ":")
@@ -221,13 +265,16 @@ compileFnkFile path modname = do
       -- action is wrapped with 'withTmpDynFlags' above.
       resetFnkEnv
       mdl <- compileFnkModuleForm forms
-      fnk_env1 <- getFnkEnv
-      return (mdl, envRequiredHomeModules fnk_env1)
+      reqs <- envRequiredHomeModules <$> getFnkEnv
+      return (mdl, reqs)
 
   tr ["reqs in" <+> mname_sdoc <+> ppr (map ms_mod_name reqs)]
 
   let rreqs = reverse reqs
+
+  -- XXX: Pass the Bool value for ms_ghc_prim_import somehow.
   ms <- mkModSummary hsc_env dflags1 path mdl rreqs
+
   return $! EMS ms (Just sp) rreqs
 
 -- | Parse the file header LANGUAGE pragmas and update given 'DynFlags'.
@@ -260,7 +307,10 @@ getDynFlagsFromSPState hsc_env sp = do
   let dflags0 = hsc_dflags hsc_env
       mkx = fmap ("-X" ++)
       exts = map mkx (langExts sp)
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+      handle_flag_warnings =
+        handleFlagWarnings (hsc_logger hsc_env) . initDiagOpts
+#elif MIN_VERSION_ghc(9,2,0)
       handle_flag_warnings = handleFlagWarnings (hsc_logger hsc_env)
 #else
       handle_flag_warnings = handleFlagWarnings
@@ -284,9 +334,24 @@ compileHsFile path mb_phase = do
   hsc_env <- getSession
   (dflags, pp_path) <- liftIO (preprocess' hsc_env (path, mb_phase))
   sbuf <- liftIO (hGetStringBuffer pp_path)
-  (simps, timps, L _l mname) <- liftIO (getImports' dflags sbuf pp_path path)
-  ms <- mkModSummary' hsc_env dflags path mname simps timps Nothing (Just sbuf)
+  (simps, timps, ghc_prim_import, L _l mname) <-
+    liftIO (getImports' dflags sbuf pp_path path)
+  let simps' = fmap (rnRPQI hsc_env) simps
+      timps' = fmap (rnRPQI hsc_env) timps
+  ms <- mkModSummary' hsc_env dflags path mname simps' timps'
+                      Nothing (Just sbuf) ghc_prim_import
   return $! plainEMS ms
+
+-- | Rename raw package qualified import. See
+-- 'GHC.Driver.Make.getPreprocessedImports', which is not exported.
+rnRPQI :: HscEnv -> (RawPkgQual, Located ModuleName) -> (PkgQual, Located ModuleName)
+#if MIN_VERSION_ghc(9,4,0)
+rnRPQI hsc_env (pk, lmn@(L _ mn)) =
+  (renameRawPkgQual (hsc_unit_env hsc_env) mn pk, lmn)
+#else
+rnRPQI _ = id
+#endif
+{-# INLINABLE rnRPQI #-}
 
 compileOtherFile :: FilePath -> Fnk TargetSummary
 compileOtherFile path = do
@@ -295,8 +360,22 @@ compileOtherFile path = do
   traceSummary fnk_env
             "compileOtherFile"
             ["Compiling OtherSource:" <+> text path]
-  o_file <- liftIO (compileFile hsc_env StopLn (path, Nothing))
-  return $! LdInput (FileOption "" o_file)
+#if MIN_VERSION_ghc(9,4,0)
+  -- ghc 9.4, introduced StopPhase data type. Before that, Phase data type was
+  -- directly used as stopping phase.
+  let phase_to_stop = NoStop
+#else
+  let phase_to_stop = StopLn
+#endif
+  o_file0 <- liftIO (compileFile hsc_env phase_to_stop (path, Nothing))
+#if MIN_VERSION_ghc(9,4,0)
+  -- Resulting type of compileFile changed in ghc 9.4 from 'FilePath' to 'Maybe
+  -- FilePath'.
+  let o_file1 = maybe "" id o_file0
+#else
+  let o_file1 = o_file0
+#endif
+  return $! LdInput (FileOption "" o_file1)
 
 -- Note [Avoiding Recompilation]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -332,8 +411,15 @@ mkModSummary hsc_env dflags file mdl reqs = do
 
       -- XXX: PackageImports language extension not yet supported.  See
       -- 'HscTypes.ms_home_imps'
-      imports = map (\lm -> (Nothing, reLoc (ideclName (unLoc lm))))
-                    (hsmodImports mdl)
+      rn_idecl = reLoc . ideclName . unLoc
+      imports0 = hsmodImports mdl
+#if MIN_VERSION_ghc(9,4,0)
+      implicit_prelude = xopt ImplicitPrelude dflags
+      imports1 = mkPrelImports mod_name r_s_span implicit_prelude imports0
+      imports2 = map (\lm -> (NoPkgQual, rn_idecl lm)) (imports1 ++ imports0)
+#else
+      imports2 = map (\lm -> (Nothing, rn_idecl lm)) imports0
+#endif
 
   -- Adding file path of the required modules and file paths of imported home
   -- package modules to "hpm_src_files" to support recompilation.
@@ -348,20 +434,20 @@ mkModSummary hsc_env dflags file mdl reqs = do
 #endif
         }
 
-  mkModSummary' hsc_env dflags file mod_name [] imports (Just pm) Nothing
+  mkModSummary' hsc_env dflags file mod_name [] imports2 (Just pm) Nothing False
 
 #if !MIN_VERSION_ghc(9,2,0)
-#if MIN_VERSION_ghc(9,0,0)
+#  if MIN_VERSION_ghc(9,0,0)
 mkEmptyApiAnns :: ApiAnns
 mkEmptyApiAnns = ApiAnns { apiAnnItems = Map.empty
                          , apiAnnEofPos = Nothing
                          , apiAnnComments = Map.empty
                          , apiAnnRogueComments = []
                          }
-#else
+#  else
 mkEmptyApiAnns :: (Map.Map a b, Map.Map c d)
 mkEmptyApiAnns = (Map.empty, Map.empty)
-#endif
+#  endif
 #endif
 
 -- | Make 'ModSummary' for recompilation check done with 'doCheckOldIface'.
@@ -373,21 +459,23 @@ mkModSummaryForRecompile hsc_env tu@(tsource, _) = do
   dflags1 <- case tsource of
     FnkSource {} -> parseFnkFileHeader hsc_env path
     _            -> return (hsc_dflags hsc_env)
-  mkModSummary' hsc_env dflags1 path mod_name [] [] Nothing Nothing
+  mkModSummary' hsc_env dflags1 path mod_name [] [] Nothing Nothing False
 
 -- | Make 'ModSummary' from source file, module name, and imports.
 mkModSummary'
   :: MonadIO m
   => HscEnv
-  -> DynFlags
+  -> DynFlags -- Potentially file local DynFlags
   -> FilePath
   -> ModuleName
-  -> [(Maybe FastString, Located ModuleName)]
-  -> [(Maybe FastString, Located ModuleName)]
+  -> [(PkgQual, Located ModuleName)]
+  -> [(PkgQual, Located ModuleName)]
   -> Maybe HsParsedModule
   -> Maybe StringBuffer
+  -> Bool
   -> m ModSummary
-mkModSummary' hsc_env dflags file mod_name srcimps txtimps mb_pm mb_buf = do
+mkModSummary' hsc_env dflags file mod_name srcimps txtimps mb_pm mb_buf
+              _ghc_prim_import = do
   -- Throw an exception on module name mismatch.
   assertModuleNameMatch dflags file mb_pm
 
@@ -395,12 +483,26 @@ mkModSummary' hsc_env dflags file mod_name srcimps txtimps mb_pm mb_buf = do
         if isObjectBackend dflags
            then modificationTimeIfExists path
            else return Nothing
+#if MIN_VERSION_ghc(9,4,0)
+  let mkMLoc df mname path =
+        pure (mkHomeModLocation (initFinderOpts df) mname path)
+      addHomeMod henv =
+        addHomeModuleToFinder (hsc_FC henv) (hsc_home_unit henv)
+#else
+  let mkMLoc = mkHomeModLocation
+      addHomeMod = addHomeModuleToFinder
+#endif
 
   liftIO
-    (do mloc <- mkHomeModLocation dflags mod_name file
-        mmod <- addHomeModuleToFinder hsc_env mod_name mloc
-        hs_date <- getModificationUTCTime file
+    (do mloc <- mkMLoc dflags mod_name file
+        mmod <- addHomeMod hsc_env mod_name mloc
         obj_date <- tryGetObjectDate (ml_obj_file mloc)
+#if MIN_VERSION_ghc(9,4,0)
+        src_hash <- getFileHash file
+        dyn_obj_date <- modificationTimeIfExists (ml_dyn_obj_file mloc)
+#else
+        hs_date <- getModificationUTCTime file
+#endif
         iface_date <- maybeGetIfaceDate dflags mloc
 #if MIN_VERSION_ghc(8,8,0)
         hie_date <- modificationTimeIfExists (ml_hie_file mloc)
@@ -408,7 +510,13 @@ mkModSummary' hsc_env dflags file mod_name srcimps txtimps mb_pm mb_buf = do
         return ModSummary { ms_mod = mmod
                           , ms_hsc_src = HsSrcFile
                           , ms_location = mloc
+#if MIN_VERSION_ghc(9,4,0)
+                          , ms_hs_hash = src_hash
+                          , ms_dyn_obj_date = dyn_obj_date
+                          , ms_ghc_prim_import = _ghc_prim_import
+#else
                           , ms_hs_date = hs_date
+#endif
                           , ms_obj_date = obj_date
                           , ms_iface_date = iface_date
 #if MIN_VERSION_ghc(8,8,0)
@@ -466,9 +574,15 @@ assertModuleNameMatch dflags file mb_pm =
 -- See: GhcMake.maybeGetIfaceDate
 maybeGetIfaceDate :: DynFlags -> ModLocation -> IO (Maybe UTCTime)
 maybeGetIfaceDate dflags location =
-  if writeInterfaceOnlyMode dflags
+  if writeIface dflags
      then modificationTimeIfExists (ml_hi_file location)
      else return Nothing
+  where
+#if MIN_VERSION_ghc(9,4,0)
+    writeIface = const True
+#else
+    writeIface = writeInterfaceOnlyMode
+#endif
 
 -- | Dump the module contents of given 'ModSummary'.
 dumpModSummary
@@ -537,16 +651,22 @@ dumpParsedAST _hsc_env dflags ms =
 #else
     show_ast_data = showAstData
 #endif
-#if MIN_VERSION_ghc(9,2,0)
-    dumpIfSet_dyn_hs df flag label sdoc =
-      dumpIfSet_dyn (hsc_logger _hsc_env) df flag label FormatHaskell sdoc
-    dumpIfSet_dyn_txt df flag label sdoc =
-      dumpIfSet_dyn (hsc_logger _hsc_env) df flag label FormatText sdoc
+#if MIN_VERSION_ghc(9,4,0)
+    dumpIfSet_dyn_hs = putDumpFileMaybe_for FormatHaskell
+    dumpIfSet_dyn_txt = putDumpFileMaybe_for FormatText
+    putDumpFileMaybe_for format df flag label sdoc =
+      let hsc_env = hscSetFlags df _hsc_env
+      in  putDumpFileMaybe (hsc_logger hsc_env) flag label format sdoc
+#elif MIN_VERSION_ghc(9,2,0)
+    dumpIfSet_dyn_hs = dumpIfSet_dyn_with FormatHaskell
+    dumpIfSet_dyn_txt = dumpIfSet_dyn_with FormatText
+    dumpIfSet_dyn_with format df flag label sdoc =
+      dumpIfSet_dyn (hsc_logger _hsc_env) df flag label format sdoc
 #elif MIN_VERSION_ghc(9,0,0)
-    dumpIfSet_dyn_hs df flag label sdoc =
-      dumpIfSet_dyn df flag label FormatHaskell sdoc
-    dumpIfSet_dyn_txt df flag label sdoc =
-      dumpIfSet_dyn df flag label FormatText sdoc
+    dumpIfSet_dyn_hs = dumpIfSet_dyn_with FormatHaskell
+    dumpIfSet_dyn_txt = dumpIfSet_dyn_with FormatText
+    dumpIfSet_dyn_with format df flag label sdoc =
+      dumpIfSet_dyn df flag label format sdoc
 #else
     dumpIfSet_dyn_hs = dumpIfSet_dyn
     dumpIfSet_dyn_txt = dumpIfSet_dyn
@@ -574,7 +694,7 @@ requiredDependencies :: [ModSummary] -> Fnk [FilePath]
 requiredDependencies mss = do
   hsc_env0 <- getSession
   let getDeps he = pure $! nub $! foldl' (requiredDependency he) [] mss
-  if isInterpreted (hsc_dflags hsc_env0)
+  if isExpanding (hsc_dflags hsc_env0)
     then getDeps hsc_env0
     else do
       mb_hsc_env <- envSessionForExpand <$> getFnkEnv
@@ -607,9 +727,14 @@ requiredDependency hsc_env = go
 
     req_paths acc usage =
       case usage of
-        -- Recursively calling `dependencyFile' with the ModSummary referred by
-        -- the usage file path .
-        UsageFile {usg_file_path = path} ->
+        -- Recursively calling `go' with the ModSummary referred by the usage
+        -- file path, but only for Haskell and Finkel source codes.
+        --
+        -- It is important to track only those "UsageFile"s of source code that
+        -- potentially containing macro definitions. Otherwise the compilation
+        -- time of modules containing ":require" of home package module was
+        -- noticeably slow in ghc 9.4.2.
+        UsageFile {usg_file_path = path} | isFnkFile path || isHsFile path ->
           let mb_ms1 = find is_my_path mss
               is_my_path = (Just path ==) . ml_hs_file . ms_location
               mss = mgModSummaries' (hsc_mod_graph hsc_env)
@@ -666,32 +791,43 @@ mgModSummaries' :: ModuleGraph -> [ModSummary]
 mgLookupModule' :: ModuleGraph -> Module -> Maybe ModSummary
 {-# INLINABLE mgLookupModule' #-}
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+extendMG' g ms = Graph.extendMG' g (ModuleNode [] ms)
+mgElemModule' mg m = moduleName m `elem` map ms_mod_name (mgModSummaries mg)
+mkModuleGraph' = mkModuleGraph . map (\ms -> ModuleNode [] ms)
+mgModSummaries' = mgModSummaries
+mgLookupModule' = mgLookupModule
+#elif MIN_VERSION_ghc(9,2,0)
 extendMG' g ms = extendMG g (extendModSummaryNoDeps ms)
 mgElemModule' = mgElemModule
 mkModuleGraph' = mkModuleGraph . map extendModSummaryNoDeps
 mgModSummaries' = mgModSummaries
 mgLookupModule' = mgLookupModule
 #elif MIN_VERSION_ghc(8,4,0)
--- ModuleGraph was an alias of [ModSummary] in ghc < 8.4.
 extendMG' = extendMG
 mgElemModule' = mgElemModule
 mkModuleGraph' = mkModuleGraph
 mgModSummaries' = mgModSummaries
 mgLookupModule' = mgLookupModule
 #else
+-- ModuleGraph was an alias of [ModSummary] in ghc < 8.4.
 extendMG' = flip (:)
 mgElemModule' mg mdl = go mg
   where
     go []       = False
-    go (ms:mss) = if ms_mod ms == mdl then True else go mss
+    go (ms:mss) = (ms_mod == mdl) || go mss
 mkModuleGraph' = id
 mgModSummaries' = id
 mgLookupModule' mg mdl = find (\ms -> ms_mod_name ms == moduleName mdl) mg
 #endif
 
-#if !MIN_VERSION_ghc(8,10,0)
--- The `ms_home_allimps' function did not exist until ghc 8.10.x.
+-- The `ms_home_allimps' function did not exist until ghc 8.10.x, and removed in
+-- ghc 9.4.x.
+#if MIN_VERSION_ghc(9,4,0)
+-- XXX: Use 'GHC.Unit.Module.ModSummary.home_imps' ?
+ms_home_allimps :: ModSummary -> [ModuleName]
+ms_home_allimps = map (unLoc . snd) . ms_imps
+#elif !MIN_VERSION_ghc(8,10,0)
 ms_home_allimps :: ModSummary -> [ModuleName]
 ms_home_allimps ms = map unLoc (ms_home_srcimps ms ++ ms_home_imps ms)
 
@@ -719,29 +855,47 @@ preprocess' :: HscEnv -> (FilePath, Maybe Phase) -> IO (DynFlags, FilePath)
 preprocess' hsc_env (path, mb_phase) = do
   et_result <- preprocess hsc_env path Nothing mb_phase
   case et_result of
+#  if MIN_VERSION_ghc(9,4,0)
+    Left err   -> throwErrors (fmap GhcDriverMessage err)
+#  else
     Left err   -> throwErrors err
+#  endif
     Right pair -> return pair
 #else
 preprocess' = preprocess
 #endif
 
 getImports' :: DynFlags -> StringBuffer -> FilePath -> FilePath
-            -> IO ([(Maybe FastString, Located ModuleName)],
-                   [(Maybe FastString, Located ModuleName)],
+            -> IO ([(RawPkgQual, Located ModuleName)],
+                   [(RawPkgQual, Located ModuleName)],
+                   Bool,
                    Located ModuleName)
 {-# INLINABLE getImports' #-}
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
 getImports' dflags sbuf pp_path path = do
   let imp_prelude = xopt ImplicitPrelude dflags
       popts = initParserOpts dflags
   et_ret <- getImports popts imp_prelude sbuf pp_path path
-  either (throwErrors . fmap pprError) pure et_ret
+  either (throwErrors . fmap GhcPsMessage) pure et_ret
+#elif MIN_VERSION_ghc(9,2,0)
+getImports' dflags sbuf pp_path path = do
+  let imp_prelude = xopt ImplicitPrelude dflags
+      popts = initParserOpts dflags
+  et_ret <- getImports popts imp_prelude sbuf pp_path path
+  case et_ret of
+    Right (simps, timps, lm) -> pure (simps, timps, False, lm)
+    Left err                 -> throwErrors (fmap pprError err)
 #elif MIN_VERSION_ghc(8,8,0)
-getImports' dflags sbuf pp_path path =
-  getImports dflags sbuf pp_path path >>= either throwErrors pure
+getImports' dflags sbuf pp_path path = do
+  et_ret <- getImports dflags sbuf pp_path path
+  case et_ret of
+    Right (simps, timps, lm) -> pure (simps, timps, False, lm)
+    Left err                 -> throwErrors err
 #else
-getImports' = getImports
+getImports' dflags sbuf pp_path path = do
+  (simps, timps, lm) <- getImports dflags sbuf pp_path path
+  pure (simps, timps, False, lm)
 #endif
 
 -- ------------------------------------------------------------------------

@@ -27,10 +27,20 @@ import GHC_Types_Name_Reader           (getRdrName, mkQual, mkUnqual)
 import GHC_Types_SrcLoc                (GenLocated (..), getLoc)
 import GHC_Utils_Lexeme                (isLexCon, isLexConSym, isLexVarSym)
 
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Hs.Extension                (noHsUniTok)
+import GHC.Parser.Annotation           (NoEpAnns (..))
+#elif MIN_VERSION_ghc(9,2,0)
+import GHC_Parser_Annotation           (EpaLocation (..), TrailingAnn (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,4,0) && MIN_VERSION_ghc(9,0,0)
+import GHC_Parser_Annotation           (IsUnicodeSyntax (..))
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import GHC_Parser_Annotation           (Anchor (..), AnchorOperation (..),
-                                        EpAnn (..), EpaLocation (..),
-                                        TrailingAnn (..))
+                                        EpAnn (..))
 import GHC_Types_SrcLoc                (srcSpanToRealSrcSpan)
 #endif
 
@@ -42,7 +52,6 @@ import GHC_Builtin_Types_Prim          (funTyCon)
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Hs_Type                     (HsArrow (..), mkHsForAllInvisTele)
-import GHC_Parser_Annotation           (IsUnicodeSyntax (..))
 #elif MIN_VERSION_ghc(8,10,0)
 import GHC_Types_Var                   (ForallVisFlag (..))
 #endif
@@ -172,11 +181,19 @@ b_funT (LForm (L l _)) ts =
     -- during recursion. Using "EpAnn" to make a dummy EpAnn typed value with
     -- "mkDummyAnn". Without the dummy value, GADT constructors will show
     -- compilation errors.
+#  if MIN_VERSION_ghc(9,4,0)
+    hsFunTy = HsFunTy ann (HsUnrestrictedArrow noHsUniTok)
+#  else
     hsFunTy = HsFunTy ann (HsUnrestrictedArrow NormalSyntax)
+#  endif
     ann = maybe NOEXT mkDummyAnn (srcSpanToRealSrcSpan l)
     mkDummyAnn real_span =
       let dummy_anchor = Anchor real_span UnchangedAnchor
+#  if MIN_VERSION_ghc(9,4,0)
+          dummy_anns = NoEpAnns
+#  else
           dummy_anns = AddRarrowAnn (EpaSpan real_span)
+#  endif
           dummy_comments = NOEXT
       in  EpAnn dummy_anchor dummy_anns dummy_comments
 #elif MIN_VERSION_ghc(9,0,0)
@@ -210,7 +227,11 @@ b_opOrAppT form@(LForm (L l ty)) typs
   | Atom (ASymbol name) <- ty
   , isLexConSym name =
     let lrname = lN l (mkUnqual tcName name)
+#if MIN_VERSION_ghc(9,4,0)
+        f lhs rhs = lA l (mkHsOpTy NotPromoted lhs lrname rhs)
+#else
         f lhs rhs = lA l (mkHsOpTy lhs lrname rhs)
+#endif
     in  return (foldr1 f (map (parenthesizeHsType' opPrec) typs))
   -- Var type application
   | otherwise =
@@ -300,7 +321,9 @@ b_kindedType (LForm (L l _)) ty kind =
 {-# INLINABLE b_kindedType #-}
 
 b_docT :: HType -> LHsDocString -> HType
-b_docT ty doc = let l = getLocA ty in lA l (HsDocTy NOEXT ty doc)
+b_docT ty doc = let l = getLocA ty in lA l (HsDocTy NOEXT ty doc')
+  where
+    doc' = lHsDocString2LHsDoc doc
 {-# INLINABLE b_docT #-}
 
 b_unpackT :: Code -> HType -> HType
@@ -360,9 +383,9 @@ forAllTy bndrs body =
              , hst_tele = mkHsForAllInvisTele bndrs
 #else
              , hst_bndrs = bndrs
-#if MIN_VERSION_ghc(8,10,0)
+#  if MIN_VERSION_ghc(8,10,0)
              , hst_fvf = ForallInvis
-#endif
+#  endif
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
@@ -388,11 +411,11 @@ hsExplicitListTy =
 #endif
 
 hsExplicitTupleTy :: [HType] -> HsType PARSED
-hsExplicitTupleTy tys =
+hsExplicitTupleTy =
 #if MIN_VERSION_ghc(8,6,0)
-  HsExplicitTupleTy NOEXT tys
+  HsExplicitTupleTy NOEXT
 #else
-  HsExplicitTupleTy [] tys
+  HsExplicitTupleTy []
 #endif
 
 hsBoxedTuple :: HsTupleSort

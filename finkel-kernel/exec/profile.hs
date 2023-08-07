@@ -18,7 +18,6 @@ import qualified System.FilePath              as FilePath
 -- ghc
 import qualified GHC                          as GHC
 import           GHC_Data_StringBuffer        (hGetStringBuffer)
-import           GHC_Driver_Errors            (printBagOfErrors)
 import           GHC_Driver_Ppr               (printForUser)
 import           GHC_Driver_Session           (DynFlags, GeneralFlag (..),
                                                HasDynFlags (..), gopt_set)
@@ -27,6 +26,13 @@ import           GHC_Types_SrcLoc             (mkGeneralLocated)
 import           GHC_Utils_Outputable         (Outputable (..),
                                                PrintUnqualified, SDoc,
                                                neverQualify)
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Config.Diagnostic (initDiagOpts)
+import           GHC.Driver.Errors            (printMessages)
+#else
+import           GHC_Driver_Errors            (printBagOfErrors)
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Utils.Logger             (HasLogger (..))
 #endif
@@ -117,7 +123,9 @@ pprHsModule path = Fnk.runFnk go SpecialForms.defaultFnkEnv
          logger <- getLogger
 #endif
          let dflags1 = gopt_set dflags0 Opt_Haddock
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+             pboe = printMessages logger (initDiagOpts dflags1)
+#elif MIN_VERSION_ghc(9,2,0)
              pboe = printBagOfErrors logger dflags1
 #else
              pboe = printBagOfErrors dflags1

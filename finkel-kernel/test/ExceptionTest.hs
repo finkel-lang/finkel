@@ -4,18 +4,15 @@ module ExceptionTest
   ) where
 
 -- base
-import Control.Exception  (bracket)
-import System.Environment (lookupEnv, setEnv)
-import System.Exit        (ExitCode (..))
-
--- filepath
-import System.FilePath    ((</>))
+import Control.Exception   (bracket)
+import System.Environment  (lookupEnv, setEnv)
+import System.Exit         (ExitCode (..))
 
 -- hspec
 import Test.Hspec
 
 -- -- finkel-kernel
--- import Language.Finkel
+import Language.Finkel.Fnk (initializeLibDirFromGhc)
 
 -- Internal
 import TestAux
@@ -31,8 +28,8 @@ exceptionFnkTests = do
 noGhcTest :: FnkSpec
 noGhcTest =
   describe "No ghc found in current PATH" $
-    it "should fail with non-0 exit code" $ \ftr -> do
-      let act = withEmptyPATH (ftr_main ftr ["-fno-code", hello])
+    it "should fail with non-0 exit code" $ \_ -> do
+      let act = withEmptyPATH initializeLibDirFromGhc
       act `shouldThrow` exitFailureSelector
 
 compileErrorTests :: FnkSpec
@@ -58,6 +55,3 @@ withEmptyPATH = bracket acquire restore . const
         Nothing   -> return ""
         Just path -> setEnv "PATH" "/" >> return path
     restore = setEnv "PATH"
-
-hello :: FilePath
-hello = "test" </> "data" </> "syntax" </> "0001-hello.fnk"

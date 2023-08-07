@@ -73,7 +73,7 @@ b_module mb_form exports =
 #if MIN_VERSION_ghc(9,0,0)
                , hsmodLayout = NoLayoutInfo
 #endif
-               , hsmodHaddockModHeader = mbdoc }
+               , hsmodHaddockModHeader = fmap lHsDocString2LHsDoc mbdoc }
 {-# INLINABLE b_module #-}
 
 b_implicitMainModule :: Builder ([HImportDecl] -> [HDecl] -> HModule)
@@ -84,17 +84,17 @@ b_ieSym :: Code -> Builder HIE
 b_ieSym form@(LForm (L l _)) = do
   name <- getVarOrConId form
   let var x = lA l (IEVar NOEXT (lA l (IEName (lN l (mkRdrName x)))))
-      con x = iEThingAbs l x
+      con = iEThingAbs l
   pure (if isLexCon name
-          then (con name)
-          else (var name))
+          then con name
+          else var name)
 {-# INLINABLE b_ieSym #-}
 
 b_ieGroup :: Int -> Code -> Builder HIE
 b_ieGroup n form@(LForm (L l body))
   | List [_, doc_code] <- body
   , Atom (AString _ doc) <- unCode doc_code
-  = return $! lA l (IEGroup NOEXT (fromIntegral n) (hsDocString doc))
+  = return $! lA l (IEGroup NOEXT (fromIntegral n) (mkLHsDoc l doc))
   | otherwise
   = setLastToken form >> failB "Invalid group documentation"
 {-# INLINABLE b_ieGroup #-}
@@ -102,7 +102,7 @@ b_ieGroup n form@(LForm (L l body))
 b_ieDoc :: Code -> Builder HIE
 b_ieDoc (LForm (L l form)) =
   case form of
-    Atom (AString _ str) -> return $! lA l (IEDoc NOEXT (hsDocString str))
+    Atom (AString _ str) -> return $! lA l (IEDoc NOEXT (mkLHsDoc l str))
     _                    -> builderError
 {-# INLINABLE b_ieDoc #-}
 

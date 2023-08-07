@@ -20,6 +20,11 @@ import           Data.Bifunctor                    (first)
 import           GHC.Fingerprint                   (getFileHash)
 import           System.IO                         (fixIO)
 
+#if MIN_VERSION_ghc(9,4,0)
+-- containers
+import qualified Data.Set                          as Set
+#endif
+
 -- filepath
 import           System.FilePath                   (dropExtension,
                                                     takeDirectory)
@@ -32,8 +37,7 @@ import           GHC_Driver_Session                (DynFlags (..),
                                                     HasDynFlags (..))
 import           GHC_IfaceToCore                   (typecheckIface)
 import           GHC_Iface_Load                    (readIface)
-import           GHC_Iface_Recomp                  (RecompileRequired (..),
-                                                    checkOldIface)
+import           GHC_Iface_Recomp                  (checkOldIface)
 import           GHC_Iface_Recomp_Binary           (putNameLiterally)
 import           GHC_Iface_Recomp_Flags            (fingerprintDynFlags)
 import           GHC_Tc_Module                     (getModuleInterface)
@@ -58,15 +62,29 @@ import           GHC_Unit_State                    (LookupResult (..),
 import           GHC_Unit_Types                    (IsBootInterface)
 import           GHC_Utils_Exception               (handleIO)
 import           GHC_Utils_Fingerprint             (Fingerprint)
-import           GHC_Utils_Outputable              (Outputable (..), (<+>))
+import           GHC_Utils_Outputable              (Outputable (..), SDoc, text,
+                                                    (<+>))
 
 import qualified GHC_Data_Maybe                    as Maybes
 
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Env                    (hsc_units)
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Env                    (hscUpdateHPT, hsc_HPT)
+import           GHC.Driver.Pipeline.Execute       (offsetIncludePaths)
+import           GHC.Iface.Recomp                  (MaybeValidated (..))
+import           GHC.Rename.Names                  (renamePkgQual)
+import           GHC.Types.PkgQual                 (PkgQual (..))
+#elif MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.SourceFile              (SourceModified (..))
 #else
 import           GHC_Driver_Types                  (SourceModified (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,4,0)
+import           GHC_Iface_Recomp                  (RecompileRequired (..))
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Env                    (hsc_units)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -154,12 +172,12 @@ elemOutdated :: ModuleName -> RecompState -> Bool
 elemOutdated name rs = name `elementOfUniqSet` rs_outdated rs
 {-# INLINABLE elemOutdated #-}
 
--- "RecompM a" is same as "FnkT (ExceptT String (State RecompState)) a".
+-- "RecompM a" is same as "FnkT (ExceptT SDoc (State RecompState)) a".
 
 -- | Newtype for recompilation check, state monad combined with Fnk with either
 -- value.
 newtype RecompM a =
-  RecompM {unRecompM :: RecompState -> Fnk (Either String a, RecompState)}
+  RecompM {unRecompM :: RecompState -> Fnk (Either SDoc a, RecompState)}
 
 instance Functor RecompM where
   fmap f (RecompM m) = RecompM (fmap (first (fmap f)) . m)
@@ -220,11 +238,11 @@ getHscEnv :: RecompM HscEnv
 getHscEnv = RecompM (\st -> pure (Right (rs_hsc_env st), st))
 {-# INLINABLE getHscEnv #-}
 
-recomp :: String -> RecompM a
+recomp :: SDoc -> RecompM a
 recomp why = RecompM (\st -> pure (Left why, st))
 {-# INLINABLE recomp #-}
 
-outdate :: ModuleName -> String -> RecompM a
+outdate :: ModuleName -> SDoc -> RecompM a
 outdate name why = RecompM (\st0 -> pure (Left why, addOutdated name st0))
 {-# INLINABLE outdate #-}
 
@@ -242,7 +260,11 @@ addHomeModInfo name hmi =
   RecompM (\rs0 ->
              let hsc_env0 = rs_hsc_env rs0
                  hpt1 = addToHpt (hsc_HPT hsc_env0) name hmi
+#if MIN_VERSION_ghc(9,4,0)
+                 hsc_env1 = hscUpdateHPT (const hpt1) hsc_env0
+#else
                  hsc_env1 = hsc_env0 {hsc_HPT = hpt1}
+#endif
                  rs1 = rs0 {rs_hsc_env = hsc_env1}
              in  pure (Right (), rs1))
 {-# INLINABLE addHomeModInfo #-}
@@ -251,18 +273,26 @@ checkOutdatedCache :: ModuleName -> RecompM ()
 checkOutdatedCache mname = do
   st <- getRecompState
   when (elemOutdated mname st)
-       (recomp (moduleNameString mname ++ " in outdated cache"))
+       (recomp (text (moduleNameString mname ++ " in outdated cache")))
 {-# INLINABLE checkOutdatedCache #-}
 
 checkObjDate :: ModSummary -> RecompM ()
+#if MIN_VERSION_ghc(9,4,0)
+-- ms_hs_date disappeared in ghc 9.4.
+-- XXX: Should check with Fingerprint in ms_hs_hash field?
+checkObjDate _ms = pure ()
+#else
 checkObjDate ms = do
-  let hdate = ms_hs_date ms
-      name = ms_mod_name ms
-      out str = outdate name (unwords [moduleNameString name, "has", str])
+  let name = ms_mod_name ms
+      hdate = ms_hs_date ms
+      out str = outdate name (text (moduleNameString name) <+>
+                              text "has" <+>
+                              text str)
   case ms_obj_date ms of
     Just odate | hdate < odate -> return ()
     Just _                     -> out "outdated object code"
     _                          -> out "no object code"
+#endif
 {-# INLINABLE checkObjDate #-}
 
 lookupOrLoadIface :: ModSummary -> RecompM ModIface
@@ -294,10 +324,11 @@ checkUsagePackageModules usages = getHscEnv >>= forM_ usages . go
                 checkOutdatedCache mname
                 (_, mb_iface) <- liftIO (getModuleInterface hsc_env mdl)
                 case mb_iface of
-                  Nothing -> outdate mname (mname_str ++ " iface not found")
+                  Nothing -> outdate mname (text (mname_str ++
+                                                  " iface not found"))
                   Just iface ->
                     when (mi_mod_hash' iface /= old_hash)
-                         (outdate mname (mname_str ++ " hash changed"))
+                         (outdate mname (text (mname_str ++ " hash changed")))
 #if MIN_VERSION_ghc(9,2,0)
               lmws_arg1 = hsc_units
 #elif MIN_VERSION_ghc(9,0,0)
@@ -305,14 +336,20 @@ checkUsagePackageModules usages = getHscEnv >>= forM_ usages . go
 #else
               lmws_arg1 = hsc_dflags
 #endif
-          case lookupModuleWithSuggestions (lmws_arg1 hsc_env) mname Nothing of
+          -- case lookupModuleWithSuggestions (lmws_arg1 hsc_env) mname Nothing of
+#if MIN_VERSION_ghc(9,4,0)
+              no_pkgq = NoPkgQual
+#else
+              no_pkgq = Nothing
+#endif
+          case lookupModuleWithSuggestions (lmws_arg1 hsc_env) mname no_pkgq of
             LookupFound {}    -> check_mod_hash
             LookupMultiple {} -> check_mod_hash
             LookupHidden {}   -> check_mod_hash
 #if MIN_VERSION_ghc(8,6,0)
-            LookupUnusable {} -> outdate mname (mname_str ++ " unusable")
+            LookupUnusable {} -> outdate mname (text (mname_str ++ " unusable"))
 #endif
-            LookupNotFound {} -> outdate mname (mname_str ++ " not found")
+            LookupNotFound {} -> outdate mname (text (mname_str ++ " not found"))
         _ -> return ()
 
 -- | Refill 'ms_textual_imps' field with 'UsageHomeModule' in interface.
@@ -321,21 +358,41 @@ refillHomeImports fnk_env ms mi = do
   -- XXX: At the moment cannot find any clue to get textual imports of external
   -- packages from ModIface, recompilation due to changes in external package
   -- modules are done with "checkUsagePackageModules".
-  let dmods0 = dep_mods (mi_deps mi)
-      dmods1 = map unDeps dmods0
+  let dmods0 = get_dep_mods (mi_deps mi)
+#if MIN_VERSION_ghc(9,4,0)
+      get_dep_mods = dep_direct_mods
+#else
+      get_dep_mods = dep_mods
+#endif
+      dmods1 = mapDMS unDeps dmods0
       tr = traceMake fnk_env "refillHomeImports"
       mname = ms_mod_name ms
 
   tr [ "dep_mods mi_deps of" <+> ppr mname
-     , nvc_or_none (map fst dmods1) ]
+     , nvc_or_none (dmsToList (mapDMS fst dmods1))
+     ]
 
-  -- Marking this module as outdated when any of the mported home package module
-  -- was outdated, and at the same time, preserving the state with outdated home
-  -- package module.
-  imps <- outdateToo mname (mapM (collectOldIface fnk_env) dmods1)
-  return (ms {ms_textual_imps=imps})
+  -- Marking this module as outdated when any of the imported home package
+  -- module was outdated, and at the same time, preserving the state with
+  -- outdated home package module.
+  imps0 <- outdateToo mname (mapM (collectOldIface fnk_env) (dmsToList dmods1))
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,4,0)
+  hsc_env <- getHscEnv
+  let imps1 = map rename imps0
+      rename (mb_fs, lmname) =
+        (renamePkgQual unit_env (unLoc lmname) mb_fs, lmname)
+      unit_env = hsc_unit_env hsc_env
+#else
+  let imps1 = imps0
+#endif
+
+  return (ms {ms_textual_imps=imps1})
+
+#if MIN_VERSION_ghc(9,4,0)
+unDeps :: (a, ModuleNameWithIsBoot) -> (ModuleName, IsBootInterface)
+unDeps (_, mnwib) = (gwib_mod mnwib, gwib_isBoot mnwib)
+#elif MIN_VERSION_ghc(9,0,0)
 unDeps :: ModuleNameWithIsBoot -> (ModuleName, IsBootInterface)
 unDeps gwib = (gwib_mod gwib, gwib_isBoot gwib)
 #else
@@ -388,23 +445,36 @@ collectOldIface fnk_env (mname, _is_boot) = do
 -- | Check whether recompile is required or not via 'checkOldIface'.
 doCheckOldIface :: ModSummary -> ModIface -> RecompM ModIface
 doCheckOldIface ms iface0 = do
-  -- Delegating the interface test to "checkOldIface", except for the
-  -- up-to-date-ness of source code by comparing the timestamps of the source
-  -- code file and object code file.
   hsc_env0 <- getHscEnv
   let dflags_with_new_paths = adjustIncludePaths (ms_hspp_opts ms) ms
       hsc_env1 = hsc_env0 {hsc_dflags = dflags_with_new_paths}
       mb_iface0 = Just iface0
-      src_modified =
+      mname = ms_mod_name ms
+#if MIN_VERSION_ghc(9,4,0)
+  -- 'SourceModified' data type disappeared in ghc 9.4.
+  mbv_iface <- liftIO (checkOldIface hsc_env1 ms mb_iface0)
+  case mbv_iface of
+    UpToDateItem iface     -> pure iface
+    OutOfDateItem reason _ -> outdate mname (ppr reason)
+#else
+  -- Delegating the interface test to "checkOldIface", except for the
+  -- up-to-date-ness of source code by comparing the timestamps of the source
+  -- code file and object code file.
+  let src_modified =
        case ms_obj_date ms of
          Just odate | ms_hs_date ms < odate -> SourceUnmodified
          _                                  -> SourceModified
+      recompileReason rr =
+        case rr of
+          UpToDate          -> text "up to date"
+          MustCompile       -> text "must compile"
+          RecompBecause why -> text why
   (rr, mb_iface1) <- liftIO (checkOldIface hsc_env1 ms src_modified mb_iface0)
   let why = recompileReason rr
-      mname = ms_mod_name ms
   case rr of
     UpToDate | Just iface <- mb_iface1 -> return iface
     _                                  -> outdate mname why
+#endif
 
 checkTargetUnit :: (Located String, Maybe Phase) -> RecompM TargetUnit
 checkTargetUnit name_and_mb_phase@(lname, _) = do
@@ -413,7 +483,7 @@ checkTargetUnit name_and_mb_phase@(lname, _) = do
       mname = mkModuleName (asModuleName name)
   mb_tu <- findTargetUnitMaybe dflags name_and_mb_phase
   case mb_tu of
-    Nothing -> outdate mname ("Source of " ++ name ++ " not found")
+    Nothing -> outdate mname (text ("Source of " ++ name ++ " not found"))
     Just tu -> return tu
 {-# INLINABLE checkTargetUnit #-}
 
@@ -440,10 +510,16 @@ loadIface hsc_env ms = do
   let mdl = ms_mod ms
       mname = moduleName mdl
       mname_str = moduleNameString mname
-      load_iface = readIface mdl (msHiFilePath ms)
+#if MIN_VERSION_ghc(9,4,0)
+  let load_iface =
+        readIface (hsc_dflags hsc_env) (hsc_NC hsc_env) mdl (msHiFilePath ms)
+  read_result <- liftIO (initIfaceLoad hsc_env (liftIO load_iface))
+#else
+  let load_iface = readIface mdl (msHiFilePath ms)
   read_result <- liftIO (initIfaceLoad hsc_env load_iface)
+#endif
   case read_result of
-    Maybes.Failed _err     -> outdate mname ("no iface for " ++ mname_str)
+    Maybes.Failed _e       -> outdate mname (text ("no iface for " ++ mname_str))
     Maybes.Succeeded iface -> pure iface
 
 -- | Make 'HomeModInfo' for object code recompilation.
@@ -452,15 +528,16 @@ mkHomeModInfo
 mkHomeModInfo hsc_env0 ms iface0 = liftIO $ do
   let mdl = ms_mod ms
       mloc = ms_location ms
+#if MIN_VERSION_ghc(9,4,0)
+      update_hpt = hscUpdateHPT
+#else
+      update_hpt f he = he {hsc_HPT = f (hsc_HPT he)}
+#endif
       -- See Note [Knot-tying typecheckIface] in GhcMake.
       knot_tying hsc_env mname iface =
         fixIO $ \details' -> do
-          let hsc_env1 =
-                hsc_env {
-                  hsc_HPT =
-                    let hmi = HomeModInfo iface details' Nothing
-                    in  addToHpt (hsc_HPT hsc_env) mname hmi
-                }
+          let hmi = HomeModInfo iface details' Nothing
+              hsc_env1 = update_hpt (\hpt -> addToHpt hpt mname hmi) hsc_env
           initIfaceLoad hsc_env1 (typecheckIface iface)
   details <- knot_tying hsc_env0 (ms_mod_name ms) iface0
   mb_linkable <- findObjectLinkableMaybe mdl mloc
@@ -472,23 +549,18 @@ adjustIncludePaths :: DynFlags -> ModSummary -> DynFlags
 adjustIncludePaths dflags0 ms =
   -- See: "DriverPipeline.compileOne'", it is doing similar work for updating
   -- the "includePaths" of the "DynFlags" used in "checkOldInterface".
-  let new_paths =
-        case ml_hs_file (ms_location ms) of
-          Just path -> addQuoteInclude' old_paths [current_dir path]
-          Nothing   -> old_paths
-      old_paths = includePaths dflags0
-      current_dir = takeDirectory . dropExtension
-      dflags1 = dflags0 {includePaths = new_paths}
-  in  dflags1
-
--- | Show textual representation of 'RecompileRequired'.
-recompileReason :: RecompileRequired -> String
-recompileReason rr =
-  case rr of
-    UpToDate          -> "up to date"
-    MustCompile       -> "must compile"
-    RecompBecause why -> why
-{-# INLINABLE recompileReason #-}
+  case ml_hs_file (ms_location ms) of
+    Nothing   -> dflags0
+    Just path ->
+      let old_paths = includePaths dflags0
+          current_dir = takeDirectory (dropExtension path)
+          new_paths0 = addQuoteInclude' old_paths [current_dir]
+#if MIN_VERSION_ghc(9,4,0)
+          new_paths1 = offsetIncludePaths dflags0 new_paths0
+#else
+          new_paths1 = new_paths0
+#endif
+      in  dflags0 {includePaths = new_paths1}
 
 
 -- ------------------------------------------------------------------------
@@ -516,3 +588,25 @@ mi_flag_hash' = mi_flag_hash
 #endif
 {-# INLINABLE mi_mod_hash' #-}
 {-# INLINABLE mi_flag_hash' #-}
+
+-- Fields in Dependency module set
+--
+-- Data type for dependency module is defined in GHC.Unit.Module.Deps as
+-- `Dependencies'. Some of the fields in this data type has changed to use `Set'
+-- from plain list. Following `DepModSet' tries to absorb the modification.
+
+mapDMS :: (Ord a, Ord b) => (a -> b) -> DepModSet a -> DepModSet b
+{-# INLINABLE mapDMS #-}
+
+dmsToList :: DepModSet a -> [a]
+{-# INLINABLE dmsToList #-}
+
+#if MIN_VERSION_ghc(9,4,0)
+type DepModSet a = Set.Set a
+mapDMS = Set.map
+dmsToList = Set.toList
+#else
+type DepModSet a = [a]
+mapDMS = map
+dmsToList = id
+#endif

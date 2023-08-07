@@ -24,9 +24,15 @@ import GHC_Driver_Session      (HasDynFlags (..))
 import GHC_Settings_Config     (cProjectVersionInt)
 
 import GHC_Types_SourceError   (handleSourceError)
-import GHC_Types_TyThing_Ppr   (pprTypeForUser)
 
 import GHC_Utils_Outputable    (SDoc)
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Core.TyCo.Ppr       (pprSigmaType)
+#else
+import GHC                     (Type)
+import GHC_Types_TyThing_Ppr   (pprTypeForUser)
+#endif
 
 #if MIN_VERSION_ghc(9,2,0)
 import GHC.Driver.Env          (hsc_units)
@@ -88,7 +94,7 @@ exprTypeTest =
       in  runFnk (doEval ftr "<exprTypeTest>" parseExpr act buf) evalFnkEnv
     act expr  = do
       ty <- evalExprType expr
-      pprDocForUser (pprTypeForUser ty)
+      pprDocForUser (pprSigmaType ty)
 
 typeKindTest :: FnkSpec
 typeKindTest = do
@@ -102,7 +108,7 @@ typeKindTest = do
       in  runFnk (doEval ftr "<typeKindTest>" parseType act buf) evalFnkEnv
     act expr = do
       (_, kind) <- evalTypeKind expr
-      pprDocForUser (pprTypeForUser kind)
+      pprDocForUser (pprSigmaType kind)
 
 doEval :: FnkTestResource
        -> String -> Builder a -> (a -> Fnk b) -> StringBuffer -> Fnk b
@@ -124,4 +130,11 @@ pprDocForUser sdoc = do
   pure (showSDocForUser dflags unit_state unqual sdoc)
 #else
   pure (showSDocForUser dflags unqual sdoc)
+#endif
+
+-- Auxiliary
+
+#if !MIN_VERSION_ghc(9,4,0)
+pprSigmaType :: Type -> SDoc
+pprSigmaType = pprTypeForUser
 #endif

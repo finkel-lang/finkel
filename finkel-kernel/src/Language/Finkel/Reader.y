@@ -342,12 +342,17 @@ supportedLangExts =
       , MultiParamTypeClasses
       , MonoLocalBinds
       , MonomorphismRestriction
+#if MIN_VERSION_ghc(9,4,0)
+      , NamedFieldPuns
+#endif
       , OverloadedStrings
       , OverloadedLabels
       , OverloadedLists
       , PolyKinds
       , RankNTypes
+#if !MIN_VERSION_ghc(9,4,0)
       , RecordPuns
+#endif
       , RecordWildCards
       , ScopedTypeVariables
 #if MIN_VERSION_ghc(8,10,0)
@@ -367,9 +372,15 @@ supportedLangExts =
     f = concatMap g
     g ext = [(fsLit name, name), (fsLit noname, noname)]
       where
+#if MIN_VERSION_ghc(9,4,0)
+        name = show ext
+#else
+        -- Until ghc 9.4.0, NamedFieldPuns constructor did not exist
+        -- in LanguageExtensions.
         name = case ext of
           RecordPuns -> "NamedFieldPuns"
           _ -> show ext
+#endif
         noname = "No" ++ name
 
 makeOptionFlags :: [Code] -> [Located String]

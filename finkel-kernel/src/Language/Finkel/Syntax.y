@@ -39,6 +39,10 @@ import GHC_Types_ForeignCall (Safety)
 import GHC_Types_SrcLoc (GenLocated(..), Located, getLoc, noLoc)
 import GHC_Types_SourceText (SourceText (..))
 
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Parser.Annotation (LocatedA, LocatedAn, la2la)
+#endif
+
 #if MIN_VERSION_ghc(8,6,0)
 import GHC_Hs_Decls (DerivStrategy(..))
 #else
@@ -435,9 +439,9 @@ deriving :: { HDeriving }
                                 ; return (b_derivsD ds1 $2) } }
 
 deriving_clause :: { HDeriving }
-    : 'anyclass' types { b_derivD (Just (uL $1 anyclassStrategy)) $2 }
-    | 'newtype' types  { b_derivD (Just (uL $1 newtypeStrategy)) $2 }
-    | 'stock' types    { b_derivD (Just (uL $1 stockStrategy)) $2 }
+    : 'anyclass' types { b_derivD (Just (uLA $1 anyclassStrategy)) $2 }
+    | 'newtype' types  { b_derivD (Just (uLA $1 newtypeStrategy)) $2 }
+    | 'stock' types    { b_derivD (Just (uLA $1 stockStrategy)) $2 }
     | types mb_via     { b_derivD $2 $1 }
 
 mb_via :: { Maybe HDerivStrategy }
@@ -446,11 +450,11 @@ mb_via :: { Maybe HDerivStrategy }
 
 standalone_deriv :: { HDecl }
     : 'anyclass' 'instance' overlap type
-      { b_standaloneD (Just (uL $1 anyclassStrategy)) $3 $4 }
+      { b_standaloneD (Just (uLA $1 anyclassStrategy)) $3 $4 }
     | 'newtype' 'instance' overlap type
-      { b_standaloneD (Just (uL $1 newtypeStrategy)) $3 $4 }
+      { b_standaloneD (Just (uLA $1 newtypeStrategy)) $3 $4 }
     | 'stock' 'instance' overlap type
-      { b_standaloneD (Just (uL $1 stockStrategy)) $3 $4}
+      { b_standaloneD (Just (uLA $1 stockStrategy)) $3 $4}
     | mb_via 'instance' overlap type
       { b_standaloneD $1 $3 $4 }
 
@@ -905,11 +909,11 @@ hlist0 :: { [HExpr] }
 guards :: { ([HGRHS],[HDecl]) }
     : 'where' {% parse p_where $1 }
     | list_es {% parse p_guards0 $1 >>= \gs -> return (gs,[]) }
-    | atom    { ([reLoc (L (getLoc $1) (b_GRHS [] $1))], []) }
+    | atom    { (b_hgrhs [] ($1, []), []) }
 
 guards0 :: { [HGRHS] }
     : '|' guards1 { $2 }
-    | exprs       { [reLoc (L (getLoc $1) (b_GRHS [] $1))] }
+    | exprs       { b_hgrhs [] ($1, []) }
 
 guards1 :: { [HGRHS] }
     : list_es         {% b_hgrhs [] `fmap` parse p_guard $1 }
@@ -921,7 +925,7 @@ guard :: { (HExpr, [HGuardLStmt]) }
 
 where :: { ([HGRHS],[HDecl]) }
     : list_es lbinds0 {% parse p_guards0 $1 >>= \gs -> return (gs,$2) }
-    | atom lbinds0    { ([reLoc (L (getLoc $1) (b_GRHS [] $1))], $2) }
+    | atom lbinds0    { (b_hgrhs [] ($1, []), $2) }
 
 -- Quoted form
 
@@ -1124,6 +1128,15 @@ unListL (LForm (L _ form)) =
 uL :: Code -> a -> Located a
 uL (LForm (L l _)) a = L l a
 {-# INLINE uL #-}
+
+#if MIN_VERSION_ghc(9,4,0)
+uLA :: Code -> a -> LocatedAn ann a
+uLA (LForm (L l _)) a = la2la (reLocA (L l a))
+#else
+uLA :: Code -> a -> Located a
+uLA = uL
+#endif
+{-# INLINE uLA #-}
 
 -- $docforms
 --
