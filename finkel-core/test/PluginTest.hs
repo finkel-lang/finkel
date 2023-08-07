@@ -37,6 +37,11 @@
      (import Finkel.Core.Plugin (plugin))
 
      (cond-expand
+       [(<= 904 :ghc)
+        (:begin
+          (import GHC.Driver.Env.Types ((HscEnv ..)))
+          (import GHC.Driver.Plugins ((PluginWithArgs ..) (StaticPlugin ..)
+                                      (Plugins ..) emptyPlugins)))]
        [(<= 902 :ghc)
         (:begin
           (import GHC.Driver.Env.Types ((HscEnv ..)))
@@ -71,7 +76,11 @@
                      (<- dflags1 (parseDynFlags hsc-env2 fnk-args))
                      (void (setSessionDynFlags dflags1))
 
-                     (<- t (guessTarget (</> pdir file) Nothing))
+                     (<- t (cond-expand
+                             [(<= 904 :ghc)
+                              (guessTarget (</> pdir file) Nothing Nothing)]
+                             [otherwise
+                              (guessTarget (</> pdir file) Nothing)]))
                      (setTargets [t])
                      (load LoadAllTargets))]
          (it (++ "should compile " file)
@@ -86,6 +95,10 @@
              (=> (GhcMonad m) (-> HscEnv StaticPlugin (m ()))))
        [hsc-env sp]
        (cond-expand
+         [(<= 904 :ghc)
+          (void (setSession (hsc-env {(= hsc-plugins
+                                        (emptyPlugins
+                                         {(= staticPlugins [sp])}))})))]
          [(<= 902 :ghc)
           (void (setSession (hsc-env {(= hsc-static-plugins [sp])})))]
          [otherwise

@@ -55,6 +55,7 @@
  (:: macro-decl (-> Code Code Code (Fnk Code)))
  (= macro-decl name arg body
    (do (<- tmp (gensym' "tmp"))
+       ;; XXX: Test the behaviour when the type signature in below is removed.
        (return `(= ,name
                   (let ((:: ,tmp (-> Code (Fnk Code)))
                         (= ,tmp ,arg ,body))

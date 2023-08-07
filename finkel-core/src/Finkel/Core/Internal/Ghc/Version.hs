@@ -6,29 +6,33 @@ module Finkel.Core.Internal.Ghc.Version
   ) where
 
 -- base
-import Data.Version           (Version)
+import Data.Version                    (Version)
 
 -- finkel-kernel
-import Language.Finkel        (Code, Fnk, finkelSrcError, fromCode)
+import Language.Finkel                 (Code, Fnk, finkelSrcError, fromCode)
 
 -- ghc
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Driver.Env         (hsc_units)
+import GHC.Driver.Env                  (hsc_units)
 #elif MIN_VERSION_ghc(9,0,0)
-import GHC.Driver.Session     (unitState)
+import GHC.Driver.Session              (unitState)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,4,0)
+import GHC.Unit.Types                  (indefUnit)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC.Unit.State         (PackageName (..), lookupPackageName,
-                               lookupUnitId, unitPackageVersion)
-import GHC.Unit.Types         (indefUnit)
+import GHC.Unit.State                  (PackageName (..), lookupPackageName,
+                                        lookupUnitId, unitPackageVersion)
 #else
-import Module                 (componentIdToInstalledUnitId)
-import Packages               (PackageName (..), lookupInstalledPackage,
-                               lookupPackageName)
+import Module                          (componentIdToInstalledUnitId)
+import Packages                        (PackageName (..),
+                                        lookupInstalledPackage,
+                                        lookupPackageName)
 
 -- ghc-boot
-import GHC.PackageDb          (packageVersion)
+import GHC.PackageDb                   (packageVersion)
 #endif
 
 -- Internal
@@ -48,7 +52,15 @@ getPackageVersion hsc_env form =
       Just v  -> pure v
 
 lookupPackageVersion :: HscEnv -> String -> Maybe Version
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+lookupPackageVersion hsc_env name =
+  -- XXX: Is GHC.Driver.Env.hscActiveUnitId related?
+  do let pname = PackageName (fsLit name)
+         us = hsc_units hsc_env
+     uid <- lookupPackageName us pname
+     uinfo <- lookupUnitId us uid
+     pure $ unitPackageVersion uinfo
+#elif MIN_VERSION_ghc(9,2,0)
 lookupPackageVersion hsc_env name =
   do let pname = PackageName (fsLit name)
          us = hsc_units hsc_env
