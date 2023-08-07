@@ -50,7 +50,8 @@
    (Language.Finkel.Make [buildHsSyn make])
    (Language.Finkel.Fnk
     [(FnkEnv ..) fnkEnvOptions getFnkEnv macroNames modifyFnkEnv
-     partitionFnkEnvOptions putFnkEnv setDynFlags setFnkVerbosity])
+     partitionFnkEnvOptions putFnkEnv setDynFlags setFnkVerbosity
+     updateDynFlags])
    (Language.Finkel.Syntax [parseExpr parseType])
    (Language.Finkel.Make [asModuleName])
 
@@ -85,7 +86,7 @@
 
  (GHC.Iface.Syntax [showToHeader])
 
- (GHC.Runtime.Context [(InteractiveContext ..) (InteractiveImport ..)])
+ (GHC.Runtime.Context [(InteractiveImport ..)])
  (GHC.Runtime.Debugger [pprTypeAndContents])
  (GHC.Runtime.Eval
   [abandonAll getContext getInfo moduleIsInterpreted parseName setContext
@@ -97,11 +98,10 @@
   [Name getName nameModule nameOccName nameSrcSpan pprInfixName])
  (GHC.Types.Name.Set [elemNameSet mkNameSet])
  (GHC.Types.SourceError [srcErrorMessages])
- (GHC.Types.SourceText [(StringLiteral ..)])
  (GHC.Types.SrcLoc [getLoc isGoodSrcSpan mkGeneralLocated unLoc])
  (GHC.Types.Target [(Target ..) (TargetId ..) pprTarget])
  (GHC.Types.TyThing [(TyThing ..) tyThingParent_maybe])
- (GHC.Types.TyThing.Ppr [pprTyThing pprTyThingInContextLoc pprTypeForUser])
+ (GHC.Types.TyThing.Ppr [pprTyThing pprTyThingInContextLoc])
 
  (GHC.Unit.Finder (flushFinderCaches uncacheModule))
  (GHC.Unit.Home.ModInfo [pprHPT])
@@ -114,6 +114,19 @@
   [SDoc $$ <+> <> empty dcolon hsep nest ppr sep text vcat]))
 
 ;;; Extra imports
+
+(cond-expand
+  [(<= 904 :ghc)
+   (:begin
+     (import qualified GHC)
+     (import GHC.Core.TyCo.Ppr (pprSigmaType))
+     (import GHC.Driver.Env (hsc-HPT hsc-home-unit hscActiveUnitId))
+     (import GHC.Driver.Make ((ModIfaceCache ..))))]
+  [otherwise
+   (imports-from-ghc
+    (GHC (Type))
+    (GHC.Types.SourceText [(StringLiteral ..)])
+    (GHC.Types.TyThing.Ppr [pprTypeForUser]))])
 
 (cond-expand
   [(<= 902 :ghc)
@@ -178,6 +191,12 @@
 
 
 ;;; Auxiliary functions
+
+(cond-expand
+  [(<= 904 :ghc)
+   (:begin)]
+  [otherwise
+   (defn (:: pprSigmaType (-> Type SDoc)) pprTypeForUser)])
 
 (defn (:: showUnitId (-> DynFlags String))
   [dflags]
@@ -469,6 +488,15 @@ object code."
   (do (setTargets [])
       (void (GhcMake.load LoadAllTargets))))
 
+(defn (:: clear-caches (Fnk ()))
+  (cond-expand
+    [(<= 904 :ghc)
+     (do (<- fnk-env getFnkEnv)
+         (lept [clear (. void liftIO iface-clearCache)])
+         (mapM- clear (envInterpModIfaceCache fnk-env)))]
+    [otherwise
+     (pure ())]))
+
 
 ;;; Functions for show command
 
@@ -712,8 +740,14 @@ object code."
   [form]
   (case-do getContext
     (: (IIModule m) _) (findModule m Nothing)
-    (: (IIDecl d) _)   (findModule (unLoc (ideclName d))
-                                   (fmap sl-fs (ideclPkgQual d)))
+    (: (IIDecl d) _)   (cond-expand
+                         [(<= 904 :ghc)
+                          (do (<- pq (GHC.renameRawPkgQualM (unLoc (ideclName d))
+                                                            (ideclPkgQual d)))
+                              (GHC.findQualifiedModule pq (unLoc (ideclName d))))]
+                         [otherwise
+                          (findModule (unLoc (ideclName d))
+                                      (fmap sl-fs (ideclPkgQual d)))])
     _ (finkelSrcError form "browse: no current module")))
 
 ;;; Mostly taken from `GHCi.UI.browseCmd'.
@@ -759,6 +793,7 @@ object code."
                (when ($ not null graph-to-summaries graph)
                  (liftIO (putStrLn warn-unloading)))
                clear-all-targets
+               clear-caches
                (setContext (map mk-ii-str mods))
                workingDirectoryChanged
                (liftIO (do (<- dir1 (expand-path dir0))
@@ -798,7 +833,7 @@ object code."
                (<- (, _ kind) (evalTypeKind ty0))
                (lept [sdoc (hsep [(text (show form))
                                   dcolon
-                                  (pprTypeForUser kind)])])
+                                  (pprSigmaType kind)])])
                (<- str (show-sdoc-for-user-m sdoc))
                (return `(System.IO.putStrLn ,str)))
     _ (invalid-form "kind" forms)))
@@ -826,17 +861,41 @@ paths from import directories."
            (do (<- graph0 getModuleGraph)
                (<- _ abandonAll)
                clear-all-targets
+               clear-caches
                (<- hsc-env getSession)
                (lept [graph1 (graph-to-summaries graph0)
-                      uncache (. (uncacheModule hsc-env) ms_mod_name)])
+                      uncache (cond-expand
+                                [(<= 904 :ghc)
+                                 (\ ms (uncacheModule (hsc-FC hsc-env)
+                                                      (hsc-home-unit hsc-env)
+                                                      (ms-mod-name ms)))]
+                                [otherwise
+                                 (. (uncacheModule hsc-env) ms_mod_name)])])
                (liftIO (do (mapM_ uncache graph1)
-                           (flushFinderCaches hsc-env)))
+                           (cond-expand
+                             [(<= 904 :ghc)
+                              (flushFinderCaches (hsc-FC hsc-env)
+                                                 (hsc-unit-env hsc-env))]
+                             [otherwise
+                              (flushFinderCaches hsc-env)])))
                (setSession (discardInteractiveContext hsc-env))))
          (make-target [path]
-           (do (<- dflags getDynFlags)
-               (lept [allow-obj (not (is-interpreting dflags))
+           (do (<- hsc-env getSession)
+               (lept [allow-obj (cond-expand
+                                  [(<= 904 :ghc)
+                                   ;; Deciding from target name, since the
+                                   ;; "-fforce-recomp" option is always turned
+                                   ;; ON when object code was not allowed.
+                                   (not (isPrefixOf "*" path))]
+                                  [otherwise
+                                   ($ not is-interpreting hsc-dflags hsc-env)])
                       tfile (TargetFile path Nothing)])
-               (return (Target tfile allow-obj Nothing))))]
+               (pure
+                (cond-expand
+                  [(<= 904 :ghc)
+                   (Target tfile allow-obj (hscActiveUnitId hsc-env) Nothing)]
+                  [otherwise
+                   (Target tfile allow-obj Nothing)]))))]
 
     (case forms
       [form] (maybe
@@ -867,7 +926,11 @@ paths from import directories."
   "Function to reload previously loaded module."
   [_forms]
   (case-do getTargets
-    (: (Target target-id _ _) _)
+    (cond-expand
+      [(<= 904 :ghc)
+       (: (Target target-id _ _ _) _)]
+      [otherwise
+       (: (Target target-id _ _) _)])
     (env-context-on-exception
      (lept [tstr (case target-id
                    (TargetFile path _) path
@@ -880,8 +943,6 @@ paths from import directories."
                                  ,(++ "; reloaded " tstr))))
          Failed (return '(:begin)))))
     _ (return '(System.IO.putStrLn "; reload: invalid target"))))
-
-
 
 (defn (:: set-cmd ReplAction)
   "Set command line flags, see `GHCi.UI.newDynFlags'."
@@ -920,14 +981,9 @@ paths from import directories."
         ;; Updating two more `DynFlags', one is the default `DynFlags' used to
         ;; import modules during macro expansion, and another is the `DynFlags'
         ;; in the `HscEnv' used by the macro expander.
-        (lefn [(update-session-for-expand [he]
-                 (lept [ic1 (hsc-IC he)
-                        ic2 (ic1 {(= ic-dflags dflags2)})]
-                   (he {(= hsc-dflags dflags2)
-                        (= hsc-IC ic2)})))])
         (modifyFnkEnv
          (\e (e {(= envDefaultDynFlags (Just dflags2))
-                 (= envSessionForExpand (fmap update-session-for-expand
+                 (= envSessionForExpand (fmap (updateDynFlags dflags2)
                                               (envSessionForExpand e)))})))
         (return '(:begin)))
     _ (finkelSrcError nil "set: empty form")))
@@ -965,8 +1021,7 @@ paths from import directories."
                (<- expr (buildHsSyn parseExpr [expanded]))
                (<- ty (evalExprType expr))
                (lept [sdoc (sep [(text (show form))
-                                 (nest 2 (<+> dcolon
-                                              (pprTypeForUser ty)))])])
+                                 (nest 2 (<+> dcolon (pprSigmaType ty)))])])
                (<- str (show-sdoc-for-user-m sdoc))
                (return `(System.IO.putStrLn ,str)))
     _ (invalid-form "type" forms)))

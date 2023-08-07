@@ -234,6 +234,8 @@
 
           (ok '(repl-macro show targets)
               (cond-expand
+                [(<= 904 :ghc)
+                 "; targets: main:test/data/m01.fnk"]
                 [(<= 902 :ghc)
                  "; targets: *test/data/m01.fnk"]
                 [otherwise

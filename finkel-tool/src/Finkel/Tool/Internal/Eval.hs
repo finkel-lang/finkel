@@ -1,4 +1,5 @@
 ;;; -*- mode: finkel -*-
+
 ;;; Eval loop in REPL.
 
 (:require Finkel.Core)
@@ -88,6 +89,14 @@
 
 
 ;;; Extra imports
+
+(cond-expand
+  [(<= 904 :ghc)
+   (:begin
+     (import GHC.Driver.Env (hscActiveUnitId))
+     (import GHC.Types.Error (mkMessages)))]
+  [otherwise
+   (:begin)])
 
 (cond-expand
   [(<= 902 :ghc)
@@ -229,7 +238,7 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
       ;; Load modules specified from command line, when given.
       (lept [err (=<< (. liftIO throwIO FinkelToolException))])
       (unless (null srcs)
-        (catch (do (setTargets (map guessFnkTarget srcs))
+        (catch (do (setTargets (map (guessFnkTarget hsc-env0) srcs))
                    (<- sflag (compile-and-import srcs))
                    (case sflag
                      Failed ($ err pure (++ "Failed loading: ")
@@ -455,15 +464,19 @@ context."
 
 ;;; Auxiliary
 
-(defn (:: guessFnkTarget (-> (Located String) Target))
+(defn (:: guessFnkTarget (-> HscEnv (Located String) Target))
   "Simple function to do similar work done in `GHC.guessTarget', to support
 source code file paths with @.fnk@ extension."
-  [lsrc]
+  [_hsc_env lsrc]
   (lept [src (unLoc lsrc)
          tid (if (looksLikeModuleName src)
                (TargetModule (mkModuleName src))
                (TargetFile src Nothing))]
-    (Target tid True Nothing)))
+    (cond-expand
+      [(<= 904 :ghc)
+       (Target tid True (hscActiveUnitId _hsc_env) Nothing)]
+      [otherwise
+       (Target tid True Nothing)])))
 
 (defn (:: partition-args
         (-> [(Located String)] (, [(Located String)] [(Located String)])))
@@ -492,7 +505,9 @@ to separate object files from source code files."
         (<- unqual getPrintUnqual)
         (lefn [(lmsg [l]
                  (lept [wmsg (mkWrappedMsg dflags l unqual (text msg))
-                        emsgs (unitBag wmsg)
+                        emsgs (cond-expand
+                                [(<= 904 :ghc) (mkMessages (unitBag wmsg))]
+                                [otherwise (unitBag wmsg)])
                         sdoc (vcat (ppr-wrapped-msg-bag-with-loc emsgs))]
                    (render-with-err-style dflags unqual sdoc)))])
         (case (finkelExceptionLoc fe)
@@ -525,8 +540,8 @@ to separate object files from source code files."
                    (map (++ "; ")
                         (lines (++ nstr (++ " :: " typ))))))))
 
-(defn (:: add-gt-ii (-> InteractiveImport [InteractiveImport]
-                        [InteractiveImport]))
+(defn (:: add-gt-ii
+        (-> InteractiveImport [InteractiveImport] [InteractiveImport]))
   [mdl acc]
   (if (any (subsume-ii mdl) acc)
     acc

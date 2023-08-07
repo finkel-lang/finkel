@@ -54,6 +54,9 @@
    (import Distribution.Simple.Setup (fromFlag toFlag))])
 
 (cond-expand
+  [(:min-version "Cabal" 3 8 0)
+   (import Distribution.Simple.PackageDescription
+           (readGenericPackageDescription))]
   [(:min-version "Cabal" 2 2 0)
    (import Distribution.PackageDescription.Parsec
            (readGenericPackageDescription))]

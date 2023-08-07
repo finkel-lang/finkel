@@ -34,7 +34,6 @@
 (imports-from-ghc
  (GHC.Settings.Config [cProjectVersion]))
 
-
 
 ;;; Exported
 

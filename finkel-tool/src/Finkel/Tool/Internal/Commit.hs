@@ -7,23 +7,22 @@
   (export get-git-commit)
   (import
    ;; base
-   (Control.Exception [(SomeException ..) handle])
+   (Control.Exception [(SomeException ..) catch])
    (System.Exit [(ExitCode ..)])
 
    ;; process
    (System.Process [readProcess readProcessWithExitCode])))
 
 (defn (:: is-dirty (IO Bool))
-  (do (<- (, ec _ _) (readProcessWithExitCode "git" ["diff" "--quiet"] []))
-      (case ec
-        ExitSuccess (return False)
-        _ (return True))))
+  (case-do (readProcessWithExitCode "git" ["diff" "--quiet"] [])
+    (, ExitSuccess _ _) (return False)
+    _ (return True)))
 
 (defn (:: get-git-commit (IO (Maybe String)))
-  (handle
-   (\ (SomeException _) (return Nothing))
-   (case-do (fmap lines (readProcess "git" ["rev-parse" "--short=7" "HEAD"]
-                                     []))
-     (: hash _) (do (<- dirty is-dirty)
-                    (return (Just (++ hash (if dirty "-dirty" "")))))
-     _ (return Nothing))))
+  (catch (case-do (fmap lines (readProcess "git"
+                                           ["rev-parse" "--short=7" "HEAD"]
+                                           []))
+           (: hash _) (do (<- dirty is-dirty)
+                          (return (Just (++ hash (if dirty "-dirty" "")))))
+           _ (return Nothing))
+    (\ (SomeException _) (return Nothing))))

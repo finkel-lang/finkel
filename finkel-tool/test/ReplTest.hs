@@ -215,7 +215,7 @@
              (killThread tid)))))))
 
 (defn (:: evalTests (-> EvalTestFns Spec))
-  [(EvalTestFns {(= etf-ok ok) (= etf-ng ng) (= etf-satisfy satisfy)})]
+  [(EvalTestFns {(= etf-ok ok) (= etf-satisfy satisfy)})]
   (do
     ;; Statements and declarations
     (ok '(+ 10 32) "42")
@@ -271,8 +271,11 @@
                (Left str) (isSubsequenceOf "syntax error on input" str)
                _ False))
 
-    (ng '(head [])
-        "*** Exception: Prelude.head: empty list")))
+    (satisfy '(head [])
+             (lcase
+               (Left str) (isSubsequenceOf "*** Exception: Prelude.head: empty list"
+                                           str)
+               _ False))))
 
 (defn (:: listenTests1 (-> EvalTestFns Spec))
   [(EvalTestFns {(= etf-tid etid)})]
