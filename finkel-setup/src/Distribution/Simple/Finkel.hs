@@ -140,6 +140,9 @@ finkelPPHandler = ("fnk", doNothingPP)
   where
     doNothingPP _ _ _ = PreProcessor
       { platformIndependent = True
+#if MIN_VERSION_Cabal(3,8,0)
+      , ppOrdering = unsorted
+#endif
       , runPreProcessor = mkSimplePreProcessor (\_ _ _ -> return ())
       }
 
@@ -310,7 +313,13 @@ optExtras = toNubListR . optExtras'
 #endif
   where
     optExtras' :: FilePath -> [String]
+#if MIN_TOOL_VERSION_ghc(9,2,0)
+    -- In ghc >= 9.2, "-fbyte-code" creates '*.o' object files. Using
+    -- "-fno-code" instead of bytecode.
+    optExtras' odir = ["-v0", "-fno-code", "--fnk-hsdir=" ++ odir]
+#else
     optExtras' odir = ["-v0", "-fbyte-code", "--fnk-hsdir=" ++ odir]
+#endif
 
 -- | Same as the one used in "Distribution.Simple".
 allSuffixHandlers :: UserHooks -> [PPSuffixHandler]

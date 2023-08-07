@@ -118,7 +118,6 @@ getCabalPackageDbs executable_path = do
       ghc_ver = "ghc-" ++ cProjectVersion
       localdb = joinPath distdir </>
                 joinPath ["dist-newstyle", "packagedb", ghc_ver]
-  -- return [storedb, localdb]
   return [localdb]
 
 getPackageConfD :: FilePath -> IO [FilePath]
