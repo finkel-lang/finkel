@@ -29,10 +29,12 @@ in buildImage {
   created = "${created}";
   contents = [
     myPkgs.busybox
-    myPkgs.cabal-install
-    myPkgs.stack
+    myHaskellPackages.cabal-install
+    # Compilation of stack is failing, commented out for now.
+    # myPkgs.stack
     myGhc
     myHaskellPackages.fkc
+    myHaskellPackages.fnkpp
     myHaskellPackages.finkel
   ];
   config = {
