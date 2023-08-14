@@ -38,11 +38,15 @@ let
 
   # To compile finkel-core and finkel-tool with ghc 8.10.3. At the moment,
   # running fkc with multiple cores not working well.
-  moreCabalOptions =
-    if compiler == "ghc8103" then
-      { maxBuildCores = 1; }
-    else
-      { };
+
+  # moreCabalOptions =
+  #   if compiler == "ghc8103" then
+  #     { maxBuildCores = 1; }
+  #   else
+  #     { };
+
+  # ATM, Constantly using single build cores ....
+  moreCabalOptions = { maxBuildCores = 1; };
 
   # Main configuration for finkel related packages.
   overlay = self: super: {
