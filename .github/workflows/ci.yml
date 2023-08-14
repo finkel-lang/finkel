@@ -222,6 +222,7 @@ jobs:
 
       - name: Build container image stream
         # if: matrix.compiler == 'ghc8107' && github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master'
         run: |
           nix-build --argstr compiler ${{ matrix.compiler }} ./nix/docker.nix
           echo "image_stream=$(readlink result)" >> $GITHUB_ENV
@@ -230,15 +231,17 @@ jobs:
         # if: matrix.compiler == 'ghc8107' && github.ref == 'refs/heads/master'
         if: github.ref == 'refs/heads/master'
         env:
-          CRED: ${{ secrets.GHCR_USER }}:${{ secrets.GHCR_PAT }}
+          # Below `CRED' was used for credentials for ghcr.io, but not any more
+          # since logging in with GITHUB_TOKEN is working.  May be the
+          # `GHCR_USER' and `GHCR_PAT' variables could be removed from the
+          # secrets.
+          #
+          # CRED: ${{ secrets.GHCR_USER }}:${{ secrets.GHCR_PAT }}
           FROM: docker-archive:/dev/stdin
           TO: docker://ghcr.io/${{ github.repository }}:latest
-        # Using `sudo' when invoking `skopeo', to avoid `mkdir /run/containers:
-        # permission denied" error.
         run: |
-          ${{ env.image_stream }} | \
-            gzip | \
-            sudo skopeo --debug copy --dest-creds ${CRED} ${FROM} ${TO}
+          echo ${{ secrets.GITHUB_TOKEN }} | skopeo login -u $ --password-stdin ghcr.io
+          ${{ env.image_stream }} | gzip | skopeo --debug copy ${FROM} ${TO}
 
   make-sdist-with-stack:
     runs-on:
