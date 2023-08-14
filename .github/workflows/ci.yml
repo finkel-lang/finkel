@@ -95,7 +95,7 @@ jobs:
           target: stack:all
 
       - name: Send coverage report
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           name: stack-${{ matrix.os }}-${{ matrix.resolver }}
 
@@ -307,7 +307,7 @@ jobs:
           cabal v2-build all
 
       - name: Upload package tarballs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: finkel-srcs
           path: |
