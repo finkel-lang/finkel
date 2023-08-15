@@ -82,8 +82,8 @@ See the [documentation][doc] for more details.
 
 Contributions are welcome. Please see the [CONTRIBUTING.md][contrib].
 
-[ci-badge]: https://img.shields.io/github/workflow/status/finkel-lang/finkel/ci/master?label=ci
-[ci]: https://github.com/finkel-lang/finkel/actions?query=workflow%3Aci
+[ci-badge]: https://img.shields.io/github/actions/workflow/status/finkel-lang/finkel/ci.yml?logo=github&label=ci
+[ci]: https://github.com/finkel-lang/finkel/actions/workflows/ci.yml
 [doc-badge]: http://readthedocs.org/projects/finkel/badge/?version=latest
 [doc]: https://finkel.readthedocs.io/en/latest/
 [codecov-badge]: https://codecov.io/gh/finkel-lang/finkel/branch/master/graph/badge.svg
