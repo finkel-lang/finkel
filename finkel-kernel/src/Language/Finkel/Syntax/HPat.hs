@@ -14,7 +14,6 @@ import Data.Either                     (partitionEithers)
 import Data.List                       (foldl')
 
 -- ghc
-import GHC_Data_FastString             (headFS, nullFS)
 import GHC_Hs_Lit                      (HsLit (..), HsOverLit)
 import GHC_Hs_Pat                      (HsConPatDetails, HsRecFields (..),
                                         Pat (..))
@@ -26,6 +25,11 @@ import GHC_Utils_Lexeme                (isLexCon, isLexConId, isLexConSym,
                                         isLexSym)
 
 import GHC_Types_SrcLoc                (Located)
+
+#if MIN_VERSION_ghc(9,6,0)
+import GHC.Hs.Extension                (noHsTok)
+import GHC.Hs.Pat                      (RecFieldsDotDot (..))
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Hs.Pat                      (gParPat)
@@ -55,6 +59,7 @@ import SrcLoc                          (unLoc)
 
 -- Internal
 import Language.Finkel.Builder
+import Language.Finkel.Data.FastString (nullFS, unconsFS)
 import Language.Finkel.Form
 import Language.Finkel.Syntax.SynUtils
 
@@ -132,8 +137,7 @@ b_wildP (LForm (L l _)) = lA l wildPat
 b_symP :: Code -> Builder HPat
 b_symP orig@(LForm (L l form))
   | (Atom (ASymbol name)) <- form
-  , let hdchr = headFS name
-  , let tlchrs = tailFS name
+  , Just (hdchr,tlchrs) <- unconsFS name
   = case () of
       _ | isLexCon name
         -- Constructor.
@@ -196,7 +200,9 @@ b_labeledP (LForm (L l form)) ps
         (wilds, non_wilds) = partitionEithers ps
         mb_dotdot = case wilds of
           []                  -> Nothing
-#if MIN_VERSION_ghc(8,10,0)
+#if MIN_VERSION_ghc(9,6,0)
+          (LForm (L wl _): _) -> Just (L wl (RecFieldsDotDot (length non_wilds)))
+#elif MIN_VERSION_ghc(8,10,0)
           (LForm (L wl _): _) -> Just (L wl (length non_wilds))
 #else
           _                   -> Just (length non_wilds)
@@ -221,7 +227,11 @@ b_asP (LForm (dL->L l form)) pat =
       return $! lA l (asPat (lN l (mkRdrName name)) (mkParPat' pat))
     _ -> builderError
   where
+#if MIN_VERSION_ghc(9,6,0)
+    asPat lid p = AsPat NOEXT lid noHsTok p
+#else
     asPat = AsPat NOEXT
+#endif
 {-# INLINABLE b_asP #-}
 
 b_lazyP :: HPat -> HPat

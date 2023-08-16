@@ -67,9 +67,19 @@ import           GHC_Utils_Outputable              (Outputable (..), SDoc, text,
 
 import qualified GHC_Data_Maybe                    as Maybes
 
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Unit.Home.ModInfo             (HomeModLinkable (..),
+                                                    emptyHomeModInfoLinkable)
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.SysTools.Cpp                  (offsetIncludePaths)
+#elif MIN_VERSION_ghc(9,4,0)
+import           GHC.Driver.Pipeline.Execute       (offsetIncludePaths)
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Env                    (hscUpdateHPT, hsc_HPT)
-import           GHC.Driver.Pipeline.Execute       (offsetIncludePaths)
 import           GHC.Iface.Recomp                  (MaybeValidated (..))
 import           GHC.Rename.Names                  (renamePkgQual)
 import           GHC.Types.PkgQual                 (PkgQual (..))
@@ -533,15 +543,24 @@ mkHomeModInfo hsc_env0 ms iface0 = liftIO $ do
 #else
       update_hpt f he = he {hsc_HPT = f (hsc_HPT he)}
 #endif
+
+#if MIN_VERSION_ghc(9,6,0)
+      empty_home_mod_info_linkable = emptyHomeModInfoLinkable
+      asObjLinkable mb_linkable = HomeModLinkable { homeMod_object = mb_linkable
+                                                  , homeMod_bytecode = Nothing }
+#else
+      empty_home_mod_info_linkable = Nothing
+      asObjLinkable = id
+#endif
       -- See Note [Knot-tying typecheckIface] in GhcMake.
       knot_tying hsc_env mname iface =
         fixIO $ \details' -> do
-          let hmi = HomeModInfo iface details' Nothing
+          let hmi = HomeModInfo iface details' empty_home_mod_info_linkable
               hsc_env1 = update_hpt (\hpt -> addToHpt hpt mname hmi) hsc_env
           initIfaceLoad hsc_env1 (typecheckIface iface)
   details <- knot_tying hsc_env0 (ms_mod_name ms) iface0
   mb_linkable <- findObjectLinkableMaybe mdl mloc
-  return $! HomeModInfo iface0 details mb_linkable
+  return $! HomeModInfo iface0 details (asObjLinkable mb_linkable)
 
 -- | Adjust the 'includePaths' field in given 'DynFlags' to prepare for getting
 -- flag hash value.

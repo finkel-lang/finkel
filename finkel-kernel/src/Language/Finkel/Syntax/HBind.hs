@@ -52,13 +52,18 @@ mkPatBind_compat :: HPat -> [HGRHS] -> [HDecl] -> HsBind PARSED
 mkPatBind_compat (dL->L l pat) grhss decls =
   PatBind { pat_lhs = cL l pat
           , pat_rhs = mkGRHSs grhss decls l
+          -- XXX: From ghc 9.6, the `pat_ext' field is used for holding former
+          -- `pat_ticks' information.
 #if MIN_VERSION_ghc(8,6,0)
           , pat_ext = NOEXT
 #else
           , pat_rhs_ty = placeHolderType
           , bind_fvs = placeHolderNames
 #endif
-          , pat_ticks = ([], []) }
+#if !MIN_VERSION_ghc(9,6,0)
+          , pat_ticks = ([], [])
+#endif
+          }
 {-# INLINABLE mkPatBind_compat #-}
 
 mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED

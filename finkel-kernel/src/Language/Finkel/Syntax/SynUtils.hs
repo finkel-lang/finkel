@@ -31,8 +31,6 @@ import qualified Data.ByteString.Char8            as BS
 #endif
 
 -- ghc
-import           GHC_Data_FastString              (FastString, fsLit, headFS,
-                                                   unpackFS)
 import           GHC_Hs_Decls                     (LConDecl, LDataFamInstDecl,
                                                    LDocDecl, LFamilyDecl,
                                                    LTyFamInstDecl)
@@ -117,6 +115,8 @@ import           GHC_Hs_Doc                       (HsDocString (..))
 
 -- Internal
 import           Language.Finkel.Builder
+import           Language.Finkel.Data.FastString  (FastString, fsLit, unconsFS,
+                                                   unpackFS)
 import           Language.Finkel.Form
 import           Language.Finkel.Syntax.Extension
 import           Language.Finkel.Syntax.Location
@@ -158,11 +158,11 @@ mkRdrName' upperCaseNameSpace name
   | name == fsLit ":" = nameRdrName consDataConName
 
   -- Names starting with ':' are data constructor.
-  | x == ':' = mkUnqual srcDataName name
+  | nameStartsWith (== ':') = mkUnqual srcDataName name
 
   -- Names starting with capital letters might be qualified var names or
   -- data constructor names.
-  | isUpper x =
+  | nameStartsWith isUpper =
     case splitQualName name of
       Nothing -> mkUnqual upperCaseNameSpace name
       Just q@(_, name') -> if isLexCon name'
@@ -172,7 +172,9 @@ mkRdrName' upperCaseNameSpace name
   -- Variable.
   | otherwise = mkVarUnqual name
   where
-    x = headFS name
+    nameStartsWith test = case unconsFS name of
+                            Just (x,_) -> test x
+                            _          -> False
 {-# INLINABLE mkRdrName' #-}
 
 -- See also "compiler/parser/Lexer.x.source" in ghc source code. It has

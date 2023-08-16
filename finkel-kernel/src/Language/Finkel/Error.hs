@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE TypeFamilies #-}
 -- | Version compatible variant of error message type and functions.
 
 module Language.Finkel.Error
@@ -9,8 +10,14 @@ module Language.Finkel.Error
 
 #include "ghc_modules.h"
 
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,6,0)
+import GHC.Types.Error         (NoDiagnosticOpts (..))
+import GHC.Utils.Outputable    (NamePprCtx)
+#else
+import GHC_Utils_Outputable    (PrintUnqualified)
+#endif
 
+#if MIN_VERSION_ghc(9,4,0)
 -- base
 import Data.Typeable           (Typeable)
 
@@ -31,14 +38,23 @@ import GHC_Utils_Error         (ErrMsg, mkErrMsg, mkPlainErrMsg)
 
 import GHC_Driver_Session      (DynFlags)
 import GHC_Types_SrcLoc        (SrcSpan)
-import GHC_Utils_Outputable    (PrintUnqualified, SDoc)
+import GHC_Utils_Outputable    (SDoc)
 
 #if MIN_VERSION_ghc(9,4,0)
 newtype FnkWrapper = FnkWrapper {unFnkWrapper :: SDoc}
   deriving (Typeable)
 
 instance Diagnostic FnkWrapper where
+#if MIN_VERSION_ghc(9,6,0)
+  type DiagnosticOpts FnkWrapper = NoDiagnosticOpts
+  diagnosticMessage _no_diagnostic_opts = mkSimpleDecorated . unFnkWrapper
+  defaultDiagnosticOpts = NoDiagnosticOpts
+  -- XXX: May worth adding Finkel specific diagnostic code.
+  diagnosticCode _ = Nothing
+#else
   diagnosticMessage = mkSimpleDecorated . unFnkWrapper
+#endif
+
   diagnosticReason = const ErrorWithoutFlag
   diagnosticHints = const noHints
 
@@ -55,7 +71,11 @@ type WrappedMsg = MsgEnvelope DecoratedSDoc
 type WrappedMsg = ErrMsg
 #endif
 
-mkWrappedMsg :: DynFlags -> SrcSpan -> PrintUnqualified -> SDoc -> WrappedMsg
+#if !MIN_VERSION_ghc(9,6,0)
+#define NamePprCtx PrintUnqualified
+#endif
+
+mkWrappedMsg :: DynFlags -> SrcSpan -> NamePprCtx -> SDoc -> WrappedMsg
 {-# INLINABLE mkWrappedMsg #-}
 
 mkPlainWrappedMsg :: DynFlags -> SrcSpan -> SDoc -> WrappedMsg

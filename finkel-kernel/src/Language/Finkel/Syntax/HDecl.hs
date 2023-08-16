@@ -9,98 +9,116 @@ module Language.Finkel.Syntax.HDecl where
 #include "ghc_modules.h"
 
 -- base
-import Data.Maybe                      (fromMaybe)
+import Data.Maybe                       (fromMaybe)
 
 -- ghc
-import GHC_Core_DataCon                (SrcStrictness (..))
-import GHC_Data_FastString             (FastString, unpackFS)
-import GHC_Data_OrdList                (toOL)
-import GHC_Hs_Binds                    (HsBind, Sig (..))
-import GHC_Hs_Decls                    (ClsInstDecl (..), ConDecl (..),
-                                        DataFamInstDecl (..), DefaultDecl (..),
-                                        DerivDecl (..), DocDecl (..),
-                                        FamilyDecl (..), FamilyInfo (..),
-                                        FamilyResultSig (..), ForeignDecl (..),
-                                        ForeignExport (..), HsDataDefn (..),
-                                        HsDecl (..), HsDerivingClause (..),
-                                        InstDecl (..), NewOrData (..),
-                                        TyClDecl (..), TyFamInstDecl (..),
-                                        TyFamInstEqn)
-import GHC_Hs_Doc                      (LHsDocString)
-import GHC_Hs_Expr                     (HsMatchContext (..), Match (..))
-import GHC_Hs_Pat                      (Pat (..))
-import GHC_Hs_Type                     (ConDeclField (..), HsConDetails (..),
-                                        HsTyVarBndr (..), HsType (..),
-                                        HsWildCardBndrs (..), mkFieldOcc,
-                                        mkHsQTvs)
-import GHC_Hs_Utils                    (mkClassOpSigs)
-import GHC_Parser_PostProcess          (mkConDeclH98, mkGadtDecl,
-                                        mkInlinePragma, parseCImport)
-import GHC_Types_Basic                 (Activation (..), InlineSpec (..),
-                                        OverlapMode (..), PhaseNum,
-                                        RuleMatchInfo (..))
-import GHC_Types_Fixity                (Fixity (..), FixityDirection (..),
-                                        LexicalFixity (..))
-import GHC_Types_ForeignCall           (CCallConv (..), CExportSpec (..),
-                                        Safety (..))
-import GHC_Types_Name_Occurrence       (dataName, tcName)
-import GHC_Types_Name_Reader           (RdrName, mkUnqual)
-import GHC_Types_SrcLoc                (GenLocated (..), Located, getLoc, noLoc,
-                                        unLoc)
+import GHC_Core_DataCon                 (SrcStrictness (..))
+import GHC_Data_FastString              (FastString, unpackFS)
+import GHC_Data_OrdList                 (toOL)
+import GHC_Hs_Binds                     (HsBind, Sig (..))
+import GHC_Hs_Decls                     (ClsInstDecl (..), ConDecl (..),
+                                         DataFamInstDecl (..), DefaultDecl (..),
+                                         DerivDecl (..), DocDecl (..),
+                                         FamilyDecl (..), FamilyInfo (..),
+                                         FamilyResultSig (..), ForeignDecl (..),
+                                         ForeignExport (..), HsDataDefn (..),
+                                         HsDecl (..), HsDerivingClause (..),
+                                         InstDecl (..), TyClDecl (..),
+                                         TyFamInstDecl (..), TyFamInstEqn)
+import GHC_Hs_Doc                       (LHsDocString)
+import GHC_Hs_Expr                      (HsMatchContext (..), Match (..))
+import GHC_Hs_Pat                       (Pat (..))
+import GHC_Hs_Type                      (ConDeclField (..), HsConDetails (..),
+                                         HsTyVarBndr (..), HsType (..),
+                                         HsWildCardBndrs (..), mkFieldOcc,
+                                         mkHsQTvs)
+import GHC_Hs_Utils                     (mkClassOpSigs)
+import GHC_Parser_PostProcess           (mkConDeclH98, mkGadtDecl,
+                                         mkInlinePragma, parseCImport)
+import GHC_Types_Basic                  (Activation (..), InlineSpec (..),
+                                         OverlapMode (..), PhaseNum,
+                                         RuleMatchInfo (..))
+import GHC_Types_Fixity                 (Fixity (..), FixityDirection (..),
+                                         LexicalFixity (..))
+import GHC_Types_ForeignCall            (CCallConv (..), CExportSpec (..),
+                                         Safety (..))
+import GHC_Types_Name_Occurrence        (dataName, tcName)
+import GHC_Types_Name_Reader            (RdrName, mkUnqual)
+import GHC_Types_SrcLoc                 (GenLocated (..), Located, getLoc,
+                                         noLoc, unLoc)
+
+#if MIN_VERSION_ghc(9,6,0)
+import GHC.Parser.Annotation            (noAnn)
+import GHC.Parser.PostProcess           (mkTokenLocation)
+import Language.Haskell.Syntax.Concrete (HsUniToken (..))
+import Language.Haskell.Syntax.Decls    (DataDefnCons (..))
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import Language.Haskell.Syntax.Decls    (NewOrData (..))
+#else
+import GHC_Hs_Decls                     (NewOrData (..))
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import Language.Haskell.Syntax.Concrete (LayoutInfo (..))
+#elif MIN_VERSION_ghc(9,0,0)
+import GHC_Types_SrcLoc                 (LayoutInfo (..))
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
-import GHC.Parser.Annotation           (l2l)
+import GHC.Parser.Annotation            (l2l)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC_Hs_Decls                    (DerivClauseTys (..),
-                                        XViaStrategyPs (..))
-import GHC_Hs_Type                     (mkHsOuterImplicit)
-import GHC_Hs_Utils                    (hsTypeToHsSigType, hsTypeToHsSigWcType)
-import GHC_Parser_Annotation           (AnnSortKey (..))
-import GHC_Types_Basic                 (TopLevelFlag (..))
+import GHC_Hs_Decls                     (DerivClauseTys (..),
+                                         XViaStrategyPs (..))
+import GHC_Hs_Type                      (mkHsOuterImplicit)
+import GHC_Hs_Utils                     (hsTypeToHsSigType, hsTypeToHsSigWcType)
+import GHC_Parser_Annotation            (AnnSortKey (..))
+import GHC_Types_Basic                  (TopLevelFlag (..))
 #else
-import GHC_Hs_Type                     (mkHsImplicitBndrs)
-import GHC_Hs_Utils                    (mkLHsSigType, mkLHsSigWcType)
+import GHC_Hs_Type                      (mkHsImplicitBndrs)
+import GHC_Hs_Utils                     (mkLHsSigType, mkLHsSigWcType)
 #endif
+
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC_Hs_Type                     (LHsTyVarBndr, hsLinear)
-import GHC_Types_SrcLoc                (LayoutInfo (..))
-import GHC_Types_Var                   (Specificity (..))
+import GHC_Hs_Type                      (LHsTyVarBndr, hsLinear)
+import GHC_Types_Var                    (Specificity (..))
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import GHC_Parser_Lexer                (P (..), ParseResult (..))
-import GHC_Parser_PostProcess          (mkStandaloneKindSig)
+import GHC_Parser_Lexer                 (P (..), ParseResult (..))
+import GHC_Parser_PostProcess           (mkStandaloneKindSig)
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import GHC_Hs_Decls                    (LTyFamDefltDecl)
+import GHC_Hs_Decls                     (LTyFamDefltDecl)
 #else
-import GHC_Hs_Decls                    (LTyFamDefltEqn)
-import Outputable                      (showSDocUnsafe)
-import RdrHsSyn                        (mkATDefault)
+import GHC_Hs_Decls                     (LTyFamDefltEqn)
+import Outputable                       (showSDocUnsafe)
+import RdrHsSyn                         (mkATDefault)
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import GHC_Hs_Decls                    (FamEqn (..))
+import GHC_Hs_Decls                     (FamEqn (..))
 #elif MIN_VERSION_ghc(8,4,0)
-import GHC_Hs_Decls                    (FamEqn (..), HsTyPats)
+import GHC_Hs_Decls                     (FamEqn (..), HsTyPats)
 #else
-import GHC_Hs_Decls                    (TyFamEqn (..))
+import GHC_Hs_Decls                     (TyFamEqn (..))
 #endif
 
 #if MIN_VERSION_ghc(8,8,0)
-import GHC_Hs_Type                     (HsArg (..))
+import GHC_Hs_Type                      (HsArg (..))
 #endif
 
 #if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Decls                    (DerivStrategy (..))
+import GHC_Hs_Decls                     (DerivStrategy (..))
 #else
-import GHC_Hs_Decls                    (noForeignExportCoercionYet,
-                                        noForeignImportCoercionYet)
-import PlaceHolder                     (PlaceHolder (..), placeHolderNames)
+import GHC_Hs_Decls                     (noForeignExportCoercionYet,
+                                         noForeignImportCoercionYet)
+import PlaceHolder                      (PlaceHolder (..), placeHolderNames)
 #endif
 
 -- Internal
@@ -153,20 +171,31 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
                     , tcdFVs = placeHolderNames
 #endif
                     }
-    defn = HsDataDefn { dd_ND = newOrData
+    defn = HsDataDefn { dd_cType = Nothing
+#if !MIN_VERSION_ghc(9,6,0)
+                      , dd_ND = newOrData
+#endif
 #if MIN_VERSION_ghc(9,2,0)
                       , dd_ctxt = Nothing
 #else
                       , dd_ctxt = noLoc []
 #endif
-                      , dd_cType = Nothing
                       , dd_kindSig = ksig
-                      , dd_cons = cs
+                      , dd_cons = condecls
                       , dd_derivs = derivs
 #if MIN_VERSION_ghc(8,6,0)
                       , dd_ext = NOEXT
 #endif
                       }
+#if MIN_VERSION_ghc(9,6,0)
+    condecls = case newOrData of
+                 NewType | c:_ <- cs -> NewTypeCon c
+                 DataType            -> DataTypeCons False cs
+                 -- XXX: Not sure reaching below is possible.
+                 _                   -> error "mkNewTypeOrDataD:condecls"
+#else
+    condecls = cs
+#endif
 {-# INLINABLE mkNewtypeOrDataD #-}
 
 b_typeD :: Code
@@ -279,7 +308,13 @@ b_gadtD form@(LForm (L l1 _)) (ctxt, bodyty) = do
 #if MIN_VERSION_ghc(9,2,0)
   ldecl <-
     do ps <- fmap ghcPState getBState
-       case unP (mkGadtDecl l1 [name'] (hsTypeToHsSigType ty) []) ps of
+       let name'' = pure name'
+#  if MIN_VERSION_ghc(9,6,0)
+       let  dcolon = L (mkTokenLocation l1) HsNormalTok
+       case unP (mkGadtDecl l1 name'' dcolon (hsTypeToHsSigType ty)) ps of
+#  else
+       case unP (mkGadtDecl l1 name'' (hsTypeToHsSigType ty) []) ps of
+#endif
          POk _ d -> pure d
          _       -> builderError
 #elif MIN_VERSION_ghc(9,0,0)
@@ -442,6 +477,9 @@ b_classD (tys,ty) decls = do
     -- point.
     let bndrs' = tail (reverse bndrs)
         cls = ClassDecl { tcdLName = name
+#if MIN_VERSION_ghc(9,6,0)
+                        , tcdLayout = NoLayoutInfo
+#endif
 #if MIN_VERSION_ghc(9,2,0)
                         , tcdCtxt =
                           if null tys
@@ -458,7 +496,9 @@ b_classD (tys,ty) decls = do
                         , tcdATs = cd_fds cd
                         , tcdATDefs = atdefs
                         , tcdDocs = cd_docs cd
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+                        , tcdCExt = (noAnn, NoAnnSortKey)
+#elif MIN_VERSION_ghc(9,2,0)
                         , tcdCExt = (unused, NoAnnSortKey, NoLayoutInfo)
 #elif MIN_VERSION_ghc(9,0,0)
                         , tcdCExt = NoLayoutInfo
@@ -581,15 +621,17 @@ mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats, mb_kind)
 #endif
                              }
       -- XXX: Contexts and kind signatures not supported.
-      rhs = HsDataDefn { dd_ND = new_or_data
-                       , dd_cType = Nothing
+      rhs = HsDataDefn { dd_cType = Nothing
+#if !MIN_VERSION_ghc(9,6,0)
+                       , dd_ND = new_or_data
+#endif
 #if MIN_VERSION_ghc(9,2,0)
                        , dd_ctxt = Nothing
 #else
                        , dd_ctxt = L l []
 #endif
                        , dd_kindSig = mb_kind
-                       , dd_cons = condecls
+                       , dd_cons = condecls'
                        , dd_derivs = deriv
 #if MIN_VERSION_ghc(8,6,0)
                        , dd_ext = NOEXT
@@ -597,6 +639,15 @@ mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats, mb_kind)
                        }
       tycon = L ln (mkUnqual tcName name)
       inst = mkDataFamInstDecl tycon pats rhs
+#if MIN_VERSION_ghc(9,6,0)
+      condecls' = case new_or_data of
+                    NewType | c:_ <- condecls -> NewTypeCon c
+                    DataType                  -> DataTypeCons False condecls
+                    -- XXX: Again, not sure reaching below is possible.
+                    _ -> error "mk_data_or_newtype_instD:condecls'"
+#else
+      condecls' = condecls
+#endif
   in  lA l (InstD NOEXT faminst)
 {-# INLINABLE mk_data_or_newtype_instD #-}
 
@@ -703,10 +754,13 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty)
                                , fd_co = noForeignExportCoercionYet
 #endif
                                , fd_fe = e }
-            e = CExport (L l (CExportStatic (SourceText ename')
-                                            ename'_fs
-                                            (unLoc ccnv)))
-                        (L l (SourceText ename'))
+            ces = CExportStatic stxt ename'_fs (unLoc ccnv)
+            stxt = SourceText ename'
+#if MIN_VERSION_ghc(9,6,0)
+            e = CExport (L l stxt) (L l ces)
+#else
+            e = CExport (L l ces) (L l stxt)
+#endif
         return (lA l (forD fe))
     _ -> builderError
   | otherwise = builderError

@@ -339,7 +339,9 @@ type HLocalBinds = Located (HsLocalBinds PARSED)
 
 type HMatch = LMatch PARSED HExpr
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,6,0)
+type HModule = HsModule PARSED
+#elif MIN_VERSION_ghc(9,0,0)
 type HModule = HsModule
 #else
 type HModule = HsModule PARSED

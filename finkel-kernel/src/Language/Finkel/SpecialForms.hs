@@ -17,6 +17,7 @@ module Language.Finkel.SpecialForms
 import Control.Exception                 (throw)
 import Control.Monad                     (foldM, unless, when)
 import Control.Monad.IO.Class            (MonadIO (..))
+import Data.Foldable                     (toList)
 import Data.Maybe                        (catMaybes)
 import GHC.Exts                          (unsafeCoerce#)
 
@@ -64,6 +65,10 @@ import GHC_Unit_Module_ModSummary        (ModSummary (..))
 import GHC_Utils_Error                   (compilationProgressMsg)
 import GHC_Utils_Outputable              (SDoc, fsep, nest, ppr, text, vcat,
                                           (<+>))
+
+#if MIN_VERSION_ghc(9,6,0)
+import Language.Haskell.Syntax.ImpExp    (ImportListInterpretation (..))
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Driver.Env                    (hsc_HPT, hsc_units)
@@ -198,6 +203,13 @@ coerceMacro dflags name =
         Left err    -> failFnk (syntaxErrMsg err)
 {-# INLINABLE coerceMacro #-}
 
+-- CPP macro hack to support pattern matching with ImportListInterpretation
+-- introduced in ghc 9.6 to work with older version of ghc .
+#if !MIN_VERSION_ghc(9,6,0)
+#define EverythingBut True
+#define Exactly False
+#endif
+
 getTyThingsFromIDecl :: GhcMonad m => HImportDecl -> ModuleInfo -> m [TyThing]
 getTyThingsFromIDecl (L _ idecl) minfo = do
   -- 'toImportList' borrowed from local definition in
@@ -205,11 +217,16 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
   let exportedNames = modInfoExports minfo
       ieName' (dL->L l ie) = la2la (cL l (ieName ie))
       toImportList (h, dL->L _ loc) = (h, map ieName' loc)
+#if MIN_VERSION_ghc(9,6,0)
+      ideclImportList' = ideclImportList
+#else
+      ideclImportList' = ideclHiding
+#endif
       getNames =
-        case fmap toImportList (ideclHiding idecl) of
+        case fmap toImportList (ideclImportList' idecl) of
           -- Import with `hiding' entities. Comparing 'Name' and 'RdrName' via
           -- OccName'.
-          Just (True, ns)  -> do
+          Just (EverythingBut, ns)  -> do
             let f n acc = if nameOccName n `elem` ns'
                              then acc
                              else n : acc
@@ -217,9 +234,10 @@ getTyThingsFromIDecl (L _ idecl) minfo = do
             return (foldr f [] exportedNames)
 
           -- Import with explicit entities.
-          Just (False, ns) -> do
+          Just (Exactly, ns) -> do
             hsc_env <- getSession
-            concat <$> mapM (liftIO . hscTcRnLookupRdrName hsc_env) ns
+            let lkup_name = fmap toList . hscTcRnLookupRdrName hsc_env
+            concat <$> mapM (liftIO . lkup_name) ns
 
           -- Import whole module.
           Nothing          -> return exportedNames
