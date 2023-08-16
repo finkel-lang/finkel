@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP              #-}
+{-# LANGUAGE TypeApplications #-}
 -- | Main function for Finkel compiler.
 --
 -- This module contains 'main' function, which does similar and simplified works
@@ -44,6 +45,11 @@ import           GHC_Utils_CliOption          (Option (FileOption))
 import           GHC_Utils_Misc               (looksLikeModuleName)
 import           GHC_Utils_Panic              (GhcException (..),
                                                throwGhcException)
+
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Errors.Types      (GhcMessage)
+import           GHC.Types.Error              (Diagnostic (..))
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Diagnostic (initDiagOpts)
@@ -237,7 +243,14 @@ main3 orig_args ghc_args = do
        handleSourceError
          (\e -> do printException e
                    liftIO exitFailure)
-#if MIN_VERSION_ghc(9,4,0)
+         -- XXX: Compatibility codes for `handleFlagWarnings' appear in
+         -- "L.F.M.Summary", reuse the code.
+#if MIN_VERSION_ghc(9,6,0)
+         (liftIO
+           (let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
+                diag_opts = initDiagOpts dflags3
+            in  handleFlagWarnings logger diagnostic_opts diag_opts warnings))
+#elif MIN_VERSION_ghc(9,4,0)
          (liftIO (handleFlagWarnings logger (initDiagOpts dflags3) warnings))
 #elif MIN_VERSION_ghc(9,2,0)
          (liftIO (handleFlagWarnings logger dflags3 warnings))

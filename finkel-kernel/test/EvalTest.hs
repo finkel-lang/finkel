@@ -15,7 +15,6 @@ import System.Info             (os)
 import System.FilePath         (takeBaseName)
 
 -- ghc
-import GHC                     (getPrintUnqual)
 import GHC_Data_StringBuffer   (StringBuffer, hGetStringBuffer,
                                 stringToStringBuffer)
 import GHC_Driver_Monad        (printException)
@@ -26,6 +25,12 @@ import GHC_Settings_Config     (cProjectVersionInt)
 import GHC_Types_SourceError   (handleSourceError)
 
 import GHC_Utils_Outputable    (SDoc)
+
+#if MIN_VERSION_ghc(9,6,0)
+import GHC                     (getNamePprCtx)
+#else
+import GHC                     (getPrintUnqual)
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Core.TyCo.Ppr       (pprSigmaType)
@@ -124,7 +129,11 @@ evalFnkEnv = fnkTestEnv {envContextModules = modules}
 pprDocForUser :: SDoc -> Fnk String
 pprDocForUser sdoc = do
   dflags <- getDynFlags
+#if MIN_VERSION_ghc(9,6,0)
+  unqual <- getNamePprCtx
+#else
   unqual <- getPrintUnqual
+#endif
 #if MIN_VERSION_ghc(9,2,0)
   unit_state <- hsc_units <$> getSession
   pure (showSDocForUser dflags unit_state unqual sdoc)

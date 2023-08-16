@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP              #-}
+{-# LANGUAGE TypeApplications #-}
 -- | Simple executable for profiling.
 --
 -- Simple executable to wrap some simple actions.
@@ -23,9 +24,16 @@ import           GHC_Driver_Session           (DynFlags, GeneralFlag (..),
                                                HasDynFlags (..), gopt_set)
 import           GHC_Types_Basic              (SuccessFlag (..))
 import           GHC_Types_SrcLoc             (mkGeneralLocated)
-import           GHC_Utils_Outputable         (Outputable (..),
-                                               PrintUnqualified, SDoc,
+import           GHC_Utils_Outputable         (Outputable (..), SDoc,
                                                neverQualify)
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Errors.Types      (GhcMessage)
+import           GHC.Types.Error              (Diagnostic (..))
+import           GHC.Utils.Outputable         (NamePprCtx)
+#else
+import           GHC_Utils_Outputable         (PrintUnqualified)
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Diagnostic (initDiagOpts)
 import           GHC.Driver.Errors            (printMessages)
@@ -123,7 +131,10 @@ pprHsModule path = Fnk.runFnk go SpecialForms.defaultFnkEnv
          logger <- getLogger
 #endif
          let dflags1 = gopt_set dflags0 Opt_Haddock
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,6,0)
+             ddopts = defaultDiagnosticOpts @GhcMessage
+             pboe = printMessages logger ddopts (initDiagOpts dflags1)
+#elif MIN_VERSION_ghc(9,4,0)
              pboe = printMessages logger (initDiagOpts dflags1)
 #elif MIN_VERSION_ghc(9,2,0)
              pboe = printBagOfErrors logger dflags1
@@ -141,7 +152,12 @@ pprHsModule path = Fnk.runFnk go SpecialForms.defaultFnkEnv
            Right lmdl -> prForUser dflags1 stdout neverQualify (ppr lmdl)
            Left err   -> putStrLn "pprHsModule: error" >> pboe err
 
+#if MIN_VERSION_ghc(9,6,0)
+prForUser :: DynFlags -> Handle -> NamePprCtx -> SDoc -> IO ()
+#else
 prForUser :: DynFlags -> Handle -> PrintUnqualified -> SDoc -> IO ()
+#endif
+
 #if MIN_VERSION_ghc(9,0,0)
 prForUser df hdl qual sdoc = printForUser df hdl qual AllTheWay sdoc
 #else

@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Wrapper for Finkel code compilation monad.
@@ -154,6 +155,17 @@ import           GHC_Utils_Outputable         (SDoc, alwaysQualify,
                                                vcat, (<+>))
 import qualified GHC_Utils_Ppr                as Pretty
 
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Errors.Types      (GhcMessage)
+import           GHC.Types.Error              (defaultDiagnosticOpts)
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Backend           (interpreterBackend)
+#elif MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Backend           (Backend (..))
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Diagnostic (initDiagOpts)
 import           GHC.Driver.Env               (hscSetFlags)
@@ -165,7 +177,6 @@ import           GHC_Driver_Errors            (printBagOfErrors)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Backend           (Backend (..))
 import           GHC.Driver.Env               (hsc_units)
 import           GHC.Utils.Logger             (HasLogger (..))
 #else
@@ -505,7 +516,13 @@ printFinkelException e = case finkelExceptionLoc e of
     prLocErr l = do
       dflags <- getDynFlags
       let em = mkWrappedMsg dflags l neverQualify (text msg)
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,6,0)
+      logger <- getLogger
+      let ghc_msg = mkMessages (unitBag em)
+          diagnostic_opts = defaultDiagnosticOpts @GhcMessage
+          diag_opts = initDiagOpts dflags
+      liftIO (printMessages logger diagnostic_opts diag_opts ghc_msg)
+#elif MIN_VERSION_ghc(9,4,0)
       logger <- getLogger
       let ghc_msg = mkMessages (unitBag em)
       liftIO (printMessages logger (initDiagOpts dflags) ghc_msg)
@@ -603,7 +620,10 @@ useInterpreter dflags0 =
         foldl setter df (concatMap (get_flags platform) hostFullWays)
       dflags1 = dflags0 { ghcLink = LinkInMemory
                         , verbosity = 1 }
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+      dflags2 = dflags1 { backend = interpreterBackend
+                        , targetWays_ = hostFullWays }
+#elif MIN_VERSION_ghc(9,2,0)
       dflags2 = dflags1 { backend = Interpreter
                         , targetWays_ = hostFullWays }
 #elif MIN_VERSION_ghc(9,0,0)
@@ -937,7 +957,9 @@ dumpDynFlags fnk_env label dflags =
 #else
       , "  mainModIs:" <+> ppr (mainModIs dflags)
 #endif
+#if !MIN_VERSION_ghc(9,6,0)
       , "  mainFunIs:" <+> ppr (mainFunIs dflags)
+#endif
       , "  safeHaskell:" <+> text (show (safeHaskell dflags))
       , "  lang:" <+> ppr (language dflags)
       , "  extensionFlags:" <+> ppr (FlagSet.toList (extensionFlags dflags))
@@ -950,7 +972,9 @@ dumpDynFlags fnk_env label dflags =
       , "  includePaths:" <+> vcat (map text (includePaths dflags))
 #endif
       , "  picPOpts:" <+> sep (map text (picPOpts dflags))
-#if MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(9,6,0)
+      , "  opt_P_signature:" <+> ppr (snd (opt_P_signature dflags))
+#elif MIN_VERSION_ghc(8,6,0)
       , "  opt_P_signature:" <+> ppr (opt_P_signature dflags)
 #endif
       , "  hcSuf:" <+> text (hcSuf dflags)

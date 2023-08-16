@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 -- | Internal module for 'ModSummary'.
 module Language.Finkel.Make.Summary
   ( -- * Target summary
@@ -71,7 +72,6 @@ import           GHC_Hs_Dump                       (BlankSrcSpan (..),
 import           GHC_Hs_ImpExp                     (ImportDecl (..))
 import           GHC_Hs_Stats                      (ppSourceStats)
 import           GHC_Parser_Header                 (getImports)
-import           GHC_Runtime_Context               (icPrintUnqual)
 import           GHC_Types_SourceError             (throwOneError)
 import           GHC_Types_SourceFile              (HscSource (..))
 import           GHC_Types_SrcLoc                  (GenLocated (..), Located,
@@ -94,6 +94,25 @@ import           GHC_Utils_Misc                    (looksLikeModuleName,
 import           GHC_Utils_Outputable              (Outputable (..), SDoc, hcat,
                                                     quotes, text, vcat, ($$),
                                                     (<+>))
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Errors.Types           (GhcMessage)
+import           GHC.Types.Error                   (Diagnostic (..))
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Runtime.Context               (icNamePprCtx)
+#else
+import           GHC_Runtime_Context               (icPrintUnqual)
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Backend                (backendWritesFiles)
+#elif MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Backend                (backendProducesObject)
+#else
+import           GHC_Driver_Session                (isObjectTarget)
+#endif
+
 
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Diagnostic      (initDiagOpts)
@@ -147,11 +166,9 @@ import           GHC.LanguageExtensions            (Extension (ImplicitPrelude))
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Backend                (backendProducesObject)
 import           GHC.Driver.Errors                 (handleFlagWarnings)
 import           GHC.Hs                            (HsParsedModule (..))
 #else
-import           GHC_Driver_Session                (isObjectTarget)
 import           GHC_Driver_Types                  (HsParsedModule (..),
                                                     handleFlagWarnings)
 #endif
@@ -307,7 +324,12 @@ getDynFlagsFromSPState hsc_env sp = do
   let dflags0 = hsc_dflags hsc_env
       mkx = fmap ("-X" ++)
       exts = map mkx (langExts sp)
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,6,0)
+      handle_flag_warnings df ws =
+        let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
+            diag_opts = initDiagOpts df
+        in  handleFlagWarnings (hsc_logger hsc_env) diagnostic_opts diag_opts ws
+#elif MIN_VERSION_ghc(9,4,0)
       handle_flag_warnings =
         handleFlagWarnings (hsc_logger hsc_env) . initDiagOpts
 #elif MIN_VERSION_ghc(9,2,0)
@@ -603,7 +625,9 @@ dumpModSummary fnk_env hsc_env mb_sp ms =
            out_dir = takeDirectory out_path
        traceSummary fnk_env "dumpModSummary" ["Writing to" <+> text out_path]
        let dflags = hsc_dflags hsc_env
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+           unqual = icNamePprCtx (hsc_unit_env hsc_env) (hsc_IC hsc_env)
+#elif MIN_VERSION_ghc(9,2,0)
            unqual = icPrintUnqual (hsc_unit_env hsc_env) (hsc_IC hsc_env)
 #else
            unqual = icPrintUnqual dflags (hsc_IC hsc_env)
@@ -915,7 +939,9 @@ withTiming' label = withTiming getDynFlags (text label) (const ())
 
 -- | 'True' if the backend used by given 'DynFlags' produces object code.
 isObjectBackend :: DynFlags -> Bool
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+isObjectBackend = backendWritesFiles . backend
+#elif MIN_VERSION_ghc(9,2,0)
 isObjectBackend = backendProducesObject . backend
 #else
 isObjectBackend = isObjectTarget . hscTarget

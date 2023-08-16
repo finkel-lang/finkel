@@ -31,6 +31,10 @@ module Language.Finkel.Emit
 import Control.Monad.IO.Class            (MonadIO (..))
 import System.IO                         (Handle)
 
+#if MIN_VERSION_ghc(9,6,0)
+import Data.Foldable                     (toList)
+#endif
+
 #if !MIN_VERSION_ghc(9,2,0)
 import Data.Maybe                        (fromMaybe)
 #endif
@@ -40,7 +44,7 @@ import Prelude                           hiding ((<>))
 #endif
 
 -- ghc
-import GHC                               (OutputableBndrId, getPrintUnqual)
+import GHC                               (OutputableBndrId)
 import GHC_Data_Bag                      (bagToList, isEmptyBag)
 import GHC_Driver_Env                    (HscEnv (..))
 import GHC_Driver_Monad                  (GhcMonad (..))
@@ -70,6 +74,20 @@ import GHC_Utils_Outputable              (Outputable (..), OutputableBndr (..),
                                           interppSP, lparen, nest, parens,
                                           pprWithCommas, punctuate, sep, text,
                                           vbar, vcat, ($$), ($+$), (<+>), (<>))
+
+#if MIN_VERSION_ghc(9,6,0)
+import GHC                               (getNamePprCtx)
+#else
+import GHC                               (getPrintUnqual)
+#define getNamePprCtx getPrintUnqual
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import GHC.Hs                            (XModulePs (..))
+import GHC.Hs.Extension                  (GhcPs)
+import Language.Haskell.Syntax.Decls     (DataDefnCons (..),
+                                          dataDefnConsNewOrData)
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Hs.Doc                        (LHsDoc, hsDocString)
@@ -307,7 +325,7 @@ genHsSrc :: (GhcMonad m, HsSrc a) => SPState -> a -> m String
 genHsSrc st0 x = do
   hsc_env <- getSession
   let dflags = hsc_dflags hsc_env
-  unqual <- getPrintUnqual
+  unqual <- getNamePprCtx
 #if MIN_VERSION_ghc(9,2,0)
   return (showSDocForUser dflags (hsc_units hsc_env) unqual (toHsSrc st0 x))
 #else
@@ -318,7 +336,7 @@ genHsSrc st0 x = do
 putHsSrc :: (GhcMonad m, HsSrc a, MonadIO m) => Handle -> SPState -> a -> m ()
 putHsSrc hdl st0 x = do
   hsc_env <- getSession
-  unqual <- getPrintUnqual
+  unqual <- getNamePprCtx
   let dflags = hsc_dflags hsc_env
 #if MIN_VERSION_ghc(9,0,1)
       render = printForUser dflags hdl unqual AllTheWay
@@ -340,31 +358,52 @@ instance HsSrc RdrName where
 instance (HsSrc b) => HsSrc (GenLocated a b) where
   toHsSrc st (L _ e) = toHsSrc st e
 
-#if MIN_VERSION_ghc(9,2,0)
-#define HSMODANN _hsmodAnn
+#if MIN_VERSION_ghc(9,6,0)
+#define HSMODEXT modExt
+#define HSMODDEPREC {- no hsmodDeprecMessage #-}
+#define HSMODMBDOC {- no hsmodHaddockModHeader -}
 #else
+#define HSMODEXT {- no hsmodExt #-}
+#define HSMODDEPREC _deprec
+#define HSMODMBDOC mbDoc
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0) || MIN_VERSION_ghc(9,6,0)
 #define HSMODANN {- no hsmodAnn -}
-#endif
-
-#if MIN_VERSION_ghc(9,0,0)
-#define LAYOUTINFO _layout_info
 #else
-#define LAYOUTINFO {- no LayoutInfo -}
+#define HSMODANN _hsmodAnn
 #endif
 
-#if MIN_VERSION_ghc(9,0,0)
+#if !MIN_VERSION_ghc(9,0,0) || MIN_VERSION_ghc(9,6,0)
+#define LAYOUTINFO {- no LayoutInfo -}
+#else
+#define LAYOUTINFO _layout_info
+#endif
+
+-- HsModule used had an argument until 9.0, and then the argument came back in
+-- 9.6.
+#if MIN_VERSION_ghc(9,6,0)
+instance HsSrc (Hsrc (HsModule GhcPs)) where
+#elif MIN_VERSION_ghc(9,0,0)
 instance HsSrc (Hsrc HsModule) where
 #else
 instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (HsModule a)) where
 #endif
   toHsSrc st a = case unHsrc a of
-    HsModule HSMODANN LAYOUTINFO Nothing _ imports decls _ mbDoc ->
+    -- XXX: Avoid repeating the pattern matches for HsModule ... or consider
+    -- using wild card patterns.
+    HsModule HSMODEXT HSMODANN LAYOUTINFO Nothing _ imports decls HSMODDEPREC HSMODMBDOC ->
       vcat [ pp_headerPragmas st
            , pp_mbdocn mbDoc
            , pp_nonnull imports
            , hsSrc_nonnull st (map unLoc decls)
            , text "" ]
-    HsModule HSMODANN LAYOUTINFO (Just name) exports imports decls deprec mbDoc ->
+#if MIN_VERSION_ghc(9,6,0)
+      where
+        mbDoc = hsmodHaddockModHeader modExt
+        _deprec = hsmodDeprecMessage modExt
+#endif
+    HsModule HSMODEXT HSMODANN LAYOUTINFO (Just name) exports imports decls HSMODDEPREC HSMODMBDOC ->
       vcat [ pp_headerPragmas st
            , pp_mbdocn mbDoc
            , case exports of
@@ -379,10 +418,14 @@ instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (HsModule a)) where
            , text "" ]
       where
         pp_header rest =
-          case deprec of
+          case _deprec of
             Nothing -> pp_modname <+> rest
             Just d  -> vcat [pp_modname, ppr d, rest]
         pp_modname = text "module" <+> ppr name
+#if MIN_VERSION_ghc(9,6,0)
+        mbDoc = hsmodHaddockModHeader modExt
+        _deprec = hsmodDeprecMessage modExt
+#endif
 
 instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (IE a)) where
   toHsSrc _st (Hsrc ie) =
@@ -595,21 +638,35 @@ pp_data_defn :: OUTPUTABLE n pr
              -> HsDataDefn n
              -> SDoc
 pp_data_defn
-  st pp_hdr HsDataDefn { dd_ND = new_or_data
+  st pp_hdr HsDataDefn { dd_cType = mb_ct, dd_kindSig = mb_sig
+#if !MIN_VERSION_ghc(9,6,0)
+                       , dd_ND = new_or_data
+#endif
 #if MIN_VERSION_ghc(9,2,0)
                        , dd_ctxt = context
 #else
                        , dd_ctxt = L _ context
 #endif
-                       , dd_cType = mb_ct, dd_kindSig = mb_sig
-                       , dd_cons = condecls, dd_derivs = derivings }
+                       , dd_cons = condecls
+                       , dd_derivs = derivings }
   | null condecls
   = ppr new_or_data <+> pp_ct <+> pp_hdr context <+> pp_sig
     <+> pp_derivings derivings
   | otherwise
   = hang (ppr new_or_data <+> pp_ct <+> pp_hdr context <+> pp_sig)
-       2 (pp_condecls st condecls $$ pp_derivings derivings)
+       2 (pp_cds condecls $$ pp_derivings derivings)
   where
+#if MIN_VERSION_ghc(9,6,0)
+    new_or_data = dataDefnConsNewOrData condecls
+    pp_cds cds =
+      case cds of
+        -- The _bool field in `DataTypeCOns' is for TypeData language extension
+        -- introduced in ghc 9.6.1.
+        NewTypeCon c          -> text "=" <+> pprConDecl st (unLoc c)
+        DataTypeCons _bool cs -> pp_condecls st cs
+#else
+    pp_cds = pp_condecls st
+#endif
     pp_ct = maybe empty ppr mb_ct
     pp_sig = maybe empty ((dcolon <+>) . ppr) mb_sig
 #if MIN_VERSION_ghc(9,2,0)
@@ -700,10 +757,15 @@ pprConDecl st ConDeclGADT { con_names = cons
                           , con_mb_cxt = mcxt
                           , con_res_ty = res_ty
                           , con_doc = doc }
-  = pp_mbdocn doc $+$ ppr_con_names cons <+> dcolon
+  = pp_mbdocn doc $+$ ppr_con_names cons' <+> dcolon
     <+> sep [hforall -- pprHsForAll' (hsq_explicit qvars) cxt
             ,ppr_arrow_chain (get_args args ++ [hsrc res_ty])]
   where
+#if MIN_VERSION_ghc(9,6,0)
+    cons' = toList cons
+#else
+    cons' = cons
+#endif
 #if MIN_VERSION_ghc(9,2,0)
     hforall = pprHsOuterSigTyVarBndrs outer_bndrs <+> pprLHsContext mcxt
 #elif MIN_VERSION_ghc(9,0,0)

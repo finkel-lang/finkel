@@ -18,81 +18,91 @@ module Language.Finkel.Expand
 #include "ghc_modules.h"
 
 -- base
-import           Control.Concurrent     (MVar, modifyMVar, newMVar)
-import           Control.Monad.IO.Class (MonadIO (..))
-import           Data.Char              (isLower)
-import           Data.Foldable          (foldlM, for_)
-import           Data.IORef             (atomicModifyIORef', newIORef)
-import           Data.Maybe             (isJust)
-import           System.IO.Unsafe       (unsafePerformIO)
+import           Control.Concurrent              (MVar, modifyMVar, newMVar)
+import           Control.Monad.IO.Class          (MonadIO (..))
+import           Data.Char                       (isLower)
+import           Data.Foldable                   (foldlM, for_)
+import           Data.IORef                      (atomicModifyIORef', newIORef)
+import           Data.Maybe                      (isJust)
+import           System.IO.Unsafe                (unsafePerformIO)
 
 -- containers
-import qualified Data.Map               as Map
+import qualified Data.Map                        as Map
 
 #if MIN_VERSION_ghc(9,0,0)
-import qualified Data.Set               as Set
+import qualified Data.Set                        as Set
 #endif
 
 -- exception
-import           Control.Monad.Catch    (bracket)
+import           Control.Monad.Catch             (bracket)
 
 -- ghc
-import           GHC_Data_FastString    (FastString, headFS)
-import           GHC_Driver_Env_Types   (HscEnv (..))
-import           GHC_Driver_Main        (newHscEnv)
-import           GHC_Driver_Monad       (Ghc (..), GhcMonad (..), Session (..),
-                                         getSession, setSession)
-import           GHC_Driver_Session     (DynFlags (..), GeneralFlag (..),
-                                         GhcLink (..), HasDynFlags (..),
-                                         setGeneralFlag', unSetGeneralFlag',
-                                         updOptLevel)
-import           GHC_Types_SrcLoc       (GenLocated (..))
-import           GHC_Utils_Outputable   (Outputable (..), SDoc, cat, fsep, nest,
-                                         vcat)
+import           GHC_Driver_Env_Types            (HscEnv (..))
+import           GHC_Driver_Main                 (newHscEnv)
+import           GHC_Driver_Monad                (Ghc (..), GhcMonad (..),
+                                                  Session (..), getSession,
+                                                  setSession)
+import           GHC_Driver_Session              (DynFlags (..),
+                                                  GeneralFlag (..),
+                                                  GhcLink (..),
+                                                  HasDynFlags (..),
+                                                  setGeneralFlag',
+                                                  unSetGeneralFlag',
+                                                  updOptLevel)
+import           GHC_Types_SrcLoc                (GenLocated (..))
+import           GHC_Utils_Outputable            (Outputable (..), SDoc, cat,
+                                                  fsep, nest, vcat)
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Session              (topDir)
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Backend              (backendCanReuseLoadedCode,
+                                                  interpreterBackend)
+#elif MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Backend              (Backend (..))
+#else
+import           GHC_Driver_Session              (HscTarget (..))
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
-import           GHC.Driver.Env         (discardIC)
+import           GHC.Driver.Env                  (discardIC)
 #else
-import           GHC_Runtime_Context    (InteractiveContext (..),
-                                         emptyInteractiveContext)
-import           GHC_Types_Name         (nameIsFromExternalPackage)
+import           GHC_Runtime_Context             (InteractiveContext (..),
+                                                  emptyInteractiveContext)
+import           GHC_Types_Name                  (nameIsFromExternalPackage)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,4,0)
-import           GHC.Driver.Env         (hsc_home_unit)
-#endif
-
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Backend     (Backend (..))
-#else
--- ghc
-import           GHC_Driver_Session     (HscTarget (..))
+import           GHC.Driver.Env                  (hsc_home_unit)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
-import           GHC_Driver_Session     (homeUnit)
+import           GHC_Driver_Session              (homeUnit)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC                    (setSessionDynFlags)
-import           GHC_Platform_Ways      (Way (..), hostFullWays)
+import           GHC                             (setSessionDynFlags)
+import           GHC_Platform_Ways               (Way (..), hostFullWays)
 #else
-import           GHC_Driver_Session     (Way (..), interpWays, thisPackage)
+import           GHC_Driver_Session              (Way (..), interpWays,
+                                                  thisPackage)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Runtime.Loader     (initializePlugins)
+import           GHC.Runtime.Loader              (initializePlugins)
 #elif MIN_VERSION_ghc(8,6,0)
-import           DynamicLoading         (initializePlugins)
+import           DynamicLoading                  (initializePlugins)
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Session     (WarningFlag (..), wopt_unset)
+import           GHC_Driver_Session              (WarningFlag (..), wopt_unset)
 #else
-import           GHC_Driver_Session     (Settings (..), rawSettings)
+import           GHC_Driver_Session              (Settings (..), rawSettings)
 #endif
 
 -- Internal
+import           Language.Finkel.Data.FastString (FastString, unconsFS)
 import           Language.Finkel.Fnk
 import           Language.Finkel.Form
 
@@ -165,7 +175,11 @@ newHscEnvForExpand dflags0 = do
       dflags2 = if interpHasNoWayDyn
                    then removeWayDyn dflags1
                    else dflags1
+#if MIN_VERSION_ghc(9,6,0)
+  liftIO $! newHscEnv (topDir dflags2) dflags2
+#else
   liftIO $! newHscEnv dflags2
+#endif
 
 -- | Run given 'Fnk' action with macro expansion settings for 'GhcPluginMode'.
 withExpanderSettingsG :: Fnk a -> Fnk a
@@ -346,7 +360,9 @@ bcoDynFlags :: DynFlags -> DynFlags
 -- XXX: See: 'GhcMake.enableCodeGenForUnboxedTupleOrSums'.
 bcoDynFlags dflags0 =
   let dflags1 = dflags0 { ghcLink = LinkInMemory
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+                        , backend = interpreterBackend
+#elif MIN_VERSION_ghc(9,2,0)
                         , backend = Interpreter
 #else
                         , hscTarget = HscInterpreted
@@ -386,7 +402,11 @@ interpHasNoWayDyn = WayDyn `notElem` interpWays
 
 -- | 'True' when the 'DynFlags' is using interpreter.
 isInterpreted :: DynFlags -> Bool
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+-- As of ghc 9.6.2, interpreter bacnend is the only backend which can reuse
+-- loaded code.
+isInterpreted dflags = backendCanReuseLoadedCode (backend dflags)
+#elif MIN_VERSION_ghc(9,2,0)
 isInterpreted dflags = backend dflags == Interpreter
 #else
 isInterpreted dflags = hscTarget dflags == HscInterpreted
@@ -426,9 +446,15 @@ boundedNameOne form =
   where
     f x =
       case unCode x of
-        Atom (ASymbol n) | isLower (headFS n) -> [n]
-        _                                     -> []
+        Atom (ASymbol n) | startsWithLower n -> [n]
+        _                                    -> []
 {-# INLINABLE boundedNameOne #-}
+
+startsWithLower :: FastString -> Bool
+startsWithLower fs = case unconsFS fs of
+  Just (c, _) -> isLower c
+  _           -> False
+{-# INLINABLE startsWithLower #-}
 
 -- | Perform 'Fnk' action with temporary shadowed macro environment.
 withShadowing :: [FastString] -- ^ Names of macro to shadow.

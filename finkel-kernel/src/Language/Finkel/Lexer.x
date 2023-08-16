@@ -52,7 +52,7 @@ import qualified Data.ByteString.Char8      as C8
 
 -- ghc
 import           GHC_Data_FastString        (FastString,
-                                             fsLit, headFS, nullFS,
+                                             fsLit, nullFS,
                                              mkFastStringByteString,
                                              unpackFS)
 import           GHC_Data_StringBuffer      (StringBuffer, atEnd,
@@ -77,10 +77,6 @@ import           GHC_Utils_Misc              (readRational)
 import qualified GHC.Data.Strict as Strict
 #endif
 
-#if !MIN_VERSION_ghc(9,0,0)
-import           GHC_Data_FastString        (tailFS)
-#endif
-
 #if MIN_VERSION_ghc(8,10,0)
 import           GHC_Data_FastString        (bytesFS)
 #else
@@ -91,6 +87,7 @@ import           FastString                 (fastStringToByteString)
 import qualified GHC.LanguageExtensions     as LangExt
 
 -- Internal
+import           Language.Finkel.Data.FastString (unconsFS)
 import           Language.Finkel.Form
 import           Language.Finkel.Form.Fractional
 }
@@ -610,27 +607,18 @@ tok_lambda inp0@(AlexInput _ buf) l = do
 tok_symbol :: Action
 tok_symbol (AlexInput _ buf) l =
   let fs0 = takeUtf8FS l buf
-      fs1 | c == '!', secondIsStartsVarId fs0 = replaceHyphens fs0
+      fs1 | c == '!', secondIsVarId fs0 = replaceHyphens fs0
           | startsVarSym c || startsConSym c = fs0
           | otherwise = replaceHyphens fs0
           where c = currentChar buf
   in  fs0 `seq` fs1 `seq` return $! TSymbol fs1
 {-# INLINABLE tok_symbol #-}
 
-secondIsStartsVarId :: FastString -> Bool
-#if MIN_VERSION_ghc(9,0,0)
--- 'GHC.Data.FastString.tailFS' disappeared in ghc 9.0.0.
-secondIsStartsVarId fs0 =
-  let bs1 = C8.tail (bytesFS fs0)
-      c = C8.head bs1
-  in  not (nullFS fs0) && not (C8.null bs1) && startsVarId c
-#else
-secondIsStartsVarId fs0 =
-  let fs1 = tailFS fs0
-      c = headFS fs1
-  in  not (nullFS fs0) && not (nullFS fs1) && startsVarId c
-#endif
-{-# INLINABLE secondIsStartsVarId #-}
+secondIsVarId :: FastString -> Bool
+secondIsVarId fs0 = case unconsFS fs0 of
+  Just (_,fs1) | Just (c,_) <- unconsFS fs1 -> startsVarId c
+  _ -> False
+{-# INLINABLE secondIsVarId #-}
 
 replaceHyphens :: FastString -> FastString
 replaceHyphens =

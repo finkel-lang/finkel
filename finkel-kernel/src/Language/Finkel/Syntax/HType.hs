@@ -14,7 +14,6 @@ import Data.List                       (foldl')
 
 -- ghc
 import GHC_Builtin_Types               (consDataCon, listTyCon_RDR, tupleTyCon)
-import GHC_Data_FastString             (headFS, lengthFS, nullFS)
 import GHC_Hs_Doc                      (LHsDocString)
 import GHC_Hs_Type                     (HsSrcBang (..), HsTupleSort (..),
                                         HsTyLit (..), HsType (..),
@@ -73,6 +72,7 @@ import TysWiredIn                      (starKindTyCon)
 
 -- Internal
 import Language.Finkel.Builder
+import Language.Finkel.Data.FastString (lengthFS, nullFS, unconsFS)
 import Language.Finkel.Form
 import Language.Finkel.Syntax.SynUtils
 
@@ -126,24 +126,21 @@ b_symT whole@(LForm (L l form)) =
   where
     ty name =
       case splitQualName name of
-        Nothing
-          | ',' == x  -> tv (getRdrName (tupleTyCon Boxed arity))
-          | '!' == x  ->
-            bang (tv (mkUnqual (namespace xs) xs))
-          -- XXX: Handle "StarIsType" language extension. Name of
-          -- the type kind could be obtained from
-          -- "TysWiredIn.liftedTypeKindTyCon".
-          | '*' == x && nullFS xs ->
-#if MIN_VERSION_ghc(8,6,0)
-            lA l (HsStarTy NOEXT False)
-#else
-            tv (getRdrName starKindTyCon)
-#endif
-          | otherwise -> tv (mkUnqual (namespace name) name)
         Just qual -> tv (mkQual (namespace name) qual)
+        Nothing -> case unconsFS name of
+          -- XXX: Handle "StarIsType" language extension. Name of the type kind
+          -- could be obtained from "TysWiredIn.liftedTypeKindTyCon".
+          Just (x, xs)
+            | ',' == x -> tv (getRdrName (tupleTyCon Boxed arity))
+            | '!' == x -> bang (tv (mkUnqual (namespace xs) xs))
+            | '*' == x, nullFS xs ->
+#if MIN_VERSION_ghc(8,6,0)
+               lA l (HsStarTy NOEXT False)
+#else
+               tv (getRdrName starKindTyCon)
+#endif
+          _ -> tv (mkUnqual (namespace name) name)
       where
-        x = headFS name
-        xs = tailFS name
         arity = 1 + lengthFS name
     namespace ns
       -- Using "isLexVarSym" for "TypeOperator" extension.

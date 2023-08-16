@@ -843,9 +843,7 @@ genSrc = L finkelUnhelpfulSpan
 -- locations in the argument list elements.
 mkLocatedForm :: [LForm a] -> Located [LForm a]
 mkLocatedForm [] = genSrc []
-mkLocatedForm ms = L (combineLocs (unLForm (head ms))
-                                  (unLForm (last ms)))
-                     ms
+mkLocatedForm ms = L (combineLocs (unLForm (head ms)) (unLForm (last ms))) ms
 {-# INLINABLE mkLocatedForm #-}
 
 -- | Lift given argument to 'LForm'.

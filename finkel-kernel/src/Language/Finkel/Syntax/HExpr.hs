@@ -15,8 +15,6 @@ import Data.List                         (foldl', foldl1')
 
 -- ghc
 import GHC_Builtin_Types                 (tupleDataCon)
-import GHC_Data_FastString               (FastString, fsLit, headFS, lengthFS,
-                                          nullFS, unpackFS)
 import GHC_Data_OrdList                  (toOL)
 import GHC_Hs_Doc                        (HsDocString)
 import GHC_Hs_Expr                       (ArithSeqInfo (..), GRHS (..),
@@ -36,18 +34,31 @@ import GHC_Types_SrcLoc                  (GenLocated (..), Located,
                                           SrcSpan (..), getLoc, noLoc)
 import GHC_Utils_Lexeme                  (isLexCon, isLexSym, isLexVarId)
 
+#if MIN_VERSION_ghc(9,6,0)
+import GHC.Hs.Extension                  (noHsTok)
+import GHC.Hs.Pat                        (RecFieldsDotDot (..))
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
+import Language.Haskell.Syntax.Concrete  (HsToken (..))
+#elif MIN_VERSION_ghc(9,4,0)
+import Language.Haskell.Syntax.Extension (HsToken (..))
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Hs.Expr                       (gHsPar)
 import GHC.Parser.PostProcess            (mkTokenLocation)
 import Language.Haskell.Syntax.Expr      (HsDoFlavour (..))
-import Language.Haskell.Syntax.Extension (HsToken (..))
 #else
 import GHC_Hs_Expr                       (HsStmtContext (..))
 #endif
 
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,6,0)
+import GHC_Parser_Annotation             (locA)
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import GHC_Hs_Utils                      (hsTypeToHsSigWcType)
-import GHC_Parser_Annotation             (locA)
 #else
 import GHC_Hs_Utils                      (mkLHsSigWcType)
 import GHC_Parser_PostProcess            (mkRdrRecordUpd)
@@ -70,6 +81,8 @@ import PlaceHolder                       (placeHolderType)
 
 -- Internal
 import Language.Finkel.Builder
+import Language.Finkel.Data.FastString   (FastString, fsLit, lengthFS, nullFS,
+                                          unconsFS, unpackFS)
 import Language.Finkel.Form
 import Language.Finkel.Syntax.HBind
 import Language.Finkel.Syntax.HType
@@ -246,11 +259,13 @@ b_recConOrUpdE whole@(LForm (L l form)) flds =
     mkufld  = cfld2ufld . mkcfld'
     (wilds, non_wilds) = partitionEithers flds
     mb_dotdot = case wilds of
-      []                 -> Nothing
-#if MIN_VERSION_ghc(8,10,0)
-      (LForm (L wl _):_) -> Just (L wl (length non_wilds))
+      []               -> Nothing
+#if MIN_VERSION_ghc(9,6,0)
+      LForm (L wl _):_ -> Just (L wl (RecFieldsDotDot (length non_wilds)))
+#elif MIN_VERSION_ghc(8,10,0)
+      LForm (L wl _):_ -> Just (L wl (length non_wilds))
 #else
-      _                  -> Just (length non_wilds)
+      _                -> Just (length non_wilds)
 #endif
 {-# INLINABLE b_recConOrUpdE #-}
 
@@ -325,7 +340,9 @@ mkAppTypes = foldl' mkAppType
 
 mkAppType :: HExpr -> HType -> HExpr
 mkAppType (dL->expr@(L l _)) ty =
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+  L l (HsAppType NOEXT expr noHsTok (mkHsWildCardBndrs ty))
+#elif MIN_VERSION_ghc(9,2,0)
   L l (HsAppType (locA l) expr (mkHsWildCardBndrs ty))
 #elif MIN_VERSION_ghc(8,8,0)
   cL l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
@@ -375,13 +392,14 @@ b_varE :: Code -> Builder HExpr
 b_varE (LForm (L l form))
   | Atom (ASymbol x) <- form
   , not (nullFS x)
-  , let hdchr = headFS x
-  , let tlchrs = tailFS x
+  , Just (hdchr,tlchrs) <- unconsFS x
   = case hdchr of
       -- Overloaded label starts with `#'. Tail characters need to be a valid
       -- variable identifier.
       '#' | isLexVarId tlchrs ->
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+          ret (HsOverLabel NOEXT (SourceText (show tlchrs)) tlchrs)
+#elif MIN_VERSION_ghc(9,2,0)
           ret (HsOverLabel NOEXT tlchrs)
 #else
           ret (HsOverLabel NOEXT Nothing tlchrs)
@@ -396,7 +414,7 @@ b_varE (LForm (L l form))
       _   -> ret (var (mkVarRdrName x))
   | otherwise = builderError
   where
-    ret e = return (lA l e)
+    ret = return . lA l
     var n = HsVar NOEXT (lN l n)
 {-# INLINABLE b_varE #-}
 
@@ -520,7 +538,7 @@ b_rapp = either (first . (:)) (second . (:))
 b_exprOrTyArg :: Code -> Builder (Either HExpr HType)
 b_exprOrTyArg lform = case lform of
   LForm (L l (Atom (ASymbol sym)))
-    | '@' <- headFS sym, let rest = tailFS sym, not (nullFS rest)
+    | Just ('@', rest) <- unconsFS sym, not (nullFS rest)
     -> fmap Right (b_symT (LForm (L l (Atom (ASymbol rest)))))
   _ -> fmap Left (b_varE lform)
 {-# INLINABLE b_exprOrTyArg #-}
