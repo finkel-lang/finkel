@@ -7,7 +7,7 @@ module Finkel.Core.Internal.Ghc.Compat
     getModuleInfo, lookupModule, lookupName, modInfoExports,
 
     -- GHC.Data.FastString
-    FastString, fsLit, unpackFS, headFS, nullFS,
+    FastString, fsLit, unpackFS, nullFS,
 
     -- GHC.Driver.Env
     HscEnv(..),
@@ -72,3 +72,4 @@ import Outputable
 import Plugins
 import Var
 #endif
+
