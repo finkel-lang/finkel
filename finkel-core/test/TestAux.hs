@@ -57,10 +57,10 @@
   (eqGensymCode2 (unCode a) (unCode b)))
 
 (defn (:: eqGensymCode2 (-> (Form Atom) (Form Atom) Bool))
-  [(Atom (ASymbol a)) (Atom (ASymbol b))]
+  [(Atom (@ asym (ASymbol a))) (Atom (@ bsym (ASymbol b)))]
   (| ((nullFS a) (nullFS b))
-     ((== (headFS a) #'$) True)
-     ((== (headFS b) #'$) True)
+     ((<- (: #'$ _) (show asym)) True)
+     ((<- (: #'$ _) (show bsym)) True)
      (otherwise (== a b)))
   [(List as) (List bs)] (eqGensymCodes as bs)
   [(HsList as) (HsList bs)] (eqGensymCodes as bs)
@@ -124,29 +124,23 @@
 
 ;;; Macros
 
-(defmacro expandTo
-  [in out]
+(defmacro expandTo [in out]
   `(expand-form ,(car in) ',in ',out))
 
-(defmacro expandFailureWith
-  [in test]
+(defmacro expandFailureWith [in test]
   `(let ((= act
            (do (<- r (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv))
                (seq r (pure r)))))
      (shouldThrow act ,test)))
 
-(defmacro expandFailure
-  [in]
+(defmacro expandFailure [in]
   `(expandFailureWith ,in anyException))
 
-(defmacro expandSatisfy
-  [in test]
+(defmacro expandSatisfy [in test]
   `(expand-form-satisfies ,(car in) ',in ,test))
 
-(defmacro expandWithPackageDbSatisfy
-  [in test]
+(defmacro expandWithPackageDbSatisfy [in test]
   `(expand-form-with-package-db-satisfies ,(car in) ',in ,test))
 
-(defmacro expandWithPackageDbFailure
-  [in test]
+(defmacro expandWithPackageDbFailure [in test]
   `(expand-form-with-package-db-failure ,(car in) ',in ,test))
