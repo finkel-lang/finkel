@@ -358,13 +358,15 @@ instance HsSrc RdrName where
 instance (HsSrc b) => HsSrc (GenLocated a b) where
   toHsSrc st (L _ e) = toHsSrc st e
 
+-- Some CPP macros to pattern match with constructors of HsModule.
+
 #if MIN_VERSION_ghc(9,6,0)
 #define HSMODEXT modExt
-#define HSMODDEPREC {- no hsmodDeprecMessage #-}
+#define HSMODDEPREC {- no hsmodDeprecMessage -}
 #define HSMODMBDOC {- no hsmodHaddockModHeader -}
 #else
-#define HSMODEXT {- no hsmodExt #-}
-#define HSMODDEPREC _deprec
+#define HSMODEXT {- no hsmodExt -}
+#define HSMODDEPREC deprec
 #define HSMODMBDOC mbDoc
 #endif
 
@@ -390,41 +392,32 @@ instance HsSrc (Hsrc HsModule) where
 instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (HsModule a)) where
 #endif
   toHsSrc st a = case unHsrc a of
-    -- XXX: Avoid repeating the pattern matches for HsModule ... or consider
-    -- using wild card patterns.
-    HsModule HSMODEXT HSMODANN LAYOUTINFO Nothing _ imports decls HSMODDEPREC HSMODMBDOC ->
-      vcat [ pp_headerPragmas st
-           , pp_mbdocn mbDoc
-           , pp_nonnull imports
-           , hsSrc_nonnull st (map unLoc decls)
-           , text "" ]
-#if MIN_VERSION_ghc(9,6,0)
+    HsModule HSMODEXT HSMODANN LAYOUTINFO mb_name exports imports decls
+      HSMODDEPREC HSMODMBDOC ->
+        vcat ([ pp_headerPragmas st
+              , pp_mbdocn mbDoc ] ++
+              mb_header ++
+              [ pp_nonnull imports
+              , hsSrc_nonnull st (map unLoc decls)
+              , text "" ])
       where
-        mbDoc = hsmodHaddockModHeader modExt
-        _deprec = hsmodDeprecMessage modExt
-#endif
-    HsModule HSMODEXT HSMODANN LAYOUTINFO (Just name) exports imports decls HSMODDEPREC HSMODMBDOC ->
-      vcat [ pp_headerPragmas st
-           , pp_mbdocn mbDoc
-           , case exports of
-               Nothing ->
-                 pp_header (text "where")
-               Just es ->
-                 vcat [ pp_header lparen
-                      , nest 8 (pp_lies st (unLoc es))
-                      , nest 4 (text ") where")]
-           , pp_nonnull imports
-           , hsSrc_nonnull st (map unLoc decls)
-           , text "" ]
-      where
-        pp_header rest =
-          case _deprec of
-            Nothing -> pp_modname <+> rest
-            Just d  -> vcat [pp_modname, ppr d, rest]
-        pp_modname = text "module" <+> ppr name
+        mb_header =
+          case mb_name of
+            Nothing -> []
+            Just name -> [ case exports of
+                             Nothing -> pp_header name (text "where")
+                             Just es -> vcat [ pp_header name lparen
+                                             , nest 8 (pp_lies st (unLoc es))
+                                             , nest 4 (text ") where") ]]
+        pp_header name rest =
+          case deprec of
+            Nothing -> pp_modname name <+> rest
+            Just d  -> vcat [pp_modname name, ppr d, rest]
+        pp_modname name =
+          text "module" <+> ppr name
 #if MIN_VERSION_ghc(9,6,0)
         mbDoc = hsmodHaddockModHeader modExt
-        _deprec = hsmodDeprecMessage modExt
+        deprec = hsmodDeprecMessage modExt
 #endif
 
 instance OUTPUTABLEOCC a pr => HsSrc (Hsrc (IE a)) where
