@@ -22,6 +22,7 @@
    (Control.Exception [(Exception ..) (SomeException ..) try])
    (Control.Monad [filterM unless void when])
    (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.Foldable [toList])
    (Data.Function [on])
    (Data.List [find intercalate intersperse isPrefixOf partition sortBy])
    (Data.Maybe [catMaybes])
@@ -62,12 +63,12 @@
    (Finkel.Tool.Internal.Compat)))
 
 ;;; ghc
+
 (imports-from-ghc
  (GHC
   [(ModuleInfo) findModule getBindings getModSummary getModuleGraph
-   getModuleInfo getPrintUnqual getTargets isLoaded lookupName
-   lookupModule modInfoExports setSessionDynFlags setTargets
-   workingDirectoryChanged])
+   getModuleInfo getTargets isLoaded lookupName lookupModule modInfoExports
+   setSessionDynFlags setTargets workingDirectoryChanged])
 
  (GHC.Core.FamInstEnv [FamInst pprFamInst])
  (GHC.Core.InstEnv [ClsInst pprInstance])
@@ -129,14 +130,21 @@
     (GHC.Types.TyThing.Ppr [pprTypeForUser]))])
 
 (cond-expand
+  [(<= 906 :ghc)
+   (import GHC.Driver.Backend (backendCanReuseLoadedCode))]
+  [(<= 902 :ghc)
+   (import GHC.Driver.Backend (backendProducesObject))]
+  [otherwise
+   (imports-from-ghc
+    (GHC.Driver.Session [isObjectTarget]))])
+
+(cond-expand
   [(<= 902 :ghc)
    (:begin
-     (import GHC.Driver.Backend (backendProducesObject))
      (import GHC.Driver.Env (hsc-units))
      (import GHC.Linker.Loader (initLoaderState showLoaderState)))]
   [otherwise
    (imports-from-ghc
-    (GHC.Driver.Session [isObjectTarget])
     (GHC.Runtime.Linker [initDynLinker showLinkerState]))])
 
 (cond-expand
@@ -211,6 +219,8 @@
 (defn (:: gen-default-dflags (-> DynFlags DynFlags))
   [flg]
   (cond-expand
+    [(<= 906 :ghc)
+     (defaultDynFlags (settings flg))]
     [(<= 810 :ghc)
      (defaultDynFlags (settings flg) (llvmConfig flg))]
     [(<= 806 :ghc)
@@ -263,6 +273,8 @@
 
 (defn (:: is-interpreting (-> DynFlags Bool))
   (cond-expand
+    [(<= 906 :ghc)
+     (. backendCanReuseLoadedCode backend)]
     [(<= 902 :ghc)
      (. not backendProducesObject backend)]
     [otherwise
@@ -296,7 +308,7 @@
 (defn (:: show-sdoc-for-user-m (-> SDoc (Fnk String)))
   [sdoc]
   (do (<- hsc-env getSession)
-      (<- unqual getPrintUnqual)
+      (<- unqual get-name-ppr-ctx)
       (lept [dflags (hsc-dflags hsc-env)
              str (cond-expand
                    [(<= 902 :ghc)
@@ -449,7 +461,7 @@ object code."
              (<- mb_stuffs (mapM (getInfo all-info) names))
              (lept [filtered
                     (filter-out-children child-filter
-                                         (catMaybes mb_stuffs))])
+                                         (catMaybes (toList mb_stuffs)))])
              (return
               (vcat (intersperse (text "") (map ppr-info filtered)))))
     (cond-expand
