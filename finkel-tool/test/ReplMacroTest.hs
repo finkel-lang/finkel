@@ -104,7 +104,12 @@
           (with-right '(repl-macro info ())
             (isSubsequenceOf "instance Show ()"))
           (with-right '(repl-macro info [])
-            (isSubsequenceOf "data [] a = [] | a : [a]"))
+            (isSubsequenceOf
+             (cond-expand
+               [(<= 906 :ghc)
+                "data List a = [] | a : [a]"]
+               [otherwise
+                "data [] a = [] | a : [a]"])))
 
           ;; kind
           (ok '(repl-macro kind Maybe)
@@ -133,6 +138,8 @@
             (. (elem "class C a") lines))
           (lept [interpreter-backend-line
                  (cond-expand
+                   [(<= 906 :ghc)
+                    ";  backend: byte-code interpreter"]
                    [(<= 902 :ghc)
                     ";  backend: Interpreter"]
                    [otherwise

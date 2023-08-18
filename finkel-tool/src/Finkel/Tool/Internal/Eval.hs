@@ -20,6 +20,7 @@
      fromException throwIO throwTo])
    (Control.Monad (unless))
    (Control.Monad.IO.Class [(MonadIO ..)])
+   (Data.Foldable [toList])
    (Data.List [intercalate])
    (GHC.Conc [myThreadId])
    (System.IO [Handle])
@@ -56,7 +57,7 @@
 
 (imports-from-ghc
  (GHC
-  [(Target ..) (TargetId ..) getPrintUnqual parseDynamicFlags setTargets])
+  [(Target ..) (TargetId ..) parseDynamicFlags setTargets])
 
  (GHC.Data.Bag [unitBag])
  (GHC.Data.OrdList [toOL])
@@ -85,10 +86,16 @@
 
  (GHC.Utils.Misc [looksLikeModuleName])
  (GHC.Utils.Outputable
-  [SDoc PrintUnqualified ppr mkErrStyle setStyleColoured text vcat]))
+  [SDoc ppr mkErrStyle setStyleColoured text vcat]))
 
 
 ;;; Extra imports
+
+(cond-expand
+  [(<= 906 :ghc)
+   (import Language.Haskell.Syntax.ImpExp ((ImportListInterpretation ..)))]
+  [otherwise
+   (:begin)])
 
 (cond-expand
   [(<= 904 :ghc)
@@ -158,12 +165,17 @@
 
 See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
   (cond-expand
+    [(<= 906 :ghc)
+     [Opt-ImplicitImportQualified
+      Opt-IgnoreOptimChanges
+      Opt-IgnoreHpcChanges
+      Opt-UseBytecodeRatherThanObjects]]
     [(<= 804 :ghc)
-     [Opt_ImplicitImportQualified
-      Opt_IgnoreOptimChanges
-      Opt_IgnoreHpcChanges]]
+     [Opt-ImplicitImportQualified
+      Opt-IgnoreOptimChanges
+      Opt-IgnoreHpcChanges]]
     [otherwise
-     [Opt_ImplicitImportQualified]]))
+     [Opt-ImplicitImportQualified]]))
 
 (defn (:: parse-dynamic-flags
         (=> (MonadIO m)
@@ -177,7 +189,7 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
     [otherwise
      (parseDynamicFlags (hsc-dflags hsc-env))]))
 
-(defn (:: render-with-err-style (-> DynFlags PrintUnqualified SDoc String))
+(defn (:: render-with-err-style (-> DynFlags NamePprCtx SDoc String))
   [dflags unqual sdoc]
   (lept [style0 (cond-expand
                   [(<= 900 :ghc) (mkErrStyle unqual)]
@@ -312,7 +324,7 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
   "Set the name of function used for printing values in interactive
 context."
   [name]
-  (case-do (parseName name)
+  (case-do (fmap toList (parseName name))
     (: f _) (modifySession
              (\he (he {(= hsc-IC (setInteractivePrintName (hsc-IC he) f))})))
     _ (failFnk "set-print-name: parse error")))
@@ -495,14 +507,14 @@ to separate object files from source code files."
   (lept [emsgs (srcErrorMessages src-err)
          sdoc (vcat (ppr-wrapped-msg-bag-with-loc emsgs))]
     (do (<- dflags getDynFlags)
-        (<- unqual getPrintUnqual)
+        (<- unqual get-name-ppr-ctx %_getPrintUnqual)
         (return (render-with-err-style dflags unqual sdoc)))))
 
 (defn (:: make-finkel-exception-message (-> FinkelException (Fnk String)))
   [fe]
   (lept [msg (displayException fe)]
     (do (<- dflags getDynFlags)
-        (<- unqual getPrintUnqual)
+        (<- unqual get-name-ppr-ctx)
         (lefn [(lmsg [l]
                  (lept [wmsg (mkWrappedMsg dflags l unqual (text msg))
                         emsgs (cond-expand
@@ -553,19 +565,25 @@ to separate object files from source code files."
   [(IIDecl x) (IIDecl y)]
   (where (&& (== (unLoc (ideclName x)) (unLoc (ideclName y)))
              (== (ideclAs x) (ideclAs y))
-             (|| (not (is-import-decl-qualified
-                       (ideclQualified x)))
-                 (is-import-decl-qualified
-                  (ideclQualified y)))
-             (hiding-subsumes (ideclHiding x)
-                              (ideclHiding y)))
-    (defn hiding-subsumes
-      [_ (Just (, False (L _ [])))]
-      True
-
-      [(Just (, False (L _ xs))) (Just (, False (L _ ys)))]
-      (all (flip elem xs) ys)
-
-      [a b] (== a b)))
+             (|| (not (is-import-decl-qualified (ideclQualified x)))
+                 (is-import-decl-qualified (ideclQualified y)))
+             (cond-expand
+               [(<= 906 :ghc)
+                (hiding-subsumes (ideclImportList x) (ideclImportList y))]
+               [otherwise
+                (hiding-subsumes (ideclHiding x) (ideclHiding y))]))
+    (cond-expand
+      [(<= 906 :ghc)
+       (defn hiding-subsumes
+         [_ (Just (, Exactly (L _ [])))] True
+         [(Just (, Exactly (L _ xs))) (Just (, Exactly (L _ ys)))]
+         (all (flip elem xs) ys)
+         [a b] (== a b))]
+      [otherwise
+       (defn hiding-subsumes
+         [_ (Just (, False (L _ [])))] True
+         [(Just (, False (L _ xs))) (Just (, False (L _ ys)))]
+         (all (flip elem xs) ys)
+         [a b] (== a b))]))
 
   [_ _] False)
