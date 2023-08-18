@@ -145,9 +145,9 @@ mkTest' path = do
          | takeBaseName p == "0008-ffi"
          = (True, "Native code test for FFI skipped")
          | otherwise
-         = ( or [ b == "1004-doccomment-01"
-               , b == "2012-typeop"
-               , b == "2019-overlabel" ]
+         = ( b == "1004-doccomment-01" ||
+             b == "2012-typeop" ||
+             b == "2019-overlabel"
            , "Generated Haskell code is malformed" )
           where b = takeBaseName p
 #endif
