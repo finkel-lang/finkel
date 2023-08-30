@@ -403,9 +403,9 @@ interpHasNoWayDyn = WayDyn `notElem` interpWays
 -- | 'True' when the 'DynFlags' is using interpreter.
 isInterpreted :: DynFlags -> Bool
 #if MIN_VERSION_ghc(9,6,0)
--- As of ghc 9.6.2, interpreter bacnend is the only backend which can reuse
+-- As of ghc 9.6.2, interpreter backend is the only backend which can reuse
 -- loaded code.
-isInterpreted dflags = backendCanReuseLoadedCode (backend dflags)
+isInterpreted = backendCanReuseLoadedCode . backend
 #elif MIN_VERSION_ghc(9,2,0)
 isInterpreted dflags = backend dflags == Interpreter
 #else
