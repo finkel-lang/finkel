@@ -176,7 +176,7 @@ reading the input until successful parse result."
 
 (defn (:: mangled-command (-> String Bool))
   [lin]
-  (lefn [(commands ["expand" "expand!" "info" "kind" "load" "type"])]
+  (lept [commands ["expand" "expand!" "info" "kind" "load" "type"]]
     (case (words lin)
       (: w _) (any (isPrefixOf w) commands)
       _ False)))
