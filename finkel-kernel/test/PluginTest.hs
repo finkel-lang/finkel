@@ -69,14 +69,9 @@ pluginTests =
       compile ["-optF", "--warn-interp=False"] [] "p06.hs"
       compile [] [] "p08.hs"
 
-#if !MIN_VERSION_ghc(9,2,0)
-      -- XXX: Test code with macros not yet working in ghc >= 9.2.0. Required
-      -- module is compiled, but macros in the required module were not added to
-      -- FnkEnv.
-      compile ["-v", "--warn-interp=False"] ["--verbose=0"] "p09.hs"
-      compile ["-v", "--warn-interp=False"] ["--verbose=3"] "p09.hs"
-      compile [] ["--verbose=3"] "p10.hs"
-#endif
+      compile ["-v", "-optF", "--warn-interp=False"] ["--verbose=0"] "p09.hs"
+      compile ["-v", "-optF", "--warn-interp=False"] ["--verbose=3"] "p09.hs"
+      compile ["-v", "-optF", "--warn-interp=False"] ["--verbose=3"] "p10.hs"
 
       -- Failures
       compileWithFailedFlag [] [] "p07.hs"
@@ -114,7 +109,10 @@ compile'
   :: String -> (IO SuccessFlag -> IO ()) -> [String] -> [String] -> String
   -> FnkSpec
 compile' msg wrap ghc_args plugin_args basename =
-  describe ("compile " ++ basename ++ " with ghc plugin") $ do
+  let title =
+        "compile " ++ basename ++ ", ghc args: " ++
+        show ghc_args ++ ", plugin args: " ++ show plugin_args
+  in  describe title $ do
     it ("should " ++ msg ++ " compile " ++ basename) $ \ftr -> do
       libdir <- getLibDirFromGhc
       me <- getExecutablePath
