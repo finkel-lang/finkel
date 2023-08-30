@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE ViewPatterns      #-}
+
 -- | Syntax for declaration.
 module Language.Finkel.Syntax.HDecl where
 
@@ -131,6 +132,7 @@ import Language.Finkel.Syntax.SynUtils
 #if !MIN_VERSION_ghc(8,6,0)
 import Language.Finkel.Syntax.HPat
 #endif
+
 
 -- ---------------------------------------------------------------------
 --

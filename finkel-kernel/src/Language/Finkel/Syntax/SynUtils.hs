@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+
 -- | Utility codes for syntax.
 module Language.Finkel.Syntax.SynUtils
   ( -- * This module
