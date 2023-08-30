@@ -46,14 +46,13 @@ import           GHC_Driver_Session              (DynFlags (..),
                                                   GeneralFlag (..),
                                                   GhcLink (..),
                                                   HasDynFlags (..),
-                                                  setGeneralFlag',
-                                                  unSetGeneralFlag',
-                                                  updOptLevel)
+                                                  setGeneralFlag', updOptLevel)
 import           GHC_Types_SrcLoc                (GenLocated (..))
 import           GHC_Utils_Outputable            (Outputable (..), SDoc, cat,
                                                   fsep, nest, vcat)
 #if MIN_VERSION_ghc(9,6,0)
-import           GHC.Driver.Session              (topDir)
+import           GHC.Driver.Backend              (backendWritesFiles)
+import           GHC.Driver.Session              (topDir, unSetGeneralFlag')
 #endif
 
 #if MIN_VERSION_ghc(9,6,0)
@@ -368,9 +367,25 @@ bcoDynFlags dflags0 =
                         , hscTarget = HscInterpreted
 #endif
                         }
-      dflags2 = unSetGeneralFlag' Opt_Hpc $
-                unSetGeneralFlag' Opt_BuildDynamicToo dflags1
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,6,0)
+      -- See 'GHC.Driver.Main.hscMaybeWriteIface'. The function will panic if
+      -- writing simple interface file with dyanmic-too option enabled. The
+      -- simple interface is written from
+      -- "GHC.Driver.Pipeline.Execute.runHscBackendPhase" if backend does not
+      -- write files.
+      --
+      -- XXX: Not sure whether possible to have -dynamic-too with
+      -- non-file-writing backend, confirm it.
+      dflags2 | not (backendWritesFiles (backend dflags0))
+              = unSetGeneralFlag' Opt_BuildDynamicToo dflags1
+              | otherwise = dflags1
+#else
+      dflags2 = dflags1
+#endif
+#if MIN_VERSION_ghc(9,6,0)
+      -- In ghc 9.6, seems like `Opt_ByteCode' is not in use any more.
+      dflags3 = setGeneralFlag' Opt_UseBytecodeRatherThanObjects dflags2
+#elif MIN_VERSION_ghc(9,2,0)
       dflags3 = setGeneralFlag' Opt_ByteCode dflags2
 #elif MIN_VERSION_ghc(8,10,3)
       dflags3 = setGeneralFlag' Opt_ByteCodeIfUnboxed dflags2
