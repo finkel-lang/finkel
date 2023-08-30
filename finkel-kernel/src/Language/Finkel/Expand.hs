@@ -131,9 +131,9 @@ withExpanderSettingsE act =
      -- interpreter, using the given action as-is.
      if isInterpreted dflags
         then act
-        else bracket (prepare dflags) restore (const act)
+        else bracket prepare restore (const act)
   where
-    prepare dflags = do
+    prepare = do
       fnk_env <- getFnkEnv
       hsc_env_old <- getSession
 
@@ -143,7 +143,7 @@ withExpanderSettingsE act =
       case envSessionForExpand fnk_env of
         Just he -> setSession $! discardInteractiveContext he
         Nothing -> do
-          he1 <- newHscEnvForExpand dflags
+          he1 <- newHscEnvForExpand hsc_env_old
           setSession he1
           postSetSession
           he2 <- getSession
@@ -168,17 +168,35 @@ withExpanderSettingsE act =
 -- Adjusting the 'DynFlags' used by the macro expansion session, to support
 -- evaluating expressions in dynamic and non-dynamic builds of the Finkel
 -- compiler executable.
-newHscEnvForExpand :: MonadIO m => DynFlags -> m HscEnv
-newHscEnvForExpand dflags0 = do
-  let dflags1 = bcoDynFlags dflags0
+newHscEnvForExpand :: MonadIO m => HscEnv -> m HscEnv
+newHscEnvForExpand orig_hsc_env = do
+  let dflags0 = hsc_dflags orig_hsc_env
+      dflags1 = bcoDynFlags dflags0
       dflags2 = if interpHasNoWayDyn
                    then removeWayDyn dflags1
                    else dflags1
+
 #if MIN_VERSION_ghc(9,6,0)
-  liftIO $! newHscEnv (topDir dflags2) dflags2
+  -- In ghc 9.6, arguments of newHscEnv takes top directory of ghc library path.
+  new_hsc_env_0 <- liftIO $! newHscEnv (topDir dflags2) dflags2
 #else
-  liftIO $! newHscEnv dflags2
+  new_hsc_env_0 <- liftIO $! newHscEnv dflags2
 #endif
+#if MIN_VERSION_ghc(9,4,0)
+  -- From ghc 9.4, plugins (loaded and static) are stored in HscEnv instead of
+  -- DynFlags. Updating the hsc_plugins field from old hsc_env value.
+  let new_hsc_env_1 = new_hsc_env_0 {hsc_plugins = hsc_plugins orig_hsc_env}
+#elif MIN_VERSION_ghc(9,2,0)
+  -- From ghc 9.2, hsc_env has separate fields for loaded plugins and static
+  -- plugins.
+  let new_hsc_env_1 =
+        new_hsc_env_0 { hsc_plugins = hsc_plugins _orig_hsc_env
+                      , hsc_static_plugins = hsc_static_plugins orig_hsc_env}
+#else
+  -- No need to update hsc_env, plugins are stored in DynFlags.
+  let new_hsc_env_1 = new_hsc_env_0
+#endif
+  pure new_hsc_env_1
 
 -- | Run given 'Fnk' action with macro expansion settings for 'GhcPluginMode'.
 withExpanderSettingsG :: Fnk a -> Fnk a
@@ -202,7 +220,7 @@ withExpanderSettingsG act = do
 withGlobalSession :: Fnk a -> Fnk a
 withGlobalSession act0 = do
   fer <- Fnk pure
-  dflags0 <- getDynFlags
+  orig_hsc_env <- getSession
 
   let prepare = initializeGlobalSession
       restore = setSession
@@ -224,7 +242,7 @@ withGlobalSession act0 = do
     modifyMVar globalSessionVar $ \mb_s0 -> do
       s1@(Session r1) <- case mb_s0 of
         Just s0 -> pure s0
-        Nothing -> newHscEnvForExpand dflags0 >>= fmap Session . newIORef
+        Nothing -> newHscEnvForExpand orig_hsc_env >>= fmap Session . newIORef
       (retval, fnk_env) <- unGhc (toGhc act1 fer) s1
       for_ (envSessionForExpand fnk_env) $ \he ->
         atomicModifyIORef' r1 (const (he, ()))
