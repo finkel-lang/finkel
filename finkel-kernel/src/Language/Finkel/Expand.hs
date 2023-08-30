@@ -211,7 +211,7 @@ withGlobalSession act0 = do
         let mex1 = discardInteractiveContext mex0
         setSession mex1
 
-        -- XXX: Shoud keep the old `envDefaultDynFlags' as-is?
+        -- XXX: Should keep the old `envDefaultDynFlags' as-is?
         modifyFnkEnv (\e -> e { envSessionForExpand = Just mex1
                               , envDefaultDynFlags = Just (hsc_dflags mex1) })
 
