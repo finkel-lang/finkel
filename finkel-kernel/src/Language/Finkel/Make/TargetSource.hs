@@ -265,10 +265,9 @@ findInFirstNLines buf n test = go n buf
     -- False when the source code contained less number of lines than
     -- the number specified by the argument.
     go i buf0 =
-      if i == 0 || atEnd buf0
-        then False
-        else case getStringBufferLine buf0 of
-               (l, buf1) -> test l || go (i-1) buf1
+      not (i == 0 || atEnd buf0) &&
+      (case getStringBufferLine buf0 of
+          (l, buf1) -> test l || go (i-1) buf1)
 {-# INLINABLE findInFirstNLines #-}
 
 getStringBufferLine :: StringBuffer -> (String, StringBuffer)
