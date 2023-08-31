@@ -191,7 +191,7 @@ newHscEnvForExpand orig_hsc_env = do
   -- plugins.
   let new_hsc_env_1 =
         new_hsc_env_0 { hsc_plugins = hsc_plugins _orig_hsc_env
-                      , hsc_static_plugins = hsc_static_plugins orig_hsc_env}
+                      , hsc_static_plugins = hsc_static_plugins orig_hsc_env }
 #else
   -- No need to update hsc_env, plugins are stored in DynFlags.
   let new_hsc_env_1 = new_hsc_env_0
