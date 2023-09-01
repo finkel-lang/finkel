@@ -136,7 +136,7 @@ import           GHC_Driver_Ppr               (showSDocForUser)
 import           GHC_Driver_Session           (DynFlags (..), GeneralFlag (..),
                                                GhcLink (..), HasDynFlags (..),
                                                gopt, gopt_set, gopt_unset,
-                                               picPOpts)
+                                               picPOpts, ways)
 import           GHC_Platform_Ways            (wayGeneralFlags,
                                                wayUnsetGeneralFlags)
 import           GHC_Runtime_Context          (InteractiveContext (..))
@@ -617,7 +617,7 @@ useInterpreter :: DynFlags -> DynFlags
 useInterpreter dflags0 =
   let platform = targetPlatform dflags0
       upd_gopt setter get_flags df =
-        foldl setter df (concatMap (get_flags platform) hostFullWays)
+        foldl setter df (concatMap (get_flags platform) (ways df))
       dflags1 = dflags0 { ghcLink = LinkInMemory
                         , verbosity = 1 }
 #if MIN_VERSION_ghc(9,6,0)
