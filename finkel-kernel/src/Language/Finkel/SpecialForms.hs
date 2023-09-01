@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE ViewPatterns      #-}
+
 -- | Special forms.
 module Language.Finkel.SpecialForms
   ( specialForms
@@ -68,6 +69,15 @@ import GHC_Utils_Outputable              (SDoc, fsep, nest, ppr, text, vcat,
 
 #if MIN_VERSION_ghc(9,6,0)
 import Language.Haskell.Syntax.ImpExp    (ImportListInterpretation (..))
+#endif
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Make                   (ModIfaceCache (..))
+#endif
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Env                    (hscActiveUnitId, hsc_HUG)
+import GHC.Unit.Env                      (lookupHug)
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
@@ -268,7 +278,8 @@ withInternalLoad :: Fnk a -> Fnk a
 withInternalLoad act = do
   -- 'DynFlags' in the current session might be updated by the file local
   -- pragmas.  Using the 'DynFlags' from 'envDefaultDynFlags', which is
-  -- initialized when entering the 'make' function in 'initSessionForMake'.
+  -- initialized when entering the 'make' function in 'initSessionForMake' for
+  -- ExecMode mode and 'newHscEnvForExpand' in GhcPluginMode.
   --
   -- Updating the current context in HscEnv, to avoid home module import errors,
   -- which may happen when compiling with bytecode interpreter (e.g., done when
@@ -281,6 +292,7 @@ withInternalLoad act = do
         putFnkEnv fnk_env
       no_force_recomp = unSetGeneralFlag' Opt_ForceRecomp
       update = setDynFlags . no_force_recomp . bcoDynFlags
+
   bracket acquire restore $ \(_context, _dflags, fnk_env) -> do
     setContext []
     mapM_ update (envDefaultDynFlags fnk_env)
@@ -355,19 +367,72 @@ makeMissingHomeMod (L _ idecl) = do
   hsc_env <- getSession
   fnk_env <- getFnkEnv
 
+#if MIN_VERSION_ghc(9,4,0)
+  let getCachedIface = case envInterpModIfaceCache fnk_env of
+        Just mic -> liftIO $ do
+          caches <- iface_clearCache mic
+          mapM_ (iface_addToCache mic) caches
+          pure caches
+        Nothing -> pure []
+#endif
+
   let mname = unLoc lmname
       lmname = reLoc (ideclName idecl)
       invoked = envInvokedMode fnk_env
       mk_fn = case invoked of
         ExecMode      -> makeFromRequire
+
+        -- Some attempts to get incrementally compiled home module info in ghc
+        -- 9.6. One is to use the ModIfaceCache, another is to use hscUpdateHPT.
+        --
+        -- GhcPluginMode -> \lm -> do
+        --    -- XXX: keep old modiface cache, combine and update after calling
+        --    -- makeFromRequirePlugin.
+        --    old_caches <- getCachedIface
+        --    makeFromRequirePlugin lm
+        --    liftIO $ case envInterpModIfaceCache fnk_env of
+        --      Just mic -> mapM_ (iface_addToCache mic) old_caches
+        --      _        -> pure ()
+        --
+        --    -- let -- get the old hpt before invoking makeFromRequirePlugin ...
+        --    --     update_hpt hpt = foldr addHomeModInfoToHpt hpt (eltsHpt old_hpt)
+        --    --     new_hsc_env = hscUpdateHPT update_hpt hsc_env
+        --    -- setSession new_hsc_env
+
         GhcPluginMode -> makeFromRequirePlugin
+
       smpl_mk = withInternalLoad (mk_fn lmname)
       dflags = hsc_dflags hsc_env
       tr = debug fnk_env "makeMissinghomeMod"
       do_mk msgs = tr msgs >> smpl_mk
       dont_mk = tr
 
-  case lookupHpt (hsc_HPT hsc_env) mname of
+#if MIN_VERSION_ghc(9,4,0)
+  cached_ifaces <- getCachedIface
+  tr ("cached_iface:" : map ppr cached_ifaces)
+#endif
+
+  -- XXX: See 'GHC.Driver.Make.enableCodeGenWhen', which is looking up dynflags
+  -- from mod summary, and looking up node key from 'needs_codegen_map'. The
+  -- 'needs_codegen_map' will filter out modules not containing TemplateHaskell
+  -- language extension when backend does not generate codes (which means ghc
+  -- invoked with "-fno-code" option).
+
+  -- Alternate attemps to get incrementally added home modules in ghc 9.6, which
+  -- did not work well:
+  --
+  -- mb_installed_mod <- do
+  --   let installed_mod = mkModule (hscActiveUnitId hsc_env) mname
+  --       FinderCache ref _ = hsc_FC hsc_env
+  --   im_env <- liftIO (readIORef ref)
+  --   pure (lookupInstalledModuleEnv im_env installed_mod)
+  --
+  -- let by_mname ms = ms_mod_name ms == mname
+  --     mb_installed_mod = find by_mname (mgModSummaries (hsc_mod_graph hsc_env))
+
+  let mb_installed_mod = lookupHpt (hsc_HPT hsc_env) mname
+
+  case mb_installed_mod of
     -- When the compiler was invoked as ghc plugin, skipping compilation of home
     -- module when the module was found in current home package table.
     -- Otherwise, homeModError would be shown when loading interface file.
@@ -375,6 +440,14 @@ makeMissingHomeMod (L _ idecl) = do
       ExecMode      -> do_mk ["Found" <+> ppr mname <+> "in HPT"]
       GhcPluginMode -> dont_mk ["Skipping" <+> ppr mname <+> "found in HPT"]
     _ -> do
+
+#if MIN_VERSION_ghc(9,4,0)
+      tr ["No" <+> ppr mname <+> "in HPT"]
+      case lookupHug (hsc_HUG hsc_env) (hscActiveUnitId hsc_env) mname of
+        Just _ -> tr ["Found" <+> ppr mname <+> "in home unit graph"]
+        _      -> tr ["No" <+> ppr mname <+> "in home unit graph"]
+#endif
+
       mb_ts <- findTargetModuleNameMaybe dflags lmname
       case mb_ts of
         Just ts -> do_mk ["Found file" <+> text (targetSourcePath ts)]
@@ -386,7 +459,7 @@ makeMissingHomeMod (L _ idecl) = do
 #endif
           fresult <- liftIO (findImportedModule hsc_env mname no_pkg_qual)
           case fresult of
-            Found {} -> dont_mk ["Skipping" <+> ppr mname]
+            Found {} -> dont_mk ["Skipping" <+> ppr mname <+> "found in Finder"]
             _        -> do_mk ["Module" <+> ppr mname <+> "not found"]
 
 
