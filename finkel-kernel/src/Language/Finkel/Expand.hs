@@ -190,7 +190,7 @@ newHscEnvForExpand orig_hsc_env = do
   -- From ghc 9.2, hsc_env has separate fields for loaded plugins and static
   -- plugins.
   let new_hsc_env_1 =
-        new_hsc_env_0 { hsc_plugins = hsc_plugins _orig_hsc_env
+        new_hsc_env_0 { hsc_plugins = hsc_plugins orig_hsc_env
                       , hsc_static_plugins = hsc_static_plugins orig_hsc_env }
 #else
   -- No need to update hsc_env, plugins are stored in DynFlags.
