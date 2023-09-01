@@ -76,7 +76,7 @@ import           GHC_Types_SourceError             (throwOneError)
 import           GHC_Types_SrcLoc                  (Located, getLoc, unLoc)
 import           GHC_Unit_Finder                   (FindResult (..),
                                                     findExposedPackageModule)
-import           GHC_Unit_Home_ModInfo             (lookupHpt)
+import           GHC_Unit_Home_ModInfo             (lookupHpt, pprHPT)
 import           GHC_Unit_Module                   (ModuleName, mkModuleName)
 import           GHC_Unit_Module_Graph             (ModuleGraph)
 import           GHC_Unit_Module_ModSummary        (ModSummary (..),
@@ -85,6 +85,10 @@ import           GHC_Utils_Outputable              (Outputable (..), SDoc,
                                                     brackets, nest, text, vcat,
                                                     (<+>))
 
+#if MIN_VERSION_ghc(9,6,0)
+import           GHC.Driver.Backend                (backendName)
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Finder          (initFinderOpts)
 import           GHC.Driver.Env                    (hscActiveUnitId,
@@ -92,9 +96,8 @@ import           GHC.Driver.Env                    (hscActiveUnitId,
                                                     hsc_HUG, hsc_units)
 import           GHC.Driver.Plugins                (ParsedResult (..),
                                                     PsMessages (..))
-import           GHC.Driver.Session                (GhcLink (..), ways)
+import           GHC.Driver.Session                (GhcLink (..))
 import           GHC.Hs                            (HsParsedModule)
-import           GHC.Platform.Ways                 (Way (..), hasWay)
 import           GHC.Types.Error                   (emptyMessages)
 import           GHC.Types.PkgQual                 (PkgQual (..))
 import           GHC.Types.SrcLoc                  (GenLocated (..))
@@ -111,6 +114,11 @@ import           GHC.Unit.Types                    (GenWithIsBoot (..),
                                                     IsBootInterface (..))
 #else
 import           GHC_Utils_Misc                    (getModificationUTCTime)
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Session                (ways)
+import           GHC.Platform.Ways                 (Way (..), hasWay)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -238,7 +246,7 @@ initSessionForMake = do
   _preload1 <- setSessionDynFlags dflags2
   dflags3 <- getDynFlags
 
-  -- Load modules names in FnkEnv to current interactive context.
+  -- Load module names in FnkEnv to current interactive context.
   fnk_env <- getFnkEnv
   let ctx_modules = envContextModules fnk_env
   unless (null ctx_modules) (setContextModules ctx_modules)
@@ -272,6 +280,7 @@ makeFromRequire lmname = do
       tr = traceMake fnk_env "makeFromRequire"
       dflags = hsc_dflags hsc_env
 
+  tr ["old summaries:", nvc_or_none old_summaries]
   tr ["required module:" <+> ppr (unLoc lmname)]
   tu <- emptyTargetUnit <$> findTargetModuleName dflags lmname
 
@@ -289,37 +298,80 @@ makeFromRequirePlugin lmname = do
   hsc_env <- getSession
 
   let mname = unLoc lmname
-      target = Target { targetId = TargetModule mname
-
-#if MIN_VERSION_ghc(9,4,0)
-                      -- XXX: See 'GHC.Driver.Pipeline.compileOne'', when the
-                      -- targetAllowObjCode is set to False, Opt_ForceRecomp of
-                      -- the local dynflags is always turned on.
-                      --
-                      -- When the GHCi is built to prefer dynamic object, and
-                      -- when dynamic object of home package module did not
-                      -- exist, interpreter may try to load non-dynamic object
-                      -- and shows an error during macro expansion.
-
-                      -- At the moment, object code is allowed only when current
-                      -- compilation contains "-dynamic" or "-dynamic-too".
-                      , targetAllowObjCode = ways dflags `hasWay` WayDyn ||
-                                             gopt Opt_BuildDynamicToo dflags
-                      , targetUnitId = hscActiveUnitId hsc_env
+      dflags = hsc_dflags hsc_env
+      -- XXX: Not sure when the target can use object code. Add some tests for
+      -- combination of "-fno-code" and newly added options,
+      -- Opt_ByteCodeAndObjectCode, and Opt_WriteIfSimplifiedCore.
+      --
+      -- XXX: Under certain condition in ghc 9.6, it is possible to allow object
+      -- codes when the backend does not write files (for -fno-code
+      -- option). Though at the moment, the backend at this point is always set
+      -- to interpreter. Find out a way to get the backend of the original
+      -- DynFlags, at this point, the backend of `dflags' is always set to
+      -- interpreter.  See 'Language.Finkel.Expand.newHscEnvForExpand'.
+      --
+      -- XXX: Find out a way to support compiling with "-fno-code" option in ghc
+      -- 9.6, which is used when generating documentations with haddock.
+      --
+      -- allow_obj_code =
+      --   case envDefaultDynFlags fnk_env of
+      --     Just df -> not (backendWritesFiles (backend df)) ||
+      --                ways df `hasWay` WayDyn || gopt Opt_BuildDynamicToo df
+      --     Nothing -> False
+      --
+      -- XXX: In ghc 9.4, see 'GHC.Driver.Pipeline.compileOne'', when the
+      -- targetAllowObjCode is set to False, Opt_ForceRecomp of the local
+      -- dynflags is always turned on. When the GHCi is built to prefer dynamic
+      -- object, and when dynamic object of home package module did not exist,
+      -- interpreter may try to load non-dynamic object and shows an error
+      -- during macro expansion.
+      --
+      -- For ghc >= 9.2, allowing object code when current compilation contains
+      -- "-dynamic" or "-dynamic-too".
+#if MIN_VERSION_ghc(9,2,0)
+      allow_obj_code =
+        case envDefaultDynFlags fnk_env of
+          Just df -> ways df `hasWay` WayDyn || gopt Opt_BuildDynamicToo df
+          Nothing -> False
 #else
-                      , targetAllowObjCode = False
+      allow_obj_code = False
+#endif
+      target = Target { targetId = TargetModule mname
+                      , targetAllowObjCode = allow_obj_code
+#if MIN_VERSION_ghc(9,4,0)
+                      , targetUnitId = hscActiveUnitId hsc_env
 #endif
                       , targetContents = Nothing
                       }
       old_targets = hsc_targets hsc_env
-      dflags = hsc_dflags hsc_env
       messager = envMessager fnk_env
       tr = traceMake fnk_env "makeFromRequirePlugin"
+#if MIN_VERSION_ghc(9,4,0)
+      new_target_id = targetId target
+      old_targets' = filter ((/= new_target_id) . targetId) old_targets
+      new_targets = target : old_targets'
+#else
+      new_targets = target : old_targets
+#endif
 
-  tr [ "target module:" <+> ppr mname
-     , "old_targets:" <+> nvc_or_none old_targets ]
+#if MIN_VERSION_ghc(9,6,0)
+  case envDefaultDynFlags fnk_env of
+    Just default_dflags -> do
+      let ppr_ways = text . show . ways
+          ppr_backend_name = text . show . backendName . backend
+      tr [ "ways:" <+> ppr_ways dflags
+         , "ways (fnk):" <+> ppr_ways default_dflags
+         , "backend:" <+> ppr_backend_name dflags
+         , "backend (fnk):" <+> ppr_backend_name default_dflags ]
+    Nothing -> pure ()
+#endif
 
-  setSession (hsc_env {hsc_targets = target : old_targets})
+  tr [ "target:" <+> ppr target
+     , "old_targets:" <+> nvc_or_none old_targets
+     , "new_targets:" <+> nvc_or_none new_targets
+     , "hsc_hpt:" <+> pprHPT (hsc_HPT hsc_env)]
+
+  setSession (hsc_env {hsc_targets = new_targets})
   withTmpDynFlags (setExpanding dflags) $ do
     mg <- depanal [] False
     void (doLoad LoadAllTargets (Just messager) mg)
