@@ -171,6 +171,9 @@ withExpanderSettingsE act =
 newHscEnvForExpand :: MonadIO m => HscEnv -> m HscEnv
 newHscEnvForExpand orig_hsc_env = do
   let dflags0 = hsc_dflags orig_hsc_env
+      -- XXX: Constantly updating the backend to interpreter, the original
+      -- backend information is gone. If the 'bcoDynFlags' was not applied,
+      -- compilation of finkel-core package failed in ghc <= 8.10.
       dflags1 = bcoDynFlags dflags0
       dflags2 = if interpHasNoWayDyn
                    then removeWayDyn dflags1
