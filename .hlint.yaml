@@ -50,6 +50,19 @@
 # Ignore some builtin hints
 # - ignore: {name: Use let}
 # - ignore: {name: Use const, within: SpecialModule} # Only within certain modules
+- ignore: {name: Use fewer imports}
+- ignore: {
+    name: Use camelCase,
+    within: [
+      Language.Finkel.Syntax.HBind,
+      Language.Finkel.Syntax.HDecl,
+      Language.Finkel.Syntax.HExpr,
+      Language.Finkel.Syntax.HImpExp,
+      Language.Finkel.Syntax.HPat,
+      Language.Finkel.Syntax.HType,
+      Language.Finkel.SpecialForms
+    ]
+  }
 
 
 # Define some custom infix operators
