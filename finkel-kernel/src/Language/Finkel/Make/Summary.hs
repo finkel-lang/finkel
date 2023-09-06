@@ -113,6 +113,11 @@ import           GHC.Driver.Backend                (backendProducesObject)
 import           GHC_Driver_Session                (isObjectTarget)
 #endif
 
+#if MIN_VERSION_ghc(8,4,0)
+import           GHC_Data_EnumSet                  (toList)
+#else
+import           Data.IntSet                       (toList)
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Diagnostic      (initDiagOpts)
@@ -274,6 +279,10 @@ compileFnkFile path modname = do
   let tr = traceSummary fnk_env0 "compileFnkFile"
       mname_str = moduleNameString modname
       mname_sdoc = text (mname_str ++ ":")
+
+  tr [ "path:" <+> text path
+     , "language:" <+> ppr (language dflags1)
+     , "extensionFlags:" <+> ppr (toList (extensionFlags dflags1))]
 
   -- Compile the form with local DynFlags to support file local pragmas.
   (mdl, reqs) <- withTmpDynFlags dflags1 $
