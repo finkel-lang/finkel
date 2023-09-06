@@ -141,7 +141,6 @@ import           GHC_Plugins                       (Plugin (..), withPlugins)
 import           GHC_Driver_Make                   (depanal)
 import           GHC_Types_Target                  (Target (..), TargetId (..))
 
-
 -- internal
 import           Language.Finkel.Error
 import           Language.Finkel.Expand
