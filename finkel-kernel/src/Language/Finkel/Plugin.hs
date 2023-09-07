@@ -37,6 +37,14 @@ import GHC_Unit_Module                   (ModLocation (..))
 import GHC_Unit_Module_ModSummary        (ModSummary (..), ms_mod_name)
 import GHC_Utils_Outputable              (text)
 
+#if MIN_VERSION_ghc(9,6,0)
+import GHC.Driver.Backend                (backendGeneratesCode)
+import GHC.Driver.Env                    (hscSetFlags)
+import GHC.Driver.Session                (GeneralFlag (..), backend,
+                                          setGeneralFlag', xopt_set)
+import GHC.LanguageExtensions            (Extension (..))
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Plugins                       (ParsedResult)
 #endif
@@ -84,6 +92,9 @@ pluginWith
 pluginWith mod_name fnk_env =
   defaultPlugin
     { parsedResultAction = fnkParsedResultAction mod_name fnk_env
+#if MIN_VERSION_ghc(9,6,0)
+    , driverPlugin = fnkNoCodePlugin
+#endif
     , pluginRecompile = flagRecompile
     }
 
@@ -228,6 +239,36 @@ printUsage mod_name = do
         , "OPTIONS:"
         ]
   putStrLn (usageInfo header fnkPluginOptions)
+
+#if MIN_VERSION_ghc(9,6,0)
+
+-- Note: [Workaround to support "-fno-code" option in ghc 9.6]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- When compiling with "-fno-code", home package module might rquired from other
+-- home package modules. In 'GHC.Driver.Make.enableCodeGenWhen', byte codes are
+-- generated when the TemplateHaskell language extension is turned on. However,
+-- at the moment finkel does not understand TemplateHaskell, so manually
+-- updating the 'HscEnv' with 'driverPlugin' plugin action. The three updates
+-- done to the 'DynFlags' are same as passing "-fprefer-byte-code",
+-- "-fwrite-if-simplified-core", and "-XTemplateHaskell" from command line.
+--
+-- XXX: haddock generation is not working with ghc 9.6 yet. Seems like the
+-- modified HscEnv is not passed to the static plugin used by haddock.
+
+fnkNoCodePlugin :: [CommandLineOption] -> HscEnv -> IO HscEnv
+fnkNoCodePlugin _ hsc_env = do
+  let dflags0 = hsc_dflags hsc_env
+      generates_code = backendGeneratesCode (backend dflags0)
+  if generates_code
+    then pure hsc_env
+    else do
+      let update df = setGeneralFlag' Opt_UseBytecodeRatherThanObjects $
+                      setGeneralFlag' Opt_WriteIfSimplifiedCore $
+                      xopt_set df TemplateHaskell
+          dflags1 = update dflags0
+      pure (hscSetFlags dflags1 hsc_env)
+#endif
 
 #else /* ghc < 8.6.0 */
 
