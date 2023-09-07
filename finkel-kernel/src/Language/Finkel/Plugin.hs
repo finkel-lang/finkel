@@ -30,9 +30,10 @@ import GHC_Driver_Main                   (getHscEnv)
 import GHC_Driver_Monad                  (Ghc (..), Session (..))
 import GHC_Plugins                       (CommandLineOption, Plugin (..),
                                           defaultPlugin, flagRecompile)
+import GHC_Runtime_Context               (InteractiveContext (..))
 import GHC_Types_SourceError             (throwOneError)
 import GHC_Types_SrcLoc                  (noLoc, noSrcSpan)
-import GHC_Unit_Module                   (ModLocation (..), ModuleName)
+import GHC_Unit_Module                   (ModLocation (..))
 import GHC_Unit_Module_ModSummary        (ModSummary (..), ms_mod_name)
 import GHC_Utils_Outputable              (text)
 
@@ -54,6 +55,7 @@ import Language.Finkel.Exception         (FinkelException (..),
 import Language.Finkel.Fnk               (FnkEnv (..), FnkEnvRef (..),
                                           FnkInvokedMode (..),
                                           fromFnkEnvOptions, initFnkEnv, toGhc)
+import Language.Finkel.Make              (mkParsedResult)
 import Language.Finkel.Make.Summary      (TargetSummary (..), compileFnkFile,
                                           dumpParsedAST)
 import Language.Finkel.Make.TargetSource (TargetSource (..),
@@ -62,8 +64,6 @@ import Language.Finkel.Preprocess        (FnkSrcOptions (..),
                                           defaultFnkSrcOptions,
                                           fromFnkSrcOptions)
 import Language.Finkel.SpecialForms      (defaultFnkEnv)
-
-import Language.Finkel.Make              (mkParsedResult)
 
 
 -- ------------------------------------------------------------------------
@@ -163,21 +163,28 @@ fnkParsedResultAction mod_name fnk_env args0 ms pm =
                   fnk_env' = fpoFnkEnv fpo
               ts <- findTargetSourceWithPragma pragma dflags lpath
               case ts of
-                FnkSource {} -> mkPR <$> parseFnkModule fnk_env' path mname
+                FnkSource {} -> mkPR <$> parseFnkModule fnk_env' path ms
                 _            -> pure pm
   where
     args1 = concatMap words args0
-    mname = ms_mod_name ms
     dflags = ms_hspp_opts ms
     mkPR = mkParsedResult
 
-parseFnkModule :: FnkEnv -> FilePath -> ModuleName -> Hsc HsParsedModule
-parseFnkModule fenv0 path mname = do
+parseFnkModule :: FnkEnv -> FilePath -> ModSummary -> Hsc HsParsedModule
+parseFnkModule fenv0 path ms = do
   henv <- getHscEnv
+
   let mb_loc = fromMaybe noSrcSpan . finkelExceptionLoc
+      mname = ms_mod_name ms
       dflags = hsc_dflags henv
+
+      -- Setting the default DynFlags of FnkEnv to the DynFlags from interactive
+      -- context, since the DynFlags from 'hsc_dflags' field of HscEnv is
+      -- already updated with file local options at this point. This will
+      -- prevent redundant recompilation when requireing home package modules.
       fenv1 = fenv0 { envInvokedMode = GhcPluginMode
-                    , envDefaultDynFlags = Just dflags }
+                    , envDefaultDynFlags = Just (ic_dflags (hsc_IC henv)) }
+
       handler e = throwOneError (mkPlainWrappedMsg dflags (mb_loc e)
                                   (text (displayException e)))
       fnk = handleFinkelException handler $ compileFnkFile path mname
@@ -188,8 +195,8 @@ parseFnkModule fenv0 path mname = do
     unGhc (toGhc fnk (FnkEnvRef fer)) session
 
   case summary of
-    EMS ms _mb_sp _reqs | Just pm <- ms_parsed_mod ms -> do
-      dumpParsedAST henv (ms_hspp_opts ms) ms
+    EMS ems _mb_sp _reqs | Just pm <- ms_parsed_mod ems -> do
+      dumpParsedAST henv (ms_hspp_opts ems) ems
       pure pm
     _ -> liftIO (throwIO (FinkelException ("Failed to parse " ++ path)))
 
