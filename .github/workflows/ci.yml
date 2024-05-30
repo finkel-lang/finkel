@@ -6,314 +6,36 @@ on:
     paths-ignore:
       - '**.md'
 
-env:
-  cache-version: v15
-
 defaults:
   run:
     shell: bash
 
 jobs:
+  pre-job:
+    uses: ./.github/workflows/pre-job.yml
+
   stack:
-    strategy:
-      matrix:
-        include:
-          # - os: ubuntu-latest
-          #   resolver: lts-11
-          # - os: ubuntu-latest
-          #   resolver: lts-12
-
-          - os: ubuntu-latest
-            resolver: lts-14
-          - os: ubuntu-latest
-            resolver: lts-16
-          - os: ubuntu-latest
-            resolver: lts-18
-
-          - os: ubuntu-latest
-            resolver: lts-20
-          - os: macos-latest
-            resolver: lts-20
-          - os: windows-latest
-            resolver: lts-20
-
-    env:
-      STACK: stack --resolver=${{ matrix.resolver }}
-      RESOLVER: ${{ matrix.resolver }}
-
-    runs-on:
-      - ${{ matrix.os }}
-
-    steps:
-      - name: Checkout git repository
-        uses: actions/checkout@v3
-
-      - name: Cache stack package database (non-windows)
-        id: cache-stack-pkg-db-non-win
-        # Caching under macos-latest had problem while compiling the "fkc"
-        # package with the cached "~/.stack" data, disabling at the moment.
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/cache@v3
-        with:
-          path: ~/.stack
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ env.cache-version }}
-
-      - name: Cache directory for stack (windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/cache@v3
-        with:
-          path: C:\Users\runneradmin\AppData\Local\Programs\stack\
-          key: ${{ runner.os }}-stack-${{ env.cache-version }}
-
-      - name: Cache stack packages database (windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/cache@v3
-        with:
-          path: C:\Users\runneradmin\AppData\Roaming\stack\
-          key: ${{ runner.os }}-stack-pkg-db-${{ matrix.resolver }}-${{ env.cache-version }}
-
-      - name: Show stack version
-        run: $STACK --version
-
-      - name: Setup stack
-        run: $STACK setup
-
-      - name: Install dependency packages
-        run: $STACK build -j 2 --test --only-dependencies
-
-      - name: Build packages
-        run: $STACK build --fast --test --coverage --no-run-tests
-
-      - name: Run tests
-        run: |
-          RESOLVER=${{ matrix.resolver }} $STACK --jobs 1 build \
-          --fast --test --coverage
-
-      - name: Generate coverage report
-        uses: 8c6794b6/hpc-codecov-action@v2
-        with:
-          target: stack:all
-
-      - name: Send coverage report
-        uses: codecov/codecov-action@v3
-        with:
-          name: stack-${{ matrix.os }}-${{ matrix.resolver }}
+    needs: pre-job
+    if: ${{ needs.pre-job.outputs.run == 'true' }}
+    uses: ./.github/workflows/stack.yml
+    secrets: inherit
+    with:
+      cache-version: v16
 
   cabal-install:
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          # - macos-latest
-          # - windows-latest
-        plan:
-          - ghc: "9.0.2"
-            cabal: "3.4.1.0"
-            flags: "-O0"
-
-          - ghc: "9.4.6"
-            cabal: "3.8.1.0"
-            flags: "-O0"
-
-          - ghc: "9.4.6"
-            cabal: "3.8.1.0"
-            flags: "-O2"
-
-    runs-on:
-      - ${{ matrix.os }}
-
-    steps:
-      - name: Checkout project repository
-        uses: actions/checkout@v3
-
-      - name: Cache ~/.ghcup
-        id: home-dot-ghcup
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-        uses: actions/cache@v3
-        with:
-          path: ~/.ghcup
-          key: ${{ runner.os }}-ghcup-${{ matrix.plan.ghc }}-${{ env.cache-version }}
-
-      - name: Cache cabal package database
-        id: home-dot-cabal
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-        uses: actions/cache@v3
-        with:
-          path: ~/.cabal
-          key: ${{ runner.os }}-cabal-pkg-db-${{ matrix.plan.ghc }}-${{ hashFiles('cabal.project') }}-${{ env.cache-version }}
-
-      - name: Install ghc and cabal-install (linux and osx)
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
-        run: |
-          ghcup upgrade
-          ghcup install cabal ${{ matrix.plan.cabal }}
-          ghcup install ghc ${{ matrix.plan.ghc }}
-          ghcup set ghc ${{ matrix.plan.ghc }}
-          which cabal
-          which ghc
-
-      - name: Install ghc and cabal-install (windows)
-        if: matrix.os == 'windows-latest'
-        uses: haskell/actions/setup@v1
-        with:
-          ghc-version: ${{ matrix.plan.ghc }}
-          cabal-version: ${{ matrix.plan.cabal }}
-
-      - name: Show version and paths
-        run: |
-          ghc --version
-          cabal --version
-
-      - name: Update cabal package list
-        run: cabal v2-update
-
-      # XXX: In Windows, use of profiling libraries are not yet supported.
-      - name: Write cabal.project.local with v2-configure (non-windows)
-        if: matrix.os != 'windows-latest'
-        run: cabal v2-configure ${{ matrix.plan.flags }}
-
-      - name: Write cabal.project.local with v2-configure (windows)
-        if: matrix.os == 'windows-latest'
-        run: cabal v2-configure --disable-library-profiling ${{ matrix.plan.flags }}
-
-      - name: Build dependency packages
-        run: cabal v2-build all -j --only-dependencies
-
-      - name: Build packages
-        run: cabal v2-build all
-
-      - name: Run tests
-        run: cabal v2-test all
-
-      - name: Run haddock
-        run: cabal v2-haddock all
+    needs: pre-job
+    if: ${{ needs.pre-job.outputs.run == 'true' }}
+    uses: ./.github/workflows/cabal-install.yml
+    with:
+      cache-version: v16
 
   nix-build:
-    strategy:
-      matrix:
-        include:
-          # - nixpkgs: "channel:nixos-20.03"
-          #   compiler: "ghc865"
-          # - nixpkgs: "channel:nixos-20.09"
-          #   compiler: "ghc884"
-          - nixpkgs: "channel:nixos-22.05"
-            compiler: "ghc8107"
-          # - nixpkgs: "channel:nixos-23.05"
-          #   compiler: "ghc92"
-          # - nixpkgs: "channel:nixos-unstable"
-          #   compiler: "ghc8107"
-          # - nixpkgs: "channel:nixos-unstable"
-          #   compiler: "ghc901"
-
-    runs-on:
-      - ubuntu-latest
-
-    steps:
-      - name: Checkout git repository
-        uses: actions/checkout@v3
-
-      - name: Install nix
-        uses: cachix/install-nix-action@v22
-        with:
-          nix_path: nixpkgs=${{ matrix.nixpkgs }}
-
-      - name: Build with nix-build
-        run: nix-build --argstr compiler ${{ matrix.compiler }}
-
-      - name: Build container image stream
-        # if: matrix.compiler == 'ghc8107' && github.ref == 'refs/heads/master'
-        if: github.ref == 'refs/heads/master'
-        run: |
-          nix-build --argstr compiler ${{ matrix.compiler }} ./nix/docker.nix
-          echo "image_stream=$(readlink result)" >> $GITHUB_ENV
-
-      - name: Push image to ghcr.io
-        # if: matrix.compiler == 'ghc8107' && github.ref == 'refs/heads/master'
-        if: github.ref == 'refs/heads/master'
-        env:
-          # Below `CRED' was used for credentials for ghcr.io, but not any more
-          # since logging in with GITHUB_TOKEN is working.  May be the
-          # `GHCR_USER' and `GHCR_PAT' variables could be removed from the
-          # secrets.
-          #
-          # CRED: ${{ secrets.GHCR_USER }}:${{ secrets.GHCR_PAT }}
-          FROM: docker-archive:/dev/stdin
-          TO: docker://ghcr.io/${{ github.repository }}:latest
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | skopeo login -u $ --password-stdin ghcr.io
-          ${{ env.image_stream }} | gzip | skopeo --debug copy ${FROM} ${TO}
+    needs: pre-job
+    if: ${{ needs.pre-job.outputs.run == 'true' }}
+    uses: ./.github/workflows/nix-build.yml
+    secrets: inherit
 
   make-sdist-with-stack:
-    runs-on:
-      - ubuntu-latest
-
-    env:
-      STACK: stack --resolver=lts-18
-
-    steps:
-      - name: Checkout git repository
-        uses: actions/checkout@v3
-
-      - name: Show versions
-        run: |
-          stack --version
-          ghc --version
-          cabal --version
-
-      - name: Build finkel-setup
-        # The "finkel-setup" is used by other packages in custom-setup stanza of
-        # cabal configuration, building before running sdist command.
-        run: $STACK build --fast finkel-setup
-
-      - name: Run stack sdist
-        run: |
-          $STACK sdist \
-            finkel-kernel \
-            fkc \
-            fnkpp \
-            finkel-setup \
-            finkel-core \
-            finkel-tool \
-            finkel \
-            --tar-dir sdist
-
-      - name: Emit temporary stack.yaml
-        run: |
-          cd sdist
-          echo 'resolver: lts-0.0' > stack.yaml
-          echo 'packages:' >> stack.yaml
-          ls *.tar.gz | sed -e 's/\(.*\)\.tar.gz/  - \1/' >> stack.yaml
-          cat stack.yaml
-
-      - name: Build from tarballs with stack
-        run: |
-          cd sdist
-          for t in `ls *.tar.gz`; do tar zxvf $t; done
-          $STACK build --fast
-
-      - name: Emit temporary cabal.project
-        run: |
-          cd sdist
-          echo 'packages:' >> cabal.project
-          ls *.tar.gz | sed -e 's/\(.*\)\.tar.gz/  \1/' >> cabal.project
-          cat cabal.project
-
-      - name: Install and set ghc 9.2.4 via ghcup
-        run: |
-          ghcup install ghc 9.2.4
-          ghcup set ghc 9.2.4
-
-      - name: Build from tarballs with cabal-install
-        run: |
-          cd sdist
-          cabal v2-update
-          cabal v2-build all
-
-      - name: Upload package tarballs
-        uses: actions/upload-artifact@v3
-        with:
-          name: finkel-srcs
-          path: |
-            sdist/*.tar.gz
-            sdist/stack.yaml
-            sdist/cabal.project
+    needs: pre-job
+    if: ${{ needs.pre-job.outputs.run == 'true' }}
+    uses: ./.github/workflows/sdist.yml

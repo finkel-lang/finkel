@@ -1,0 +1,88 @@
+name: cabal-install
+
+on:
+  workflow_call:
+    inputs:
+      cache-version:
+        description: cache key version
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cabal-install:
+    name: ghc ${{ matrix.plan.ghc }} with ${{ matrix.plan.flags }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          # - macos-latest
+          # - windows-latest
+        plan:
+          - ghc: "9.0.2"
+            cabal: "3.10.3.0"
+            flags: "-O0"
+
+          - ghc: "9.2.8"
+            cabal: "latest"
+            flags: "-O0"
+
+          # Running tests in ghc 9.4.8 was approximately 2x slow than 9.4.7
+          - ghc: "9.4.7"
+            cabal: "latest"
+            flags: "-O0"
+
+          - ghc: "9.4.7"
+            cabal: "latest"
+            flags: "-O2"
+
+    runs-on:
+      - ${{ matrix.os }}
+
+    steps:
+      - name: Checkout project repository
+        uses: actions/checkout@v4
+
+      - name: Cache cabal package database
+        uses: actions/cache@v4
+        with:
+          path: ~/.cabal
+          key: home-dot-cabal-${{ matrix.plan.ghc }}-${{ inputs.cache-version }}
+
+      - name: Setup ghc and cabal-install
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ matrix.plan.ghc }}
+          cabal-version: ${{ matrix.plan.cabal }}
+
+      - name: Show version and paths
+        run: |
+          ghc --version
+          cabal --version
+
+      - name: Update cabal package list
+        run: cabal v2-update
+
+      # XXX: In Windows, use of profiling libraries are not yet supported.
+      - name: Write cabal.project.local with v2-configure (non-windows)
+        if: matrix.os != 'windows-latest'
+        run: cabal v2-configure ${{ matrix.plan.flags }} --test-show-details=streaming
+
+      - name: Write cabal.project.local with v2-configure (windows)
+        if: matrix.os == 'windows-latest'
+        run: cabal v2-configure --disable-library-profiling ${{ matrix.plan.flags }}
+
+      - name: Build dependency packages
+        run: cabal v2-build all -j --only-dependencies
+
+      - name: Build packages
+        run: cabal v2-build all
+
+      - name: Run tests
+        run: cabal v2-test all
+
+      - name: Run haddock
+        run: cabal v2-haddock all

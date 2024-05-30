@@ -1,0 +1,81 @@
+name: sdist
+
+on:
+  workflow_call:
+
+jobs:
+  make-sdist-with-stack:
+    name: Build *.tar.gz made via sdist
+
+    runs-on: ubuntu-latest
+
+    env:
+      STACK: stack --resolver=lts-20
+
+    steps:
+      - name: Checkout git repository
+        uses: actions/checkout@v4
+
+      - name: Show versions
+        run: |
+          stack --version
+          ghc --version
+          cabal --version
+
+      - name: Build finkel-setup
+        # The "finkel-setup" is used by other packages in custom-setup stanza of
+        # cabal configuration, building before running sdist command.
+        run: $STACK build --fast finkel-setup
+
+      - name: Run stack sdist
+        run: |
+          $STACK sdist \
+            finkel-kernel \
+            fkc \
+            fnkpp \
+            finkel-setup \
+            finkel-core \
+            finkel-tool \
+            finkel \
+            --tar-dir sdist
+
+      - name: Emit temporary stack.yaml
+        run: |
+          cd sdist
+          echo 'resolver: lts-0.0' > stack.yaml
+          echo 'packages:' >> stack.yaml
+          ls *.tar.gz | sed -e 's/\(.*\)\.tar.gz/  - \1/' >> stack.yaml
+          cat stack.yaml
+
+      - name: Build from tarballs with stack
+        run: |
+          cd sdist
+          for t in `ls *.tar.gz`; do tar zxvf $t; done
+          $STACK build --fast
+
+      - name: Emit temporary cabal.project
+        run: |
+          cd sdist
+          echo 'packages:' >> cabal.project
+          ls *.tar.gz | sed -e 's/\(.*\)\.tar.gz/  \1/' >> cabal.project
+          cat cabal.project
+
+      - name: Install and set ghc 9.2.8 via ghcup
+        run: |
+          ghcup install ghc 9.2.8
+          ghcup set ghc 9.2.8
+
+      - name: Build from tarballs with cabal-install
+        run: |
+          cd sdist
+          cabal v2-update
+          cabal v2-build all
+
+      - name: Upload package tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: finkel-srcs
+          path: |
+            sdist/*.tar.gz
+            sdist/stack.yaml
+            sdist/cabal.project

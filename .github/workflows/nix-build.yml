@@ -1,0 +1,61 @@
+name: nix-build
+
+on:
+  workflow_call:
+
+jobs:
+  nix-build:
+    name: Build with nix
+    strategy:
+      matrix:
+        include:
+          # - nixpkgs: "channel:nixos-20.03"
+          #   compiler: "ghc865"
+          # - nixpkgs: "channel:nixos-20.09"
+          #   compiler: "ghc884"
+          - nixpkgs: "channel:nixos-22.05"
+            compiler: "ghc8107"
+          # - nixpkgs: "channel:nixos-23.05"
+          #   compiler: "ghc92"
+          # - nixpkgs: "channel:nixos-unstable"
+          #   compiler: "ghc8107"
+          # - nixpkgs: "channel:nixos-unstable"
+          #   compiler: "ghc901"
+
+    runs-on:
+      - ubuntu-latest
+
+    steps:
+      - name: Checkout git repository
+        uses: actions/checkout@v4
+
+      - name: Install nix
+        uses: cachix/install-nix-action@v22
+        with:
+          nix_path: nixpkgs=${{ matrix.nixpkgs }}
+
+      - name: Build with nix-build
+        run: nix-build --argstr compiler ${{ matrix.compiler }}
+
+      - name: Build container image stream
+        # if: matrix.compiler == 'ghc8107' && github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master'
+        run: |
+          nix-build --argstr compiler ${{ matrix.compiler }} ./nix/docker.nix
+          echo "image_stream=$(readlink result)" >> $GITHUB_ENV
+
+      - name: Push image to ghcr.io
+        # if: matrix.compiler == 'ghc8107' && github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master'
+        env:
+          # Below `CRED' was used for credentials for ghcr.io, but not any more
+          # since logging in with GITHUB_TOKEN is working.  May be the
+          # `GHCR_USER' and `GHCR_PAT' variables could be removed from the
+          # secrets.
+          #
+          # CRED: ${{ secrets.GHCR_USER }}:${{ secrets.GHCR_PAT }}
+          FROM: docker-archive:/dev/stdin
+          TO: docker://ghcr.io/${{ github.repository }}:latest
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | skopeo login -u $ --password-stdin ghcr.io
+          ${{ env.image_stream }} | gzip | skopeo --debug copy ${FROM} ${TO}
