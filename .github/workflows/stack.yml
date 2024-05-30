@@ -1,0 +1,90 @@
+name: stack
+
+on:
+  workflow_call:
+    inputs:
+      cache-version:
+        description: cache key version
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  stack:
+    name: ${{ matrix.resolver }} under ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # - os: ubuntu-latest
+          #   resolver: lts-11
+          # - os: ubuntu-latest
+          #   resolver: lts-12
+
+          # - os: ubuntu-latest
+          #   resolver: lts-14
+          # - os: ubuntu-latest
+          #   resolver: lts-16
+          # - os: ubuntu-latest
+          #   resolver: lts-18
+
+          - os: ubuntu-latest
+            resolver: lts-20
+          - os: macos-latest
+            resolver: lts-20
+          - os: windows-latest
+            resolver: lts-20
+
+    env:
+      STACK: stack --resolver=${{ matrix.resolver }}
+
+    runs-on:
+      - ${{ matrix.os }}
+
+    steps:
+      - name: Checkout git repository
+        uses: actions/checkout@v4
+
+      - name: Cache stack related directories
+        uses: 8c6794b6/playing-with-github/.github/actions/setup-stack-cache@main
+        with:
+          cache-key:
+            ${{ matrix.os }}-${{ matrix.resolver }}-${{ inputs.cache-version }}
+
+      - name: Setup haskell
+        uses: haskell-actions/setup@v2
+        with:
+          enable-stack: true
+          stack-no-global: true
+
+      - name: Setup stack
+        run: $STACK setup
+
+      - name: Show versions
+        run: |
+          $STACK --version
+          $STACK exec -- ghc --version
+
+      - name: Install dependency packages
+        run: $STACK build -j 2 --test --only-dependencies
+
+      - name: Build packages
+        run: $STACK build --fast --test --coverage --no-run-tests
+
+      - name: Run tests
+        run: |
+          RESOLVER=${{ matrix.resolver }} $STACK --jobs 1 build \
+          --fast --test --coverage
+
+      - name: Generate coverage report
+        uses: 8c6794b6/hpc-codecov-action@v4
+        with:
+          target: stack:all
+
+      - name: Send coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          name: stack-${{ matrix.os }}-${{ matrix.resolver }}
+          token: ${{ secrets.CODECOV_TOKEN }}
