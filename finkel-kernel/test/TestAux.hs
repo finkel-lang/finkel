@@ -270,7 +270,8 @@ removeArtifacts dir = do
     removeObjAndHi file =
       when (takeExtension file `elem` [ ".o", ".hi"
                                       , ".p_o", ".p_hi"
-                                      , ".dyn_o", ".dyn_hi" ])
+                                      , ".dyn_o", ".dyn_hi"
+                                      , ".hscpp" ])
            (removeFile (dir </> file))
 
 -- | The 'FnkEnv' used for test. Has 'envLibDir' field from CPP header file.
