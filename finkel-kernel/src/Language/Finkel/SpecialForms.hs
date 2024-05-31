@@ -367,15 +367,6 @@ makeMissingHomeMod (L _ idecl) = do
   hsc_env <- getSession
   fnk_env <- getFnkEnv
 
-#if MIN_VERSION_ghc(9,4,0)
-  let getCachedIface = case envInterpModIfaceCache fnk_env of
-        Just mic -> liftIO $ do
-          caches <- iface_clearCache mic
-          mapM_ (iface_addToCache mic) caches
-          pure caches
-        Nothing -> pure []
-#endif
-
   let mname = unLoc lmname
       lmname = reLoc (ideclName idecl)
       invoked = envInvokedMode fnk_env
@@ -408,6 +399,12 @@ makeMissingHomeMod (L _ idecl) = do
       dont_mk = tr
 
 #if MIN_VERSION_ghc(9,4,0)
+  let getCachedIface = case envInterpModIfaceCache fnk_env of
+        Just mic -> liftIO $ do
+          caches <- iface_clearCache mic
+          mapM_ (iface_addToCache mic) caches
+          pure caches
+        Nothing -> pure []
   cached_ifaces <- getCachedIface
   tr ("cached_iface:" : map ppr cached_ifaces)
 #endif
@@ -419,7 +416,7 @@ makeMissingHomeMod (L _ idecl) = do
   -- invoked with "-fno-code" option).
 
   -- Alternate attemps to get incrementally added home modules in ghc 9.6, which
-  -- did not work well:
+  -- did not work ...:
   --
   -- mb_installed_mod <- do
   --   let installed_mod = mkModule (hscActiveUnitId hsc_env) mname
