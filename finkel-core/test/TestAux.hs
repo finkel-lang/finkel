@@ -124,23 +124,24 @@
 
 ;;; Macros
 
-(defmacro expandTo [in out]
-  `(expand-form ,(car in) ',in ',out))
+(defmacro expandTo [in-form out]
+  `(expand-form ,(car in-form) ',in-form ',out))
 
-(defmacro expandFailureWith [in test]
+(defmacro expandFailureWith [in-form test]
   `(let ((= act
-           (do (<- r (runFnk (macroFunction ,(car in) ',in) defaultFnkEnv))
+           (do (<- r (runFnk (macroFunction ,(car in-form) ',in-form)
+                             defaultFnkEnv))
                (seq r (pure r)))))
      (shouldThrow act ,test)))
 
-(defmacro expandFailure [in]
-  `(expandFailureWith ,in anyException))
+(defmacro expandFailure [in-form]
+  `(expandFailureWith ,in-form anyException))
 
-(defmacro expandSatisfy [in test]
-  `(expand-form-satisfies ,(car in) ',in ,test))
+(defmacro expandSatisfy [in-form test]
+  `(expand-form-satisfies ,(car in-form) ',in-form ,test))
 
-(defmacro expandWithPackageDbSatisfy [in test]
-  `(expand-form-with-package-db-satisfies ,(car in) ',in ,test))
+(defmacro expandWithPackageDbSatisfy [in-form test]
+  `(expand-form-with-package-db-satisfies ,(car in-form) ',in-form ,test))
 
-(defmacro expandWithPackageDbFailure [in test]
-  `(expand-form-with-package-db-failure ,(car in) ',in ,test))
+(defmacro expandWithPackageDbFailure [in-form test]
+  `(expand-form-with-package-db-failure ,(car in-form) ',in-form ,test))
