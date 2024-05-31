@@ -32,9 +32,10 @@
 
      ;; finkel-kernel
      (import Language.Finkel.Fnk (getLibDirFromGhc))
+     (import Language.Finkel.Hooks (finkelHooks))
 
      ;; Internal
-     (import Finkel.Core.Plugin (plugin))
+     (import Finkel.Core.Plugin (plugin coreFnkEnv))
 
      (cond-expand
        [(<= 904 :ghc)
@@ -64,15 +65,23 @@
      (defn (:: compile (-> String Spec))
        [file]
        (lept [sp (StaticPlugin (PluginWithArgs plugin []))
-              go (do (<- hsc-env0 getSession)
-                     (void (setSessionDynFlags (hsc-dflags hsc-env0)))
+              go (do (<- hsc-env0
+                       (>>= getSession
+                            (. liftIO (finkelHooks "PluginTest" coreFnkEnv []))))
+                     (setSession hsc-env0)
 
+                     (<- hsc-env0-b getSession)
+
+                     (void (setSessionDynFlags (hsc-dflags hsc-env0-b)))
                      (<- hsc-env1 getSession)
+
                      (setFinkelPlugin hsc-env1 sp)
 
                      (<- hsc-env2 getSession)
-                     (lept [fnk-args ["-F" "-pgmF" "fnkpp" "-fno-code"
-                                      (++ "-i" pdir)]])
+                     (lept [pp-args (cond-expand
+                                      [(<= 906 :ghc) []]
+                                      [otherwise ["-F" "-pgmF" "fnkpp"]])
+                            fnk-args (++ pp-args ["-fno-code" (++ "-i" pdir)])])
                      (<- dflags1 (parseDynFlags hsc-env2 fnk-args))
                      (void (setSessionDynFlags dflags1))
 
