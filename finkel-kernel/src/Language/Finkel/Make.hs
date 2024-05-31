@@ -94,6 +94,7 @@ import           GHC.Driver.Config.Finder          (initFinderOpts)
 import           GHC.Driver.Env                    (hscActiveUnitId,
                                                     hscSetFlags, hsc_HPT,
                                                     hsc_HUG, hsc_units)
+import           GHC.Driver.Hooks                  (Hooks (..))
 import           GHC.Driver.Plugins                (ParsedResult (..),
                                                     PsMessages (..))
 import           GHC.Driver.Session                (GhcLink (..))
@@ -361,7 +362,8 @@ makeFromRequirePlugin lmname = do
       tr [ "ways:" <+> ppr_ways dflags
          , "ways (fnk):" <+> ppr_ways default_dflags
          , "backend:" <+> ppr_backend_name dflags
-         , "backend (fnk):" <+> ppr_backend_name default_dflags ]
+         , "backend (fnk):" <+> ppr_backend_name default_dflags
+         , "allowObjCode:" <+> text (show (allow_obj_code)) ]
     Nothing -> pure ()
 #endif
 
@@ -372,6 +374,19 @@ makeFromRequirePlugin lmname = do
 
   setSession (hsc_env {hsc_targets = new_targets})
   withTmpDynFlags (setExpanding dflags) $ do
+#if MIN_VERSION_ghc(9,4,0)
+    hsc_env1 <- getSession
+    let dflags1 = hsc_dflags hsc_env1
+        num_plugins = length (pluginModNames dflags1)
+        has_phase_hook = case runPhaseHook (hsc_hooks hsc_env1) of
+          Just _ -> "yes"
+          _      -> "no"
+    tr [ "In withTmpDynFlags"
+       , "num_plugins:" <+> text (show num_plugins)
+       , "has_phase_hook:" <+> has_phase_hook
+       , "knot_vars:" <+> ppr (hsc_type_env_vars hsc_env1)
+       , "opt_pp:" <+> text (show (gopt Opt_Pp dflags1)) ]
+#endif
     mg <- depanal [] False
     void (doLoad LoadAllTargets (Just messager) mg)
 
