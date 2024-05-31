@@ -37,11 +37,8 @@
              (\ version _build-tool
                ;; XXX: Always skipping
                (|| is-win
-                   ;; GHC 9.0.x installed via ghcup does not come with profiling
-                   ;; libraries, skipping.
-                   (&& (<= (makeVersion [9 0]) version)
-                       (< version (makeVersion [9 1])))
-                   (<= ghc904 version))))]]
+                   ;; Skipping in ghc >= 9.0 ...
+                   (<= (makeVersion [9 0]) version))))]]
     (before_
      (remove-compiled [(</> dir "hello")])
      (describe "using the finkel executable"
