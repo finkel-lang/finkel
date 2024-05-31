@@ -51,10 +51,14 @@ test-suite test
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
 
-  if impl (ghc >= 8.6.0)
-    build-tool-depends:  fnkpp:fnkpp      == 0.0.0
-    ghc-options:         -F -pgmF fnkpp
-                         -fplugin Finkel.Core.Plugin
+  if impl (ghc >= 9.6)
+    ghc-options:       -fplugin Finkel.Core.Plugin
+                       -keep-hscpp-files
+  else
+    if impl (ghc >= 8.6.0)
+      build-tool-depends:  fnkpp:fnkpp      == 0.0.0
+      ghc-options:         -F -pgmF fnkpp
+                           -fplugin Finkel.Core.Plugin
 
 source-repository head
   type:     git

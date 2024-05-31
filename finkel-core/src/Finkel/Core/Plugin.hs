@@ -3,7 +3,8 @@
 (:doc "GHC plugin for compiling Finkel source codes.")
 
 (module Finkel.Core.Plugin
-  plugin)
+  plugin
+  coreFnkEnv)
 
 ;;; finkel-kernel
 (import Language.Finkel (defaultFnkEnv))
@@ -18,6 +19,10 @@
 
 ;;; Compile time modules
 
+;;; XXX: Workaround for nested use of `:require', requiring all the home unit
+;;; modules from the deepest to the shallowest.
+(:require Finkel.Core.Internal.Stage1)
+(:require Finkel.Core.Internal.Stage2)
 (:require Finkel.Core)
 
 (:eval-when-compile
@@ -33,13 +38,16 @@ This plugin could not be loaded before the /downsweep/ phase of the ghc
 compilation manager, need other way to parse the module header to resolve the
 home package module dependencies.")
 (:: plugin Plugin)
-(= plugin
+(= plugin (pluginWith "Finkel.Core.Plugin" coreFnkEnv))
+
+(:doc "The `FnkEnv' containing the macros from `Finkel.Core'.")
+(:: coreFnkEnv FnkEnv)
+(= coreFnkEnv
   (macrolet [(core-macros ()
                `[,@(map (\mac `(, ,mac ,(make-symbol mac)))
-                        (exported-macros Finkel.Core))] )]
-    (let ((= myFnkEnv (defaultFnkEnv {(= envMacros myMacros)
-                                      (= envDefaultMacros myMacros)
-                                      (= envInvokedMode GhcPluginMode)}))
-          (= coreMacros (makeEnvMacros (core-macros)))
+                        (exported-macros Finkel.Core))])]
+    (let ((= coreMacros (makeEnvMacros (core-macros)))
           (= myMacros (mergeMacros specialForms coreMacros)))
-      (pluginWith "Finkel.Core.Plugin" myFnkEnv))))
+      (defaultFnkEnv {(= envMacros myMacros)
+                      (= envDefaultMacros myMacros)
+                      (= envInvokedMode GhcPluginMode)}))))

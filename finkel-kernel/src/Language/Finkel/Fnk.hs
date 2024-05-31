@@ -16,6 +16,7 @@ module Language.Finkel.Fnk
   , EnvMacros
   , FlagSet
   , runFnk
+  , runFnk'
   , toGhc
   , fromGhc
   , emptyFnkEnv
@@ -131,7 +132,7 @@ import           GHC_Data_FastString          (FastString, fsLit, uniqueOfFS,
 import           GHC_Driver_Env_Types         (HscEnv (..))
 import           GHC_Driver_Main              (Messager, batchMsg)
 import           GHC_Driver_Monad             (Ghc (..), GhcMonad (..),
-                                               modifySession)
+                                               Session (..), modifySession)
 import           GHC_Driver_Ppr               (showSDocForUser)
 import           GHC_Driver_Session           (DynFlags (..), GeneralFlag (..),
                                                GhcLink (..), HasDynFlags (..),
@@ -149,10 +150,10 @@ import           GHC_Types_Unique_Supply      (MonadUnique (..), UniqSupply,
                                                takeUniqFromSupply)
 import           GHC_Types_Var                (varType)
 import           GHC_Utils_CliOption          (showOpt)
-import           GHC_Utils_Outputable         (SDoc, alwaysQualify,
-                                               defaultErrStyle, neverQualify,
-                                               ppr, printSDocLn, sep, text,
-                                               vcat, (<+>))
+import           GHC_Utils_Outputable         (Outputable (..), SDoc,
+                                               alwaysQualify, defaultErrStyle,
+                                               neverQualify, ppr, printSDocLn,
+                                               sep, text, vcat, (<+>))
 import qualified GHC_Utils_Ppr                as Pretty
 
 #if MIN_VERSION_ghc(9,6,0)
@@ -264,6 +265,11 @@ data FnkInvokedMode
   -- ^ Standalone executable mode.
   | GhcPluginMode
   -- ^ GHC plugin mode.
+
+instance Outputable FnkInvokedMode where
+  ppr im = case im of
+    ExecMode      -> "exec"
+    GhcPluginMode -> "ghc-plugin"
 
 -- | Environment state in 'Fnk'.
 data FnkEnv = FnkEnv
@@ -456,11 +462,23 @@ instance GhcMonad Fnk where
   {-# INLINE setSession #-}
 
 -- | Run 'Fnk' with given environment.
+--
+-- Internally calls 'initFnkEnv' and 'runGhc'.
 runFnk :: Fnk a -> FnkEnv -> IO a
 runFnk m fnk_env0 = do
   fnk_env1 <- initFnkEnv fnk_env0
   ref <- newIORef fnk_env1
   runGhc (envLibDir fnk_env1) (toGhc m (FnkEnvRef ref))
+
+-- | Run 'Fnk' with given 'FnkEnv' and 'HscEnv'.
+--
+-- This function does /NOT/ call 'initFnkEnv', uses 'unGhc' instead of 'runGhc'.
+runFnk' :: Fnk a -> FnkEnv -> HscEnv -> IO a
+runFnk' m fnk_env hsc_env = do
+  fer <- FnkEnvRef <$> newIORef fnk_env
+  session <- Session <$> newIORef hsc_env
+  unGhc (toGhc m fer) session
+{-# INLINABLE runFnk' #-}
 
 -- | Extract 'Ghc' from 'Fnk'.
 toGhc :: Fnk a -> FnkEnvRef -> Ghc a

@@ -49,7 +49,7 @@ import           GHC_Driver_Session              (DynFlags (..),
                                                   setGeneralFlag', updOptLevel)
 import           GHC_Types_SrcLoc                (GenLocated (..))
 import           GHC_Utils_Outputable            (Outputable (..), SDoc, cat,
-                                                  fsep, nest, vcat)
+                                                  fsep, nest, vcat, (<+>))
 #if MIN_VERSION_ghc(9,6,0)
 import           GHC.Driver.Backend              (backendWritesFiles)
 import           GHC.Driver.Session              (topDir, unSetGeneralFlag')
@@ -117,6 +117,10 @@ import           Language.Finkel.Form
 withExpanderSettings :: Fnk a -> Fnk a
 withExpanderSettings act = do
   fnk_env <- getFnkEnv
+
+  debugWhen fnk_env Fnk_trace_expand
+    ["withExpanderSettings: envInvokedMode:" <+> ppr (envInvokedMode fnk_env)]
+
   case envInvokedMode fnk_env of
     ExecMode      -> withExpanderSettingsE act
     GhcPluginMode -> withExpanderSettingsG act
@@ -143,7 +147,7 @@ withExpanderSettingsE act =
       case envSessionForExpand fnk_env of
         Just he -> setSession $! discardInteractiveContext he
         Nothing -> do
-          he1 <- newHscEnvForExpand hsc_env_old
+          he1 <- newHscEnvForExpand fnk_env hsc_env_old
           setSession he1
           postSetSession
           he2 <- getSession
@@ -168,8 +172,8 @@ withExpanderSettingsE act =
 -- Adjusting the 'DynFlags' used by the macro expansion session, to support
 -- evaluating expressions in dynamic and non-dynamic builds of the Finkel
 -- compiler executable.
-newHscEnvForExpand :: MonadIO m => HscEnv -> m HscEnv
-newHscEnvForExpand orig_hsc_env = do
+newHscEnvForExpand :: MonadIO m => FnkEnv -> HscEnv -> m HscEnv
+newHscEnvForExpand fnk_env orig_hsc_env = do
   let dflags0 = hsc_dflags orig_hsc_env
       -- XXX: Constantly updating the backend to interpreter, the original
       -- backend information is gone. If the 'bcoDynFlags' was not applied,
@@ -179,6 +183,10 @@ newHscEnvForExpand orig_hsc_env = do
                    then removeWayDyn dflags1
                    else dflags1
 
+  debugWhen' (hsc_dflags orig_hsc_env) fnk_env Fnk_trace_expand
+    [ "newHscEnvForExpand.hsc_targets"
+    , nest 2 (fsep (map ppr (hsc_targets orig_hsc_env)))]
+
 #if MIN_VERSION_ghc(9,6,0)
   -- In ghc 9.6, arguments of newHscEnv takes top directory of ghc library path.
   new_hsc_env_0 <- liftIO $! newHscEnv (topDir dflags2) dflags2
@@ -187,8 +195,10 @@ newHscEnvForExpand orig_hsc_env = do
 #endif
 #if MIN_VERSION_ghc(9,4,0)
   -- From ghc 9.4, plugins (loaded and static) are stored in HscEnv instead of
-  -- DynFlags. Updating the hsc_plugins field from old hsc_env value.
-  let new_hsc_env_1 = new_hsc_env_0 {hsc_plugins = hsc_plugins orig_hsc_env}
+  -- DynFlags. Updating the hsc_plugins and hsc_hooks fields from old hsc_env
+  -- value.
+  let new_hsc_env_1 = new_hsc_env_0 { hsc_plugins = hsc_plugins orig_hsc_env
+                                    , hsc_hooks = hsc_hooks orig_hsc_env }
 #elif MIN_VERSION_ghc(9,2,0)
   -- From ghc 9.2, hsc_env has separate fields for loaded plugins and static
   -- plugins.
@@ -205,9 +215,11 @@ newHscEnvForExpand orig_hsc_env = do
 withExpanderSettingsG :: Fnk a -> Fnk a
 withExpanderSettingsG act = do
   dflags <- getDynFlags
+  fnk_env <- getFnkEnv
+  let tr = debugWhen' dflags fnk_env Fnk_trace_expand
   if isExpanding dflags
-    then act
-    else withGlobalSession act
+    then tr ["withExpanderSettingsG: id"] >> act
+    else tr ["withExpanderSettingsG: withGlobalSession"] >> withGlobalSession act
 
 -- Note: [Global HscEnv for plugin]
 -- --------------------------------
@@ -223,6 +235,7 @@ withExpanderSettingsG act = do
 withGlobalSession :: Fnk a -> Fnk a
 withGlobalSession act0 = do
   fer <- Fnk pure
+  fenv0 <- getFnkEnv
   orig_hsc_env <- getSession
 
   let prepare = initializeGlobalSession
@@ -237,12 +250,17 @@ withGlobalSession act0 = do
         modifyFnkEnv (\e -> e { envSessionForExpand = Just mex2 })
         fnk_env <- getFnkEnv
         pure (retval, fnk_env)
+      tr = debugWhen' (hsc_dflags orig_hsc_env) fenv0 Fnk_trace_expand
 
   (retval, fnk_env) <- liftIO $ do
     modifyMVar globalSessionVar $ \mb_s0 -> do
       s1@(Session r1) <- case mb_s0 of
-        Just s0 -> pure s0
-        Nothing -> newHscEnvForExpand orig_hsc_env >>= fmap Session . newIORef
+        Just s0 -> do
+          tr ["withGlobalsession: global session already initialized"]
+          pure s0
+        Nothing -> do
+          tr ["withGlobalsession: invoking newHscEnvForExpand"]
+          newHscEnvForExpand fenv0 orig_hsc_env >>= fmap Session . newIORef
       (retval, fnk_env) <- unGhc (toGhc act1 fer) s1
       for_ (envSessionForExpand fnk_env) $ \he ->
         atomicModifyIORef' r1 (const (he, ()))

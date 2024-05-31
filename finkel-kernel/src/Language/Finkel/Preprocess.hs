@@ -2,18 +2,17 @@
 -- Module header preprocessor
 
 module Language.Finkel.Preprocess
-  ( -- Options
-    FnkSrcOptions(..)
-  , defaultFnkSrcOptions
-  , fromFnkSrcOptions
-
+  (
     -- Preprocessor functions
-  , defaultPreprocess
+    defaultPreprocess
   , defaultPreprocessEnv
   , defaultPreprocessWith
 
     -- Auxiliary
   , preprocessOrCopy
+  , PpOptions(..)
+  , ppOptions
+  , mkPpOptions
   ) where
 
 #include "ghc_modules.h"
@@ -23,12 +22,15 @@ import Control.Exception                 (Exception (..), throw)
 import Control.Monad                     (when)
 import Control.Monad.IO.Class            (MonadIO (..))
 import Data.Char                         (toLower)
+import Data.IORef                        (newIORef)
 import Data.List                         (foldl')
 import Data.Maybe                        (fromMaybe)
 import System.Console.GetOpt             (ArgDescr (..), ArgOrder (..),
                                           OptDescr (..), getOpt, usageInfo)
 import System.Environment                (getArgs, getProgName)
 import System.Exit                       (exitFailure)
+import System.IO                         (IOMode (..), hPutStrLn, stderr,
+                                          stdout, withFile)
 
 #if MIN_VERSION_base(4,11,0)
 import Prelude                           hiding ((<>))
@@ -36,13 +38,13 @@ import Prelude                           hiding ((<>))
 
 -- directory
 import System.Directory                  (copyFile)
-import System.IO                         (IOMode (..), hPutStrLn, stderr,
-                                          stdout, withFile)
 
 -- ghc
 import GHC_Data_Bag                      (unitBag)
 import GHC_Data_FastString               (fsLit)
 import GHC_Data_StringBuffer             (StringBuffer, hGetStringBuffer)
+import GHC_Driver_Env                    (HscEnv (..))
+import GHC_Driver_Monad                  (Ghc (..), Session (..))
 import GHC_Types_SrcLoc                  (GenLocated (..))
 import GHC_Utils_Outputable              (text, ($$), (<>))
 
@@ -69,20 +71,25 @@ import Language.Finkel.Emit              (Hsrc (..), putHsSrc)
 import Language.Finkel.Exception         (FinkelException (..),
                                           handleFinkelException,
                                           readOrFinkelException)
-import Language.Finkel.Expand            (expands)
-import Language.Finkel.Fnk               (FnkEnv (..), Macro (..), addMacro,
-                                          lookupMacro, macroFunction,
+import Language.Finkel.Expand            (expands, withExpanderSettings)
+import Language.Finkel.Fnk               (FnkEnv (..), FnkEnvRef (..),
+                                          FnkInvokedMode (..), Macro (..),
+                                          addMacro, lookupMacro, macroFunction,
                                           makeEnvMacros, mergeMacros,
                                           modifyFnkEnv, printFinkelException,
-                                          runFnk)
+                                          runFnk, toGhc)
 import Language.Finkel.Form              (Form (..), LForm (..), aSymbol,
                                           unCode)
-import Language.Finkel.Make.Summary      (buildHsSyn)
+import Language.Finkel.Make.Summary      (buildHsSyn, withTiming')
 import Language.Finkel.Make.TargetSource (findPragmaString)
 import Language.Finkel.Reader            (parseSexprs)
 import Language.Finkel.SpecialForms      (defaultFnkEnv, emptyForm,
                                           specialForms)
 import Language.Finkel.Syntax            (parseHeader, parseModule)
+
+import Language.Finkel.Options           (FnkSrcOptions (..),
+                                          defaultFnkSrcOptions,
+                                          fromFnkSrcOptions)
 
 
 -- ------------------------------------------------------------------------
@@ -126,7 +133,7 @@ defaultPreprocessWith fnk_env args =
       me <- getProgName
       let ppo = foldl' (flip id) myPpOptions opts
           myPpOptions = mkPpOptions me fnk_env
-          go = preprocessOrCopy ppo
+          go = preprocessOrCopy Nothing ppo
       if ppoHelp ppo
         then printUsage
         else do
@@ -149,20 +156,23 @@ defaultPreprocessWith fnk_env args =
 -- | Preprocess Finkel source code file with given 'FnkEnv', or copy
 -- the file if the file was a Haskell source code.
 preprocessOrCopy
-  :: PpOptions
+  :: Maybe HscEnv
+  -- ^ Environment used for expanding macros.
+  -> PpOptions
   -- ^ Pre-processor options.
   -> FilePath
   -- ^ Path of input Finkel source code.
   -> Maybe FilePath
   -- ^ 'Just' path to write preprocessed output, or 'Nothing' for 'stdout'.
   -> IO ()
-preprocessOrCopy ppo isrc mb_opath = do
+preprocessOrCopy mb_hsc_env ppo isrc mb_opath = do
   buf <- hGetStringBuffer isrc
   if not (ppoIgnore ppo) && findPragmaString (ppoPragma ppo) buf
     then do
       let opath = fromMaybe "stdout" mb_opath
       debug ppo 2 ("Preprocessing " ++ isrc ++ " to " ++ opath)
-      writeModule ppo buf isrc mb_opath
+      writeModule mb_hsc_env ppo buf isrc mb_opath
+      debug ppo 2 ("Finished wriitng " ++ isrc ++ " to " ++ opath)
     else do
       debug ppo 2 ("Skipping " ++ isrc)
       mapM_ (copyFile isrc) mb_opath
@@ -190,23 +200,35 @@ printUsage = do
   putStrLn (usageInfo header ppOptions)
 
 writeModule
-  :: PpOptions -> StringBuffer -> FilePath -> Maybe FilePath -> IO ()
-writeModule ppo buf0 ipath mb_opath =
+  :: Maybe HscEnv -> PpOptions -> StringBuffer -> FilePath -> Maybe FilePath
+  -> IO ()
+writeModule mb_hsc_env ppo buf0 ipath mb_opath =
   case mb_opath of
-    Just opath -> withFile opath WriteMode run
     Nothing    -> run stdout
+    Just opath -> withFile opath WriteMode run
   where
-    run hdl = runFnk (go hdl) fnk_env
+    run hdl =
+      case mb_hsc_env of
+        Nothing -> runFnk (go hdl) fnk_env
+        Just hsc_env -> do
+          -- Assuming that the given FnkEnv is already initialized at this
+          -- point.
+          fer <- newIORef fnk_env
+          session <- Session <$> newIORef hsc_env
+          unGhc (toGhc (go hdl) (FnkEnvRef fer)) session
     fnk_env = (ppoFnkEnv ppo) {envVerbosity=ppoVerbosity ppo}
     parser = if ppoFull ppo
                 then parseModule
                 else parseHeader
     warn_interp_macros = 0 < ppoVerbosity ppo && ppoWarnInterp ppo
-    go hdl = handleFinkelException handler $ do
+    go hdl = withTiming' "writeModule" $ handleFinkelException handler $ do
       when warn_interp_macros $
         modifyFnkEnv (replaceWithWarnings interpMacros)
       (forms0, sp) <- parseSexprs (Just ipath) buf0
-      forms1 <- expands forms0
+      let wrap = case envInvokedMode fnk_env of
+            ExecMode      -> id
+            GhcPluginMode -> withExpanderSettings
+      forms1 <- wrap $ expands forms0
       mdl <- buildHsSyn parser forms1
       putHsSrc hdl sp (Hsrc mdl)
     handler e = do
@@ -216,7 +238,7 @@ writeModule ppo buf0 ipath mb_opath =
 debug :: MonadIO m => PpOptions -> Int -> String -> m ()
 debug ppo level msg =
   when (level < ppoVerbosity ppo) $
-    liftIO (putStrLn (ppoExecName ppo ++ ": " ++ msg))
+    liftIO (hPutStrLn stderr (ppoExecName ppo ++ ": " ++ msg))
 
 
 -- ------------------------------------------------------------------------
@@ -310,42 +332,6 @@ replaceWithWarnings names fnk_env = fnk_env {envMacros=added}
 
       -- Deleget to the original function
       macroFunction macro form
-
-
--- ------------------------------------------------------------------------
---
--- Options for finkel source code
---
--- ------------------------------------------------------------------------
-
-data FnkSrcOptions = FnkSrcOptions
-  { fsrcPragma :: !String
-    -- ^ String to be searched at the beginning section of a file to detect
-    -- Finkel source code.
-  , fsrcIgnore :: !Bool
-    -- ^ Flag for ignoring the given file.
-  }
-
-defaultFnkSrcOptions :: FnkSrcOptions
-defaultFnkSrcOptions = FnkSrcOptions
-  { fsrcPragma = ";;;"
-  , fsrcIgnore = False
-  }
-
-fnkSrcOptions :: [OptDescr (FnkSrcOptions -> FnkSrcOptions)]
-fnkSrcOptions =
-  [ Option [] ["pragma"]
-    (ReqArg (\i o -> o {fsrcPragma = i}) "STR")
-    (unlines [ "Searched string to detect Finkel source file."
-             , "(default: " ++ fsrcPragma defaultFnkSrcOptions ++ ")" ])
-  , Option [] ["ignore"]
-    (NoArg (\o -> o {fsrcIgnore = True}))
-    "Ignore this file."
-  ]
-
-fromFnkSrcOptions :: ((FnkSrcOptions -> FnkSrcOptions) -> a) -> [OptDescr a]
-fromFnkSrcOptions f = map (fmap f) fnkSrcOptions
-
 
 -- ------------------------------------------------------------------------
 --
