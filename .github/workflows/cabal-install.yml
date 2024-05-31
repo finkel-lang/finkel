@@ -30,12 +30,16 @@ jobs:
             cabal: "latest"
             flags: "-O0"
 
-          # Running tests in ghc 9.4.8 was approximately 2x slow than 9.4.7
+          # Running tests in ghc 9.4.8 was approximately 2x slower than 9.4.7
           - ghc: "9.4.7"
             cabal: "latest"
             flags: "-O0"
 
-          - ghc: "9.4.7"
+          - ghc: "9.6.5"
+            cabal: "latest"
+            flags: "-O0"
+
+          - ghc: "9.6.5"
             cabal: "latest"
             flags: "-O2"
 
@@ -63,17 +67,13 @@ jobs:
           ghc --version
           cabal --version
 
-      - name: Update cabal package list
-        run: cabal v2-update
+      # # XXX: In Windows, use of profiling libraries are not yet supported.
+      # - name: Write cabal.project.local with v2-configure (windows)
+      #   if: matrix.os == 'windows-latest'
+      #   run: cabal v2-configure --disable-library-profiling ${{ matrix.plan.flags }}
 
-      # XXX: In Windows, use of profiling libraries are not yet supported.
-      - name: Write cabal.project.local with v2-configure (non-windows)
-        if: matrix.os != 'windows-latest'
+      - name: Write cabal.project.local with v2-configure
         run: cabal v2-configure ${{ matrix.plan.flags }} --test-show-details=streaming
-
-      - name: Write cabal.project.local with v2-configure (windows)
-        if: matrix.os == 'windows-latest'
-        run: cabal v2-configure --disable-library-profiling ${{ matrix.plan.flags }}
 
       - name: Build dependency packages
         run: cabal v2-build all -j --only-dependencies
@@ -85,4 +85,6 @@ jobs:
         run: cabal v2-test all
 
       - name: Run haddock
+        # Generating haddock documentations is not working yet in 9.6.5 ...
+        if: ${{ matrix.plan.ghc != '9.6.5' }}
         run: cabal v2-haddock all
