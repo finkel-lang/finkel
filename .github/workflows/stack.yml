@@ -31,11 +31,11 @@ jobs:
           #   resolver: lts-18
 
           - os: ubuntu-latest
-            resolver: lts-20
+            resolver: lts-22
           - os: macos-latest
-            resolver: lts-20
+            resolver: lts-22
           - os: windows-latest
-            resolver: lts-20
+            resolver: lts-22
 
     env:
       STACK: stack --resolver=${{ matrix.resolver }}
@@ -54,7 +54,7 @@ jobs:
             ${{ matrix.os }}-${{ matrix.resolver }}-${{ inputs.cache-version }}
 
       - name: Setup haskell
-        uses: haskell-actions/setup@v2
+        uses: haskell-actions/setup@v2.7.3
         with:
           enable-stack: true
           stack-no-global: true
