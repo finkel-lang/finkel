@@ -55,7 +55,7 @@ test-suite finkel-setup-test
                      , finkel-setup
                        --
                      , ghc           >= 8.2.0 && < 9.7
-                     , hspec         >= 2.4.8 && < 2.11
+                     , hspec         >= 2.4.8 && < 2.12
   build-tool-depends:  fkc:fkc
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
