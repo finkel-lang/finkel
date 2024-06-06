@@ -982,7 +982,7 @@ paths from import directories."
         (<- (, dflags1 leftovers warns)
           (parseDynamicFlagsCmdLine dflags0 (map onTheREPL hs-flags)))
         (liftIO
-         (do (handle-flag-warnings hsc-env dflags1 warns)
+         (do (print-or-throw-diagnostics hsc-env dflags1 warns)
              (unless (null leftovers)
                (putStrLn
                 (++ "Some flags have not been recognized: "
