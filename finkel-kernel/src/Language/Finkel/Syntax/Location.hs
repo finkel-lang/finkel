@@ -25,11 +25,11 @@ import           HsExtension                       (IdP)
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Parser.Annotation             (LocatedA, LocatedL,
-                                                    LocatedN, SrcSpanAnn' (..),
-                                                    SrcAnn, addCLocA, addCLocAA,
-                                                    combineLocsA, getLocA,
-                                                    la2la, noAnnSrcSpan, reLoc,
-                                                    reLocA)
+                                                    LocatedN, SrcAnn,
+                                                    SrcSpanAnn' (..), addCLocA,
+                                                    addCLocAA, combineLocsA,
+                                                    getLocA, la2la,
+                                                    noAnnSrcSpan, reLoc, reLocA)
 import           GHC.Types.SrcLoc                  (noSrcSpan)
 #elif MIN_VERSION_ghc(9,0,0)
 import           GHC.Types.SrcLoc                  (addCLoc, getLoc)
@@ -155,8 +155,8 @@ type LIdP a = Located a
 
 -- Function defined in 'HsUtils', not exported.
 mkLocatedList ::  [Located a] -> Located [Located a]
-mkLocatedList [] = noLoc []
-mkLocatedList ms = L (combineLocs (head ms) (last ms)) ms
+mkLocatedList []        = noLoc []
+mkLocatedList ms@(hd:_) = L (combineLocs hd (last ms)) ms
 {-# INLINABLE mkLocatedList #-}
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -164,8 +164,8 @@ mkLocatedListA
   :: Semigroup a
   => [GenLocated (SrcAnn a) e]
   -> GenLocated (SrcAnn a) [GenLocated (SrcAnn a) e]
-mkLocatedListA [] = L (SrcSpanAnn unused noSrcSpan) []
-mkLocatedListA ms = L (combineLocsA (head ms) (last ms)) ms
+mkLocatedListA []        = L (SrcSpanAnn unused noSrcSpan) []
+mkLocatedListA ms@(hd:_) = L (combineLocsA hd (last ms)) ms
 #else
 mkLocatedListA :: [Located a] -> Located [Located a]
 mkLocatedListA = mkLocatedList

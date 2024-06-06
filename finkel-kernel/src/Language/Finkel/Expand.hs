@@ -50,6 +50,10 @@ import           GHC_Driver_Session              (DynFlags (..),
 import           GHC_Types_SrcLoc                (GenLocated (..))
 import           GHC_Utils_Outputable            (Outputable (..), SDoc, cat,
                                                   fsep, nest, vcat, (<+>))
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Driver.DynFlags             (ParMakeCount (..))
+#endif
+
 #if MIN_VERSION_ghc(9,6,0)
 import           GHC.Driver.Backend              (backendWritesFiles)
 import           GHC.Driver.Session              (topDir, unSetGeneralFlag')
@@ -325,8 +329,13 @@ globalSessionVar = unsafePerformIO (newMVar Nothing)
 -- | Modify given 'DynFlags' as in macro expansion state.
 setExpanding :: DynFlags -> DynFlags
 setExpanding dflags0 =
-  let dflags1 = dflags0 {parMakeCount = Just 1}
-      raw_settings = rawSettings dflags1
+  let raw_settings = rawSettings dflags0
+#if MIN_VERSION_ghc(9,8,0)
+      dflags1 = dflags0 {parMakeCount = Just (ParMakeThisMany 1)}
+#else
+      dflags1 = dflags0 {parMakeCount = Just 1}
+#endif
+
 #if MIN_VERSION_ghc(8,10,0)
       dflags2 = dflags1 {rawSettings = expandingKey : raw_settings}
 #else

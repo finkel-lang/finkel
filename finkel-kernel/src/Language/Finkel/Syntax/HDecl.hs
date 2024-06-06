@@ -47,6 +47,10 @@ import GHC_Types_Name_Occurrence        (dataName, tcName)
 import GHC_Types_Name_Reader            (RdrName, mkUnqual)
 import GHC_Types_SrcLoc                 (GenLocated (..), Located, getLoc,
                                          noLoc, unLoc)
+#if MIN_VERSION_ghc(9,8,0)
+import GHC.Data.FastString              (fsLit)
+import Language.Haskell.Syntax.Type     (HsBndrVis (..))
+#endif
 
 #if MIN_VERSION_ghc(9,6,0)
 import GHC.Parser.Annotation            (noAnn)
@@ -124,6 +128,7 @@ import PlaceHolder                      (PlaceHolder (..), placeHolderNames)
 
 -- Internal
 import Language.Finkel.Builder
+import Language.Finkel.Data.SourceText
 import Language.Finkel.Form
 import Language.Finkel.Syntax.HBind
 import Language.Finkel.Syntax.HType
@@ -141,14 +146,14 @@ import Language.Finkel.Syntax.HPat
 -- ---------------------------------------------------------------------
 
 b_dataD :: Code
-        -> (FastString, [HTyVarBndr], Maybe HKind)
+        -> (FastString, [HTyVarBndrVis], Maybe HKind)
         -> (HDeriving, [HConDecl])
         -> HDecl
 b_dataD = mkNewtypeOrDataD DataType
 {-# INLINABLE b_dataD #-}
 
 b_newtypeD :: Code
-           -> (FastString, [HTyVarBndr], Maybe HKind)
+           -> (FastString, [HTyVarBndrVis], Maybe HKind)
            -> (HDeriving, [HConDecl])
            -> HDecl
 b_newtypeD = mkNewtypeOrDataD NewType
@@ -156,7 +161,7 @@ b_newtypeD = mkNewtypeOrDataD NewType
 
 mkNewtypeOrDataD :: NewOrData
                  -> Code
-                 -> (FastString, [HTyVarBndr], Maybe HKind)
+                 -> (FastString, [HTyVarBndrVis], Maybe HKind)
                  -> (HDeriving, [HConDecl])
                  -> HDecl
 mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
@@ -201,7 +206,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
 {-# INLINABLE mkNewtypeOrDataD #-}
 
 b_typeD :: Code
-        -> (FastString, [HTyVarBndr], Maybe HKind)
+        -> (FastString, [HTyVarBndrVis], Maybe HKind)
         -> HType
         -> HDecl
 b_typeD (LForm (L l _)) (name, tvs, _) ty = lA l (tyClD synonym)
@@ -219,7 +224,7 @@ b_typeD (LForm (L l _)) (name, tvs, _) ty = lA l (tyClD synonym)
 {-# INLINABLE b_typeD #-}
 
 b_standaloneKindSigD
-  :: Code -> (FastString, [HTyVarBndr], Maybe HKind) -> Builder HDecl
+  :: Code -> (FastString, [a], Maybe HKind) -> Builder HDecl
 #if MIN_VERSION_ghc(8,10,0)
 b_standaloneKindSigD (LForm (L l _)) (name, _tvs, mb_knd) =
   -- StandaloneKindSignature is not supported in ghc < 8.10.  Also the arguments
@@ -451,7 +456,11 @@ b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
 b_classD (tys,ty) decls = do
     cd <- cvBindsAndSigs (toOL decls)
     let
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,8,0)
+        -- XXX: Does not support HsBndrInvisible
+        userTV = UserTyVar NOEXT HsBndrRequired
+        kindedTV = KindedTyVar NOEXT HsBndrRequired
+#elif MIN_VERSION_ghc(9,0,0)
         userTV = UserTyVar NOEXT ()
         kindedTV = KindedTyVar NOEXT ()
 #else
@@ -477,8 +486,10 @@ b_classD (tys,ty) decls = do
     -- Note that the `bndrs' are gathered from left to right,
     -- re-ordering with reverse and removing the duplicated head at this
     -- point.
-    let bndrs' = tail (reverse bndrs)
-        cls = ClassDecl { tcdLName = name
+    bndrs' <- case reverse bndrs of
+                []   -> builderError
+                _:tl -> pure tl
+    let cls = ClassDecl { tcdLName = name
 #if MIN_VERSION_ghc(9,6,0)
                         , tcdLayout = NoLayoutInfo
 #endif
@@ -535,13 +546,13 @@ b_instD mb_overlap (ctxts,ty@(L l _)) decls = do
   return (L l (instD (clsInstD decl)))
 {-# INLINABLE b_instD #-}
 
-b_datafamD :: Code -> (FastString, [HTyVarBndr], Maybe HType) -> HDecl
+b_datafamD :: Code -> (FastString, [HTyVarBndrVis], Maybe HType) -> HDecl
 b_datafamD = mkFamilyDecl DataFamily
 {-# INLINABLE b_datafamD #-}
 
 b_tyfamD :: [(Located FastString, [HType], HType)]
          -> Code
-         -> (FastString, [HTyVarBndr], Maybe HType)
+         -> (FastString, [HTyVarBndrVis], Maybe HType)
          -> HDecl
 b_tyfamD insts =
   if null insts
@@ -557,7 +568,7 @@ b_tyfamD insts =
 -- See: "RdrHsSyn.mkFamDecl" and 'Convert.cvtDec'.
 mkFamilyDecl :: FamilyInfo PARSED
              -> Code
-             -> (FastString, [HTyVarBndr], Maybe HType)
+             -> (FastString, [HTyVarBndrVis], Maybe HType)
              -> HDecl
 mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
   let fam = FamilyDecl
@@ -681,7 +692,11 @@ b_overlapP (LForm (L _ (List [LForm (L l (Atom (ASymbol mode)))]))) =
     pragma con = Just (L l (con stxt))
     -- XXX: Adding extra pragma comment header to support translation to
     -- Haskell source code.
+#if MIN_VERSION_ghc(9,8,0)
+    stxt = SourceText (fsLit "{-# " <> mode)
+#else
     stxt = SourceText ("{-# " ++ unpackFS mode)
+#endif
 b_overlapP _ = builderError
 {-# INLINABLE b_overlapP #-}
 
@@ -712,9 +727,9 @@ b_fixityD dir (LForm (L l form)) syms =
               _                   -> builderError
           fixity = Fixity dir' (fromIntegral n) dir
           dir' = case dir of
-                   InfixL -> SourceText "infixl"
-                   InfixR -> SourceText "infixr"
-                   InfixN -> SourceText "infix"
+                   InfixL -> strToSourceText "infixl"
+                   InfixR -> strToSourceText "infixr"
+                   InfixN -> strToSourceText "infix"
       names <- mapM lname syms
       return (lA l (sigD (mkFixSig names fixity)))
     _ -> builderError
@@ -731,7 +746,7 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty)
       source =
          case ename' of
             "" -> L l NoSourceText
-            _  -> L l (quotedSourceText ename')
+            _  -> L l (toQuotedSourceText ename'_fs)
       safety = fromMaybe (noLoc PlaySafe) mb_safety
       forD = ForD NOEXT
   in case unCode imp_or_exp of
@@ -757,7 +772,11 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty)
 #endif
                                , fd_fe = e }
             ces = CExportStatic stxt ename'_fs (unLoc ccnv)
+#if MIN_VERSION_ghc(9,8,0)
+            stxt = SourceText ename'_fs
+#else
             stxt = SourceText ename'
+#endif
 #if MIN_VERSION_ghc(9,6,0)
             e = CExport (L l stxt) (L l ces)
 #else
@@ -876,13 +895,13 @@ b_inlineD ispec mb_act (LForm (L l form)) =
   where
     ipragma = mkInlinePragma stxt (ispec', FunLike) mb_act
     source =
-      case ispec'' (SourceText "") of
+      case ispec'' (strToSourceText "") of
         NoInline {}  -> "{-# NOINLINE"
         Inlinable {} -> "{-# INLINABLE"
         _            -> "{-# INLINE"
-    stxt = SourceText source
+    stxt = strToSourceText source
 #if MIN_VERSION_ghc(9,4,0)
-    ispec' = ispec (SourceText source)
+    ispec' = ispec stxt
     ispec'' = ispec
 #else
     ispec' = ispec
@@ -900,7 +919,7 @@ b_activation f code@(LForm (L _l atom))
   , [(n,"")] <- reads rest = return (f source n)
   | otherwise = builderError
   where
-    source = SourceText (show code)
+    source = strToSourceText (show code)
 {-# INLINABLE b_activation #-}
 
 b_specializeD :: Code -> Maybe Activation -> (Code, HType) -> Builder HDecl
@@ -912,7 +931,7 @@ b_specializeInlineD :: Code -> Maybe Activation -> (Code, HType)
 #if MIN_VERSION_ghc(9,4,0)
 b_specializeInlineD =
   let str = "{-# SPECIALISE INLINE"
-  in  specializeBuilder (Inline (SourceText str)) str
+  in  specializeBuilder (Inline (strToSourceText str)) str
 #else
 b_specializeInlineD = specializeBuilder Inline "{-# SPECIALISE INLINE"
 #endif
@@ -925,7 +944,7 @@ specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig)
   | LForm (L ln (Atom (ASymbol name))) <- nsym = do
   let lname = lN ln (mkRdrName name)
       ipragma = mkInlinePragma source (ispec, FunLike) mb_act
-      source = SourceText txt
+      source = strToSourceText txt
       specSig = SpecSig NOEXT lname [hsTypeToHsSigType tsig] ipragma
   return (lA l (sigD specSig))
   | otherwise = builderError

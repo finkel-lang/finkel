@@ -67,6 +67,10 @@ import           GHC_Utils_Outputable              (Outputable (..), SDoc, text,
 
 import qualified GHC_Data_Maybe                    as Maybes
 
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Data.FastString               (unpackFS)
+#endif
+
 #if MIN_VERSION_ghc(9,6,0)
 import           GHC.Unit.Home.ModInfo             (HomeModLinkable (..),
                                                     emptyHomeModInfoLinkable)
@@ -152,8 +156,14 @@ runUsageFileCheck =  go
         UsageFile {usg_file_path = file
                   ,usg_file_hash = old_hash} ->
           liftIO (handleIO (const (return False))
-                           (fmap (== old_hash) (getFileHash file)))
+                           (fmap (== old_hash) (getFileHash' file)))
         _ -> return True
+
+#if MIN_VERSION_ghc(9,8,0)
+    getFileHash' = getFileHash . unpackFS
+#else
+    getFileHash' = getFileHash
+#endif
 
 
 -- ------------------------------------------------------------------------

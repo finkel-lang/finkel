@@ -35,6 +35,10 @@ import GHC_Types_SrcLoc                  (GenLocated (..), Located,
                                           SrcSpan (..), getLoc, noLoc)
 import GHC_Utils_Lexeme                  (isLexCon, isLexSym, isLexVarId)
 
+#if MIN_VERSION_ghc(9,8,0)
+import Language.Haskell.Syntax.Expr      (LHsRecUpdFields (..))
+#endif
+
 #if MIN_VERSION_ghc(9,6,0)
 import GHC.Hs.Extension                  (noHsTok)
 import GHC.Hs.Pat                        (RecFieldsDotDot (..))
@@ -84,6 +88,7 @@ import PlaceHolder                       (placeHolderType)
 import Language.Finkel.Builder
 import Language.Finkel.Data.FastString   (FastString, fsLit, lengthFS, nullFS,
                                           unconsFS, unpackFS)
+import Language.Finkel.Data.SourceText
 import Language.Finkel.Form
 import Language.Finkel.Syntax.HBind
 import Language.Finkel.Syntax.HType
@@ -246,7 +251,14 @@ b_recConOrUpdE whole@(LForm (L l form)) flds =
 #endif
     _ -> do
       v <- b_varE whole
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,8,0)
+      -- XXX: Use mkRdrRecordUpd, runPV, and unP?
+      pure (lA l (RecordUpd { rupd_ext = unused
+                            , rupd_expr = v
+                            , rupd_flds = RegularRecUpdFields
+                                { xRecUpdFields = unused
+                                , recUpdFields = uflds }}))
+#elif MIN_VERSION_ghc(9,2,0)
       pure (lA l (RecordUpd { rupd_ext = unused
                             , rupd_expr = v
                             , rupd_flds = Left uflds }))
@@ -278,7 +290,15 @@ b_recUpdE expr flds = do
        l = getLoc expr'
    case wilds of
      (_:_) -> builderError
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,8,0)
+     -- XXX: Does not support OverloadedRecUpdFields. Use mkRdrRecordUpd, runPV,
+     -- and unP?
+     []    -> pure (L l (RecordUpd { rupd_ext = unused
+                                   , rupd_expr = mkLHsPar expr'
+                                   , rupd_flds = RegularRecUpdFields
+                                      { xRecUpdFields = unused
+                                      , recUpdFields = uflds }}))
+#elif MIN_VERSION_ghc(9,2,0)
      -- XXX: Does not support record dot syntax yet.  The return type of
      -- 'mkRdrRecordUpd' function changed from previous ghc release, now the
      -- function returns 'PV (HsExpr GhcPs)', formerly it was 'HsExpr GhcPs'.
@@ -399,7 +419,7 @@ b_varE (LForm (L l form))
       -- variable identifier.
       '#' | isLexVarId tlchrs ->
 #if MIN_VERSION_ghc(9,6,0)
-          ret (HsOverLabel NOEXT (SourceText (show tlchrs)) tlchrs)
+          ret (HsOverLabel NOEXT (toQuotedSourceText tlchrs) tlchrs)
 #elif MIN_VERSION_ghc(9,2,0)
           ret (HsOverLabel NOEXT tlchrs)
 #else
@@ -496,7 +516,7 @@ b_quoteAtomE l qualify atom =
     AFractional _fl -> b_fracE orig >>= mk_lapp qFractionalS
     AUnit           -> mk_unit
   where
-    mk_sym s = lA l (hsLit (HsString (SourceText (show s)) s))
+    mk_sym s = lA l (hsLit (HsString (toQuotedSourceText s) s))
     mk_str st str = lA l (hsLit (HsString st str))
     orig = LForm (L l (Atom atom))
     mk_lapp lname arg = do
@@ -523,7 +543,7 @@ getLocInfo l = withLocInfo l fname mk_int
     -- Using unhelpful location for file names, lines, and columns. Otherwise,
     -- hpc code coverage will mark the location information as non-evaluated
     -- expressions.
-    fname fs = lA ql (hsLit (HsString (SourceText (show fs)) fs))
+    fname fs = lA ql (hsLit (HsString (toQuotedSourceText fs) fs))
     mk_int n = lA ql $! hsOverLit $! mkHsIntegral_compat $! mkIntegralLit n
 #if MIN_VERSION_ghc(9,0,0)
     ql = UnhelpfulSpan (UnhelpfulOther (fsLit "<b_quoteE>"))

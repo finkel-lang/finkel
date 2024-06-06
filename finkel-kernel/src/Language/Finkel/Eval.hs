@@ -28,6 +28,12 @@ import GHC_Types_TyThing       (TyThing (..))
 import GHC_Types_Var_Env       (emptyTidyEnv)
 import GHC_Utils_Error         (Messages)
 
+#if MIN_VERSION_ghc(9,8,0)
+import GHC.Tc.Zonk.Env         (ZonkFlexi (..))
+#elif MIN_VERSION_ghc(8,10,0)
+import GHC_Tc_Utils_Zonk       (ZonkFlexi (..))
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Driver.Errors.Types (GhcMessage, hoistTcRnMessage)
 import GHC.Tc.Errors.Types     (TcRnMessage)
@@ -45,7 +51,6 @@ import GHC_Types_SourceError   (mkSrcErr)
 
 #if MIN_VERSION_ghc(8,10,0)
 import GHC_Core_TyCo_Tidy      (tidyType)
-import GHC_Tc_Utils_Zonk       (ZonkFlexi (..))
 #else
 import TyCoRep                 (tidyType)
 #endif

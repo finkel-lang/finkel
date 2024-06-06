@@ -3,12 +3,13 @@
 -- | Version compatibility module for GHC.Data.FastString
 module Language.Finkel.Data.FastString
   ( module FS
-#if !MIN_VERSION_ghc(9,2,0)
   , module Language.Finkel.Data.FastString
-#endif
   ) where
 
 #include "ghc_modules.h"
+
+-- binary
+import Data.Binary         (Binary (..), Get, Put)
 
 -- ghc
 import GHC_Data_FastString as FS
@@ -21,3 +22,31 @@ unconsFS fs =
     (c : cs) -> Just (c, mkFastString cs)
 {-# INLINABLE unconsFS #-}
 #endif
+
+
+-- ------------------------------------------------------------------------
+-- For Data.Binary.Binary
+-- ------------------------------------------------------------------------
+
+#if MIN_VERSION_ghc(9,0,0)
+putFastString :: FastString -> Put
+putFastString = put . FS.fastStringToShortByteString
+
+getFastString :: Get FastString
+getFastString = fmap FS.mkFastStringShortByteString get
+#elif MIN_VERSION_ghc(8,10,0)
+putFastString :: FastString -> Put
+putFastString = put . FS.bytesFS
+
+getFastString :: Get FastString
+getFastString = fmap FS.mkFastStringByteString get
+#else
+putFastString :: FastString -> Put
+putFastString = put . FS.fastStringToByteString
+
+getFastString :: Get FastString
+getFastString = fmap FS.mkFastStringByteString get
+#endif
+
+{-# INLINABLE getFastString #-}
+{-# INLINABLE putFastString #-}

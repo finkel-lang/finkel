@@ -208,10 +208,10 @@ b_funT (LForm (L l _)) ts =
 
 b_tyLitT :: Code -> Builder HType
 b_tyLitT (LForm (L l form))
-  | Atom (AString _ str) <- form =
-    return (mkLit l (HsStrTy (SourceText (show str)) str))
-  | Atom (AInteger IL {il_value=n}) <- form =
-    return (mkLit l (HsNumTy (SourceText (show n)) n))
+  | Atom (AString stxt str) <- form =
+    return (mkLit l (HsStrTy stxt str))
+  | Atom (AInteger IL {il_value=n, il_text=stxt}) <- form =
+    return (mkLit l (HsNumTy stxt n))
   | otherwise = builderError
   where
     mkLit loc lit = lA loc (HsTyLit NOEXT lit)

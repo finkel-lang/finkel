@@ -94,8 +94,14 @@ import           GHC_Utils_Misc                    (looksLikeModuleName,
 import           GHC_Utils_Outputable              (Outputable (..), SDoc, hcat,
                                                     quotes, text, vcat, ($$),
                                                     (<+>))
-#if MIN_VERSION_ghc(9,6,0)
-import           GHC.Driver.Errors.Types           (GhcMessage)
+
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Data.FastString               (unpackFS)
+#endif
+
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Types.Error                   (defaultDiagnosticOpts)
+#elif MIN_VERSION_ghc(9,6,0)
 import           GHC.Types.Error                   (Diagnostic (..))
 #endif
 
@@ -170,7 +176,10 @@ import           GHC.Hs.Dump                       (BlankEpAnnotations (..))
 import           GHC.LanguageExtensions            (Extension (ImplicitPrelude))
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Driver.Errors                 (printOrThrowDiagnostics)
+import           GHC.Hs                            (HsParsedModule (..))
+#elif MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Errors                 (handleFlagWarnings)
 import           GHC.Hs                            (HsParsedModule (..))
 #else
@@ -333,7 +342,14 @@ getDynFlagsFromSPState hsc_env sp = do
   let dflags0 = hsc_dflags hsc_env
       mkx = fmap ("-X" ++)
       exts = map mkx (langExts sp)
-#if MIN_VERSION_ghc(9,6,0)
+#if MIN_VERSION_ghc(9,8,0)
+      handle_flag_warnings df ws =
+        let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
+            diag_opts = initDiagOpts df
+            ws' = GhcDriverMessage <$> ws
+            logger = hsc_logger hsc_env
+        in  printOrThrowDiagnostics logger diagnostic_opts diag_opts ws'
+#elif MIN_VERSION_ghc(9,6,0)
       handle_flag_warnings df ws =
         let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
             diag_opts = initDiagOpts df
@@ -767,13 +783,21 @@ requiredDependency hsc_env = go
         -- potentially containing macro definitions. Otherwise the compilation
         -- time of modules containing ":require" of home package module was
         -- noticeably slow in ghc 9.4.2.
-        UsageFile {usg_file_path = path} | isFnkFile path || isHsFile path ->
+        UsageFile {usg_file_path = path_fs} | isFnkFile path || isHsFile path ->
           let mb_ms1 = find is_my_path mss
               is_my_path = (Just path ==) . ml_hs_file . ms_location
               mss = mgModSummaries' (hsc_mod_graph hsc_env)
               acc1 = path : acc
           in  maybe acc1 (go acc1) mb_ms1
+          where
+            path = unpackFSFor908 path_fs
         _ -> acc
+
+#if MIN_VERSION_ghc(9,8,0)
+    unpackFSFor908 = unpackFS
+#else
+    unpackFSFor908 = id
+#endif
 
 mkModuleFromHscEnv :: HscEnv -> ModuleName -> Module
 mkModuleFromHscEnv hsc_env =

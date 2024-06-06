@@ -85,6 +85,12 @@ import           GHC_Utils_Outputable              (Outputable (..), SDoc,
                                                     brackets, nest, text, vcat,
                                                     (<+>))
 
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Driver.Config.Diagnostic      (initIfaceMessageOpts)
+import           GHC.Iface.Errors.Ppr              (missingInterfaceErrorDiagnostic)
+import           GHC.Types.Error                   (mkUnknownDiagnostic)
+#endif
+
 #if MIN_VERSION_ghc(9,6,0)
 import           GHC.Driver.Backend                (backendName)
 #endif
@@ -829,7 +835,11 @@ filterNotCompiled fnk_env hsc_env = foldM find_not_compiled []
               return acc
             _ -> do
               let err = mkPlainWrappedMsg dflags (getLoc lmname) doc
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,8,0)
+                  doc = missingInterfaceErrorDiagnostic opts body
+                  opts = initIfaceMessageOpts dflags
+                  body = cannotFindModule hsc_env mname fr
+#elif MIN_VERSION_ghc(9,2,0)
                   doc = cannotFindModule hsc_env mname fr
 #else
                   doc = cannotFindModule dflags mname fr
@@ -849,7 +859,11 @@ doLoad lhm mb_msgr mg = do
         then envInterpModIfaceCache fnk_env
         else Nothing
 
+#  if MIN_VERSION_ghc(9,8,0)
+  load' mb_hmi_cache lhm mkUnknownDiagnostic mb_msgr mg
+#  else
   load' mb_hmi_cache lhm mb_msgr mg
+#  endif
 #else
 doLoad = load'
 #endif

@@ -37,6 +37,7 @@ import           GHC_Data_StringBuffer  (StringBuffer)
 import           GHC.LanguageExtensions (Extension(..))
 
 -- Internal
+import           Language.Finkel.Data.SourceText
 import           Language.Finkel.Form
 import           Language.Finkel.Exception
 import           Language.Finkel.Lexer
@@ -208,12 +209,12 @@ mkCcSymbol (L l _) = sym l "}"
 
 mkDoc :: Located Token -> Code
 mkDoc (L l (TDocNext str)) =
-  li l [sym l ":doc", atom l (AString (SourceText (unpackFS str)) str)]
+  li l [sym l ":doc", atom l (AString (toSourceText str) str)]
 {-# INLINABLE mkDoc #-}
 
 mkDocp :: Located Token -> Code
 mkDocp (L l (TDocPrev str)) =
-  li l [sym l ":doc^", atom l (AString (SourceText (unpackFS str)) str)]
+  li l [sym l ":doc^", atom l (AString (toSourceText str) str)]
 {-# INLINABLE mkDocp #-}
 
 mkDoch :: Located Token -> Code
@@ -224,14 +225,14 @@ mkDoch (L l (TDocGroup n s)) = li l [sym l dh, atom l (AString st s)]
            2 -> ":dh2"
            3 -> ":dh3"
            _ -> ":dh4"
-    st = SourceText (unpackFS s)
+    st = toSourceText s
 {-# INLINABLE mkDoch #-}
 
 mkDock :: Located Token -> Code
 mkDock (L l (TDocNamed k mb_doc)) =
   case mb_doc of
     Nothing -> li l pre
-    Just d  -> li l (pre ++ [atom l (AString (SourceText (unpackFS d)) d)])
+    Just d  -> li l (pre ++ [atom l (AString (toSourceText d) d)])
   where
     pre = [sym l ":doc$", atom l (ASymbol k)]
 {-# INLINABLE mkDock #-}

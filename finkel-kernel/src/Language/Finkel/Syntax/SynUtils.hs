@@ -58,6 +58,10 @@ import           GHC_Types_SrcLoc                 (GenLocated (..), Located,
 import           GHC_Utils_Lexeme                 (isLexCon, isLexConSym,
                                                    isLexVar, isLexVarSym)
 
+#if MIN_VERSION_ghc(9,8,0)
+import           Language.Haskell.Syntax.Type     (HsBndrVis (..))
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Hs.Doc                       (LHsDoc)
 import           GHC.Hs.Pat                       (HsFieldBind (..))
@@ -187,10 +191,11 @@ splitQualName fstr =
      then Nothing
      else go (unpackFS fstr) "" []
   where
-    go []       _   []  = Nothing
-    go []       tmp acc = let mdl = reverse (tail (concat acc))
-                              var = reverse tmp
-                          in  Just (fsLit mdl, fsLit var)
+    go []       tmp acc = case concat acc of
+      [] -> Nothing
+      _:tl -> let mdl = reverse tl
+                  var = reverse tmp
+              in  Just (fsLit mdl, fsLit var)
     go "."      tmp acc = go [] ('.':tmp) acc
     go ('.':cs) tmp acc = go cs [] (('.':tmp) : acc)
     go (c:cs)   tmp acc = go cs (c:tmp) acc
@@ -229,7 +234,11 @@ getVarOrConId orig@(LForm (L _ form)) =
 -- | Convert record field constructor expression to record field update
 -- expression.
 cfld2ufld :: LHsRecField PARSED HExpr
+#if MIN_VERSION_ghc(9,8,0)
+          -> LHsRecUpdField PARSED PARSED
+#else
           -> LHsRecUpdField PARSED
+#endif
 -- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
 #if MIN_VERSION_ghc(9,4,0)
 cfld2ufld (L l0 (HsFieldBind _ann (L l1 (FieldOcc _ rdr)) rhs pun)) =
@@ -280,10 +289,6 @@ pun_RDR :: RdrName
 pun_RDR = mkUnqual varName (fsLit "pun-right-hand-side")
 {-# INLINABLE pun_RDR #-}
 
-quotedSourceText :: String -> SourceText
-quotedSourceText s = SourceText $ "\"" ++ s ++ "\""
-{-# INLINABLE quotedSourceText #-}
-
 -- Following `cvBindsAndSigs`, `getMonoBind`, `has_args`, and
 -- `makeFunBind` functions are based on resembling functions defined in
 -- `RdrHsSyn` module in ghc package.
@@ -329,12 +334,14 @@ cvBindsAndSigs fb =
        POk _ cd -> return cd
        _        -> builderError
 
-kindedTyVar :: Code -> Code -> HType -> Builder HTyVarBndr
+kindedTyVar :: Code -> Code -> HType -> Builder HTyVarBndrVis
 kindedTyVar (LForm (L l _dc)) name kind =
   case name of
     LForm (L ln (Atom (ASymbol name'))) -> do
        let name'' = lN ln (mkUnqual tvName name')
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,8,0)
+       return $! lA l (KindedTyVar NOEXT HsBndrRequired name'' kind)
+#elif MIN_VERSION_ghc(9,0,0)
        return $! lA l (KindedTyVar NOEXT () name'' kind)
 #else
        return $! L l (KindedTyVar NOEXT name'' kind)
@@ -355,7 +362,21 @@ kindedTyVarSpecific = kindedTyVar
 #endif
 {-# INLINABLE kindedTyVarSpecific #-}
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,8,0)
+codeToUserTyVar :: Code -> HTyVarBndrVis
+codeToUserTyVar code =
+  case code of
+    LForm (L l (Atom (ASymbol name))) ->
+      lA l (UserTyVar NOEXT HsBndrRequired (lN l (mkUnqual tvName name)))
+    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
+codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
+codeToUserTyVarSpecific code =
+  case code of
+    LForm (L l (Atom (ASymbol name))) ->
+      lA l (UserTyVar NOEXT SpecifiedSpec (lN l (mkUnqual tvName name)))
+      -- XXX: Does not support 'InferredSpec' yet.
+    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
+#elif MIN_VERSION_ghc(9,0,0)
 codeToUserTyVar :: Code -> LHsTyVarBndr () PARSED
 codeToUserTyVar code =
   case code of

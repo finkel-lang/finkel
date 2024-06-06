@@ -46,7 +46,16 @@ import           GHC_Utils_Misc               (looksLikeModuleName)
 import           GHC_Utils_Panic              (GhcException (..),
                                                throwGhcException)
 
-#if MIN_VERSION_ghc(9,6,0)
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Driver.Errors            (printOrThrowDiagnostics)
+#elif MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Errors            (handleFlagWarnings)
+#endif
+
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Driver.Errors.Types      (GhcMessage (..))
+import           GHC.Types.Error              (defaultDiagnosticOpts)
+#elif MIN_VERSION_ghc(9,6,0)
 import           GHC.Driver.Errors.Types      (GhcMessage)
 import           GHC.Types.Error              (Diagnostic (..))
 #endif
@@ -56,7 +65,6 @@ import           GHC.Driver.Config.Diagnostic (initDiagOpts)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Errors            (handleFlagWarnings)
 import           GHC.Types.SourceError        (handleSourceError)
 import           GHC.Utils.Logger             (HasLogger (..))
 #else
@@ -245,7 +253,13 @@ main3 orig_args ghc_args = do
                    liftIO exitFailure)
          -- XXX: Compatibility codes for `handleFlagWarnings' appear in
          -- "L.F.M.Summary", reuse the code.
-#if MIN_VERSION_ghc(9,6,0)
+#if MIN_VERSION_ghc(9,8,0)
+         (liftIO
+           (let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
+                diag_opts = initDiagOpts dflags3
+                msg = GhcDriverMessage <$> warnings
+            in  printOrThrowDiagnostics logger diagnostic_opts diag_opts msg))
+#elif MIN_VERSION_ghc(9,6,0)
          (liftIO
            (let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
                 diag_opts = initDiagOpts dflags3

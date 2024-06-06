@@ -86,17 +86,6 @@ import           GHC_Types_SrcLoc                (BufPos (..), BufSpan (..),
                                                   unhelpfulSpanFS)
 #endif
 
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC_Data_FastString             (fastStringToShortByteString,
-                                                  mkFastStringShortByteString)
-#elif MIN_VERSION_ghc(8,10,0)
-import           GHC_Data_FastString             (bytesFS,
-                                                  mkFastStringByteString)
-#else
-import           GHC_Data_FastString             (fastStringToByteString,
-                                                  mkFastStringByteString)
-#endif
-
 #if MIN_VERSION_ghc(8,4,0)
 import           GHC_Types_SourceText            (IntegralLit (..),
                                                   mkIntegralLit)
@@ -106,6 +95,7 @@ import           GHC_Types_SourceText            (IntegralLit (..),
 import           Control.DeepSeq                 (NFData (..))
 
 -- Internal
+import           Language.Finkel.Data.FastString (getFastString, putFastString)
 import           Language.Finkel.Form.Fractional
 
 
@@ -488,29 +478,6 @@ instance Binary Atom where
       _ -> error $ "get: unknown tag " ++ show t
   {-# INLINE get #-}
 
-#if MIN_VERSION_ghc(9,0,0)
-putFastString :: FastString -> Put
-putFastString = put . fastStringToShortByteString
-
-getFastString :: Get FastString
-getFastString = fmap mkFastStringShortByteString get
-#elif MIN_VERSION_ghc(8,10,0)
-putFastString :: FastString -> Put
-putFastString = put . bytesFS
-
-getFastString :: Get FastString
-getFastString = fmap mkFastStringByteString get
-#else
-putFastString :: FastString -> Put
-putFastString = put . fastStringToByteString
-
-getFastString :: Get FastString
-getFastString = fmap mkFastStringByteString get
-#endif
-
-{-# INLINABLE getFastString #-}
-{-# INLINABLE putFastString #-}
-
 putIntegralLit :: IntegralLit -> Put
 putIntegralLit il =
   putSourceText (il_text il) *> put (il_neg il) *> put (il_value il)
@@ -842,8 +809,8 @@ genSrc = L finkelUnhelpfulSpan
 -- When the argument is not null, the resulting list has a combined location of
 -- locations in the argument list elements.
 mkLocatedForm :: [LForm a] -> Located [LForm a]
-mkLocatedForm [] = genSrc []
-mkLocatedForm ms = L (combineLocs (unLForm (head ms)) (unLForm (last ms))) ms
+mkLocatedForm []        = genSrc []
+mkLocatedForm ms@(hd:_) = L (combineLocs (unLForm hd) (unLForm (last ms))) ms
 {-# INLINABLE mkLocatedForm #-}
 
 -- | Lift given argument to 'LForm'.

@@ -18,25 +18,37 @@ module Language.Finkel.Form.Fractional
   ) where
 
 -- binary
-import Data.Binary          (Binary (..), Get, Put, getWord8, putWord8)
+import Data.Binary                     (Binary (..), Get, Put, getWord8,
+                                        putWord8)
 
 -- ghc
+#if MIN_VERSION_ghc(9,8,0)
+import GHC.Data.FastString             (unpackFS)
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Types.SourceText (FractionalExponentBase (..), FractionalLit (..),
-                             SourceText (..), mkSourceFractionalLit,
-                             mkTHFractionalLit, rationalFromFractionalLit)
-import GHC.Utils.Misc       (readSignificandExponentPair)
+import GHC.Types.SourceText            (FractionalExponentBase (..),
+                                        FractionalLit (..), SourceText (..),
+                                        mkSourceFractionalLit,
+                                        mkTHFractionalLit,
+                                        rationalFromFractionalLit)
+import GHC.Utils.Misc                  (readSignificandExponentPair)
 #elif MIN_VERSION_ghc(9,0,0)
-import GHC.Types.Basic      (FractionalLit (..), SourceText (..),
-                             mkFractionalLit)
-import GHC.Utils.Misc       (readRational)
+import GHC.Types.Basic                 (FractionalLit (..), SourceText (..),
+                                        mkFractionalLit)
+import GHC.Utils.Misc                  (readRational)
 #elif MIN_VERSION_ghc(8,4,0)
-import BasicTypes           (FractionalLit (..), SourceText (..),
-                             mkFractionalLit)
-import Util                 (readRational)
+import BasicTypes                      (FractionalLit (..), SourceText (..),
+                                        mkFractionalLit)
+import Util                            (readRational)
 #else
-import BasicTypes           (FractionalLit (..), SourceText (..))
-import Util                 (readRational)
+import BasicTypes                      (FractionalLit (..), SourceText (..))
+import Util                            (readRational)
+#endif
+
+-- Internal
+#if MIN_VERSION_ghc(9,8,0)
+import Language.Finkel.Data.FastString (getFastString, putFastString)
 #endif
 
 -- | Make a 'FractionalLit' from given real value.
@@ -53,7 +65,11 @@ mkFractionalLit' x = FL (show (realToFrac x :: Double)) (toRational x)
 -- | Get string representation of 'FractionalLit'.
 fl_text_compat :: FractionalLit -> String
 {-# INLINE fl_text_compat #-}
-#if MIN_VERSION_ghc(8,4,0)
+#if MIN_VERSION_ghc(9,8,0)
+fl_text_compat fl = case fl_text fl of
+  NoSourceText -> error "fractional literal with no source"
+  SourceText s -> unpackFS s
+#elif MIN_VERSION_ghc(8,4,0)
 fl_text_compat fl = case fl_text fl of
   NoSourceText -> error "fractional literal with no source"
   SourceText s -> s
@@ -140,7 +156,11 @@ getFractionalLit = FL <$> get <*> get
 
 putSourceText :: SourceText -> Put
 putSourceText st = case st of
+#if MIN_VERSION_ghc(9,8,0)
+  SourceText str -> putWord8 0 >> putFastString str
+#else
   SourceText str -> putWord8 0 >> put str
+#endif
   NoSourceText   -> putWord8 1
 {-# INLINABLE putSourceText #-}
 
@@ -148,7 +168,11 @@ getSourceText :: Get SourceText
 getSourceText = do
   t <- getWord8
   case t of
+#if MIN_VERSION_ghc(9,8,0)
+    0 -> SourceText <$> getFastString
+#else
     0 -> SourceText <$> get
+#endif
     1 -> pure NoSourceText
     _ -> error $ "getSourceText: unknown tag " ++ show t
 {-# INLINABLE getSourceText #-}

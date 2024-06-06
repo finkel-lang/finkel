@@ -26,9 +26,14 @@ import           GHC_Types_Basic              (SuccessFlag (..))
 import           GHC_Types_SrcLoc             (mkGeneralLocated)
 import           GHC_Utils_Outputable         (Outputable (..), SDoc,
                                                neverQualify)
+#if MIN_VERSION_ghc(9,8,0)
+import           GHC.Types.Error              (defaultDiagnosticOpts)
+#elif MIN_VERSION_ghc(9,6,0)
+import           GHC.Types.Error              (Diagnostic (..))
+#endif
+
 #if MIN_VERSION_ghc(9,6,0)
 import           GHC.Driver.Errors.Types      (GhcMessage)
-import           GHC.Types.Error              (Diagnostic (..))
 import           GHC.Utils.Outputable         (NamePprCtx)
 #else
 import           GHC_Utils_Outputable         (PrintUnqualified)
