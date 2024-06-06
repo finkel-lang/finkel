@@ -105,12 +105,9 @@ targetUnitName (ts, _) =
 -- | Data type to represent target source.
 data TargetSource
   = FnkSource FilePath ModuleName
-  -- ^ Finkel source.
-  --
-  -- Holds file path of the source code, module name, parsed form data, and
-  -- 'SPState' including required module names.
+  -- ^ Finkel source with file path of the source code and module name.
   | HsSource FilePath ModuleName
-  -- ^ Haskell source with file path of the source code.
+  -- ^ Haskell source with file path of the source code and module name.
   | OtherSource FilePath
   -- ^ Other source with file path of other contents.
 
