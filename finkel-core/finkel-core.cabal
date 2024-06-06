@@ -50,7 +50,7 @@ library
   autogen-modules:     Paths_finkel_core
 
   build-depends:       base          >= 4.7   && < 5
-                     , ghc           >= 8.2.0 && < 9.7
+                     , ghc           >= 8.2.0 && < 9.9
                      , finkel-kernel == 0.0.0
   -- To import "GHC.PackageDb.packageVersion"
   if impl (ghc <= 9.0.0)

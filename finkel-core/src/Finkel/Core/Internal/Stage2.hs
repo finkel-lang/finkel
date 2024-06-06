@@ -308,7 +308,7 @@ expands to:
             (: #'$ #'$ #'\123 rest) (case (go acc rest)
                                       (, tmp ss) (, (: #'$ #'\123 tmp) ss))
             (: #'$ #'\123 rest) (let ((= (, var ys) (break (== #'\125) rest))
-                                      (= (, lit ss) (go acc (tail ys))))
+                                      (= (, lit ss) (go acc (drop 1 ys))))
                                   (if (null var)
                                     (err "empty variable")
                                     (if (null ys)
@@ -854,7 +854,7 @@ and the definition of 'cdadr' is:
 (eval-when [:compile]
   (defn (:: ads [String])
     (let ((= f (concatMap (\x [(: #'a x) (: #'d x)]))))
-      (concat (take 3 (tail (iterate f [[#'a] [#'d]]))))))
+      (concat (take 3 (drop 1 (iterate f [[#'a] [#'d]]))))))
 
   (defn (:: cxr-name (-> String Code))
     [x]
