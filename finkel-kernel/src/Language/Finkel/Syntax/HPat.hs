@@ -99,11 +99,10 @@ b_intP (LForm (L l form)) =
 b_stringP :: Code -> Builder HPat
 b_stringP (LForm (L l form)) =
   case form of
-    Atom (AString _ str) -> return $! lA l (npat str)
-    _                    -> builderError
+    Atom (AString stxt str) -> return $! lA l (npat stxt str)
+    _                       -> builderError
   where
-    npat str = mkNPat' (L l (lit str))
-    lit str = hsIsString (SourceText (show str)) str
+    npat stxt str = mkNPat' (L l (hsIsString stxt str))
     hsIsString s t =
 #if MIN_VERSION_ghc(8,6,0)
       mkHsIsString s t
@@ -115,10 +114,8 @@ b_stringP (LForm (L l form)) =
 b_charP :: Code -> Builder HPat
 b_charP (LForm (L l form)) =
   case form of
-    Atom (AChar _ c) -> return $! lA l (LitPat NOEXT (lit c))
-    _                -> builderError
-  where
-    lit c = HsChar (SourceText (show c)) c
+    Atom (AChar stxt c) -> return $! lA l (LitPat NOEXT (HsChar stxt c))
+    _                   -> builderError
 {-# INLINABLE b_charP #-}
 
 b_unitP :: Code -> Builder HPat

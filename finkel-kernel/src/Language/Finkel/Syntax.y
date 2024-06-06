@@ -407,17 +407,17 @@ overlap :: { Maybe (Located OverlapMode) }
 sfsig :: { (Code, HType) }
     : '::' idsym type { ($2, $3) }
 
-simpletype :: { (FastString, [HTyVarBndr], Maybe HKind)}
+simpletype :: { (FastString, [HTyVarBndrVis], Maybe HKind)}
     : conid   {% getConId $1 >>= \n -> return (n, [], Nothing) }
     | list_es {% parse p_lsimpletype $1 }
 
-lsimpletype :: { (FastString, [HTyVarBndr], Maybe HKind) }
+lsimpletype :: { (FastString, [HTyVarBndrVis], Maybe HKind) }
     : '::' conid type   {% getConId $2 >>= \n -> return (n, [], Just $3) }
     | '::' list_es type {% do { (n,tv) <- parse p_famconhd $2
                               ; return (n,tv,Just $3)} }
     | famconhd          { case $1 of (n,tv) -> (n,tv,Nothing) }
 
-famconhd :: { (FastString, [HTyVarBndr]) }
+famconhd :: { (FastString, [HTyVarBndrVis]) }
     : conid tvbndrs {% getConId $1 >>= \n -> return (n,$2) }
 
 constrs :: { (HDeriving, [HConDecl]) }
@@ -467,7 +467,7 @@ forallcon :: { ([HTyVarBndrSpecific], (HConDecl, [HType])) }
     : qtycon                    { ([], $1) }
     | tvbndr_specific forallcon { case $2 of (vs,con) -> ($1:vs,con) }
 
-lkindtv :: { HTyVarBndr }
+lkindtv :: { HTyVarBndrVis }
     : '::' idsym type {% kindedTyVar $1 $2 $3 }
 
 tvbndr_specific :: { HTyVarBndrSpecific }
@@ -562,17 +562,17 @@ lidecl :: { HDecl }
     | 'data' dinsthd constrs { b_datainstD $1 $2 $3 }
     | decl                   { $1 }
 
-dconhead :: { (FastString, [HTyVarBndr], Maybe HType) }
+dconhead :: { (FastString, [HTyVarBndrVis], Maybe HType) }
     : simpletype { $1 }
 
-tvbndrs :: { [HTyVarBndr] }
+tvbndrs :: { [HTyVarBndrVis] }
     : rtvbndrs { reverse $1 }
 
-rtvbndrs :: { [HTyVarBndr] }
+rtvbndrs :: { [HTyVarBndrVis] }
     : {- empty -}     { [] }
     | rtvbndrs tvbndr { $2:$1 }
 
-tvbndr :: { HTyVarBndr }
+tvbndr :: { HTyVarBndrVis }
     : idsym   { codeToUserTyVar $1 }
     | list_es {% parse p_lkindtv $1 }
 

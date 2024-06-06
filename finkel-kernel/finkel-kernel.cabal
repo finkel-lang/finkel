@@ -45,7 +45,7 @@ tested-with:           GHC == 8.2.2
 custom-setup
   setup-depends:       base     >= 4.10  && < 5
                      , Cabal    >= 2.0   && < 3.11
-                     , filepath >= 1.4.1 && < 1.5
+                     , filepath >= 1.4.1 && < 1.6
 
 flag dev
   description:         Flag for internal development
@@ -91,6 +91,7 @@ library
                        Language.Finkel.Syntax.HPat
                        Language.Finkel.Syntax.HType
                        Language.Finkel.Data.FastString
+                       Language.Finkel.Data.SourceText
   autogen-modules:     Paths_finkel_kernel
   includes:            Syntax.h
                        ghc_modules.h
@@ -99,15 +100,15 @@ library
   build-depends:       array        >= 0.5.2  && < 0.6
                      , base         >= 4.10   && < 5
                      , binary       >= 0.8.5  && < 0.9
-                     , bytestring   >= 0.10.8 && < 0.12
+                     , bytestring   >= 0.10.8 && < 0.13
                      , containers   >= 0.5.10 && < 0.7
-                     , deepseq      >= 1.4.3  && < 1.5
+                     , deepseq      >= 1.4.3  && < 1.6
                      , directory    >= 1.3.0  && < 1.4
                      , exceptions   >= 0.8.3  && < 0.11
-                     , filepath     >= 1.4.1  && < 1.5
-                     , ghc          >= 8.2.0  && < 9.7.0
-                     , ghc-boot     >= 8.2.0  && < 9.7.0
-                     , ghci         >= 8.2.0  && < 9.7.0
+                     , filepath     >= 1.4.1  && < 1.6
+                     , ghc          >= 8.2.0  && < 9.9.0
+                     , ghc-boot     >= 8.2.0  && < 9.9.0
+                     , ghci         >= 8.2.0  && < 9.9.0
                      , process      >= 1.6.1  && < 1.7
                      , time         >= 1.8.0  && < 1.13
   build-tool-depends:  alex:alex    >= 3.1.7  && < 3.6

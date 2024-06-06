@@ -100,6 +100,7 @@ import GHC_Unit_Module_Graph             (mgLookupModule)
 
 -- Internal
 import Language.Finkel.Builder
+import Language.Finkel.Data.SourceText
 import Language.Finkel.Eval
 import Language.Finkel.Exception
 import Language.Finkel.Expand            (bcoDynFlags, expand, expands')
@@ -649,7 +650,7 @@ tSym l s = LForm (L l (Atom (ASymbol s)))
 {-# INLINABLE tSym #-}
 
 tString :: SrcSpan -> FastString -> Code
-tString l s = LForm (L l (Atom (AString (SourceText (show s)) s)))
+tString l s = LForm (L l (Atom (AString (toQuotedSourceText s) s)))
 {-# INLINABLE tString #-}
 
 tInt :: SrcSpan -> Int -> Code

@@ -152,8 +152,11 @@ asModuleName name =
   where
     -- Taking the directory names from last to first, to support auto generated
     -- modules made by stack.
-    names = reverse (takeWhile (isUpper . head)
+    names = reverse (takeWhile startsWithUpper
                                (reverse (splitPath (dropExtension name))))
+    startsWithUpper cs = case cs of
+      []  -> False
+      c:_ -> isUpper c
     sep_to_dot c =
       if c == pathSeparator
          then '.'

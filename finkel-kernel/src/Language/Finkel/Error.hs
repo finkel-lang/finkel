@@ -48,7 +48,9 @@ instance Diagnostic FnkWrapper where
 #if MIN_VERSION_ghc(9,6,0)
   type DiagnosticOpts FnkWrapper = NoDiagnosticOpts
   diagnosticMessage _no_diagnostic_opts = mkSimpleDecorated . unFnkWrapper
+#  if !MIN_VERSION_ghc(9,8,0)
   defaultDiagnosticOpts = NoDiagnosticOpts
+#  endif
   -- XXX: May worth adding Finkel specific diagnostic code.
   diagnosticCode _ = Nothing
 #else

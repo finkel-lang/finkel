@@ -55,6 +55,7 @@ module Language.Finkel.Builder
   , HStmt
   , HTyVarBndr
   , HTyVarBndrSpecific
+  , HTyVarBndrVis
   , HType
 
   -- * Function names for @:quote@
@@ -88,6 +89,10 @@ import GHC_Hs_Type              (LConDeclField, LHsSigType, LHsSigWcType,
 import GHC_Parser_Lexer         (PState (..))
 import GHC_Types_ForeignCall    (CCallConv (..))
 import GHC_Types_SrcLoc         (Located, noLoc)
+
+#if MIN_VERSION_ghc(9,8,0)
+import GHC.Hs.Type              (HsBndrVis (..))
+#endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Driver.Config.Parser (initParserOpts)
@@ -357,12 +362,18 @@ type HSigWcType = LHsSigWcType PARSED
 
 type HStmt = ExprLStmt PARSED
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,8,0)
 type HTyVarBndr = LHsTyVarBndr () PARSED
 type HTyVarBndrSpecific = LHsTyVarBndr Specificity PARSED
+type HTyVarBndrVis = LHsTyVarBndr (HsBndrVis PARSED) PARSED
+#elif MIN_VERSION_ghc(9,0,0)
+type HTyVarBndr = LHsTyVarBndr () PARSED
+type HTyVarBndrSpecific = LHsTyVarBndr Specificity PARSED
+type HTyVarBndrVis = HTyVarBndr
 #else
 type HTyVarBndr = LHsTyVarBndr PARSED
 type HTyVarBndrSpecific = HTyVarBndr
+type HTyVarBndrVis = HTyVarBndr
 #endif
 
 type HType = LHsType PARSED

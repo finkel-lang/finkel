@@ -842,10 +842,10 @@ pp_vanilla_decl_head thing HsQTvs {hsq_explicit=tyvars} fixity context =
   hsep [pprHsContext context, pp_tyvars tyvars]
   where
     pp_tyvars (varl:varsr)
-      | fixity == Infix && length varsr > 1
+      | fixity == Infix, varsr_hd:varsr_tl <- varsr
       = hsep [ char '(', ppr (unLoc varl), pprInfixOcc (unLoc thing)
-             , ppr (unLoc (head varsr)), char ')'
-             , hsep (map (ppr . unLoc) (tail varsr)) ]
+             , ppr (unLoc varsr_hd), char ')'
+             , hsep (map (ppr . unLoc) varsr_tl) ]
       | fixity == Infix
       = hsep [ ppr (unLoc varl), pprInfixOcc (unLoc thing)
              , hsep (map (ppr . unLoc) varsr) ]

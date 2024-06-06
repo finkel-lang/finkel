@@ -60,7 +60,6 @@ import           GHC_Data_StringBuffer      (StringBuffer, atEnd,
                                              lexemeToFastString,
                                              lexemeToString, nextChar,
                                              prevChar, stepOn)
-import qualified GHC_Data_StringBuffer       as SB
 import           GHC_Parser_CharClass       (is_space)
 import           GHC_Utils_Encoding         (utf8DecodeByteString)
 import           GHC_Types_SrcLoc           (GenLocated(..), Located,
@@ -88,6 +87,7 @@ import qualified GHC.LanguageExtensions     as LangExt
 
 -- Internal
 import           Language.Finkel.Data.FastString (unconsFS)
+import           Language.Finkel.Data.SourceText
 import           Language.Finkel.Form
 import           Language.Finkel.Form.Fractional
 }
@@ -533,9 +533,9 @@ tok_block_comment_with tok ini inp0 _ = do
   where
     go inp prev acc =
       case alexGetChar inp of
-        Just (c, inp') | prev == ';', c == '#' -> Just (tail acc, inp')
-                       | otherwise             -> go inp' c (c:acc)
-        Nothing                                -> Nothing
+        Just (c, inp') | prev == ';', c == '#', _:tl <- acc -> Just (tl, inp')
+                       | otherwise -> go inp' c (c:acc)
+        Nothing -> Nothing
 {-# INLINABLE tok_block_comment_with #-}
 
 tok_doc_prev :: Action
@@ -646,12 +646,12 @@ tok_char inp0 _ = do
                  return $! TChar st c'
             Nothing ->
               do alexSetInput inp'
-                 return $! TChar (SourceText "'\\\\'") '\\'
+                 return $! TChar (strToSourceText "'\\\\'") '\\'
           _    ->
             do alexSetInput inp'
                let st | c == '\'' = '\'' : '\\' : c : "'"
                       | otherwise = '\'' : c : "'"
-               return $! TChar (SourceText st) c
+               return $! TChar (strToSourceText st) c
       | otherwise = alexError "tok_char.go1: panic"
 {-# INLINABLE tok_char #-}
 
@@ -666,7 +666,12 @@ tok_string inp@(AlexInput _ buf) _l =
         -- Refill the source text with string extracted with updated buffer
         -- location.
         do alexSetInput inp2
-           let src = lexemeToString buf (cur buf2 - cur buf)
+#if MIN_VERSION_ghc(9,8,0)
+           let lexeme = lexemeToFastString
+#else
+           let lexeme = lexemeToString
+#endif
+           let src = lexeme buf (cur buf2 - cur buf)
            return $! TString (SourceText src) str
     _ -> lexErrorSP
   where
@@ -703,8 +708,8 @@ is_space' c = c <= '\x7f' && is_space c
 escapeChar :: AlexInput -> Maybe (SourceText, Char, AlexInput)
 escapeChar inp0
   | Just (c1, inp1) <- alexGetChar inp0 =
-    let ret x = Just $! (SourceText (show x), x, inp1)
-        esc str = SourceText ('\'':'\\':str)
+    let ret x = Just $! (strToSourceText (show x), x, inp1)
+        esc str = strToSourceText ('\'':'\\':str)
         numericChar test acc0 f =
           let lp inp acc =
                 case alexGetChar inp of
@@ -767,7 +772,7 @@ escapeChar inp0
 tok_integer :: Action
 tok_integer (AlexInput _ buf) l =
   let str = lexemeToString buf (fromIntegral l)
-  in  return $ TInteger (SourceText str) $! read $! str
+  in  return $ TInteger (strToSourceText str) $! read $! str
 {-# INLINABLE tok_integer #-}
 
 tok_fractional :: Action

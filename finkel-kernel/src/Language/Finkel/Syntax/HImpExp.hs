@@ -98,7 +98,11 @@ b_ieSym :: Code -> Builder HIE
 b_ieSym form@(LForm (L l _)) = do
   name <- getVarOrConId form
   let con = iEThingAbs l
+#if MIN_VERSION_ghc(9,8,0)
+      var x = lA l (IEVar Nothing (lA l (ieName l (mkRdrName x))))
+#else
       var x = lA l (IEVar NOEXT (lA l (ieName l (mkRdrName x))))
+#endif
   pure (if isLexCon name
           then con name
           else var name)
@@ -136,7 +140,11 @@ b_ieAll :: Code -> Builder HIE
 b_ieAll form@(LForm (L l _)) = do
   name <- getConId form
   let thing = lA l (iEThingAll (lA l (ieName l (mkUnqual tcClsName name))))
+#if MIN_VERSION_ghc(9,8,0)
+      iEThingAll = IEThingAll (Nothing, NOEXT)
+#else
       iEThingAll = IEThingAll NOEXT
+#endif
   return thing
 {-# INLINABLE b_ieAll #-}
 
@@ -159,7 +167,11 @@ b_ieWith (LForm (L l form)) names =
     f (LForm (L l0 (Atom (ASymbol n0)))) (ns0, fs0) =
       (lA l0 (ieName l (mkRdrName n0)) : ns0, fs0)
     f _ acc = acc
+#if MIN_VERSION_ghc(9,8,0)
+    iEThingWith = IEThingWith (Nothing, NOEXT)
+#else
     iEThingWith = IEThingWith NOEXT
+#endif
     wc = NoIEWildcard
 {-# INLINABLE b_ieWith #-}
 
@@ -170,7 +182,11 @@ b_ieMdl xs =
     _                                   -> builderError
   where
     thing l n = lA l (iEModuleContents (lA l (mkModuleNameFS n)))
+#if MIN_VERSION_ghc(9,8,0)
+    iEModuleContents = IEModuleContents (Nothing, NOEXT)
+#else
     iEModuleContents = IEModuleContents NOEXT
+#endif
 {-# INLINABLE b_ieMdl #-}
 
 b_importD :: (Code, Bool, Maybe Code) -> (Bool, Maybe [HIE])
@@ -221,7 +237,11 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
 
 iEThingAbs :: SrcSpan -> FastString -> HIE
 iEThingAbs l name =
+#if MIN_VERSION_ghc(9,8,0)
+  lA l (IEThingAbs (Nothing, NOEXT) (lA l (ieName l (mkUnqual tcClsName name))))
+#else
   lA l (IEThingAbs NOEXT (lA l (ieName l (mkUnqual tcClsName name))))
+#endif
 {-# INLINABLE iEThingAbs #-}
 
 #if MIN_VERSION_ghc(9,6,0)
