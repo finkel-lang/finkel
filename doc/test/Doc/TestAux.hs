@@ -192,7 +192,7 @@ be skipped.")
   "Parse the contents of console file."
   (lefn [(go [ls]
            (case (span is-cmd-line ls)
-             (, (: cl _) r0) (case (words (tail cl))
+             (, (: cl _) r0) (case (words (drop 1 cl))
                                (: cmd args) (case (break is-cmd-line r0)
                                               (, os r1) (: (ct cmd args os)
                                                            (go r1)))
