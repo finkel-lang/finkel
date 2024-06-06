@@ -181,7 +181,7 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
         (=> (MonadIO m)
             (-> HscEnv
                 [Located String]
-                (m (, DynFlags [Located String] [WARN])))))
+                (m (, DynFlags [Located String] WARN)))))
   [hsc-env]
   (cond-expand
     [(<= 902 :ghc)
@@ -226,7 +226,7 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
       (lept [on-the-commandline (mkGeneralLocated "on the commandline")
              lghc-opts (map on-the-commandline ghc-opts)])
       (<- (, dflags0 fileish warns) (parse-dynamic-flags hsc-env0 lghc-opts))
-      (liftIO (handle-flag-warnings hsc-env0 dflags0 warns))
+      (liftIO (print-or-throw-diagnostics hsc-env0 dflags0 warns))
 
       ;; As done in the Main.hs in "ghc-bin" package, updating the `ldInputs'
       ;; field o the `DynFlags' with `FileOption', to support linking object

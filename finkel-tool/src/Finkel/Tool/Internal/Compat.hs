@@ -8,7 +8,7 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Internal.Compat
-  (export WARN NamePprCtx handle-flag-warnings ppr-wrapped-msg-bag-with-loc
+  (export WARN NamePprCtx print-or-throw-diagnostics ppr-wrapped-msg-bag-with-loc
           get-name-ppr-ctx)
   (require
    (Finkel.Tool.Internal.Macro.Ghc))
@@ -22,8 +22,16 @@
  (GHC.Driver.Env [(HscEnv ..)])
  (GHC.Driver.Monad [(GhcMonad ..)])
  (GHC.Driver.Session [(DynFlags ..)])
- (GHC.Driver.Errors [handleFlagWarnings])
  (GHC.Utils.Outputable [SDoc]))
+
+(cond-expand
+  [(<= 908 :ghc)
+   (:begin
+     (import GHC.Driver.Config.Diagnostic (initPrintConfig))
+     (import GHC.Driver.Errors (printOrThrowDiagnostics)))]
+  [otherwise
+   (imports-from-ghc
+    (GHC.Driver.Errors (handleFlagWarnings)))])
 
 (cond-expand
   [(<= 906 :ghc)
@@ -35,7 +43,7 @@
   [(<= 906 :ghc)
    (:begin
      (import GHC.Driver.Config.Diagnostic (initDiagOpts))
-     (import GHC.Driver.Errors.Types (GhcMessage GhcMessageOpts))
+     (import GHC.Driver.Errors.Types ((GhcMessage ..) GhcMessageOpts))
      (import GHC.Types.Error ((Messages ..) (Diagnostic ..)
                               defaultDiagnosticOpts)))]
   [(<= 904 :ghc)
@@ -56,6 +64,8 @@
     (GHC.Utils.Error [pprErrMsgBagWithLoc]))])
 
 (cond-expand
+  [(<= 908 :ghc)
+   (import GHC.Driver.Errors.Types (DriverMessage))]
   [(< 802 :ghc)
    (imports-from-ghc
     (GHC.Driver.CmdLine (Warn)))]
@@ -66,8 +76,9 @@
 
 (type WARN
   (cond-expand
-    [(< 802 :ghc) Warn]
-    [otherwise (Located String)]))
+    [(<= 908 :ghc) (Messages DriverMessage)]
+    [(< 802 :ghc) [Warn]]
+    [otherwise [(Located String)]]))
 
 ;;; Functions
 
@@ -81,9 +92,13 @@
      (type NamePprCtx PrintUnqualified)
      (defn get-name-ppr-ctx getPrintUnqual))])
 
-(defn (:: handle-flag-warnings (-> HscEnv DynFlags [WARN] (IO ())))
+(defn (:: print-or-throw-diagnostics (-> HscEnv DynFlags WARN (IO ())))
   [_hsc-env dflags warns]
   (cond-expand
+    [(<= 908 :ghc)
+     (lept [diagopts (initDiagOpts dflags)]
+       (printOrThrowDiagnostics (hsc-logger _hsc-env) (initPrintConfig dflags)
+                                diagopts (fmap GhcDriverMessage warns)))]
     [(<= 906 :ghc)
      (handleFlagWarnings (hsc-logger _hsc-env) (defaultDiagnosticOpts @GhcMessage)
                          (initDiagOpts dflags) warns)]
