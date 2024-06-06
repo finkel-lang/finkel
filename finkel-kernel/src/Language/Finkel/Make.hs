@@ -8,6 +8,9 @@ module Language.Finkel.Make
   , makeFromRequire
   , makeFromRequirePlugin
 
+    -- * Summary
+  , fnkSourceToSummary
+
     -- * Session related functions
   , initSessionForMake
   , setContextModules
@@ -396,6 +399,14 @@ makeFromRequirePlugin lmname = do
     mg <- depanal [] False
     void (doLoad LoadAllTargets (Just messager) mg)
 
+-- | Make new 'TargetSummary' from given 'TargetUnit'.
+fnkSourceToSummary :: TargetSource -> Fnk TargetSummary
+fnkSourceToSummary ts = do
+  fnk_env <- getFnkEnv
+  hsc_env <- getSession
+  let tu = emptyTargetUnit ts
+  fst <$> unMakeM (makeNewSummary fnk_env hsc_env tu) emptyMkSt
+
 
 -- ---------------------------------------------------------------------
 --
@@ -543,6 +554,14 @@ data MkSt = MkSt
   , mks_old_summaries :: ![ModSummary]
   }
 
+emptyMkSt :: MkSt
+emptyMkSt = MkSt
+  { mks_summarised = []
+  , mks_flag_options = []
+  , mks_to_summarise = []
+  , mks_old_summaries = []
+  }
+
 getMkSt :: MakeM MkSt
 getMkSt = MakeM (\s -> pure (s,s))
 {-# INLINABLE getMkSt #-}
@@ -571,10 +590,8 @@ summariseTargets
 summariseTargets hsc_env old_summaries tus_to_summarise =
   withTiming' "summariseTargets [Finkel]" $ do
     fnk_env <- getFnkEnv
-    let mks0 = MkSt { mks_summarised = []
-                    , mks_flag_options = []
-                    , mks_to_summarise = tus_to_summarise
-                    , mks_old_summaries = old_summaries }
+    let mks0 = emptyMkSt { mks_to_summarise = tus_to_summarise
+                         , mks_old_summaries = old_summaries }
         rs0 = emptyRecompState hsc_env
     (_, mks1) <- unMakeM (summariseAll fnk_env hsc_env rs0) mks0
     return (mks_summarised mks1, reverse (mks_flag_options mks1))
@@ -718,7 +735,7 @@ isFileModified ms = fmap (/= ms_hs_hash ms) . getFileHash
 isFileModified ms = fmap (ms_hs_date ms <) . getModificationUTCTime
 #endif
 
--- | Make new 'ModSummary' with required home package modules and.
+-- | Make new 'TargetSummary'.
 makeNewSummary :: FnkEnv -> HscEnv -> TargetUnit -> MakeM TargetSummary
 makeNewSummary fnk_env hsc_env tu = toMakeM $ do
   tsum <- summariseTargetUnit tu

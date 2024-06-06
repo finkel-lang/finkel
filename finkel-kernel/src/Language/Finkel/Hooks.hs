@@ -35,7 +35,7 @@ import GHC.Types.SourceFile              (HscSource (..))
 import GHC.Types.SrcLoc                  (noLoc, noSrcSpan)
 
 import GHC.Unit.Module.Location          (ModLocation (..))
-import GHC.Unit.Module.ModSummary        (ModSummary (..), ms_mod_name)
+import GHC.Unit.Module.ModSummary        (ModSummary (..))
 
 import GHC.Utils.Error                   (Messages)
 import GHC.Utils.Exception               (ExceptionMonad)
@@ -53,7 +53,8 @@ import Language.Finkel.Exception         (finkelExceptionLoc,
 import Language.Finkel.Expand            (bcoDynFlags)
 import Language.Finkel.Fnk               (FnkInvokedMode (..), initFnkEnv,
                                           runFnk')
-import Language.Finkel.Make.Summary      (TargetSummary (..), compileFnkFile)
+import Language.Finkel.Make              (fnkSourceToSummary)
+import Language.Finkel.Make.Summary      (TargetSummary (..))
 import Language.Finkel.Make.TargetSource (TargetSource (..),
                                           findTargetSourceWithPragma)
 import Language.Finkel.Options           (FnkPluginOptions (..),
@@ -183,32 +184,34 @@ runFnkPpPhase fpo hsc_env _orig_fn input_fn output_fn = do
 
   pure output_fn
 
--- See: GHC.Driver.Main.hsc_typecheck, which is not exported.
 runFnkTcPhase :: FnkPluginOptions -> HscEnv -> ModSummary
               -> IO (FrontendResult, Messages GhcMessage)
-runFnkTcPhase fpo hsc_env ms0 = do
-  let fnk_typecheck_and_get_warnings hs_file = runHsc' hsc_env $ do
-        let mname = ms_mod_name ms0
-            fnk_env = fpoFnkEnv fpo
-        ems <- liftIO $ withFinkelExceptionHandler hsc_env $
-               runFnk' (compileFnkFile hs_file mname) fnk_env hsc_env
-        case ems of
-          EMS ms1 _ _ | Just pm <- ms_parsed_mod ms1 -> do
-            let local_hsc_env = hscSetFlags (ms_hspp_opts ms1) hsc_env
-            (tc_gbl, _) <- liftIO $ hscTypecheckRename local_hsc_env ms1 pm
-            pure $ FrontendTypecheck tc_gbl
-          _ -> error "runFnkTcPhase: no parsed mod ..."
-
+runFnkTcPhase fpo hsc_env ms0 =
   case ml_hs_file (ms_location ms0) of
     Nothing -> error "runFnkTcPhase: no hs file ..."
     Just hs_file -> do
       let dflags = hsc_dflags hsc_env
           pragma = fpoPragma fpo
+          fnk_env = fpoFnkEnv fpo
       ts <- findTargetSourceWithPragma pragma dflags (noLoc hs_file)
       case ts of
-        FnkSource {} -> fnk_typecheck_and_get_warnings hs_file
+        FnkSource {} -> fnkTypecheckAndGetWarnings fnk_env hsc_env ts
         HsSource {}  -> hscTypecheckAndGetWarnings hsc_env ms0
         _            -> error "runFnkTcPhase: other source ..."
+
+-- See: GHC.Driver.Main.hsc_typecheck, which is not exported.
+fnkTypecheckAndGetWarnings :: FnkEnv -> HscEnv -> TargetSource
+                           -> IO (FrontendResult, Messages GhcMessage)
+fnkTypecheckAndGetWarnings fnk_env hsc_env ts = runHsc' hsc_env $ do
+  ems <- liftIO $ withFinkelExceptionHandler hsc_env $
+         runFnk' (fnkSourceToSummary ts) fnk_env hsc_env
+  case ems of
+    -- XXX: Invoke hscFrontendHook as done in hscTypecheckAndGetWarings?
+    EMS ms1 _ _ | Just pm <- ms_parsed_mod ms1 -> do
+      let lcl_hsc_env = hscSetFlags (ms_hspp_opts ms1) hsc_env
+      (tc_gbl, _) <- liftIO $ hscTypecheckRename lcl_hsc_env ms1 pm
+      pure $ FrontendTypecheck tc_gbl
+    _ -> error "runFnkTcPhase: no parsed mod ..."
 
 logStrLn :: FnkPluginOptions -> String -> IO ()
 logStrLn fpo msg =
