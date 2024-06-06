@@ -39,7 +39,11 @@ jobs:
             cabal: "latest"
             flags: "-O0"
 
-          - ghc: "9.6.5"
+          - ghc: "9.8.2"
+            cabal: "latest"
+            flags: "-O0"
+
+          - ghc: "9.8.2"
             cabal: "latest"
             flags: "-O2"
 
@@ -85,6 +89,7 @@ jobs:
         run: cabal v2-test all
 
       - name: Run haddock
-        # Generating haddock documentations is not working yet in 9.6.5 ...
-        if: ${{ matrix.plan.ghc != '9.6.5' }}
+        # Generating haddock documentations is not working yet in 9.6.5 and
+        # 9.8.2 ...
+        if: ${{ matrix.plan.ghc != '9.6.5' && matrix.plan.ghc != '9.8.2' }}
         run: cabal v2-haddock all
