@@ -35,8 +35,12 @@ module Language.Finkel.Make.Summary
 -- base
 import           Control.Monad.IO.Class            (MonadIO (..))
 import           Data.Foldable                     (find)
-import           Data.List                         (foldl', nub)
+import           Data.List                         (nub)
 import           System.IO                         (IOMode (..), withFile)
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.List                         (foldl')
+#endif
 
 -- container
 #if !MIN_VERSION_ghc(9,2,0)

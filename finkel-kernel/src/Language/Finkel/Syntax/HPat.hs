@@ -11,7 +11,9 @@ module Language.Finkel.Syntax.HPat where
 
 -- base
 import Data.Either                     (partitionEithers)
+#if !MIN_VERSION_base(4,20,0)
 import Data.List                       (foldl')
+#endif
 
 -- ghc
 import GHC_Hs_Lit                      (HsLit (..), HsOverLit)
@@ -26,8 +28,11 @@ import GHC_Utils_Lexeme                (isLexCon, isLexConId, isLexConSym,
 
 import GHC_Types_SrcLoc                (Located)
 
-#if MIN_VERSION_ghc(9,6,0)
+#if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,6,0)
 import GHC.Hs.Extension                (noHsTok)
+#endif
+
+#if MIN_VERSION_ghc(9,6,0)
 import GHC.Hs.Pat                      (RecFieldsDotDot (..))
 #endif
 
@@ -197,7 +202,10 @@ b_labeledP (LForm (L l form)) ps
         (wilds, non_wilds) = partitionEithers ps
         mb_dotdot = case wilds of
           []                  -> Nothing
-#if MIN_VERSION_ghc(9,6,0)
+#if MIN_VERSION_ghc(9,10,0)
+          (LForm (L wl _): _) -> Just (la2la
+                                     (L wl (RecFieldsDotDot (length non_wilds))))
+#elif MIN_VERSION_ghc(9,6,0)
           (LForm (L wl _): _) -> Just (L wl (RecFieldsDotDot (length non_wilds)))
 #elif MIN_VERSION_ghc(8,10,0)
           (LForm (L wl _): _) -> Just (L wl (length non_wilds))
@@ -224,7 +232,9 @@ b_asP (LForm (dL->L l form)) pat =
       return $! lA l (asPat (lN l (mkRdrName name)) (mkParPat' pat))
     _ -> builderError
   where
-#if MIN_VERSION_ghc(9,6,0)
+#if MIN_VERSION_ghc(9,10,0)
+    asPat lid p = AsPat NOEXT lid p
+#elif MIN_VERSION_ghc(9,6,0)
     asPat lid p = AsPat NOEXT lid noHsTok p
 #else
     asPat = AsPat NOEXT

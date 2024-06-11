@@ -16,7 +16,7 @@ module Language.Finkel.Main
 import           Control.Exception            (displayException, throwIO)
 import           Control.Monad                (unless)
 import           Control.Monad.IO.Class       (MonadIO (..))
-import           Data.List                    (foldl', intercalate, partition)
+import           Data.List                    (intercalate, partition)
 import           Data.Version                 (showVersion)
 import           System.Console.GetOpt        (ArgDescr (..), ArgOrder (..),
                                                OptDescr (..), getOpt, usageInfo)
@@ -28,6 +28,10 @@ import           System.IO                    (BufferMode (..), hSetBuffering,
 import           System.Process               (CreateProcess (..),
                                                createProcess_, proc,
                                                waitForProcess)
+
+#if !MIN_VERSION_base(4,20,0)
+import           Data.List                    (foldl')
+#endif
 
 -- ghc
 import           GHC                          (defaultErrorHandler,

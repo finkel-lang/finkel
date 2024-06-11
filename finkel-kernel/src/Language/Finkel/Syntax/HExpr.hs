@@ -12,7 +12,11 @@ module Language.Finkel.Syntax.HExpr where
 -- base
 import Control.Arrow                     (first, second)
 import Data.Either                       (partitionEithers)
-import Data.List                         (foldl', foldl1')
+import Data.List                         (foldl1')
+
+#if !MIN_VERSION_base(4,20,0)
+import Data.List                         (foldl')
+#endif
 
 -- ghc
 import GHC_Builtin_Types                 (tupleDataCon)
@@ -35,24 +39,32 @@ import GHC_Types_SrcLoc                  (GenLocated (..), Located,
                                           SrcSpan (..), getLoc, noLoc)
 import GHC_Utils_Lexeme                  (isLexCon, isLexSym, isLexVarId)
 
+#if MIN_VERSION_ghc(9,10,0)
+import Language.Haskell.Syntax.Expr      (HsLamVariant (..))
+#elif MIN_VERSION_ghc(9,6,0)
+import GHC.Hs.Extension                  (noHsTok)
+#endif
+
+#if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,6,0)
+import Language.Haskell.Syntax.Concrete  (HsToken (..))
+#elif !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,4,0)
+import Language.Haskell.Syntax.Extension (HsToken (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,4,0)
+import GHC.Parser.PostProcess            (mkTokenLocation)
+#endif
+
 #if MIN_VERSION_ghc(9,8,0)
 import Language.Haskell.Syntax.Expr      (LHsRecUpdFields (..))
 #endif
 
 #if MIN_VERSION_ghc(9,6,0)
-import GHC.Hs.Extension                  (noHsTok)
 import GHC.Hs.Pat                        (RecFieldsDotDot (..))
-#endif
-
-#if MIN_VERSION_ghc(9,6,0)
-import Language.Haskell.Syntax.Concrete  (HsToken (..))
-#elif MIN_VERSION_ghc(9,4,0)
-import Language.Haskell.Syntax.Extension (HsToken (..))
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Hs.Expr                       (gHsPar)
-import GHC.Parser.PostProcess            (mkTokenLocation)
 import Language.Haskell.Syntax.Expr      (HsDoFlavour (..))
 #else
 import GHC_Hs_Expr                       (HsStmtContext (..))
@@ -112,14 +124,21 @@ b_ifE (LForm (L l _)) p t f =
 
 b_lamE :: (HExpr,[HPat]) -> HExpr
 #if MIN_VERSION_ghc(9,0,0)
-b_lamE (body,pats) = mkLHsPar (lA l (HsLam NOEXT mg))
+b_lamE (body,pats) = mkLHsPar (lA l hsLam)
   -- Using 'mkHsLam' will make a 'MatchGroup' value with 'Generated' origin
   -- instead of 'FromSource', and contains 'noLoc' location. These were causing
   -- some issues when "-Wincomplete-patterns" flag was turned on.
   where
+#  if MIN_VERSION_ghc(9,10,0)
+    hsLam = HsLam NOEXT LamSingle mg
+#  else
+    hsLam = HsLam NOEXT mg
+#  endif
     l = getLoc (reLoc body)
     mg = mkMatchGroup FromSource ms
-#  if MIN_VERSION_ghc(9,2,0)
+#  if MIN_VERSION_ghc(9,10,0)
+    ms = reLocA (L l [mkSimpleMatch (LamAlt LamSingle) pats body])
+#  elif MIN_VERSION_ghc(9,2,0)
     ms = reLocA (L l [mkSimpleMatch LambdaExpr pats body])
 #  else
     ms = [mkSimpleMatch LambdaExpr pats body]
@@ -156,7 +175,9 @@ b_letE (LForm (L l _)) decls body = do
 #else
   let valbinds = L l (mkHsValBinds_compat (cd_binds cd) (cd_sigs cd))
 #endif
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,10,0)
+  pure (lA l (HsLet (NOEXT, NOEXT) valbinds body))
+#elif MIN_VERSION_ghc(9,4,0)
   let tokLet = L (mkTokenLocation l) HsTok
       tokIn = L (mkTokenLocation l) HsTok
   return (lA l (HsLet NOEXT tokLet valbinds tokIn body))
@@ -194,7 +215,10 @@ b_match pat (grhss,decls) =
 b_hgrhs :: [HGRHS] -> (HExpr, [HGuardLStmt]) -> [HGRHS]
 b_hgrhs rhss (body, gs) =
   let lrhs = case gs of
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,10,0)
+        [] -> reLocA (noLoc rhs)
+        _  -> let l = getLoc (mkLocatedListA gs) in L l rhs
+#elif MIN_VERSION_ghc(9,4,0)
         [] -> reLocA (noLoc rhs)
         _  -> let l = getLoc (mkLocatedListA gs) in la2la (L l rhs)
 #else
@@ -225,7 +249,11 @@ b_tsigE :: Code -> HExpr -> ([HType], HType) -> HExpr
 b_tsigE (LForm (L l _)) e0 (ctxt,t) =
   let t' = case ctxt of
              [] -> t
+#if MIN_VERSION_ghc(9,10,0)
+             _  -> lA l (mkHsQualTy_compat (mkLocatedListA ctxt) t)
+#else
              _  -> lA l (mkHsQualTy_compat (la2la (mkLocatedListA ctxt)) t)
+#endif
 #if MIN_VERSION_ghc(9,2,0)
       e1 = ExprWithTySig NOEXT e0 (hsTypeToHsSigWcType t')
 #elif MIN_VERSION_ghc(8,8,0)
@@ -273,7 +301,10 @@ b_recConOrUpdE whole@(LForm (L l form)) flds =
     (wilds, non_wilds) = partitionEithers flds
     mb_dotdot = case wilds of
       []               -> Nothing
-#if MIN_VERSION_ghc(9,6,0)
+#if MIN_VERSION_ghc(9,10,0)
+      LForm (L wl _):_ -> Just (la2la
+                                (L wl (RecFieldsDotDot (length non_wilds))))
+#elif MIN_VERSION_ghc(9,6,0)
       LForm (L wl _):_ -> Just (L wl (RecFieldsDotDot (length non_wilds)))
 #elif MIN_VERSION_ghc(8,10,0)
       LForm (L wl _):_ -> Just (L wl (length non_wilds))
@@ -361,7 +392,9 @@ mkAppTypes = foldl' mkAppType
 
 mkAppType :: HExpr -> HType -> HExpr
 mkAppType (dL->expr@(L l _)) ty =
-#if MIN_VERSION_ghc(9,6,0)
+#if MIN_VERSION_ghc(9,10,0)
+  L l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
+#elif MIN_VERSION_ghc(9,6,0)
   L l (HsAppType NOEXT expr noHsTok (mkHsWildCardBndrs ty))
 #elif MIN_VERSION_ghc(9,2,0)
   L l (HsAppType (locA l) expr (mkHsWildCardBndrs ty))

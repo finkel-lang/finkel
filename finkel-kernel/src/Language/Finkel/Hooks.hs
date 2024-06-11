@@ -10,11 +10,14 @@ module Language.Finkel.Hooks
 import Control.Exception                 (displayException)
 import Control.Monad                     (when)
 import Control.Monad.IO.Class            (MonadIO (..))
-import Data.List                         (foldl')
 import Data.Maybe                        (fromMaybe)
 import System.Console.GetOpt             (ArgOrder (..), getOpt)
 import System.Exit                       (exitFailure, exitSuccess)
 import System.IO                         (hPutStrLn, stderr)
+
+#if !MIN_VERSION_base(4,20,0)
+import Data.List                         (foldl')
+#endif
 
 -- ghc
 import GHC.Driver.Env                    (HscEnv (..), hscSetFlags, runHsc')
@@ -155,6 +158,9 @@ showTPhase phase = case phase of
   T_LlvmOpt {}      -> "T_LlvmOpt"
   T_LlvmLlc {}      -> "T_LlvmLlc"
   T_LlvmMangle {}   -> "T_LlvmMangle"
+#if MIN_VERSION_ghc(9,10,0)
+  T_LlvmAs {}       -> "T_LlvmAs"
+#endif
   T_MergeForeign {} -> "T_MergeForeign"
 
 runFnkPpPhase

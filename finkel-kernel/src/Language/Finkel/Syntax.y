@@ -39,6 +39,10 @@ import GHC_Types_ForeignCall (Safety)
 import GHC_Types_SrcLoc (GenLocated(..), Located, getLoc, noLoc)
 import GHC_Types_SourceText (SourceText (..))
 
+#if MIN_VERSION_ghc(9,10,0)
+import GHC.Parser.Annotation (NoAnn(..))
+#endif
+
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Parser.Annotation (LocatedA, LocatedAn, la2la)
 #endif
@@ -1129,7 +1133,10 @@ uL :: Code -> a -> Located a
 uL (LForm (L l _)) a = L l a
 {-# INLINE uL #-}
 
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,10,0)
+uLA :: NoAnn ann => Code -> a -> LocatedAn ann a
+uLA (LForm (L l _)) a = reLocA (L l a)
+#elif MIN_VERSION_ghc(9,4,0)
 uLA :: Code -> a -> LocatedAn ann a
 uLA (LForm (L l _)) a = la2la (reLocA (L l a))
 #else

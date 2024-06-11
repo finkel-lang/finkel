@@ -740,13 +740,13 @@ pprConDecl st condecl@ConDeclH98 {} =
 
 #if MIN_VERSION_ghc(8,6,0)
 pprConDecl st ConDeclGADT { con_names = cons
-#if MIN_VERSION_ghc(9,2,0)
+#  if MIN_VERSION_ghc(9,2,0)
                           , con_bndrs = L _ outer_bndrs
                           , con_g_args = args
-#else
+#  else
                           , con_qvars = qvars
                           , con_args = args
-#endif
+#  endif
                           , con_mb_cxt = mcxt
                           , con_res_ty = res_ty
                           , con_doc = doc }
@@ -754,39 +754,42 @@ pprConDecl st ConDeclGADT { con_names = cons
     <+> sep [hforall -- pprHsForAll' (hsq_explicit qvars) cxt
             ,ppr_arrow_chain (get_args args ++ [hsrc res_ty])]
   where
-#if MIN_VERSION_ghc(9,6,0)
+#  if MIN_VERSION_ghc(9,6,0)
     cons' = toList cons
-#else
+#  else
     cons' = cons
-#endif
-#if MIN_VERSION_ghc(9,2,0)
+#  endif
+#  if MIN_VERSION_ghc(9,2,0)
     hforall = pprHsOuterSigTyVarBndrs outer_bndrs <+> pprLHsContext mcxt
-#elif MIN_VERSION_ghc(9,0,0)
+#  elif MIN_VERSION_ghc(9,0,0)
     hforall = pprHsForAll' (mkHsForAllInvisTele qvars) cxt
     cxt = fromMaybe (noLoc []) mcxt
-#else
+#  else
     hforall = pprHsForAll' (hsq_explicit qvars) cxt
     cxt = fromMaybe (noLoc []) mcxt
-#endif
-#if MIN_VERSION_ghc(9,4,0)
-    get_args (PrefixConGADT csts)  = map hsrc csts
-    get_args (RecConGADT fields _) = [pprConDeclFields (unLoc fields)]
-#elif MIN_VERSION_ghc(9,2,0)
-    get_args (PrefixConGADT csts)  = map hsrc csts
-    get_args (RecConGADT fields)   = [pprConDeclFields (unLoc fields)]
-#else
-    get_args (PrefixCon as)        = map hsrc as
-    get_args (RecCon fields)       = [pprConDeclFields (unLoc fields)]
-    get_args (InfixCon {})         = pprPanic "pprConDecl:GADT" (ppr cons)
-#endif
+#  endif
+#  if MIN_VERSION_ghc(9,10,0)
+    get_args (PrefixConGADT _x csts) = map hsrc csts
+    get_args (RecConGADT _ fields)   = [pprConDeclFields (unLoc fields)]
+#  elif MIN_VERSION_ghc(9,4,0)
+    get_args (PrefixConGADT csts)    = map hsrc csts
+    get_args (RecConGADT fields _)   = [pprConDeclFields (unLoc fields)]
+#  elif MIN_VERSION_ghc(9,2,0)
+    get_args (PrefixConGADT csts)    = map hsrc csts
+    get_args (RecConGADT fields)     = [pprConDeclFields (unLoc fields)]
+#  else
+    get_args (PrefixCon as)          = map hsrc as
+    get_args (RecCon fields)         = [pprConDeclFields (unLoc fields)]
+    get_args (InfixCon {})           = pprPanic "pprConDecl:GADT" (ppr cons)
+#  endif
     ppr_arrow_chain []     = empty
     ppr_arrow_chain (a:as) = sep (a : map (arrow <+>) as)
     hsrc :: HsSrc a => a -> SDoc
     hsrc = toHsSrc st
 
-#if !MIN_VERSION_ghc(9,0,0)
+#  if !MIN_VERSION_ghc(9,0,0)
 pprConDecl _ con = ppr con
-#endif
+#  endif
 #else
 pprConDecl st (ConDeclGADT { con_names = cons
                            , con_type = res_ty
@@ -805,8 +808,7 @@ ppr_con_names = pprWithCommas (pprPrefixOcc . unLoc)
 
 -- Modified version of 'HsTypes.pprConDeclFields', to emit documentation
 -- comments of fields in record data type.
-pprConDeclFields :: OUTPUTABLE n pr
-                  => [LConDeclField n] -> SDoc
+pprConDeclFields :: OUTPUTABLE n pr => [LConDeclField n] -> SDoc
 pprConDeclFields fields =
   braces (sep (punctuate comma (map ppr_fld fields)))
   where
