@@ -39,7 +39,7 @@ test-suite test
                      , ghc           >= 8.2.0  && < 9.11
                      , process       >= 1.6.1  && < 1.7
                      , hspec         >= 2.4.8  && < 2.12
-                     , QuickCheck    >= 2.10.1 && < 2.15
+                     , QuickCheck    >= 2.10.1 && < 2.16
                        --
                      , finkel-core   == 0.0.0
                      , finkel-kernel == 0.0.0
