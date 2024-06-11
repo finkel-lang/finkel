@@ -97,10 +97,19 @@
 
           ;; info
           (ok '(repl-macro info putStr)
-              "putStr :: String -> IO () \t-- Defined in ‘System.IO’")
+              (cond-expand
+                [(<= 910 :ghc)
+                 "putStr :: String -> IO () \t-- Defined in ‘GHC.Internal.System.IO’"]
+                [otherwise
+                 "putStr :: String -> IO () \t-- Defined in ‘System.IO’"]))
           (ok '(repl-macro info ++)
-              "(++) :: [a] -> [a] -> [a] \t-- Defined in ‘GHC.Base’\n\
-             \infixr 5 ++")
+              (cond-expand
+                [(<= 910 :ghc)
+                 "(++) :: [a] -> [a] -> [a] \t-- Defined in ‘GHC.Internal.Base’\n\
+                 \infixr 5 ++"]
+                [otherwise
+                 "(++) :: [a] -> [a] -> [a] \t-- Defined in ‘GHC.Base’\n\
+                 \infixr 5 ++"]))
           (with-right '(repl-macro info ())
             (isSubsequenceOf "instance Show ()"))
           (with-right '(repl-macro info [])

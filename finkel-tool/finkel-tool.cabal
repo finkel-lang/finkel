@@ -79,9 +79,9 @@ library
                      , exceptions    >= 0.8.3  && < 0.11
                      , filepath      >= 1.4.1  && < 1.6
                      , haskeline     >= 0.7.4  && < 0.9
-                     , ghc           >= 8.2.0  && < 9.9.0
-                     , ghc-boot      >= 8.2.0  && < 9.9.0
-                     , ghci          >= 8.2.0  && < 9.9.0
+                     , ghc           >= 8.2.0  && < 9.11.0
+                     , ghc-boot      >= 8.2.0  && < 9.11.0
+                     , ghci          >= 8.2.0  && < 9.11.0
                      , network       >= 2.6.3  && < 3.3
                      , process       >= 1.6.1  && < 1.7
                      , transformers  >= 0.5.2  && < 0.7
@@ -110,6 +110,7 @@ test-suite finkel-tool-test
   build-depends:       base
                      , directory
                      , exceptions
+                     , filepath
                      , ghc
                      , haskeline
                      , network
@@ -118,10 +119,9 @@ test-suite finkel-tool-test
                      , finkel-kernel
                      , finkel-tool
                      --
-                     , filepath   >= 1.4.1  && < 1.5
                      , hspec      >= 2.4.8  && < 2.12
                      , silently   >= 1.2    && < 1.3
-                     , QuickCheck >= 2.10.1 && < 2.15
+                     , QuickCheck >= 2.10.1 && < 2.16
   other-modules:       CLITest
                        GhcTest
                        MainTest
