@@ -54,7 +54,7 @@ test-suite finkel-setup-test
                      , finkel-kernel
                      , finkel-setup
                        --
-                     , ghc           >= 8.2.0 && < 9.9
+                     , ghc           >= 8.2.0 && < 9.11
                      , hspec         >= 2.4.8 && < 2.12
   build-tool-depends:  fkc:fkc
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
