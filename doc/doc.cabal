@@ -48,8 +48,12 @@ test-suite test
 
   ghc-options:         -Wall -threaded -rtsopts
 
-  if !os(windows) && flag(dynamic)
-    ghc-options:       -dynamic
+  -- Skipping the whole test under Windows, since it's too slow.
+  if os(windows)
+    buildable: False
+  else
+    if flag(dynamic)
+      ghc-options:       -dynamic
 
   if impl (ghc >= 9.6)
     ghc-options:       -fplugin Finkel.Core.Plugin
