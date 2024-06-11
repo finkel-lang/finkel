@@ -4,8 +4,6 @@ module Language.Finkel.ParsedResult (
   fnkParsedResultAction
   ) where
 
-#include "ghc_modules.h"
-
 #if MIN_VERSION_ghc(9,6,0)
 
 -- Not supported in ghc >= 9.6.
@@ -15,6 +13,8 @@ fnkParsedResultAction = error "Use Language.Finkel.Hooks.finkelHooks instead"
 -- Requires parsedResultaction field in the 'Plugin' data type, which is
 -- supported from ghc 8.6.0.
 #elif MIN_VERSION_ghc(8,6,0)
+
+#include "ghc_modules.h"
 
 -- base
 import Control.Exception                 (displayException, throwIO)

@@ -100,6 +100,10 @@ import           System.Exit                  (exitFailure)
 import           System.IO                    (hPutStrLn, stderr)
 import           System.IO.Unsafe             (unsafePerformIO)
 
+#if MIN_VERSION_ghc(9,10,0)
+import           Data.Word                    (Word64)
+#endif
+
 #if !MIN_VERSION_ghc(8,8,0)
 import           Control.Monad.Fail           (MonadFail (..))
 #endif
@@ -754,7 +758,9 @@ gensym' prefix = do
 -- multiple times. To avoid initialization of UniqSupply multiple times, using
 -- top-level IORef to detect whether the initializatio has been done or not.
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,10,0)
+type InitialUnique = Word64
+#elif MIN_VERSION_ghc(9,2,0)
 type InitialUnique = Word
 #else
 type InitialUnique = Int

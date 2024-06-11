@@ -80,6 +80,10 @@ mkTest path
   , __GLASGOW_HASKELL__ < (900 :: Int)
   = describe path (it "is pending under ghc < 9.0"
                     (const (pendingWith "Generated Haskell code not working")))
+  | base_name == "0003-expressions-3"
+  , __GLASGOW_HASKELL__ >= (910 :: Int)
+  = describe path (it "is not supported in ghc >= 9.10"
+                    (const (pendingWith "`forall' is keyword by default")))
   | base_name == "2028-standalonekind"
   , __GLASGOW_HASKELL__ < (810 :: Int)
   = describe path (it "is not supported in ghc < 8.10.1"

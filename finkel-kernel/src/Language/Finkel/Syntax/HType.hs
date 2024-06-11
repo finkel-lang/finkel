@@ -11,7 +11,9 @@ module Language.Finkel.Syntax.HType where
 #include "ghc_modules.h"
 
 -- base
+#if !MIN_VERSION_base(4,20,0)
 import Data.List                       (foldl')
+#endif
 
 -- ghc
 import GHC_Builtin_Types               (consDataCon, listTyCon_RDR, tupleTyCon)
@@ -27,21 +29,21 @@ import GHC_Types_Name_Reader           (getRdrName, mkQual, mkUnqual)
 import GHC_Types_SrcLoc                (GenLocated (..), getLoc)
 import GHC_Utils_Lexeme                (isLexCon, isLexConSym, isLexVarSym)
 
-#if MIN_VERSION_ghc(9,4,0)
+#if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,2,0)
+import GHC_Parser_Annotation           (Anchor (..), AnchorOperation (..),
+                                        EpAnn (..))
+import GHC_Types_SrcLoc                (srcSpanToRealSrcSpan)
+#endif
+
+#if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,4,0)
 import GHC.Hs.Extension                (noHsUniTok)
 import GHC.Parser.Annotation           (NoEpAnns (..))
-#elif MIN_VERSION_ghc(9,2,0)
+#elif !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,2,0)
 import GHC_Parser_Annotation           (EpaLocation (..), TrailingAnn (..))
 #endif
 
 #if !MIN_VERSION_ghc(9,4,0) && MIN_VERSION_ghc(9,0,0)
 import GHC_Parser_Annotation           (IsUnicodeSyntax (..))
-#endif
-
-#if MIN_VERSION_ghc(9,2,0)
-import GHC_Parser_Annotation           (Anchor (..), AnchorOperation (..),
-                                        EpAnn (..))
-import GHC_Types_SrcLoc                (srcSpanToRealSrcSpan)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -179,21 +181,27 @@ b_funT (LForm (L l _)) ts =
     -- during recursion. Using "EpAnn" to make a dummy EpAnn typed value with
     -- "mkDummyAnn". Without the dummy value, GADT constructors will show
     -- compilation errors.
-#  if MIN_VERSION_ghc(9,4,0)
+#  if MIN_VERSION_ghc(9,10,0)
+    hsFunTy = HsFunTy ann (HsUnrestrictedArrow NOEXT)
+#  elif MIN_VERSION_ghc(9,4,0)
     hsFunTy = HsFunTy ann (HsUnrestrictedArrow noHsUniTok)
 #  else
     hsFunTy = HsFunTy ann (HsUnrestrictedArrow NormalSyntax)
 #  endif
+#  if MIN_VERSION_ghc(9,10,0)
+    ann = NOEXT
+#  else
     ann = maybe NOEXT mkDummyAnn (srcSpanToRealSrcSpan l)
     mkDummyAnn real_span =
       let dummy_anchor = Anchor real_span UnchangedAnchor
-#  if MIN_VERSION_ghc(9,4,0)
+#    if MIN_VERSION_ghc(9,4,0)
           dummy_anns = NoEpAnns
-#  else
+#    else
           dummy_anns = AddRarrowAnn (EpaSpan real_span)
-#  endif
+#    endif
           dummy_comments = NOEXT
       in  EpAnn dummy_anchor dummy_anns dummy_comments
+#  endif
 #elif MIN_VERSION_ghc(9,0,0)
     hsFunTy = HsFunTy NOEXT (HsUnrestrictedArrow NormalSyntax)
 #else
@@ -292,7 +300,11 @@ b_bangT (LForm (L l _)) t = lA l (hsBangTy srcBang (parTyApp t))
 b_forallT :: Code -> ([HTyVarBndrSpecific], ([HType], HType)) -> HType
 b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
   let ty0 = lA l0 (mkHsQualTy_compat ctxts' body)
+#if MIN_VERSION_ghc(9,10,0)
+      ctxts' = mkLocatedListA ctxts
+#else
       ctxts' = la2la (mkLocatedListA ctxts)
+#endif
 #if MIN_VERSION_ghc(8,4,0)
       ty1 = hsParTy (lA l0 (forAllTy bndrs ty0))
 #else
@@ -303,8 +315,11 @@ b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
 
 b_qualT :: Code -> ([HType], HType) -> HType
 b_qualT (LForm (L l _)) (ctxts, body) =
+#if MIN_VERSION_ghc(9,10,0)
+  lA l (mkHsQualTy_compat (mkLocatedListA ctxts) body)
+#else
   lA l (mkHsQualTy_compat (la2la (mkLocatedListA ctxts)) body)
-
+#endif
 {-# INLINABLE b_qualT #-}
 
 b_kindedType :: Code -> HType -> HType -> HType

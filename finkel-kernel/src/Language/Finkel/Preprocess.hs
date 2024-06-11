@@ -23,7 +23,6 @@ import Control.Monad                     (when)
 import Control.Monad.IO.Class            (MonadIO (..))
 import Data.Char                         (toLower)
 import Data.IORef                        (newIORef)
-import Data.List                         (foldl')
 import Data.Maybe                        (fromMaybe)
 import System.Console.GetOpt             (ArgDescr (..), ArgOrder (..),
                                           OptDescr (..), getOpt, usageInfo)
@@ -31,6 +30,10 @@ import System.Environment                (getArgs, getProgName)
 import System.Exit                       (exitFailure)
 import System.IO                         (IOMode (..), hPutStrLn, stderr,
                                           stdout, withFile)
+
+#if !MIN_VERSION_base(4,20,0)
+import Data.List                         (foldl')
+#endif
 
 #if MIN_VERSION_base(4,11,0)
 import Prelude                           hiding ((<>))

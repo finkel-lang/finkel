@@ -58,6 +58,12 @@ import           GHC_Types_SrcLoc                 (GenLocated (..), Located,
 import           GHC_Utils_Lexeme                 (isLexCon, isLexConSym,
                                                    isLexVar, isLexVarSym)
 
+#if MIN_VERSION_ghc(9,10,0)
+import           GHC.Parser.Annotation            (noAnnSrcSpan)
+#elif MIN_VERSION_ghc(9,4,0)
+import           GHC.Parser.Annotation            (SrcSpanAnn' (..), noComments)
+#endif
+
 #if MIN_VERSION_ghc(9,8,0)
 import           Language.Haskell.Syntax.Type     (HsBndrVis (..))
 #endif
@@ -66,7 +72,6 @@ import           Language.Haskell.Syntax.Type     (HsBndrVis (..))
 import           GHC.Hs.Doc                       (LHsDoc)
 import           GHC.Hs.Pat                       (HsFieldBind (..))
 import           GHC.Parser                       (parseIdentifier)
-import           GHC.Parser.Annotation            (SrcSpanAnn' (..), noComments)
 import           GHC.Parser.HaddockLex            (lexHsDoc)
 import           GHC.Types.SrcLoc                 (SrcSpan)
 #else
@@ -265,7 +270,13 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
 -- | Make 'HsRecField' with given name and located data.
 mkcfld :: Bool -> (Located FastString, a) -> LHsRecField PARSED a
 mkcfld is_pun (L nl name, e) =
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,10,0)
+  lA nl HsFieldBind { hfbAnn = NOEXT
+                    , hfbLHS = L (noAnnSrcSpan nl)
+                                 (mkFieldOcc (lN nl (mkRdrName name)))
+                    , hfbRHS = e
+                    , hfbPun = is_pun }
+#elif MIN_VERSION_ghc(9,4,0)
   lA nl HsFieldBind { hfbAnn = NOEXT
                     -- XXX: Not much sure below location is appropriate
                     , hfbLHS = L (SrcSpanAnn noComments nl)
@@ -339,7 +350,9 @@ kindedTyVar (LForm (L l _dc)) name kind =
   case name of
     LForm (L ln (Atom (ASymbol name'))) -> do
        let name'' = lN ln (mkUnqual tvName name')
-#if MIN_VERSION_ghc(9,8,0)
+#if MIN_VERSION_ghc(9,10,0)
+       return $! lA l (KindedTyVar NOEXT (HsBndrRequired NOEXT) name'' kind)
+#elif MIN_VERSION_ghc(9,8,0)
        return $! lA l (KindedTyVar NOEXT HsBndrRequired name'' kind)
 #elif MIN_VERSION_ghc(9,0,0)
        return $! lA l (KindedTyVar NOEXT () name'' kind)
@@ -362,7 +375,23 @@ kindedTyVarSpecific = kindedTyVar
 #endif
 {-# INLINABLE kindedTyVarSpecific #-}
 
-#if MIN_VERSION_ghc(9,8,0)
+#if MIN_VERSION_ghc(9,10,0)
+codeToUserTyVar :: Code -> HTyVarBndrVis
+codeToUserTyVar code =
+  -- XXX: Always using HsBndrRequired.
+  case code of
+    LForm (L l (Atom (ASymbol name))) ->
+      let bvis = HsBndrRequired NOEXT
+      in lA l (UserTyVar NOEXT bvis (lN l (mkUnqual tvName name)))
+    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
+codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
+codeToUserTyVarSpecific code =
+  case code of
+    LForm (L l (Atom (ASymbol name))) ->
+      lA l (UserTyVar NOEXT SpecifiedSpec (lN l (mkUnqual tvName name)))
+      -- XXX: Does not support 'InferredSpec' yet.
+    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
+#elif MIN_VERSION_ghc(9,8,0)
 codeToUserTyVar :: Code -> HTyVarBndrVis
 codeToUserTyVar code =
   case code of
@@ -371,10 +400,10 @@ codeToUserTyVar code =
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
 codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
 codeToUserTyVarSpecific code =
+  -- XXX: Does not support 'InferredSpec' yet.
   case code of
     LForm (L l (Atom (ASymbol name))) ->
       lA l (UserTyVar NOEXT SpecifiedSpec (lN l (mkUnqual tvName name)))
-      -- XXX: Does not support 'InferredSpec' yet.
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
 #elif MIN_VERSION_ghc(9,0,0)
 codeToUserTyVar :: Code -> LHsTyVarBndr () PARSED

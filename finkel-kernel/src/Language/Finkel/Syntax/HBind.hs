@@ -23,6 +23,10 @@ import           GHC_Types_Fixity                (Fixity)
 import           GHC_Types_Name_Reader           (RdrName)
 import           GHC_Types_SrcLoc                (GenLocated (..))
 
+#if MIN_VERSION_ghc(9,10,0)
+import           GHC_Hs_Binds                    (HsMultAnn (..))
+#endif
+
 #if !MIN_VERSION_ghc(9,2,0)
 import           GHC_Types_SrcLoc                (SrcSpan)
 #endif
@@ -52,9 +56,13 @@ mkPatBind_compat :: HPat -> [HGRHS] -> [HDecl] -> HsBind PARSED
 mkPatBind_compat (dL->L l pat) grhss decls =
   PatBind { pat_lhs = cL l pat
           , pat_rhs = mkGRHSs grhss decls l
-          -- XXX: From ghc 9.6, the `pat_ext' field is used for holding former
-          -- `pat_ticks' information.
+#if MIN_VERSION_ghc(9,10,0)
+            -- XXX: Does not support HsMultAnn.
+          , pat_mult = HsNoMultAnn unused
+#endif
 #if MIN_VERSION_ghc(8,6,0)
+            -- XXX: From ghc 9.6, the `pat_ext' field is used for holding former
+            -- `pat_ticks' information.
           , pat_ext = NOEXT
 #else
           , pat_rhs_ty = placeHolderType
@@ -111,5 +119,6 @@ declsToBinds l decls = L l binds'
 {-# INLINABLE declsToBinds #-}
 
 mkFixSig :: [LocatedN RdrName] -> Fixity -> Sig PARSED
+-- XXX: Does not support NamespaceSpecifier.
 mkFixSig lnames fixity = FixSig NOEXT (FixitySig NOEXT lnames fixity)
 {-# INLINABLE mkFixSig #-}

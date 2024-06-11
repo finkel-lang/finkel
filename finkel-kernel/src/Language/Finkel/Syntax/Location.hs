@@ -1,9 +1,15 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP              #-}
+{-# LANGUAGE FlexibleContexts #-}
+
+ -- For HasLoc (GenLocated l e)
+{-# LANGUAGE MonoLocalBinds   #-}
+
 -- | Module for location in Haskell AST
 module Language.Finkel.Syntax.Location
   ( -- * Auxiliary function
     lN, lA, lL
   , mkLocatedList, mkLocatedListA
+  , mkLocatedListA'
 
     -- * Re-export or aliase
   , LocatedN, LIdP
@@ -12,7 +18,25 @@ module Language.Finkel.Syntax.Location
 
   ) where
 
+#include "ghc_modules.h"
+
 -- ghc
+
+import           GHC_Types_SrcLoc                  (GenLocated (..), Located,
+                                                    SrcSpan, combineLocs, noLoc)
+
+#if MIN_VERSION_ghc(9,10,0)
+import qualified GHC.Hs.Utils                      (mkLocatedList)
+import           GHC.Parser.Annotation             (HasAnnotation (..),
+                                                    HasLoc (..), LocatedAn,
+                                                    NoAnn (..))
+#elif MIN_VERSION_ghc(9,2,0)
+import           GHC.Parser.Annotation             (SrcAnn, SrcSpanAnn' (..),
+                                                    addCLocAA, combineLocsA,
+                                                    noAnn, noAnnSrcSpan, reLocA)
+import           GHC.Types.SrcLoc                  (noSrcSpan)
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import           Language.Haskell.Syntax.Extension (LIdP)
 #elif MIN_VERSION_ghc(8,10,0)
@@ -25,34 +49,15 @@ import           HsExtension                       (IdP)
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Parser.Annotation             (LocatedA, LocatedL,
-                                                    LocatedN, SrcAnn,
-                                                    SrcSpanAnn' (..), addCLocA,
-                                                    addCLocAA, combineLocsA,
-                                                    getLocA, la2la,
-                                                    noAnnSrcSpan, reLoc, reLocA)
-import           GHC.Types.SrcLoc                  (noSrcSpan)
-#elif MIN_VERSION_ghc(9,0,0)
-import           GHC.Types.SrcLoc                  (addCLoc, getLoc)
+                                                    LocatedN, addCLocA, getLocA,
+                                                    la2la, reLoc)
 #else
-import           SrcLoc                            (addCLoc, getLoc)
-#endif
-
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Types.SrcLoc                  (GenLocated (..), Located,
-                                                    SrcSpan, combineLocs, noLoc)
-#else
-import           SrcLoc                            (GenLocated (..), Located,
-                                                    SrcSpan, combineLocs, noLoc)
+import           GHC_Types_SrcLoc                  (addCLoc, getLoc)
 #endif
 
 #if MIN_VERSION_ghc(8,8,0) && !MIN_VERSION_ghc(9,0,0)
 import           SrcLoc                            (HasSrcSpan, SrcSpanLess)
 import qualified SrcLoc
-#endif
-
--- Internal
-#if MIN_VERSION_ghc(9,2,0)
-import           Language.Finkel.Syntax.Extension
 #endif
 
 -- Note [Location helper functions]
@@ -100,6 +105,18 @@ lL = L
 {-# INLINABLE lA #-}
 {-# INLINABLE lL #-}
 
+#if MIN_VERSION_ghc(9,10,0)
+reLocA :: (HasLoc (GenLocated a e), HasAnnotation b)
+       => GenLocated a e -> GenLocated b e
+reLocA = reLoc
+{-# INLINE reLocA #-}
+
+addCLocAA :: (HasLoc a, HasLoc b, HasAnnotation l)
+          => a -> b -> c -> GenLocated l c
+addCLocAA = addCLocA
+{-# INLINE addCLocAA #-}
+#endif
+
 #if !MIN_VERSION_ghc(9,2,0)
 getLocA :: Located a -> SrcSpan
 getLocA = getLoc
@@ -146,28 +163,54 @@ cL = L
 {-# INLINABLE dL #-}
 
 #if !MIN_VERSION_ghc(8,6,0)
-#if MIN_VERSION_ghc(8,4,0)
+#  if MIN_VERSION_ghc(8,4,0)
 type LIdP a = Located (IdP a)
-#else
+#  else
 type LIdP a = Located a
-#endif
+#  endif
 #endif
 
--- Function defined in 'HsUtils', not exported.
-mkLocatedList ::  [Located a] -> Located [Located a]
+#if !MIN_VERSION_ghc(8,6,0) && MIN_VERSION_ghc(8,4,0)
+type LIdP a = Located (IdP a)
+#elif !MIN_VERSION_ghc(8,6,0) && !MIN_VERSION_ghc(8,4,0)
+type LIdP a = Located a
+#endif
+
+-- For concrete 'Located' input and output.
+mkLocatedList :: [Located a] -> Located [Located a]
 mkLocatedList []        = noLoc []
 mkLocatedList ms@(hd:_) = L (combineLocs hd (last ms)) ms
 {-# INLINABLE mkLocatedList #-}
 
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,10,0)
+mkLocatedListA :: (Semigroup a, NoAnn an)
+               => [LocatedAn a e] -> LocatedAn an [LocatedAn a e]
+mkLocatedListA = GHC.Hs.Utils.mkLocatedList
+
+-- The expression is same as 'mkLocatedListA', but the type signature of the
+-- resulting value has the same annotation as the element of given list.
+mkLocatedListA' :: (Semigroup a, NoAnn a)
+                => [LocatedAn a e] -> LocatedAn a [LocatedAn a e]
+mkLocatedListA' = mkLocatedListA
+
+#elif MIN_VERSION_ghc(9,2,0)
 mkLocatedListA
   :: Semigroup a
   => [GenLocated (SrcAnn a) e]
   -> GenLocated (SrcAnn a) [GenLocated (SrcAnn a) e]
-mkLocatedListA []        = L (SrcSpanAnn unused noSrcSpan) []
+mkLocatedListA []        = L (SrcSpanAnn noAnn noSrcSpan) []
 mkLocatedListA ms@(hd:_) = L (combineLocsA hd (last ms)) ms
+
+mkLocatedListA'
+  :: Semigroup a
+  => [GenLocated (SrcAnn a) e]
+  -> GenLocated (SrcAnn a) [GenLocated (SrcAnn a) e]
+mkLocatedListA' = mkLocatedListA
 #else
 mkLocatedListA :: [Located a] -> Located [Located a]
 mkLocatedListA = mkLocatedList
+
+mkLocatedListA' :: [Located a] -> Located [Located a]
+mkLocatedListA' = mkLocatedList
 #endif
 {-# INLINABLE mkLocatedListA #-}

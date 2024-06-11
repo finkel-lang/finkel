@@ -22,12 +22,15 @@ import GHC_Types_SrcLoc                 (GenLocated (..), SrcSpan)
 import GHC_Unit_Module                  (mkModuleNameFS)
 import GHC_Utils_Lexeme                 (isLexCon)
 
+#if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,6,0)
+import Language.Haskell.Syntax.Concrete (LayoutInfo (..))
+#elif !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,0,0)
+import GHC_Types_SrcLoc                 (LayoutInfo (..))
+#endif
+
 #if MIN_VERSION_ghc(9,6,0)
 import GHC.Hs                           (XModulePs (..))
-import Language.Haskell.Syntax.Concrete (LayoutInfo (..))
 import Language.Haskell.Syntax.ImpExp   (ImportListInterpretation (..))
-#elif MIN_VERSION_ghc(9,0,0)
-import GHC_Types_SrcLoc                 (LayoutInfo (..))
 #endif
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -64,7 +67,11 @@ b_module mb_form exports =
       HsModule { hsmodName = mb_name
                , hsmodExports = if null exports
                                    then Nothing
+#if MIN_VERSION_ghc(9,10,0)
+                                   else Just (mkLocatedListA exports)
+#else
                                    else Just (la2la (mkLocatedListA exports))
+#endif
                , hsmodImports = imports
                -- Function `cvTopDecls' is used for mergeing multiple top-level
                -- FunBinds, which may take different patterns in its arguments.
@@ -72,7 +79,11 @@ b_module mb_form exports =
 #if MIN_VERSION_ghc(9,6,0)
                , hsmodExt = XModulePs
                    { hsmodAnn = NOEXT
+#  if MIN_VERSION_ghc(9,10,0)
+                   , hsmodLayout = unused
+#  else
                    , hsmodLayout = NoLayoutInfo
+#  endif
                    , hsmodDeprecMessage = Nothing
                    , hsmodHaddockModHeader = fmap lHsDocString2LHsDoc mbdoc
                    }
@@ -98,10 +109,12 @@ b_ieSym :: Code -> Builder HIE
 b_ieSym form@(LForm (L l _)) = do
   name <- getVarOrConId form
   let con = iEThingAbs l
-#if MIN_VERSION_ghc(9,8,0)
-      var x = lA l (IEVar Nothing (lA l (ieName l (mkRdrName x))))
+#if MIN_VERSION_ghc(9,10,0)
+  let var x = lA l (IEVar Nothing (lA l (ieName l (mkRdrName x))) Nothing)
+#elif MIN_VERSION_ghc(9,8,0)
+  let var x = lA l (IEVar Nothing (lA l (ieName l (mkRdrName x))))
 #else
-      var x = lA l (IEVar NOEXT (lA l (ieName l (mkRdrName x))))
+  let var x = lA l (IEVar NOEXT (lA l (ieName l (mkRdrName x))))
 #endif
   pure (if isLexCon name
           then con name
@@ -139,13 +152,15 @@ b_ieAbs form@(LForm (L l _)) = iEThingAbs l <$> getConId form
 b_ieAll :: Code -> Builder HIE
 b_ieAll form@(LForm (L l _)) = do
   name <- getConId form
-  let thing = lA l (iEThingAll (lA l (ieName l (mkUnqual tcClsName name))))
-#if MIN_VERSION_ghc(9,8,0)
-      iEThingAll = IEThingAll (Nothing, NOEXT)
+#if MIN_VERSION_ghc(9,10,0)
+  -- XXX: Does not support ExportDoc.
+  let iEThingAll ie_name = IEThingAll (Nothing, NOEXT) ie_name Nothing
+#elif MIN_VERSION_ghc(9,8,0)
+  let iEThingAll = IEThingAll (Nothing, NOEXT)
 #else
-      iEThingAll = IEThingAll NOEXT
+  let iEThingAll = IEThingAll NOEXT
 #endif
-  return thing
+  return $ lA l (iEThingAll (lA l (ieName l (mkUnqual tcClsName name))))
 {-# INLINABLE b_ieAll #-}
 
 b_ieWith :: Code -> [Code] -> Builder HIE
@@ -154,8 +169,11 @@ b_ieWith (LForm (L l form)) names =
     Atom (ASymbol name) -> return (thing name)
     _                   -> builderError
   where
+#if MIN_VERSION_ghc(9,10,0)
+    -- XXX: Does not support ExportDoc.
+    thing name = lA l (iEThingWith (wrapped name) wc ns Nothing)
+#elif MIN_VERSION_ghc(9,2,0)
     -- XXX: Does not support DuplicateRecordFields.
-#if MIN_VERSION_ghc(9,2,0)
     thing name = lA l (iEThingWith (wrapped name) wc ns)
 #else
     thing name = L l (iEThingWith (wrapped name) wc ns _fs)
@@ -237,7 +255,11 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
 
 iEThingAbs :: SrcSpan -> FastString -> HIE
 iEThingAbs l name =
-#if MIN_VERSION_ghc(9,8,0)
+#if MIN_VERSION_ghc(9,10,0)
+  -- XXX: Does not support ExportDoc.
+  lA l (IEThingAbs (Nothing, NOEXT) (lA l (ieName l (mkUnqual tcClsName name)))
+                   Nothing)
+#elif MIN_VERSION_ghc(9,8,0)
   lA l (IEThingAbs (Nothing, NOEXT) (lA l (ieName l (mkUnqual tcClsName name))))
 #else
   lA l (IEThingAbs NOEXT (lA l (ieName l (mkUnqual tcClsName name))))
