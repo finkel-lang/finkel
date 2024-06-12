@@ -11,10 +11,6 @@ module Language.Finkel.Form.Fractional
   , readFractionalLit
   , putFractionalLit
   , getFractionalLit
-
-  , SourceText(..)
-  , putSourceText
-  , getSourceText
   ) where
 
 -- binary
@@ -47,8 +43,8 @@ import Util                            (readRational)
 #endif
 
 -- Internal
-#if MIN_VERSION_ghc(9,8,0)
-import Language.Finkel.Data.FastString (getFastString, putFastString)
+#if MIN_VERSION_ghc(8,4,0)
+import Language.Finkel.Data.SourceText
 #endif
 
 -- | Make a 'FractionalLit' from given real value.
@@ -154,25 +150,3 @@ putFractionalLit fl = put (fl_text fl) *> put (fl_value fl)
 getFractionalLit = FL <$> get <*> get
 #endif
 
-putSourceText :: SourceText -> Put
-putSourceText st = case st of
-#if MIN_VERSION_ghc(9,8,0)
-  SourceText str -> putWord8 0 >> putFastString str
-#else
-  SourceText str -> putWord8 0 >> put str
-#endif
-  NoSourceText   -> putWord8 1
-{-# INLINABLE putSourceText #-}
-
-getSourceText :: Get SourceText
-getSourceText = do
-  t <- getWord8
-  case t of
-#if MIN_VERSION_ghc(9,8,0)
-    0 -> SourceText <$> getFastString
-#else
-    0 -> SourceText <$> get
-#endif
-    1 -> pure NoSourceText
-    _ -> error $ "getSourceText: unknown tag " ++ show t
-{-# INLINABLE getSourceText #-}

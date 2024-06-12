@@ -56,11 +56,13 @@ import           Data.Function                   (on)
 import           Data.Maybe                      (fromMaybe)
 import           GHC.Generics                    (Generic)
 
+-- binary
 import           Data.Binary                     (Binary (..), Get, Put,
                                                   getWord8, putWord8)
 
 -- ghc
 import           GHC_Data_FastString             (FastString, fsLit, unpackFS)
+import           GHC_Types_SourceText            (SourceText (..))
 import           GHC_Types_SrcLoc                (GenLocated (..), Located,
                                                   RealSrcSpan (..),
                                                   SrcSpan (..), combineLocs,
@@ -96,6 +98,7 @@ import           Control.DeepSeq                 (NFData (..))
 
 -- Internal
 import           Language.Finkel.Data.FastString (getFastString, putFastString)
+import           Language.Finkel.Data.SourceText (getSourceText, putSourceText)
 import           Language.Finkel.Form.Fractional
 
 
