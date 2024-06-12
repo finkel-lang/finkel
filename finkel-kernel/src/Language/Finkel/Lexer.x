@@ -88,8 +88,8 @@ import qualified GHC.LanguageExtensions     as LangExt
 -- Internal
 import           Language.Finkel.Data.FastString (unconsFS)
 import           Language.Finkel.Data.SourceText
+import           Language.Finkel.Data.Fractional
 import           Language.Finkel.Form
-import           Language.Finkel.Form.Fractional
 }
 
 $nl          = [\n\r\f]
