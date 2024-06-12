@@ -8,18 +8,32 @@ module Language.Finkel.Data.SourceText
   , toQuotedSourceText
   , fsToSourceText
   , strToSourceText
+  , putSourceText
+  , getSourceText
   ) where
 
 #include "ghc_modules.h"
 
+-- binary
+import Data.Binary                     (Get, Put, getWord8, putWord8)
+
+#if !MIN_VERSION_ghc(9,8,0)
+import Data.Binary                     (Binary (..))
+#endif
+
 -- ghc
-import GHC_Data_FastString  (FastString)
-import GHC_Types_SourceText (SourceText (..))
+import GHC_Data_FastString             (FastString)
+import GHC_Types_SourceText            (SourceText (..))
 
 #if MIN_VERSION_ghc(9,8,0)
-import GHC_Data_FastString  (fsLit)
+import GHC_Data_FastString             (fsLit)
 #else
-import GHC_Data_FastString  (unpackFS)
+import GHC_Data_FastString             (unpackFS)
+#endif
+
+-- Internal
+#if MIN_VERSION_ghc(9,8,0)
+import Language.Finkel.Data.FastString (getFastString, putFastString)
 #endif
 
 
@@ -42,6 +56,34 @@ instance IsSourceText FastString where
 toQuotedSourceText :: Show a => a -> SourceText
 toQuotedSourceText = toSourceText . show
 {-# INLINE toQuotedSourceText #-}
+
+
+-- ------------------------------------------------------------------------
+-- For Data.Binary.Binary
+-- ------------------------------------------------------------------------
+
+putSourceText :: SourceText -> Put
+putSourceText st = case st of
+#if MIN_VERSION_ghc(9,8,0)
+  SourceText str -> putWord8 0 >> putFastString str
+#else
+  SourceText str -> putWord8 0 >> put str
+#endif
+  NoSourceText   -> putWord8 1
+{-# INLINABLE putSourceText #-}
+
+getSourceText :: Get SourceText
+getSourceText = do
+  t <- getWord8
+  case t of
+#if MIN_VERSION_ghc(9,8,0)
+    0 -> SourceText <$> getFastString
+#else
+    0 -> SourceText <$> get
+#endif
+    1 -> pure NoSourceText
+    _ -> error $ "getSourceText: unknown tag " ++ show t
+{-# INLINABLE getSourceText #-}
 
 
 -- ------------------------------------------------------------------------
