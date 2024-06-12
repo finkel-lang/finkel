@@ -74,7 +74,9 @@ library
                        Language.Finkel.Fnk
                        Language.Finkel.SpecialForms
                        Language.Finkel.Syntax
-  other-modules:       Language.Finkel.Form.Fractional
+  other-modules:       Language.Finkel.Data.Fractional
+                       Language.Finkel.Data.FastString
+                       Language.Finkel.Data.SourceText
                        Language.Finkel.Make.Recompile
                        Language.Finkel.Make.Summary
                        Language.Finkel.Make.TargetSource
@@ -90,8 +92,6 @@ library
                        Language.Finkel.Syntax.HImpExp
                        Language.Finkel.Syntax.HPat
                        Language.Finkel.Syntax.HType
-                       Language.Finkel.Data.FastString
-                       Language.Finkel.Data.SourceText
   autogen-modules:     Paths_finkel_kernel
   includes:            Syntax.h
                        ghc_modules.h

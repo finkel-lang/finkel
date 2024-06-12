@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 -- | Module for version compatible fractional literal value.
-module Language.Finkel.Form.Fractional
+module Language.Finkel.Data.Fractional
   ( FractionalLit(..)
   , mkFractionalLit'
   , showFractionalList
@@ -14,8 +14,11 @@ module Language.Finkel.Form.Fractional
   ) where
 
 -- binary
-import Data.Binary                     (Binary (..), Get, Put, getWord8,
-                                        putWord8)
+import Data.Binary                     (Binary (..), Get, Put)
+
+#if MIN_VERSION_ghc(9,2,0)
+import Data.Binary                     (getWord8, putWord8)
+#endif
 
 -- ghc
 #if MIN_VERSION_ghc(9,8,0)

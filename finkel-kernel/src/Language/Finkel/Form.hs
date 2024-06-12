@@ -98,8 +98,8 @@ import           Control.DeepSeq                 (NFData (..))
 
 -- Internal
 import           Language.Finkel.Data.FastString (getFastString, putFastString)
+import           Language.Finkel.Data.Fractional
 import           Language.Finkel.Data.SourceText (getSourceText, putSourceText)
-import           Language.Finkel.Form.Fractional
 
 
 -- -------------------------------------------------------------------
