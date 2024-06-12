@@ -3,7 +3,7 @@
 module Language.Finkel.Form.Fractional
   ( FractionalLit(..)
   , mkFractionalLit'
-  , fl_text_compat
+  , showFractionalList
 #if MIN_VERSION_ghc(9,2,0)
   -- XXX: Rename 'fl_value' with 'rationalFromFractionalLit'?
   , fl_value
@@ -63,18 +63,18 @@ mkFractionalLit' x = FL (show (realToFrac x :: Double)) (toRational x)
 #endif
 
 -- | Get string representation of 'FractionalLit'.
-fl_text_compat :: FractionalLit -> String
-{-# INLINE fl_text_compat #-}
+showFractionalList :: FractionalLit -> String
+{-# INLINE showFractionalList #-}
 #if MIN_VERSION_ghc(9,8,0)
-fl_text_compat fl = case fl_text fl of
+showFractionalList fl = case fl_text fl of
   NoSourceText -> error "fractional literal with no source"
   SourceText s -> unpackFS s
 #elif MIN_VERSION_ghc(8,4,0)
-fl_text_compat fl = case fl_text fl of
+showFractionalList fl = case fl_text fl of
   NoSourceText -> error "fractional literal with no source"
   SourceText s -> s
 #else
-fl_text_compat = fl_text
+showFractionalList = fl_text
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)

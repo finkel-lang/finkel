@@ -98,7 +98,7 @@ b_intP (LForm (L l form)) =
     Atom (AInteger n) -> return $! lA l (npat n)
     _                 -> builderError
   where
-    npat n = mkNPat' (L l (mkHsIntegral_compat n))
+    npat n = mkNPat' (L l (mkHsIntegral' n))
 {-# INLINABLE b_intP #-}
 
 b_stringP :: Code -> Builder HPat
@@ -198,7 +198,7 @@ b_labeledP (LForm (L l form)) ps
           case mb_p of
             Just p  -> mkcfld False (lab, p)
             Nothing -> mkcfld True (lab, punned)
-        punned = lA l (VarPat NOEXT (lN l pun_RDR))
+        punned = lA l (VarPat NOEXT (lN l punRDR))
         (wilds, non_wilds) = partitionEithers ps
         mb_dotdot = case wilds of
           []                  -> Nothing

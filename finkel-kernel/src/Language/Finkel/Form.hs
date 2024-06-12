@@ -142,7 +142,7 @@ instance Show Atom where
         _    -> ['#', '\'', c]
       AString _ s -> showsPrec d s
       AInteger il -> showsPrec d (il_value il)
-      AFractional f -> showString (fl_text_compat f)
+      AFractional f -> showString (showFractionalList f)
 
 instance NFData Atom where
   rnf x =

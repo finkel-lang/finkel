@@ -250,9 +250,9 @@ b_tsigE (LForm (L l _)) e0 (ctxt,t) =
   let t' = case ctxt of
              [] -> t
 #if MIN_VERSION_ghc(9,10,0)
-             _  -> lA l (mkHsQualTy_compat (mkLocatedListA ctxt) t)
+             _  -> lA l (mkHsQualTy' (mkLocatedListA ctxt) t)
 #else
-             _  -> lA l (mkHsQualTy_compat (la2la (mkLocatedListA ctxt)) t)
+             _  -> lA l (mkHsQualTy' (la2la (mkLocatedListA ctxt)) t)
 #endif
 #if MIN_VERSION_ghc(9,2,0)
       e1 = ExprWithTySig NOEXT e0 (hsTypeToHsSigWcType t')
@@ -347,7 +347,7 @@ mkcfld' (n,mb_e) =
     Just e  -> mkcfld False (n, e)
     Nothing -> mkcfld True (n, punned)
   where
-    punned = lA l (HsVar NOEXT (lN l pun_RDR))
+    punned = lA l (HsVar NOEXT (lN l punRDR))
     l = getLoc n
 {-# INLINABLE mkcfld' #-}
 
@@ -428,7 +428,7 @@ b_integerE (LForm (L l form)) =
       | otherwise      -> return (expr x)
     _                  -> builderError
   where
-    expr x = lA l (hsOverLit $! mkHsIntegral_compat x)
+    expr x = lA l (hsOverLit $! mkHsIntegral' x)
 {-# INLINABLE b_integerE #-}
 
 b_fracE :: Code -> Builder HExpr
@@ -577,7 +577,7 @@ getLocInfo l = withLocInfo l fname mk_int
     -- hpc code coverage will mark the location information as non-evaluated
     -- expressions.
     fname fs = lA ql (hsLit (HsString (toQuotedSourceText fs) fs))
-    mk_int n = lA ql $! hsOverLit $! mkHsIntegral_compat $! mkIntegralLit n
+    mk_int n = lA ql $! hsOverLit $! mkHsIntegral' $! mkIntegralLit n
 #if MIN_VERSION_ghc(9,0,0)
     ql = UnhelpfulSpan (UnhelpfulOther (fsLit "<b_quoteE>"))
 #else

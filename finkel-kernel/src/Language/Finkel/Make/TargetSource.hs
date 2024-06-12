@@ -1,5 +1,6 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP          #-}
+{-# LANGUAGE BangPatterns  #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE TupleSections #-}
 -- | Module for source code file path look up.
 module Language.Finkel.Make.TargetSource
   (
@@ -85,7 +86,7 @@ findTargetUnitMaybe
   :: MonadIO m
   => DynFlags -> (Located String, Maybe Phase) -> m (Maybe TargetUnit)
 findTargetUnitMaybe dflags (lpath,mbp) =
-  fmap (\t -> (t, mbp)) <$> findTargetSourceMaybe dflags lpath
+  fmap (, mbp) <$> findTargetSourceMaybe dflags lpath
 
 -- | Get 'ModuleName' from given 'TargetUnit'.
 targetUnitName :: TargetUnit -> ModuleName

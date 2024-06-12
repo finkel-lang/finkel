@@ -26,11 +26,6 @@ import           Control.Applicative              (Alternative (..))
 #endif
 import           Data.Char                        (isUpper)
 
--- bytestring
-#if MIN_VERSION_ghc(9,0,0)
-import qualified Data.ByteString.Char8            as BS
-#endif
-
 -- ghc
 import           GHC_Hs_Decls                     (LConDecl, LDataFamInstDecl,
                                                    LDocDecl, LFamilyDecl,
@@ -83,12 +78,10 @@ import           GHC.Hs.Extension                 (GhcPass (..))
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC_Data_FastString              (mkFastStringByteString)
 import           GHC_Hs_Decls                     (ConDecl (..))
 import           GHC_Hs_Type                      (LHsTyVarBndr)
 import           GHC_Types_Var                    (Specificity (..))
 #else
-import qualified GHC_Data_FastString              as FS
 import           HaddockUtils                     (addConDoc)
 #endif
 
@@ -296,9 +289,9 @@ mkcfld is_pun (L nl name, e) =
 {-# INLINABLE mkcfld #-}
 
 -- | Dummy name for named field puns. See: @GHC.Parser.PostProcess.pun_RDR@.
-pun_RDR :: RdrName
-pun_RDR = mkUnqual varName (fsLit "pun-right-hand-side")
-{-# INLINABLE pun_RDR #-}
+punRDR :: RdrName
+punRDR = mkUnqual varName (fsLit "pun-right-hand-side")
+{-# INLINABLE punRDR #-}
 
 -- Following `cvBindsAndSigs`, `getMonoBind`, `has_args`, and
 -- `makeFunBind` functions are based on resembling functions defined in
@@ -463,10 +456,9 @@ mkLHsDoc _ = mkHsDocString
 {-# INLINABLE lHsDocString2LHsDoc #-}
 {-# INLINABLE mkLHsDoc #-}
 
--- | Auxiliary function to absorb version compatibiity of
--- 'mkHsIntegral'.
-mkHsIntegral_compat :: IntegralLit -> HsOverLit PARSED
-mkHsIntegral_compat il =
+-- | Auxiliary function to absorb version compatibiity of 'mkHsIntegral'.
+mkHsIntegral' :: IntegralLit -> HsOverLit PARSED
+mkHsIntegral' il =
 #if MIN_VERSION_ghc(8,6,0)
     mkHsIntegral il
 #elif MIN_VERSION_ghc(8,4,0)
@@ -474,10 +466,10 @@ mkHsIntegral_compat il =
 #else
     mkHsIntegral (il_text il) (il_value il) placeHolderType
 #endif
-{-# INLINABLE mkHsIntegral_compat #-}
+{-# INLINABLE mkHsIntegral' #-}
 
-mkHsQualTy_compat :: LHsContext PARSED -> HType -> HsType PARSED
-mkHsQualTy_compat ctxt body
+mkHsQualTy' :: LHsContext PARSED -> HType -> HsType PARSED
+mkHsQualTy' ctxt body
   | nullLHsContext ctxt = unLoc body
   | otherwise =
     HsQualTy { hst_ctxt = real_ctxt
@@ -493,7 +485,7 @@ mkHsQualTy_compat ctxt body
 #else
     real_ctxt = ctxt
 #endif
-{-# INLINABLE mkHsQualTy_compat #-}
+{-# INLINABLE mkHsQualTy' #-}
 
 nullLHsContext :: LHsContext PARSED -> Bool
 nullLHsContext (L _ cs) = null cs
@@ -551,15 +543,6 @@ addConDoc :: LConDecl' a -> Maybe LHsDocString -> LConDecl' a
 addConDoc decl    Nothing = decl
 addConDoc (L p c) doc     = L p (c {con_doc = con_doc c <|> doc})
 #endif
-
--- Version compatibility helper.
-tailFS :: FastString -> FastString
-#if MIN_VERSION_ghc(9,0,0)
-tailFS = mkFastStringByteString . BS.tail . bytesFS
-#else
-tailFS = FS.tailFS
-#endif
-{-# INLINABLE tailFS #-}
 
 consListWith :: [Code] -> String -> Code
 consListWith rest sym =

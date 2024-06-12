@@ -3,7 +3,7 @@
 module Language.Finkel.Make.Trace
   ( traceMake
   , traceMake'
-  , nvc_or_none
+  , nvcOrNone
   ) where
 
 #include "ghc_modules.h"
@@ -32,8 +32,8 @@ traceMake' dflags fnk_env fn_name msgs0 =
   in  debugWhen' dflags fnk_env Fnk_trace_make msgs1
 
 -- | Nested 'vcat' or text @"none"@.
-nvc_or_none :: Outputable a => [a] -> SDoc
-nvc_or_none xs = nest 2 sdoc
+nvcOrNone :: Outputable a => [a] -> SDoc
+nvcOrNone xs = nest 2 sdoc
   where
     sdoc =
        if null xs
