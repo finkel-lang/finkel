@@ -299,7 +299,7 @@ b_bangT (LForm (L l _)) t = lA l (hsBangTy srcBang (parTyApp t))
 
 b_forallT :: Code -> ([HTyVarBndrSpecific], ([HType], HType)) -> HType
 b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
-  let ty0 = lA l0 (mkHsQualTy_compat ctxts' body)
+  let ty0 = lA l0 (mkHsQualTy' ctxts' body)
 #if MIN_VERSION_ghc(9,10,0)
       ctxts' = mkLocatedListA ctxts
 #else
@@ -316,9 +316,9 @@ b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
 b_qualT :: Code -> ([HType], HType) -> HType
 b_qualT (LForm (L l _)) (ctxts, body) =
 #if MIN_VERSION_ghc(9,10,0)
-  lA l (mkHsQualTy_compat (mkLocatedListA ctxts) body)
+  lA l (mkHsQualTy' (mkLocatedListA ctxts) body)
 #else
-  lA l (mkHsQualTy_compat (la2la (mkLocatedListA ctxts)) body)
+  lA l (mkHsQualTy' (la2la (mkLocatedListA ctxts)) body)
 #endif
 {-# INLINABLE b_qualT #-}
 

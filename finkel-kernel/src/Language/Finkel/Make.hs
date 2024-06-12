@@ -289,7 +289,7 @@ makeFromRequire lmname = do
       tr = traceMake fnk_env "makeFromRequire"
       dflags = hsc_dflags hsc_env
 
-  tr ["old summaries:", nvc_or_none old_summaries]
+  tr ["old summaries:", nvcOrNone old_summaries]
   tr ["required module:" <+> ppr (unLoc lmname)]
   tu <- emptyTargetUnit <$> findTargetModuleName dflags lmname
 
@@ -298,7 +298,7 @@ makeFromRequire lmname = do
 
   mgraph <- hsc_mod_graph <$> getSession
   let mod_summaries = mgModSummaries' mgraph
-  tr ["summaries:", nvc_or_none mod_summaries]
+  tr ["summaries:", nvcOrNone mod_summaries]
 
 -- | Make function used when the Finkel compiler was invoked as a ghc plugin.
 makeFromRequirePlugin :: Located ModuleName -> Fnk ()
@@ -377,8 +377,8 @@ makeFromRequirePlugin lmname = do
 #endif
 
   tr [ "target:" <+> ppr target
-     , "old_targets:" <+> nvc_or_none old_targets
-     , "new_targets:" <+> nvc_or_none new_targets
+     , "old_targets:" <+> nvcOrNone old_targets
+     , "new_targets:" <+> nvcOrNone new_targets
      , "hsc_hpt:" <+> pprHPT (hsc_HPT hsc_env)]
 
   setSession (hsc_env {hsc_targets = new_targets})
@@ -429,7 +429,7 @@ make1 how_much old_summaries targets = do
 
   tr [ "total:" <+> text (show total)
      , "targets:", targets_sdoc
-     , "old summaries:", nvc_or_none old_summaries]
+     , "old summaries:", nvcOrNone old_summaries]
 
   hsc_env <- getSession
   (mss0, options) <- summariseTargets hsc_env old_summaries targets
@@ -455,7 +455,7 @@ make1 how_much old_summaries targets = do
                           else extendMG' mg ms
       mgraph0 = foldr updateMG (mkModuleGraph' mss0) old_summaries
 #endif
-  tr ["new summaries:", nvc_or_none (mgModSummaries' mgraph0)]
+  tr ["new summaries:", nvcOrNone (mgModSummaries' mgraph0)]
 
   -- Pass the merged ModuleGraph to the "load'" function, delegate the hard
   -- works to it.

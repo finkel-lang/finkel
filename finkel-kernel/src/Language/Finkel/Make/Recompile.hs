@@ -347,7 +347,7 @@ checkUsagePackageModules usages = getHscEnv >>= forM_ usages . go
                   Nothing -> outdate mname (text (mname_str ++
                                                   " iface not found"))
                   Just iface ->
-                    when (mi_mod_hash' iface /= old_hash)
+                    when (miModHash' iface /= old_hash)
                          (outdate mname (text (mname_str ++ " hash changed")))
 #if MIN_VERSION_ghc(9,2,0)
               lmws_arg1 = hsc_units
@@ -389,7 +389,7 @@ refillHomeImports fnk_env ms mi = do
       mname = ms_mod_name ms
 
   tr [ "dep_mods mi_deps of" <+> ppr mname
-     , nvc_or_none (dmsToList (mapDMS fst dmods1))
+     , nvcOrNone (dmsToList (mapDMS fst dmods1))
      ]
 
   -- Marking this module as outdated when any of the imported home package
@@ -510,7 +510,7 @@ checkTargetUnit name_and_mb_phase@(lname, _) = do
 checkFlagHash :: HscEnv -> ModSummary -> ModIface -> RecompM ()
 checkFlagHash _he ms iface = do
   -- See "checkFlagHash" function in "MkIface".
-  let old_hash = mi_flag_hash' iface
+  let old_hash = miFlagHash' iface
       dflags0 = ms_hspp_opts ms
       dflags1 = adjustIncludePaths dflags0 ms
       mdl = mi_module iface
@@ -607,16 +607,16 @@ addQuoteInclude' = flip (++)
 #endif
 {-# INLINABLE addQuoteInclude' #-}
 
-mi_mod_hash', mi_flag_hash' :: ModIface -> Fingerprint
+miModHash', miFlagHash' :: ModIface -> Fingerprint
 #if MIN_VERSION_ghc(8,10,0)
-mi_mod_hash' = mi_mod_hash . mi_final_exts
-mi_flag_hash' = mi_flag_hash . mi_final_exts
+miModHash' = mi_mod_hash . mi_final_exts
+miFlagHash' = mi_flag_hash . mi_final_exts
 #else
-mi_mod_hash' = mi_mod_hash
-mi_flag_hash' = mi_flag_hash
+miModHash' = mi_mod_hash
+miFlagHash' = mi_flag_hash
 #endif
-{-# INLINABLE mi_mod_hash' #-}
-{-# INLINABLE mi_flag_hash' #-}
+{-# INLINABLE miModHash' #-}
+{-# INLINABLE miFlagHash' #-}
 
 -- Fields in Dependency module set
 --

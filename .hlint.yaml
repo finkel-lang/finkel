@@ -54,6 +54,7 @@
 - ignore: {
     name: Use camelCase,
     within: [
+      Language.Finkel.Emit,
       Language.Finkel.Syntax.HBind,
       Language.Finkel.Syntax.HDecl,
       Language.Finkel.Syntax.HExpr,

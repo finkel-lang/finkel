@@ -42,7 +42,6 @@ module Language.Finkel.Fnk
   -- * Debugging
   , FnkDebugFlag(..)
   , fopt
-  , fopt_set
   , setFnkVerbosity
   , debugWhen
   , debugWhen'
@@ -889,10 +888,10 @@ fopt flag fnk_env =
 {-# INLINABLE fopt #-}
 
 -- | Turn on the given 'FnkDebugFlag'.
-fopt_set :: FnkDebugFlag -> FnkEnv -> FnkEnv
-fopt_set flag fnk_env =
+foptSet :: FnkDebugFlag -> FnkEnv -> FnkEnv
+foptSet flag fnk_env =
   fnk_env {envDumpFlags = setBit (envDumpFlags fnk_env) (fromEnum flag)}
-{-# INLINABLE fopt_set #-}
+{-# INLINABLE foptSet #-}
 
 -- | Update the 'envVerbosity' to given value.
 setFnkVerbosity :: Int -> FnkEnv -> FnkEnv
@@ -1052,7 +1051,7 @@ fnkEnvOptions =
   ]
   where
     opt = Option []
-    debug_opt flag = opt [to_str flag] (NoArg (fopt_set flag))
+    debug_opt flag = opt [to_str flag] (NoArg (foptSet flag))
     to_str = map replace . show
     replace '_' = '-'
     replace c   = toLower c

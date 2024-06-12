@@ -322,9 +322,9 @@ b_gadtD form@(LForm (L l1 _)) (ctxt, bodyty) = do
       ty = lA l1 qty
 #endif
 #if MIN_VERSION_ghc(9,10,0)
-      qty = mkHsQualTy_compat (mkLocatedListA ctxt) bodyty
+      qty = mkHsQualTy' (mkLocatedListA ctxt) bodyty
 #else
-      qty = mkHsQualTy_compat (la2la (mkLocatedListA ctxt)) bodyty
+      qty = mkHsQualTy' (la2la (mkLocatedListA ctxt)) bodyty
 #endif
 #if MIN_VERSION_ghc(9,10,0)
   ldecl <- do
@@ -583,9 +583,9 @@ b_instD mb_overlap (ctxts,ty@(L l _)) decls = do
 #endif
                          }
 #if MIN_VERSION_ghc(9,10,0)
-      qty = L l (mkHsQualTy_compat (mkLocatedListA ctxts) ty)
+      qty = L l (mkHsQualTy' (mkLocatedListA ctxts) ty)
 #else
-      qty = L l (mkHsQualTy_compat (la2la (mkLocatedListA ctxts)) ty)
+      qty = L l (mkHsQualTy' (la2la (mkLocatedListA ctxts)) ty)
 #endif
       instD = InstD NOEXT
       clsInstD = ClsInstD NOEXT
@@ -923,9 +923,9 @@ b_tsigD names (ctxts,typ0) = do
         if null ctxts
           then typ1
 #if MIN_VERSION_ghc(9,10,0)
-          else lA l (mkHsQualTy_compat (mkLocatedListA ctxts) typ1)
+          else lA l (mkHsQualTy' (mkLocatedListA ctxts) typ1)
 #else
-          else lA l (mkHsQualTy_compat (la2la (mkLocatedListA ctxts)) typ1)
+          else lA l (mkHsQualTy' (la2la (mkLocatedListA ctxts)) typ1)
 #endif
       typ1 = unParTy typ0
       mkName form =

@@ -282,7 +282,7 @@ defmoduleForDownsweep = Macro (pure . f)
             _                      -> acc
         hasLoadPhase xs =
           case unCode (curve xs) of
-            List ys -> elem (sym ":load") ys
+            List ys -> sym ":load" `elem` ys
             _       -> False
         moduleForm n = mkL0 (List [sym "module", n])
         importForm l xs = LForm (L l (List (sym "import" : map curve xs)))
@@ -404,8 +404,8 @@ ppOptions =
 
 parseBoolish :: String -> Bool
 parseBoolish str
-  | elem low_str trueish = True
-  | elem low_str falsish = False
+  | low_str `elem` trueish = True
+  | low_str `elem` falsish = False
   | otherwise = throw (FinkelException msg)
   where
      low_str = map toLower str

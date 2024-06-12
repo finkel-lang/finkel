@@ -767,7 +767,7 @@ requiredDependency hsc_env = go
       let mg = hsc_mod_graph hsc_env
           hpt = hsc_HPT hsc_env
           acc1 = find_require_paths hpt acc ms
-      in  foldl' (find_import_path mg) acc1 (ms_home_allimps ms)
+      in  foldl' (find_import_path mg) acc1 (msHomeAllimps ms)
 
     find_import_path mg acc mod_name =
       let mdl = mkModuleFromHscEnv hsc_env mod_name
@@ -886,23 +886,26 @@ mgLookupModule' mg mdl = find (\ms -> ms_mod_name ms == moduleName mdl) mg
 -- ghc 9.4.x.
 #if MIN_VERSION_ghc(9,4,0)
 -- XXX: Use 'GHC.Unit.Module.ModSummary.home_imps' ?
-ms_home_allimps :: ModSummary -> [ModuleName]
-ms_home_allimps = map (unLoc . snd) . ms_imps
-#elif !MIN_VERSION_ghc(8,10,0)
-ms_home_allimps :: ModSummary -> [ModuleName]
-ms_home_allimps ms = map unLoc (ms_home_srcimps ms ++ ms_home_imps ms)
+msHomeAllimps :: ModSummary -> [ModuleName]
+msHomeAllimps = map (unLoc . snd) . ms_imps
+#elif MIN_VERSION_ghc(8,10,0)
+msHomeAllimps :: ModSummary -> [ModuleName]
+msHomeAllimps = ms_home_allimps
+#else
+msHomeAllimps :: ModSummary -> [ModuleName]
+msHomeAllimps ms = map unLoc (ms_home_srcimps ms ++ ms_home_imps ms)
+  where
+    ms_home_srcimps :: ModSummary -> [Located ModuleName]
+    ms_home_srcimps = home_imps . ms_srcimps
 
-ms_home_srcimps :: ModSummary -> [Located ModuleName]
-ms_home_srcimps = home_imps . ms_srcimps
+    ms_home_imps :: ModSummary -> [Located ModuleName]
+    ms_home_imps = home_imps . ms_imps
 
-ms_home_imps :: ModSummary -> [Located ModuleName]
-ms_home_imps = home_imps . ms_imps
-
-home_imps :: [(Maybe FastString, Located ModuleName)] -> [Located ModuleName]
-home_imps imps = [ lmodname |  (mb_pkg, lmodname) <- imps, isLocal mb_pkg ]
-  where isLocal Nothing    = True
-        isLocal (Just pkg) | pkg == fsLit "this" = True -- "this" is special
-        isLocal _          = False
+    home_imps :: [(Maybe FastString, Located ModuleName)] -> [Located ModuleName]
+    home_imps imps = [ lmodname |  (mb_pkg, lmodname) <- imps, isLocal mb_pkg ]
+      where isLocal Nothing    = True
+            isLocal (Just pkg) | pkg == fsLit "this" = True -- "this" is special
+            isLocal _          = False
 #endif
 
 -- ------------------------------------------------------------------------

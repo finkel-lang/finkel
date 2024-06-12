@@ -185,15 +185,10 @@ evalDecls decls = do
 -- | Like 'HscMain.hscDesugar'', but for 'Fnk'.
 fnkcDesugar' :: GhcMonad m => ModLocation -> TcGblEnv -> m ModGuts
 fnkcDesugar' mod_location tc_result = do
-  hsc_env <- getSession
-  r <- ioMsgMaybe (deSugar hsc_env mod_location tc_result)
-
   -- In `Hsc', `handleWarning' is called at this point. But currently Fnk does
   -- not keep tracks of warning messages, so does nothing ...
-  --
-  -- handleWarnings
-
-  return r
+  hsc_env <- getSession
+  ioMsgMaybe (deSugar hsc_env mod_location tc_result)
 
 -- | GHC version compatibility helper for combining 'hscSimplify'
 -- and 'tcg_th_coreplugins'.
