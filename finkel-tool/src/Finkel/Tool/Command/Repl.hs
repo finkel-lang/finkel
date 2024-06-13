@@ -25,9 +25,8 @@
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Fnk
-    [(FnkEnv ..) EnvMacros fnkEnvOptionsUsage fromFnkEnvOptions
-     makeEnvMacros mergeMacros])
+   (Language.Finkel.Fnk [(FnkEnv ..) EnvMacros makeEnvMacros mergeMacros])
+   (Language.Finkel.Options [fromFnkEnvOptions fnkEnvOptionsUsage])
    (Language.Finkel.SpecialForms [specialForms])
 
    ;; finkel-core

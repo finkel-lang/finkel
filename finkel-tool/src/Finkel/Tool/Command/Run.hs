@@ -14,7 +14,8 @@
    (System.Environment [getProgName])
 
    ;; finkel-kernel
-   (Language.Finkel.Fnk [FnkEnv fromFnkEnvOptions fnkEnvOptionsUsage])
+   (Language.Finkel.Fnk [FnkEnv])
+   (Language.Finkel.Options [fromFnkEnvOptions fnkEnvOptionsUsage])
 
    ;; finkel-core
    (Finkel.Core.Functions [make-symbol])

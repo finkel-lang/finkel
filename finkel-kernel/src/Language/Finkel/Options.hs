@@ -1,22 +1,36 @@
 -- | Codes for command line options.
 module Language.Finkel.Options
-  ( FnkPluginOptions(..)
+  (
+    -- * Plugin options
+    FnkPluginOptions(..)
   , defaultFnkPluginOptions
   , fnkPluginOptions
   , fpoPragma
   , fpoIgnore
   , printPluginUsage
 
+    -- * Fnk source options
   , FnkSrcOptions (..)
   , defaultFnkSrcOptions
   , fromFnkSrcOptions
+
+    -- * FnkEnv options
+  , fnkEnvOptions
+  , fnkEnvOptionsWithLib
+  , partitionFnkEnvOptions
+  , fromFnkEnvOptions
+  , fnkEnvOptionsUsage
+
   ) where
 
 -- base
-import System.Console.GetOpt (ArgDescr (..), OptDescr (..), usageInfo)
-import System.Environment    (getProgName)
+import Data.Char                 (toLower)
+import Data.List                 (isPrefixOf, partition)
+import System.Console.GetOpt     (ArgDescr (..), OptDescr (..), usageInfo)
+import System.Environment        (getProgName)
 
 -- Internal
+import Language.Finkel.Exception
 import Language.Finkel.Fnk
 
 
@@ -116,3 +130,64 @@ fnkSrcOptions =
 fromFnkSrcOptions :: ((FnkSrcOptions -> FnkSrcOptions) -> a) -> [OptDescr a]
 fromFnkSrcOptions f = map (fmap f) fnkSrcOptions
 
+
+-- ---------------------------------------------------------------------
+--
+-- FnkEnv options
+--
+-- ---------------------------------------------------------------------
+
+-- | Separate Finkel debug options from others.
+partitionFnkEnvOptions
+   :: [String]
+   -- ^ Flag inputs, perhaps given as command line arguments.
+   -> ([String], [String])
+   -- ^ Pair of @(finkel_flags, other_flags)@.
+partitionFnkEnvOptions = partition test
+  where
+    -- The "-B" option is to update the ghc libdir in FnkEnv.
+    test arg = "--fnk-" `isPrefixOf` arg || "-B" `isPrefixOf` arg
+
+-- | Command line option handlers to update 'FnkDumpFlag' in 'FnkEnv'.
+fnkEnvOptions :: [OptDescr (FnkEnv -> FnkEnv)]
+fnkEnvOptions =
+  [ opt ["fnk-verbose"]
+        (ReqArg (\i o -> o {envVerbosity = parseVerbosity i}) "INT")
+        "Set verbosity level to INT."
+  , opt ["fnk-hsdir"]
+        (ReqArg (\path o -> o {envHsOutDir = Just path}) "DIR")
+        "Set Haskell code output directory to DIR."
+
+  -- Dump and trace options
+  , debug_opt Fnk_dump_dflags "Dump DynFlags settings."
+  , debug_opt Fnk_dump_expand "Dump expanded code."
+  , debug_opt Fnk_dump_hs "Dump Haskell source code."
+  , debug_opt Fnk_trace_expand "Trace macro expansion."
+  , debug_opt Fnk_trace_make "Trace make function."
+  , debug_opt Fnk_trace_spf "Trace builtin special forms."
+  ]
+  where
+    opt = Option []
+    debug_opt flag = opt [to_str flag] (NoArg (foptSet flag))
+    to_str = map replace . show
+    replace '_' = '-'
+    replace c   = toLower c
+    parseVerbosity = readOrFinkelException "INT" "verbosity"
+
+-- | Options for @FnkEnv@ with an option to set ghc @libdir@.
+fnkEnvOptionsWithLib :: [OptDescr (FnkEnv -> FnkEnv)]
+fnkEnvOptionsWithLib = lib_option : fnkEnvOptions
+  where
+    lib_option =
+      Option ['B'] []
+             (ReqArg (\path o -> o {envLibDir = Just path}) "DIR")
+             "Set ghc library directory to DIR."
+
+-- | Convert 'fnkEnvOptions' to list of 'OptDescr' taking a function modifying
+-- 'FnkEnv'.
+fromFnkEnvOptions :: ((FnkEnv -> FnkEnv) -> a) -> [OptDescr a]
+fromFnkEnvOptions f = map (fmap f) fnkEnvOptionsWithLib
+
+-- | Usage information for 'fnkEnvOptions', without @-B@ option.
+fnkEnvOptionsUsage :: String -> String
+fnkEnvOptionsUsage = flip usageInfo fnkEnvOptions

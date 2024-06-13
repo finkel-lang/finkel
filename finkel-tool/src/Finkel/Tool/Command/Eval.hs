@@ -20,10 +20,10 @@
    (System.Environment [getProgName])
 
    ;; finkel-kernel
-   (Language.Finkel.Fnk
-    [(Fnk) FnkEnv runFnk fromFnkEnvOptions fnkEnvOptionsUsage])
+   (Language.Finkel.Fnk [(Fnk) FnkEnv runFnk])
    (Language.Finkel.Form [Code])
    (Language.Finkel.Lexer [evalSP])
+   (Language.Finkel.Options [fromFnkEnvOptions fnkEnvOptionsUsage])
    (Language.Finkel.Reader [sexpr])
 
    ;; Internal
