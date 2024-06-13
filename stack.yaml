@@ -3,7 +3,7 @@
 # For advanced use and comprehensive documentation of the format, please see:
 # http://docs.haskellstack.org/en/stable/yaml_configuration/
 
-resolver: lts-22.24
+resolver: lts-22.25
 
 packages:
   # Main components
