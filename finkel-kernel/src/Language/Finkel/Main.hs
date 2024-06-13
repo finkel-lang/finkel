@@ -93,6 +93,7 @@ import           GHC.HandleEncoding           (configureHandleEncoding)
 import           Language.Finkel.Exception
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make
+import           Language.Finkel.Options
 import           Language.Finkel.Reader       (supportedLangExts)
 import           Language.Finkel.SpecialForms (defaultFnkEnv)
 import qualified Paths_finkel_kernel

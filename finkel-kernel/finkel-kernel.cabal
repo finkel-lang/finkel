@@ -68,6 +68,7 @@ library
                        Language.Finkel.Lexer
                        Language.Finkel.Make
                        Language.Finkel.Main
+                       Language.Finkel.Options
                        Language.Finkel.Plugin
                        Language.Finkel.Preprocess
                        Language.Finkel.Reader
@@ -81,7 +82,6 @@ library
                        Language.Finkel.Make.Summary
                        Language.Finkel.Make.TargetSource
                        Language.Finkel.Make.Trace
-                       Language.Finkel.Options
                        Language.Finkel.ParsedResult
                        Language.Finkel.Syntax.Extension
                        Language.Finkel.Syntax.Location

@@ -73,14 +73,14 @@ import GHC_Driver_Session                (HasDynFlags (..))
 import Language.Finkel.Emit              (Hsrc (..), putHsSrc)
 import Language.Finkel.Exception         (FinkelException (..),
                                           handleFinkelException,
+                                          printFinkelException,
                                           readOrFinkelException)
 import Language.Finkel.Expand            (expands, withExpanderSettings)
 import Language.Finkel.Fnk               (FnkEnv (..), FnkEnvRef (..),
                                           FnkInvokedMode (..), Macro (..),
                                           addMacro, lookupMacro, macroFunction,
                                           makeEnvMacros, mergeMacros,
-                                          modifyFnkEnv, printFinkelException,
-                                          runFnk, toGhc)
+                                          modifyFnkEnv, runFnk, toGhc)
 import Language.Finkel.Form              (Form (..), LForm (..), aSymbol,
                                           unCode)
 import Language.Finkel.Make.Summary      (buildHsSyn, withTiming')

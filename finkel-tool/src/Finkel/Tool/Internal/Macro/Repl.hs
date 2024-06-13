@@ -49,10 +49,9 @@
    (Language.Finkel.Eval [evalExprType evalTypeKind])
    (Language.Finkel.Form [mkLocatedForm])
    (Language.Finkel.Make [buildHsSyn make])
-   (Language.Finkel.Fnk
-    [(FnkEnv ..) fnkEnvOptions getFnkEnv macroNames modifyFnkEnv
-     partitionFnkEnvOptions putFnkEnv setDynFlags setFnkVerbosity
-     updateDynFlags])
+   (Language.Finkel.Fnk [(FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv
+                         setDynFlags setFnkVerbosity updateDynFlags])
+   (Language.Finkel.Options [fnkEnvOptions partitionFnkEnvOptions])
    (Language.Finkel.Syntax [parseExpr parseType])
    (Language.Finkel.Make [asModuleName])
 
