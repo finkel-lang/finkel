@@ -179,9 +179,8 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
 
 (defn (:: parse-dynamic-flags
         (=> (MonadIO m)
-            (-> HscEnv
-                [Located String]
-                (m (, DynFlags [Located String] WARN)))))
+            (-> HscEnv [Located String]
+                (m (, DynFlags [Located String] WARNINGs)))))
   [hsc-env]
   (cond-expand
     [(<= 902 :ghc)
@@ -507,7 +506,7 @@ to separate object files from source code files."
   (lept [emsgs (srcErrorMessages src-err)
          sdoc (vcat (ppr-wrapped-msg-bag-with-loc emsgs))]
     (do (<- dflags getDynFlags)
-        (<- unqual get-name-ppr-ctx %_getPrintUnqual)
+        (<- unqual get-name-ppr-ctx)
         (return (render-with-err-style dflags unqual sdoc)))))
 
 (defn (:: make-finkel-exception-message (-> FinkelException (Fnk String)))

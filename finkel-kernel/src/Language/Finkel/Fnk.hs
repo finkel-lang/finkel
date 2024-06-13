@@ -158,7 +158,6 @@ import           GHC.Driver.Make           (ModIfaceCache, newIfaceCache)
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env            (hsc_units)
-import           GHC.Utils.Logger          (HasLogger (..))
 #else
 import           GHC_Driver_Session        (HscTarget (..))
 #endif
@@ -186,6 +185,7 @@ import qualified Data.IntSet               as EnumSet
 #endif
 
 -- Internal
+import           Language.Finkel.Error
 import           Language.Finkel.Exception
 import           Language.Finkel.Form
 
@@ -430,6 +430,9 @@ instance HasDynFlags Fnk where
 instance HasLogger Fnk where
   getLogger = Fnk (const getLogger)
   {-# INLINE getLogger #-}
+#else
+instance HasLogger Fnk where
+  getLogger = pure (error "getLogger (Fnk): no Logger")
 #endif
 
 instance GhcMonad Fnk where

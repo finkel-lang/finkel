@@ -56,7 +56,7 @@ import GHC_Types_SrcLoc       (GenLocated (..), Located)
 import GHC_Unit_Module        (ModuleName, mkModuleName, moduleNameSlashes,
                                moduleNameString)
 import GHC_Utils_Misc         (looksLikeModuleName)
-import GHC_Utils_Outputable   (Outputable (..), neverQualify, sep, text)
+import GHC_Utils_Outputable   (Outputable (..), sep, text)
 
 -- Internal
 import Language.Finkel.Error
@@ -244,10 +244,9 @@ findTargetSourceWithPragma pragma dflags (L l modNameOrFilePath)= do
           modName = mkModuleName (asModuleName path)
   case mb_inputPath of
     Just path -> detectSource path
-    Nothing   -> do
-      let err = mkWrappedMsg dflags l neverQualify doc
-          doc = text ("cannot find target source: " ++ modNameOrFilePath)
-      throwOneError err
+    Nothing   ->
+      let doc = text ("cannot find target source: " ++ modNameOrFilePath)
+      in  throwOneError (mkPlainWrappedMsg dflags l doc)
 
 
 -- ------------------------------------------------------------------------
