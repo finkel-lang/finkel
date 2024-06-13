@@ -103,12 +103,6 @@ import           GHC_Utils_Outputable              (Outputable (..), SDoc, hcat,
 import           GHC.Data.FastString               (unpackFS)
 #endif
 
-#if MIN_VERSION_ghc(9,8,0)
-import           GHC.Types.Error                   (defaultDiagnosticOpts)
-#elif MIN_VERSION_ghc(9,6,0)
-import           GHC.Types.Error                   (Diagnostic (..))
-#endif
-
 #if MIN_VERSION_ghc(9,6,0)
 import           GHC.Runtime.Context               (icNamePprCtx)
 #else
@@ -130,7 +124,6 @@ import           Data.IntSet                       (toList)
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
-import           GHC.Driver.Config.Diagnostic      (initDiagOpts)
 import           GHC.Driver.Config.Finder          (initFinderOpts)
 import           GHC.Driver.Env                    (hscSetFlags, hsc_HPT)
 import           GHC.Driver.Phases                 (StopPhase (..))
@@ -180,15 +173,10 @@ import           GHC.Hs.Dump                       (BlankEpAnnotations (..))
 import           GHC.LanguageExtensions            (Extension (ImplicitPrelude))
 #endif
 
-#if MIN_VERSION_ghc(9,8,0)
-import           GHC.Driver.Errors                 (printOrThrowDiagnostics)
-import           GHC.Hs                            (HsParsedModule (..))
-#elif MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Errors                 (handleFlagWarnings)
+#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Hs                            (HsParsedModule (..))
 #else
-import           GHC_Driver_Types                  (HsParsedModule (..),
-                                                    handleFlagWarnings)
+import           GHC_Driver_Types                  (HsParsedModule (..))
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -318,7 +306,7 @@ compileFnkFile path modname = do
 
 -- | Parse the file header LANGUAGE pragmas and update given 'DynFlags'.
 parseFnkFileHeader
-  :: (MonadIO m, MonadThrow m) => HscEnv -> FilePath -> m DynFlags
+  :: (HasLogger m, MonadIO m, MonadThrow m) => HscEnv -> FilePath -> m DynFlags
 parseFnkFileHeader hsc_env path = do
   contents <- liftIO (hGetStringBuffer path)
   (_, sp) <- parseHeaderPragmas (Just path) contents
@@ -339,37 +327,18 @@ compileFnkModuleForm form = do
   buildHsSyn parseModule expanded
 
 -- | Get language extensions in current 'Fnk' from given 'SPState'.
-getDynFlagsFromSPState :: MonadIO m => HscEnv -> SPState -> m DynFlags
+getDynFlagsFromSPState :: (HasLogger m, MonadIO m) => HscEnv -> SPState -> m DynFlags
 getDynFlagsFromSPState hsc_env sp = do
   -- Adding "-X" to 'String' representation of 'LangExt' data type, as done in
   -- 'HeaderInfo.checkExtension'.
   let dflags0 = hsc_dflags hsc_env
       mkx = fmap ("-X" ++)
       exts = map mkx (langExts sp)
-#if MIN_VERSION_ghc(9,8,0)
-      handle_flag_warnings df ws =
-        let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
-            diag_opts = initDiagOpts df
-            ws' = GhcDriverMessage <$> ws
-            logger = hsc_logger hsc_env
-        in  printOrThrowDiagnostics logger diagnostic_opts diag_opts ws'
-#elif MIN_VERSION_ghc(9,6,0)
-      handle_flag_warnings df ws =
-        let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
-            diag_opts = initDiagOpts df
-        in  handleFlagWarnings (hsc_logger hsc_env) diagnostic_opts diag_opts ws
-#elif MIN_VERSION_ghc(9,4,0)
-      handle_flag_warnings =
-        handleFlagWarnings (hsc_logger hsc_env) . initDiagOpts
-#elif MIN_VERSION_ghc(9,2,0)
-      handle_flag_warnings = handleFlagWarnings (hsc_logger hsc_env)
-#else
-      handle_flag_warnings = handleFlagWarnings
-#endif
+  logger <- getLogger
   (dflags1,_,warns1) <- parseDynamicFilePragma dflags0 exts
-  liftIO (handle_flag_warnings dflags1 warns1)
+  printOrThrowDiagnostics' logger dflags1 warns1
   (dflags2,_,warns2) <- parseDynamicFilePragma dflags1 (ghcOptions sp)
-  liftIO (handle_flag_warnings dflags2 warns2)
+  printOrThrowDiagnostics' logger dflags2 warns2
   return dflags2
 
 resetFnkEnv :: Fnk ()
@@ -502,8 +471,8 @@ mkEmptyApiAnns = (Map.empty, Map.empty)
 #endif
 
 -- | Make 'ModSummary' for recompilation check done with 'doCheckOldIface'.
-mkModSummaryForRecompile
-  :: (MonadIO m, MonadThrow m) => HscEnv -> TargetUnit -> m ModSummary
+mkModSummaryForRecompile :: (HasLogger m, MonadIO m, MonadThrow m)
+                         => HscEnv -> TargetUnit -> m ModSummary
 mkModSummaryForRecompile hsc_env tu@(tsource, _) = do
   let path = targetSourcePath tsource
       mod_name = targetUnitName tu

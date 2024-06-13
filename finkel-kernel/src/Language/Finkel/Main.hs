@@ -1,5 +1,4 @@
-{-# LANGUAGE CPP              #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE CPP #-}
 -- | Main function for Finkel compiler.
 --
 -- This module contains 'main' function, which does similar and simplified works
@@ -50,30 +49,10 @@ import           GHC_Utils_Misc               (looksLikeModuleName)
 import           GHC_Utils_Panic              (GhcException (..),
                                                throwGhcException)
 
-#if MIN_VERSION_ghc(9,8,0)
-import           GHC.Driver.Errors            (printOrThrowDiagnostics)
-#elif MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Errors            (handleFlagWarnings)
-#endif
-
-#if MIN_VERSION_ghc(9,8,0)
-import           GHC.Driver.Errors.Types      (GhcMessage (..))
-import           GHC.Types.Error              (defaultDiagnosticOpts)
-#elif MIN_VERSION_ghc(9,6,0)
-import           GHC.Driver.Errors.Types      (GhcMessage)
-import           GHC.Types.Error              (Diagnostic (..))
-#endif
-
-#if MIN_VERSION_ghc(9,4,0)
-import           GHC.Driver.Config.Diagnostic (initDiagOpts)
-#endif
-
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.SourceError        (handleSourceError)
-import           GHC.Utils.Logger             (HasLogger (..))
 #else
-import           GHC_Driver_Types             (handleFlagWarnings,
-                                               handleSourceError)
+import           GHC_Driver_Types             (handleSourceError)
 #endif
 
 #if MIN_VERSION_ghc(8,10,1) && !MIN_VERSION_ghc(8,10,3)
@@ -90,6 +69,7 @@ import           GHC.HandleEncoding           (configureHandleEncoding)
 #endif
 
 -- internal
+import           Language.Finkel.Error
 import           Language.Finkel.Exception
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make
@@ -216,8 +196,8 @@ main3 orig_args ghc_args = do
   -- From ghc 9.0, "interpretPackageEnv" is called from "parseDynamicFlags". In
   -- older versions, package environment initialization works were done by
   -- "setSessionDynFlags" via "initPackages".
-#if MIN_VERSION_ghc(9,2,0)
   logger <- getLogger
+#if MIN_VERSION_ghc(9,2,0)
   (dflags2, lfileish, warnings) <- parseDynamicFlags logger dflags1b largs
 #else
   (dflags2, lfileish, warnings) <- parseDynamicFlags dflags1b largs
@@ -256,26 +236,7 @@ main3 orig_args ghc_args = do
        handleSourceError
          (\e -> do printException e
                    liftIO exitFailure)
-         -- XXX: Compatibility codes for `handleFlagWarnings' appear in
-         -- "L.F.M.Summary", reuse the code.
-#if MIN_VERSION_ghc(9,8,0)
-         (liftIO
-           (let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
-                diag_opts = initDiagOpts dflags3
-                msg = GhcDriverMessage <$> warnings
-            in  printOrThrowDiagnostics logger diagnostic_opts diag_opts msg))
-#elif MIN_VERSION_ghc(9,6,0)
-         (liftIO
-           (let diagnostic_opts = defaultDiagnosticOpts @GhcMessage
-                diag_opts = initDiagOpts dflags3
-            in  handleFlagWarnings logger diagnostic_opts diag_opts warnings))
-#elif MIN_VERSION_ghc(9,4,0)
-         (liftIO (handleFlagWarnings logger (initDiagOpts dflags3) warnings))
-#elif MIN_VERSION_ghc(9,2,0)
-         (liftIO (handleFlagWarnings logger dflags3 warnings))
-#else
-         (liftIO (handleFlagWarnings dflags3 warnings))
-#endif
+         (printOrThrowDiagnostics' logger dflags3 warnings)
 
        -- Initialization works for Finkel.
        initSessionForMake

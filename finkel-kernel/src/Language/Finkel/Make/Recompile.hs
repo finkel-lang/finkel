@@ -119,6 +119,7 @@ import           GHC_Driver_Session                (IncludeSpecs,
 #endif
 
 -- internal
+import           Language.Finkel.Error
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make.Summary
 import           Language.Finkel.Make.TargetSource
@@ -232,6 +233,14 @@ instance MonadIO RecompM where
 instance HasDynFlags RecompM where
   getDynFlags = RecompM (\st -> pure (Right (hsc_dflags (rs_hsc_env st)), st))
   {-# INLINE getDynFlags #-}
+
+instance HasLogger RecompM where
+#if MIN_VERSION_ghc(9,2,0)
+  getLogger = RecompM (\st -> pure (Right (hsc_logger (rs_hsc_env st)), st))
+  {-# INLINE getLogger #-}
+#else
+  getLogger = pure (error "getLogger (RecompM): no Logger")
+#endif
 
 -- | Check whether recompilation is required.
 checkRecompileRequired

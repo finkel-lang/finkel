@@ -8,13 +8,16 @@
 (:require Finkel.Core)
 
 (defmodule Finkel.Tool.Internal.Compat
-  (export WARN NamePprCtx print-or-throw-diagnostics ppr-wrapped-msg-bag-with-loc
-          get-name-ppr-ctx)
+  (export WARNINGs NamePprCtx print-or-throw-diagnostics
+          ppr-wrapped-msg-bag-with-loc get-name-ppr-ctx)
   (require
    (Finkel.Tool.Internal.Macro.Ghc))
   (import-when [:compile]
     ;; finkel-core
-    (Finkel.Prelude)))
+    (Finkel.Prelude))
+  (import
+   ;; finkel-kernel
+   (Language.Finkel.Error [WARNINGs printOrThrowDiagnostics'])))
 
 ;;; ghc
 
@@ -25,15 +28,6 @@
  (GHC.Utils.Outputable [SDoc]))
 
 (cond-expand
-  [(<= 908 :ghc)
-   (:begin
-     (import GHC.Driver.Config.Diagnostic (initPrintConfig))
-     (import GHC.Driver.Errors (printOrThrowDiagnostics)))]
-  [otherwise
-   (imports-from-ghc
-    (GHC.Driver.Errors (handleFlagWarnings)))])
-
-(cond-expand
   [(<= 906 :ghc)
    (import GHC (NamePprCtx getNamePprCtx))]
   [otherwise
@@ -42,14 +36,11 @@
 (cond-expand
   [(<= 906 :ghc)
    (:begin
-     (import GHC.Driver.Config.Diagnostic (initDiagOpts))
      (import GHC.Driver.Errors.Types ((GhcMessage ..) GhcMessageOpts))
      (import GHC.Types.Error ((Messages ..) (Diagnostic ..)
                               defaultDiagnosticOpts)))]
   [(<= 904 :ghc)
-   (:begin
-     (import GHC.Driver.Config.Diagnostic (initDiagOpts))
-     (import GHC.Types.Error (Diagnostic Messages getMessages)))]
+   (import GHC.Types.Error (Diagnostic Messages getMessages))]
   [otherwise
    (:begin
      (import Language.Finkel.Error (WrappedMsg))
@@ -63,23 +54,6 @@
    (imports-from-ghc
     (GHC.Utils.Error [pprErrMsgBagWithLoc]))])
 
-(cond-expand
-  [(<= 908 :ghc)
-   (import GHC.Driver.Errors.Types (DriverMessage))]
-  [(< 802 :ghc)
-   (imports-from-ghc
-    (GHC.Driver.CmdLine (Warn)))]
-  [otherwise
-   (import SrcLoc (Located))])
-
-;;; Types
-
-(type WARN
-  (cond-expand
-    [(<= 908 :ghc) (Messages DriverMessage)]
-    [(< 802 :ghc) [Warn]]
-    [otherwise [(Located String)]]))
-
 ;;; Functions
 
 (:: get-name-ppr-ctx (=> (GhcMonad m) (m NamePprCtx)))
@@ -92,22 +66,13 @@
      (type NamePprCtx PrintUnqualified)
      (defn get-name-ppr-ctx getPrintUnqual))])
 
-(defn (:: print-or-throw-diagnostics (-> HscEnv DynFlags WARN (IO ())))
+(defn (:: print-or-throw-diagnostics (-> HscEnv DynFlags WARNINGs (IO ())))
   [_hsc-env dflags warns]
   (cond-expand
-    [(<= 908 :ghc)
-     (lept [diagopts (initDiagOpts dflags)]
-       (printOrThrowDiagnostics (hsc-logger _hsc-env) (initPrintConfig dflags)
-                                diagopts (fmap GhcDriverMessage warns)))]
-    [(<= 906 :ghc)
-     (handleFlagWarnings (hsc-logger _hsc-env) (defaultDiagnosticOpts @GhcMessage)
-                         (initDiagOpts dflags) warns)]
-    [(<= 904 :ghc)
-     (handleFlagWarnings (hsc-logger _hsc-env) (initDiagOpts dflags) warns)]
     [(<= 902 :ghc)
-     (handleFlagWarnings (hsc-logger _hsc-env) dflags warns)]
+     (printOrThrowDiagnostics' (hsc-logger _hsc-env) dflags warns)]
     [otherwise
-     (handleFlagWarnings dflags warns)]))
+     (printOrThrowDiagnostics' (error "no logger") dflags warns)]))
 
 (cond-expand
   [(<= 906 :ghc)
