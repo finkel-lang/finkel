@@ -34,15 +34,9 @@ putFastString = put . FS.fastStringToShortByteString
 
 getFastString :: Get FastString
 getFastString = fmap FS.mkFastStringShortByteString get
-#elif MIN_VERSION_ghc(8,10,0)
-putFastString :: FastString -> Put
-putFastString = put . FS.bytesFS
-
-getFastString :: Get FastString
-getFastString = fmap FS.mkFastStringByteString get
 #else
 putFastString :: FastString -> Put
-putFastString = put . FS.fastStringToByteString
+putFastString = put . FS.bytesFS
 
 getFastString :: Get FastString
 getFastString = fmap FS.mkFastStringByteString get

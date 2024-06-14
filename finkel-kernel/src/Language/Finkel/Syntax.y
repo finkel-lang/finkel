@@ -38,6 +38,7 @@ import GHC_Types_Fixity (FixityDirection (..))
 import GHC_Types_ForeignCall (Safety)
 import GHC_Types_SrcLoc (GenLocated(..), Located, getLoc, noLoc)
 import GHC_Types_SourceText (SourceText (..))
+import GHC_Hs_Decls (DerivStrategy(..))
 
 #if MIN_VERSION_ghc(9,10,0)
 import GHC.Parser.Annotation (NoAnn(..))
@@ -45,12 +46,6 @@ import GHC.Parser.Annotation (NoAnn(..))
 
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Parser.Annotation (LocatedA, LocatedAn, la2la)
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Decls (DerivStrategy(..))
-#else
-import BasicTypes (DerivStrategy(..))
 #endif
 
 -- Internal

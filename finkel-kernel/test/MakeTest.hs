@@ -127,7 +127,6 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
                    (let outputs = map (<.> "o") inputs
                     in  buildObjAndExist flags inputs outputs)
       prepare_obj = do
-        doUnload
         mapM_ removeArtifacts [odir, odir </> "M4", odir </> "M6"]
 
   -- Compile object codes with and without optimization option
@@ -135,11 +134,7 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
   buildObjAndExist' ["-O1"] ["P1", "P2"]
 
   -- Recompile P1 and P2 without deleting previous results
-  --
-  -- Seems like, the use of global persistent linker state in ghc < 8.10 have
-  -- problem when recompiling the same modules after "-O1" option, unloading the
-  -- object files.
-  before_ doUnload (buildObj [] ["P1","P2"])
+  buildObj [] ["P1","P2"]
 
   -- Compile object code with and without optimization, module reorderd
   buildObjAndExist' [] ["P2", "P1"]
@@ -184,13 +179,11 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
 
   reload_simple "R02.fnk"
 
-#if MIN_VERSION_ghc(8,10,0)
   -- Reloading test for modules containing `:require' of home package modules
-  -- not working well with ghc < 8.10.
+  -- not working well with ghc >= 8.10.
 
   -- XXX: Disabled at the moment.
   -- reload_simple "R03.fnk"
-#endif
 
   -- Recompile tests
   let recompile_simple t extras =
@@ -223,16 +216,8 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
 -- run, which may cause link time error with dynamic object on some platforms.
 -- To avoid such link time error, invoking "Linker.unload" before running the
 -- test containing macro expansion.
-
--- Unload old objects.
-doUnload :: IO ()
-#if MIN_VERSION_ghc(8,10,0)
--- Persistent linker state is isolated, does nothing.
-doUnload = return ()
-#else
--- Persistent linker state is a global IORef.
-doUnload = runFnk (getSession >>= liftIO . flip unload []) fnkTestEnv
-#endif
+--
+-- Persistent linker state is isolated from ghc 8.10, does nothing.
 
 -- Action to decide whether profiling objects for the "finkel-kernel" package
 -- are available at runtime.

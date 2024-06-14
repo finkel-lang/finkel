@@ -18,15 +18,14 @@ import Data.List                       (foldl')
 -- ghc
 import GHC_Hs_Lit                      (HsLit (..), HsOverLit)
 import GHC_Hs_Pat                      (HsConPatDetails, HsRecFields (..),
-                                        Pat (..))
+                                        Pat (..), parenthesizePat)
 import GHC_Hs_Type                     (HsConDetails (..))
-import GHC_Hs_Utils                    (mkHsIsString, mkNPat, nlWildPat)
-import GHC_Types_Basic                 (Boxity (..))
-import GHC_Types_SrcLoc                (GenLocated (..))
+import GHC_Hs_Utils                    (mkHsIntegral, mkHsIsString, mkNPat,
+                                        nlWildPat)
+import GHC_Types_Basic                 (Boxity (..), appPrec, opPrec)
+import GHC_Types_SrcLoc                (GenLocated (..), Located)
 import GHC_Utils_Lexeme                (isLexCon, isLexConId, isLexConSym,
                                         isLexSym)
-
-import GHC_Types_SrcLoc                (Located)
 
 #if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,6,0)
 import GHC.Hs.Extension                (noHsTok)
@@ -42,7 +41,7 @@ import GHC.Hs.Pat                      (gParPat)
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Hs_Pat                      (ConLikeP)
-#elif MIN_VERSION_ghc(8,4,0)
+#else
 import GHC_Hs_Extension                (IdP)
 #endif
 
@@ -52,25 +51,12 @@ import GHC_Hs_Type                     (mkHsPatSigType)
 import GHC_Hs_Utils                    (mkLHsSigWcType)
 #endif
 
-#if !MIN_VERSION_ghc(8,6,0)
-import PlaceHolder                     (placeHolderType)
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Pat                      (parenthesizePat)
-#else
-import SrcLoc                          (unLoc)
-#endif
-
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Data.FastString (nullFS, unconsFS)
 import Language.Finkel.Form
 import Language.Finkel.Syntax.SynUtils
 
-#if !MIN_VERSION_ghc(8,6,0)
-import Language.Finkel.Syntax.HExpr    hiding (mkcfld')
-#endif
 
 -- ------------------------------------------------------------------------
 --
@@ -98,7 +84,7 @@ b_intP (LForm (L l form)) =
     Atom (AInteger n) -> return $! lA l (npat n)
     _                 -> builderError
   where
-    npat n = mkNPat' (L l (mkHsIntegral' n))
+    npat n = mkNPat' (L l (mkHsIntegral n))
 {-# INLINABLE b_intP #-}
 
 b_stringP :: Code -> Builder HPat
@@ -107,13 +93,7 @@ b_stringP (LForm (L l form)) =
     Atom (AString stxt str) -> return $! lA l (npat stxt str)
     _                       -> builderError
   where
-    npat stxt str = mkNPat' (L l (hsIsString stxt str))
-    hsIsString s t =
-#if MIN_VERSION_ghc(8,6,0)
-      mkHsIsString s t
-#else
-      mkHsIsString s t placeHolderType
-#endif
+    npat stxt str = mkNPat' (L l (mkHsIsString stxt str))
 {-# INLINABLE b_stringP #-}
 
 b_charP :: Code -> Builder HPat
@@ -126,7 +106,7 @@ b_charP (LForm (L l form)) =
 b_unitP :: Code -> Builder HPat
 b_unitP (LForm (L l form)) =
   case form of
-    Atom AUnit -> return $! lA l (mkTuplePat' [])
+    Atom AUnit -> return $! lA l (mkTuplePat [])
     _          -> builderError
 {-# INLINABLE b_unitP #-}
 
@@ -175,19 +155,8 @@ b_symP orig@(LForm (L l form))
 b_hsListP :: [HPat] -> HPat
 b_hsListP pats = p
   where
-#if MIN_VERSION_ghc(8,10,0)
      p = case dL (mkLocatedListA pats) of L l _ -> L l (listPat pats)
-#elif MIN_VERSION_ghc(8,8,0)
-     p = listPat pats
-#else
-     p = case dL (mkLocatedList pats) of L l _ -> L l (listPat pats)
-#endif
-     listPat ps =
-#if MIN_VERSION_ghc(8,6,0)
-       ListPat NOEXT ps
-#else
-       ListPat ps placeHolderType Nothing
-#endif
+     listPat = ListPat NOEXT
 {-# INLINABLE b_hsListP #-}
 
 b_labeledP :: Code -> [PreRecField HPat] -> Builder HPat
@@ -207,10 +176,8 @@ b_labeledP (LForm (L l form)) ps
                                      (L wl (RecFieldsDotDot (length non_wilds))))
 #elif MIN_VERSION_ghc(9,6,0)
           (LForm (L wl _): _) -> Just (L wl (RecFieldsDotDot (length non_wilds)))
-#elif MIN_VERSION_ghc(8,10,0)
-          (LForm (L wl _): _) -> Just (L wl (length non_wilds))
 #else
-          _                   -> Just (length non_wilds)
+          (LForm (L wl _): _) -> Just (L wl (length non_wilds))
 #endif
         flds = map mkcfld' non_wilds
         rc = HsRecFields { rec_flds = flds
@@ -222,7 +189,7 @@ b_labeledP (LForm (L l form)) ps
 {-# INLINABLE b_labeledP #-}
 
 b_tupP :: Code -> [HPat] -> HPat
-b_tupP (LForm (L l _)) ps = lA l (mkTuplePat' ps)
+b_tupP (LForm (L l _)) ps = lA l (mkTuplePat ps)
 {-# INLINABLE b_tupP #-}
 
 b_asP :: Code -> HPat -> Builder HPat
@@ -244,7 +211,7 @@ b_asP (LForm (dL->L l form)) pat =
 b_lazyP :: HPat -> HPat
 b_lazyP (dL-> L l pat0) = cL l (LazyPat NOEXT pat1)
   where
-    pat1 = parenthesizePat' appPrec (cL l pat0)
+    pat1 = parenthesizePat appPrec (cL l pat0)
 {-# INLINABLE b_lazyP #-}
 
 b_bangP :: HPat -> HPat
@@ -262,13 +229,13 @@ b_conP forms is_paren rest =
         rname = mkVarRdrName name
         lrname = lN l rname
         prefixPat = return (lA l (mkConPat lrname (mkPrefixCon prest)))
-        prest = map (parenthesizePat' appPrec) rest
+        prest = map (parenthesizePat appPrec) rest
         infixPat =
           case rest of
             (hd:rest') ->
               let f lh rh = lA l (mkConPat lrname (InfixCon lh (paren rh)))
-                  paren = parenthesizePat' opPrec
-              in  return (foldl' f (parenthesizePat' opPrec hd) rest')
+                  paren = parenthesizePat opPrec
+              in  return (foldl' f (parenthesizePat opPrec hd) rest')
             _ -> builderError
     _ -> builderError
 {-# INLINABLE b_conP #-}
@@ -279,24 +246,16 @@ b_sigP (LForm (L l _)) pat ty =
   lA l (SigPat NOEXT pat (mkHsPatSigType NOEXT ty))
 #elif MIN_VERSION_ghc(9,0,0)
   lA l (SigPat NOEXT pat (mkHsPatSigType ty))
-#elif MIN_VERSION_ghc(8,8,0)
-  cL l (SigPat NOEXT pat (mkLHsSigWcType ty))
-#elif MIN_VERSION_ghc(8,6,0)
-  cL l (SigPat (mkLHsSigWcType ty) pat)
 #else
-  cL l (SigPatIn pat (mkLHsSigWcType ty))
+  cL l (SigPat NOEXT pat (mkLHsSigWcType ty))
 #endif
 {-# INLINABLE b_sigP #-}
 
-mkTuplePat' :: [HPat] -> Pat PARSED
-mkTuplePat' ps =
-#if MIN_VERSION_ghc(8,6,0)
-  TuplePat NOEXT ps Boxed
-#else
-  TuplePat ps Boxed []
-#endif
-{-# INLINABLE mkTuplePat' #-}
+mkTuplePat :: [HPat] -> Pat PARSED
+mkTuplePat ps = TuplePat NOEXT ps Boxed
+{-# INLINABLE mkTuplePat #-}
 
+-- XXX: Consider using GHC.Hs.Utils.mkParPat
 mkParPat' :: HPat -> HPat
 #if MIN_VERSION_ghc(9,4,0)
 mkParPat' pat@(L l _) = cL l (gParPat pat)
@@ -311,11 +270,8 @@ mkParPat' (dL->L l p) =
 #if MIN_VERSION_ghc(9,0,0)
 mkConPat :: LocatedN (ConLikeP PARSED) -> HsConPatDetails PARSED -> Pat PARSED
 mkConPat = ConPat NOEXT
-#elif MIN_VERSION_ghc(8,4,0)
-mkConPat :: Located (IdP PARSED) -> HsConPatDetails PARSED -> Pat PARSED
-mkConPat = ConPatIn
 #else
-mkConPat :: Located PARSED -> HsConPatDetails PARSED -> Pat PARSED
+mkConPat :: Located (IdP PARSED) -> HsConPatDetails PARSED -> Pat PARSED
 mkConPat = ConPatIn
 #endif
 
@@ -337,59 +293,3 @@ mkPrefixCon :: [a] -> HsConDetails a r
 mkPrefixCon = PrefixCon
 #endif
 {-# INLINABLE mkPrefixCon #-}
-
--- ------------------------------------------------------------------------
---
--- Parenthesizing
---
--- ------------------------------------------------------------------------
-
--- | Parenthesize patterns.
-parenthesizePat' :: PprPrec -> HPat -> HPat
-#if MIN_VERSION_ghc(8,6,0)
-parenthesizePat' = parenthesizePat
-#else
--- Brought from "compiler/hsSyn/HsPa.hs" in tghc 8.8.3 source code. Modified to
--- work with ghc 8.2.x and ghc 8.4.x.
-
--- | @'parenthesizePat' p pat@ checks if @'patNeedsParens' p pat@ is true, and
--- if so, surrounds @pat@ with a 'ParPat'. Otherwise, it simply returns @pat@.
-parenthesizePat' p lpat@(dL->L loc pat)
-  | patNeedsParens p pat = cL loc (ParPat NOEXT lpat)
-  | otherwise            = lpat
-
--- | @'patNeedsParens' p pat@ returns 'True' if the pattern @pat@ needs
--- parentheses under precedence @p@.
-patNeedsParens :: PprPrec -> Pat p -> Bool
-patNeedsParens p = go
-  where
-    go (NPlusKPat {})    = p > opPrec
-    go (SplicePat {})    = False
-    go (ConPatIn _ ds)   = conPatNeedsParens p ds
-    go cp@(ConPatOut {}) = conPatNeedsParens p (pat_args cp)
-    -- go (SigPat {})       = p >= sigPrec
-    go (ViewPat {})      = True
-    go (CoPat _ q _)     = go q
-    go (WildPat {})      = False
-    go (VarPat {})       = False
-    go (LazyPat {})      = False
-    go (BangPat {})      = False
-    go (ParPat {})       = False
-    go (AsPat {})        = False
-    go (TuplePat {})     = False
-    go (SumPat {})       = False
-    go (ListPat {})      = False
-    go (LitPat l)        = hsLitNeedsParens p l
-    go (NPat lol _ _ _)  = hsOverLitNeedsParens p (unLoc lol)
-    -- go (XPat {})         = True -- conservative default
-    go _                 = True
-
--- | @'conPatNeedsParens' p cp@ returns 'True' if the constructor patterns @cp@
--- needs parentheses under precedence @p@.
-conPatNeedsParens :: PprPrec -> HsConDetails a b -> Bool
-conPatNeedsParens p = go
-  where
-    go (PrefixCon args) = p >= appPrec && not (null args)
-    go (InfixCon {})    = p >= opPrec
-    go (RecCon {})      = False
-#endif

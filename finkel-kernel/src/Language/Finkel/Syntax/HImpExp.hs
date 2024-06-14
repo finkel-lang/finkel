@@ -21,6 +21,7 @@ import GHC_Types_Name_Reader            (RdrName, mkQual, mkUnqual)
 import GHC_Types_SrcLoc                 (GenLocated (..), SrcSpan)
 import GHC_Unit_Module                  (mkModuleNameFS)
 import GHC_Utils_Lexeme                 (isLexCon)
+import GHC_Hs_ImpExp                    (ImportDeclQualifiedStyle (..))
 
 #if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,6,0)
 import Language.Haskell.Syntax.Concrete (LayoutInfo (..))
@@ -31,10 +32,6 @@ import GHC_Types_SrcLoc                 (LayoutInfo (..))
 #if MIN_VERSION_ghc(9,6,0)
 import GHC.Hs                           (XModulePs (..))
 import Language.Haskell.Syntax.ImpExp   (ImportListInterpretation (..))
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import GHC_Hs_ImpExp                    (ImportDeclQualifiedStyle (..))
 #endif
 
 -- Internal
@@ -223,12 +220,8 @@ b_importD (name, qualified, mb_as) (hiding, mb_entities) =
 #endif
                        }
           mname = mkModuleNameFS m
-#if MIN_VERSION_ghc(8,10,0)
           qualified' | qualified = QualifiedPre
                      | otherwise = NotQualified
-#else
-          qualified' = qualified
-#endif
           asModName (LForm (L l' (Atom (ASymbol x)))) =
             lA l' (mkModuleNameFS x)
           asModName _ = error "b_importD.asModName"

@@ -17,7 +17,6 @@ import           GHC_Hs_Binds                    (FixitySig (..), HsBind,
                                                   emptyLocalBinds)
 import           GHC_Hs_Decls                    (HsDecl (..))
 import           GHC_Hs_Expr                     (GRHSs (..), LGRHS)
-import           GHC_Hs_Utils                    (mkFunBind)
 import qualified GHC_Parser_PostProcess          as PostProcess
 import           GHC_Types_Fixity                (Fixity)
 import           GHC_Types_Name_Reader           (RdrName)
@@ -31,26 +30,10 @@ import           GHC_Hs_Binds                    (HsMultAnn (..))
 import           GHC_Types_SrcLoc                (SrcSpan)
 #endif
 
-#if MIN_VERSION_ghc(8,10,0)
-import           GHC_Types_Basic                 (Origin (..))
-#endif
-
-#if !MIN_VERSION_ghc(8,6,0)
-import           PlaceHolder                     (placeHolderNames,
-                                                  placeHolderType)
-#endif
-
 -- Internal
 import           Language.Finkel.Builder
 import           Language.Finkel.Syntax.SynUtils
 
-mkFunBind_compat :: LocatedN RdrName -> [HMatch] -> HsBind PARSED
-#if MIN_VERSION_ghc(8,10,0)
-mkFunBind_compat = mkFunBind FromSource
-#else
-mkFunBind_compat = mkFunBind
-#endif
-{-# INLINABLE mkFunBind_compat #-}
 
 mkPatBind_compat :: HPat -> [HGRHS] -> [HDecl] -> HsBind PARSED
 mkPatBind_compat (dL->L l pat) grhss decls =
@@ -60,28 +43,18 @@ mkPatBind_compat (dL->L l pat) grhss decls =
             -- XXX: Does not support HsMultAnn.
           , pat_mult = HsNoMultAnn unused
 #endif
-#if MIN_VERSION_ghc(8,6,0)
-            -- XXX: From ghc 9.6, the `pat_ext' field is used for holding former
-            -- `pat_ticks' information.
+            -- XXX: From ghc 9.6 (8.6?), the `pat_ext' field is used for holding
+            -- former `pat_ticks' information.
           , pat_ext = NOEXT
-#else
-          , pat_rhs_ty = placeHolderType
-          , bind_fvs = placeHolderNames
-#endif
 #if !MIN_VERSION_ghc(9,6,0)
           , pat_ticks = ([], [])
 #endif
           }
 {-# INLINABLE mkPatBind_compat #-}
 
-mkHsValBinds_compat :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
-mkHsValBinds_compat binds sigs =
-#if MIN_VERSION_ghc(8,6,0)
-  HsValBinds NOEXT (ValBinds NOEXT binds sigs)
-#else
-  HsValBinds (ValBindsIn binds sigs)
-#endif
-{-# INLINABLE mkHsValBinds_compat #-}
+mkHsValBinds :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
+mkHsValBinds binds sigs = HsValBinds NOEXT (ValBinds NOEXT binds sigs)
+{-# INLINABLE mkHsValBinds #-}
 
 #if MIN_VERSION_ghc(9,2,0)
 mkGRHSs :: [LGRHS PARSED t] -> [HDecl] -> a -> GRHSs PARSED t
@@ -102,7 +75,7 @@ declsToBinds l decls = L l binds'
   where
     binds' = case decls of
       [] -> emptyLocalBinds
-      _  -> mkHsValBinds_compat (listToBag binds) sigs
+      _  -> mkHsValBinds (listToBag binds) sigs
     -- Using 'PostProcess.cvTopDecls' to group same names in where
     -- clause. Perhaps better to do similar things done in
     -- 'PostProcess.cvBindGroup', which is dedicated for 'P' monad ...

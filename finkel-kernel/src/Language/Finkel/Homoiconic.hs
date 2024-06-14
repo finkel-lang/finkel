@@ -54,11 +54,6 @@ import qualified Data.Functor.Product  as Product
 import qualified Data.Functor.Sum      as Sum
 import qualified Data.Semigroup        as Semigroup
 
-#if !MIN_VERSION_ghc(8,8,0)
-import           Control.Monad.Fail    (MonadFail (..))
-import           Prelude               hiding (fail)
-#endif
-
 -- ghc
 import           GHC_Data_FastString   (FastString, unpackFS)
 import           GHC_Types_SrcLoc      (GenLocated (..), SrcSpan, getLoc)

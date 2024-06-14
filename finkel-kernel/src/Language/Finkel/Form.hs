@@ -88,10 +88,8 @@ import           GHC_Types_SrcLoc                (BufPos (..), BufSpan (..),
                                                   unhelpfulSpanFS)
 #endif
 
-#if MIN_VERSION_ghc(8,4,0)
 import           GHC_Types_SourceText            (IntegralLit (..),
                                                   mkIntegralLit)
-#endif
 
 -- deepseq
 import           Control.DeepSeq                 (NFData (..))
@@ -333,7 +331,6 @@ instance Outputable a => Outputable (Form a) where
 instance Outputable a => Outputable (LForm a) where
   ppr (LForm (L _ a)) = ppr a
 
-#if MIN_VERSION_ghc(8,4,0)
 instance Semigroup (Form a) where
   Atom a <> Atom b       = List [atomForm a, atomForm b]
   Atom a <> List bs      = List (atomForm a : bs)
@@ -362,35 +359,6 @@ instance Monoid (Form a) where
 instance Monoid (LForm a) where
   mempty = LForm (genSrc mempty)
   {-# INLINE mempty #-}
-#else
-instance Monoid (Form a) where
-  Atom a `mappend` Atom b       = List [atomForm a, atomForm b]
-  Atom a `mappend` List bs      = List (atomForm a : bs)
-  Atom a `mappend` HsList bs    = List (atomForm a : bs)
-
-  List as `mappend` Atom b      = List (as `mappend` [atomForm b])
-  List as `mappend` List bs     = List (as `mappend` bs)
-  List as `mappend` HsList bs   = List (as `mappend` bs)
-
-  HsList as `mappend` Atom b    = List (as `mappend` [atomForm b])
-  HsList as `mappend` List bs   = List (as `mappend` bs)
-  HsList as `mappend` HsList bs = List (as `mappend` bs)
-
-  TEnd `mappend` b              = b
-  a `mappend` TEnd              = a
-  {-# INLINE mappend #-}
-
-  mempty = List []
-  {-# INLINE mempty #-}
-
-instance Monoid (LForm a) where
-  LForm (L l a) `mappend` LForm (L r b) =
-    LForm (L (combineSrcSpans l r) (a `mappend` b))
-  {-# INLINE mappend #-}
-
-  mempty = LForm (genSrc mempty)
-  {-# INLINE mempty #-}
-#endif
 
 instance Alternative Form where
   empty = mempty
@@ -861,27 +829,3 @@ nop2 _ _ f (Atom (AFractional fl1)) (Atom (AFractional fl2)) =
   Atom (aFractional (on f fl_value fl1 fl2))
 nop2 _ _ _ _ _ = List []
 {-# INLINABLE nop2 #-}
-
-#if !MIN_VERSION_ghc(8,4,0)
--- | IntegralLit back ported to 8.2.x.
-data IntegralLit
-  = IL { il_text  :: SourceText
-       , il_neg   :: Bool
-       , il_value :: Integer
-       }
-  deriving (Data, Show)
-
-mkIntegralLit :: Integral a => a -> IntegralLit
-mkIntegralLit i = IL { il_text = SourceText (show i_integer)
-                     , il_neg = i < 0
-                     , il_value = i_integer }
-  where
-    i_integer :: Integer
-    i_integer = toInteger i
-
-instance Eq IntegralLit where
-  (==) = (==) `on` il_value
-
-instance Ord IntegralLit where
-  compare = compare `on` il_value
-#endif

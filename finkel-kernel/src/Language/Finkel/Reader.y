@@ -324,13 +324,9 @@ supportedLangExts =
       , DeriveGeneric
       , DeriveTraversable
       , DerivingStrategies
-#if MIN_VERSION_ghc(8,6,0)
       , DerivingVia
-#endif
       , EmptyCase
-#if MIN_VERSION_ghc(8,4,0)
       , EmptyDataDeriving
-#endif
       , ExistentialQuantification
       , ExplicitForAll
       , FlexibleContexts
@@ -356,9 +352,7 @@ supportedLangExts =
 #endif
       , RecordWildCards
       , ScopedTypeVariables
-#if MIN_VERSION_ghc(8,10,0)
       , StandaloneKindSignatures
-#endif
       , StandaloneDeriving
       , TypeApplications
       , TypeFamilies

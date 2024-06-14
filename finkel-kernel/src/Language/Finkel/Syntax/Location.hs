@@ -39,12 +39,8 @@ import           GHC.Types.SrcLoc                  (noSrcSpan)
 
 #if MIN_VERSION_ghc(9,2,0)
 import           Language.Haskell.Syntax.Extension (LIdP)
-#elif MIN_VERSION_ghc(8,10,0)
+#else
 import           GHC.Hs.Extension                  (LIdP)
-#elif MIN_VERSION_ghc(8,6,0)
-import           HsExtension                       (LIdP)
-#elif MIN_VERSION_ghc(8,4,0)
-import           HsExtension                       (IdP)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -161,20 +157,6 @@ cL = L
 
 {-# INLINABLE cL #-}
 {-# INLINABLE dL #-}
-
-#if !MIN_VERSION_ghc(8,6,0)
-#  if MIN_VERSION_ghc(8,4,0)
-type LIdP a = Located (IdP a)
-#  else
-type LIdP a = Located a
-#  endif
-#endif
-
-#if !MIN_VERSION_ghc(8,6,0) && MIN_VERSION_ghc(8,4,0)
-type LIdP a = Located (IdP a)
-#elif !MIN_VERSION_ghc(8,6,0) && !MIN_VERSION_ghc(8,4,0)
-type LIdP a = Located a
-#endif
 
 -- For concrete 'Located' input and output.
 mkLocatedList :: [Located a] -> Located [Located a]

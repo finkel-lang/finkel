@@ -60,7 +60,7 @@ import           System.FilePath                   (splitExtension)
 
 -- ghc
 import           GHC                               (setSessionDynFlags)
-import           GHC_Driver_Env                    (HscEnv (..))
+import           GHC_Driver_Env                    (HscEnv (..), runHsc)
 import           GHC_Driver_Main                   (Messager)
 import           GHC_Driver_Make                   (LoadHowMuch (..), load')
 import           GHC_Driver_Monad                  (GhcMonad (..))
@@ -71,6 +71,7 @@ import           GHC_Driver_Session                (DynFlags (..),
                                                     HasDynFlags (..), gopt,
                                                     gopt_set, gopt_unset)
 import           GHC_Hs_ImpExp                     (simpleImportDecl)
+import           GHC_Plugins                       (Plugin (..), withPlugins)
 import           GHC_Runtime_Context               (InteractiveImport (..))
 import           GHC_Runtime_Eval                  (setContext)
 import           GHC_Runtime_Loader                (initializePlugins)
@@ -141,11 +142,6 @@ import           GHC_Unit_Finder                   (cannotFindModule)
 import           GHC_Unit_Types                    (moduleUnit)
 #else
 import           GHC_Unit_Module                   (Module (..), moduleUnitId)
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import           GHC_Driver_Env                    (runHsc)
-import           GHC_Plugins                       (Plugin (..), withPlugins)
 #endif
 
 import           GHC_Driver_Make                   (depanal)
@@ -227,23 +223,19 @@ initSessionForMake :: Fnk ()
 initSessionForMake = do
   dflags0 <- getDynFlags
 
-#if MIN_VERSION_ghc(8,6,0)
   -- Initializing the DynFlags for plugin at this point, to avoid repeated calls
   -- of "initializePlugins" before applying plugin action "parsedResultAction".
   -- The 'setSessionDynFlags' changes the current 'DynFlags', so getting the
   -- updated "DynFlags". Returned list of 'InstalledUnitId's are ignored.
   _preload0 <- setSessionDynFlags dflags0
   hsc_env <- getSession
-#  if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,0)
   hsc_env1 <- liftIO $! initializePlugins hsc_env
   setSession hsc_env1
   let dflags1 = hsc_dflags hsc_env1
-#  else
+#else
   let dflags0' = hsc_dflags hsc_env
   dflags1 <- liftIO $! initializePlugins hsc_env dflags0'
-#  endif
-#else
-  let dflags1 = dflags0
 #endif
 
   -- Mangle the function name in "mainFunIs" field, to support mangled name,
@@ -757,7 +749,6 @@ makeNewSummary fnk_env hsc_env tu = toMakeM $ do
       -- To support -ddump-parsed-ast option.
       dumpParsedAST hsc_env (ms_hspp_opts ms0) ms0
 
-#if MIN_VERSION_ghc(8,6,0)
       -- To support parsedResultAction in plugin. See "HscMain.hscParse'"
       ms1 <- case ms_parsed_mod ms0 of
         Nothing -> return ms0
@@ -766,21 +757,17 @@ makeNewSummary fnk_env hsc_env tu = toMakeM $ do
               dflags0 = hsc_dflags hsc_env
               dflags1 = adjustIncludePaths dflags0 ms0
               hsc_env' = hsc_env {hsc_dflags = dflags1}
-#  if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,4,0)
               plugins = hsc_plugins (hscSetFlags dflags1 hsc_env)
               act = parsedResultModule <$>
                     withPlugins plugins do_action (mkParsedResult pm)
-#  elif MIN_VERSION_ghc(9,2,0)
+#elif MIN_VERSION_ghc(9,2,0)
               act = withPlugins (hsc_env {hsc_dflags=dflags1}) do_action pm
-#  else
+#else
               act = withPlugins dflags1 do_action pm
-#  endif
+#endif
           parsed_mod <- liftIO (runHsc hsc_env' act)
           return $! ms0 {ms_parsed_mod = Just parsed_mod}
-#else
-      -- Ghc does not support parsedResultAction.
-      let ms1 = ms0
-#endif
       return $! EMS ms1 Nothing reqs
 
 #if MIN_VERSION_ghc(9,4,0)

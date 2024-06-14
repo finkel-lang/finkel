@@ -223,11 +223,7 @@ resetPackageEnv pkg_args = do
 -- | Clear 'packageEnv' field in 'DynFlags'.
 clearPackageEnv :: DynFlags -> DynFlags
 -- Use of "-" to reset package env is NOT supported until 8.4.4.
-#if MIN_VERSION_ghc(8,4,4)
 clearPackageEnv dflags = dflags {packageEnv = Just "-"}
-#else
-clearPackageEnv dflags = dflags {packageEnv = Nothing}
-#endif
 
 parseAndSetDynFlags :: [String] -> Fnk ()
 parseAndSetDynFlags args = do

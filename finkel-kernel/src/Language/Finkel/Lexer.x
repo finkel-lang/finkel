@@ -51,7 +51,7 @@ import qualified Data.ByteString            as W8
 import qualified Data.ByteString.Char8      as C8
 
 -- ghc
-import           GHC_Data_FastString        (FastString,
+import           GHC_Data_FastString        (FastString, bytesFS,
                                              fsLit, nullFS,
                                              mkFastStringByteString,
                                              unpackFS)
@@ -74,12 +74,6 @@ import           GHC_Utils_Misc              (readRational)
 
 #if MIN_VERSION_ghc(9,4,0)
 import qualified GHC.Data.Strict as Strict
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import           GHC_Data_FastString        (bytesFS)
-#else
-import           FastString                 (fastStringToByteString)
 #endif
 
 -- ghc-boot
@@ -925,14 +919,7 @@ adjustChar c = fromIntegral $ ord adj_c
                   _other                -> non_graphic
 {-# INLINABLE adjustChar #-}
 
-#if !MIN_VERSION_ghc(8,10,0)
--- | 'fastStringToByteString' is deprecated in ghc-8.10.x.
-bytesFS :: FastString -> W8.ByteString
-bytesFS = fastStringToByteString
-#endif
-
 dropCommentBeginning :: C8.ByteString -> C8.ByteString
 dropCommentBeginning = C8.dropWhile (== ';')
 {-# INLINABLE dropCommentBeginning #-}
-
 }
