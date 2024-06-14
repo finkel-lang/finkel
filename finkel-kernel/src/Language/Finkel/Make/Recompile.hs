@@ -34,12 +34,13 @@ import           GHC_Data_FastString               (FastString)
 import           GHC_Driver_Env_Types              (HscEnv (..))
 import           GHC_Driver_Phases                 (Phase (..))
 import           GHC_Driver_Session                (DynFlags (..),
-                                                    HasDynFlags (..))
-import           GHC_IfaceToCore                   (typecheckIface)
+                                                    HasDynFlags (..),
+                                                    addQuoteInclude)
 import           GHC_Iface_Load                    (readIface)
 import           GHC_Iface_Recomp                  (checkOldIface)
 import           GHC_Iface_Recomp_Binary           (putNameLiterally)
 import           GHC_Iface_Recomp_Flags            (fingerprintDynFlags)
+import           GHC_IfaceToCore                   (typecheckIface)
 import           GHC_Tc_Module                     (getModuleInterface)
 import           GHC_Tc_Utils_Monad                (initIfaceLoad)
 import           GHC_Types_SrcLoc                  (Located, noLoc, unLoc)
@@ -55,6 +56,8 @@ import           GHC_Unit_Module                   (ModLocation (..),
                                                     moduleNameString)
 import           GHC_Unit_Module_Deps              (Dependencies (..),
                                                     Usage (..))
+import           GHC_Unit_Module_ModIface          (ModIface, ModIface_ (..),
+                                                    mi_flag_hash, mi_mod_hash)
 import           GHC_Unit_Module_ModSummary        (ModSummary (..),
                                                     msHiFilePath, ms_mod_name)
 import           GHC_Unit_State                    (LookupResult (..),
@@ -104,18 +107,6 @@ import           GHC.Driver.Env                    (hsc_units)
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC_Unit_Types                    (GenWithIsBoot (..),
                                                     ModuleNameWithIsBoot)
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import           GHC_Unit_Module_ModIface          (ModIface, ModIface_ (..),
-                                                    mi_flag_hash, mi_mod_hash)
-#else
-import           HscTypes                          (ModIface (..))
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import           GHC_Driver_Session                (IncludeSpecs,
-                                                    addQuoteInclude)
 #endif
 
 -- internal
@@ -375,9 +366,7 @@ checkUsagePackageModules usages = getHscEnv >>= forM_ usages . go
             LookupFound {}    -> check_mod_hash
             LookupMultiple {} -> check_mod_hash
             LookupHidden {}   -> check_mod_hash
-#if MIN_VERSION_ghc(8,6,0)
             LookupUnusable {} -> outdate mname (text (mname_str ++ " unusable"))
-#endif
             LookupNotFound {} -> outdate mname (text (mname_str ++ " not found"))
         _ -> return ()
 
@@ -592,7 +581,7 @@ adjustIncludePaths dflags0 ms =
     Just path ->
       let old_paths = includePaths dflags0
           current_dir = takeDirectory (dropExtension path)
-          new_paths0 = addQuoteInclude' old_paths [current_dir]
+          new_paths0 = addQuoteInclude old_paths [current_dir]
 #if MIN_VERSION_ghc(9,4,0)
           new_paths1 = offsetIncludePaths dflags0 new_paths0
 #else
@@ -600,32 +589,17 @@ adjustIncludePaths dflags0 ms =
 #endif
       in  dflags0 {includePaths = new_paths1}
 
+miModHash', miFlagHash' :: ModIface -> Fingerprint
+miModHash' = mi_mod_hash . mi_final_exts
+miFlagHash' = mi_flag_hash . mi_final_exts
+{-# INLINABLE miModHash' #-}
+{-# INLINABLE miFlagHash' #-}
 
 -- ------------------------------------------------------------------------
 --
 -- GHC version compatibility functions
 --
 -- ------------------------------------------------------------------------
-
-#if MIN_VERSION_ghc(8,6,0)
-addQuoteInclude' :: IncludeSpecs -> [String] -> IncludeSpecs
-addQuoteInclude' = addQuoteInclude
-#else
-addQuoteInclude' :: [String] -> [String] -> [String]
-addQuoteInclude' = flip (++)
-#endif
-{-# INLINABLE addQuoteInclude' #-}
-
-miModHash', miFlagHash' :: ModIface -> Fingerprint
-#if MIN_VERSION_ghc(8,10,0)
-miModHash' = mi_mod_hash . mi_final_exts
-miFlagHash' = mi_flag_hash . mi_final_exts
-#else
-miModHash' = mi_mod_hash
-miFlagHash' = mi_flag_hash
-#endif
-{-# INLINABLE miModHash' #-}
-{-# INLINABLE miFlagHash' #-}
 
 -- Fields in Dependency module set
 --

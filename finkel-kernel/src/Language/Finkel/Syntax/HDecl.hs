@@ -19,26 +19,30 @@ import GHC_Data_OrdList                 (toOL)
 import GHC_Hs_Binds                     (HsBind, Sig (..))
 import GHC_Hs_Decls                     (ClsInstDecl (..), ConDecl (..),
                                          DataFamInstDecl (..), DefaultDecl (..),
-                                         DerivDecl (..), DocDecl (..),
+                                         DerivDecl (..), DerivStrategy (..),
+                                         DocDecl (..), FamEqn (..),
                                          FamilyDecl (..), FamilyInfo (..),
                                          FamilyResultSig (..), ForeignDecl (..),
                                          ForeignExport (..), HsDataDefn (..),
                                          HsDecl (..), HsDerivingClause (..),
-                                         InstDecl (..), TyClDecl (..),
-                                         TyFamInstDecl (..), TyFamInstEqn)
+                                         InstDecl (..), LTyFamDefltDecl,
+                                         TyClDecl (..), TyFamInstDecl (..),
+                                         TyFamInstEqn)
 import GHC_Hs_Doc                       (LHsDocString)
 import GHC_Hs_Expr                      (HsMatchContext (..), Match (..))
 import GHC_Hs_Pat                       (Pat (..))
-import GHC_Hs_Type                      (ConDeclField (..), HsConDetails (..),
-                                         HsTyVarBndr (..), HsType (..),
-                                         HsWildCardBndrs (..), mkFieldOcc,
-                                         mkHsQTvs)
-import GHC_Hs_Utils                     (mkClassOpSigs)
+import GHC_Hs_Type                      (ConDeclField (..), HsArg (..),
+                                         HsConDetails (..), HsTyVarBndr (..),
+                                         HsType (..), HsWildCardBndrs (..),
+                                         mkFieldOcc, mkHsQTvs)
+import GHC_Hs_Utils                     (mkClassOpSigs, mkFunBind)
+import GHC_Parser_Lexer                 (P (..), ParseResult (..))
 import GHC_Parser_PostProcess           (mkConDeclH98, mkGadtDecl,
-                                         mkInlinePragma, parseCImport)
+                                         mkInlinePragma, mkStandaloneKindSig,
+                                         parseCImport)
 import GHC_Types_Basic                  (Activation (..), InlineSpec (..),
-                                         OverlapMode (..), PhaseNum,
-                                         RuleMatchInfo (..))
+                                         Origin (..), OverlapMode (..),
+                                         PhaseNum, RuleMatchInfo (..))
 import GHC_Types_Fixity                 (Fixity (..), FixityDirection (..),
                                          LexicalFixity (..))
 import GHC_Types_ForeignCall            (CCallConv (..), CExportSpec (..),
@@ -49,9 +53,8 @@ import GHC_Types_SrcLoc                 (GenLocated (..), Located, getLoc,
                                          noLoc, unLoc)
 
 #if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,6,0)
-import Language.Haskell.Syntax.Concrete (HsUniToken (..))
-import GHC.Parser.Annotation            (noAnn)
 import GHC.Parser.PostProcess           (mkTokenLocation)
+import Language.Haskell.Syntax.Concrete (HsUniToken (..))
 #endif
 
 #if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,6,0)
@@ -80,9 +83,9 @@ import GHC.Parser.Annotation            (l2l)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC_Hs_Type                      (mkHsOuterImplicit)
 import GHC_Hs_Decls                     (DerivClauseTys (..),
                                          XViaStrategyPs (..))
+import GHC_Hs_Type                      (mkHsOuterImplicit)
 import GHC_Hs_Utils                     (hsTypeToHsSigType, hsTypeToHsSigWcType)
 import GHC_Parser_Annotation            (AnnSortKey (..))
 import GHC_Types_Basic                  (TopLevelFlag (..))
@@ -91,43 +94,9 @@ import GHC_Hs_Type                      (mkHsImplicitBndrs)
 import GHC_Hs_Utils                     (mkLHsSigType, mkLHsSigWcType)
 #endif
 
-
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Hs_Type                      (LHsTyVarBndr, hsLinear)
 import GHC_Types_Var                    (Specificity (..))
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import GHC_Parser_Lexer                 (P (..), ParseResult (..))
-import GHC_Parser_PostProcess           (mkStandaloneKindSig)
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import GHC_Hs_Decls                     (LTyFamDefltDecl)
-#else
-import GHC_Hs_Decls                     (LTyFamDefltEqn)
-import Outputable                       (showSDocUnsafe)
-import RdrHsSyn                         (mkATDefault)
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import GHC_Hs_Decls                     (FamEqn (..))
-#elif MIN_VERSION_ghc(8,4,0)
-import GHC_Hs_Decls                     (FamEqn (..), HsTyPats)
-#else
-import GHC_Hs_Decls                     (TyFamEqn (..))
-#endif
-
-#if MIN_VERSION_ghc(8,8,0)
-import GHC_Hs_Type                      (HsArg (..))
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Decls                     (DerivStrategy (..))
-#else
-import GHC_Hs_Decls                     (noForeignExportCoercionYet,
-                                         noForeignImportCoercionYet)
-import PlaceHolder                      (PlaceHolder (..), placeHolderNames)
 #endif
 
 -- Internal
@@ -137,10 +106,6 @@ import Language.Finkel.Form
 import Language.Finkel.Syntax.HBind
 import Language.Finkel.Syntax.HType
 import Language.Finkel.Syntax.SynUtils
-
-#if !MIN_VERSION_ghc(8,6,0)
-import Language.Finkel.Syntax.HPat
-#endif
 
 
 -- ---------------------------------------------------------------------
@@ -175,12 +140,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
                     , tcdFixity = Prefix
                     , tcdTyVars = mkHsQTvs tvs
                     , tcdDataDefn = defn
-#if MIN_VERSION_ghc(8,6,0)
                     , tcdDExt = NOEXT
-#else
-                    , tcdDataCusk = PlaceHolder
-                    , tcdFVs = placeHolderNames
-#endif
                     }
     defn = HsDataDefn { dd_cType = Nothing
 #if !MIN_VERSION_ghc(9,6,0)
@@ -194,9 +154,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
                       , dd_kindSig = ksig
                       , dd_cons = condecls
                       , dd_derivs = derivs
-#if MIN_VERSION_ghc(8,6,0)
                       , dd_ext = NOEXT
-#endif
                       }
 #if MIN_VERSION_ghc(9,6,0)
     condecls = case newOrData of
@@ -219,44 +177,32 @@ b_typeD (LForm (L l _)) (name, tvs, _) ty = lA l (tyClD synonym)
                       , tcdFixity = Prefix
                       , tcdTyVars = mkHsQTvs tvs
                       , tcdRhs = ty
-#if MIN_VERSION_ghc(8,6,0)
                       , tcdSExt = NOEXT
-#else
-                      , tcdFVs = placeHolderNames
-#endif
                       }
 {-# INLINABLE b_typeD #-}
 
 b_standaloneKindSigD
   :: Code -> (FastString, [a], Maybe HKind) -> Builder HDecl
-#if MIN_VERSION_ghc(8,10,0)
-b_standaloneKindSigD (LForm (L l _)) (name, _tvs, mb_knd) =
+b_standaloneKindSigD (LForm (L l _)) (name, _tvs, mb_knd) = do
   -- StandaloneKindSignature is not supported in ghc < 8.10.  Also the arguments
   -- of "mkStandaloneKindSig" differ from ghc 9.0.x to ghc 9.2.x.
-#if   MIN_VERSION_ghc(9,2,0)
-  do knd <- maybe builderError (pure . hsTypeToHsSigType) mb_knd
-     let sigP = mkStandaloneKindSig l (L l [lN l (mkRdrName name)]) knd []
+#if MIN_VERSION_ghc(9,2,0)
+  knd <- maybe builderError (pure . hsTypeToHsSigType) mb_knd
+  let sigP = mkStandaloneKindSig l (L l [lN l (mkRdrName name)]) knd []
 #else
-  do knd <- maybe builderError pure mb_knd
-     let sigP = mkStandaloneKindSig l (L l [lN l (mkRdrName name)]) knd
+  knd <- maybe builderError pure mb_knd
+  let sigP = mkStandaloneKindSig l (L l [lN l (mkRdrName name)]) knd
 #endif
-     ps <- fmap ghcPState getBState
-     case unP sigP ps of
-       POk _ sig -> pure (lA l (KindSigD NOEXT (unLoc sig)))
-       PFailed _ -> builderError
-#else
-b_standaloneKindSigD _ _ = builderError
-#endif
+  ps <- fmap ghcPState getBState
+  case unP sigP ps of
+    POk _ sig -> pure (lA l (KindSigD NOEXT (unLoc sig)))
+    PFailed _ -> builderError
 
 b_conD :: Code -> HConDeclH98Details -> Builder HConDecl
 b_conD form@(LForm (L l _)) details = do
   name <- getConId form
   let name' = lN l (mkUnqual dataName name)
-#if MIN_VERSION_ghc(8,6,0)
       cxt = Nothing
-#else
-      cxt = L l []
-#endif
 #if MIN_VERSION_ghc(9,2,0)
   pure (lA l (mkConDeclH98 NOEXT name' Nothing cxt details))
 #else
@@ -270,10 +216,8 @@ b_qtyconD (whole@(L l decl), tys) =
     [] -> whole
 #if MIN_VERSION_ghc(9,10,0)
     _  -> L l (decl { con_mb_cxt = Just (mkLocatedListA tys) })
-#elif MIN_VERSION_ghc(8,6,0)
-    _  -> L l (decl { con_mb_cxt = Just (la2la (mkLocatedListA tys)) })
 #else
-    _  -> L l (decl { con_cxt = Just (mkLocatedList tys) })
+    _  -> L l (decl { con_mb_cxt = Just (la2la (mkLocatedListA tys)) })
 #endif
 {-# INLINABLE b_qtyconD #-}
 
@@ -287,22 +231,18 @@ b_forallD :: [HTyVarBndr] -> (HConDecl, [HType]) -> Builder HConDecl
 #endif
 b_forallD vars (L l cdecl@ConDeclH98{}, cxts) = pure d
   where
-#if MIN_VERSION_ghc(8,6,0)
     d = L l cdecl { con_ex_tvs = vars
-#  if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,0)
                   , con_forall = True
-#  else
-                  , con_forall = noLoc True
-#  endif
-#  if MIN_VERSION_ghc(9,10,0)
-                  , con_mb_cxt = Just (mkLocatedListA cxts) }
-#  else
-                  , con_mb_cxt = Just (la2la (mkLocatedListA cxts)) }
-#  endif
 #else
-    d = L l cdecl { con_qvars = Just (mkHsQTvs vars)
-                  , con_cxt = Just (mkLocatedList cxts) }
+                  , con_forall = noLoc True
 #endif
+#if MIN_VERSION_ghc(9,10,0)
+                  , con_mb_cxt = Just (mkLocatedListA cxts)
+#else
+                  , con_mb_cxt = Just (la2la (mkLocatedListA cxts))
+#endif
+                  }
 b_forallD _ _ = builderError
 {-# INLINABLE b_forallD #-}
 
@@ -351,10 +291,8 @@ b_gadtD form@(LForm (L l1 _)) (ctxt, bodyty) = do
     case unP (mkGadtDecl name' ty) ps of
       POk _ d -> pure (L l1 (fst d))
       _       -> builderError
-#elif MIN_VERSION_ghc(8,6,0)
-  let ldecl = L l1 (fst (mkGadtDecl name' ty))
 #else
-  let ldecl = L l1 (mkGadtDecl name' (mkLHsSigType ty))
+  let ldecl = L l1 (fst (mkGadtDecl name' ty))
 #endif
   return ldecl
 {-# INLINABLE b_gadtD #-}
@@ -403,9 +341,7 @@ b_recFieldD mb_doc (names, ty) = do
   let mb_doc' = fmap lHsDocString2LHsDoc mb_doc
   names' <- mapM f names
   let field = ConDeclField { cd_fld_names = names'
-#if MIN_VERSION_ghc(8,6,0)
                            , cd_fld_ext = NOEXT
-#endif
                            , cd_fld_type = ty
                            , cd_fld_doc = mb_doc' }
       loc = getLoc (mkLocatedForm names)
@@ -456,11 +392,9 @@ b_viaD ty@(L l _) =
   pure (Just (reLoc (L l (ViaStrategy (XViaStrategyPs NOEXT sig)))))
   where
     sig = hsTypeToHsSigType ty
-#elif MIN_VERSION_ghc(8,6,0)
+#else
 b_viaD ty@(dL->L l _) =
   pure (Just (lA l (ViaStrategy (hsTypeToHsSigType ty))))
-#else
-b_viaD _              = builderError
 #endif
 {-# INLINABLE b_viaD #-}
 
@@ -471,15 +405,12 @@ b_standaloneD mb_strategy mb_overlap ty0@(dL-> L l _) = L l (DerivD NOEXT dd)
   where
 #if MIN_VERSION_ghc(9,10,0)
     -- XXX: Does not support WarningTxt.
-    dd = DerivDecl (Nothing, NOEXT) ty1 mb_strategy (fmap reLocA mb_overlap)
+    dd = DerivDecl (Nothing, NOEXT) ty1 mb_strategy mb_overlap'
 #else
-    dd = DerivDecl NOEXT ty1 mb_strategy (fmap reLocA mb_overlap)
+    dd = DerivDecl NOEXT ty1 mb_strategy mb_overlap'
 #endif
-#if MIN_VERSION_ghc(8,6,0)
+    mb_overlap' = fmap reLocA mb_overlap
     ty1 = hsTypeToHsSigWcType ty0
-#else
-    ty1 = hsTypeToHsSigType ty0
-#endif
 {-# INCLUDE b_standaloneD #-}
 
 b_classD :: ([HType],HType) -> [HDecl] -> Builder HDecl
@@ -514,6 +445,7 @@ b_classD (tys,ty) decls = do
               (_, n, _) <- unAppTy t1
               return (l1, n, [L l1 (kindedTV n k)])
             _ -> builderError
+
     atdefs <- cd2atdefs cd
     (l, name, bndrs) <- unAppTy ty
     -- Note that the `bndrs' are gathered from left to right,
@@ -522,22 +454,34 @@ b_classD (tys,ty) decls = do
     bndrs' <- case reverse bndrs of
                 []   -> builderError
                 _:tl -> pure tl
+
+#if MIN_VERSION_ghc(9,10,0)
+    let tcd_ctxt | null tys = Nothing
+                 | otherwise = Just (mkLocatedListA tys)
+#elif MIN_VERSION_ghc(9,2,0)
+    let tcd_ctxt | null tys = Nothing
+                 | otherwise = Just (la2la (mkLocatedListA tys))
+#else
+    let tcd_ctxt = mkLocatedList tys
+#endif
+
+#if MIN_VERSION_ghc(9,10,0)
+    let tcd_cext = (unused, unused, NoAnnSortKey)
+#elif MIN_VERSION_ghc(9,6,0)
+    let tcd_cext = (unused, NoAnnSortKey)
+#elif MIN_VERSION_ghc(9,2,0)
+    let tcd_cext = (unused, NoAnnSortKey, NoLayoutInfo)
+#elif MIN_VERSION_ghc(9,0,0)
+    let tcd_cext = NoLayoutInfo
+#else
+    let tcd_cext = NOEXT
+#endif
+
     let cls = ClassDecl { tcdLName = name
 #if !MIN_VERSION_ghc(9,10,0) && MIN_VERSION_ghc(9,6,0)
                         , tcdLayout = NoLayoutInfo
 #endif
-#if MIN_VERSION_ghc(9,2,0)
-                        , tcdCtxt =
-                          if null tys
-                            then Nothing
-#  if MIN_VERSION_ghc(9,10,0)
-                            else Just (mkLocatedListA tys)
-#  else
-                            else Just (la2la (mkLocatedListA tys))
-#  endif
-#else
-                        , tcdCtxt = mkLocatedList tys
-#endif
+                        , tcdCtxt = tcd_ctxt
                         , tcdFixity = Prefix
                         , tcdTyVars = mkHsQTvs bndrs'
                         , tcdFDs = []
@@ -546,19 +490,7 @@ b_classD (tys,ty) decls = do
                         , tcdATs = cd_fds cd
                         , tcdATDefs = atdefs
                         , tcdDocs = cd_docs cd
-#if MIN_VERSION_ghc(9,10,0)
-                        , tcdCExt = (unused, unused, NoAnnSortKey)
-#elif MIN_VERSION_ghc(9,6,0)
-                        , tcdCExt = (noAnn, NoAnnSortKey)
-#elif MIN_VERSION_ghc(9,2,0)
-                        , tcdCExt = (unused, NoAnnSortKey, NoLayoutInfo)
-#elif MIN_VERSION_ghc(9,0,0)
-                        , tcdCExt = NoLayoutInfo
-#elif MIN_VERSION_ghc(8,6,0)
-                        , tcdCExt = NOEXT
-#else
-                        , tcdFVs = placeHolderNames
-#endif
+                        , tcdCExt = tcd_cext
                         }
     return (L l (tyClD cls))
 {-# INLINABLE b_classD #-}
@@ -578,7 +510,7 @@ b_instD mb_overlap (ctxts,ty@(L l _)) decls = do
                          , cid_ext = (Nothing, unused, NoAnnSortKey)
 #elif MIN_VERSION_ghc(9,2,0)
                          , cid_ext = (unused, NoAnnSortKey)
-#elif MIN_VERSION_ghc(8,6,0)
+#else
                          , cid_ext = NOEXT
 #endif
                          }
@@ -628,9 +560,7 @@ mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
         , fdResultSig = L l rsig
 #endif
         , fdInjectivityAnn = Nothing
-#if MIN_VERSION_ghc(8,6,0)
         , fdExt = NOEXT
-#endif
 #if MIN_VERSION_ghc(9,2,0)
           -- XXX: When to use 'NotTopLevel'?
         , fdTopLevel = TopLevel
@@ -675,9 +605,7 @@ mk_data_or_newtype_instD
 mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats, mb_kind)
                          (deriv, condecls) =
   let faminst = DataFamInstD { dfid_inst = inst
-#if MIN_VERSION_ghc(8,6,0)
                              , dfid_ext = NOEXT
-#endif
                              }
       -- XXX: Contexts and kind signatures not supported.
       rhs = HsDataDefn { dd_cType = Nothing
@@ -692,9 +620,7 @@ mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats, mb_kind)
                        , dd_kindSig = mb_kind
                        , dd_cons = condecls'
                        , dd_derivs = deriv
-#if MIN_VERSION_ghc(8,6,0)
                        , dd_ext = NOEXT
-#endif
                        }
       tycon = L ln (mkUnqual tcName name)
       inst = mkDataFamInstDecl tycon pats rhs
@@ -717,11 +643,8 @@ b_tyinstD (LForm (L l _)) (L ln name, pats) rhs =
       tyfaminstD = TyFamInstD NOEXT tfid
 #if MIN_VERSION_ghc(9,2,0)
       tfid = TyFamInstDecl NOEXT inst
-#elif MIN_VERSION_ghc(8,4,0)
-      tfid = TyFamInstDecl inst
 #else
-      tfid = TyFamInstDecl { tfid_eqn = L l inst
-                           , tfid_fvs = placeHolderNames }
+      tfid = TyFamInstDecl inst
 #endif
   in  lA l (InstD NOEXT tyfaminstD)
 {-# INLINABLE b_tyinstD #-}
@@ -807,21 +730,13 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty)
       , Just ispec <- parseCImport ccnv' safety name ename' source -> do
         let fi = ForeignImport { fd_name = lname
                                , fd_sig_ty = tsig
-#if MIN_VERSION_ghc(8,6,0)
                                , fd_i_ext = NOEXT
-#else
-                               , fd_co = noForeignImportCoercionYet
-#endif
                                , fd_fi = ispec}
         return (lA l (forD fi))
       | ie == "export" -> do
         let fe = ForeignExport { fd_name = lname
                                , fd_sig_ty = tsig
-#if MIN_VERSION_ghc(8,6,0)
                                , fd_e_ext = NOEXT
-#else
-                               , fd_co = noForeignExportCoercionYet
-#endif
                                , fd_fe = e }
             ces = CExportStatic stxt ename'_fs (unLoc ccnv)
 #if MIN_VERSION_ghc(9,8,0)
@@ -893,20 +808,13 @@ b_funBindD :: Located RdrName -> [HPat] -> [HGRHS] -> [HDecl] -> Builder HDecl
 b_funBindD lname0@(L l _) args grhss decls = do
   let body = mkGRHSs grhss decls l
       lname = reLocA lname0
-#if MIN_VERSION_ghc(8,6,0)
       match = lA l (Match NOEXT ctxt args body)
-#elif MIN_VERSION_ghc(8,4,0)
-      match = L l (Match ctxt args' body)
-      args' = map (parenthesizePat' appPrec) args
-#else
-      match = L l (Match ctxt args' Nothing body)
-      args' = map (parenthesizePat' appPrec) args
-#endif
       ctxt = FunRhs { mc_fun = lname
                     , mc_fixity = Prefix
                       -- XXX: Get strictness from ... where?
                     , mc_strictness = NoSrcStrict }
-      bind = mkFunBind_compat lname [match]
+      -- bind = mkFunBind_compat lname [match]
+      bind = mkFunBind FromSource lname [match]
   return (lA l (ValD NOEXT bind))
 {-# INLINABLE b_funBindD #-}
 
@@ -919,13 +827,11 @@ b_patBindD (grhss,decls) lpat@(dL->L l _pat) =
 b_tsigD :: [Code] -> ([HType], HType) -> Builder HDecl
 b_tsigD names (ctxts,typ0) = do
   let typ' = hsTypeToHsSigWcType qtyp
-      qtyp =
-        if null ctxts
-          then typ1
+      qtyp = if null ctxts then typ1 else lqty1
 #if MIN_VERSION_ghc(9,10,0)
-          else lA l (mkHsQualTy' (mkLocatedListA ctxts) typ1)
+      lqty1 = lA l (mkHsQualTy' (mkLocatedListA ctxts) typ1)
 #else
-          else lA l (mkHsQualTy' (la2la (mkLocatedListA ctxts)) typ1)
+      lqty1 = lA l (mkHsQualTy' (la2la (mkLocatedListA ctxts)) typ1)
 #endif
       typ1 = unParTy typ0
       mkName form =
@@ -1070,14 +976,8 @@ mkDataFamInstDecl tycon pats rhs = dfid
   where
 #if MIN_VERSION_ghc(9,2,0)
     dfid = DataFamInstDecl (mkFamEqn tycon pats rhs)
-#elif MIN_VERSION_ghc(8,4,0)
-    dfid = DataFamInstDecl (mkHsImplicitBndrs (mkFamEqn tycon pats rhs))
 #else
-    dfid = DataFamInstDecl { dfid_tycon = tycon
-                           , dfid_pats = mkHsImplicitBndrs pats
-                           , dfid_fixity = Prefix
-                           , dfid_defn = rhs
-                           , dfid_fvs = placeHolderNames }
+    dfid = DataFamInstDecl (mkHsImplicitBndrs (mkFamEqn tycon pats rhs))
 #endif
 {-# INLINABLE mkDataFamInstDecl #-}
 
@@ -1085,51 +985,29 @@ mkTyFamInstEqn :: Located RdrName -> [HType] -> HType -> TyFamInstEqn PARSED
 mkTyFamInstEqn tycon pats rhs =
 #if MIN_VERSION_ghc(9,2,0)
   mkFamEqn tycon pats rhs
-#elif MIN_VERSION_ghc(8,4,0)
-  mkHsImplicitBndrs (mkFamEqn tycon pats rhs)
 #else
-  TyFamEqn { tfe_tycon = tycon
-           , tfe_pats = mkHsImplicitBndrs pats
-           , tfe_fixity = Prefix
-           , tfe_rhs = rhs }
+  mkHsImplicitBndrs (mkFamEqn tycon pats rhs)
 #endif
 {-# INLINABLE mkTyFamInstEqn #-}
 
-#if MIN_VERSION_ghc(8,10,0)
-type FAMEQN p rhs = FamEqn p rhs
-#elif MIN_VERSION_ghc(8,4,0)
-type FAMEQN p rhs = FamEqn p (HsTyPats p) rhs
-#else
-type FAMEQN p rhs = TyFamEqn p rhs
-#endif
-
-#if MIN_VERSION_ghc(8,4,0)
-mkFamEqn :: Located RdrName -> [HType] -> rhs -> FAMEQN PARSED rhs
+mkFamEqn :: Located RdrName -> [HType] -> rhs -> FamEqn PARSED rhs
 mkFamEqn tycon pats rhs =
   FamEqn { feqn_tycon = reLocA tycon
          , feqn_fixity = Prefix
          , feqn_rhs = rhs
-#  if MIN_VERSION_ghc(9,10,0)
+#if MIN_VERSION_ghc(9,10,0)
          , feqn_pats = map (HsValArg NOEXT) pats
          , feqn_bndrs = mkHsOuterImplicit
-#  elif MIN_VERSION_ghc(8,8,0)
-           -- Type synonym "HsTyPats" for `feqn_pats' field changed from
-           -- `HsTyPats' to `HsTypeArg' in 8.8.0.
+#elif MIN_VERSION_ghc(9,2,0)
          , feqn_pats = map HsValArg pats
-#    if MIN_VERSION_ghc(9,2,0)
          , feqn_bndrs = mkHsOuterImplicit
-#    else
+#else
+         , feqn_pats = map HsValArg pats
          , feqn_bndrs = Nothing
-#    endif
-#  else
-         , feqn_pats = pats
-#  endif
-#  if   MIN_VERSION_ghc(8,6,0)
+#endif
          , feqn_ext = NOEXT
-#  endif
          }
 {-# INLINABLE mkFamEqn #-}
-#endif
 
 unParTy :: HType -> HType
 unParTy t0 =
@@ -1141,29 +1019,13 @@ unParTy t0 =
 noUserInline :: InlineSpec
 #if MIN_VERSION_ghc(9,2,0)
 noUserInline = NoUserInlinePrag
-#elif MIN_VERSION_ghc(8,4,0)
-noUserInline = NoUserInline
 #else
-noUserInline = EmptyInlineSpec
+noUserInline = NoUserInline
 #endif
 {-# INLINABLE noUserInline #-}
 
-#if MIN_VERSION_ghc(8,10,0)
 cd2atdefs :: CategorizedDecls -> Builder [LTyFamDefltDecl PARSED]
 cd2atdefs = pure . cd_tfis
-#else
-cd2atdefs :: CategorizedDecls -> Builder [LTyFamDefltEqn PARSED]
-cd2atdefs cd = mapM toATDef (cd_tfis cd)
-  where
-     toATDef d = case mkATDefault' d of
-                   Right lty      -> return lty
-                   Left (_, sdoc) -> failB (showSDocUnsafe sdoc)
-#  if MIN_VERSION_ghc(8,8,0)
-     mkATDefault' = fmap fst . mkATDefault
-#  else
-     mkATDefault' = mkATDefault
-#  endif
-#endif
 {-# INLINABLE cd2atdefs #-}
 
 #if !MIN_VERSION_ghc(9,2,0)

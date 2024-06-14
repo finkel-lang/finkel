@@ -29,10 +29,8 @@ import GHC.Types.SrcLoc                  (noSrcSpan)
 import GHC.Parser.Annotation             (AnnSortKey (..), EpAnn (..),
                                           EpAnnComments (..))
 import Language.Haskell.Syntax.Extension (NoExtField (..), noExtField)
-#elif MIN_VERSION_ghc(8,10,0)
+#else
 import GHC.Hs.Extension                  (NoExtField (..), noExtField)
-#elif MIN_VERSION_ghc(8,6,0)
-import HsExtension                       (NoExt (..), noExt)
 #endif
 
 -- | Type class to represent field value which is no in use.
@@ -113,12 +111,6 @@ instance Unused a => Unused [a] where
   {-# INLINE unused #-}
 #endif
 
-#if MIN_VERSION_ghc(8,10,0)
 instance Unused NoExtField where
   unused = noExtField
   {-# INLINE unused #-}
-#elif MIN_VERSION_ghc(8,6,0)
-instance Unused NoExt where
-  unused = noExt
-  {-# INLINE unused #-}
-#endif

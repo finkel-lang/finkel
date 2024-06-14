@@ -146,13 +146,7 @@ pprHsModule path = Fnk.runFnk go SpecialForms.defaultFnkEnv
 #else
              pboe = printBagOfErrors dflags1
 #endif
-#if MIN_VERSION_ghc(8,4,0)
              (_warnings, ret) = GHC.parser contents dflags1 path
-#else
-             ret = case GHC.parser contents dflags1 path of
-                       Right (_, lmdl) -> Right lmdl
-                       Left err        -> Left err
-#endif
          liftIO $ case ret of
            Right lmdl -> prForUser dflags1 stdout neverQualify (ppr lmdl)
            Left err   -> putStrLn "pprHsModule: error" >> pboe err

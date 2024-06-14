@@ -9,8 +9,6 @@
 module SyntaxTest
   ( syntaxTests
   , syntaxFnkTests
-  , ignored_84x
-  , ignored_82x
   ) where
 
 #include "ghc_modules.h"
@@ -19,8 +17,8 @@ module SyntaxTest
 import Control.Monad          (unless, when)
 import Data.IORef             (atomicWriteIORef, newIORef, readIORef)
 import GHC.Exts               (unsafeCoerce#)
-import System.IO              (BufferMode (..), hSetBuffering, stdout)
 import System.Info            (os)
+import System.IO              (BufferMode (..), hSetBuffering, stdout)
 
 -- directory
 import System.Directory       (createDirectoryIfMissing, doesFileExist,
@@ -73,9 +71,6 @@ mkTest path
   , base_name `elem` ["1002-macro", "1003-eval-when-compile"]
   = describe path (it "is pending with ghc-8.10.1 under Windows"
                       (const (pendingWith "Macro expansion not yet supported")))
-  | base_name `elem` ignored
-  = describe path (it "is not supported in this version of ghc"
-                      (const (pendingWith "Not supported")))
   | base_name == "0003-expressions-2"
   , __GLASGOW_HASKELL__ < (900 :: Int)
   = describe path (it "is pending under ghc < 9.0"
@@ -95,17 +90,6 @@ mkTest path
   | otherwise = mkTest' path
   where
     base_name = takeBaseName path
-#if MIN_VERSION_ghc(8,6,0)
-    ignored = []
-#elif MIN_VERSION_ghc(8,4,0)
-    ignored = ignored_84x
-#else
-    ignored = ignored_82x
-#endif
-
-ignored_84x, ignored_82x :: [String]
-ignored_84x = ["2024-derivingvia"]
-ignored_82x = "2020-emptyderiv" : ignored_84x
 
 mkTest' :: FilePath -> FnkSpec
 mkTest' path = do
@@ -132,34 +116,6 @@ mkTest' path = do
             then nativeCompile
             else byteCompile
 
-#if MIN_VERSION_ghc(8,10,0)
-      skipThisTest _ = (False, "")
-#elif MIN_VERSION_ghc(8,8,0)
-      skipThisTest p
-         = (takeBaseName p == "0008-ffi", "Native code for FFI skipped")
-#elif MIN_VERSION_ghc(8,6,0)
-      skipThisTest p
-         | takeBaseName p == "0008-ffi"
-         = (True, "Native code test for FFI skipped")
-         | otherwise
-         = ( takeBaseName p == "2019-overlabel"
-           , "Generated Haskell code is malformed" )
-#else
-      skipThisTest p
-         | takeBaseName p == "0008-ffi"
-         = (True, "Native code test for FFI skipped")
-         | otherwise
-         = ( b == "1004-doccomment-01" ||
-             b == "2012-typeop" ||
-             b == "2019-overlabel"
-           , "Generated Haskell code is malformed" )
-          where b = takeBaseName p
-#endif
-      skipOr act =
-        case skipThisTest path of
-          (True, reason) -> pendingWith reason
-          _              -> act
-
   runIO (do createDirectoryIfMissing True odir
             hSetBuffering stdout NoBuffering)
 
@@ -173,12 +129,12 @@ mkTest' path = do
       exist <- doesFileExist dotHs
       exist `shouldBe` True
 
-    it "should compile dumped Haskell code" $ \ftr -> skipOr $ do
+    it "should compile dumped Haskell code" $ \ftr -> do
       io <- runFnk (compile ftr dotHs Nothing) fnkTestEnv
       unless toNativeCompile $
         capture_ io >>= atomicWriteIORef hsORef
 
-    it "should have same output" $ \_ -> skipOr $ do
+    it "should have same output" $ \_ -> do
       unless toNativeCompile $ do
         fnk <- readIORef fnkORef
         hs <- readIORef hsORef

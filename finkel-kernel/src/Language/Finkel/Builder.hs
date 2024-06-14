@@ -80,8 +80,9 @@ import GHC_Data_FastString      (FastString, appendFS)
 import GHC_Driver_Session       (DynFlags)
 import GHC_Hs                   (HsModule)
 import GHC_Hs_Binds             (HsLocalBinds, LHsBind, LSig)
-import GHC_Hs_Decls             (HsDeriving, LConDecl, LHsDecl)
+import GHC_Hs_Decls             (HsDeriving, LConDecl, LDerivStrategy, LHsDecl)
 import GHC_Hs_Expr              (ExprLStmt, GuardLStmt, LGRHS, LHsExpr, LMatch)
+import GHC_Hs_Extension         (GhcPs)
 import GHC_Hs_ImpExp            (LIE, LIEWrappedName, LImportDecl)
 import GHC_Hs_Pat               (LPat)
 import GHC_Hs_Type              (LConDeclField, LHsSigType, LHsSigWcType,
@@ -110,18 +111,6 @@ import GHC_Parser_Lexer         (mkPState)
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Types_Var            (Specificity (..))
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Decls             (LDerivStrategy)
-#else
-import BasicTypes               (DerivStrategy)
-#endif
-
-#if MIN_VERSION_ghc(8,4,0)
-import GHC_Hs_Extension         (GhcPs)
-#else
-import RdrName                  (RdrName)
 #endif
 
 -- Internal
@@ -286,11 +275,7 @@ builderError = do
 -- for more information of \"Trees that Grow\".
 --
 
-#if MIN_VERSION_ghc(8,4,0)
 type PARSED = GhcPs
-#else
-type PARSED = RdrName
-#endif
 
 type HBind = LHsBind PARSED
 
@@ -316,11 +301,7 @@ type HDecl = LHsDecl PARSED
 
 type HDeriving = HsDeriving PARSED
 
-#if MIN_VERSION_ghc(8,6,0)
 type HDerivStrategy = LDerivStrategy PARSED
-#else
-type HDerivStrategy = Located DerivStrategy
-#endif
 
 type HExpr = LHsExpr PARSED
 

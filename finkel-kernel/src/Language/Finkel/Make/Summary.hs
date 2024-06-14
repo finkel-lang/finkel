@@ -58,6 +58,7 @@ import           System.FilePath                   (takeBaseName, takeDirectory,
                                                     (<.>), (</>))
 
 -- ghc
+import           GHC_Data_EnumSet                  (toList)
 import           GHC_Data_FastString               (fsLit)
 import           GHC_Data_StringBuffer             (StringBuffer,
                                                     hGetStringBuffer)
@@ -76,7 +77,7 @@ import           GHC_Hs_Dump                       (BlankSrcSpan (..),
 import           GHC_Hs_ImpExp                     (ImportDecl (..))
 import           GHC_Hs_Stats                      (ppSourceStats)
 import           GHC_Parser_Header                 (getImports)
-import           GHC_Types_SourceError             (throwOneError)
+import           GHC_Types_SourceError             (throwErrors, throwOneError)
 import           GHC_Types_SourceFile              (HscSource (..))
 import           GHC_Types_SrcLoc                  (GenLocated (..), Located,
                                                     mkSrcLoc, mkSrcSpan, unLoc)
@@ -89,7 +90,10 @@ import           GHC_Unit_Module                   (ModLocation (..), Module,
                                                     moduleNameSlashes,
                                                     moduleNameString)
 import           GHC_Unit_Module_Deps              (Usage (..))
-import           GHC_Unit_Module_Graph             (ModuleGraph)
+import           GHC_Unit_Module_Graph             (ModuleGraph, mgLookupModule,
+                                                    mgModSummaries,
+                                                    mkModuleGraph)
+import           GHC_Unit_Module_ModIface          (ModIface_ (..))
 import           GHC_Unit_Module_ModSummary        (ModSummary (..),
                                                     ms_mod_name)
 import           GHC_Utils_CliOption               (Option (..))
@@ -98,6 +102,7 @@ import           GHC_Utils_Misc                    (looksLikeModuleName,
 import           GHC_Utils_Outputable              (Outputable (..), SDoc, hcat,
                                                     quotes, text, vcat, ($$),
                                                     (<+>))
+
 
 #if MIN_VERSION_ghc(9,8,0)
 import           GHC.Data.FastString               (unpackFS)
@@ -117,11 +122,6 @@ import           GHC.Driver.Backend                (backendProducesObject)
 import           GHC_Driver_Session                (isObjectTarget)
 #endif
 
-#if MIN_VERSION_ghc(8,4,0)
-import           GHC_Data_EnumSet                  (toList)
-#else
-import           Data.IntSet                       (toList)
-#endif
 
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Finder          (initFinderOpts)
@@ -154,7 +154,7 @@ import           GHC.Utils.Logger                  (dumpIfSet_dyn)
 import           GHC_Utils_Error                   (dumpIfSet_dyn)
 #endif
 
-#if !MIN_VERSION_ghc(9,4,0) && MIN_VERSION_ghc(8,10,0)
+#if !MIN_VERSION_ghc(9,4,0)
 import           GHC_Unit_Module_ModSummary        (ms_home_allimps)
 #endif
 
@@ -162,7 +162,7 @@ import           GHC_Unit_Module_ModSummary        (ms_home_allimps)
 import           GHC.Unit.Module.ModSummary        (extendModSummaryNoDeps)
 #endif
 
-#if !MIN_VERSION_ghc(9,4,0) && MIN_VERSION_ghc(8,4,0)
+#if !MIN_VERSION_ghc(9,4,0)
 import           GHC_Unit_Module_Graph             (extendMG)
 #endif
 
@@ -198,30 +198,12 @@ import           GHC_Utils_Error                   (DumpFormat (..))
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Monad                  (withTimingM)
-#elif MIN_VERSION_ghc(8,10,0)
-import           GHC_Utils_Error                   (withTimingD)
 #else
-import           GHC_Utils_Error                   (withTiming)
+import           GHC_Utils_Error                   (withTimingD)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC_Utils_Outputable              (Depth (..))
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import           GHC_Unit_Module_ModIface          (ModIface_ (..))
-#else
-import           GHC_Unit_Module_ModIface          (ModIface (..), ms_imps)
-#endif
-
-#if MIN_VERSION_ghc(8,8,0)
-import           GHC_Types_SourceError             (throwErrors)
-#endif
-
-#if MIN_VERSION_ghc(8,4,0)
-import           GHC_Unit_Module_Graph             (mgLookupModule,
-                                                    mgModSummaries,
-                                                    mkModuleGraph)
 #endif
 
 -- Internal
@@ -524,9 +506,7 @@ mkModSummary' hsc_env dflags file mod_name srcimps txtimps mb_pm mb_buf
         hs_date <- getModificationUTCTime file
 #endif
         iface_date <- maybeGetIfaceDate dflags mloc
-#if MIN_VERSION_ghc(8,8,0)
         hie_date <- modificationTimeIfExists (ml_hie_file mloc)
-#endif
         return ModSummary { ms_mod = mmod
                           , ms_hsc_src = HsSrcFile
                           , ms_location = mloc
@@ -539,9 +519,7 @@ mkModSummary' hsc_env dflags file mod_name srcimps txtimps mb_pm mb_buf
 #endif
                           , ms_obj_date = obj_date
                           , ms_iface_date = iface_date
-#if MIN_VERSION_ghc(8,8,0)
                           , ms_hie_date = hie_date
-#endif
                           , ms_parsed_mod = mb_pm
                           , ms_srcimps = srcimps
                           , ms_textual_imps = txtimps
@@ -563,16 +541,11 @@ updateSummaryTimestamps dflags obj_allowed ms = do
         then liftIO (modificationTimeIfExists (ml_obj_file ms_loc))
         else return Nothing
   iface_date <- liftIO (maybeGetIfaceDate dflags ms_loc)
-#if MIN_VERSION_ghc(8,8,0)
   hie_date <- liftIO (modificationTimeIfExists (ml_hie_file ms_loc))
-#endif
   -- XXX: Fill in the list of required ModSummary.
   return (ms { ms_obj_date = obj_date
              , ms_iface_date = iface_date
-#if MIN_VERSION_ghc(8,8,0)
-             , ms_hie_date = hie_date
-#endif
-             })
+             , ms_hie_date = hie_date })
 
 -- See: "GhcMake.summariseModule"
 assertModuleNameMatch
@@ -658,16 +631,11 @@ dumpParsedAST _hsc_env dflags ms =
             dumpIfSet_dyn_hs dflags Opt_D_dump_parsed "Parser"
                              (ppr rdr_module)
             dumpIfSet_dyn_hs dflags Opt_D_dump_parsed_ast "Parser AST"
-                             (txt (show_ast_data NoBlankSrcSpan rdr_module))
+                             (show_ast_data NoBlankSrcSpan rdr_module)
             dumpIfSet_dyn_txt dflags Opt_D_source_stats "Source Statistic"
                               (ppSourceStats False rdr_module)
        Nothing -> return ())
   where
-#if MIN_VERSION_ghc(8,4,0)
-    txt = id
-#else
-    txt = text
-#endif
 #if MIN_VERSION_ghc(9,2,0)
     show_ast_data sp = showAstData sp NoBlankEpAnnotations
 #else
@@ -833,22 +801,12 @@ mgElemModule' = mgElemModule
 mkModuleGraph' = mkModuleGraph . map extendModSummaryNoDeps
 mgModSummaries' = mgModSummaries
 mgLookupModule' = mgLookupModule
-#elif MIN_VERSION_ghc(8,4,0)
+#else
 extendMG' = extendMG
 mgElemModule' = mgElemModule
 mkModuleGraph' = mkModuleGraph
 mgModSummaries' = mgModSummaries
 mgLookupModule' = mgLookupModule
-#else
--- ModuleGraph was an alias of [ModSummary] in ghc < 8.4.
-extendMG' = flip (:)
-mgElemModule' mg mdl = go mg
-  where
-    go []       = False
-    go (ms:mss) = (ms_mod == mdl) || go mss
-mkModuleGraph' = id
-mgModSummaries' = id
-mgLookupModule' mg mdl = find (\ms -> ms_mod_name ms == moduleName mdl) mg
 #endif
 
 -- The `ms_home_allimps' function did not exist until ghc 8.10.x, and removed in
@@ -857,24 +815,9 @@ mgLookupModule' mg mdl = find (\ms -> ms_mod_name ms == moduleName mdl) mg
 -- XXX: Use 'GHC.Unit.Module.ModSummary.home_imps' ?
 msHomeAllimps :: ModSummary -> [ModuleName]
 msHomeAllimps = map (unLoc . snd) . ms_imps
-#elif MIN_VERSION_ghc(8,10,0)
-msHomeAllimps :: ModSummary -> [ModuleName]
-msHomeAllimps = ms_home_allimps
 #else
 msHomeAllimps :: ModSummary -> [ModuleName]
-msHomeAllimps ms = map unLoc (ms_home_srcimps ms ++ ms_home_imps ms)
-  where
-    ms_home_srcimps :: ModSummary -> [Located ModuleName]
-    ms_home_srcimps = home_imps . ms_srcimps
-
-    ms_home_imps :: ModSummary -> [Located ModuleName]
-    ms_home_imps = home_imps . ms_imps
-
-    home_imps :: [(Maybe FastString, Located ModuleName)] -> [Located ModuleName]
-    home_imps imps = [ lmodname |  (mb_pkg, lmodname) <- imps, isLocal mb_pkg ]
-      where isLocal Nothing    = True
-            isLocal (Just pkg) | pkg == fsLit "this" = True -- "this" is special
-            isLocal _          = False
+msHomeAllimps = ms_home_allimps
 #endif
 
 -- ------------------------------------------------------------------------
@@ -884,7 +827,6 @@ msHomeAllimps ms = map unLoc (ms_home_srcimps ms ++ ms_home_imps ms)
 preprocess' :: HscEnv -> (FilePath, Maybe Phase) -> IO (DynFlags, FilePath)
 {-# INLINABLE preprocess' #-}
 
-#if MIN_VERSION_ghc(8,8,0)
 preprocess' hsc_env (path, mb_phase) = do
   et_result <- preprocess hsc_env path Nothing mb_phase
   case et_result of
@@ -894,9 +836,6 @@ preprocess' hsc_env (path, mb_phase) = do
     Left err   -> throwErrors err
 #  endif
     Right pair -> return pair
-#else
-preprocess' = preprocess
-#endif
 
 getImports' :: DynFlags -> StringBuffer -> FilePath -> FilePath
             -> IO ([(RawPkgQual, Located ModuleName)],
@@ -919,16 +858,12 @@ getImports' dflags sbuf pp_path path = do
   case et_ret of
     Right (simps, timps, lm) -> pure (simps, timps, False, lm)
     Left err                 -> throwErrors (fmap pprError err)
-#elif MIN_VERSION_ghc(8,8,0)
+#else
 getImports' dflags sbuf pp_path path = do
   et_ret <- getImports dflags sbuf pp_path path
   case et_ret of
     Right (simps, timps, lm) -> pure (simps, timps, False, lm)
     Left err                 -> throwErrors err
-#else
-getImports' dflags sbuf pp_path path = do
-  (simps, timps, lm) <- getImports dflags sbuf pp_path path
-  pure (simps, timps, False, lm)
 #endif
 
 -- ------------------------------------------------------------------------
@@ -939,10 +874,8 @@ getImports' dflags sbuf pp_path path = do
 withTiming' :: String -> Fnk a -> Fnk a
 #if MIN_VERSION_ghc(9,2,0)
 withTiming' label = withTimingM (text label) (const ())
-#elif MIN_VERSION_ghc(8,10,0)
-withTiming' label = withTimingD (text label) (const ())
 #else
-withTiming' label = withTiming getDynFlags (text label) (const ())
+withTiming' label = withTimingD (text label) (const ())
 #endif
 {-# INLINABLE withTiming' #-}
 

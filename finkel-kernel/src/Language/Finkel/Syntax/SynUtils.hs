@@ -10,11 +10,6 @@ module Language.Finkel.Syntax.SynUtils
 
     -- * Location module
   , module Language.Finkel.Syntax.Location
-
-#if MIN_VERSION_ghc(8,6,0)
-     -- * Re-export for ghc version compatibility
-  , PprPrec(..), topPrec, sigPrec, opPrec, funPrec, appPrec
-#endif
   ) where
 
 #include "Syntax.h"
@@ -27,21 +22,19 @@ import           Control.Applicative              (Alternative (..))
 import           Data.Char                        (isUpper)
 
 -- ghc
-import           GHC_Hs_Decls                     (LConDecl, LDataFamInstDecl,
-                                                   LDocDecl, LFamilyDecl,
-                                                   LTyFamInstDecl)
+import           GHC_Builtin_Types                (consDataConName)
+import           GHC_Data_FastString              (bytesFS)
+import           GHC_Data_OrdList                 (OrdList)
+import           GHC_Hs_Decls                     (DerivStrategy (..), LConDecl,
+                                                   LDataFamInstDecl, LDocDecl,
+                                                   LFamilyDecl, LTyFamInstDecl)
 import           GHC_Hs_Doc                       (LHsDocString)
-import           GHC_Hs_Lit                       (HsOverLit (..))
 import           GHC_Hs_Pat                       (LHsRecField, LHsRecUpdField)
 import           GHC_Hs_Type                      (AmbiguousFieldOcc (..),
                                                    FieldOcc (..),
                                                    HsTyVarBndr (..),
                                                    HsType (..), LHsContext,
                                                    mkFieldOcc)
-import           GHC_Hs_Utils                     (mkHsIntegral)
-
-import           GHC_Builtin_Types                (consDataConName)
-import           GHC_Data_OrdList                 (OrdList)
 import           GHC_Parser_Lexer                 (P (..), ParseResult (..))
 import qualified GHC_Parser_PostProcess           as PostProcess
 import           GHC_Types_Name_Occurrence        (NameSpace, srcDataName,
@@ -85,35 +78,12 @@ import           GHC_Types_Var                    (Specificity (..))
 import           HaddockUtils                     (addConDoc)
 #endif
 
-#if MIN_VERSION_ghc(8,10,0)
-import           GHC_Data_FastString              (bytesFS)
-#elif MIN_VERSION_ghc(8,6,0)
-import           GHC_Data_FastString              (fastStringToByteString)
-#else
-import           PlaceHolder                      (PlaceHolder (..),
-                                                   placeHolderType)
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import           GHC_Hs_Decls                     (DerivStrategy (..))
-#else
-import           BasicTypes                       (DerivStrategy (..))
-#endif
-
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Hs.Doc                       (HsDocString (..),
                                                    mkHsDocStringChunkUtf8ByteString)
-#elif MIN_VERSION_ghc(8,6,0)
+#else
 import           GHC_Hs_Doc                       (HsDocString,
                                                    mkHsDocStringUtf8ByteString)
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import           GHC_Types_Basic                  (PprPrec (..), appPrec,
-                                                   funPrec, opPrec, sigPrec,
-                                                   topPrec)
-#else
-import           GHC_Hs_Doc                       (HsDocString (..))
 #endif
 
 -- Internal
@@ -123,6 +93,7 @@ import           Language.Finkel.Data.FastString  (FastString, fsLit, unconsFS,
 import           Language.Finkel.Form
 import           Language.Finkel.Syntax.Extension
 import           Language.Finkel.Syntax.Location
+
 
 -- ------------------------------------------------------------------------
 --
@@ -244,7 +215,7 @@ cfld2ufld (L l0 (HsFieldBind _ann (L l1 (FieldOcc _ rdr)) rhs pun)) =
 #elif MIN_VERSION_ghc(9,2,0)
 cfld2ufld (L l0 (HsRecField _ (L l1 (FieldOcc _ rdr)) arg pun)) =
   L l0 (HsRecField NOEXT (L l1 (Unambiguous NOEXT rdr)) arg pun)
-#elif MIN_VERSION_ghc(8,6,0)
+#else
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
   where
@@ -252,11 +223,6 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
 #  if !MIN_VERSION_ghc(9,0,0)
 cfld2ufld _ = error "Language.Finkel.Syntax.SynUtils:cfld2ufld"
 #  endif
-#else
-cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc rdr _)) arg pun)) =
-  L l0 (HsRecField (L l1 unambiguous) arg pun)
-  where
-    unambiguous = Unambiguous rdr PlaceHolder
 #endif
 {-# INLINABLE cfld2ufld #-}
 
@@ -276,15 +242,15 @@ mkcfld is_pun (L nl name, e) =
                                  (mkFieldOcc (lN nl (mkRdrName name)))
                     , hfbRHS = e
                     , hfbPun = is_pun }
-#else
-  lA nl HsRecField { hsRecFieldLbl = mkfname name
-#  if MIN_VERSION_ghc(9,2,0)
+#elif MIN_VERSION_ghc(9,2,0)
+  lA nl HsRecField { hsRecFieldLbl = L nl (mkFieldOcc (lN nl (mkRdrName name)))
                    , hsRecFieldAnn = NOEXT
-#  endif
                    , hsRecFieldArg = e
                    , hsRecPun = is_pun }
-  where
-    mkfname n = L nl (mkFieldOcc (lN nl (mkRdrName n)))
+#else
+  lA nl HsRecField { hsRecFieldLbl = L nl (mkFieldOcc (lN nl (mkRdrName name)))
+                   , hsRecFieldArg = e
+                   , hsRecPun = is_pun }
 #endif
 {-# INLINABLE mkcfld #-}
 
@@ -431,12 +397,8 @@ codeToUserTyVarSpecific = codeToUserTyVar
 mkHsDocString :: FastString -> HsDocString
 #if MIN_VERSION_ghc(9,4,0)
 mkHsDocString = GeneratedDocString . mkHsDocStringChunkUtf8ByteString . bytesFS
-#elif MIN_VERSION_ghc(8,10,0)
-mkHsDocString = mkHsDocStringUtf8ByteString . bytesFS
-#elif MIN_VERSION_ghc(8,6,0)
-mkHsDocString = mkHsDocStringUtf8ByteString . fastStringToByteString
 #else
-mkHsDocString = HsDocString
+mkHsDocString = mkHsDocStringUtf8ByteString . bytesFS
 #endif
 {-# INLINABLE mkHsDocString #-}
 
@@ -456,26 +418,12 @@ mkLHsDoc _ = mkHsDocString
 {-# INLINABLE lHsDocString2LHsDoc #-}
 {-# INLINABLE mkLHsDoc #-}
 
--- | Auxiliary function to absorb version compatibiity of 'mkHsIntegral'.
-mkHsIntegral' :: IntegralLit -> HsOverLit PARSED
-mkHsIntegral' il =
-#if MIN_VERSION_ghc(8,6,0)
-    mkHsIntegral il
-#elif MIN_VERSION_ghc(8,4,0)
-    mkHsIntegral il placeHolderType
-#else
-    mkHsIntegral (il_text il) (il_value il) placeHolderType
-#endif
-{-# INLINABLE mkHsIntegral' #-}
-
 mkHsQualTy' :: LHsContext PARSED -> HType -> HsType PARSED
 mkHsQualTy' ctxt body
   | nullLHsContext ctxt = unLoc body
   | otherwise =
     HsQualTy { hst_ctxt = real_ctxt
-#if MIN_VERSION_ghc(8,6,0)
              , hst_xqual = NOEXT
-#endif
              , hst_body = body }
   where
 #if MIN_VERSION_ghc(9,4,0)
@@ -507,25 +455,6 @@ addConDoc'' :: LHsDocString -> LConDecl' a -> LConDecl' a
 addConDoc'' = flip addConDoc . Just
 {-# INLINABLE addConDoc'' #-}
 
--- Until ghc 8.6.0, 'PprPrec' did not exist. Following 'PprPrec' and its
--- predefined values are taken from 'compiler/basicTypes/BasicTypes.hs' in ghc
--- source code. Re-exporting from this module.
-
-#if !MIN_VERSION_ghc(8,6,0)
--- | A general-purpose pretty-printing precedence type.
-newtype PprPrec = PprPrec Int deriving (Eq, Ord, Show)
--- See Note [Precedence in types] in ghc source.
-
-topPrec, sigPrec, funPrec, opPrec, appPrec :: PprPrec
-topPrec = PprPrec 0 -- No parens
-sigPrec = PprPrec 1 -- Explicit type signatures
-funPrec = PprPrec 2 -- Function args; no parens for constructor apps
-                    -- See [Type operator precedence] for why both
-                    -- funPrec and opPrec exist.
-opPrec  = PprPrec 2 -- Infix operator
-appPrec = PprPrec 3 -- Constructor args; no parens for atomic
-#endif
-
 #if MIN_VERSION_ghc(9,2,0)
 type LConDecl' a = LConDecl (GhcPass a)
 #else
@@ -538,10 +467,12 @@ addConDoc decl    Nothing        = decl
 addConDoc (L p c) (Just ld) = L p (c {con_doc = con_doc c <|> doc'})
   where
     doc' = case ld of L l d -> Just (L l (lexHsDoc parseIdentifier d))
+{-# INLINABLE addConDoc #-}
 #elif MIN_VERSION_ghc(9,0,0)
 addConDoc :: LConDecl' a -> Maybe LHsDocString -> LConDecl' a
 addConDoc decl    Nothing = decl
 addConDoc (L p c) doc     = L p (c {con_doc = con_doc c <|> doc})
+{-# INLINABLE addConDoc #-}
 #endif
 
 consListWith :: [Code] -> String -> Code
@@ -556,11 +487,7 @@ fsSymbol (LForm (L l x)) =
     _                  -> builderError
 {-# INLINABLE fsSymbol #-}
 
-#if MIN_VERSION_ghc(8,6,0)
 stockStrategy, anyclassStrategy, newtypeStrategy :: DerivStrategy PARSED
-#else
-stockStrategy, anyclassStrategy, newtypeStrategy :: DerivStrategy
-#endif
 
 #if MIN_VERSION_ghc(9,2,0)
 stockStrategy = StockStrategy NOEXT

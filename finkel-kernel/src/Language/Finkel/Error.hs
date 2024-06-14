@@ -45,10 +45,8 @@ import GHC.Driver.Errors.Types      (DriverMessage)
 import GHC.Types.Error              (Messages, defaultDiagnosticOpts)
 #elif MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.CmdLine           (Warn)
-#elif MIN_VERSION_ghc(8,2,0)
-import CmdLineParser                (Warn)
 #else
-import SrcLoc                       (Located)
+import CmdLineParser                (Warn)
 #endif
 
 #if MIN_VERSION_ghc(9,6,0)
@@ -170,10 +168,8 @@ printLocatedString _logger dflags l str = do
 
 #if MIN_VERSION_ghc(9,8,0)
 type WARNINGs = Messages DriverMessage
-#elif MIN_VERSION_ghc(8,2,0)
-type WARNINGs = [Warn]
 #else
-type WARNINGs = [Located String]
+type WARNINGs = [Warn]
 #endif
 
 -- GHC.Utils.Logger did not exist until ghc 9.2.

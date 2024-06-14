@@ -59,14 +59,8 @@ import           GHC_Driver_Types             (handleSourceError)
 import           GHC_Driver_Session           (HscTarget (..), gopt_set)
 #endif
 
-#if !MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Session           (targetPlatform)
-#endif
-
 -- ghc-boot
-#if MIN_VERSION_ghc(8,6,0)
 import           GHC.HandleEncoding           (configureHandleEncoding)
-#endif
 
 -- internal
 import           Language.Finkel.Error
@@ -151,7 +145,7 @@ main1 fnk_env orig_args ghc_args = do
   initGCStatistics
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
-  configureHandleEncoding'
+  configureHandleEncoding
   defaultErrorHandler
     defaultFatalMessager
     defaultFlushOut
@@ -406,14 +400,6 @@ showInfo :: DynFlags -> IO ()
 showInfo dflags = do
   let sq x = " [" ++ x ++ "\n ]"
   putStrLn (sq (intercalate "\n ," (map show (compilerInfo dflags))))
-
--- | Until ghc-8.6.0, 'configureHandleEncoding' did not exist.
-configureHandleEncoding' :: IO ()
-#if MIN_VERSION_ghc(8,6,0)
-configureHandleEncoding' = configureHandleEncoding
-#else
-configureHandleEncoding' = return ()
-#endif
 
 foreign import ccall safe "initGCStatistics"
   initGCStatistics :: IO ()

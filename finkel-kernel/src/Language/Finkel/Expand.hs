@@ -46,10 +46,13 @@ import           GHC_Driver_Session              (DynFlags (..),
                                                   GeneralFlag (..),
                                                   GhcLink (..),
                                                   HasDynFlags (..),
-                                                  setGeneralFlag', updOptLevel)
+                                                  WarningFlag (..),
+                                                  setGeneralFlag', updOptLevel,
+                                                  wopt_unset)
 import           GHC_Types_SrcLoc                (GenLocated (..))
 import           GHC_Utils_Outputable            (Outputable (..), SDoc, cat,
                                                   fsep, nest, vcat, (<+>))
+
 #if MIN_VERSION_ghc(9,8,0)
 import           GHC.Driver.DynFlags             (ParMakeCount (..))
 #endif
@@ -94,14 +97,8 @@ import           GHC_Driver_Session              (Way (..), interpWays,
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Runtime.Loader              (initializePlugins)
-#elif MIN_VERSION_ghc(8,6,0)
-import           DynamicLoading                  (initializePlugins)
-#endif
-
-#if MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Session              (WarningFlag (..), wopt_unset)
 #else
-import           GHC_Driver_Session              (Settings (..), rawSettings)
+import           DynamicLoading                  (initializePlugins)
 #endif
 
 -- Internal
@@ -297,12 +294,10 @@ initializeGlobalSession = do
 initializePlugin' :: MonadIO m => HscEnv -> m HscEnv
 #if MIN_VERSION_ghc(9,2,0)
 initializePlugin' = liftIO . initializePlugins
-#elif MIN_VERSION_ghc(8,6,0)
+#else
 initializePlugin' hsc_env = do
   plugin_dflags <- liftIO $ initializePlugins hsc_env (hsc_dflags hsc_env)
   return (updateDynFlags plugin_dflags hsc_env)
-#else
-initializePlugin' = pure
 #endif
 {-# INLINABLE initializePlugin' #-}
 
@@ -335,13 +330,7 @@ setExpanding dflags0 =
 #else
       dflags1 = dflags0 {parMakeCount = Just 1}
 #endif
-
-#if MIN_VERSION_ghc(8,10,0)
       dflags2 = dflags1 {rawSettings = expandingKey : raw_settings}
-#else
-      add_key s = s {sRawSettings = expandingKey : raw_settings}
-      dflags2 = dflags1 {settings = add_key (settings dflags1)}
-#endif
   in  dflags2
 {-# INLINABLE setExpanding #-}
 
@@ -442,13 +431,9 @@ bcoDynFlags dflags0 =
       dflags4 = setGeneralFlag' Opt_IgnoreOptimChanges $
                 setGeneralFlag' Opt_IgnoreHpcChanges $
                 updOptLevel 0 dflags3
-#if MIN_VERSION_ghc(8,10,0)
       -- XXX: Warning message for missing home package module is shown with
       -- -Wall option, suppressing for now ...
       dflags5 = wopt_unset dflags4 Opt_WarnMissingHomeModules
-#else
-      dflags5 = dflags4
-#endif
   in  dflags5
 {-# INLINABLE bcoDynFlags #-}
 

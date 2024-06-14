@@ -61,7 +61,8 @@ import GHC_Types_Var                     (varName)
 import GHC_Unit_Finder                   (FindResult (..), findImportedModule)
 import GHC_Unit_Home_ModInfo             (lookupHpt)
 import GHC_Unit_Module                   (Module, moduleNameString)
-import GHC_Unit_Module_Graph             (ModuleGraph, showModMsg)
+import GHC_Unit_Module_Graph             (ModuleGraph, mgLookupModule,
+                                          showModMsg)
 import GHC_Unit_Module_ModSummary        (ModSummary (..))
 import GHC_Utils_Error                   (compilationProgressMsg)
 import GHC_Utils_Outputable              (SDoc, fsep, nest, ppr, text, vcat,
@@ -94,9 +95,6 @@ import GHC.Utils.Outputable              (empty)
 import GHC_Types_SrcLoc                  (UnhelpfulSpanReason (..))
 #endif
 
-#if MIN_VERSION_ghc(8,4,0)
-import GHC_Unit_Module_Graph             (mgLookupModule)
-#endif
 
 -- Internal
 import Language.Finkel.Builder

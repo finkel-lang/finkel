@@ -16,14 +16,17 @@ import Data.List                       (foldl')
 #endif
 
 -- ghc
-import GHC_Builtin_Types               (consDataCon, listTyCon_RDR, tupleTyCon)
+import GHC_Builtin_Types               (consDataCon, eqTyCon_RDR, listTyCon_RDR,
+                                        tupleTyCon)
 import GHC_Hs_Doc                      (LHsDocString)
 import GHC_Hs_Type                     (HsSrcBang (..), HsTupleSort (..),
                                         HsTyLit (..), HsType (..),
                                         SrcStrictness (..),
                                         SrcUnpackedness (..), mkAnonWildCardTy,
-                                        mkHsAppTy, mkHsOpTy)
-import GHC_Types_Basic                 (Boxity (..))
+                                        mkHsAppTy, mkHsOpTy, parenthesizeHsType)
+import GHC_Types_Basic                 (Boxity (..), PprPrec (..),
+                                        PromotionFlag (..), appPrec, funPrec,
+                                        opPrec)
 import GHC_Types_Name_Occurrence       (dataName, tcName, tvName)
 import GHC_Types_Name_Reader           (getRdrName, mkQual, mkUnqual)
 import GHC_Types_SrcLoc                (GenLocated (..), getLoc)
@@ -54,23 +57,8 @@ import GHC_Builtin_Types_Prim          (funTyCon)
 
 #if MIN_VERSION_ghc(9,0,0)
 import GHC_Hs_Type                     (HsArrow (..), mkHsForAllInvisTele)
-#elif MIN_VERSION_ghc(8,10,0)
+#else
 import GHC_Types_Var                   (ForallVisFlag (..))
-#endif
-
-#if MIN_VERSION_ghc(8,8,0)
-import GHC_Builtin_Types               (eqTyCon_RDR)
-import GHC_Types_Basic                 (PromotionFlag (..))
-#else
-import GHC_Hs_Type                     (Promoted (..))
-import PrelNames                       (eqTyCon_RDR)
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import GHC_Hs_Type                     (parenthesizeHsType)
-#else
-import PlaceHolder                     (placeHolderKind)
-import TysWiredIn                      (starKindTyCon)
 #endif
 
 -- Internal
@@ -85,28 +73,11 @@ import Language.Finkel.Syntax.SynUtils
 --
 -- ---------------------------------------------------------------------
 
-#if MIN_VERSION_ghc(8,8,0)
-type PROMOTIONFLAG = PromotionFlag
-
-iSPROMOTED :: PROMOTIONFLAG
-iSPROMOTED = IsPromoted
-#else
-type PROMOTIONFLAG = Promoted
-
-iSPROMOTED :: PROMOTIONFLAG
-iSPROMOTED = Promoted
-#endif
-{-# INLINABLE iSPROMOTED #-}
-
-nOTPROMOTED :: PROMOTIONFLAG
-nOTPROMOTED = NotPromoted
-{-# INLINABLE nOTPROMOTED #-}
-
 unPromoteTyVar :: HType -> HType
 unPromoteTyVar ty =
   case ty of
     (dL->L l (HsTyVar _EXT _ (L ln name))) ->
-      L l (hsTyVar nOTPROMOTED (L ln name))
+      L l (hsTyVar NotPromoted (L ln name))
     _ -> ty
 {-# INLINABLE unPromoteTyVar #-}
 
@@ -137,11 +108,7 @@ b_symT whole@(LForm (L l form)) =
             | ',' == x -> tv (getRdrName (tupleTyCon Boxed arity))
             | '!' == x -> bang (tv (mkUnqual (namespace xs) xs))
             | '*' == x, nullFS xs ->
-#if MIN_VERSION_ghc(8,6,0)
                lA l (HsStarTy NOEXT False)
-#else
-               tv (getRdrName starKindTyCon)
-#endif
           _ -> tv (mkUnqual (namespace name) name)
       where
         arity = 1 + lengthFS name
@@ -165,13 +132,9 @@ b_funT :: Code -> [HType] -> Builder HType
 b_funT (LForm (L l _)) ts =
   -- For single argument, making HsAppTy with '(->)' instead of HsFunTy.
   case ts of
-    []           -> return funty
-#if MIN_VERSION_ghc(8,4,0)
-    [t]          -> return (mkHsAppTy funty t)
-#else
-    [t@(L l0 _)] -> return (lA l0 (hsParTy (mkHsAppTy funty t)))
-#endif
-    _            -> return (foldr1 f ts)
+    []  -> return funty
+    [t] -> return (mkHsAppTy funty t)
+    _   -> return (foldr1 f ts)
   where
     f a b = addCLocAA a b (hsFunTy (parenthesizeHsType' funPrec a) b)
     -- XXX: Does not support linear type and unicode syntax.
@@ -251,7 +214,7 @@ b_prmConT (LForm (L l form)) =
     Atom (ASymbol name) -> return $! ty name
     _                   -> builderError
   where
-    ty name = lA l (hsTyVar iSPROMOTED (lN l (rname name)))
+    ty name = lA l (hsTyVar IsPromoted (lN l (rname name)))
     rname name =
       case name of
        ":" -> getRdrName consDataCon
@@ -278,8 +241,7 @@ b_listT ty@(L l _) = L l (HsListTy NOEXT ty)
 {-# INLINABLE b_listT #-}
 
 b_nilT :: Code -> HType
-b_nilT (LForm (L l _)) =
-  lA l (hsTyVar NotPromoted (lN l listTyCon_RDR))
+b_nilT (LForm (L l _)) = lA l (hsTyVar NotPromoted (lN l listTyCon_RDR))
 {-# INLINABLE b_nilT #-}
 
 b_tupT :: Code -> [HType] -> HType
@@ -305,11 +267,7 @@ b_forallT (LForm (L l0 _)) (bndrs, (ctxts, body)) =
 #else
       ctxts' = la2la (mkLocatedListA ctxts)
 #endif
-#if MIN_VERSION_ghc(8,4,0)
       ty1 = hsParTy (lA l0 (forAllTy bndrs ty0))
-#else
-      ty1 = forAllTy bndrs ty0
-#endif
   in  lA l0 ty1
 {-# INLINABLE b_forallT #-}
 
@@ -324,13 +282,7 @@ b_qualT (LForm (L l _)) (ctxts, body) =
 
 b_kindedType :: Code -> HType -> HType -> HType
 b_kindedType (LForm (L l _)) ty kind =
-#if MIN_VERSION_ghc(8,8,0)
-   -- Parens for kind signature were removed in ghc 8.8.1. To show
-   -- parens in generated Haskell code, explicitly adding at this point.
    lA l (hsParTy (lA l (HsKindSig NOEXT ty kind)))
-#else
-   L l (HsKindSig NOEXT ty kind)
-#endif
 {-# INLINABLE b_kindedType #-}
 
 b_docT :: HType -> LHsDocString -> HType
@@ -368,7 +320,7 @@ b_prmTupT prsr typs =
         tys <- prsr tl
         let tys' = map unPromoteTyVar tys
             l = getLoc (mkLocatedList (map unLForm typs))
-        return (lA l (hsExplicitTupleTy tys'))
+        return (lA l (HsExplicitTupleTy NOEXT tys'))
     _ -> builderError
 {-# INLINABLE b_prmTupT #-}
 
@@ -396,14 +348,9 @@ forAllTy bndrs body =
              , hst_tele = mkHsForAllInvisTele bndrs
 #else
              , hst_bndrs = bndrs
-#  if MIN_VERSION_ghc(8,10,0)
              , hst_fvf = ForallInvis
-#  endif
 #endif
-
-#if MIN_VERSION_ghc(8,6,0)
              , hst_xforall = NOEXT
-#endif
              }
 {-# INLINABLE forAllTy #-}
 
@@ -411,25 +358,13 @@ hsParTy :: HType -> HsType PARSED
 hsParTy = HsParTy NOEXT
 {-# INLINABLE hsParTy #-}
 
-hsTyVar :: PROMOTIONFLAG -> LIdP PARSED -> HsType PARSED
+hsTyVar :: PromotionFlag -> LIdP PARSED -> HsType PARSED
 hsTyVar = HsTyVar NOEXT
 {-# INLINABLE hsTyVar #-}
 
 hsExplicitListTy :: [HType] -> HsType PARSED
-hsExplicitListTy =
-#if MIN_VERSION_ghc(8,6,0)
-  HsExplicitListTy NOEXT iSPROMOTED
-#else
-  HsExplicitListTy iSPROMOTED placeHolderKind
-#endif
-
-hsExplicitTupleTy :: [HType] -> HsType PARSED
-hsExplicitTupleTy =
-#if MIN_VERSION_ghc(8,6,0)
-  HsExplicitTupleTy NOEXT
-#else
-  HsExplicitTupleTy []
-#endif
+hsExplicitListTy = HsExplicitListTy NOEXT IsPromoted
+{-# INLINABLE hsExplicitListTy #-}
 
 hsBoxedTuple :: HsTupleSort
 #if MIN_VERSION_ghc(9,2,0)
@@ -454,48 +389,7 @@ parTyApp :: HType -> HType
 parTyApp = parenthesizeHsType' appPrec
 {-# INLINABLE parTyApp #-}
 
-#if MIN_VERSION_ghc(8,6,0)
 parenthesizeHsType' :: PprPrec -> HType -> HType
 parenthesizeHsType' p lty@(L _ ty)
   | HsBangTy {} <- ty = lty
   | otherwise         = parenthesizeHsType p lty
-
-#else
-
--- Ppr precedence, arranged and back ported from ghc 8.6.x.
---
--- "PprPrec" and xxxPrec are defined in "basicTypes/BasicTypes.hs",
--- "hsTypeNeedsParens" and "parenthesizeHsType" are defined in
--- "hsSyn/HsTypes.hs".
-
-parenthesizeHsType' :: PprPrec -> HType -> HType
-parenthesizeHsType' p lty@(L loc ty)
-  | hsTypeNeedsParens p ty = L loc (HsParTy NOEXT lty)
-  | otherwise              = lty
-
-hsTypeNeedsParens :: PprPrec -> HsType pass -> Bool
-hsTypeNeedsParens p = go
-  where
-    go (HsForAllTy{})        = p >= funPrec
-    go (HsQualTy{})          = p >= funPrec
-    -- No parenthesis for Bang types
-    -- go (HsBangTy{})          = p > topPrec
-    go (HsRecTy{})           = False
-    go (HsTyVar{})           = False
-    go (HsFunTy{})           = p >= funPrec
-    go (HsTupleTy{})         = False
-    go (HsSumTy{})           = False
-    go (HsKindSig{})         = False
-    go (HsListTy{})          = False
-    go (HsIParamTy{})        = p > topPrec
-    go (HsSpliceTy{})        = False
-    go (HsExplicitListTy{})  = False
-    go (HsExplicitTupleTy{}) = False
-    go (HsTyLit{})           = False
-    go (HsWildCardTy{})      = False
-    go (HsAppTy{})           = p >= appPrec
-    go (HsOpTy{})            = p >= opPrec
-    go (HsParTy{})           = False
-    go (HsDocTy (L _ t) _)   = go t
-    go _                     = False
-#endif

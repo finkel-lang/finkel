@@ -4,19 +4,6 @@
 
 module PluginTest (pluginTests) where
 
--- Requires StaticPlugin, which is supported from ghc 8.8.0.
-#if !MIN_VERSION_ghc(8,8,0)
--- hspec
-import Test.Hspec
-
--- Internal
-import TestAux
-
-pluginTests :: FnkSpec
-pluginTests = describe "run compiler as ghc plugin" $
-  it "is not supported" $ \_ -> pendingWith "GHC version is < 8.8.0"
-#else
-
 #include "ghc_modules.h"
 
 -- base
@@ -24,7 +11,7 @@ import Control.Monad          (void)
 import System.Info            (os)
 
 #if MIN_VERSION_ghc(9,6,0)
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.IO.Class (MonadIO (..))
 #endif
 
 #if (MIN_VERSION_ghc(9,6,0) || !MIN_VERSION_ghc(9,4,0))
@@ -45,7 +32,7 @@ import GHC.Runtime.Loader     (initializeSessionPlugins)
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
-import GHC_Plugins            (Plugins(..), emptyPlugins)
+import GHC_Plugins            (Plugins (..), emptyPlugins)
 #endif
 
 -- hspec
@@ -187,4 +174,3 @@ setFinkelPlugin hsc_env sp =
 pdir :: FilePath
 pdir = "test" </> "data" </> "plugin"
 
-#endif /* ghc >= 8.6.0 */

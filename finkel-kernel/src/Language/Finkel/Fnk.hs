@@ -93,10 +93,6 @@ import           System.IO.Unsafe          (unsafePerformIO)
 import           Data.Word                 (Word64)
 #endif
 
-#if !MIN_VERSION_ghc(8,8,0)
-import           Control.Monad.Fail        (MonadFail (..))
-#endif
-
 -- containers
 import qualified Data.Map                  as Map
 
@@ -119,6 +115,7 @@ import           System.Process            (readProcess)
 
 -- ghc
 import           GHC                       (ModSummary (..), runGhc)
+import qualified GHC_Data_EnumSet          as EnumSet
 import           GHC_Data_FastString       (FastString, fsLit, uniqueOfFS,
                                             unpackFS)
 import           GHC_Driver_Env_Types      (HscEnv (..))
@@ -128,7 +125,8 @@ import           GHC_Driver_Monad          (Ghc (..), GhcMonad (..),
 import           GHC_Driver_Ppr            (showSDocForUser)
 import           GHC_Driver_Session        (DynFlags (..), GeneralFlag (..),
                                             GhcLink (..), HasDynFlags (..),
-                                            gopt, gopt_set, gopt_unset,
+                                            IncludeSpecs (..), gopt, gopt_set,
+                                            gopt_unset, opt_P_signature,
                                             picPOpts, ways)
 import           GHC_Platform_Ways         (wayGeneralFlags,
                                             wayUnsetGeneralFlags)
@@ -170,19 +168,6 @@ import           GHC_Platform_Ways         (hostFullWays)
 import           GHC_Platform_Ways         (interpWays, updateWays)
 #endif
 
-#if !MIN_VERSION_ghc(8,10,0)
-import           GHC_Driver_Session        (targetPlatform)
-#endif
-
-#if MIN_VERSION_ghc(8,6,0)
-import           GHC_Driver_Session        (IncludeSpecs (..), opt_P_signature)
-#endif
-
-#if MIN_VERSION_ghc(8,4,0)
-import qualified GHC_Data_EnumSet          as EnumSet
-#else
-import qualified Data.IntSet               as EnumSet
-#endif
 
 -- Internal
 import           Language.Finkel.Error
@@ -938,18 +923,14 @@ dumpDynFlags fnk_env label dflags =
       , "  safeHaskell:" <+> text (show (safeHaskell dflags))
       , "  lang:" <+> ppr (language dflags)
       , "  extensionFlags:" <+> ppr (EnumSet.toList (extensionFlags dflags))
-#if MIN_VERSION_ghc(8,6,0)
       , "  includePathsQuote:" <+>
         vcat (map text (includePathsQuote (includePaths dflags)))
       , "  includePathsGlobal:" <+>
         vcat (map text (includePathsGlobal (includePaths dflags)))
-#else
-      , "  includePaths:" <+> vcat (map text (includePaths dflags))
-#endif
       , "  picPOpts:" <+> sep (map text (picPOpts dflags))
 #if MIN_VERSION_ghc(9,6,0)
       , "  opt_P_signature:" <+> ppr (snd (opt_P_signature dflags))
-#elif MIN_VERSION_ghc(8,6,0)
+#else
       , "  opt_P_signature:" <+> ppr (opt_P_signature dflags)
 #endif
       , "  hcSuf:" <+> text (hcSuf dflags)
