@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Module for run sub command
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Command.Run
   (export runMain)
   (import

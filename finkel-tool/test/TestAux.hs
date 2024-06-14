@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;;; Auxiliary codes for tests
 
-(:require Finkel.Core)
-
 (defmodule TestAux
   (export (TestIO ..) (TestIOState ..) runTestIO
           (EvalTestFns ..) makeEvalTestFns quietly)

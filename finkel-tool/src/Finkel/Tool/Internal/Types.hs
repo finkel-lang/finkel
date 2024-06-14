@@ -4,8 +4,6 @@
 
 ;;;; Types for REPL.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.Types
   (export
    ;; repl

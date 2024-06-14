@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;;; IO related function for REPL
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.IO
   (export
    read-form

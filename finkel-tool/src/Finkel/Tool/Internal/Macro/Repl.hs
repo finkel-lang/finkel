@@ -7,8 +7,6 @@
 ;;; the code could be invoked from REPL via evaluating the typed in
 ;;; forms.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.Macro.Repl
   (export repl-macro compile-and-import)
   (require
@@ -19,6 +17,7 @@
     (Finkel.Prelude))
   (import
    ;; base
+   (Prelude hiding [<>])
    (Control.Exception [(Exception ..) (SomeException ..) try])
    (Control.Monad [filterM unless void when])
    (Control.Monad.IO.Class [(MonadIO ..)])
@@ -82,7 +81,7 @@
   [(DynFlags ..) (GhcMode ..) (HasDynFlags ..) (Language ..)
    (PackageFlag ..) (GeneralFlag ..)  defaultDynFlags
    fFlags flagSpecFlag flagSpecName gopt lang_set
-   parseDynamicFlagsCmdLine xFlags xopt wopt wWarningFlags])
+   parseDynamicFlagsCmdLine settings xFlags xopt wopt wWarningFlags])
 
  (GHC.Iface.Syntax [showToHeader])
 
@@ -106,14 +105,17 @@
  (GHC.Unit.Finder (flushFinderCaches uncacheModule))
  (GHC.Unit.Home.ModInfo [pprHPT])
  (GHC.Unit.Module [ModuleName mkModuleName mkModuleNameFS moduleNameString])
- (GHC.Unit.Module.Graph [ModuleGraph])
+ (GHC.Unit.Module.Graph [mgModSummaries])
  (GHC.Unit.Module.ModSummary [(ModSummary ..) ms-mod-name])
 
  (GHC.Utils.Misc [looksLikeModuleName])
  (GHC.Utils.Outputable
   [SDoc $$ <+> <> empty dcolon hsep nest ppr sep text vcat]))
 
+
 ;;; Extra imports
+
+(import GHC.Hs.ImpExp ((ImportDecl ..) simpleImportDecl))
 
 (cond-expand
   [(<= 904 :ghc)
@@ -149,11 +151,9 @@
 (cond-expand
   [(<= 902 :ghc)
    (import GHC.Runtime.Interpreter ((Message ..) interpCmd))]
-  [(<= 810 :ghc)
-   (imports-from-ghc
-    (GHC.Runtime.Interpreter [(Message ..) iservCmd]))]
   [otherwise
-   (:begin)])
+   (imports-from-ghc
+    (GHC.Runtime.Interpreter [(Message ..) iservCmd]))])
 
 (cond-expand
   [(<= 900 :ghc)
@@ -166,24 +166,6 @@
      (imports-from-ghc
       (GHC.Unit.Module [(Module ..)]))
      (import qualified GhcMake))])
-
-(cond-expand
-  [(<= 810 :ghc)
-   (:begin
-     (import GHC.Hs.ImpExp ((ImportDecl ..) simpleImportDecl))
-     (imports-from-ghc
-      (GHC.Driver.Session [settings])))]
-  [otherwise
-   (import HsImpExp ((ImportDecl ..) simpleImportDecl))])
-
-(cond-expand
-  [(<= 804 :ghc)
-   (:begin
-     (import Prelude hiding (<>))
-     (imports-from-ghc
-      (GHC.Unit.Module.Graph [mgModSummaries])))]
-  [otherwise
-   (:begin)])
 
 
 ;;; Types
@@ -220,19 +202,8 @@
   (cond-expand
     [(<= 906 :ghc)
      (defaultDynFlags (settings flg))]
-    [(<= 810 :ghc)
-     (defaultDynFlags (settings flg) (llvmConfig flg))]
-    [(<= 806 :ghc)
-     (defaultDynFlags (settings flg) (, (llvmTargets flg) (llvmPasses flg)))]
-    [(<= 804 :ghc)
-     (defaultDynFlags (settings flg) (llvmTargets flg))]
     [otherwise
-     (defaultDynFlags (settings flg))]))
-
-(defn (:: graph-to-summaries (-> ModuleGraph [ModSummary]))
-  (cond-expand
-    [(<= 804 :ghc) mgModSummaries]
-    [otherwise id]))
+     (defaultDynFlags (settings flg) (llvmConfig flg))]))
 
 (defn (:: show-linker-state (-> HscEnv (IO ())))
   [hsc-env]
@@ -245,10 +216,8 @@
     [(<= 900 :ghc)
      (do (<- sdoc (showLinkerState (hsc-dynLinker hsc-env)))
          (putStrLn (showPpr (hsc-dflags hsc-env) sdoc)))]
-    [(<= 810 :ghc)
-     (showLinkerState (hsc-dynLinker hsc-env) (hsc-dflags hsc-env))]
     [otherwise
-     (showLinkerState (hsc-dflags hsc-env))]))
+     (showLinkerState (hsc-dynLinker hsc-env) (hsc-dflags hsc-env))]))
 
 (defn (:: rts-revert-cafs (Fnk ()))
   (cond-expand
@@ -256,19 +225,9 @@
      (case-do (fmap hsc-interp getSession)
        (Just interp) (liftIO (interpCmd interp RtsRevertCAFs))
        _ (pure ()))]
-    [(<= 810 :ghc)
-     (do (<- hsc-env getSession)
-         (liftIO (iservCmd hsc-env RtsRevertCAFs)))]
-    [(== 808 :ghc)
-     (liftIO (rts-revert-cafs-ffi))]
     [otherwise
-     (pure ())]))
-
-(cond-expand
-  [(== 808 :ghc)
-   (foreign import ccall "revertCAFs" (:: rts-revert-cafs-ffi (IO ())))]
-  [otherwise
-   (:begin)])
+     (do (<- hsc-env getSession)
+         (liftIO (iservCmd hsc-env RtsRevertCAFs)))]))
 
 (defn (:: is-interpreting (-> DynFlags Bool))
   (cond-expand
@@ -463,17 +422,9 @@ object code."
                                          (catMaybes (toList mb_stuffs)))])
              (return
               (vcat (intersperse (text "") (map ppr-info filtered)))))
-    (cond-expand
-      [(<= 804 :ghc)
-       (:begin
-         (defn child-filter [(, a _ _ _ _)] a)
-         (defn ppr-info [(, thing fixity cls fam _)]
-           (__ppr-info thing fixity cls fam)))]
-      [otherwise
-       (:begin
-         (defn child-filter [(, a _ _ _)] a)
-         (defn ppr-info [(, thing fixity cls fam)]
-           (__ppr-info thing fixity cls fam)))])))
+    (defn child-filter [(, a _ _ _ _)] a)
+    (defn ppr-info [(, thing fixity cls fam _)]
+      (__ppr-info thing fixity cls fam))))
 
 (defn (:: __ppr-info (-> TyThing Fixity [ClsInst] [FamInst] SDoc))
   [thing fixity cls fam]
@@ -521,13 +472,8 @@ object code."
         (AnId i) (pprTypeAndContents i)
         _ (do (<- mb-stuff (getInfo False (getName tt)))
               (return (maybe (text "") ppr-tt mb-stuff)))))
-    (cond-expand
-      [(<= 804 :ghc)
-       (defn ppr-tt [(, thing _ _ _ _)]
-         (pprTyThing showToHeader thing))]
-      [otherwise
-       (defn ppr-tt [(, thing _ _ _)]
-         (pprTyThing showToHeader thing))])))
+    (defn ppr-tt [(, thing _ _ _ _)]
+      (pprTyThing showToHeader thing))))
 
 (defn (:: show-context (Fnk Code))
   (where (do (<- context getContext)
@@ -640,7 +586,7 @@ object code."
 
 (defn (:: show-modules (Fnk Code))
   (do (<- graph0 getModuleGraph)
-      (lept [graph1 (graph-to-summaries graph0)])
+      (lept [graph1 (mgModSummaries graph0)])
       (<- graph2 (filterM (. isLoaded ms_mod_name) graph1))
       (<- mods (mapM showModule graph2))
       (return `(System.IO.putStr ,(unlines mods)))))
@@ -801,7 +747,7 @@ object code."
   (lefn [(work [dir0]
            (do (<- graph getModuleGraph)
                (<- mods (fmap envContextModules getFnkEnv))
-               (when ($ not null graph-to-summaries graph)
+               (when ($ not null mgModSummaries graph)
                  (liftIO (putStrLn warn-unloading)))
                clear-all-targets
                clear-caches
@@ -874,7 +820,7 @@ paths from import directories."
                clear-all-targets
                clear-caches
                (<- hsc-env getSession)
-               (lept [graph1 (graph-to-summaries graph0)
+               (lept [graph1 (mgModSummaries graph0)
                       uncache (cond-expand
                                 [(<= 904 :ghc)
                                  (\ ms (uncacheModule (hsc-FC hsc-env)

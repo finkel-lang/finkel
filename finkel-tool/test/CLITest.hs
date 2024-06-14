@@ -3,8 +3,6 @@
 
 %p(language RankNTypes)
 
-(:require Finkel.Core)
-
 (defmodule CLITest
   (export cliTests)
   (import-when [:compile]

@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Tests for main function
 
-(:require Finkel.Core)
-
 (defmodule MainTest
   (export mainTests)
   (import-when [:compile]

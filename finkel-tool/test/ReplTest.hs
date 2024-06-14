@@ -4,8 +4,6 @@
 %p(LANGUAGE OverloadedStrings)
 %p(OPTIONS_GHC -Wno-orphans)
 
-(:require Finkel.Core)
-
 (defmodule ReplTest
   (export replTests listenTests)
   (require

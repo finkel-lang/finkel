@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Main entry point
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Main
   (export defaultMain)
   (import

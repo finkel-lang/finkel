@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;;; Tests for REPL macros
 
-(:require Finkel.Core)
-
 (defmodule ReplMacroTest
   (export replMacroTests)
   (import-when [:compile]

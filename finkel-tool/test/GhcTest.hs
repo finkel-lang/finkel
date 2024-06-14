@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 %p(LANGUAGE TypeApplications)
 
-(:require Finkel.Core)
-
 (defmodule GhcTest
   (export ghcTests)
   (import-when [:compile]

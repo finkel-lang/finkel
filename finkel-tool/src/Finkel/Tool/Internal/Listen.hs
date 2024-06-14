@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Loop for network connection.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.Listen
   (export listener accept-loop run-conn)
   (require

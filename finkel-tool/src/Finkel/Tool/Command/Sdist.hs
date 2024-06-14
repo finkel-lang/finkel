@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;;; Finkel sdist command, to create tar.gz of cabal package
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Command.Sdist
   (export sdistMain)
   (import-when [:compile]

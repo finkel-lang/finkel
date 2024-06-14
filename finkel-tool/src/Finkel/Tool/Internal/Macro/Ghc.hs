@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Module containing ghc version compatibililty macro.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.Macro.Ghc
   (export imports-from-ghc)
   (import

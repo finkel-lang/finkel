@@ -28,24 +28,22 @@ extra-source-files:  README.md
                      test/data/p02/src/Lib.fnk
                      test/data/p02/test/Spec.hs
 
-tested-with:           GHC == 8.2.2
-                     , GHC == 8.4.4
-                     , GHC == 8.6.5
-                     , GHC == 8.8.4
-                     , GHC == 8.10.7
-                     , GHC == 9.0.1
+tested-with:           GHC == 8.10.7
+                     , GHC == 9.0.2
                      , GHC == 9.2.8
-                     , GHC == 9.4.8
+                     , GHC == 9.4.7
+                     , GHC == 9.6.5
+                     , GHC == 9.8.2
+                     , GHC == 9.10.1
+
+custom-setup
+  setup-depends:       base  >= 4.14 && < 5
+                     , Cabal >= 3.2  && < 3.12
 
 flag dynamic
   description:         Dynamically link executables (except Windows)
   default:             True
   manual:              True
-
-custom-setup
-  setup-depends:       base         >= 4.7 && < 5
-                     , Cabal        >= 2.0 && < 3.11
-                     , finkel-setup == 0.0.0
 
 library
   hs-source-dirs:      src
@@ -71,20 +69,21 @@ library
                        Finkel.Tool.Main
                        Paths_finkel_tool
   autogen-modules:     Paths_finkel_tool
-  build-depends:       base          >= 4.7    && < 5
-                     , bytestring    >= 0.10.8 && < 0.13
-                     , Cabal         >= 2.0    && < 3.11
-                     , deepseq       >= 1.4.3  && < 1.6
-                     , directory     >= 1.3.0  && < 1.4
-                     , exceptions    >= 0.8.3  && < 0.11
+  build-depends:       base          >= 4.14   && < 5
+                     , bytestring    >= 0.10   && < 0.13
+                     , Cabal         >= 3.2    && < 3.11
+                     , deepseq       >= 1.4    && < 1.6
+                     , directory     >= 1.3    && < 1.4
+                     , exceptions    >= 0.10   && < 0.11
                      , filepath      >= 1.4.1  && < 1.6
-                     , haskeline     >= 0.7.4  && < 0.9
-                     , ghc           >= 8.2.0  && < 9.11.0
-                     , ghc-boot      >= 8.2.0  && < 9.11.0
-                     , ghci          >= 8.2.0  && < 9.11.0
+                     , haskeline     >= 0.8    && < 0.9
+                     , ghc           >= 8.10.0 && < 9.11.0
+                     , ghc-boot      >= 8.10.0 && < 9.11.0
+                     , ghci          >= 8.10.0 && < 9.11.0
                      , network       >= 2.6.3  && < 3.3
-                     , process       >= 1.6.1  && < 1.7
-                     , transformers  >= 0.5.2  && < 0.7
+                     , process       >= 1.6    && < 1.7
+                     , transformers  >= 0.5    && < 0.7
+                       --
                      , finkel-kernel == 0.0.0
                      , finkel-core   == 0.0.0
                      , finkel-setup  == 0.0.0
@@ -96,12 +95,9 @@ library
      ghc-options:        -fplugin Finkel.Core.Plugin
                          -keep-hscpp-files
   else
-    if impl (ghc >= 8.6.0)
-       build-tool-depends: fnkpp:fnkpp == 0.0.0
-       ghc-options:        -F -pgmF fnkpp -optF --warn-interp=False
-                           -fplugin Finkel.Core.Plugin
-    else
-       build-tool-depends:  fkc:fkc == 0.0.0
+     build-tool-depends: fnkpp:fnkpp == 0.0.0
+     ghc-options:        -F -pgmF fnkpp -optF --warn-interp=False
+                         -fplugin Finkel.Core.Plugin
 
 test-suite finkel-tool-test
   type:                exitcode-stdio-1.0
@@ -129,20 +125,17 @@ test-suite finkel-tool-test
                        ReplMacroTest
                        TestAux
   default-language:    Haskell2010
-    
+
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
   if impl (ghc >= 9.6.0)
-     ghc-options:        -fplugin Finkel.Core.Plugin
-                         -keep-hscpp-files
+     ghc-options:      -fplugin Finkel.Core.Plugin
+                       -keep-hscpp-files
   else
-    if impl (ghc >= 8.6.0)
-       build-tool-depends: fnkpp:fnkpp == 0.0.0
-       ghc-options:        -F -pgmF fnkpp -optF --warn-interp=False
-                           -fplugin Finkel.Core.Plugin
-    else
-       build-tool-depends:  fkc:fkc == 0.0.0
+     build-tool-depends: fnkpp:fnkpp == 0.0.0
+     ghc-options:      -F -pgmF fnkpp -optF --warn-interp=False
+                       -fplugin Finkel.Core.Plugin
 
 source-repository head
   type:     git

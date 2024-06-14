@@ -7,8 +7,6 @@
 ;;;; shall be easier to support reading forms from other sources than
 ;;;; line oriented user input, e.g. network sockets.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Command.Repl
   (export replMain repl-env)
   (import-when [:compile]

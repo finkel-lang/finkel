@@ -5,8 +5,6 @@
 
 ;;;; Some commonly used version compatibility type and functions
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.Compat
   (export WARNINGs NamePprCtx print-or-throw-diagnostics
           ppr-wrapped-msg-bag-with-loc get-name-ppr-ctx)
