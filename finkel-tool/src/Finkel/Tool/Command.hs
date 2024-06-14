@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Commands
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Command
   (export commands)
   (import

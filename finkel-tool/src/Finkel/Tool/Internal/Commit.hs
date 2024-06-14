@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;;; Module containing function to get git commit ID
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.Commit
   (export get-git-commit)
   (import

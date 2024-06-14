@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Module for showing versions.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Command.Version
   (export versionMain)
   (require

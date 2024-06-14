@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Module for make sub command.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Command.Make
   (export makeMain)
   (import-when [:compile]

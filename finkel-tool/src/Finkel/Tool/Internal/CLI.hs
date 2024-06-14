@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Command line interface utilities.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.CLI
   (export
    (CLI ..)
@@ -30,12 +28,8 @@
    (System.Console.Haskeline [InputT])
    (qualified System.Console.Haskeline as Haskeline)))
 
-(cond-expand
-  [(<= 810 :ghc)
-   (import Control.Monad.Catch
-           ((MonadThrow ..) (MonadCatch ..) (MonadMask ..)))]
-  [otherwise
-   (import System.Console.Haskeline ((MonadException ..)))])
+(import Control.Monad.Catch
+        ((MonadThrow ..) (MonadCatch ..) (MonadMask ..)))
 
 ;;; Type class for command line interface, ... actually, for 'InputT' from the
 ;;; haskeline package.
@@ -68,33 +62,18 @@
   (= withInterrupt act act)
   (= exitWith Exit.exitWith))
 
-(cond-expand
-  [(<= 810 :ghc)
-   (instance (=> (MonadIO m) (MonadCatch m) (MonadMask m) (MonadThrow m)
-                 (CLI (InputT m)))
-     (= getString Haskeline.getInputLine)
-     %p(INLINE getString)
-     (= putString Haskeline.outputStrLn)
-     %p(INLINE putString)
-     (= handleInterrupt Haskeline.handleInterrupt)
-     %p(INLINE handleInterrupt)
-     (= withInterrupt Haskeline.withInterrupt)
-     %p(INLINE withInterrupt)
-     (= exitWith (. liftIO Exit.exitWith))
-     %p(INLINE exitWith))]
-  [otherwise
-   (instance (=> (MonadIO m) (MonadException m)
-                 (CLI (InputT m)))
-     (= getString Haskeline.getInputLine)
-     %p(INLINE getString)
-     (= putString Haskeline.outputStrLn)
-     %p(INLINE putString)
-     (= handleInterrupt Haskeline.handleInterrupt)
-     %p(INLINE handleInterrupt)
-     (= withInterrupt Haskeline.withInterrupt)
-     %p(INLINE withInterrupt)
-     (= exitWith (. liftIO Exit.exitWith))
-     %p(INLINE exitWith))])
+(instance (=> (MonadIO m) (MonadCatch m) (MonadMask m) (MonadThrow m)
+              (CLI (InputT m)))
+  (= getString Haskeline.getInputLine)
+  %p(INLINE getString)
+  (= putString Haskeline.outputStrLn)
+  %p(INLINE putString)
+  (= handleInterrupt Haskeline.handleInterrupt)
+  %p(INLINE handleInterrupt)
+  (= withInterrupt Haskeline.withInterrupt)
+  %p(INLINE withInterrupt)
+  (= exitWith (. liftIO Exit.exitWith))
+  %p(INLINE exitWith))
 
 
 ;;; Command data type

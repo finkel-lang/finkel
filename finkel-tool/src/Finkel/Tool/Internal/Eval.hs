@@ -2,8 +2,6 @@
 
 ;;; Eval loop in REPL.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.Eval
   (export eval-loop eval-once fork-eval-loop)
   (require
@@ -72,7 +70,8 @@
  (GHC.Parser.PostProcess [cvTopDecls])
 
  (GHC.Runtime.Context [(InteractiveImport ..) setInteractivePrintName])
- (GHC.Runtime.Eval [compileParsedExprRemote getContext parseName setContext])
+ (GHC.Runtime.Eval [(ExecOptions ..) (ExecResult ..) compileParsedExprRemote
+                    getContext parseName setContext execStmt' execOptions])
 
  (GHC.Types.Basic [(SuccessFlag ..)])
 
@@ -90,6 +89,8 @@
 
 
 ;;; Extra imports
+
+(import GHC.Hs.ImpExp ((ImportDecl ..) isImportDeclQualified))
 
 (cond-expand
   [(<= 906 :ghc)
@@ -120,45 +121,7 @@
   [otherwise
    (:begin)])
 
-(cond-expand
-  [(<= 810 :ghc)
-   (import GHC.Hs.ImpExp ((ImportDecl ..) (ImportDeclQualifiedStyle)
-                          isImportDeclQualified))]
-  [otherwise
-   (import HsImpExp ((ImportDecl ..)))])
-
-(cond-expand
-  [(<= 808 :ghc)
-   (imports-from-ghc
-    (GHC.Runtime.Eval
-     [(ExecOptions ..) (ExecResult ..) execStmt' execOptions]))]
-  [otherwise
-   (:begin
-     (imports-from-ghc
-      (GHC.Driver.Main [hscParsedStmt])
-      (GHC.Runtime.Context
-       [(InteractiveContext ..) extendInteractiveContextWithIds])
-      (GHC.Runtime.Interpreter [evalStmt])
-      (GHC.Runtime.Linker [extendLinkEnv])
-      (GHC.Types.Fixity.Env [FixityEnv])
-      (GHC.Types.Var [Id]))
-
-     ;; base
-     (import qualified System.Exit)
-
-     ;; ghci
-     (import GHCi.Message ((EvalResult ..) (EvalStatus_ ..)
-                           (SerializableException ..))))])
-
 ;;; Version compatibility function
-
-(cond-expand
-  [(<= 810 :ghc)
-   (defn (:: is-import-decl-qualified (-> ImportDeclQualifiedStyle Bool))
-     isImportDeclQualified)]
-  [otherwise
-   (defn (:: is-import-decl-qualified (-> Bool Bool))
-     id)])
 
 (defn (:: optional-dynflags [GeneralFlag])
   "Optional 'GeneralFlag' set for REPL.
@@ -170,12 +133,10 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
       Opt-IgnoreOptimChanges
       Opt-IgnoreHpcChanges
       Opt-UseBytecodeRatherThanObjects]]
-    [(<= 804 :ghc)
+    [otherwise
      [Opt-ImplicitImportQualified
       Opt-IgnoreOptimChanges
-      Opt-IgnoreHpcChanges]]
-    [otherwise
-     [Opt-ImplicitImportQualified]]))
+      Opt-IgnoreHpcChanges]]))
 
 (defn (:: parse-dynamic-flags
         (=> (MonadIO m)
@@ -345,89 +306,18 @@ context."
 (defn (:: eval-statement
         (-> Handle ForeignHValue InSource HStmt (Fnk Result)))
   [hdl wrapper itype stmt]
-  (cond-expand
-    [(<= 808 :ghc)
-     ;; Reusing `execStmt'' from ghc package.
-     (lept [wrap (case itype
-                   Prompt (fmap (\r (, r "")))
-                   Connection (with-io-redirect hdl))
-            err (. pure Left (++ "*** Exception: ") show)
-            ok (. pure Right)
-            opts (execOptions {(= execWrap
-                                 (\fhv (EvalApp (EvalThis wrapper)
-                                                (EvalThis fhv))))})]
-       (case-do (wrap (execStmt' stmt "stmt-text" opts))
-         (, (ExecComplete (Right _ns) _) r) (ok r)
-         (, (ExecComplete (Left e) _) _r) (err e)
-         (, (ExecBreak {}) r) (pure (Left (++ "break: " r)))))]
-    [otherwise
-     ;; Old version of ghc does not export `execStmt'', rewriting execution
-     ;; function and updating curent HscEnv ...
-     (where exec-stmt-and-update
-       (defn exec-stmt-and-update
-         (do (<- hsc-env getSession)
-             (case-do (liftIO (hscParsedStmt hsc-env stmt))
-               (Just (, ids hvio fxty)) (update-hsc-env hsc-env ids hvio fxty)
-               Nothing (pure (Left "eval-statement: no result")))))
-       (defn (:: update-hsc-env
-               (-> HscEnv [Id] ForeignHValue FixityEnv (Fnk Result)))
-         [hsc-env ids hvals-io fixity-env]
-         ;; The `evalStmt' below is from "compiler/ghci/GHCi.hsc", which uses
-         ;; `iservCmd' in its implementation.
-         (lefn [(success [fhvals _elapsed ret]
-                  (do (lefn [(ic (hsc-IC hsc-env))
-                             (ic2 (extendInteractiveContextWithIds ic ids))
-                             (ic3 (ic2 {(= ic-fix-env fixity-env)}))
-                             (names (map getName ids))
-                             (hsc-env-2 (hsc-env {(= hsc-IC ic3)}))])
-                      ;; (<- dflags getDynFlags)
-                      ($ liftIO extendLinkEnv (zip names fhvals))
-
-                      ;; InteractiveEval does not export `rttiEnvironment'.
-                      ;;
-                      ;; (<- hsc-env-3
-                      ;;     (liftIO
-                      ;;      (rttiEnvironment (hscenv {(= hsc_IC final-ic)}))))
-
-                      (setSession hsc-env-2)
-                      (case names
-                        [name] (| ((== (occNameString (nameOccName name)) "it")
-                                   (return (Right ret))))
-                        _ (pure (Right ret %_(names-and-types dflags names ids))))))
-                (exception [serialized]
-                  (case serialized
-                    (EOtherException e) (return (Left (++ "*** Exception: " e)))
-                    (EExitCode ecode) (liftIO (System.Exit.exitWith ecode))
-                    EUserInterrupt (return (Left "Interrupted."))))
-                (incomplete
-                  (return (Left "update-hsc-env failed.")))
-                (eval-app
-                  (EvalApp (EvalThis wrapper) (EvalThis hvals-io)))
-                (eval-hvals-io
-                  (cond-expand
-                    [(<= 902 :ghc)
-                     (case (hsc-interp hsc-env)
-                       (Just interp) (evalStmt interp (hsc-dflags hsc-env)
-                                               False eval-app)
-                       _ (throwIO (FinkelToolException "No interpreter")))]
-                    [otherwise
-                     (evalStmt hsc-env False eval-app)]))
-                (eval-for-prompt
-                  (do (<- status (liftIO eval-hvals-io))
-                      (return (, status ""))))
-                (eval-for-connection
-                  (liftIO (with-io-redirect hdl eval-hvals-io)))]
-           (do (<- (, status ret)
-                 ;; Switching behaviour between prompt and network connection. Getting
-                 ;; printed result as `String' for connection by wrapping the execution
-                 ;; of compiled result, which is a value of `IO [HValue]' type.
-                 (case itype
-                   Prompt eval-for-prompt
-                   Connection eval-for-connection))
-               (case status
-                 (EvalComplete et (EvalSuccess hvs)) (success hvs et ret)
-                 (EvalComplete  _ (EvalException e)) (exception e)
-                 _ incomplete)))))]))
+  (lept [wrap (case itype
+                Prompt (fmap (\r (, r "")))
+                Connection (with-io-redirect hdl))
+         err (. pure Left (++ "*** Exception: ") show)
+         ok (. pure Right)
+         opts (execOptions {(= execWrap
+                              (\fhv (EvalApp (EvalThis wrapper)
+                                             (EvalThis fhv))))})]
+    (case-do (wrap (execStmt' stmt "stmt-text" opts))
+      (, (ExecComplete (Right _ns) _) r) (ok r)
+      (, (ExecComplete (Left e) _) _r) (err e)
+      (, (ExecBreak {}) r) (pure (Left (++ "break: " r))))))
 
 (defn (:: eval-imports (-> DynFlags [HImportDecl] (Fnk Result)))
   [dflags imports]
@@ -564,8 +454,8 @@ to separate object files from source code files."
   [(IIDecl x) (IIDecl y)]
   (where (&& (== (unLoc (ideclName x)) (unLoc (ideclName y)))
              (== (ideclAs x) (ideclAs y))
-             (|| (not (is-import-decl-qualified (ideclQualified x)))
-                 (is-import-decl-qualified (ideclQualified y)))
+             (|| (not (isImportDeclQualified (ideclQualified x)))
+                 (isImportDeclQualified (ideclQualified y)))
              (cond-expand
                [(<= 906 :ghc)
                 (hiding-subsumes (ideclImportList x) (ideclImportList y))]

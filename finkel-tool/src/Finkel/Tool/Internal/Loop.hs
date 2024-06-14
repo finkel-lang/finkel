@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Starting REPL
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Internal.Loop
   (export start-repl acquire-repl cleanup-repl)
   (import-when [:compile]

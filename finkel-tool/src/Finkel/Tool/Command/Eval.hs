@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;;; Eval sub command
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Command.Eval
   (export evalMain
           eval-and-exit

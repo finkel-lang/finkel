@@ -1,8 +1,6 @@
 ;;; -*- mode: finkel -*-
 ;;; Help utility for Finkel  tool.
 
-(:require Finkel.Core)
-
 (defmodule Finkel.Tool.Command.Help
   (export
    ;; Help command
