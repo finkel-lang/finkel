@@ -76,10 +76,8 @@
      (import GHC.Parser.PostProcess ((ECP ..) runPV)))]
   [(<= 900 :ghc)
    (import GHC.Parser.PostProcess (runECP-P))]
-  [(<= 810 :ghc)
-   (import RdrHsSyn (runECP-P))]
   [otherwise
-   (:begin)])
+   (import RdrHsSyn (runECP-P))])
 
 
 ;;; Functions
@@ -96,8 +94,7 @@
                              ;; for `runPV' and `unECP' to make the type
                              ;; concrete.
                              [(<= 902 :ghc) (\p (runPV (unECP p)))]
-                             [(<= 810 :ghc) runECP-P]
-                             [otherwise return])])
+                             [otherwise runECP-P])])
          (describe "expression"
            (parser-tests "expr" (Parsers (>>= GhcParser.parseExpression
                                               expFromECP)
