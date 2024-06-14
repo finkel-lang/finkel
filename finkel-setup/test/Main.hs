@@ -51,12 +51,10 @@ main = do
   -- building executable in test packages. In ghc 8.2.x, the use of "-"
   -- in GHC_ENVIRONMENT will show "No such package environment" error,
   -- so "executable" and "test" stanzas in ".cabal" file are disabled.
-#if MIN_VERSION_ghc(8,4,0)
   setEnv "GHC_ENVIRONMENT" "-"
-#endif
 
   hspec (afterAll_ (setCurrentDirectory cwd)
-                   (beforeAll_ (remove_dist_if_exist cwd)
+                   (beforeAll_ (removeDistIfExist cwd)
                                (buildPackage cwd pkgdbs "p01")))
 
 buildPackage :: String -> [String] -> String -> Spec
@@ -75,9 +73,7 @@ buildPackage cwd pkgdbs name =
             [ setCurrentDirectory pkgdir
             , setup configure_args
             , setup ["build"]
-#if MIN_VERSION_ghc(8,4,0)
             , setup ["test"]
-#endif
             , setup ["haddock"]
             ]
 
@@ -87,12 +83,13 @@ setup args = do
   withArgs args fnkMain
 
 getPackageDbs :: String -> IO [String]
-getPackageDbs executable_path =
-  if ".stack-work" `isSubsequenceOf` executable_path
-     then getStackPackageDbs
-     else if "dist-newstyle" `isSubsequenceOf` executable_path
-             then getCabalPackageDbs executable_path
-             else getPackageConfD executable_path
+getPackageDbs executable_path
+  | ".stack-work" `isSubsequenceOf` executable_path
+  = getStackPackageDbs
+  | "dist-newstyle" `isSubsequenceOf` executable_path
+  = getCabalPackageDbs executable_path
+  | otherwise
+  = getPackageConfD executable_path
 
 getStackPackageDbs :: IO [String]
 getStackPackageDbs = do
@@ -133,8 +130,8 @@ getPackageConfD path = go path (takeDirectory path)
                 then return [pkg_conf_d]
                 else go current (takeDirectory current)
 
-remove_dist_if_exist :: FilePath -> IO ()
-remove_dist_if_exist cwd =
+removeDistIfExist :: FilePath -> IO ()
+removeDistIfExist cwd =
   catch (let dir = cwd </> "test" </> "data" </> "p01" </> "dist"
          in  removeDirectoryRecursive dir)
         (\e -> if isDoesNotExistError e
