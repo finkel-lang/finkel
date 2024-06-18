@@ -22,8 +22,9 @@ executable finkel
   build-depends:       base        >= 4.14 && < 5
                      , finkel-tool == 0.0.0
   default-language:    Haskell2010
-  c-sources:           hschooks.c
-  ghc-options:         -Wall -threaded -no-hs-main
+  ghc-options:         -Wall -threaded
+                       -rtsopts=all
+                       "-with-rtsopts=-K512M -H -I5 -T"
 
 source-repository head
   type:     git
