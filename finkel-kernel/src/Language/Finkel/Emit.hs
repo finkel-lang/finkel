@@ -23,7 +23,6 @@ module Language.Finkel.Emit
   , putHsSrc
   ) where
 
-#include "Syntax.h"
 #include "ghc_modules.h"
 
 -- base
@@ -382,10 +381,10 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (HsModule a)) where
 instance OUTPUTABLE a pr => HsSrc (Hsrc (IE a)) where
   toHsSrc _st (Hsrc ie) =
     case ie of
-      IEGroup _EXT n doc  -> commentWithHeader ("-- " ++ replicate n '*')
+      IEGroup _ n doc  -> commentWithHeader ("-- " ++ replicate n '*')
                                                (getHsDocString doc)
-      IEDoc _EXT doc      -> commentWithHeader "-- |" (getHsDocString doc)
-      IEDocNamed _EXT doc -> text ("-- $" ++ doc)
+      IEDoc _ doc      -> commentWithHeader "-- |" (getHsDocString doc)
+      IEDocNamed _ doc -> text ("-- $" ++ doc)
       _                   -> ppr ie
 
 
@@ -398,10 +397,10 @@ instance OUTPUTABLE a pr => HsSrc (Hsrc (IE a)) where
 instance OUTPUTABLE a pr => HsSrc (HsDecl a) where
   toHsSrc st decl =
     case decl of
-      SigD  _EXT sig   -> toHsSrc st sig
-      TyClD _EXT tycld -> toHsSrc st tycld
-      DocD _EXT doc    -> toHsSrc st doc
-      _                -> ppr decl
+      SigD  _ sig   -> toHsSrc st sig
+      TyClD _ tycld -> toHsSrc st tycld
+      DocD _ doc    -> toHsSrc st doc
+      _             -> ppr decl
 
 
 -- --------------------------------------------------------------------
@@ -412,9 +411,9 @@ instance OUTPUTABLE a pr => HsSrc (HsDecl a) where
 
 instance OUTPUTABLE a pr => HsSrc (Sig a) where
   toHsSrc st sig = case sig of
-    TypeSig _EXT vars ty -> pprVarSig (map unLoc vars)
+    TypeSig _ vars ty -> pprVarSig (map unLoc vars)
                                       (toHsSrc st ty)
-    ClassOpSig _EXT is_dflt vars ty
+    ClassOpSig _ is_dflt vars ty
       | is_dflt   -> text "default" <+> pprVarSig (map unLoc vars)
                                                   (toHsSrc st ty)
       | otherwise -> pprVarSig (map unLoc vars) (toHsSrc st ty)
@@ -467,17 +466,17 @@ instance (OUTPUTABLE a pr) => HsSrc (HsType a) where
       sep [pprHsContextAlways ctxt, hsrc ty1]
 #endif
 #if MIN_VERSION_ghc(9,0,0)
-    HsFunTy _EXT _arrow ty1 ty2 -> t_arr_t ty1 ty2
+    HsFunTy _ _arrow ty1 ty2 -> t_arr_t ty1 ty2
 #else
-    HsFunTy _EXT ty1 ty2 -> t_arr_t ty1 ty2
+    HsFunTy _ ty1 ty2 -> t_arr_t ty1 ty2
 #endif
-    HsDocTy _EXT ty1 (L _ docstr) ->
+    HsDocTy _ ty1 (L _ docstr) ->
 #if MIN_VERSION_ghc(9,4,0)
       ppr ty1 $+$ commentWithHeader "-- ^" (hsDocString docstr)
 #else
       ppr ty1 $+$ commentWithHeader "-- ^" docstr
 #endif
-    HsParTy _EXT ty1 -> parens (hsrc ty1)
+    HsParTy _ ty1 -> parens (hsrc ty1)
     _ -> ppr ty
     where
       t_arr_t t1 t2 = sep [hsrc t1, text "->", hsrc t2]
@@ -865,11 +864,11 @@ pprFamilyDecl top_level FamilyDecl { fdInfo = info
                      NotTopLevel -> empty
 
     pp_kind = case result of
-                NoSig    _EXT         -> empty
-                KindSig  _EXT kind    -> dcolon <+> ppr kind
-                TyVarSig _EXT tv_bndr -> text "=" <+> ppr tv_bndr
+                NoSig    _         -> empty
+                KindSig  _ kind    -> dcolon <+> ppr kind
+                TyVarSig _ tv_bndr -> text "=" <+> ppr tv_bndr
 #if !MIN_VERSION_ghc(9,0,0)
-                XFamilyResultSig x    -> ppr x
+                XFamilyResultSig x -> ppr x
 #endif
     pp_inj = case mb_inj of
                Just (L _ (InjectivityAnn _XCINJECTIVITYANN lhs rhs)) ->

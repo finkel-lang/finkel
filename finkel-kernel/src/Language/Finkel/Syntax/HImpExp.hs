@@ -4,7 +4,6 @@
 -- | Syntax for module header, import and export entities.
 module Language.Finkel.Syntax.HImpExp where
 
-#include "Syntax.h"
 #include "ghc_modules.h"
 
 -- ghc
@@ -75,7 +74,7 @@ b_module mb_form exports =
                , hsmodDecls = cvTopDecls (toOL decls)
 #if MIN_VERSION_ghc(9,6,0)
                , hsmodExt = XModulePs
-                   { hsmodAnn = NOEXT
+                   { hsmodAnn = unused
 #  if MIN_VERSION_ghc(9,10,0)
                    , hsmodLayout = unused
 #  else
@@ -88,7 +87,7 @@ b_module mb_form exports =
                -- XXX: Does not support DEPRECATED message.
                , hsmodDeprecMessage = Nothing
 #  if MIN_VERSION_ghc(9,2,0)
-               , hsmodAnn = NOEXT
+               , hsmodAnn = unused
 #  endif
 #  if MIN_VERSION_ghc(9,0,0)
                , hsmodLayout = NoLayoutInfo
@@ -111,7 +110,7 @@ b_ieSym form@(LForm (L l _)) = do
 #elif MIN_VERSION_ghc(9,8,0)
   let var x = lA l (IEVar Nothing (lA l (ieName l (mkRdrName x))))
 #else
-  let var x = lA l (IEVar NOEXT (lA l (ieName l (mkRdrName x))))
+  let var x = lA l (IEVar unused (lA l (ieName l (mkRdrName x))))
 #endif
   pure (if isLexCon name
           then con name
@@ -122,7 +121,7 @@ b_ieGroup :: Int -> Code -> Builder HIE
 b_ieGroup n form@(LForm (L l body))
   | List [_, doc_code] <- body
   , Atom (AString _ doc) <- unCode doc_code
-  = return $! lA l (IEGroup NOEXT (fromIntegral n) (mkLHsDoc l doc))
+  = return $! lA l (IEGroup unused (fromIntegral n) (mkLHsDoc l doc))
   | otherwise
   = setLastToken form >> failB "Invalid group documentation"
 {-# INLINABLE b_ieGroup #-}
@@ -130,7 +129,7 @@ b_ieGroup n form@(LForm (L l body))
 b_ieDoc :: Code -> Builder HIE
 b_ieDoc (LForm (L l form)) =
   case form of
-    Atom (AString _ str) -> return $! lA l (IEDoc NOEXT (mkLHsDoc l str))
+    Atom (AString _ str) -> return $! lA l (IEDoc unused (mkLHsDoc l str))
     _                    -> builderError
 {-# INLINABLE b_ieDoc #-}
 
@@ -138,7 +137,7 @@ b_ieDocNamed :: Code -> Builder HIE
 b_ieDocNamed (LForm (L l form))
   | List [_,name_code] <- form
   , Atom (ASymbol name) <- unCode name_code
-  = return $! lA l (IEDocNamed NOEXT (unpackFS name))
+  = return $! lA l (IEDocNamed unused (unpackFS name))
   | otherwise = builderError
 {-# INLINABLE b_ieDocNamed #-}
 
@@ -151,11 +150,11 @@ b_ieAll form@(LForm (L l _)) = do
   name <- getConId form
 #if MIN_VERSION_ghc(9,10,0)
   -- XXX: Does not support ExportDoc.
-  let iEThingAll ie_name = IEThingAll (Nothing, NOEXT) ie_name Nothing
+  let iEThingAll ie_name = IEThingAll (Nothing, unused) ie_name Nothing
 #elif MIN_VERSION_ghc(9,8,0)
-  let iEThingAll = IEThingAll (Nothing, NOEXT)
+  let iEThingAll = IEThingAll (Nothing, unused)
 #else
-  let iEThingAll = IEThingAll NOEXT
+  let iEThingAll = IEThingAll unused
 #endif
   return $ lA l (iEThingAll (lA l (ieName l (mkUnqual tcClsName name))))
 {-# INLINABLE b_ieAll #-}
@@ -183,9 +182,9 @@ b_ieWith (LForm (L l form)) names =
       (lA l0 (ieName l (mkRdrName n0)) : ns0, fs0)
     f _ acc = acc
 #if MIN_VERSION_ghc(9,8,0)
-    iEThingWith = IEThingWith (Nothing, NOEXT)
+    iEThingWith = IEThingWith (Nothing, unused)
 #else
-    iEThingWith = IEThingWith NOEXT
+    iEThingWith = IEThingWith unused
 #endif
     wc = NoIEWildcard
 {-# INLINABLE b_ieWith #-}
@@ -198,9 +197,9 @@ b_ieMdl xs =
   where
     thing l n = lA l (iEModuleContents (lA l (mkModuleNameFS n)))
 #if MIN_VERSION_ghc(9,8,0)
-    iEModuleContents = IEModuleContents (Nothing, NOEXT)
+    iEModuleContents = IEModuleContents (Nothing, unused)
 #else
-    iEModuleContents = IEModuleContents NOEXT
+    iEModuleContents = IEModuleContents unused
 #endif
 {-# INLINABLE b_ieMdl #-}
 
@@ -250,12 +249,12 @@ iEThingAbs :: SrcSpan -> FastString -> HIE
 iEThingAbs l name =
 #if MIN_VERSION_ghc(9,10,0)
   -- XXX: Does not support ExportDoc.
-  lA l (IEThingAbs (Nothing, NOEXT) (lA l (ieName l (mkUnqual tcClsName name)))
+  lA l (IEThingAbs (Nothing, unused) (lA l (ieName l (mkUnqual tcClsName name)))
                    Nothing)
 #elif MIN_VERSION_ghc(9,8,0)
-  lA l (IEThingAbs (Nothing, NOEXT) (lA l (ieName l (mkUnqual tcClsName name))))
+  lA l (IEThingAbs (Nothing, unused) (lA l (ieName l (mkUnqual tcClsName name))))
 #else
-  lA l (IEThingAbs NOEXT (lA l (ieName l (mkUnqual tcClsName name))))
+  lA l (IEThingAbs unused (lA l (ieName l (mkUnqual tcClsName name))))
 #endif
 {-# INLINABLE iEThingAbs #-}
 
@@ -265,7 +264,7 @@ ieName :: SrcSpan -> RdrName -> IEWrappedName PARSED
 ieName :: SrcSpan -> RdrName -> IEWrappedName RdrName
 #endif
 #if MIN_VERSION_ghc(9,6,0)
-ieName l x = IEName NOEXT (lN l x)
+ieName l x = IEName unused (lN l x)
 #else
 ieName l x = IEName (lN l x)
 #endif

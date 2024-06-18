@@ -6,7 +6,6 @@
 -- | Syntax for expression.
 module Language.Finkel.Syntax.HExpr where
 
-#include "Syntax.h"
 #include "ghc_modules.h"
 
 -- base
@@ -126,9 +125,9 @@ b_lamE (body,pats) = mkLHsPar (lA l hsLam)
   -- some issues when "-Wincomplete-patterns" flag was turned on.
   where
 #  if MIN_VERSION_ghc(9,10,0)
-    hsLam = HsLam NOEXT LamSingle mg
+    hsLam = HsLam unused LamSingle mg
 #  else
-    hsLam = HsLam NOEXT mg
+    hsLam = HsLam unused mg
 #  endif
     l = getLoc (reLoc body)
     mg = mkMatchGroup FromSource ms
@@ -153,14 +152,14 @@ b_tupE (LForm (L l _)) args = lA l e
 #else
     mkArg x@(L al _) = L al (present x)
 #endif
-    explicitTuple = ExplicitTuple NOEXT
-    present = Present NOEXT
+    explicitTuple = ExplicitTuple unused
+    present = Present unused
 {-# INLINABLE b_tupE #-}
 
 -- Expression for tuple constructor function (i.e. the (,)
 -- function). See also 'b_varE' for tuples with more elements.
 b_tupConE :: Code -> HExpr
-b_tupConE (LForm (L l _)) = lA l (HsVar NOEXT (lN l (tupConName Boxed 2)))
+b_tupConE (LForm (L l _)) = lA l (HsVar unused (lN l (tupConName Boxed 2)))
 {-# INLINABLE b_tupConE #-}
 
 b_letE :: Code -> [HDecl] -> HExpr -> Builder HExpr
@@ -172,20 +171,20 @@ b_letE (LForm (L l _)) decls body = do
   let valbinds = L l (mkHsValBinds (cd_binds cd) (cd_sigs cd))
 #endif
 #if MIN_VERSION_ghc(9,10,0)
-  pure (lA l (HsLet (NOEXT, NOEXT) valbinds body))
+  pure (lA l (HsLet (unused, unused) valbinds body))
 #elif MIN_VERSION_ghc(9,4,0)
   let tokLet = L (mkTokenLocation l) HsTok
       tokIn = L (mkTokenLocation l) HsTok
-  return (lA l (HsLet NOEXT tokLet valbinds tokIn body))
+  return (lA l (HsLet unused tokLet valbinds tokIn body))
 #else
-  return (lA l (HsLet NOEXT valbinds body))
+  return (lA l (HsLet unused valbinds body))
 #endif
 {-# INLINABLE b_letE #-}
 
 b_caseE :: Code -> HExpr -> [HMatch] -> HExpr
 b_caseE (LForm (L l _)) expr matches = lA l (hsCase expr mg)
   where
-    hsCase = HsCase NOEXT
+    hsCase = HsCase unused
 #if MIN_VERSION_ghc(9,2,0)
     mg = mkMatchGroup FromSource (lL l matches)
 #else
@@ -194,7 +193,7 @@ b_caseE (LForm (L l _)) expr matches = lA l (hsCase expr mg)
 {-# INLINABLE b_caseE #-}
 
 b_match :: HPat -> ([HGRHS],[HDecl]) -> HMatch
-b_match pat (grhss,decls) = L l (Match NOEXT ctxt [pat] grhss')
+b_match pat (grhss,decls) = L l (Match unused ctxt [pat] grhss')
   where
     grhss' = mkGRHSs grhss decls l
     ctxt = CaseAlt
@@ -219,7 +218,7 @@ b_hgrhs rhss (body, gs) =
 {-# INLINABLE b_hgrhs #-}
 
 b_GRHS :: [HGuardLStmt] -> HExpr -> GRHS PARSED HExpr
-b_GRHS = GRHS NOEXT
+b_GRHS = GRHS unused
 {-# INLINABLE b_GRHS #-}
 
 b_doE :: Code -> [HStmt] -> HExpr
@@ -244,9 +243,9 @@ b_tsigE (LForm (L l _)) e0 (ctxt,t) =
              _  -> lA l (mkHsQualTy' (la2la (mkLocatedListA ctxt)) t)
 #endif
 #if MIN_VERSION_ghc(9,2,0)
-      e1 = ExprWithTySig NOEXT e0 (hsTypeToHsSigWcType t')
+      e1 = ExprWithTySig unused e0 (hsTypeToHsSigWcType t')
 #else
-      e1 = ExprWithTySig NOEXT e0 (mkLHsSigWcType t')
+      e1 = ExprWithTySig unused e0 (mkLHsSigWcType t')
 #endif
   in  mkLHsPar (lA l e1)
 {-# INLINABLE b_tsigE #-}
@@ -330,7 +329,7 @@ mkcfld' (n,mb_e) =
     Just e  -> mkcfld False (n, e)
     Nothing -> mkcfld True (n, punned)
   where
-    punned = lA l (HsVar NOEXT (lN l punRDR))
+    punned = lA l (HsVar unused (lN l punRDR))
     l = getLoc n
 {-# INLINABLE mkcfld' #-}
 
@@ -355,7 +354,7 @@ mkLHsParOp = parenthesizeHsExpr opPrec
 {-# INLINABLE mkLHsParOp #-}
 
 mkOpApp :: HExpr -> HExpr -> HExpr -> HsExpr PARSED
-mkOpApp op l = OpApp NOEXT l op
+mkOpApp op l = OpApp unused l op
 {-# INLINABLE mkOpApp #-}
 
 b_appE :: ([HExpr], [HType]) -> HExpr
@@ -371,13 +370,13 @@ mkAppTypes = foldl' mkAppType
 mkAppType :: HExpr -> HType -> HExpr
 mkAppType (dL->expr@(L l _)) ty =
 #if MIN_VERSION_ghc(9,10,0)
-  L l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
+  L l (HsAppType unused expr (mkHsWildCardBndrs ty))
 #elif MIN_VERSION_ghc(9,6,0)
-  L l (HsAppType NOEXT expr noHsTok (mkHsWildCardBndrs ty))
+  L l (HsAppType unused expr noHsTok (mkHsWildCardBndrs ty))
 #elif MIN_VERSION_ghc(9,2,0)
   L l (HsAppType (locA l) expr (mkHsWildCardBndrs ty))
 #else
-  cL l (HsAppType NOEXT expr (mkHsWildCardBndrs ty))
+  cL l (HsAppType unused expr (mkHsWildCardBndrs ty))
 #endif
 
 b_charE :: Code -> Builder HExpr
@@ -426,11 +425,11 @@ b_varE (LForm (L l form))
       -- variable identifier.
       '#' | isLexVarId tlchrs ->
 #if MIN_VERSION_ghc(9,6,0)
-          ret (HsOverLabel NOEXT (toQuotedSourceText tlchrs) tlchrs)
+          ret (HsOverLabel unused (toQuotedSourceText tlchrs) tlchrs)
 #elif MIN_VERSION_ghc(9,2,0)
-          ret (HsOverLabel NOEXT tlchrs)
+          ret (HsOverLabel unused tlchrs)
 #else
-          ret (HsOverLabel NOEXT Nothing tlchrs)
+          ret (HsOverLabel unused Nothing tlchrs)
 #endif
 
       -- Tuple constructor function with more than two elements are written as
@@ -443,7 +442,7 @@ b_varE (LForm (L l form))
   | otherwise = builderError
   where
     ret = return . lA l
-    var n = HsVar NOEXT (lN l n)
+    var n = HsVar unused (lN l n)
 {-# INLINABLE b_varE #-}
 
 b_unitE :: Code -> HExpr
@@ -466,9 +465,9 @@ b_hsListE :: Either HExpr [HExpr] -> HExpr
 b_hsListE expr =
   case expr of
 #if MIN_VERSION_ghc(9,2,0)
-    Right exprs -> L l (ExplicitList NOEXT exprs)
+    Right exprs -> L l (ExplicitList unused exprs)
 #else
-    Right exprs -> L l (ExplicitList NOEXT Nothing exprs)
+    Right exprs -> L l (ExplicitList unused Nothing exprs)
 #endif
       where
         l = getLoc (mkLocatedListA exprs)
@@ -481,7 +480,7 @@ b_lcompE ret stmts = L l (mkHsComp ListComp stmts ret)
 {-# INLINABLE b_lcompE #-}
 
 b_arithSeqE :: HExpr -> Maybe HExpr -> Maybe HExpr -> HExpr
-b_arithSeqE fromE thenE toE = L l (ArithSeq NOEXT Nothing info)
+b_arithSeqE fromE thenE toE = L l (ArithSeq unused Nothing info)
   where
     info | Just thenE' <- thenE, Just toE' <- toE =
            FromThenTo fromE thenE' toE'
@@ -569,19 +568,19 @@ b_exprOrTyArg lform = case lform of
 -- ------------------------------------------------------------------------
 
 hsLit :: HsLit PARSED -> HsExpr PARSED
-hsLit = HsLit NOEXT
+hsLit = HsLit unused
 {-# INLINABLE hsLit #-}
 
 hsPar :: HExpr -> HsExpr PARSED
 #if MIN_VERSION_ghc(9,4,0)
 hsPar = gHsPar
 #else
-hsPar = HsPar NOEXT
+hsPar = HsPar unused
 #endif
 {-# INLINABLE hsPar #-}
 
 hsOverLit :: HsOverLit PARSED -> HsExpr PARSED
-hsOverLit = HsOverLit NOEXT
+hsOverLit = HsOverLit unused
 {-# INLINABLE hsOverLit #-}
 
 tupConName :: Boxity -> Arity -> RdrName
@@ -610,7 +609,7 @@ b_letS :: Code -> [HDecl] -> Builder HStmt
 b_letS (LForm (L l _)) decls = do
   cd <- cvBindsAndSigs (toOL decls)
   let valbinds = mkHsValBinds (cd_binds cd) (cd_sigs cd)
-      letStmt = LetStmt NOEXT
+      letStmt = LetStmt unused
 #if MIN_VERSION_ghc(9,2,0)
   return (lA l (letStmt valbinds))
 #else

@@ -6,7 +6,6 @@
 -- | Syntax for declaration.
 module Language.Finkel.Syntax.HDecl where
 
-#include "Syntax.h"
 #include "ghc_modules.h"
 
 -- base
@@ -140,7 +139,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
                     , tcdFixity = Prefix
                     , tcdTyVars = mkHsQTvs tvs
                     , tcdDataDefn = defn
-                    , tcdDExt = NOEXT
+                    , tcdDExt = unused
                     }
     defn = HsDataDefn { dd_cType = Nothing
 #if !MIN_VERSION_ghc(9,6,0)
@@ -154,7 +153,7 @@ mkNewtypeOrDataD newOrData (LForm (L l _)) (name, tvs, ksig) (derivs, cs) =
                       , dd_kindSig = ksig
                       , dd_cons = condecls
                       , dd_derivs = derivs
-                      , dd_ext = NOEXT
+                      , dd_ext = unused
                       }
 #if MIN_VERSION_ghc(9,6,0)
     condecls = case newOrData of
@@ -177,7 +176,7 @@ b_typeD (LForm (L l _)) (name, tvs, _) ty = lA l (tyClD synonym)
                       , tcdFixity = Prefix
                       , tcdTyVars = mkHsQTvs tvs
                       , tcdRhs = ty
-                      , tcdSExt = NOEXT
+                      , tcdSExt = unused
                       }
 {-# INLINABLE b_typeD #-}
 
@@ -195,7 +194,7 @@ b_standaloneKindSigD (LForm (L l _)) (name, _tvs, mb_knd) = do
 #endif
   ps <- fmap ghcPState getBState
   case unP sigP ps of
-    POk _ sig -> pure (lA l (KindSigD NOEXT (unLoc sig)))
+    POk _ sig -> pure (lA l (KindSigD unused (unLoc sig)))
     PFailed _ -> builderError
 
 b_conD :: Code -> HConDeclH98Details -> Builder HConDecl
@@ -204,7 +203,7 @@ b_conD form@(LForm (L l _)) details = do
   let name' = lN l (mkUnqual dataName name)
       cxt = Nothing
 #if MIN_VERSION_ghc(9,2,0)
-  pure (lA l (mkConDeclH98 NOEXT name' Nothing cxt details))
+  pure (lA l (mkConDeclH98 unused name' Nothing cxt details))
 #else
   pure (L l (mkConDeclH98 name' Nothing cxt details))
 #endif
@@ -341,7 +340,7 @@ b_recFieldD mb_doc (names, ty) = do
   let mb_doc' = fmap lHsDocString2LHsDoc mb_doc
   names' <- mapM f names
   let field = ConDeclField { cd_fld_names = names'
-                           , cd_fld_ext = NOEXT
+                           , cd_fld_ext = unused
                            , cd_fld_type = ty
                            , cd_fld_doc = mb_doc' }
       loc = getLoc (mkLocatedForm names)
@@ -353,15 +352,15 @@ b_derivD mb_strat tys = hds
   where
 #if MIN_VERSION_ghc(9,4,0)
     hds = [la2la (L l dc)]
-    clauses = la2la (L l (DctMulti NOEXT (map hsTypeToHsSigType tys)))
+    clauses = la2la (L l (DctMulti unused (map hsTypeToHsSigType tys)))
 #elif MIN_VERSION_ghc(9,2,0)
     hds = [reLoc (L l dc)]
-    clauses = la2la (L l (DctMulti NOEXT (map hsTypeToHsSigType tys)))
+    clauses = la2la (L l (DctMulti unused (map hsTypeToHsSigType tys)))
 #else
     hds = L l [L l dc]
     clauses = L l (map hsTypeToHsSigType tys)
 #endif
-    dc = HsDerivingClause NOEXT mb_strat clauses
+    dc = HsDerivingClause unused mb_strat clauses
     l = getLoc (mkLocatedListA' tys)
 {-# INLINABLE b_derivD #-}
 
@@ -384,12 +383,12 @@ b_emptyDeriving = noLoc []
 b_viaD :: HType -> Builder (Maybe HDerivStrategy)
 #if MIN_VERSION_ghc(9,4,0)
 b_viaD ty@(L l _) =
-  pure (Just (L (l2l l) (ViaStrategy (XViaStrategyPs NOEXT sig))))
+  pure (Just (L (l2l l) (ViaStrategy (XViaStrategyPs unused sig))))
   where
     sig = hsTypeToHsSigType ty
 #elif MIN_VERSION_ghc(9,2,0)
 b_viaD ty@(L l _) =
-  pure (Just (reLoc (L l (ViaStrategy (XViaStrategyPs NOEXT sig)))))
+  pure (Just (reLoc (L l (ViaStrategy (XViaStrategyPs unused sig)))))
   where
     sig = hsTypeToHsSigType ty
 #else
@@ -401,13 +400,13 @@ b_viaD ty@(dL->L l _) =
 b_standaloneD :: Maybe HDerivStrategy
               -> Maybe (Located OverlapMode)
               -> HType -> HDecl
-b_standaloneD mb_strategy mb_overlap ty0@(dL-> L l _) = L l (DerivD NOEXT dd)
+b_standaloneD mb_strategy mb_overlap ty0@(dL-> L l _) = L l (DerivD unused dd)
   where
 #if MIN_VERSION_ghc(9,10,0)
     -- XXX: Does not support WarningTxt.
-    dd = DerivDecl (Nothing, NOEXT) ty1 mb_strategy mb_overlap'
+    dd = DerivDecl (Nothing, unused) ty1 mb_strategy mb_overlap'
 #else
-    dd = DerivDecl NOEXT ty1 mb_strategy mb_overlap'
+    dd = DerivDecl unused ty1 mb_strategy mb_overlap'
 #endif
     mb_overlap' = fmap reLocA mb_overlap
     ty1 = hsTypeToHsSigWcType ty0
@@ -418,30 +417,30 @@ b_classD (tys,ty) decls = do
     cd <- cvBindsAndSigs (toOL decls)
     let
 #if MIN_VERSION_ghc(9,10,0)
-        userTV = UserTyVar NOEXT (HsBndrRequired NOEXT)
-        kindedTV = KindedTyVar NOEXT (HsBndrRequired NOEXT)
+        userTV = UserTyVar unused (HsBndrRequired unused)
+        kindedTV = KindedTyVar unused (HsBndrRequired unused)
 #elif MIN_VERSION_ghc(9,8,0)
         -- XXX: Does not support HsBndrInvisible
-        userTV = UserTyVar NOEXT HsBndrRequired
-        kindedTV = KindedTyVar NOEXT HsBndrRequired
+        userTV = UserTyVar unused HsBndrRequired
+        kindedTV = KindedTyVar unused HsBndrRequired
 #elif MIN_VERSION_ghc(9,0,0)
-        userTV = UserTyVar NOEXT ()
-        kindedTV = KindedTyVar NOEXT ()
+        userTV = UserTyVar unused ()
+        kindedTV = KindedTyVar unused ()
 #else
-        userTV = UserTyVar NOEXT
-        kindedTV = KindedTyVar NOEXT
+        userTV = UserTyVar unused
+        kindedTV = KindedTyVar unused
 #endif
         -- Recursing in `HsAppTy' to support MultiParamTypeClasses.
     let unAppTy t =
           case t of
-            L l (HsTyVar _ _EXT n) ->
+            L l (HsTyVar _ _ n) ->
               return (l, n, [L l (userTV n)])
-            L _ (HsAppTy _EXT t1 v) -> do
+            L _ (HsAppTy _ t1 v) -> do
               (l1, n1, vs1) <- unAppTy t1
               (_, _, vs2) <- unAppTy v
               return (l1, n1, vs2 ++ vs1)
-            L _ (HsParTy _EXT t')  -> unAppTy t'
-            L l1 (HsKindSig _EXT t1 k) -> do
+            L _ (HsParTy _ t')  -> unAppTy t'
+            L l1 (HsKindSig _ t1 k) -> do
               (_, n, _) <- unAppTy t1
               return (l1, n, [L l1 (kindedTV n k)])
             _ -> builderError
@@ -474,7 +473,7 @@ b_classD (tys,ty) decls = do
 #elif MIN_VERSION_ghc(9,0,0)
     let tcd_cext = NoLayoutInfo
 #else
-    let tcd_cext = NOEXT
+    let tcd_cext = unused
 #endif
 
     let cls = ClassDecl { tcdLName = name
@@ -511,7 +510,7 @@ b_instD mb_overlap (ctxts,ty@(L l _)) decls = do
 #elif MIN_VERSION_ghc(9,2,0)
                          , cid_ext = (unused, NoAnnSortKey)
 #else
-                         , cid_ext = NOEXT
+                         , cid_ext = unused
 #endif
                          }
 #if MIN_VERSION_ghc(9,10,0)
@@ -519,8 +518,8 @@ b_instD mb_overlap (ctxts,ty@(L l _)) decls = do
 #else
       qty = L l (mkHsQualTy' (la2la (mkLocatedListA ctxts)) ty)
 #endif
-      instD = InstD NOEXT
-      clsInstD = ClsInstD NOEXT
+      instD = InstD unused
+      clsInstD = ClsInstD unused
   return (L l (instD (clsInstD decl)))
 {-# INLINABLE b_instD #-}
 
@@ -560,7 +559,7 @@ mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
         , fdResultSig = L l rsig
 #endif
         , fdInjectivityAnn = Nothing
-        , fdExt = NOEXT
+        , fdExt = unused
 #if MIN_VERSION_ghc(9,2,0)
           -- XXX: When to use 'NotTopLevel'?
         , fdTopLevel = TopLevel
@@ -569,15 +568,15 @@ mkFamilyDecl finfo (LForm (L l _)) (name, bndrs, mb_kind) =
       lname = lN l (mkUnqual tcName name)
       hsqtyvars = mkHsQTvs bndrs
       -- XXX: Does not support 'TyVarsig'.
-      rsig = maybe (NoSig NOEXT) (KindSig NOEXT) mb_kind
-  in  lA l (TyClD NOEXT (FamDecl NOEXT fam))
+      rsig = maybe (NoSig unused) (KindSig unused) mb_kind
+  in  lA l (TyClD unused (FamDecl unused fam))
 {-# INLINABLE mkFamilyDecl #-}
 
 b_dfltSigD :: HDecl -> Builder HDecl
 b_dfltSigD (dL->L l decl) =
   case decl of
-    SigD _EXT (TypeSig _EXT ids ty) ->
-     return (cL l (sigD (ClassOpSig NOEXT True ids (hswc_body ty))))
+    SigD _ (TypeSig _ ids ty) ->
+     return (cL l (sigD (ClassOpSig unused True ids (hswc_body ty))))
     _                               -> builderError
 {-# INLINABLE b_dfltSigD #-}
 
@@ -605,7 +604,7 @@ mk_data_or_newtype_instD
 mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats, mb_kind)
                          (deriv, condecls) =
   let faminst = DataFamInstD { dfid_inst = inst
-                             , dfid_ext = NOEXT
+                             , dfid_ext = unused
                              }
       -- XXX: Contexts and kind signatures not supported.
       rhs = HsDataDefn { dd_cType = Nothing
@@ -620,7 +619,7 @@ mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats, mb_kind)
                        , dd_kindSig = mb_kind
                        , dd_cons = condecls'
                        , dd_derivs = deriv
-                       , dd_ext = NOEXT
+                       , dd_ext = unused
                        }
       tycon = L ln (mkUnqual tcName name)
       inst = mkDataFamInstDecl tycon pats rhs
@@ -633,20 +632,20 @@ mk_data_or_newtype_instD new_or_data (LForm (L l _)) (L ln name, pats, mb_kind)
 #else
       condecls' = condecls
 #endif
-  in  lA l (InstD NOEXT faminst)
+  in  lA l (InstD unused faminst)
 {-# INLINABLE mk_data_or_newtype_instD #-}
 
 b_tyinstD :: Code -> (Located FastString, [HType]) -> HType -> HDecl
 b_tyinstD (LForm (L l _)) (L ln name, pats) rhs =
   let rname = L ln (mkUnqual tcName name)
       inst = mkTyFamInstEqn rname pats rhs
-      tyfaminstD = TyFamInstD NOEXT tfid
+      tyfaminstD = TyFamInstD unused tfid
 #if MIN_VERSION_ghc(9,2,0)
-      tfid = TyFamInstDecl NOEXT inst
+      tfid = TyFamInstDecl unused inst
 #else
       tfid = TyFamInstDecl inst
 #endif
-  in  lA l (InstD NOEXT tyfaminstD)
+  in  lA l (InstD unused tyfaminstD)
 {-# INLINABLE b_tyinstD #-}
 
 b_overlapP :: Code -> Builder (Maybe (Located OverlapMode))
@@ -682,8 +681,8 @@ b_defaultD :: [HType] -> HDecl
 b_defaultD types = L l (defD (defaultDecl types))
   where
     l = getLoc (mkLocatedListA types)
-    defD = DefD NOEXT
-    defaultDecl = DefaultDecl NOEXT
+    defD = DefD unused
+    defaultDecl = DefaultDecl unused
 {-# INLINABLE b_defaultD #-}
 
 b_fixityD :: FixityDirection -> Code -> [Code] -> Builder HDecl
@@ -723,20 +722,20 @@ b_ffiD (LForm (L l _)) imp_or_exp ccnv mb_safety ename (nm, ty)
       safety = fromMaybe (noLoc PlaySafe) mb_safety
       ccnv' = ccnv
 #endif
-      forD = ForD NOEXT
+      forD = ForD unused
   in case unCode imp_or_exp of
     Atom (ASymbol ie)
       | ie == "import"
       , Just ispec <- parseCImport ccnv' safety name ename' source -> do
         let fi = ForeignImport { fd_name = lname
                                , fd_sig_ty = tsig
-                               , fd_i_ext = NOEXT
+                               , fd_i_ext = unused
                                , fd_fi = ispec}
         return (lA l (forD fi))
       | ie == "export" -> do
         let fe = ForeignExport { fd_name = lname
                                , fd_sig_ty = tsig
-                               , fd_e_ext = NOEXT
+                               , fd_e_ext = unused
                                , fd_fe = e }
             ces = CExportStatic stxt ename'_fs (unLoc ccnv)
 #if MIN_VERSION_ghc(9,8,0)
@@ -786,7 +785,7 @@ b_funOrPatD :: Code -> [HPat] -> ([HGRHS], [HDecl]) -> Builder HDecl
 b_funOrPatD eq_form pats gxd@(grhss,decls) =
   case pats of
     [] -> setLastToken eq_form >> failB "Empty binding"
-    lpat@(dL->L l (BangPat _EXT pat)):pats' ->
+    lpat@(dL->L l (BangPat _ pat)):pats' ->
       case pats' of
         [] -> return (b_patBindD gxd lpat)
         _  -> let name = reLoc (L l (mkRdrName "!"))
@@ -800,28 +799,28 @@ b_funOrPatD eq_form pats gxd@(grhss,decls) =
   where
     isVarPat VarPat {} = True
     isVarPat _         = False
-    varToName (VarPat _EXT lname) = return lname
-    varToName _                   = failB "Invalid name"
+    varToName (VarPat _ lname) = return lname
+    varToName _                = failB "Invalid name"
 {-# INLINABLE b_funOrPatD #-}
 
 b_funBindD :: Located RdrName -> [HPat] -> [HGRHS] -> [HDecl] -> Builder HDecl
 b_funBindD lname0@(L l _) args grhss decls = do
   let body = mkGRHSs grhss decls l
       lname = reLocA lname0
-      match = lA l (Match NOEXT ctxt args body)
+      match = lA l (Match unused ctxt args body)
       ctxt = FunRhs { mc_fun = lname
                     , mc_fixity = Prefix
                       -- XXX: Get strictness from ... where?
                     , mc_strictness = NoSrcStrict }
       -- bind = mkFunBind_compat lname [match]
       bind = mkFunBind FromSource lname [match]
-  return (lA l (ValD NOEXT bind))
+  return (lA l (ValD unused bind))
 {-# INLINABLE b_funBindD #-}
 
 b_patBindD :: ([HGRHS],[HDecl]) -> HPat -> HDecl
 b_patBindD (grhss,decls) lpat@(dL->L l _pat) =
   let bind = mkPatBind_compat lpat grhss decls
-  in  L l (ValD NOEXT bind)
+  in  L l (ValD unused bind)
 {-# INLINABLE b_patBindD #-}
 
 b_tsigD :: [Code] -> ([HType], HType) -> Builder HDecl
@@ -839,7 +838,7 @@ b_tsigD names (ctxts,typ0) = do
           LForm (L l1 (Atom (ASymbol name))) -> return (lN l1 (mkRdrName name))
           _                                  -> builderError
       l = getLoc (mkLocatedForm names)
-      typeSig = TypeSig NOEXT
+      typeSig = TypeSig unused
   names' <- mapM mkName names
   return (lA l (sigD (typeSig names' typ')))
 {-# INLINABLE b_tsigD #-}
@@ -853,7 +852,7 @@ b_inlineD :: InlineSpec -> Maybe Activation -> Code -> Builder HDecl
 b_inlineD ispec mb_act (LForm (L l form)) =
   case form of
     Atom (ASymbol name) ->
-      let inlineSig = InlineSig NOEXT
+      let inlineSig = InlineSig unused
       in  return (lA l (sigD (inlineSig (lN l (mkRdrName name)) ipragma)))
     _ -> builderError
   where
@@ -909,7 +908,7 @@ specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig)
   let lname = lN ln (mkRdrName name)
       ipragma = mkInlinePragma source (ispec, FunLike) mb_act
       source = strToSourceText txt
-      specSig = SpecSig NOEXT lname [hsTypeToHsSigType tsig] ipragma
+      specSig = SpecSig unused lname [hsTypeToHsSigType tsig] ipragma
   return (lA l (sigD specSig))
   | otherwise = builderError
 {-# INLINABLE specializeBuilder #-}
@@ -917,7 +916,7 @@ specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig)
 b_docnextD :: Code -> Builder HDecl
 b_docnextD (LForm (L l form)) =
   case form of
-    Atom (AString _ str) -> return $! lA l (DocD NOEXT (docCommentNext (L l str)))
+    Atom (AString _ str) -> return $! lA l (DocD unused (docCommentNext (L l str)))
     _                    -> builderError
 {-# INLINABLE b_docnextD #-}
 
@@ -925,7 +924,7 @@ b_docprevD :: Code -> Builder HDecl
 b_docprevD (LForm (L l form)) =
   case form of
     Atom (AString _ str) ->
-      return $! lA l (DocD NOEXT (DocCommentPrev (mkLHsDoc l str)))
+      return $! lA l (DocD unused (DocCommentPrev (mkLHsDoc l str)))
     _ -> builderError
 {-# INLINABLE b_docprevD #-}
 
@@ -933,7 +932,7 @@ b_docGroupD :: Int -> Code -> Builder HDecl
 b_docGroupD n form@(LForm (L l _))
   | List [_,doc_code] <- unCode form
   , Atom (AString _ doc) <- unCode doc_code
-  = return $! lA l (DocD NOEXT (DocGroup (fromIntegral n) (mkLHsDoc l doc)))
+  = return $! lA l (DocD unused (DocGroup (fromIntegral n) (mkLHsDoc l doc)))
   | otherwise = setLastToken form >> failB "Invalid group doc"
 {-# INLINABLE b_docGroupD #-}
 
@@ -943,7 +942,7 @@ b_docNamed form@(LForm (L l body))
   , Atom (ASymbol name) <- unCode name_code
   , Atom (AString _ doc) <- unCode doc_code
   = let name' = unpackFS name
-    in return $! lA l (DocD NOEXT (DocCommentNamed name' (mkLHsDoc l doc)))
+    in return $! lA l (DocD unused (DocCommentNamed name' (mkLHsDoc l doc)))
   | otherwise
   = setLastToken form >> failB "Invalid named doc"
 {-# INLINABLE b_docNamed #-}
@@ -957,15 +956,15 @@ docCommentNext (L l fs) = DocCommentNext . mkLHsDoc l $ fs
 {-# INLINABLE docCommentNext #-}
 
 tyClD :: TyClDecl PARSED -> HsDecl PARSED
-tyClD = TyClD NOEXT
+tyClD = TyClD unused
 {-# INLINABLE tyClD #-}
 
 valD :: HsBind PARSED -> HsDecl PARSED
-valD = ValD NOEXT
+valD = ValD unused
 {-# INLINABLE valD #-}
 
 sigD :: Sig PARSED -> HsDecl PARSED
-sigD = SigD NOEXT
+sigD = SigD unused
 {-# INLINABLE sigD #-}
 
 mkDataFamInstDecl :: Located RdrName
@@ -996,7 +995,7 @@ mkFamEqn tycon pats rhs =
          , feqn_fixity = Prefix
          , feqn_rhs = rhs
 #if MIN_VERSION_ghc(9,10,0)
-         , feqn_pats = map (HsValArg NOEXT) pats
+         , feqn_pats = map (HsValArg unused) pats
          , feqn_bndrs = mkHsOuterImplicit
 #elif MIN_VERSION_ghc(9,2,0)
          , feqn_pats = map HsValArg pats
@@ -1005,15 +1004,15 @@ mkFamEqn tycon pats rhs =
          , feqn_pats = map HsValArg pats
          , feqn_bndrs = Nothing
 #endif
-         , feqn_ext = NOEXT
+         , feqn_ext = unused
          }
 {-# INLINABLE mkFamEqn #-}
 
 unParTy :: HType -> HType
 unParTy t0 =
   case t0 of
-    L _ (HsParTy _EXT t1) -> t1
-    _                     -> t0
+    L _ (HsParTy _ t1) -> t1
+    _                  -> t0
 {-# INLINABLE unParTy #-}
 
 noUserInline :: InlineSpec
