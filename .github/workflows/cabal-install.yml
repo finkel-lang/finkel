@@ -93,11 +93,4 @@ jobs:
         run: cabal v2-test all
 
       - name: Run haddock
-        # Generating haddock documentations is not working yet in ghc >= 9.6
-        if: >-
-          ${{
-          matrix.plan.ghc != '9.6.5' &&
-          matrix.plan.ghc != '9.8.2' &&
-          matrix.plan.ghc != '9.10.1'
-          }}
         run: cabal v2-haddock all
