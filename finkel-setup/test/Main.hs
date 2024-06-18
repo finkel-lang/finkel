@@ -55,10 +55,25 @@ main = do
 
   hspec (afterAll_ (setCurrentDirectory cwd)
                    (beforeAll_ (removeDistIfExist cwd)
-                               (buildPackage cwd pkgdbs "p01")))
+                               (do buildPackage cwd pkgdbs "p01"
+                                   buildPluginPackage cwd pkgdbs "p02")))
 
 buildPackage :: String -> [String] -> String -> Spec
-buildPackage cwd pkgdbs name =
+buildPackage = buildPackageWith setup
+  where
+    setup args = do
+      putStrLn (unwords ("running:" : args))
+      withArgs args fnkMain
+
+buildPluginPackage :: String -> [String] -> String -> Spec
+buildPluginPackage = buildPackageWith plugin_setup
+  where
+    plugin_setup args = do
+      putStrLn (unwords ("running:" : args))
+      withArgs args fnkPluginMainForHaddock
+
+buildPackageWith :: ([String] -> IO ()) -> String -> [String] -> String -> Spec
+buildPackageWith my_main cwd pkgdbs name =
   describe ("package " ++ name) $
     it "should compile and pass the tests" $ do
       let pkgdir = joinPath [cwd, "test", "data", name]
@@ -71,16 +86,11 @@ buildPackage cwd pkgdbs name =
           run act = act `shouldReturn` ()
       mapM_ run
             [ setCurrentDirectory pkgdir
-            , setup configure_args
-            , setup ["build"]
-            , setup ["test"]
-            , setup ["haddock"]
+            , my_main configure_args
+            , my_main ["build"]
+            , my_main ["test"]
+            , my_main ["haddock"]
             ]
-
-setup :: [String] -> IO ()
-setup args = do
-  putStrLn (unwords ("running:" : args))
-  withArgs args fnkMain
 
 getPackageDbs :: String -> IO [String]
 getPackageDbs executable_path
@@ -131,9 +141,11 @@ getPackageConfD path = go path (takeDirectory path)
                 else go current (takeDirectory current)
 
 removeDistIfExist :: FilePath -> IO ()
-removeDistIfExist cwd =
-  catch (let dir = cwd </> "test" </> "data" </> "p01" </> "dist"
-         in  removeDirectoryRecursive dir)
+removeDistIfExist cwd = mapM_ remove_dir ["p01", "p02"]
+  where
+    remove_dir pkg =
+      catch (let dir = cwd </> "test" </> "data" </> pkg </> "dist"
+             in  removeDirectoryRecursive dir)
         (\e -> if isDoesNotExistError e
-                  then return ()
-                  else throw e)
+                 then return ()
+                 else throw e)

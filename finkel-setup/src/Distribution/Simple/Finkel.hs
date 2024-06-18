@@ -7,6 +7,9 @@ module Distribution.Simple.Finkel
   , finkelMakeMain
   , fnkMainWith
 
+  -- * Haddock for plugin
+  , fnkPluginMainForHaddock
+
   -- * UserHooks
   , fnkHooksWith
 
@@ -102,6 +105,27 @@ rawFnkMain :: String   -- ^ Executable
            -> IO ()
 rawFnkMain exec args debug =
   defaultMainWithHooks (fnkHooksWith exec args debug)
+
+-- | Main function for generating haddock when building with finkel plugin.
+fnkPluginMainForHaddock :: IO ()
+fnkPluginMainForHaddock = defaultMainWithHooks my_hooks
+  where
+    my_hooks = simpleUserHooks {haddockHook = my_haddock_hook}
+
+    my_haddock_hook pd lbi _user_hooks flags = do
+      let search_path = getProgramSearchPath (withPrograms lbi)
+      mb_fnkpp <- findProgramOnSearchPath Verbosity.verbose search_path "fnkpp"
+      let fnkpp_path = maybe "fnkpp" fst mb_fnkpp
+          flags' = append_args fnkpp_path flags
+      haddock pd lbi knownSuffixHandlers flags'
+
+    append_args fnkpp flags =
+      let orig_args = filter ((== "ghc") . fst) $ haddockProgramArgs flags
+          my_args = ["-F", "-pgmF", fnkpp, "-optF", "--no-warn-interp"]
+          merged_args = case orig_args of
+            (_, args):_ -> args <> my_args
+            []          -> my_args
+      in  flags {haddockProgramArgs = [("ghc", merged_args)]}
 
 
 -- ---------------------------------------------------------------------
