@@ -16,6 +16,7 @@ copyright:           2017-2022 8c6794b6
 category:            Language
 build-type:          Simple
 extra-source-files:  README.md
+                     --
                      test/data/p01/LICENSE
                      test/data/p01/p01.cabal
                      test/data/p01/Setup.hs
@@ -24,6 +25,14 @@ extra-source-files:  README.md
                      test/data/p01/src/P01/*.hs
                      test/data/p01/test/*.fnk
                      test/data/p01/test/*.hs
+                     --
+                     test/data/p02/LICENSE
+                     test/data/p02/CHANGELOG.md
+                     test/data/p02/p02.cabal
+                     test/data/p02/Setup.hs
+                     test/data/p02/app/Main.hs
+                     test/data/p02/src/MyLib.hs
+                     test/data/p02/test/Main.hs
 
 tested-with:           GHC == 8.10.7
                      , GHC == 9.0.1
@@ -56,6 +65,7 @@ test-suite finkel-setup-test
                      , ghc           >= 8.10.0 && < 9.11
                      , hspec         >= 2.4.8  && < 2.12
   build-tool-depends:  fkc:fkc
+                     , fnkpp:fnkpp
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
