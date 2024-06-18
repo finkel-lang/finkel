@@ -13,6 +13,8 @@ module Language.Finkel.Data.Fractional
   , getFractionalLit
   ) where
 
+#include "ghc_modules.h"
+
 -- binary
 import Data.Binary                     (Binary (..), Get, Put)
 
@@ -32,14 +34,10 @@ import GHC.Types.SourceText            (FractionalExponentBase (..),
                                         mkTHFractionalLit,
                                         rationalFromFractionalLit)
 import GHC.Utils.Misc                  (readSignificandExponentPair)
-#elif MIN_VERSION_ghc(9,0,0)
-import GHC.Types.Basic                 (FractionalLit (..), SourceText (..),
-                                        mkFractionalLit)
-import GHC.Utils.Misc                  (readRational)
 #else
-import BasicTypes                      (FractionalLit (..), SourceText (..),
+import GHC_Types_Basic                 (FractionalLit (..), SourceText (..),
                                         mkFractionalLit)
-import Util                            (readRational)
+import GHC_Utils_Misc                  (readRational)
 #endif
 
 -- Internal
@@ -133,4 +131,3 @@ putFractionalLit fl =
 getFractionalLit =
   FL <$> getSourceText <*> get <*> get
 #endif
-
