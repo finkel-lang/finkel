@@ -22,7 +22,6 @@ import Control.Exception                 (Exception (..), throw)
 import Control.Monad                     (when)
 import Control.Monad.IO.Class            (MonadIO (..))
 import Data.Char                         (toLower)
-import Data.IORef                        (newIORef)
 import Data.Maybe                        (fromMaybe)
 import System.Console.GetOpt             (ArgDescr (..), ArgOrder (..),
                                           OptDescr (..), getOpt, usageInfo)
@@ -47,7 +46,6 @@ import GHC_Data_Bag                      (unitBag)
 import GHC_Data_FastString               (fsLit)
 import GHC_Data_StringBuffer             (StringBuffer, hGetStringBuffer)
 import GHC_Driver_Env                    (HscEnv (..))
-import GHC_Driver_Monad                  (Ghc (..), Session (..))
 import GHC_Types_SrcLoc                  (GenLocated (..))
 import GHC_Utils_Outputable              (text, ($$), (<>))
 
@@ -76,11 +74,11 @@ import Language.Finkel.Exception         (FinkelException (..),
                                           printFinkelException,
                                           readOrFinkelException)
 import Language.Finkel.Expand            (expands, withExpanderSettings)
-import Language.Finkel.Fnk               (FnkEnv (..), FnkEnvRef (..),
-                                          FnkInvokedMode (..), Macro (..),
-                                          addMacro, lookupMacro, macroFunction,
-                                          makeEnvMacros, mergeMacros,
-                                          modifyFnkEnv, runFnk, toGhc)
+import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
+                                          Macro (..), addMacro, lookupMacro,
+                                          macroFunction, makeEnvMacros,
+                                          mergeMacros, modifyFnkEnv, runFnk,
+                                          runFnk')
 import Language.Finkel.Form              (Form (..), LForm (..), aSymbol,
                                           unCode)
 import Language.Finkel.Make.Summary      (buildHsSyn, withTiming')
@@ -212,13 +210,10 @@ writeModule mb_hsc_env ppo buf0 ipath mb_opath =
   where
     run hdl =
       case mb_hsc_env of
-        Nothing -> runFnk (go hdl) fnk_env
-        Just hsc_env -> do
-          -- Assuming that the given FnkEnv is already initialized at this
-          -- point.
-          fer <- newIORef fnk_env
-          session <- Session <$> newIORef hsc_env
-          unGhc (toGhc (go hdl) (FnkEnvRef fer)) session
+        -- When hsc_env is given, assuming that given FnkEnv is already
+        -- initialized.
+        Just hsc_env -> runFnk' (go hdl) fnk_env hsc_env
+        Nothing      -> runFnk (go hdl) fnk_env
     fnk_env = (ppoFnkEnv ppo) {envVerbosity=ppoVerbosity ppo}
     parser = if ppoFull ppo
                 then parseModule
