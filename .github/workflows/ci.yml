@@ -27,7 +27,7 @@ jobs:
     if: ${{ needs.pre-job.outputs.run == 'true' }}
     uses: ./.github/workflows/cabal-install.yml
     with:
-      cache-version: v17
+      cache-version: v18
 
   nix-build:
     needs: pre-job
