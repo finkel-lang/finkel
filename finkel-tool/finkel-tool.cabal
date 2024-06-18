@@ -39,6 +39,7 @@ tested-with:           GHC == 8.10.7
 custom-setup
   setup-depends:       base  >= 4.14 && < 5
                      , Cabal >= 3.2  && < 3.12
+                     , finkel-setup == 0.0.0
 
 flag dynamic
   description:         Dynamically link executables (except Windows)
@@ -88,16 +89,16 @@ library
                      , finkel-core   == 0.0.0
                      , finkel-setup  == 0.0.0
 
-  default-language:     Haskell2010
+  default-language:    Haskell2010
 
-  ghc-options:       -Wall
+  ghc-options:         -Wall
+  build-tool-depends:  fnkpp:fnkpp == 0.0.0
   if impl (ghc >= 9.6.0)
-     ghc-options:        -fplugin Finkel.Core.Plugin
-                         -keep-hscpp-files
+     ghc-options:      -fplugin Finkel.Core.Plugin
+                       -keep-hscpp-files
   else
-     build-tool-depends: fnkpp:fnkpp == 0.0.0
-     ghc-options:        -F -pgmF fnkpp -optF --warn-interp=False
-                         -fplugin Finkel.Core.Plugin
+     ghc-options:      -F -pgmF fnkpp -optF --warn-interp=False
+                       -fplugin Finkel.Core.Plugin
 
 test-suite finkel-tool-test
   type:                exitcode-stdio-1.0
@@ -130,7 +131,7 @@ test-suite finkel-tool-test
   if !os(windows) && flag(dynamic)
     ghc-options:       -dynamic
   if impl (ghc >= 9.6.0)
-     ghc-options:      -fplugin Finkel.Core.Plugin
+    ghc-options:       -fplugin Finkel.Core.Plugin
                        -keep-hscpp-files
   else
      build-tool-depends: fnkpp:fnkpp == 0.0.0
