@@ -7,7 +7,6 @@
 -- | Syntax for type.
 module Language.Finkel.Syntax.HType where
 
-#include "Syntax.h"
 #include "ghc_modules.h"
 
 -- base
@@ -108,7 +107,7 @@ b_symT whole@(LForm (L l form)) =
             | ',' == x -> tv (getRdrName (tupleTyCon Boxed arity))
             | '!' == x -> bang (tv (mkUnqual (namespace xs) xs))
             | '*' == x, nullFS xs ->
-               lA l (HsStarTy NOEXT False)
+               lA l (HsStarTy unused False)
           _ -> tv (mkUnqual (namespace name) name)
       where
         arity = 1 + lengthFS name
@@ -145,16 +144,16 @@ b_funT (LForm (L l _)) ts =
     -- "mkDummyAnn". Without the dummy value, GADT constructors will show
     -- compilation errors.
 #  if MIN_VERSION_ghc(9,10,0)
-    hsFunTy = HsFunTy ann (HsUnrestrictedArrow NOEXT)
+    hsFunTy = HsFunTy ann (HsUnrestrictedArrow unused)
 #  elif MIN_VERSION_ghc(9,4,0)
     hsFunTy = HsFunTy ann (HsUnrestrictedArrow noHsUniTok)
 #  else
     hsFunTy = HsFunTy ann (HsUnrestrictedArrow NormalSyntax)
 #  endif
 #  if MIN_VERSION_ghc(9,10,0)
-    ann = NOEXT
+    ann = unused
 #  else
-    ann = maybe NOEXT mkDummyAnn (srcSpanToRealSrcSpan l)
+    ann = maybe unused mkDummyAnn (srcSpanToRealSrcSpan l)
     mkDummyAnn real_span =
       let dummy_anchor = Anchor real_span UnchangedAnchor
 #    if MIN_VERSION_ghc(9,4,0)
@@ -162,13 +161,13 @@ b_funT (LForm (L l _)) ts =
 #    else
           dummy_anns = AddRarrowAnn (EpaSpan real_span)
 #    endif
-          dummy_comments = NOEXT
+          dummy_comments = unused
       in  EpAnn dummy_anchor dummy_anns dummy_comments
 #  endif
 #elif MIN_VERSION_ghc(9,0,0)
-    hsFunTy = HsFunTy NOEXT (HsUnrestrictedArrow NormalSyntax)
+    hsFunTy = HsFunTy unused (HsUnrestrictedArrow NormalSyntax)
 #else
-    hsFunTy = HsFunTy NOEXT
+    hsFunTy = HsFunTy unused
 #endif
 #if MIN_VERSION_ghc(9,0,0)
     funty = lA l (hsTyVar NotPromoted (lN l (getRdrName unrestrictedFunTyCon)))
@@ -185,7 +184,7 @@ b_tyLitT (LForm (L l form))
     return (mkLit l (HsNumTy stxt n))
   | otherwise = builderError
   where
-    mkLit loc lit = lA loc (HsTyLit NOEXT lit)
+    mkLit loc lit = lA loc (HsTyLit unused lit)
 {-# INLINABLE b_tyLitT #-}
 
 b_opOrAppT :: Code -> [HType] -> Builder HType
@@ -232,12 +231,12 @@ b_appT []     = builderError
 b_appT (x:xs) =
   case xs of
     [] -> return x
-    _  -> let f t1 t2 = addCLocAA t1 t2 (HsAppTy NOEXT t1 (parTyApp t2))
+    _  -> let f t1 t2 = addCLocAA t1 t2 (HsAppTy unused t1 (parTyApp t2))
           in  pure (foldl' f x xs)
 {-# INLINABLE b_appT #-}
 
 b_listT :: HType -> HType
-b_listT ty@(L l _) = L l (HsListTy NOEXT ty)
+b_listT ty@(L l _) = L l (HsListTy unused ty)
 {-# INLINABLE b_listT #-}
 
 b_nilT :: Code -> HType
@@ -282,11 +281,11 @@ b_qualT (LForm (L l _)) (ctxts, body) =
 
 b_kindedType :: Code -> HType -> HType -> HType
 b_kindedType (LForm (L l _)) ty kind =
-   lA l (hsParTy (lA l (HsKindSig NOEXT ty kind)))
+   lA l (hsParTy (lA l (HsKindSig unused ty kind)))
 {-# INLINABLE b_kindedType #-}
 
 b_docT :: HType -> LHsDocString -> HType
-b_docT ty doc = let l = getLocA ty in lA l (HsDocTy NOEXT ty doc')
+b_docT ty doc = let l = getLocA ty in lA l (HsDocTy unused ty doc')
   where
     doc' = lHsDocString2LHsDoc doc
 {-# INLINABLE b_docT #-}
@@ -320,7 +319,7 @@ b_prmTupT prsr typs =
         tys <- prsr tl
         let tys' = map unPromoteTyVar tys
             l = getLoc (mkLocatedList (map unLForm typs))
-        return (lA l (HsExplicitTupleTy NOEXT tys'))
+        return (lA l (HsExplicitTupleTy unused tys'))
     _ -> builderError
 {-# INLINABLE b_prmTupT #-}
 
@@ -332,38 +331,38 @@ isCommaSymbol (LForm (L _ form)) =
 {-# INLINABLE isCommaSymbol #-}
 
 hsTupleTy :: HsTupleSort -> [HType] -> HsType PARSED
-hsTupleTy = HsTupleTy NOEXT
+hsTupleTy = HsTupleTy unused
 {-# INLINABLE hsTupleTy #-}
 
 hsBangTy :: HsSrcBang -> HType -> HsType PARSED
-hsBangTy = HsBangTy NOEXT
+hsBangTy = HsBangTy unused
 {-# INLINABLE hsBangTy #-}
 
 forAllTy :: [HTyVarBndrSpecific] -> HType -> HsType PARSED
 forAllTy bndrs body =
   HsForAllTy { hst_body = body
 #if MIN_VERSION_ghc(9,2,0)
-             , hst_tele = mkHsForAllInvisTele NOEXT bndrs
+             , hst_tele = mkHsForAllInvisTele unused bndrs
 #elif MIN_VERSION_ghc(9,0,0)
              , hst_tele = mkHsForAllInvisTele bndrs
 #else
              , hst_bndrs = bndrs
              , hst_fvf = ForallInvis
 #endif
-             , hst_xforall = NOEXT
+             , hst_xforall = unused
              }
 {-# INLINABLE forAllTy #-}
 
 hsParTy :: HType -> HsType PARSED
-hsParTy = HsParTy NOEXT
+hsParTy = HsParTy unused
 {-# INLINABLE hsParTy #-}
 
 hsTyVar :: PromotionFlag -> LIdP PARSED -> HsType PARSED
-hsTyVar = HsTyVar NOEXT
+hsTyVar = HsTyVar unused
 {-# INLINABLE hsTyVar #-}
 
 hsExplicitListTy :: [HType] -> HsType PARSED
-hsExplicitListTy = HsExplicitListTy NOEXT IsPromoted
+hsExplicitListTy = HsExplicitListTy unused IsPromoted
 {-# INLINABLE hsExplicitListTy #-}
 
 hsBoxedTuple :: HsTupleSort

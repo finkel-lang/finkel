@@ -12,7 +12,6 @@ module Language.Finkel.Syntax.SynUtils
   , module Language.Finkel.Syntax.Location
   ) where
 
-#include "Syntax.h"
 #include "ghc_modules.h"
 
 -- base
@@ -211,15 +210,15 @@ cfld2ufld :: LHsRecField PARSED HExpr
 -- Almost same as 'mk_rec_upd_field' in 'RdrHsSyn'
 #if MIN_VERSION_ghc(9,4,0)
 cfld2ufld (L l0 (HsFieldBind _ann (L l1 (FieldOcc _ rdr)) rhs pun)) =
-  L l0 (HsFieldBind NOEXT (L l1 (Unambiguous NOEXT rdr)) rhs pun)
+  L l0 (HsFieldBind unused (L l1 (Unambiguous unused rdr)) rhs pun)
 #elif MIN_VERSION_ghc(9,2,0)
 cfld2ufld (L l0 (HsRecField _ (L l1 (FieldOcc _ rdr)) arg pun)) =
-  L l0 (HsRecField NOEXT (L l1 (Unambiguous NOEXT rdr)) arg pun)
+  L l0 (HsRecField unused (L l1 (Unambiguous unused rdr)) arg pun)
 #else
 cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
   L l0 (HsRecField (L l1 unambiguous) arg pun)
   where
-    unambiguous = Unambiguous NOEXT rdr
+    unambiguous = Unambiguous unused rdr
 #  if !MIN_VERSION_ghc(9,0,0)
 cfld2ufld _ = error "Language.Finkel.Syntax.SynUtils:cfld2ufld"
 #  endif
@@ -230,13 +229,13 @@ cfld2ufld _ = error "Language.Finkel.Syntax.SynUtils:cfld2ufld"
 mkcfld :: Bool -> (Located FastString, a) -> LHsRecField PARSED a
 mkcfld is_pun (L nl name, e) =
 #if MIN_VERSION_ghc(9,10,0)
-  lA nl HsFieldBind { hfbAnn = NOEXT
+  lA nl HsFieldBind { hfbAnn = unused
                     , hfbLHS = L (noAnnSrcSpan nl)
                                  (mkFieldOcc (lN nl (mkRdrName name)))
                     , hfbRHS = e
                     , hfbPun = is_pun }
 #elif MIN_VERSION_ghc(9,4,0)
-  lA nl HsFieldBind { hfbAnn = NOEXT
+  lA nl HsFieldBind { hfbAnn = unused
                     -- XXX: Not much sure below location is appropriate
                     , hfbLHS = L (SrcSpanAnn noComments nl)
                                  (mkFieldOcc (lN nl (mkRdrName name)))
@@ -244,7 +243,7 @@ mkcfld is_pun (L nl name, e) =
                     , hfbPun = is_pun }
 #elif MIN_VERSION_ghc(9,2,0)
   lA nl HsRecField { hsRecFieldLbl = L nl (mkFieldOcc (lN nl (mkRdrName name)))
-                   , hsRecFieldAnn = NOEXT
+                   , hsRecFieldAnn = unused
                    , hsRecFieldArg = e
                    , hsRecPun = is_pun }
 #else
@@ -310,13 +309,13 @@ kindedTyVar (LForm (L l _dc)) name kind =
     LForm (L ln (Atom (ASymbol name'))) -> do
        let name'' = lN ln (mkUnqual tvName name')
 #if MIN_VERSION_ghc(9,10,0)
-       return $! lA l (KindedTyVar NOEXT (HsBndrRequired NOEXT) name'' kind)
+       return $! lA l (KindedTyVar unused (HsBndrRequired unused) name'' kind)
 #elif MIN_VERSION_ghc(9,8,0)
-       return $! lA l (KindedTyVar NOEXT HsBndrRequired name'' kind)
+       return $! lA l (KindedTyVar unused HsBndrRequired name'' kind)
 #elif MIN_VERSION_ghc(9,0,0)
-       return $! lA l (KindedTyVar NOEXT () name'' kind)
+       return $! lA l (KindedTyVar unused () name'' kind)
 #else
-       return $! L l (KindedTyVar NOEXT name'' kind)
+       return $! L l (KindedTyVar unused name'' kind)
 #endif
     _ -> builderError
 {-# INLINABLE kindedTyVar #-}
@@ -327,7 +326,7 @@ kindedTyVarSpecific (LForm (L l _dc)) name kind =
   case name of
     LForm (L ln (Atom (ASymbol name'))) -> do
        let name'' = lN ln (mkUnqual tvName name')
-       return $! lA l (KindedTyVar NOEXT SpecifiedSpec name'' kind)
+       return $! lA l (KindedTyVar unused SpecifiedSpec name'' kind)
     _ -> builderError
 #else
 kindedTyVarSpecific = kindedTyVar
@@ -340,14 +339,14 @@ codeToUserTyVar code =
   -- XXX: Always using HsBndrRequired.
   case code of
     LForm (L l (Atom (ASymbol name))) ->
-      let bvis = HsBndrRequired NOEXT
-      in lA l (UserTyVar NOEXT bvis (lN l (mkUnqual tvName name)))
+      let bvis = HsBndrRequired unused
+      in lA l (UserTyVar unused bvis (lN l (mkUnqual tvName name)))
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
 codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
 codeToUserTyVarSpecific code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
-      lA l (UserTyVar NOEXT SpecifiedSpec (lN l (mkUnqual tvName name)))
+      lA l (UserTyVar unused SpecifiedSpec (lN l (mkUnqual tvName name)))
       -- XXX: Does not support 'InferredSpec' yet.
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
 #elif MIN_VERSION_ghc(9,8,0)
@@ -355,28 +354,28 @@ codeToUserTyVar :: Code -> HTyVarBndrVis
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
-      lA l (UserTyVar NOEXT HsBndrRequired (lN l (mkUnqual tvName name)))
+      lA l (UserTyVar unused HsBndrRequired (lN l (mkUnqual tvName name)))
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
 codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
 codeToUserTyVarSpecific code =
   -- XXX: Does not support 'InferredSpec' yet.
   case code of
     LForm (L l (Atom (ASymbol name))) ->
-      lA l (UserTyVar NOEXT SpecifiedSpec (lN l (mkUnqual tvName name)))
+      lA l (UserTyVar unused SpecifiedSpec (lN l (mkUnqual tvName name)))
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
 #elif MIN_VERSION_ghc(9,0,0)
 codeToUserTyVar :: Code -> LHsTyVarBndr () PARSED
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
-      lA l (UserTyVar NOEXT () (lN l (mkUnqual tvName name)))
+      lA l (UserTyVar unused () (lN l (mkUnqual tvName name)))
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
 
 codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
 codeToUserTyVarSpecific code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
-      lA l (UserTyVar NOEXT SpecifiedSpec (lN l (mkUnqual tvName name)))
+      lA l (UserTyVar unused SpecifiedSpec (lN l (mkUnqual tvName name)))
       -- XXX: Does not support 'InferredSpec' yet.
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
 #else
@@ -384,7 +383,7 @@ codeToUserTyVar :: Code -> HTyVarBndr
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
-      L l (UserTyVar NOEXT (L l (mkUnqual tvName name)))
+      L l (UserTyVar unused (L l (mkUnqual tvName name)))
     _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
 
 codeToUserTyVarSpecific :: Code -> HTyVarBndrSpecific
@@ -423,7 +422,7 @@ mkHsQualTy' ctxt body
   | nullLHsContext ctxt = unLoc body
   | otherwise =
     HsQualTy { hst_ctxt = real_ctxt
-             , hst_xqual = NOEXT
+             , hst_xqual = unused
              , hst_body = body }
   where
 #if MIN_VERSION_ghc(9,4,0)
@@ -490,9 +489,9 @@ fsSymbol (LForm (L l x)) =
 stockStrategy, anyclassStrategy, newtypeStrategy :: DerivStrategy PARSED
 
 #if MIN_VERSION_ghc(9,2,0)
-stockStrategy = StockStrategy NOEXT
-anyclassStrategy = AnyclassStrategy NOEXT
-newtypeStrategy = NewtypeStrategy NOEXT
+stockStrategy = StockStrategy unused
+anyclassStrategy = AnyclassStrategy unused
+newtypeStrategy = NewtypeStrategy unused
 #else
 stockStrategy = StockStrategy
 anyclassStrategy = AnyclassStrategy

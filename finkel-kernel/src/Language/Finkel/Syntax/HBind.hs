@@ -4,7 +4,6 @@
 -- | Syntax for binds.
 module Language.Finkel.Syntax.HBind where
 
-#include "Syntax.h"
 #include "ghc_modules.h"
 
 -- ghc
@@ -45,7 +44,7 @@ mkPatBind_compat (dL->L l pat) grhss decls =
 #endif
             -- XXX: From ghc 9.6 (8.6?), the `pat_ext' field is used for holding
             -- former `pat_ticks' information.
-          , pat_ext = NOEXT
+          , pat_ext = unused
 #if !MIN_VERSION_ghc(9,6,0)
           , pat_ticks = ([], [])
 #endif
@@ -53,7 +52,7 @@ mkPatBind_compat (dL->L l pat) grhss decls =
 {-# INLINABLE mkPatBind_compat #-}
 
 mkHsValBinds :: HBinds -> [HSig] -> HsLocalBindsLR PARSED PARSED
-mkHsValBinds binds sigs = HsValBinds NOEXT (ValBinds NOEXT binds sigs)
+mkHsValBinds binds sigs = HsValBinds unused (ValBinds unused binds sigs)
 {-# INLINABLE mkHsValBinds #-}
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -61,7 +60,7 @@ mkGRHSs :: [LGRHS PARSED t] -> [HDecl] -> a -> GRHSs PARSED t
 #else
 mkGRHSs :: [LGRHS PARSED t] -> [HDecl] -> SrcSpan -> GRHSs PARSED t
 #endif
-mkGRHSs grhss decls l = GRHSs NOEXT grhss (declsToBinds l decls)
+mkGRHSs grhss decls l = GRHSs unused grhss (declsToBinds l decls)
 {-# INLINABLE mkGRHSs #-}
 
 -- | Build 'HLocalBinds' from list of 'HDecl's.
@@ -85,13 +84,13 @@ declsToBinds l decls = L l binds'
       case ds of
         []    -> (bs, ss)
         d:ds' -> case d of
-          L ld (ValD _EXT b) -> go (L ld b:bs,ss) ds'
-          L ld (SigD _EXT s) -> go (bs,L ld s:ss) ds'
+          L ld (ValD _ b) -> go (L ld b:bs,ss) ds'
+          L ld (SigD _ s) -> go (bs,L ld s:ss) ds'
           -- XXX: Ignoring.
-          _                  -> go (bs,ss) ds'
+          _               -> go (bs,ss) ds'
 {-# INLINABLE declsToBinds #-}
 
 mkFixSig :: [LocatedN RdrName] -> Fixity -> Sig PARSED
 -- XXX: Does not support NamespaceSpecifier.
-mkFixSig lnames fixity = FixSig NOEXT (FixitySig NOEXT lnames fixity)
+mkFixSig lnames fixity = FixSig unused (FixitySig unused lnames fixity)
 {-# INLINABLE mkFixSig #-}

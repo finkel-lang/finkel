@@ -5,10 +5,6 @@
 -- AST.  It seemed better to create dedicated specific class for ignored
 -- extension field.
 --
--- Still using CPP, because in ghc < 8.4, extension fields did not exist. The
--- CPP macro @NOEXT@ defined in @Syntax.h@ is expanded as "{- noext -}" block
--- comment in such cases.
-
 module Language.Finkel.Syntax.Extension
   ( Unused(..)
   ) where

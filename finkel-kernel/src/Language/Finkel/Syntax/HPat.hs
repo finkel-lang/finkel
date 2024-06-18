@@ -6,7 +6,6 @@
 -- | Syntax for patterns.
 module Language.Finkel.Syntax.HPat where
 
-#include "Syntax.h"
 #include "ghc_modules.h"
 
 -- base
@@ -99,7 +98,7 @@ b_stringP (LForm (L l form)) =
 b_charP :: Code -> Builder HPat
 b_charP (LForm (L l form)) =
   case form of
-    Atom (AChar stxt c) -> return $! lA l (LitPat NOEXT (HsChar stxt c))
+    Atom (AChar stxt c) -> return $! lA l (LitPat unused (HsChar stxt c))
     _                   -> builderError
 {-# INLINABLE b_charP #-}
 
@@ -132,23 +131,23 @@ b_symP orig@(LForm (L l form))
                       -- Operator function.
                       then do checkVarId orig name
                               let name' = lN l (mkRdrName name)
-                              return (lA l (VarPat NOEXT name'))
+                              return (lA l (VarPat unused name'))
                       -- Lazy pattern.
                       else do checkVarId orig tlchrs
                               let name' = lN l (mkRdrName tlchrs)
-                                  pat = lA l (VarPat NOEXT name')
-                              return (lA l (LazyPat NOEXT pat))
+                                  pat = lA l (VarPat unused name')
+                              return (lA l (LazyPat unused pat))
         | hdchr == '!'
         , not (nullFS tlchrs)
         , not (isLexSym tlchrs)
         -- Bang pattern.
-        -> do let pat = lA l (VarPat NOEXT (lN l (mkRdrName tlchrs)))
+        -> do let pat = lA l (VarPat unused (lN l (mkRdrName tlchrs)))
               checkVarId orig tlchrs
-              return (lA l (BangPat NOEXT pat))
+              return (lA l (BangPat unused pat))
         | otherwise
         -- Varid.
         -> do checkVarId orig name
-              return (lA l (VarPat NOEXT (lN l (mkRdrName name))))
+              return (lA l (VarPat unused (lN l (mkRdrName name))))
   | otherwise = builderError
 {-# INLINABLE b_symP #-}
 
@@ -156,7 +155,7 @@ b_hsListP :: [HPat] -> HPat
 b_hsListP pats = p
   where
      p = case dL (mkLocatedListA pats) of L l _ -> L l (listPat pats)
-     listPat = ListPat NOEXT
+     listPat = ListPat unused
 {-# INLINABLE b_hsListP #-}
 
 b_labeledP :: Code -> [PreRecField HPat] -> Builder HPat
@@ -167,7 +166,7 @@ b_labeledP (LForm (L l form)) ps
           case mb_p of
             Just p  -> mkcfld False (lab, p)
             Nothing -> mkcfld True (lab, punned)
-        punned = lA l (VarPat NOEXT (lN l punRDR))
+        punned = lA l (VarPat unused (lN l punRDR))
         (wilds, non_wilds) = partitionEithers ps
         mb_dotdot = case wilds of
           []                  -> Nothing
@@ -200,22 +199,22 @@ b_asP (LForm (dL->L l form)) pat =
     _ -> builderError
   where
 #if MIN_VERSION_ghc(9,10,0)
-    asPat lid p = AsPat NOEXT lid p
+    asPat lid p = AsPat unused lid p
 #elif MIN_VERSION_ghc(9,6,0)
-    asPat lid p = AsPat NOEXT lid noHsTok p
+    asPat lid p = AsPat unused lid noHsTok p
 #else
-    asPat = AsPat NOEXT
+    asPat = AsPat unused
 #endif
 {-# INLINABLE b_asP #-}
 
 b_lazyP :: HPat -> HPat
-b_lazyP (dL-> L l pat0) = cL l (LazyPat NOEXT pat1)
+b_lazyP (dL-> L l pat0) = cL l (LazyPat unused pat1)
   where
     pat1 = parenthesizePat appPrec (cL l pat0)
 {-# INLINABLE b_lazyP #-}
 
 b_bangP :: HPat -> HPat
-b_bangP (dL->L l pat) = cL l (BangPat NOEXT (cL l pat))
+b_bangP (dL->L l pat) = cL l (BangPat unused (cL l pat))
 {-# INLINABLE b_bangP #-}
 
 b_conP :: [Code] -> Bool -> [HPat] -> Builder HPat
@@ -243,16 +242,16 @@ b_conP forms is_paren rest =
 b_sigP :: Code -> HPat -> HType -> HPat
 b_sigP (LForm (L l _)) pat ty =
 #if MIN_VERSION_ghc(9,2,0)
-  lA l (SigPat NOEXT pat (mkHsPatSigType NOEXT ty))
+  lA l (SigPat unused pat (mkHsPatSigType unused ty))
 #elif MIN_VERSION_ghc(9,0,0)
-  lA l (SigPat NOEXT pat (mkHsPatSigType ty))
+  lA l (SigPat unused pat (mkHsPatSigType ty))
 #else
-  cL l (SigPat NOEXT pat (mkLHsSigWcType ty))
+  cL l (SigPat unused pat (mkLHsSigWcType ty))
 #endif
 {-# INLINABLE b_sigP #-}
 
 mkTuplePat :: [HPat] -> Pat PARSED
-mkTuplePat ps = TuplePat NOEXT ps Boxed
+mkTuplePat ps = TuplePat unused ps Boxed
 {-# INLINABLE mkTuplePat #-}
 
 -- XXX: Consider using GHC.Hs.Utils.mkParPat
@@ -261,15 +260,15 @@ mkParPat' :: HPat -> HPat
 mkParPat' pat@(L l _) = cL l (gParPat pat)
 #else
 mkParPat' (dL->L l p) =
-  -- This newline is mandatory to support 'NOEXT' CPP macro. Seems like, the C
+  -- This newline is mandatory to support 'unused' CPP macro. Seems like, the C
   -- preprocessor is not working well with view pattern.
-  cL l (ParPat NOEXT (cL l p))
+  cL l (ParPat unused (cL l p))
 #endif
 {-# INLINABLE mkParPat' #-}
 
 #if MIN_VERSION_ghc(9,0,0)
 mkConPat :: LocatedN (ConLikeP PARSED) -> HsConPatDetails PARSED -> Pat PARSED
-mkConPat = ConPat NOEXT
+mkConPat = ConPat unused
 #else
 mkConPat :: Located (IdP PARSED) -> HsConPatDetails PARSED -> Pat PARSED
 mkConPat = ConPatIn

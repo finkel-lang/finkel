@@ -91,8 +91,7 @@ library
                        Language.Finkel.Syntax.HPat
                        Language.Finkel.Syntax.HType
   autogen-modules:     Paths_finkel_kernel
-  includes:            Syntax.h
-                       ghc_modules.h
+  includes:            ghc_modules.h
   include-dirs:        include
   c-sources:           include/hooks.c
   build-depends:       array        >= 0.5    && < 0.6
