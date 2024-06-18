@@ -88,8 +88,8 @@ older than 9.0.
 #endif
 
 /*
-Changes happened from ghc 8.10 to ghc 9.0 From ghc 9.0.1, ghc uses "GHC.*"
-name space for its modules.
+Changes happened from ghc 8.10 to ghc 9.0. From ghc 9.0.1, ghc uses "GHC.*" name
+space for its modules.
 */
 
 #if __GLASGOW_HASKELL__ >= 900
@@ -259,12 +259,9 @@ Modules which changed its name between 8.10.x and 9.0.x.
 #if __GLASGOW_HASKELL__ >= 900
 #define GHC_Hs_Type         GHC.Hs.Type
 #define GHC_Utils_CliOption GHC.Utils.CliOption
-#elif __GLASGOW_HASKELL__ >= 810
+#else
 #define GHC_Hs_Type         GHC.Hs.Types
 #define GHC_Utils_CliOption CliOption
-#else
-#define GHC_Hs_Type         HsTypes
-#define GHC_Utils_CliOption DynFlags
 #endif
 
 /*
@@ -274,7 +271,6 @@ for import declarations. For more info about module renaming, see:
   https://gitlab.haskell.org/ghc/ghc/issues/13009
 
 */
-#if __GLASGOW_HASKELL__ >= 810
 #define GHC_Hs           GHC.Hs
 #define GHC_Hs_Binds     GHC.Hs.Binds
 #define GHC_Hs_Decls     GHC.Hs.Decls
@@ -286,16 +282,3 @@ for import declarations. For more info about module renaming, see:
 #define GHC_Hs_Lit       GHC.Hs.Lit
 #define GHC_Hs_Pat       GHC.Hs.Pat
 #define GHC_Hs_Utils     GHC.Hs.Utils
-#else
-#define GHC_Hs           HsSyn
-#define GHC_Hs_Binds     HsBinds
-#define GHC_Hs_Doc       HsDoc
-#define GHC_Hs_Decls     HsDecls
-#define GHC_Hs_Dump      HsDumpAst
-#define GHC_Hs_Expr      HsExpr
-#define GHC_Hs_Extension HsExtension
-#define GHC_Hs_ImpExp    HsImpExp
-#define GHC_Hs_Lit       HsLit
-#define GHC_Hs_Pat       HsPat
-#define GHC_Hs_Utils     HsUtils
-#endif
