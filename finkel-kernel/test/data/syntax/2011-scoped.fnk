@@ -31,14 +31,17 @@
     (= ys (reverse xs))))
 
 (class (STVC a)
-  (:: stv_op (-> [a] a))
+  (:: stv_op (-> [a] (Maybe a)))
   (= stv_op xs
-    (let ((:: ys [a])
-          (= ys (reverse xs)))
-      (head ys))))
+    (case (reverse xs)
+      (: x _) (Just x)
+      [] Nothing)))
 
 (instance (=> (STVC b) (STVC [b]))
-  (= stv_op xs (reverse (head (:: xs [[b]])))))
+  (= stv_op xs
+    (case (:: xs [[b]])
+      (: ys _) (Just (reverse ys))
+      [] Nothing)))
 
 (instance (STVC Bool))
 

@@ -103,10 +103,7 @@ containing type class constraints. This documentation comment includes
 (:doc "Documentation for data type 'D1'.")
 (data (D1 a b)
   (D1a a)
-  (:doc^ "Documentation for 'D1a'.")
-
-  (D1b %p(UNPACK) !b)
-  (:doc^ "Documentation for 'D1b'.
+  (:doc^ "Documentation for 'D1a'.
 
 This comment contains empty lines.
 

@@ -15,7 +15,8 @@
   (KS2 [a]))
 
 (newtype (KS3 (:: m (-> Type Type)) a)
-  (KS3 [a]))
+  (KS3 [a])
+  (deriving Show))
 
 (type (KS4 (:: f (-> Type Type)))
   (f Int))
@@ -41,8 +42,7 @@
         (KS1 xs) (print xs))
       (case (KS2 [(:: 4 Int) 5 6])
         (KS2 xs) (print xs))
-      (case (KS3 [(:: 7 Int) 8 9])
-        (KS3 xs) (print xs))
+      (print (KS3 [(:: 7 Int) 8 9]))
       (print (:: (Just 42) (KS4 Maybe)))
       (print (f_ks1 41))
       (print (f_ks2 "f_ks2"))
