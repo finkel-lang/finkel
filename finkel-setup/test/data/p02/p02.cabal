@@ -11,7 +11,7 @@ extra-doc-files: CHANGELOG.md
 
 custom-setup
   setup-depends: base  >= 4.14 && < 5
-               , Cabal >= 3.2  && < 3.12
+               , Cabal >= 3.2
                , finkel-setup
 
 common warnings
