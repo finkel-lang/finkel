@@ -15,7 +15,7 @@ extra-source-files:  src/P01/*.fnk
 
 custom-setup
   setup-depends:       base  >= 4.7 && < 5
-                     , Cabal >= 2.0 && < 3.9
+                     , Cabal >= 2.0
                      , finkel-setup
 
 library
