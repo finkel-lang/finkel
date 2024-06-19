@@ -16,6 +16,7 @@ module SyntaxTest
 -- base
 import Control.Monad          (unless, when)
 import Data.IORef             (atomicWriteIORef, newIORef, readIORef)
+import Data.Maybe             (fromMaybe)
 import GHC.Exts               (unsafeCoerce#)
 import System.Info            (os)
 import System.IO              (BufferMode (..), hSetBuffering, stdout)
@@ -72,24 +73,45 @@ mkTest path
   = describe path (it "is pending with ghc-8.10.1 under Windows"
                       (const (pendingWith "Macro expansion not yet supported")))
   | base_name == "0003-expressions-2"
-  , __GLASGOW_HASKELL__ < (900 :: Int)
+  , ghcVersion < 900
   = describe path (it "is pending under ghc < 9.0"
                     (const (pendingWith "Generated Haskell code not working")))
+  | base_name `elem` ["1004-doccomment-03", "2005-gadts-02"]
+  , ghcVersion >= 904
+  = describe path (it "is pending under ghc >= 9.4"
+                   (const (pendingWith "Warns with unusable UNPACK")))
   | base_name == "0003-expressions-3"
-  , __GLASGOW_HASKELL__ >= (910 :: Int)
+  , ghcVersion >= 910
   = describe path (it "is not supported in ghc >= 9.10"
                     (const (pendingWith "`forall' is keyword by default")))
   | base_name == "2028-standalonekind"
-  , __GLASGOW_HASKELL__ < (810 :: Int)
+  , ghcVersion < 810
   = describe path (it "is not supported in ghc < 8.10.1"
                     (const (pendingWith "Not supported")))
   | base_name == "2029-impredicative"
-  , __GLASGOW_HASKELL__ < (902 :: Int)
+  , ghcVersion < 902
   = describe path (it "is not reliable in ghc < 9.2"
                     (const (pendingWith "Not supported")))
   | otherwise = mkTest' path
   where
     base_name = takeBaseName path
+
+ghcVersion :: Int
+ghcVersion = __GLASGOW_HASKELL__
+
+optsToSuppressWarnings :: [(String, [String])]
+optsToSuppressWarnings =
+  let flag test opt = if test then [opt] else []
+      no_forall_identifier = flag (ghcVersion >= 904) "-Wno-forall-identifier"
+      no_star_is_type = flag (ghcVersion >= 906) "-Wno-star-is-type"
+      no_deprecated = flag (ghcVersion >= 906) "-Wno-deprecated-flags"
+  in [ ("0003-expressions-3", no_forall_identifier)
+     , ("2010-kindsig", no_star_is_type)
+     , ("2015-typefam", no_star_is_type)
+
+      -- TypeInType is deprecated in ghc >= 9.6
+     , ("2017-polykinds", no_deprecated)
+     ]
 
 mkTest' :: FilePath -> FnkSpec
 mkTest' path = do
@@ -97,24 +119,26 @@ mkTest' path = do
       removeWhenExist file = do
         exist <- doesFileExist file
         when exist (removeFile file)
+
   tmpdir <- runIO getTemporaryDirectory
   fnkORef <- mkRef "fnkORef"
   hsORef <- mkRef "hsORef"
+
   let odir = tmpdir </> "fnk_mk_test"
       aDotOut = odir </> "a.out"
       dotHs = odir </> takeBaseName path <.> "hs"
       dotTix = "a.out.tix"
       syndir = "test" </> "data" </> "syntax"
-      -- runDotO = readProcessWithExitCode aDotOut [] ""
-      prepare =
-        do removeArtifacts syndir
-           mapM_ removeWhenExist [dotTix, aDotOut, dotHs]
-      toNativeCompile =
-         takeBaseName path == "0008-ffi"
+      prepare = do
+        removeArtifacts syndir
+        mapM_ removeWhenExist [dotTix, aDotOut, dotHs]
+      toNativeCompile = takeBaseName path == "0008-ffi"
+      extra_opts =
+        fromMaybe [] (lookup (takeBaseName path) optsToSuppressWarnings)
       compile =
           if toNativeCompile
-            then nativeCompile
-            else byteCompile
+            then nativeCompile extra_opts
+            else byteCompile extra_opts
 
   runIO (do createDirectoryIfMissing True odir
             hSetBuffering stdout NoBuffering)
@@ -140,11 +164,13 @@ mkTest' path = do
         hs <- readIORef hsORef
         fnk `shouldBe` hs
 
-nativeCompile :: FnkTestResource -> FilePath -> Maybe FilePath -> Fnk (IO ())
-nativeCompile = compileWith False []
+nativeCompile
+  :: [String] -> FnkTestResource -> FilePath -> Maybe FilePath -> Fnk (IO ())
+nativeCompile = compileWith False
 
-byteCompile :: FnkTestResource -> FilePath -> Maybe FilePath -> Fnk (IO ())
-byteCompile = compileWith True ["-no-link", "-fbyte-code"]
+byteCompile
+  :: [String] -> FnkTestResource -> FilePath -> Maybe FilePath -> Fnk (IO ())
+byteCompile opts = compileWith True (["-no-link", "-fbyte-code"] ++ opts)
 
 compileWith
   :: Bool -> [String] -> FnkTestResource -> FilePath -> Maybe FilePath

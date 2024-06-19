@@ -1,6 +1,5 @@
 ;;;; OPTIONS_GHC and OPTIONS_HADDOCK pragma.
 
-%p(OPTIONS_GHC -fcse)
 %p(LANGUAGE DeriveFoldable)
 %p(OPTIONS_GHC -Wall)
 %p(LANGUAGE DeriveFunctor)
