@@ -42,7 +42,7 @@ tested-with:           GHC == 8.10.7
 
 custom-setup
   setup-depends:       base     >= 4.14 && < 5
-                     , Cabal    >= 2.0  && < 3.11
+                     , Cabal    >= 2.0  && < 3.13
                      , filepath >= 1.4  && < 1.6
 
 flag dev
