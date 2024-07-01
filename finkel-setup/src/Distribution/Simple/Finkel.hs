@@ -156,8 +156,13 @@ fnkHooksWith exec args debug = simpleUserHooks
 -- | Preprocessor suffix handler to merely register files with @"*.fnk"@
 -- files.
 finkelPPHandler :: PPSuffixHandler
-finkelPPHandler = ("fnk", doNothingPP)
+finkelPPHandler = (suffix, doNothingPP)
   where
+#if MIN_VERSION_Cabal(3,12,0)
+    suffix = Suffix "fnk"
+#else
+    suffix = "fnk"
+#endif
     doNothingPP _ _ _ = PreProcessor
       { platformIndependent = True
 #if MIN_VERSION_Cabal(3,8,0)

@@ -38,6 +38,12 @@
 ;;; Extra imports for version compatibility
 
 (cond-expand
+  [(:min-version "Cabal" 3 12 0)
+   (import Distribution.Simple.Errors (exceptionMessage))]
+  [otherwise
+   (:begin)])
+
+(cond-expand
   [(:min-version "Cabal" 3 0 1)
    (:begin)]
   [otherwise
@@ -77,7 +83,11 @@
                  (mapM- write non-opts))))
          (write-tgz [verbosity flags dir]
            (>>= (findPackageDesc dir)
-                (either (. throwIO FinkelToolException)
+                (either (cond-expand
+                          [(:min-version "Cabal" 3 12 0)
+                           (. throwIO FinkelToolException exceptionMessage)]
+                          [otherwise
+                           (. throwIO FinkelToolException)])
                         (>=> (readGenericPackageDescription verbosity)
                              (write-tgz-2 flags dir)))))
          (write-tgz-2 [flags dir descr]

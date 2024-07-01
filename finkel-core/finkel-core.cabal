@@ -29,7 +29,7 @@ tested-with:           GHC == 8.10.7
 
 custom-setup
   setup-depends:       base  >= 4.14 && < 5
-                     , Cabal >= 3.2  && < 3.12
+                     , Cabal >= 3.2  && < 3.13
                      , finkel-setup == 0.0.0
 
 library
