@@ -1,3 +1,5 @@
+;;; -*- mode: finkel -*-
+
 (defmodule Main)
 
 (defn (:: main (IO ()))

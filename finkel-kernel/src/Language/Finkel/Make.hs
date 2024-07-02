@@ -7,6 +7,7 @@ module Language.Finkel.Make
     make
   , makeFromRequire
   , makeFromRequirePlugin
+  , simpleMake
 
     -- * Summary
   , fnkSourceToSummary
@@ -59,7 +60,9 @@ import qualified Data.Map                          as Map
 import           System.FilePath                   (splitExtension)
 
 -- ghc
-import           GHC                               (setSessionDynFlags)
+import           GHC                               (guessTarget,
+                                                    setSessionDynFlags,
+                                                    setTargets)
 import           GHC_Driver_Env                    (HscEnv (..), runHsc)
 import           GHC_Driver_Main                   (Messager)
 import           GHC_Driver_Make                   (LoadHowMuch (..), load')
@@ -77,7 +80,8 @@ import           GHC_Runtime_Eval                  (setContext)
 import           GHC_Runtime_Loader                (initializePlugins)
 import           GHC_Types_Basic                   (SuccessFlag (..))
 import           GHC_Types_SourceError             (throwOneError)
-import           GHC_Types_SrcLoc                  (Located, getLoc, unLoc)
+import           GHC_Types_SrcLoc                  (GenLocated (..), Located,
+                                                    getLoc, unLoc)
 import           GHC_Unit_Finder                   (FindResult (..),
                                                     findExposedPackageModule)
 import           GHC_Unit_Home_ModInfo             (lookupHpt, pprHPT)
@@ -111,7 +115,6 @@ import           GHC.Driver.Session                (GhcLink (..))
 import           GHC.Hs                            (HsParsedModule)
 import           GHC.Types.Error                   (emptyMessages)
 import           GHC.Types.PkgQual                 (PkgQual (..))
-import           GHC.Types.SrcLoc                  (GenLocated (..))
 import           GHC.Unit.Env                      (homeUnitEnv_dflags,
                                                     unitEnv_foldWithKey)
 import           GHC.Unit.Module.Graph             (ModNodeKeyWithUid (..),
@@ -272,7 +275,7 @@ setContextModules = setContext . map (IIDecl . simpleImportDecl . mkModuleName)
 
 -- | Simple make function returning compiled home module information. Intended
 -- to be used in 'require' macro.
-makeFromRequire :: Located ModuleName -> Fnk ()
+makeFromRequire :: Located ModuleName -> Fnk SuccessFlag
 makeFromRequire lmname = do
   fnk_env <- getFnkEnv
   hsc_env <- getSession
@@ -285,15 +288,41 @@ makeFromRequire lmname = do
   tr ["required module:" <+> ppr (unLoc lmname)]
   tu <- emptyTargetUnit <$> findTargetModuleName dflags lmname
 
-  _success_flag <- withTmpDynFlags (setExpanding dflags) $
+  success_flag <- withTmpDynFlags (setExpanding dflags) $
     make1 LoadAllTargets old_summaries [tu]
 
   mgraph <- hsc_mod_graph <$> getSession
   let mod_summaries = mgModSummaries' mgraph
   tr ["summaries:", nvcOrNone mod_summaries]
+  pure success_flag
+
+-- An adhoc CPP macro for 'Maybe UnitId' argument of 'guessTarget'.
+#if MIN_VERSION_ghc(9,4,0)
+#define MAYBE_UNITID Nothing
+#else
+#define MAYBE_UNITID {- nothing -}
+#endif
+
+-- | Simple function to perform module dependency analysis and loading.
+simpleMake
+  :: [(Located FilePath, Maybe Phase)]
+  -> Bool
+  -> Maybe FilePath
+  -> Fnk SuccessFlag
+simpleMake infiles _force_recomp _mb_output = do
+  -- See: function 'doMake' in "ghc/Main.hs".
+  let guess_target (L _ modname_or_path, mb_phase) =
+        guessTarget modname_or_path MAYBE_UNITID mb_phase
+
+  new_targets <- mapM guess_target infiles
+  setTargets new_targets
+
+  msgr <- envMessager <$> getFnkEnv
+  mg <- depanal [] False
+  doLoad LoadAllTargets (Just msgr) mg
 
 -- | Make function used when the Finkel compiler was invoked as a ghc plugin.
-makeFromRequirePlugin :: Located ModuleName -> Fnk ()
+makeFromRequirePlugin :: Located ModuleName -> Fnk SuccessFlag
 makeFromRequirePlugin lmname = do
   fnk_env <- getFnkEnv
   hsc_env <- getSession
@@ -389,7 +418,7 @@ makeFromRequirePlugin lmname = do
        , "opt_pp:" <+> text (show (gopt Opt_Pp dflags1)) ]
 #endif
     mg <- depanal [] False
-    void (doLoad LoadAllTargets (Just messager) mg)
+    doLoad LoadAllTargets (Just messager) mg
 
 -- | Make new 'TargetSummary' from given 'TargetUnit'.
 fnkSourceToSummary :: TargetSource -> Fnk TargetSummary
@@ -850,7 +879,10 @@ filterNotCompiled fnk_env hsc_env = foldM find_not_compiled []
 #endif
               throwOneError err
 
--- From ghc 9.4, the `load'' function changed to take ModIface cache.
+-- From ghc 9.4, the `load'' function takes ModIface cache.
+--
+-- From ghc 9.8, the `load'' function takes (GhcMessage -> AnyGhcDiagnostic)
+-- function.
 doLoad :: LoadHowMuch -> Maybe Messager -> ModuleGraph -> Fnk SuccessFlag
 #if MIN_VERSION_ghc(9,4,0)
 doLoad lhm mb_msgr mg = do

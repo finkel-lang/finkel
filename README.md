@@ -23,7 +23,7 @@ Or in other words, **[Haskell][haskell] in S-expression**.
 ### Sample code
 
 ```clojure
-;;;; File: fib.fnk
+;;;; File: fib.hs
 
 (:doc "Simple example module to show fibonacci number.
 
@@ -49,8 +49,8 @@ input and print the fibonacci number of the argument.")
 ### Compiling an executable
 
 ```console
-$ finkel make -o fib fib.fnk
-[1 of 1] Compiling Main             ( fib.fnk, fib.o )
+$ finkel make -o fib fib.hs
+[1 of 1] Compiling Main             ( fib.hs, fib.o )
 Linking fib
 $ ./fib 10
 55
@@ -61,11 +61,11 @@ $ ./fib 10
 ```console
 $ finkel repl
 Hit `Ctrl-d' or type ,q to quit, type ,? for help.
-> ,load fib.fnk
-[1 of 1] Compiling Main             ( fib.fnk, interpreted )
-; loaded fib.fnk
+> ,load fib.hs
+[1 of 1] Compiling Main             ( fib.hs, interpreted )
+; loaded fib.hs
 > ,info fib
-fib :: Int -> Int       -- Defined at fib.fnk:16:11
+fib :: Int -> Int       -- Defined at fib.hs:16:11
 > (map fib [1 .. 10])
 [1,1,2,3,5,8,13,21,34,55]
 > (System.Environment.withArgs ["10"] main)

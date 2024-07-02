@@ -9,10 +9,10 @@ Compiling with Finkel Make
 --------------------------
 
 To compile a Finkel source code file, one can use the ``make``
-sub-command. Open a file named ``hello.fnk`` with your favorite editor
+sub-command. Open a file named ``hello.hs`` with your favorite editor
 and save the file with the following contents:
 
-.. literalinclude:: ../include/finkel-executable/hello.fnk
+.. literalinclude:: ../include/finkel-executable/hello.hs
    :language: finkel
 
 Then invoke ``finkel make`` to compile the file. The command shown in
@@ -78,9 +78,9 @@ invoke ``finkel repl``:
    foldr :: Foldable t => (a -> b -> b) -> b -> t a -> b
    > ,info Rational
    type Rational = GHC.Real.Ratio Integer  -- Defined in ‘GHC.Real’
-   > ,load hello.fnk
-   [1 of 1] Compiling Main             ( hello.fnk, interpreted )
-   ; loaded hello.fnk
+   > ,load hello.hs
+   [1 of 1] Compiling Main             ( hello.hs, interpreted )
+   ; loaded hello.hs
    > main
    Hello, World!
    > ,q

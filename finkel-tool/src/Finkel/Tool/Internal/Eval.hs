@@ -46,6 +46,9 @@
      useInterpreter withTmpDynFlags])
    (Language.Finkel.Syntax [parseExpr parseImports parseStmt parseTopDecls])
 
+   (Language.Finkel.Plugin [setFinkelPluginWithArgs])
+   (Finkel.Core.Plugin [plugin])
+
    ;; internal
    (Finkel.Tool.Internal.Compat)
    (Finkel.Tool.Internal.Exception)
@@ -179,12 +182,20 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
   "Initialization works for evaluation loop."
   [eval-wrapper-opts ghc-opts]
   (do prepareInterpreter
-      (<- hsc-env0 getSession)
 
       ;; Parse the ghc options from argument, assuming that the arguments are
       ;; passed from the command line.
+      (<- hsc-env0 getSession)
       (lept [on-the-commandline (mkGeneralLocated "on the commandline")
-             lghc-opts (map on-the-commandline ghc-opts)])
+             ghc-opts2 (cond-expand
+                         [(<= 906 :ghc) ghc-opts]
+                         ;; In ghc < 9.6, the use of `fnkpp' is mandatory.
+                         [otherwise
+                          (<> ["-F" "-pgmF" "fnkpp" "-optF" "--no-warn-interp"]
+                              ghc-opts)])
+             ;; XXX: Get plugin options from command line
+             plugin-args []
+             lghc-opts (map on-the-commandline ghc-opts2)])
       (<- (, dflags0 fileish warns) (parse-dynamic-flags hsc-env0 lghc-opts))
       (liftIO (print-or-throw-diagnostics hsc-env0 dflags0 warns))
 
@@ -199,12 +210,17 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
 
       ;; Initializing plugins with dflags from updated session.
       (setDynFlags dflags2)
-
       initSessionForMake
 
-      (<- dflags3 getDynFlags)
+      ;; Registring the finkel plugin.
+      ;;
+      ;; XXX: It is possible to pass "-fplugin" option and dynamically load the
+      ;; plugin module. Reconsider after rewriting other commands with
+      ;; plugin. If so, modify the `ghc-opts' to take the options for plugin.
+      (setFinkelPluginWithArgs plugin plugin-args)
 
       ;; Setting the default `DynFlags' for macro expansion.
+      (<- dflags3 getDynFlags)
       (modifyFnkEnv (\e (e {(= envDefaultDynFlags (Just dflags3))})))
 
       ;; Load modules specified from command line, when given.

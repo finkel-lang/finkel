@@ -42,11 +42,11 @@
       (lefn [(testdata [name]
                (</> "test" "data" name))
              (delines (intercalate "\n"))
-             (m02-dot-fnk (</> tmp-dir "m02.fnk"))
+             (m02-dot-hs (</> tmp-dir "m02.hs"))
              (m02-dot-hi (</> tmp-dir "m02.hi"))
              (main-dot-o (</> tmp-dir "Main.o"))
              (clear-m02-files
-               (mapM_ remove-if-exist [m02-dot-fnk m02-dot-hi main-dot-o]))
+               (mapM_ remove-if-exist [m02-dot-hs m02-dot-hi main-dot-o]))
              (with-right [form test]
                (satisfy form (either (const False) test)))
              (with-left [form test]
@@ -233,13 +233,13 @@
               "Verbosity level set to 1")
 
           ;; load and reload
-          (lept [m01-dot-fnk (testdata "m01.fnk")])
+          (lept [m01-dot-hs (testdata "m01.hs")])
           (ok `(:begin
-                 (repl-macro load ,(make-symbol m01-dot-fnk))
+                 (repl-macro load ,(make-symbol m01-dot-hs))
                  main)
               "=== m01.fnk ===")
           (ok '(repl-macro reload)
-              "; reloaded test/data/m01.fnk")
+              "; reloaded test/data/m01.hs")
           (ok '(repl-macro browse)
               (delines
                ["main :: IO ()"
@@ -248,16 +248,13 @@
 
           (ok '(repl-macro show targets)
               (cond-expand
-                [(<= 904 :ghc)
-                 "; targets: main:test/data/m01.fnk"]
-                [(<= 902 :ghc)
-                 "; targets: *test/data/m01.fnk"]
-                [otherwise
-                 "; targets: test/data/m01.fnk"]))
+                [(<= 904 :ghc) "; targets: main:test/data/m01.hs"]
+                [(<= 902 :ghc) "; targets: test/data/m01.hs"]
+                [otherwise     "; targets: *test/data/m01.hs"]))
           (with-right '(repl-macro show context)
             (isSubsequenceOf "IIModule: Main"))
 
-          (ok `(writeFile ,m02-dot-fnk "(defn main (print True))")
+          (ok `(writeFile ,m02-dot-hs ";;; m02.hs\n(defn main (print True))")
               "")
           (cond-expand
             [(== :os "darwin")
@@ -266,10 +263,10 @@
                  (pendingWith "OSX not supported yet")))]
             [otherwise
              (ok `(:begin
-                    (repl-macro load ,(make-symbol m02-dot-fnk))
+                    (repl-macro load ,(make-symbol m02-dot-hs))
                     main)
                  "True")])
-          (ok `(writeFile ,m02-dot-fnk "(defn main (print False))")
+          (ok `(writeFile ,m02-dot-hs ";;; m02.hs\n(defn main (print False))")
               "")
 
           (cond-expand
@@ -279,7 +276,7 @@
                  (pendingWith "OSX not supported yet")))]
             [otherwise
              (ok '(repl-macro reload)
-                 (++ "; reloaded " m02-dot-fnk))])
+                 (++ "; reloaded " m02-dot-hs))])
           (cond-expand
             [(== :os "darwin")
              (describe "evaluate main"
@@ -296,14 +293,14 @@
                  (pendingWith "OSX not supported yet")))]
             [otherwise
              (do
-               (ok `(writeFile ,m02-dot-fnk "(defn main (print True))") "")
+               (ok `(writeFile ,m02-dot-hs ";;; m02.hs\n(defn main (print True))") "")
                (ok `(:begin
                       (repl-macro set -fobject-code)
-                      (repl-macro load ,m02-dot-fnk)
+                      (repl-macro load ,m02-dot-hs)
                       main)
                    "True")
                (ok '(repl-macro reload)
-                   (++ "; reloaded " m02-dot-fnk)))])
+                   (++ "; reloaded " m02-dot-hs)))])
 
           ;; Errors
           (with-left-subseq '(repl-macro load (foo bar))

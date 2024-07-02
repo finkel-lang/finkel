@@ -1,4 +1,4 @@
-;;;; File: hello.fnk
+;;;; File: hello.hs
 
 (defn main
   (putStrLn "Hello, World!"))

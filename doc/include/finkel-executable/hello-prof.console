@@ -1,3 +1,3 @@
 $ finkel make -o hello -fforce-recomp -prof -fprof-auto hello.fnk
-[1 of 1] Compiling Main             ( hello.fnk, hello.o )
+[1 of 1] Compiling Main             ( hello.hs, hello.o )
 Linking hello ...
