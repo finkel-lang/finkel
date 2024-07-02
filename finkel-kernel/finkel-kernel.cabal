@@ -119,6 +119,8 @@ executable finkel-profile
   hs-source-dirs:      exec
   main-is:             profile.hs
   ghc-options:         -Wall -threaded -rtsopts
+  includes:            ghc_modules.h
+  include-dirs:        include
   build-depends:       base
                      , bytestring
                      , filepath
@@ -143,6 +145,8 @@ test-suite finkel-kernel-test
                        Orphan
                        TestAux
                        Paths_finkel_kernel
+  includes:            ghc_modules.h
+  include-dirs:        include
   build-depends:       base
                      , binary
                      , bytestring
