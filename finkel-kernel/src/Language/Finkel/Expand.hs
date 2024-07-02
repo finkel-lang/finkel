@@ -210,6 +210,7 @@ newHscEnvForExpand fnk_env orig_hsc_env = do
   -- No need to update hsc_env, plugins are stored in DynFlags.
   let new_hsc_env_1 = new_hsc_env_0
 #endif
+
   pure new_hsc_env_1
 
 -- | Run given 'Fnk' action with macro expansion settings for 'GhcPluginMode'.
@@ -285,6 +286,7 @@ initializeGlobalSession = do
     then getSession
     else do
 #if MIN_VERSION_ghc(9,0,0)
+      -- To set the "hsc_interp" field in the new session.
       _ <- getDynFlags >>= setSessionDynFlags
 #endif
       getSession >>= initializePlugin'
