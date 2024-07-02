@@ -54,8 +54,8 @@ import Language.Finkel.Error             (mkPlainWrappedMsg)
 import Language.Finkel.Exception         (finkelExceptionLoc,
                                           handleFinkelException)
 import Language.Finkel.Expand            (bcoDynFlags)
-import Language.Finkel.Fnk               (FnkInvokedMode (..), initFnkEnv,
-                                          runFnk')
+import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
+                                          initFnkEnv, runFnk')
 import Language.Finkel.Make              (fnkSourceToSummary)
 import Language.Finkel.Make.Summary      (TargetSummary (..))
 import Language.Finkel.Make.TargetSource (TargetSource (..),
@@ -66,8 +66,6 @@ import Language.Finkel.Options           (FnkPluginOptions (..),
                                           printPluginUsage)
 import Language.Finkel.Preprocess        (PpOptions (..), mkPpOptions,
                                           preprocessOrCopy)
-
-import Language.Finkel.Fnk               (FnkEnv (..))
 
 -- | Add hooks for compiling Finkel source codes.
 --
@@ -153,8 +151,10 @@ showTPhase phase = case phase of
   T_Cmm {}          -> "T_Cmm"
   T_Cc {}           -> "T_Cc"
   T_As {}           -> "T_As"
+#if MIN_VERSION_ghc(9,6,0)
   T_Js {}           -> "T_Js"
   T_ForeignJs {}    -> "T_ForeignJs"
+#endif
   T_LlvmOpt {}      -> "T_LlvmOpt"
   T_LlvmLlc {}      -> "T_LlvmLlc"
   T_LlvmMangle {}   -> "T_LlvmMangle"
