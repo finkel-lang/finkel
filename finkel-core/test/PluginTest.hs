@@ -28,31 +28,18 @@
 
 ;; finkel-kernel
 (import Language.Finkel.Fnk (getLibDirFromGhc))
-(import Language.Finkel.Hooks (finkelHooks))
+(import Language.Finkel.Plugin (setFinkelPluginWithArgs))
 
 ;; Internal
-(import Finkel.Core.Plugin (plugin coreFnkEnv))
+(import Finkel.Core.Plugin (plugin))
 
 (cond-expand
-  [(<= 904 :ghc)
-   (:begin
-     (import GHC.Driver.Env.Types ((HscEnv ..)))
-     (import GHC.Driver.Plugins ((PluginWithArgs ..) (StaticPlugin ..)
-                                 (Plugins ..) emptyPlugins)))]
   [(<= 902 :ghc)
-   (:begin
-     (import GHC.Driver.Env.Types ((HscEnv ..)))
-     (import GHC.Driver.Plugins ((PluginWithArgs ..) (StaticPlugin ..))))]
+   (import GHC.Driver.Env.Types ((HscEnv ..)))]
   [(<= 900 :ghc)
-   (:begin
-     (import GHC.Driver.Session ((DynFlags ..)))
-     (import GHC.Driver.Types ((HscEnv ..)))
-     (import GHC.Driver.Plugins ((PluginWithArgs ..) (StaticPlugin ..))))]
+   (import GHC.Driver.Types ((HscEnv ..)))]
   [otherwise
-   (:begin
-     (import HscTypes ((HscEnv ..)))
-     (import DynFlags ((DynFlags ..)))
-     (import Plugins ((PluginWithArgs ..) (StaticPlugin ..))))])
+   (import HscTypes ((HscEnv ..)))])
 
 ;;; Tests
 
@@ -62,18 +49,8 @@
 
 (defn (:: compile (-> String Spec))
   [file]
-  (lept [sp (StaticPlugin (PluginWithArgs plugin []))
-         go (do (<- hsc-env0
-                  (>>= getSession
-                       (. liftIO (finkelHooks "PluginTest" coreFnkEnv []))))
-                (setSession hsc-env0)
-
-                (<- hsc-env0-b getSession)
-
+  (lept [go (do (<- hsc-env0-b getSession)
                 (void (setSessionDynFlags (hsc-dflags hsc-env0-b)))
-                (<- hsc-env1 getSession)
-
-                (setFinkelPlugin hsc-env1 sp)
 
                 (<- hsc-env2 getSession)
                 (lept [pp-args (cond-expand
@@ -82,6 +59,8 @@
                        fnk-args (++ pp-args ["-fno-code" (++ "-i" pdir)])])
                 (<- dflags1 (parseDynFlags hsc-env2 fnk-args))
                 (void (setSessionDynFlags dflags1))
+
+                (setFinkelPluginWithArgs plugin [])
 
                 (<- t (cond-expand
                         [(<= 904 :ghc)
@@ -98,22 +77,7 @@
 (defn (:: pdir FilePath)
   (</> "test" "data" "plugin"))
 
-(defn (:: setFinkelPlugin
-        (=> (GhcMonad m) (-> HscEnv StaticPlugin (m ()))))
-  [hsc-env sp]
-  (cond-expand
-    [(<= 904 :ghc)
-     (void (setSession (hsc-env {(= hsc-plugins
-                                   (emptyPlugins
-                                    {(= staticPlugins [sp])}))})))]
-    [(<= 902 :ghc)
-     (void (setSession (hsc-env {(= hsc-static-plugins [sp])})))]
-    [otherwise
-     (void (setSessionDynFlags
-            ((hsc-dflags hsc-env) {(= staticPlugins [sp])})))]))
-
-(defn (:: parseDynFlags
-        (=> (MonadIO m) (-> HscEnv [String] (m DynFlags))))
+(defn (:: parseDynFlags (=> (MonadIO m) (-> HscEnv [String] (m DynFlags))))
   [hsc-env args]
   (do (cond-expand
         [(<= 902 :ghc)

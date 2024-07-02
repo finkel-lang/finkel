@@ -10,11 +10,7 @@ module PluginTest (pluginTests) where
 import Control.Monad          (void)
 import System.Info            (os)
 
-#if MIN_VERSION_ghc(9,6,0)
-import Control.Monad.IO.Class (MonadIO (..))
-#endif
-
-#if (MIN_VERSION_ghc(9,6,0) || !MIN_VERSION_ghc(9,4,0))
+#if MIN_VERSION_ghc(9,6,0) || !MIN_VERSION_ghc(9,4,0)
 import Control.Exception      (SomeException (..))
 #endif
 
@@ -25,27 +21,13 @@ import System.FilePath        ((</>))
 -- ghc
 import GHC
 import GHC_Driver_Env         (HscEnv (..))
-import GHC_Plugins            (PluginWithArgs (..), StaticPlugin (..))
-
-#if MIN_VERSION_ghc(9,6,0)
-import GHC.Runtime.Loader     (initializeSessionPlugins)
-#endif
-
-#if MIN_VERSION_ghc(9,4,0)
-import GHC_Plugins            (Plugins (..), emptyPlugins)
-#endif
 
 -- hspec
 import Test.Hspec
 
 -- finkel-kernel
 import Language.Finkel.Fnk    (getLibDirFromGhc)
-import Language.Finkel.Plugin (plugin)
-
-#if MIN_VERSION_ghc(9,6,0)
-import Language.Finkel        (defaultFnkEnv)
-import Language.Finkel.Hooks  (finkelHooks)
-#endif
+import Language.Finkel.Plugin (plugin, setFinkelPluginWithArgs)
 
 -- Internal
 import TestAux
@@ -64,7 +46,7 @@ pluginTests =
       compile [] ["--verbose=3"] "p01.hs"
       compile [] [] "p02.hs"
       compile ["-optF", "--warn-interp=False"] ["--verbose=3"] "p03.hs"
-#if !MIN_VERSION_ghc(9,6,0)
+#if !MIN_VERSION_ghc(9,4,0)
       compile ["-optF", "--ignore"] ["--ignore"] "p04.hs"
 #endif
       compile ["-ddump-parsed-ast"] [] "p05.hs"
@@ -119,8 +101,6 @@ compile' msg wrap ghc_args plugin_args basename =
       libdir <- getLibDirFromGhc
       _me <- getExecutablePath
       let act = quietly $ runGhc (Just libdir) $ do
-            let sp = StaticPlugin (PluginWithArgs plugin plugin_args)
-
             hsc_env1 <- getSession
 
             let dflags0 = hsc_dflags hsc_env1
@@ -140,16 +120,7 @@ compile' msg wrap ghc_args plugin_args basename =
 #endif
             void (setSessionDynFlags dflags1)
 
-#if MIN_VERSION_ghc(9,6,0)
-            hsc_env2 <- getSession
-            hsc_env3 <- liftIO $ finkelHooks "PluginTest" defaultFnkEnv
-                                             plugin_args hsc_env2
-            void (setSession hsc_env3)
-            initializeSessionPlugins
-#endif
-
-            hsc_env4 <- getSession
-            setFinkelPlugin hsc_env4 sp
+            setFinkelPluginWithArgs plugin plugin_args
 
 #if MIN_VERSION_ghc(9,4,0)
             t <- guessTarget (pdir </> basename) Nothing Nothing
@@ -160,16 +131,6 @@ compile' msg wrap ghc_args plugin_args basename =
             load LoadAllTargets
 
       wrap act
-
-setFinkelPlugin :: GhcMonad m => HscEnv -> StaticPlugin -> m ()
-setFinkelPlugin hsc_env sp =
-#if MIN_VERSION_ghc(9,4,0)
-  void (setSession (hsc_env {hsc_plugins=emptyPlugins {staticPlugins=[sp]}}))
-#elif MIN_VERSION_ghc(9,2,0)
-  void (setSession (hsc_env {hsc_static_plugins = [sp]}))
-#else
-  void (setSessionDynFlags ((hsc_dflags hsc_env) {staticPlugins = [sp]}))
-#endif
 
 pdir :: FilePath
 pdir = "test" </> "data" </> "plugin"
