@@ -1,3 +1,5 @@
+;;; -*- mode: finkel -*-
+
 (defmodule Main
   (export main foo bar))
 

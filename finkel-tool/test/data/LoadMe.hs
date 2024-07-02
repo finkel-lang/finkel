@@ -1,3 +1,5 @@
+;;; -*- mode: finkel -*-
+
 (defmodule LoadMe
   (export from-load-me))
 

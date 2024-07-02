@@ -19,6 +19,7 @@ import Control.Exception                 (throw)
 import Control.Monad                     (foldM, unless, when)
 import Control.Monad.IO.Class            (MonadIO (..))
 import Data.Foldable                     (toList)
+import Data.Functor                      (void)
 import Data.Maybe                        (catMaybes)
 import GHC.Exts                          (unsafeCoerce#)
 
@@ -391,7 +392,7 @@ makeMissingHomeMod (L _ idecl) = do
 
         GhcPluginMode -> makeFromRequirePlugin
 
-      smpl_mk = withInternalLoad (mk_fn lmname)
+      smpl_mk = withInternalLoad (void $ mk_fn lmname)
       dflags = hsc_dflags hsc_env
       tr = debug fnk_env "makeMissinghomeMod"
       do_mk msgs = tr msgs >> smpl_mk

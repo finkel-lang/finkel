@@ -47,7 +47,7 @@
    (Language.Finkel.Expand [discardInteractiveContext])
    (Language.Finkel.Eval [evalExprType evalTypeKind])
    (Language.Finkel.Form [mkLocatedForm])
-   (Language.Finkel.Make [buildHsSyn make])
+   (Language.Finkel.Make [buildHsSyn simpleMake])
    (Language.Finkel.Fnk [(FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv
                          setDynFlags setFnkVerbosity updateDynFlags])
    (Language.Finkel.Options [fnkEnvOptions partitionFnkEnvOptions])
@@ -300,7 +300,7 @@
       (do (putFnkEnv (fnk-env {(= envQualifyQuotePrimitives False)}))
           (lept [force-recomp (gopt Opt-ForceRecomp dflags)])
           (<- success-flag
-            (make (zip lstrs (repeat Nothing)) force-recomp Nothing))
+            (simpleMake (zip lstrs (repeat Nothing)) force-recomp Nothing))
 
           ;; As done in `GHCi.UI', reverting CAFs on load.
           rts-revert-cafs

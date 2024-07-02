@@ -1,3 +1,5 @@
+;;; -*- mode: finkel -*-
+
 (defmodule RunMeToo
   (import
    (System.Environment (getArgs))

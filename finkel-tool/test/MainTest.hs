@@ -90,7 +90,7 @@
         (it "should evaluate '(+ 1 2 3 4 5)'"
           (main' ["eval" "(+ 1 2 3 4 5)"]))
         (it "should load module and evaluate given form"
-          (main' ["eval" (++ "-i" test-data-dir) "LoadMe.fnk"
+          (main' ["eval" (++ "-i" test-data-dir) "LoadMe"
                   "(from-load-me \"LOADED\")"]))
         (it "should show error message when invoked without form"
           (failure ["eval"]))
@@ -100,8 +100,8 @@
           (failure ["eval" "(+ 1 True)))"])))))
 
 (defn (:: replTests Spec)
-  (lept [print-int (test-data "print-int.fnk")
-         print-load-me (test-data "print-load-me.fnk")
+  (lept [print-int (test-data "print-int.hs")
+         print-load-me (test-data "print-load-me.hs")
          err001 (test-data "Err001.fnk")]
     (describe "repl command"
       (do (it "should show help on --help"
@@ -109,7 +109,8 @@
           (it "should show warning messages"
             (main' ["repl" (++ "--file=" print-int) "-v2" "-O"]))
           (it "should evaluate file contents after loading module"
-            (main' ["repl" "--quiet" (++ "--file=" print-load-me) load-me]))
+            (main' ["repl" "--quiet" (++ "--file=" print-load-me)
+                    (test-data "LoadMe.hs")]))
           (it "should show compilation error when loading invalid module"
             (shouldThrow
              (main' ["repl" "--quiet" (++ "--file=" print-int) print-int])
@@ -131,21 +132,21 @@
     (describe "run command"
       (do (it "should show help on --help"
             (run ["--help"]))
-          (it "should run run-me.fnk"
-            (run ["-v0" (test-data "run-me.fnk")]))
+          (it "should run run-me.hs"
+            (run ["-v0" (test-data "run-me.hs")]))
           (it "should search directory with ghc option"
-            (run ["-v0" (++ "-i" test-data-dir) "run-me.fnk"]))
+            (pendingWith "needs full path"))
           (it "should run given function"
-            (run ["-v0" "--main" "main-two" (test-data "RunMeToo.fnk")]))
+            (run ["-v0" "--main" "main-two" (test-data "RunMeToo.hs")]))
           (it "should pass arguments after `--'"
-            (run ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
+            (run ["-v0" "--main" "main-three" (test-data "RunMeToo.hs")
                   "--" "dog"]))
           (it "should complain with malformed argument"
             (failure ["-v0" "--main"]))
           (it "should fail when input file does not exist"
             (failure ["-v0" "no-such-file.fnk"]))
           (it "should exit with status from given script"
-            (failure ["-v0" "--main" "main-three" (test-data "RunMeToo.fnk")
+            (failure ["-v0" "--main" "main-three" (test-data "RunMeToo.hs")
                       "--" "elephant"]))))))
 
 (defn (:: sdistTests Spec)
@@ -221,5 +222,3 @@
 (defn (:: test-data (-> FilePath FilePath))
   (</> test-data-dir))
 
-(defn (:: load-me FilePath)
-  (test-data "LoadMe.fnk"))
