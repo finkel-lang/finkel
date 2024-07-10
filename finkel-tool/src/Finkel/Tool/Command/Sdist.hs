@@ -1,5 +1,9 @@
 ;;; -*- mode: finkel -*-
-;;;; Finkel sdist command, to create tar.gz of cabal package
+
+;;; Finkel sdist command, to create tar.gz of cabal package
+;;;
+;;; XXX: Consider removing this command when the support for "*.fnk" file
+;;; extension is dropped.
 
 (defmodule Finkel.Tool.Command.Sdist
   (export sdistMain)
@@ -24,11 +28,11 @@
    (Distribution.Simple.SrcDist [sdist])
    (Distribution.Simple.Utils [findPackageDesc])
 
+   (Distribution.Simple.PreProcess [PPSuffixHandler (PreProcessor ..)
+                                    mkSimplePreProcessor])
+
    ;; directory
    (System.Directory [withCurrentDirectory])
-
-   ;; finkel-setup
-   (Distribution.Simple.Finkel [finkelPPHandler])
 
    ;; Internal
    (Finkel.Tool.Internal.CLI)
@@ -39,7 +43,15 @@
 
 (cond-expand
   [(:min-version "Cabal" 3 12 0)
-   (import Distribution.Simple.Errors (exceptionMessage))]
+   (:begin
+     (import Distribution.Simple.Errors (exceptionMessage))
+     (import Distribution.Simple.PreProcess ((Suffix ..))))]
+  [otherwise
+   (:begin)])
+
+(cond-expand
+  [(:min-version "Cabal" 3 8 0)
+   (import Distribution.Simple.PreProcess (unsorted))]
   [otherwise
    (:begin)])
 
@@ -122,3 +134,22 @@
        (CommandList os) ($ putStr unlines os)
        (CommandReadyToGo parsed) (write-tgzs parsed)
        (CommandErrors es) (throwIO (ArgumentErrors "sdist" es))))))
+
+;;; Preprocessor suffix handler to merely register files with @"*.fnk"@ files.
+(defn (:: finkelPPHandler PPSuffixHandler)
+  (where (, suffix do_nothing_pp)
+    (defn suffix
+      (cond-expand
+        [(:min-version "Cabal" 3 12 0) (Suffix "fnk")]
+        [otherwise "fnk"]))
+    (defn do_nothing_pp [_ _ _]
+      (cond-expand
+        [(:min-version "Cabal" 3 8 0)
+         (PreProcessor {(= platformIndependent True)
+                        (= ppOrdering unsorted)
+                        (= runPreProcessor (mkSimplePreProcessor
+                                            (\ _ _ _ (pure ()))))})]
+        [otherwise
+         (PreProcessor {(= platformIndependent True)
+                        (= runPreProcessor (mkSimplePreProcessor
+                                            (\ _ _ _ (pure ()))))})]))))
