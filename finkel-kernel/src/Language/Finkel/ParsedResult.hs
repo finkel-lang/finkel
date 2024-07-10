@@ -4,26 +4,22 @@ module Language.Finkel.ParsedResult (
   fnkParsedResultAction
   ) where
 
-#if MIN_VERSION_ghc(9,6,0)
 
--- Not supported in ghc >= 9.6.
-fnkParsedResultAction :: a
-fnkParsedResultAction = error "Use Language.Finkel.Hooks.finkelHooks instead"
-
--- Requires parsedResultaction field in the 'Plugin' data type, which is
--- supported from ghc 8.6.0.
-#elif MIN_VERSION_ghc(8,6,0)
+#if MIN_VERSION_ghc(8,6,0)
 
 #include "ghc_modules.h"
 
 -- base
 import Control.Exception                 (displayException, throwIO)
 import Control.Monad.IO.Class            (MonadIO (..))
-import Data.List                         (foldl')
 import Data.Maybe                        (fromMaybe)
 import System.Console.GetOpt             (ArgOrder (..), getOpt)
 import System.Environment                (getProgName)
 import System.Exit                       (exitFailure, exitSuccess)
+
+#if !MIN_VERSION_base(4,20,0)
+import Data.List                         (foldl')
+#endif
 
 -- ghc
 import GHC_Driver_Env                    (Hsc (..), HscEnv (..))
@@ -52,7 +48,7 @@ import Language.Finkel.Exception         (FinkelException (..),
                                           finkelExceptionLoc,
                                           handleFinkelException)
 import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
-                                          runFnk', initFnkEnv)
+                                          initFnkEnv, runFnk')
 import Language.Finkel.Make              (mkParsedResult)
 import Language.Finkel.Make.Summary      (TargetSummary (..), compileFnkFile,
                                           dumpParsedAST)
