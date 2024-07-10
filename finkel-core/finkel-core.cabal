@@ -14,7 +14,7 @@ author:              8c6794b6
 maintainer:          8c6794b6@gmail.com
 copyright:           2017-2022 8c6794b6
 category:            Language
-build-type:          Custom
+build-type:          Simple
 extra-source-files:  README.md
                      --
                      test/data/plugin/*.hs
@@ -26,11 +26,6 @@ tested-with:           GHC == 8.10.7
                      , GHC == 9.6.5
                      , GHC == 9.8.2
                      , GHC == 9.10.1
-
-custom-setup
-  setup-depends:       base  >= 4.14 && < 5
-                     , Cabal >= 3.2  && < 3.13
-                     , finkel-setup == 0.0.0
 
 library
   hs-source-dirs:      src
@@ -57,14 +52,12 @@ library
 
   default-language:    Haskell2010
 
-  ghc-options:         -Wall
   build-tool-depends:  fnkpp:fnkpp == 0.0.0
-  if impl (ghc >= 9.6.0)
-    ghc-options:       -fplugin Language.Finkel.Plugin
-                       -keep-hscpp-files
-  else
-    ghc-options:       -F -pgmF fnkpp -optF --warn-interp=False
+  ghc-options:         -Wall
+                       -F -pgmF fnkpp -optF --no-warn-interp
                        -fplugin Language.Finkel.Plugin
+  if impl (ghc >= 9.6.0)
+    ghc-options:       -keep-hscpp-files
 
 test-suite finkel-core-test
   type:                exitcode-stdio-1.0
@@ -93,14 +86,12 @@ test-suite finkel-core-test
   if impl (ghc >= 9.4.0) && os(windows)
     buildable: False
 
+  build-tool-depends:  fnkpp:fnkpp == 0.0.0
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
-  if impl (ghc >= 9.6.0)
-    ghc-options:       -fplugin Language.Finkel.Plugin
-                       -keep-hscpp-files
-  else
-    build-tool-depends: fnkpp:fnkpp == 0.0.0
-    ghc-options:       -F -pgmF fnkpp -optF --warn-interp=False
+                       -F -pgmF fnkpp -optF --warn-interp=False
                        -fplugin Language.Finkel.Plugin
+  if impl (ghc >= 9.6.0)
+    ghc-options:       -keep-hscpp-files
 
 source-repository head
   type:     git

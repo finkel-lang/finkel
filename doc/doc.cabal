@@ -48,15 +48,13 @@ test-suite test
     buildable: False
   else
     if flag(dynamic)
-      ghc-options:       -dynamic
+      ghc-options:     -dynamic
 
+  build-tool-depends:  fnkpp:fnkpp == 0.0.0
+  ghc-options:         -F -pgmF fnkpp -optF --no-warn-interp
+                       -fplugin Finkel.Core.Plugin
   if impl (ghc >= 9.6)
-    ghc-options:       -fplugin Finkel.Core.Plugin
-                       -keep-hscpp-files
-  else
-    build-tool-depends:  fnkpp:fnkpp      == 0.0.0
-    ghc-options:         -F -pgmF fnkpp
-                         -fplugin Finkel.Core.Plugin
+    ghc-options:       -keep-hscpp-files
 
 source-repository head
   type:     git

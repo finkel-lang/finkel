@@ -53,9 +53,7 @@
                 (void (setSessionDynFlags (hsc-dflags hsc-env0-b)))
 
                 (<- hsc-env2 getSession)
-                (lept [pp-args (cond-expand
-                                 [(<= 906 :ghc) []]
-                                 [otherwise ["-F" "-pgmF" "fnkpp"]])
+                (lept [pp-args ["-F" "-pgmF" "fnkpp"]
                        fnk-args (++ pp-args ["-fno-code" (++ "-i" pdir)])])
                 (<- dflags1 (parseDynFlags hsc-env2 fnk-args))
                 (void (setSessionDynFlags dflags1))

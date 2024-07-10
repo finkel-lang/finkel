@@ -187,12 +187,8 @@ See \"GHCi.UI\", \"GHCi.UI.Monad\", and \"ghc/Main.hs\"."
       ;; passed from the command line.
       (<- hsc-env0 getSession)
       (lept [on-the-commandline (mkGeneralLocated "on the commandline")
-             ghc-opts2 (cond-expand
-                         [(<= 906 :ghc) ghc-opts]
-                         ;; In ghc < 9.6, the use of `fnkpp' is mandatory.
-                         [otherwise
-                          (<> ["-F" "-pgmF" "fnkpp" "-optF" "--no-warn-interp"]
-                              ghc-opts)])
+             ghc-opts2 (<> ["-F" "-pgmF" "fnkpp" "-optF" "--no-warn-interp"]
+                           ghc-opts)
              ;; XXX: Get plugin options from command line
              plugin-args []
              lghc-opts (map on-the-commandline ghc-opts2)])

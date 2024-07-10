@@ -28,8 +28,7 @@ import GHC.Driver.Main                   (hscTypecheckAndGetWarnings,
 import GHC.Driver.Phases                 (Phase (..))
 import GHC.Driver.Pipeline.Execute       (phaseOutputFilenameNew, runPhase)
 import GHC.Driver.Pipeline.Phases        (PhaseHook (..), TPhase (..))
-import GHC.Driver.Session                (GeneralFlag (..), gopt,
-                                          setGeneralFlag')
+import GHC.Driver.Session                (GeneralFlag (..), gopt)
 
 import GHC.Plugins                       (CommandLineOption)
 
@@ -77,37 +76,32 @@ finkelHooks :: String -> FnkEnv -> [CommandLineOption] -> HscEnv -> IO HscEnv
 finkelHooks mod_name fnk_env0 cmd_line_opts hsc_env0 = do
   -- Always setting the Opt_Pp flag on for fnk_default_dflags1 and dflags1,
   -- otherwise the hook for T_HsPp will not run.
-  let enable_pp_phase = setGeneralFlag' Opt_Pp
+  let fnk_default_dflags = bcoDynFlags (ic_dflags (hsc_IC hsc_env0))
       -- XXX: Update targets in expanding seession?
       -- enable_pp_phase =
       --   setGeneralFlag' Opt_Pp .
       --   setGeneralFlag' Opt_UseBytecodeRatherThanObjects .
       --   setGeneralFlag' Opt_WriteIfSimplifiedCore .
       --   flip xopt_set TemplateHaskell
-      fnk_default_dflags0 = bcoDynFlags (ic_dflags (hsc_IC hsc_env0))
-      fnk_default_dflags1 = enable_pp_phase fnk_default_dflags0
 
       -- XXX: File local plugin options are ignored.
       (os, _ls, errs) = getOpt Permute fnkPluginOptions cmd_line_opts
       fpo0 = foldl' (flip id) (defaultFnkPluginOptions fnk_env0) os
       fnk_env1 = fpoFnkEnv fpo0
-      fnk_env2 = fnk_env1 { envDefaultDynFlags = Just fnk_default_dflags1
+      fnk_env2 = fnk_env1 { envDefaultDynFlags = Just fnk_default_dflags
                           , envInvokedMode = GhcPluginMode }
 
   fnk_env3 <- initFnkEnv fnk_env2
 
-  let dflags0 = hsc_dflags hsc_env0
-      dflags1 = enable_pp_phase dflags0
-      fpo1 = fpo0 {fpoFnkEnv = fnk_env3}
+  let fpo1 = fpo0 {fpoFnkEnv = fnk_env3}
       phase_hook = PhaseHook (fnkPhaseHook fpo1)
       hooks = (hsc_hooks hsc_env0) {runPhaseHook = Just phase_hook}
       hsc_env1 = hsc_env0 {hsc_hooks = hooks}
-      hsc_env2 = hscSetFlags dflags1 hsc_env1
 
   case errs of
     _ | fpoHelp fpo1 -> printPluginUsage mod_name >> exitSuccess
     _:_              -> mapM_ putStrLn errs >> exitFailure
-    []               -> pure hsc_env2
+    []               -> pure hsc_env1
 
 
 -- ------------------------------------------------------------------------
