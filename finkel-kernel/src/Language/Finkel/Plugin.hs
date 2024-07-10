@@ -20,12 +20,19 @@ import Data.Functor                 (void)
 #endif
 
 -- ghc
-import GHC_Driver_Monad             (GhcMonad (..))
-import GHC_Plugins                  (Plugin (..), defaultPlugin, flagRecompile)
-
-#if !MIN_VERSION_ghc(9,6,0)
 import GHC_Driver_Env               (HscEnv (..))
-import GHC_Plugins                  (PluginWithArgs (..), StaticPlugin (..))
+import GHC_Driver_Monad             (GhcMonad (..))
+import GHC_Plugins                  (Plugin (..), PluginWithArgs (..),
+                                     StaticPlugin (..), defaultPlugin,
+                                     flagRecompile)
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Plugins           (Plugins (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+import GHC                          (setSessionDynFlags)
+import GHC_Driver_Session           (DynFlags (..))
 #endif
 
 -- Internal
@@ -36,15 +43,6 @@ import Language.Finkel.SpecialForms (defaultFnkEnv)
 import Language.Finkel.Hooks        (finkelHooks)
 #else
 import Language.Finkel.ParsedResult (fnkParsedResultAction)
-#endif
-
-#if MIN_VERSION_ghc(9,4,0) && !MIN_VERSION_ghc(9,6,0)
-import GHC.Driver.Plugins           (Plugins (..))
-#endif
-
-#if !MIN_VERSION_ghc(9,2,0)
-import GHC                          (setSessionDynFlags)
-import GHC_Driver_Session           (DynFlags (..))
 #endif
 
 -- | Finkel compiler plugin.
@@ -79,7 +77,12 @@ setFinkelPluginWithArgs plgn args = do
   -- `GHC.Loader.initializePlugins' does not check the addition of static
   -- plusing, according to the comment in the function.
   hsc_env' <- liftIO $ driverPlugin plgn args hsc_env
-  setSession hsc_env'
+  let sp = StaticPlugin (PluginWithArgs plgn args)
+      old_plugins = hsc_plugins hsc_env'
+      old_static_plugins = staticPlugins old_plugins
+      new_static_plugins = sp : old_static_plugins
+      new_plugins = old_plugins {staticPlugins = new_static_plugins}
+  setSession (hsc_env' {hsc_plugins = new_plugins})
 #elif MIN_VERSION_ghc(9,4,0)
   let sp = StaticPlugin (PluginWithArgs plgn args)
       old_plugins = hsc_plugins hsc_env
