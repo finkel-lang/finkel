@@ -82,7 +82,6 @@ library
                        --
                      , finkel-kernel == 0.0.0
                      , finkel-core   == 0.0.0
-                     , finkel-setup  == 0.0.0
 
   default-language:    Haskell2010
 
