@@ -104,12 +104,7 @@ compile' msg wrap ghc_args plugin_args basename =
             hsc_env1 <- getSession
 
             let dflags0 = hsc_dflags hsc_env1
-
-#if MIN_VERSION_ghc(9,6,0)
-            let fnk_args = ["-i" ++ pdir]
-#else
-            let fnk_args = ["-F", "-pgmF", _me, "-i" ++ pdir]
-#endif
+                fnk_args = ["-F", "-pgmF", _me, "-i" ++ pdir]
                 args = map noLoc (ftr_pkg_args ftr ++ fnk_args ++ ghc_args)
 
 #if MIN_VERSION_ghc(9,2,0)

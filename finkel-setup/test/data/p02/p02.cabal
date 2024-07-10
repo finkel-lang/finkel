@@ -21,10 +21,9 @@ common finkel
     build-depends:      finkel-kernel
     build-tool-depends: fnkpp:fnkpp
     ghc-options:        -fplugin Language.Finkel.Plugin
+                        -F -pgmF fnkpp -optF --no-warn-interp
     if impl (ghc >= 9.6.0)
       ghc-options:      -keep-hscpp-files
-    else
-      ghc-options:      -F -pgmF fnkpp -optF --no-warn-interp
 
 library
     import:           warnings, finkel
