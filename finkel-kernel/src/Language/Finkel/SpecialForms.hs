@@ -112,7 +112,7 @@ import Language.Finkel.Make              (findTargetModuleNameMaybe,
 import Language.Finkel.Make.TargetSource (targetSourcePath)
 import Language.Finkel.Syntax            (parseExpr, parseLImport,
                                           parseModuleNoHeader)
-import Language.Finkel.Syntax.SynUtils
+import Language.Finkel.Syntax.Utils
 
 
 -- ---------------------------------------------------------------------

@@ -1,9 +1,9 @@
 {-# LANGUAGE CPP #-}
 
 -- | Utility codes for syntax.
-module Language.Finkel.Syntax.SynUtils
+module Language.Finkel.Syntax.Utils
   ( -- * This module
-    module Language.Finkel.Syntax.SynUtils
+    module Language.Finkel.Syntax.Utils
 
     -- * Extension module
   , module Language.Finkel.Syntax.Extension
@@ -220,7 +220,7 @@ cfld2ufld (L l0 (HsRecField (L l1 (FieldOcc _ rdr)) arg pun)) =
   where
     unambiguous = Unambiguous unused rdr
 #  if !MIN_VERSION_ghc(9,0,0)
-cfld2ufld _ = error "Language.Finkel.Syntax.SynUtils:cfld2ufld"
+cfld2ufld _ = error "Language.Finkel.Syntax.Utils:cfld2ufld"
 #  endif
 #endif
 {-# INLINABLE cfld2ufld #-}
@@ -341,35 +341,35 @@ codeToUserTyVar code =
     LForm (L l (Atom (ASymbol name))) ->
       let bvis = HsBndrRequired unused
       in lA l (UserTyVar unused bvis (lN l (mkUnqual tvName name)))
-    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
+    _ -> error "Language.Finkel.Syntax.Utils:codeToUserTyVar"
 codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
 codeToUserTyVarSpecific code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
       lA l (UserTyVar unused SpecifiedSpec (lN l (mkUnqual tvName name)))
       -- XXX: Does not support 'InferredSpec' yet.
-    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
+    _ -> error "Language.Finkel.Syntax.Utils:codeToUserTyVarSpecific"
 #elif MIN_VERSION_ghc(9,8,0)
 codeToUserTyVar :: Code -> HTyVarBndrVis
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
       lA l (UserTyVar unused HsBndrRequired (lN l (mkUnqual tvName name)))
-    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
+    _ -> error "Language.Finkel.Syntax.Utils:codeToUserTyVar"
 codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
 codeToUserTyVarSpecific code =
   -- XXX: Does not support 'InferredSpec' yet.
   case code of
     LForm (L l (Atom (ASymbol name))) ->
       lA l (UserTyVar unused SpecifiedSpec (lN l (mkUnqual tvName name)))
-    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
+    _ -> error "Language.Finkel.Syntax.Utils:codeToUserTyVarSpecific"
 #elif MIN_VERSION_ghc(9,0,0)
 codeToUserTyVar :: Code -> LHsTyVarBndr () PARSED
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
       lA l (UserTyVar unused () (lN l (mkUnqual tvName name)))
-    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
+    _ -> error "Language.Finkel.Syntax.Utils:codeToUserTyVar"
 
 codeToUserTyVarSpecific :: Code -> LHsTyVarBndr Specificity PARSED
 codeToUserTyVarSpecific code =
@@ -377,14 +377,14 @@ codeToUserTyVarSpecific code =
     LForm (L l (Atom (ASymbol name))) ->
       lA l (UserTyVar unused SpecifiedSpec (lN l (mkUnqual tvName name)))
       -- XXX: Does not support 'InferredSpec' yet.
-    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVarSpecific"
+    _ -> error "Language.Finkel.Syntax.Utils:codeToUserTyVarSpecific"
 #else
 codeToUserTyVar :: Code -> HTyVarBndr
 codeToUserTyVar code =
   case code of
     LForm (L l (Atom (ASymbol name))) ->
       L l (UserTyVar unused (L l (mkUnqual tvName name)))
-    _ -> error "Language.Finkel.Syntax.SynUtils:codeToUserTyVar"
+    _ -> error "Language.Finkel.Syntax.Utils:codeToUserTyVar"
 
 codeToUserTyVarSpecific :: Code -> HTyVarBndrSpecific
 codeToUserTyVarSpecific = codeToUserTyVar

@@ -56,7 +56,7 @@ import Language.Finkel.Syntax.HExpr
 import Language.Finkel.Syntax.HImpExp
 import Language.Finkel.Syntax.HPat
 import Language.Finkel.Syntax.HType
-import Language.Finkel.Syntax.SynUtils
+import Language.Finkel.Syntax.Utils
 }
 
 %name parse_module module
