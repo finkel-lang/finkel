@@ -30,7 +30,7 @@ Line contents after ``;`` are treated as comments.
 .. literalinclude:: ../include/language-syntax/expr/line-comment.hs
    :language: haskell
 
-Block style comment is supported with ``#;`` and ``;#``.
+Block style comment is supported with ``{-`` and ``-}``.
 
 .. literalinclude:: ../include/language-syntax/expr/block-comment.fnk
    :language: finkel
