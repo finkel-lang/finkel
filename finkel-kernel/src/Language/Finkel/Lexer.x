@@ -126,7 +126,7 @@ $white+  ;
 \;+ $white+ \$ @hsymbol $white_no_nl* ~$nl* @contdoc* { tok_doc_named }
 
 \; .*    { tok_line_comment }
-\#\; .*  { tok_block_comment }
+\{\- .*  { tok_block_comment }
 
 --- Discard prefix
 \% \_ { tok_discard }
@@ -518,8 +518,8 @@ tok_block_comment_with :: (String -> Token)
                        -> Action
 tok_block_comment_with tok ini inp0 _ = do
   case alexGetChar inp0 of
-    Just ('#', inp1)
-      | Just (';', inp2) <- alexGetChar inp1
+    Just ('{', inp1)
+      | Just ('-', inp2) <- alexGetChar inp1
       , Just (c, inp3) <- ini inp2
       , Just (com, inp4) <- go inp3 c ""
       -> alexSetInput inp4 >> return (tok (reverse com))
@@ -527,7 +527,7 @@ tok_block_comment_with tok ini inp0 _ = do
   where
     go inp prev acc =
       case alexGetChar inp of
-        Just (c, inp') | prev == ';', c == '#', _:tl <- acc -> Just (tl, inp')
+        Just (c, inp') | prev == '-', c == '}', _:tl <- acc -> Just (tl, inp')
                        | otherwise -> go inp' c (c:acc)
         Nothing -> Nothing
 {-# INLINABLE tok_block_comment_with #-}

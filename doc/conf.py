@@ -283,7 +283,7 @@ class FinkelLexer(RegexLexer):
             (r'%p\(.*', token.Comment),
 
             # Comment:
-            (r'#\;', Comment.Multiline, 'multiline-comment'),
+            (r'{-', Comment.Multiline, 'multiline-comment'),
             (r';.*', Comment.Single),
             (r'%_', Comment.Single),
 
@@ -411,10 +411,10 @@ class FinkelLexer(RegexLexer):
         ],
 
         'multiline-comment': [
-            (r'#\;', Comment.Multiline, '#push'),
-            (r'\;#', Comment.Multiline, '#pop'),
-            (r'[^;#]+', Comment.Multiline),
-            (r'[;#]', Comment.Multiline),
+            (r'{-', Comment.Multiline, '#push'),
+            (r'-}', Comment.Multiline, '#pop'),
+            (r'[^-}]+', Comment.Multiline),
+            (r'[-}]', Comment.Multiline),
         ]
     }
 
