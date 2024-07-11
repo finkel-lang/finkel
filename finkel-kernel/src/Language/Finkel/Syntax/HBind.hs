@@ -7,31 +7,31 @@ module Language.Finkel.Syntax.HBind where
 #include "ghc_modules.h"
 
 -- ghc
-import           GHC_Data_Bag                    (listToBag)
-import           GHC_Data_OrdList                (toOL)
-import           GHC_Hs_Binds                    (FixitySig (..), HsBind,
-                                                  HsBindLR (..),
-                                                  HsLocalBindsLR (..),
-                                                  HsValBindsLR (..), Sig (..),
-                                                  emptyLocalBinds)
-import           GHC_Hs_Decls                    (HsDecl (..))
-import           GHC_Hs_Expr                     (GRHSs (..), LGRHS)
-import qualified GHC_Parser_PostProcess          as PostProcess
-import           GHC_Types_Fixity                (Fixity)
-import           GHC_Types_Name_Reader           (RdrName)
-import           GHC_Types_SrcLoc                (GenLocated (..))
+import           GHC_Data_Bag                 (listToBag)
+import           GHC_Data_OrdList             (toOL)
+import           GHC_Hs_Binds                 (FixitySig (..), HsBind,
+                                               HsBindLR (..),
+                                               HsLocalBindsLR (..),
+                                               HsValBindsLR (..), Sig (..),
+                                               emptyLocalBinds)
+import           GHC_Hs_Decls                 (HsDecl (..))
+import           GHC_Hs_Expr                  (GRHSs (..), LGRHS)
+import qualified GHC_Parser_PostProcess       as PostProcess
+import           GHC_Types_Fixity             (Fixity)
+import           GHC_Types_Name_Reader        (RdrName)
+import           GHC_Types_SrcLoc             (GenLocated (..))
 
 #if MIN_VERSION_ghc(9,10,0)
-import           GHC_Hs_Binds                    (HsMultAnn (..))
+import           GHC_Hs_Binds                 (HsMultAnn (..))
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)
-import           GHC_Types_SrcLoc                (SrcSpan)
+import           GHC_Types_SrcLoc             (SrcSpan)
 #endif
 
 -- Internal
 import           Language.Finkel.Builder
-import           Language.Finkel.Syntax.SynUtils
+import           Language.Finkel.Syntax.Utils
 
 
 mkPatBind_compat :: HPat -> [HGRHS] -> [HDecl] -> HsBind PARSED

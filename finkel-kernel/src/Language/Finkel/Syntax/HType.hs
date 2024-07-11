@@ -64,7 +64,7 @@ import GHC_Types_Var                   (ForallVisFlag (..))
 import Language.Finkel.Builder
 import Language.Finkel.Data.FastString (lengthFS, nullFS, unconsFS)
 import Language.Finkel.Form
-import Language.Finkel.Syntax.SynUtils
+import Language.Finkel.Syntax.Utils
 
 -- ---------------------------------------------------------------------
 --

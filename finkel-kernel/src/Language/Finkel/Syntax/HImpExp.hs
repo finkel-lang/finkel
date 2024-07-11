@@ -36,7 +36,7 @@ import Language.Haskell.Syntax.ImpExp   (ImportListInterpretation (..))
 -- Internal
 import Language.Finkel.Builder
 import Language.Finkel.Form
-import Language.Finkel.Syntax.SynUtils
+import Language.Finkel.Syntax.Utils
 
 -- ---------------------------------------------------------------------
 --

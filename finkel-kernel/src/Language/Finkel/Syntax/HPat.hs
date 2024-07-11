@@ -54,7 +54,7 @@ import GHC_Hs_Utils                    (mkLHsSigWcType)
 import Language.Finkel.Builder
 import Language.Finkel.Data.FastString (nullFS, unconsFS)
 import Language.Finkel.Form
-import Language.Finkel.Syntax.SynUtils
+import Language.Finkel.Syntax.Utils
 
 
 -- ------------------------------------------------------------------------

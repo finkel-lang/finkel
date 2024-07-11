@@ -99,7 +99,7 @@ import Language.Finkel.Data.SourceText
 import Language.Finkel.Form
 import Language.Finkel.Syntax.HBind
 import Language.Finkel.Syntax.HType
-import Language.Finkel.Syntax.SynUtils
+import Language.Finkel.Syntax.Utils
 
 
 -- ---------------------------------------------------------------------

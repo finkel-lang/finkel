@@ -83,7 +83,7 @@ library
                        Language.Finkel.ParsedResult
                        Language.Finkel.Syntax.Extension
                        Language.Finkel.Syntax.Location
-                       Language.Finkel.Syntax.SynUtils
+                       Language.Finkel.Syntax.Utils
                        Language.Finkel.Syntax.HBind
                        Language.Finkel.Syntax.HDecl
                        Language.Finkel.Syntax.HExpr
