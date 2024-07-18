@@ -48,12 +48,6 @@
 (import Finkel.Core.Internal.Ghc.Version)
 (import Finkel.Core.Internal.Ghc.Compat)
 
-;;; XXX: Workaround for supporting ghc 9.6. Telling the build order by adding
-;;; the Stage1 module as dependency. This module does not use any of the
-;;; exported entities from Stage1, but using the macros from Stage1 during the
-;;; compilation.
-(import Finkel.Core.Internal.Stage1 ())
-
 (:require Finkel.Core.Internal.Stage1)
 
 (eval-when [:compile]

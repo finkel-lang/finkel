@@ -19,10 +19,6 @@
 
 ;;; Compile time modules
 
-;;; XXX: Workaround for nested use of `:require', requiring all the home unit
-;;; modules from the deepest to the shallowest.
-(:require Finkel.Core.Internal.Stage1)
-(:require Finkel.Core.Internal.Stage2)
 (:require Finkel.Core)
 
 (:eval-when-compile
