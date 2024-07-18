@@ -40,7 +40,7 @@ import           GHC_Driver_Env_Types            (HscEnv (..))
 import           GHC_Driver_Main                 (newHscEnv)
 import           GHC_Driver_Monad                (Ghc (..), GhcMonad (..),
                                                   Session (..), getSession,
-                                                  setSession)
+                                                  setSession, withTempSession)
 import           GHC_Driver_Session              (DynFlags (..),
                                                   GeneralFlag (..),
                                                   GhcLink (..),
@@ -218,8 +218,15 @@ withExpanderSettingsG act = do
   fnk_env <- getFnkEnv
   let tr = debugWhen' dflags fnk_env Fnk_trace_expand
   if isExpanding dflags
-    then tr ["withExpanderSettingsG: id"] >> act
-    else tr ["withExpanderSettingsG: withGlobalSession"] >> withGlobalSession act
+    then do
+      -- Clearning the current target, but not using 'withGlobalSession'. The
+      -- 'withGlobalSesion' function locks the top level MVar, using it will
+      -- cause a dead lock.
+      tr ["withExpanderSettingsG: clearing hsc_targets for nested call"]
+      withTempSession (\h -> h {hsc_targets = []}) act
+    else do
+      tr ["withExpanderSettingsG: withGlobalSession"]
+      withGlobalSession act
 
 -- Note: [Global HscEnv for plugin]
 -- --------------------------------
