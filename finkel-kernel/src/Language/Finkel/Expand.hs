@@ -6,7 +6,6 @@ module Language.Finkel.Expand
   , expand1
   , expands
   , expands'
-  , newHscEnvForExpand
   , withExpanderSettings
   , setExpanding
   , isExpanding
