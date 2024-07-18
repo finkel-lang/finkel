@@ -175,7 +175,8 @@ withExpanderSettingsE act =
 -- compiler executable.
 newHscEnvForExpand :: MonadIO m => FnkEnv -> HscEnv -> m HscEnv
 newHscEnvForExpand fnk_env orig_hsc_env = do
-  let dflags0 = hsc_dflags orig_hsc_env
+  let tr = debugWhen' dflags0 fnk_env Fnk_trace_expand
+      dflags0 = hsc_dflags orig_hsc_env
       -- XXX: Constantly updating the backend to interpreter, the original
       -- backend information is gone. If the 'bcoDynFlags' was not applied,
       -- compilation of finkel-core package failed in ghc <= 8.10.
@@ -183,10 +184,8 @@ newHscEnvForExpand fnk_env orig_hsc_env = do
       dflags2 = if interpHasNoWayDyn
                    then removeWayDyn dflags1
                    else dflags1
-
-  debugWhen' (hsc_dflags orig_hsc_env) fnk_env Fnk_trace_expand
-    [ "newHscEnvForExpand.hsc_targets"
-    , nest 2 (fsep (map ppr (hsc_targets orig_hsc_env)))]
+  tr [ "newHscEnvForExpand.hsc_targets"
+     , nest 2 (fsep (map ppr (hsc_targets orig_hsc_env)))]
 
 #if MIN_VERSION_ghc(9,6,0)
   -- In ghc 9.6, arguments of newHscEnv takes top directory of ghc library path.
@@ -240,19 +239,18 @@ withGlobalSession act0 = do
   fenv0 <- getFnkEnv
   orig_hsc_env <- getSession
 
-  let prepare = initializeGlobalSession
+  let tr = debugWhen' (hsc_dflags orig_hsc_env) fenv0 Fnk_trace_expand
+      prepare = initializeGlobalSession
       restore = setSession
       act1 = bracket prepare restore $ \mex0 -> do
         let mex1 = discardInteractiveContext mex0
         setSession mex1
-
-        modifyFnkEnv (\e -> e { envSessionForExpand = Just mex1 })
+        modifyFnkEnv (\e -> e {envSessionForExpand = Just mex1})
         retval <- act0
         mex2 <- getSession
-        modifyFnkEnv (\e -> e { envSessionForExpand = Just mex2 })
+        modifyFnkEnv (\e -> e {envSessionForExpand = Just mex2})
         fnk_env <- getFnkEnv
         pure (retval, fnk_env)
-      tr = debugWhen' (hsc_dflags orig_hsc_env) fenv0 Fnk_trace_expand
 
   (retval, fnk_env) <- liftIO $ do
     modifyMVar globalSessionVar $ \mb_s0 -> do
@@ -262,7 +260,9 @@ withGlobalSession act0 = do
           pure s0
         Nothing -> do
           tr ["withGlobalsession: invoking newHscEnvForExpand"]
-          newHscEnvForExpand fenv0 orig_hsc_env >>= fmap Session . newIORef
+          new_hsc_env <- newHscEnvForExpand fenv0 orig_hsc_env
+          r0 <- newIORef new_hsc_env
+          pure (Session r0)
       (retval, fnk_env) <- unGhc (toGhc act1 fer) s1
       for_ (envSessionForExpand fnk_env) $ \he ->
         atomicModifyIORef' r1 (const (he, ()))
