@@ -74,10 +74,6 @@ import Language.Haskell.Syntax.ImpExp    (ImportListInterpretation (..))
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
-import GHC.Driver.Make                   (ModIfaceCache (..))
-#endif
-
-#if MIN_VERSION_ghc(9,4,0)
 import GHC.Driver.Env                    (hscActiveUnitId, hsc_HUG)
 import GHC.Unit.Env                      (lookupHug)
 #endif
@@ -397,17 +393,6 @@ makeMissingHomeMod (L _ idecl) = do
       tr = debug fnk_env "makeMissinghomeMod"
       do_mk msgs = tr msgs >> smpl_mk
       dont_mk = tr
-
-#if MIN_VERSION_ghc(9,4,0)
-  let getCachedIface = case envInterpModIfaceCache fnk_env of
-        Just mic -> liftIO $ do
-          caches <- iface_clearCache mic
-          mapM_ (iface_addToCache mic) caches
-          pure caches
-        Nothing -> pure []
-  cached_ifaces <- getCachedIface
-  tr ("cached_iface:" : map ppr cached_ifaces)
-#endif
 
   -- XXX: See 'GHC.Driver.Make.enableCodeGenWhen', which is looking up dynflags
   -- from mod summary, and looking up node key from 'needs_codegen_map'. The
