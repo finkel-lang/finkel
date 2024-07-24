@@ -21,7 +21,6 @@ module Language.Finkel.Make.TargetSource
   , findTargetSource
   , findTargetSourceMaybe
   , findTargetSourceWithPragma
-  , findFileInImportPaths
 
    -- * File type related functions
   , asModuleName
