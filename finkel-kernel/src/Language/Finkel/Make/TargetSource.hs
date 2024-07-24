@@ -57,8 +57,13 @@ import GHC_Unit_Module        (ModuleName, mkModuleName, moduleNameSlashes,
 import GHC_Utils_Misc         (looksLikeModuleName)
 import GHC_Utils_Outputable   (Outputable (..), sep, text)
 
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Driver.Session     (augmentByWorkingDirectory)
+#endif
+
 -- Internal
 import Language.Finkel.Error
+
 
 -- ---------------------------------------------------------------------
 --
@@ -230,7 +235,14 @@ findTargetSource = findTargetSourceWithPragma ";;;"
 findTargetSourceWithPragma
   :: MonadIO m => String -> DynFlags -> Located String -> m TargetSource
 findTargetSourceWithPragma pragma dflags (L l modNameOrFilePath)= do
-  mb_inputPath <- findFileInImportPaths (importPaths dflags) modNameOrFilePath
+  let import_paths0 = importPaths dflags
+#if MIN_VERSION_ghc(9,4,0)
+      -- See GHC.Unit.Finder.augmentImports which is not exported.
+      import_paths1 = map (augmentByWorkingDirectory dflags) import_paths0
+#else
+      import_paths1 = import_paths0
+#endif
+  mb_inputPath <- findFileInImportPaths import_paths1 modNameOrFilePath
   let detectSource path
         | isFnkFile path = return (FnkSource path modName)
         | isHsFile path = do
