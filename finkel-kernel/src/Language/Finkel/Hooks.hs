@@ -74,9 +74,9 @@ finkelHooks :: String -> FnkEnv -> [CommandLineOption] -> HscEnv -> IO HscEnv
 
 -- Actual implementation is for ghc >= 9.6, older versions are not supported.
 finkelHooks mod_name fnk_env0 cmd_line_opts hsc_env0 = do
-  -- Always setting the Opt_Pp flag on for fnk_default_dflags1 and dflags1,
+  -- Always setting the Opt_Pp flag on for dflags_from_ic1 and dflags1,
   -- otherwise the hook for T_HsPp will not run.
-  let fnk_default_dflags = bcoDynFlags (ic_dflags (hsc_IC hsc_env0))
+  let dflags_from_ic = bcoDynFlags (ic_dflags (hsc_IC hsc_env0))
       -- XXX: Update targets in expanding seession?
       -- enable_pp_phase =
       --   setGeneralFlag' Opt_Pp .
@@ -88,7 +88,7 @@ finkelHooks mod_name fnk_env0 cmd_line_opts hsc_env0 = do
       (os, _ls, errs) = getOpt Permute fnkPluginOptions cmd_line_opts
       fpo0 = foldl' (flip id) (defaultFnkPluginOptions fnk_env0) os
       fnk_env1 = fpoFnkEnv fpo0
-      fnk_env2 = fnk_env1 { envDefaultDynFlags = Just fnk_default_dflags
+      fnk_env2 = fnk_env1 { envDefaultDynFlags = Just dflags_from_ic
                           , envInvokedMode = GhcPluginMode }
 
   fnk_env3 <- initFnkEnv fnk_env2
