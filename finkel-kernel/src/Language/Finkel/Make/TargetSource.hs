@@ -32,8 +32,8 @@ module Language.Finkel.Make.TargetSource
 #include "ghc_modules.h"
 
 -- base
+import Control.Applicative    (Alternative (..))
 import Control.Exception      (SomeException, try)
-import Control.Monad          (mplus)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Char              (isUpper)
 import Data.List              (isSubsequenceOf)
@@ -197,7 +197,7 @@ findFileInImportPaths dirs modName = do
                else do
                  exists' <- liftIO (doesFileExist hsPath)
                  if exists'
-                    then search (mb_hs `mplus` Just hsPath) ds'
+                    then search (mb_hs <|> Just hsPath) ds'
                     else search mb_hs ds'
       dirs' = if "." `elem` dirs
                  then dirs
