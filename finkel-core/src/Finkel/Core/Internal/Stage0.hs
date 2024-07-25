@@ -1,5 +1,5 @@
 ;;; -*- mode: finkel -*-
-;;;; Stage0 - functios usd in stage 1.
+;;;; Stage0 - functions used in stage 1.
 
 ;;; This module contains few functions and type to work with `Code', just enough
 ;;; to define some macros in the next `Finkel.Core.Internal.Stage1' module.
