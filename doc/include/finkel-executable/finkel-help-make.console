@@ -9,14 +9,15 @@ HELP OPTIONS:
 
 DEBUG OPTIONS:
 
-    --fnk-verbose=INT   Set verbosity level to INT.
-    --fnk-hsdir=DIR     Set Haskell code output directory to DIR.
-    --fnk-dump-dflags   Dump DynFlags settings.
-    --fnk-dump-expand   Dump expanded code.
-    --fnk-dump-hs       Dump Haskell source code.
-    --fnk-trace-expand  Trace macro expansion.
-    --fnk-trace-make    Trace make function.
-    --fnk-trace-spf     Trace builtin special forms.
+    --fnk-verbose=INT    Set verbosity level to INT.
+    --fnk-hsdir=DIR      Set Haskell code output directory to DIR.
+    --fnk-dump-dflags    Dump DynFlags settings.
+    --fnk-dump-expand    Dump expanded code.
+    --fnk-dump-hs        Dump Haskell source code.
+    --fnk-trace-expand   Trace macro expansion.
+    --fnk-trace-session  Trace session env.
+    --fnk-trace-make     Trace make function.
+    --fnk-trace-spf      Trace builtin special forms.
 
   Other options are passed to ghc.
 

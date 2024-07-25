@@ -215,6 +215,7 @@ data FnkDebugFlag
   | Fnk_dump_expand
   | Fnk_dump_hs
   | Fnk_trace_expand
+  | Fnk_trace_session
   | Fnk_trace_make
   | Fnk_trace_spf
   deriving (Eq, Show, Enum)
@@ -817,12 +818,13 @@ fopt flag fnk_env =
   where
     verbosity_to_enable =
       case flag of
-        Fnk_dump_dflags  -> 2
-        Fnk_dump_expand  -> 2
-        Fnk_dump_hs      -> 2
-        Fnk_trace_expand -> 3
-        Fnk_trace_make   -> 3
-        Fnk_trace_spf    -> 3
+        Fnk_dump_dflags   -> 2
+        Fnk_dump_expand   -> 2
+        Fnk_dump_hs       -> 2
+        Fnk_trace_expand  -> 3
+        Fnk_trace_session -> 3
+        Fnk_trace_make    -> 3
+        Fnk_trace_spf     -> 3
 {-# INLINABLE fopt #-}
 
 -- | Turn on the given 'FnkDebugFlag'.
