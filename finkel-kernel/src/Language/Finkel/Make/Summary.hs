@@ -58,7 +58,6 @@ import           System.FilePath                   (takeBaseName, takeDirectory,
                                                     (<.>), (</>))
 
 -- ghc
-import           GHC_Data_EnumSet                  (toList)
 import           GHC_Data_FastString               (fsLit)
 import           GHC_Data_StringBuffer             (StringBuffer,
                                                     hGetStringBuffer)
@@ -263,9 +262,7 @@ compileFnkFile path modname = do
       mname_str = moduleNameString modname
       mname_sdoc = text (mname_str ++ ":")
 
-  tr [ "path:" <+> text path
-     , "language:" <+> ppr (language dflags1)
-     , "extensionFlags:" <+> ppr (toList (extensionFlags dflags1))]
+  tr ["path:" <+> text path]
 
   -- Compile the form with local DynFlags to support file local pragmas.
   (mdl, reqs) <- withTmpDynFlags dflags1 $

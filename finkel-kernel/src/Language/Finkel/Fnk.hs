@@ -74,6 +74,7 @@ module Language.Finkel.Fnk
 #include "ghc_modules.h"
 
 -- base
+import           Control.Concurrent        (MVar, newMVar, withMVar)
 import           Control.Exception         (throw, throwIO)
 import           Control.Monad             (mplus, unless, when)
 import           Control.Monad.IO.Class    (MonadIO (..))
@@ -152,6 +153,7 @@ import           GHC.Driver.Backend        (Backend (..))
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Env            (hscSetFlags)
 import           GHC.Driver.Make           (ModIfaceCache, newIfaceCache)
+import           GHC.Settings              (ToolSettings (..))
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -167,7 +169,6 @@ import           GHC_Platform_Ways         (hostFullWays)
 #else
 import           GHC_Platform_Ways         (interpWays, updateWays)
 #endif
-
 
 -- Internal
 import           Language.Finkel.Error
@@ -849,7 +850,8 @@ debugWhen' dflags fnk_env flag mdocs =
 {-# INLINABLE debugWhen' #-}
 
 dumpSDocs :: MonadIO m => DynFlags -> [SDoc] -> m ()
-dumpSDocs dflags mdocs = liftIO (pr (vcat mdocs))
+dumpSDocs dflags mdocs = liftIO $
+  withMVar globalDumpSDocsLock $ const (pr (vcat mdocs))
   where
 #if MIN_VERSION_ghc(9,2,0)
     pr = printSDocLn (initSDocContext dflags err_style)
@@ -881,16 +883,15 @@ dumpDynFlags fnk_env label dflags =
   where
     msgs =
       [ label
-      , "DynFlags:"
       , "  ghcLink:" <+> text (show (ghcLink dflags))
       , "  ghcMode:" <+> ppr (ghcMode dflags)
 #if MIN_VERSION_ghc(9,2,0)
-      , "  backend: " <+> text (show (backend dflags))
+      , "  backend:" <+> text (show (backend dflags))
 #else
       , "  hscTarget:" <+> text (show (hscTarget dflags))
 #endif
 #if MIN_VERSION_ghc(9,2,0)
-      , "  ways:" <+> text (show (targetWays_ dflags))
+      , "  ways:" <+> text (show (ways dflags))
 #else
       , "  ways:" <+> text (show (ways dflags))
 #endif
@@ -901,6 +902,12 @@ dumpDynFlags fnk_env label dflags =
       , "  interpWays:" <+> text (show interpWays)
 #endif
       , "  importPaths:" <+> sep (map text (importPaths dflags))
+#if MIN_VERSION_ghc(9,4,0)
+      , "  workingDirectory:" <+> text (show (workingDirectory dflags))
+      , "  num_plugins:" <+> text (show (length (pluginModNames dflags)))
+      , "  opt_pp:" <+> text (show (gopt Opt_Pp dflags))
+      , "  pgmF:" <+> text (toolSettings_pgm_F (toolSettings dflags))
+#endif
 #if !MIN_VERSION_ghc(9,4,0)
       , "  optLevel:" <+> text (show (optLevel dflags))
 #endif
@@ -945,3 +952,10 @@ dumpDynFlags fnk_env label dflags =
                                                 , Opt_Ticky_Dyn_Thunk ])
       , "  debugLevel:" <+> ppr (debugLevel dflags)
       ]
+
+-- XXX: Unsafe global lock to avoid mixing up messages in concurrent settings.
+-- When FnkEnv is shared, better to add a MVar field in the shared FnkEnv for
+-- such purpose (But FnkEnv is not shared in parsedResultAction).
+globalDumpSDocsLock :: MVar ()
+globalDumpSDocsLock = unsafePerformIO (newMVar ())
+{-# NOINLINE globalDumpSDocsLock #-}
