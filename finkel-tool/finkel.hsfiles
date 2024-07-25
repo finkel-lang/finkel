@@ -13,7 +13,7 @@ category:            Data
 build-type:          Custom
 extra-source-files:  README.md
                      src/*.fnk
-cabal-version:       >=2.0
+cabal-version:       2.0
 
 custom-setup
   setup-depends:       base >= 4.7 && < 5
