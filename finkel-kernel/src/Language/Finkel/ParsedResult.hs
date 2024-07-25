@@ -76,12 +76,11 @@ fnkParsedResultAction
   -> Hsc HsParsedModule
 #endif
 
-fnkParsedResultAction mod_name fnk_env0 args0 ms pm = do
-  fnk_env1  <- liftIO $ initFnkEnv fnk_env0
-  case getOpt Permute fnkPluginOptions args1 of
+fnkParsedResultAction mod_name fnk_env0 args0 ms pm =
+  case getOpt Permute fnkPluginOptions (concatMap words args0) of
     (_,    _, es@(_:_)) -> liftIO (exitWithBriefUsage mod_name es)
     (os, _ls,       []) -> do
-      let fpo = foldl' (flip id) (defaultFnkPluginOptions fnk_env1) os
+      let fpo = foldl' (flip id) (defaultFnkPluginOptions fnk_env0) os
       if fpoHelp fpo
         then liftIO (printPluginUsage mod_name >> exitSuccess)
         else if fpoIgnore fpo
@@ -91,15 +90,14 @@ fnkParsedResultAction mod_name fnk_env0 args0 ms pm = do
             Just path -> do
               let pragma = fpoPragma fpo
                   lpath = noLoc path
-                  fnk_env2 = fpoFnkEnv fpo
+                  fnk_env1 = fpoFnkEnv fpo
+                  dflags = ms_hspp_opts ms
+                  mkPR = mkParsedResult
+              fnk_env2 <- liftIO $ initFnkEnv fnk_env1
               ts <- findTargetSourceWithPragma pragma dflags lpath
               case ts of
                 FnkSource {} -> mkPR <$> parseFnkModule fnk_env2 path ms
                 _            -> pure pm
-  where
-    args1 = concatMap words args0
-    dflags = ms_hspp_opts ms
-    mkPR = mkParsedResult
 
 
 -- ------------------------------------------------------------------------
