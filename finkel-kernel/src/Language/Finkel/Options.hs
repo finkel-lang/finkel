@@ -80,7 +80,7 @@ adjustFnkEnvOptions = foldr f []
     dropFnk = drop (length "fnk-")
     is_removed_option (Option so lo _ _) =
       so == ['B'] ||
-      any (`elem` lo) ["fnk-dump-hs", "fnk-dump-dflags", "fnk-hsdir"]
+      any (`elem` lo) ["fnk-dump-hs", "fnk-hsdir"]
 
 printPluginUsage :: String -> IO ()
 printPluginUsage mod_name = do
