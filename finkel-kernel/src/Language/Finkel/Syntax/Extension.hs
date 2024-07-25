@@ -29,7 +29,7 @@ import Language.Haskell.Syntax.Extension (NoExtField (..), noExtField)
 import GHC.Hs.Extension                  (NoExtField (..), noExtField)
 #endif
 
--- | Type class to represent field value which is no in use.
+-- | Type class to represent field value which is not in use.
 class Unused a where
   -- | Unused value for extension field in AST data types.
   unused :: a
