@@ -118,7 +118,7 @@ withExpanderSettings :: Fnk a -> Fnk a
 withExpanderSettings act = do
   fnk_env <- getFnkEnv
 
-  debugWhen fnk_env Fnk_trace_expand
+  debugSession fnk_env Nothing
     ["withExpanderSettings: envInvokedMode:" <+> ppr (envInvokedMode fnk_env)]
 
   case envInvokedMode fnk_env of
@@ -174,7 +174,7 @@ withExpanderSettingsE act =
 -- compiler executable.
 newHscEnvForExpand :: MonadIO m => FnkEnv -> HscEnv -> m HscEnv
 newHscEnvForExpand fnk_env orig_hsc_env = do
-  let tr = debugWhen' dflags0 fnk_env Fnk_trace_expand
+  let tr = debugWhen' dflags0 fnk_env Fnk_trace_session
       dflags0 = hsc_dflags orig_hsc_env
       -- XXX: Constantly updating the backend to interpreter, the original
       -- backend information is gone. If the 'bcoDynFlags' was not applied,
@@ -245,7 +245,7 @@ withGlobalSession act0 = do
   fenv0 <- getFnkEnv
   orig_hsc_env <- getSession
 
-  let tr = debugWhen' (hsc_dflags orig_hsc_env) fenv0 Fnk_trace_expand
+  let tr = debugWhen' (hsc_dflags orig_hsc_env) fenv0 Fnk_trace_session
       prepare = initializeGlobalSession
       restore = setSession
       act1 = bracket prepare restore $ \mex0 -> do
@@ -466,6 +466,10 @@ isInterpreted dflags = hscTarget dflags == HscInterpreted
 #endif
 {-# INLINABLE isInterpreted #-}
 
+debugSession :: FnkEnv -> Maybe SDoc -> [SDoc] -> Fnk ()
+debugSession = debugWith Fnk_trace_session
+{-# INLINABLE debugSession #-}
+
 
 -- ---------------------------------------------------------------------
 --
@@ -676,9 +680,13 @@ expand1 form =
     _ -> return form
 {-# INLINABLE expand1 #-}
 
--- | Debug function fot this module.
+-- | Debug function fot macro expansion.
 debug :: FnkEnv -> Maybe SDoc -> [SDoc] -> Fnk ()
-debug fnk_env mb_extra msgs0 =
-  let msgs1 = maybe msgs0 (: msgs0) mb_extra
-  in  debugWhen fnk_env Fnk_trace_expand msgs1
+debug = debugWith Fnk_trace_expand
 {-# INLINABLE debug #-}
+
+debugWith :: FnkDebugFlag -> FnkEnv -> Maybe SDoc -> [SDoc] -> Fnk ()
+debugWith debug_flag fnk_env mb_extra msgs0 =
+  let msgs1 = maybe msgs0 (: msgs0) mb_extra
+  in  debugWhen fnk_env debug_flag msgs1
+{-# INLINABLE debugWith #-}
