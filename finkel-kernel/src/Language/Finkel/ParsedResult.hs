@@ -48,7 +48,7 @@ import Language.Finkel.Exception         (FinkelException (..),
                                           finkelExceptionLoc,
                                           handleFinkelException)
 import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
-                                          initFnkEnv, runFnk')
+                                          dumpDynFlags, initFnkEnv, runFnk')
 import Language.Finkel.Make              (mkParsedResult)
 import Language.Finkel.Make.Summary      (TargetSummary (..), compileFnkFile,
                                           dumpParsedAST)
@@ -113,16 +113,22 @@ parseFnkModule fenv0 path ms = do
   let mb_loc = fromMaybe noSrcSpan . finkelExceptionLoc
       mname = ms_mod_name ms
       dflags = hsc_dflags henv
+      dflags_in_ic = ic_dflags (hsc_IC henv)
 
       -- Setting the default DynFlags of FnkEnv to the DynFlags from interactive
       -- context, since the DynFlags from 'hsc_dflags' field of HscEnv is
       -- already updated with file local options at this point. This will
       -- prevent redundant recompilation when requireing home package modules.
       fenv1 = fenv0 { envInvokedMode = GhcPluginMode
-                    , envDefaultDynFlags = Just (ic_dflags (hsc_IC henv)) }
+                    , envDefaultDynFlags = Just dflags_in_ic }
+
       handler e = throwOneError (mkPlainWrappedMsg dflags (mb_loc e)
                                   (text (displayException e)))
       fnk = handleFinkelException handler $ compileFnkFile path mname
+
+  let dump_dyn_flags lbl = dumpDynFlags fenv1 (text lbl)
+  dump_dyn_flags "parseFnkModule:dflags" dflags
+  dump_dyn_flags "parseFnkModule:dflags_in_ic" dflags_in_ic
 
   summary <- liftIO $ runFnk' fnk fenv1 henv
 
