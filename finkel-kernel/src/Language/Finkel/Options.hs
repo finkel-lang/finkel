@@ -163,6 +163,7 @@ fnkEnvOptions =
   , debug_opt Fnk_dump_expand "Dump expanded code."
   , debug_opt Fnk_dump_hs "Dump Haskell source code."
   , debug_opt Fnk_trace_expand "Trace macro expansion."
+  , debug_opt Fnk_trace_session "Trace session env."
   , debug_opt Fnk_trace_make "Trace make function."
   , debug_opt Fnk_trace_spf "Trace builtin special forms."
   ]
