@@ -99,10 +99,6 @@ import           GHC.Iface.Errors.Ppr              (missingInterfaceErrorDiagnos
 import           GHC.Types.Error                   (mkUnknownDiagnostic)
 #endif
 
-#if MIN_VERSION_ghc(9,6,0)
-import           GHC.Driver.Backend                (backendName)
-#endif
-
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Finder          (initFinderOpts)
 import           GHC.Driver.Env                    (hscActiveUnitId,
@@ -115,7 +111,8 @@ import           GHC.Driver.Session                (GhcLink (..))
 import           GHC.Hs                            (HsParsedModule)
 import           GHC.Types.Error                   (emptyMessages)
 import           GHC.Types.PkgQual                 (PkgQual (..))
-import           GHC.Unit.Env                      (homeUnitEnv_dflags,
+import           GHC.Unit.Env                      (UnitEnv (..),
+                                                    homeUnitEnv_dflags,
                                                     unitEnv_foldWithKey)
 import           GHC.Unit.Module.Graph             (ModNodeKeyWithUid (..),
                                                     ModuleGraphNode (..),
@@ -376,47 +373,40 @@ makeFromRequirePlugin lmname = do
       old_targets = hsc_targets hsc_env
       messager = envMessager fnk_env
       tr = traceMake fnk_env "makeFromRequirePlugin"
-#if MIN_VERSION_ghc(9,4,0)
-      new_target_id = targetId target
-      old_targets' = filter ((/= new_target_id) . targetId) old_targets
-      new_targets = target : old_targets'
-#else
       new_targets = target : old_targets
+
+#if MIN_VERSION_ghc(9,2,0)
+  let extra_dump =
+        case envDefaultDynFlags fnk_env of
+          Just default_dflags ->
+            [ "ways:" <+> text (show (ways dflags))
+            , "ways (fnk):" <+> text (show (ways default_dflags))
+            , "backend:" <+> text (show (backend dflags))
+            , "backend (fnk):" <+> text (show (backend default_dflags)) ]
+          Nothing -> []
+#else
+  let extra_dump = []
 #endif
 
-#if MIN_VERSION_ghc(9,6,0)
-  case envDefaultDynFlags fnk_env of
-    Just default_dflags -> do
-      let ppr_ways = text . show . ways
-          ppr_backend_name = text . show . backendName . backend
-      tr [ "ways:" <+> ppr_ways dflags
-         , "ways (fnk):" <+> ppr_ways default_dflags
-         , "backend:" <+> ppr_backend_name dflags
-         , "backend (fnk):" <+> ppr_backend_name default_dflags
-         , "allowObjCode:" <+> text (show (allow_obj_code)) ]
-    Nothing -> pure ()
+  tr ([ "target:" <+> ppr target
+      , "old_targets:" <+> nvcOrNone old_targets
+      , "new_targets:" <+> nvcOrNone new_targets
+      , "hsc_hpt:" <+> pprHPT (hsc_HPT hsc_env)
+      , "allowObjCode:" <+> text (show (allow_obj_code))
+#if MIN_VERSION_ghc(9,4,0)
+      , "has_phase_hook:" <+> case runPhaseHook (hsc_hooks hsc_env) of
+          Just _  -> "yes"
+          Nothing -> "no"
+      , "knot_vars:" <+> ppr (hsc_type_env_vars hsc_env)
+      , "home_unit_graph:" <+> ppr (ue_home_unit_graph (hsc_unit_env hsc_env))
 #endif
-
-  tr [ "target:" <+> ppr target
-     , "old_targets:" <+> nvcOrNone old_targets
-     , "new_targets:" <+> nvcOrNone new_targets
-     , "hsc_hpt:" <+> pprHPT (hsc_HPT hsc_env)]
+      ] <> extra_dump)
 
   setSession (hsc_env {hsc_targets = new_targets})
   withTmpDynFlags (setExpanding dflags) $ do
-#if MIN_VERSION_ghc(9,4,0)
-    hsc_env1 <- getSession
-    let dflags1 = hsc_dflags hsc_env1
-        num_plugins = length (pluginModNames dflags1)
-        has_phase_hook = case runPhaseHook (hsc_hooks hsc_env1) of
-          Just _ -> "yes"
-          _      -> "no"
-    tr [ "In withTmpDynFlags"
-       , "num_plugins:" <+> text (show num_plugins)
-       , "has_phase_hook:" <+> has_phase_hook
-       , "knot_vars:" <+> ppr (hsc_type_env_vars hsc_env1)
-       , "opt_pp:" <+> text (show (gopt Opt_Pp dflags1)) ]
-#endif
+    tmp_dflags <- fmap hsc_dflags getSession
+    dumpDynFlags fnk_env "makeFromRequirePlugin (withTmpDynFlags)" tmp_dflags
+
     mg <- depanal [] False
     doLoad LoadAllTargets (Just messager) mg
 
