@@ -291,6 +291,11 @@ withInternalLoad act = do
 
   bracket acquire restore $ \(_context, _dflags, fnk_env) -> do
     setContext []
+    -- XXX: Is haskell-language-server updating interactive dynflags?
+    --
+    -- The envDefaultDynFlags field is initialized to the DynFlags from
+    -- interactive context, in Language.Finkel.ParsedResult when initializing
+    -- the plugin.
     mapM_ update (envDefaultDynFlags fnk_env)
     putFnkEnv fnk_env {envMessager = if 0 < envVerbosity fnk_env
                                         then internalLoadMessager

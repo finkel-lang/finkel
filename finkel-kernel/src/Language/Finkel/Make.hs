@@ -403,7 +403,26 @@ makeFromRequirePlugin lmname = do
       ] <> extra_dump)
 
   setSession (hsc_env {hsc_targets = new_targets})
-  withTmpDynFlags (setExpanding dflags) $ do
+  -- withTmpDynFlags (setExpanding dflags) $ do
+
+  -- XXX: Using hardcoded additional import paths `src'
+  --
+  -- For haskell-language-server to work with finkel-core library and
+  -- finkel-tool library. However, tests in the packages need to take "test"
+  -- directory instead of "src", the directory name is specified by the
+  -- 'hs-source-dirs' in the cabal configuration file. But, currently not sure
+  -- how to get the value of 'hs-source-dirs'.
+  --
+  -- Also, when "src" is added, compiling the tests in finkel-core and
+  -- finkel-tool will fail, because these tests will search files under src
+  -- instead of importing from its internal library.
+
+  -- let adjust_dynflags df =
+  --       (setExpanding df) {importPaths = "src" : importPaths df}
+
+  let adjust_dynflags = setExpanding
+
+  withTmpDynFlags (adjust_dynflags dflags) $ do
     tmp_dflags <- fmap hsc_dflags getSession
     dumpDynFlags fnk_env "makeFromRequirePlugin (withTmpDynFlags)" tmp_dflags
 
