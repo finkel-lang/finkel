@@ -20,3 +20,8 @@ library-profiling: True
 
 package finkel-kernel
   flags: +dev
+
+if os(windows)
+  package finkel-setup
+    -- Skipping this test under Windows, since it's too slow.
+    tests: False
