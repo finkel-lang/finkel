@@ -78,6 +78,8 @@ import GHC_Hs_Decls                     (NewOrData (..))
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
+import GHC.Hs.Doc                       (LHsDoc)
+import GHC.Hs.DocString                 (HsDocStringDecorator (..))
 import GHC.Parser.Annotation            (l2l)
 #endif
 
@@ -914,19 +916,31 @@ specializeBuilder ispec txt (LForm (L l _)) mb_act (nsym, tsig)
 {-# INLINABLE specializeBuilder #-}
 
 b_docnextD :: Code -> Builder HDecl
-b_docnextD (LForm (L l form)) =
-  case form of
-    Atom (AString _ str) -> return $! lA l (DocD unused (docCommentNext (L l str)))
-    _                    -> builderError
+b_docnextD = docDWith DocCommentNext hsDocStringNext
 {-# INLINABLE b_docnextD #-}
 
 b_docprevD :: Code -> Builder HDecl
-b_docprevD (LForm (L l form)) =
+b_docprevD = docDWith DocCommentPrev hsDocStringPrevious
+{-# INLINABLE b_docprevD #-}
+
+#if MIN_VERSION_ghc(9,4,0)
+docDWith :: (LHsDoc PARSED -> DocDecl PARSED) -> HsDocStringDecorator
+         -> Code -> Builder HDecl
+#else
+docDWith :: (LHsDoc PARSED -> DocDecl) -> HsDocStringDecorator
+         -> Code -> Builder HDecl
+#endif
+docDWith constr deco (LForm (L l form)) =
   case form of
     Atom (AString _ str) ->
-      return $! lA l (DocD unused (DocCommentPrev (mkLHsDoc l str)))
+      -- Adding space to the beginning and the end of the given documentation
+      -- content at this point, to ensure at least one space will appear between
+      -- the doc body and decoration header/footer. Though more suitable place
+      -- to add spaces should exist ...
+      let doc = mkLHsDocWithDecorator deco l (wrapWithSpaces str)
+      in  pure $! lA l (DocD unused (constr doc))
     _ -> builderError
-{-# INLINABLE b_docprevD #-}
+{-# INLINABLE docDWith #-}
 
 b_docGroupD :: Int -> Code -> Builder HDecl
 b_docGroupD n form@(LForm (L l _))
@@ -946,14 +960,6 @@ b_docNamed form@(LForm (L l body))
   | otherwise
   = setLastToken form >> failB "Invalid named doc"
 {-# INLINABLE b_docNamed #-}
-
-#if MIN_VERSION_ghc(9,4,0)
-docCommentNext :: Located FastString -> DocDecl PARSED
-#else
-docCommentNext :: Located FastString -> DocDecl
-#endif
-docCommentNext (L l fs) = DocCommentNext . mkLHsDoc l $ fs
-{-# INLINABLE docCommentNext #-}
 
 tyClD :: TyClDecl PARSED -> HsDecl PARSED
 tyClD = TyClD unused
