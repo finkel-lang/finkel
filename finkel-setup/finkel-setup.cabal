@@ -68,6 +68,9 @@ test-suite finkel-setup-test
                      , fnkpp:fnkpp
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
+  -- Skipping this test under Windows, since it's too slow.
+  if os(windows)
+    buildable: False
 
 source-repository head
   type:     git
