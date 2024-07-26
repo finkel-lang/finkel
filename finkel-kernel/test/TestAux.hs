@@ -14,6 +14,7 @@ module TestAux
   , removeArtifacts
   , fnkTestEnv
   , getTestFiles
+  , getTestHsFiles
   , beforeAllWith
   , quietly
   ) where
@@ -79,7 +80,8 @@ import           Language.Finkel.Expand  (expands, withExpanderSettings)
 import           Language.Finkel.Fnk     (Fnk, FnkEnv (..), setDynFlags)
 import           Language.Finkel.Lexer   (evalSP)
 import           Language.Finkel.Main    (defaultMain)
-import           Language.Finkel.Make    (buildHsSyn, initSessionForMake, make)
+import           Language.Finkel.Make    (buildHsSyn, initSessionForMake,
+                                          simpleMake)
 import           Language.Finkel.Reader  (sexprs)
 import qualified Paths_finkel_kernel
 
@@ -232,7 +234,7 @@ parseAndSetDynFlags args = do
   setDynFlags dflags1
 
 makeLoad :: [FilePath] -> Fnk SuccessFlag
-makeLoad files = make (map (\p -> (noLoc p, Nothing)) files) False Nothing
+makeLoad files = simpleMake (map (\p -> (noLoc p, Nothing)) files) False Nothing
 
 evalWith ::  String -> Builder a -> (a -> Fnk b) -> StringBuffer -> Fnk b
 evalWith !label !parser !act !input = do
@@ -274,12 +276,21 @@ removeArtifacts dir = do
 fnkTestEnv :: FnkEnv
 fnkTestEnv = defaultFnkEnv {envLibDir = Just FINKEL_KERNEL_LIBDIR}
 
--- | Get files under test data directory.
+-- | Get files with @.fnk@ extension under test data directory.
 getTestFiles :: String -- ^ Name of the sub directory under test data directory.
              -> IO [FilePath]
-getTestFiles name =
+getTestFiles = getTestFilesBy ".fnk"
+
+-- | Get files with @.hs@ extension under test data directory.
+getTestHsFiles :: String -> IO [FilePath]
+getTestHsFiles = getTestFilesBy ".hs"
+
+getTestFilesBy :: String -- ^ File extension of interest.
+               -> String -- ^ Name of the sub directory under test data directory.
+               -> IO [FilePath]
+getTestFilesBy ext name =
   let dir = "test" </> "data" </> name
-      f x acc = if takeExtension x == ".fnk"
+      f x acc = if takeExtension x == ext
                   then (dir </> x) : acc
                   else acc
       files = getDirectoryContents dir

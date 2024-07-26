@@ -38,12 +38,10 @@ module Language.Finkel.Make
 
 
 -- base
-import           Control.Monad                     (foldM, unless, void, when,
-                                                    (>=>))
+import           Control.Monad                     (foldM, unless, void, (>=>))
 import           Control.Monad.IO.Class            (MonadIO (..))
 import           Data.Bifunctor                    (first)
 import           Data.Foldable                     (find)
-import           Data.Maybe                        (isJust)
 
 #if MIN_VERSION_ghc(9,4,0)
 import           Data.Maybe                        (catMaybes)
@@ -84,7 +82,7 @@ import           GHC_Types_SrcLoc                  (GenLocated (..), Located,
                                                     getLoc, unLoc)
 import           GHC_Unit_Finder                   (FindResult (..),
                                                     findExposedPackageModule)
-import           GHC_Unit_Home_ModInfo             (lookupHpt, pprHPT)
+import           GHC_Unit_Home_ModInfo             (pprHPT)
 import           GHC_Unit_Module                   (ModuleName, mkModuleName)
 import           GHC_Unit_Module_Graph             (ModuleGraph)
 import           GHC_Unit_Module_ModSummary        (ModSummary (..),
@@ -771,21 +769,14 @@ makeNewSummary fnk_env hsc_env tu = toMakeM $ do
   tsum <- summariseTargetUnit tu
   case tsum of
     LdInput _option -> return tsum
-    EMS ms0 mb_sp reqs -> do
+    EMS ms0 _mb_sp reqs -> do
       dumpDynFlags fnk_env "makeNewSummary" (ms_hspp_opts ms0)
       -- Since the entire compilation work does not use DriverPipeline,
       -- setting the dumpPrefix at this point.
       setDumpPrefix (ms_hspp_file ms0)
 
-      -- Dump the module contents as Haskell source when dump option were
-      -- set and this is the first time for compiling the target Module.
-      when (fopt Fnk_dump_hs fnk_env || isJust (envHsOutDir fnk_env)) $
-        case lookupHpt (hsc_HPT hsc_env) (ms_mod_name ms0) of
-          Nothing -> dumpModSummary fnk_env hsc_env mb_sp ms0
-          Just _  -> return ()
-
-      -- To support -ddump-parsed-ast option.
-      dumpParsedAST hsc_env (ms_hspp_opts ms0) ms0
+      -- XXX: The dumpParsedAST is evaluated in 'compileFnkFile', which is
+      -- before setting the dump prefix, is this fine?
 
       -- To support parsedResultAction in plugin. See "HscMain.hscParse'"
       ms1 <- case ms_parsed_mod ms0 of

@@ -1,3 +1,5 @@
+;;; -*- mode: finkel -*-
+
 %p(LANGUAGE RankNTypes
             TypeFamilies)
 (:doc "

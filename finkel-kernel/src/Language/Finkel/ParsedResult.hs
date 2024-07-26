@@ -50,8 +50,7 @@ import Language.Finkel.Exception         (FinkelException (..),
 import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
                                           dumpDynFlags, initFnkEnv, runFnk')
 import Language.Finkel.Make              (mkParsedResult)
-import Language.Finkel.Make.Summary      (TargetSummary (..), compileFnkFile,
-                                          dumpParsedAST)
+import Language.Finkel.Make.Summary      (TargetSummary (..), compileFnkFile)
 import Language.Finkel.Make.TargetSource (TargetSource (..),
                                           findTargetSourceWithPragma)
 import Language.Finkel.Options           (FnkPluginOptions (..),
@@ -133,9 +132,7 @@ parseFnkModule fenv0 path ms = do
   summary <- liftIO $ runFnk' fnk fenv1 henv
 
   case summary of
-    EMS ems _mb_sp _reqs | Just pm <- ms_parsed_mod ems -> do
-      dumpParsedAST henv (ms_hspp_opts ems) ems
-      pure pm
+    EMS ems _mb_sp _reqs | Just pm <- ms_parsed_mod ems -> pure pm
     _ -> liftIO (throwIO (FinkelException ("Failed to parse " ++ path)))
 
 exitWithBriefUsage :: String -> [String] -> IO a

@@ -1,3 +1,5 @@
+;;; -*- mode: finkel -*-
+
 %p(LANGUAGE EmptyCase
             DataKinds
             KindSignatures

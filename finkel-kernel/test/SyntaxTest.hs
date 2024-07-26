@@ -15,9 +15,11 @@ module SyntaxTest
 
 -- base
 import Control.Monad          (unless, when)
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.IORef             (atomicWriteIORef, newIORef, readIORef)
 import Data.Maybe             (fromMaybe)
 import GHC.Exts               (unsafeCoerce#)
+import System.Environment     (getExecutablePath)
 import System.Info            (os)
 import System.IO              (BufferMode (..), hSetBuffering, stdout)
 
@@ -48,8 +50,8 @@ import System.IO.Silently     (capture_)
 
 -- finkel-kernel
 import Language.Finkel.Eval   (evalExpr)
-import Language.Finkel.Fnk    (Fnk, FnkEnv (..), modifyFnkEnv,
-                               prepareInterpreter, runFnk)
+import Language.Finkel.Fnk    (Fnk, prepareInterpreter, runFnk)
+import Language.Finkel.Plugin (plugin, setFinkelPluginWithArgs)
 import Language.Finkel.Syntax (parseExpr)
 
 -- Internal
@@ -59,7 +61,7 @@ syntaxTests :: Spec
 syntaxTests = beforeAll getFnkTestResource syntaxFnkTests
 
 syntaxFnkTests :: FnkSpec
-syntaxFnkTests = runIO (getTestFiles "syntax") >>= mapM_ mkTest
+syntaxFnkTests = runIO (getTestHsFiles "syntax") >>= mapM_ mkTest
 
 mkTest :: FilePath -> FnkSpec
 mkTest path
@@ -144,7 +146,7 @@ mkTest' path = do
             hSetBuffering stdout NoBuffering)
 
   beforeAll_ prepare $ describe path $ do
-    it "should compile .fnk file" $ \ftr -> do
+    it "should compile Finkel code" $ \ftr -> do
       io <- runFnk (compile ftr path (Just odir)) fnkTestEnv
       unless toNativeCompile $ do
         capture_ io >>= atomicWriteIORef fnkORef
@@ -179,9 +181,10 @@ compileWith is_interpreting ini_args ftr file mb_dir = do
   parseAndSetDynFlags ini_args
   ftr_init ftr
   when is_interpreting prepareInterpreter
-  let update_dir dir = modifyFnkEnv (\e -> e {envHsOutDir = Just dir})
-  mapM_ update_dir mb_dir
-  parseAndSetDynFlags ["-v0"]
+  let plugin_opts = maybe [] (\d -> ["--hsdir=" <> d]) mb_dir
+  me <- liftIO getExecutablePath
+  parseAndSetDynFlags ["-v0", "-F", "-pgmF", me, "-optF", "--no-warn-interp"]
+  setFinkelPluginWithArgs plugin plugin_opts
   _hsc_env <- getSession
   let target = Target { targetId = TargetFile file Nothing
                       , targetAllowObjCode = not is_interpreting

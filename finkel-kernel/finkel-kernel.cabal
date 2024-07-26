@@ -20,7 +20,7 @@ extra-source-files:  README.md
                      --
                      test/data/eval/*.fnk
                      test/data/exception/*.fnk
-                     test/data/syntax/*.fnk
+                     test/data/syntax/*.hs
                      test/data/main/*.c
                      test/data/main/*.hs
                      test/data/main/*.fnk
