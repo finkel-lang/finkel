@@ -22,7 +22,7 @@ import           Data.Char                        (isUpper)
 
 -- ghc
 import           GHC_Builtin_Types                (consDataConName)
-import           GHC_Data_FastString              (bytesFS)
+import           GHC_Data_FastString              (appendFS, bytesFS, consFS)
 import           GHC_Data_OrdList                 (OrdList)
 import           GHC_Hs_Decls                     (DerivStrategy (..), LConDecl,
                                                    LDataFamInstDecl, LDocDecl,
@@ -57,6 +57,7 @@ import           Language.Haskell.Syntax.Type     (HsBndrVis (..))
 
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Hs.Doc                       (LHsDoc)
+import           GHC.Hs.DocString                 (HsDocStringDecorator (..))
 import           GHC.Hs.Pat                       (HsFieldBind (..))
 import           GHC.Parser                       (parseIdentifier)
 import           GHC.Parser.HaddockLex            (lexHsDoc)
@@ -392,6 +393,14 @@ codeToUserTyVarSpecific = codeToUserTyVar
 {-# INLINABLE codeToUserTyVar #-}
 {-# INLINABLE codeToUserTyVarSpecific #-}
 
+-- XXX: Move HsDocString related functions to separate module?
+
+#if !MIN_VERSION_ghc(9,4,0)
+-- These two types did not exist in ghc < 9.4, setting up simple aliases.
+type LHsDoc pass = HsDocString
+type HsDocStringDecorator = () -- dummy, not in use.
+#endif
+
 -- | Auxiliary function to make 'HsDocString'.
 mkHsDocString :: FastString -> HsDocString
 #if MIN_VERSION_ghc(9,4,0)
@@ -407,15 +416,45 @@ lHsDocString2LHsDoc = fmap (lexHsDoc parseIdentifier)
 
 mkLHsDoc :: SrcSpan -> FastString -> LHsDoc PARSED
 mkLHsDoc l = lHsDocString2LHsDoc . L l . mkHsDocString
+
+mkLHsDocWithDecorator ::
+  HsDocStringDecorator -> SrcSpan -> FastString -> LHsDoc PARSED
+mkLHsDocWithDecorator deco l fs =
+  lHsDocString2LHsDoc (L l (mkHsDocStringWithDecorator deco l fs))
+
+mkHsDocStringWithDecorator ::
+  HsDocStringDecorator -> SrcSpan -> FastString -> HsDocString
+mkHsDocStringWithDecorator decorator loc fs =
+  let chunk = mkHsDocStringChunkUtf8ByteString (bytesFS fs)
+  in  NestedDocString decorator (L loc chunk)
 #else
 lHsDocString2LHsDoc :: a -> a
 lHsDocString2LHsDoc = id
 
 mkLHsDoc :: a -> FastString -> HsDocString
 mkLHsDoc _ = mkHsDocString
+
+mkLHsDocWithDecorator :: a -> b -> FastString -> LHsDoc PARSED
+mkLHsDocWithDecorator _ _ = mkHsDocString
+
+mkHsDocStringWithDecorator :: a -> b -> FastString -> HsDocString
+mkHsDocStringWithDecorator _ _ = mkHsDocString
 #endif
 {-# INLINABLE lHsDocString2LHsDoc #-}
 {-# INLINABLE mkLHsDoc #-}
+{-# INLINABLE mkLHsDocWithDecorator #-}
+{-# INLINABLE mkHsDocStringWithDecorator #-}
+
+hsDocStringNext, hsDocStringPrevious :: HsDocStringDecorator
+#if MIN_VERSION_ghc(9,4,0)
+hsDocStringNext = HsDocStringNext
+hsDocStringPrevious = HsDocStringPrevious
+#else
+hsDocStringNext = ()
+hsDocStringPrevious = ()
+#endif
+{-# INLINABLE hsDocStringNext #-}
+{-# INLINABLE hsDocStringPrevious #-}
 
 mkHsQualTy' :: LHsContext PARSED -> HType -> HsType PARSED
 mkHsQualTy' ctxt body
@@ -501,3 +540,7 @@ newtypeStrategy = NewtypeStrategy
 {-# INLINABLE stockStrategy #-}
 {-# INLINABLE anyclassStrategy #-}
 {-# INLINABLE newtypeStrategy #-}
+
+wrapWithSpaces :: FastString -> FastString
+wrapWithSpaces fs = consFS ' ' (appendFS fs (fsLit " "))
+{-# INLINABLE  wrapWithSpaces #-}

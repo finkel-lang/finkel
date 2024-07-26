@@ -65,6 +65,7 @@ import GHC.Hs.Pat                        (RecFieldsDotDot (..))
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
+import GHC.Hs.DocString                  (HsDocStringDecorator (..))
 import GHC.Hs.Expr                       (gHsPar)
 import Language.Haskell.Syntax.Expr      (HsDoFlavour (..))
 #else
@@ -454,12 +455,20 @@ b_unitE (LForm (L l _)) =
 #endif
 {-# INLINABLE b_unitE #-}
 
-b_docString :: Code -> Builder (Located HsDocString)
-b_docString (LForm (L l form)) =
+b_docStringNext :: Code -> Builder (Located HsDocString)
+b_docStringNext = docStringWith hsDocStringNext
+{-# INLINABLE b_docStringNext #-}
+
+b_docStringPrev :: Code -> Builder (Located HsDocString)
+b_docStringPrev = docStringWith hsDocStringPrevious
+{-# INLINABLE b_docStringPrev #-}
+
+docStringWith :: HsDocStringDecorator -> Code -> Builder (Located HsDocString)
+docStringWith deco (LForm (L l form)) =
   case form of
-    Atom (AString _ x) -> return $! L l (mkHsDocString x)
+    Atom (AString _ x) -> pure $! L l (mkHsDocStringWithDecorator deco l x)
     _                  -> builderError
-{-# INLINABLE b_docString #-}
+{-# INLINABLE docStringWith #-}
 
 b_hsListE :: Either HExpr [HExpr] -> HExpr
 b_hsListE expr =

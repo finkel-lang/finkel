@@ -237,10 +237,10 @@ list_es :: { [Code] }
 -- ---------------------------------------------------------------------
 
 docnext :: { LHsDocString }
-    : 'doc' {% b_docString $1}
+    : 'doc' {% b_docStringNext $1}
 
 docprev :: { LHsDocString }
-    : 'doc^' {% b_docString $1 }
+    : 'doc^' {% b_docStringPrev $1 }
 
 mbdocprev :: { Maybe LHsDocString }
     : docprev     { Just $1 }
