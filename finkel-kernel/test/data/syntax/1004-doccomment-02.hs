@@ -1,3 +1,5 @@
+;;; -*- mode: finkel -*-
+
 (:doc "Module without explicit export entities.")
 (module Main)
 

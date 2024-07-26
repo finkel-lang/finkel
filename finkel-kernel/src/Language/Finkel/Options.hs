@@ -78,9 +78,7 @@ adjustFnkEnvOptions = foldr f []
         then acc
         else Option so (map dropFnk lo) ad descr : acc
     dropFnk = drop (length "fnk-")
-    is_removed_option (Option so lo _ _) =
-      so == ['B'] ||
-      any (`elem` lo) ["fnk-dump-hs", "fnk-hsdir"]
+    is_removed_option (Option so _ _ _) = so == ['B']
 
 printPluginUsage :: String -> IO ()
 printPluginUsage mod_name = do

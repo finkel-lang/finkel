@@ -33,9 +33,11 @@ module Language.Finkel.Make.Summary
 #include "ghc_modules.h"
 
 -- base
+import           Control.Monad                     (when)
 import           Control.Monad.IO.Class            (MonadIO (..))
 import           Data.Foldable                     (find)
 import           Data.List                         (nub)
+import           Data.Maybe                        (isJust)
 import           System.IO                         (IOMode (..), withFile)
 
 #if !MIN_VERSION_base(4,20,0)
@@ -280,6 +282,13 @@ compileFnkFile path modname = do
 
   -- XXX: Pass the Bool value for ms_ghc_prim_import somehow.
   ms <- mkModSummary hsc_env dflags1 path mdl rreqs
+
+  -- Dump the module contents as Haskell source code when any of the dump
+  -- options was set and this is the first time for compiling the target module.
+  dumpHsSourceCode fnk_env0 hsc_env (Just sp) ms
+
+  -- Also showing the parsed AST to support -ddump-parsed-ast option.
+  dumpParsedAST hsc_env (ms_hspp_opts ms) ms
 
   return $! EMS ms (Just sp) rreqs
 
@@ -573,6 +582,17 @@ maybeGetIfaceDate dflags location =
 #else
     writeIface = writeInterfaceOnlyMode
 #endif
+
+-- | Dump the Haskell source code of given 'ModSummary' if options in 'FnkEnv'
+-- are set. Will not dump when the 'ModSummary' was found in current home
+-- package table.
+dumpHsSourceCode :: (MonadIO m, HasDynFlags m)
+                 => FnkEnv -> HscEnv -> Maybe SPState -> ModSummary -> m ()
+dumpHsSourceCode fnk_env hsc_env mb_sp ms =
+  when (fopt Fnk_dump_hs fnk_env || isJust (envHsOutDir fnk_env)) $
+    case lookupHpt (hsc_HPT hsc_env) (ms_mod_name ms) of
+      Nothing -> dumpModSummary fnk_env hsc_env mb_sp ms
+      Just _  -> return ()
 
 -- | Dump the module contents of given 'ModSummary'.
 dumpModSummary
