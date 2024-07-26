@@ -15,7 +15,7 @@ import Data.Maybe                       (fromMaybe)
 import GHC_Core_DataCon                 (SrcStrictness (..))
 import GHC_Data_FastString              (FastString, unpackFS)
 import GHC_Data_OrdList                 (toOL)
-import GHC_Hs_Binds                     (HsBind, Sig (..))
+import GHC_Hs_Binds                     (Sig (..))
 import GHC_Hs_Decls                     (ClsInstDecl (..), ConDecl (..),
                                          DataFamInstDecl (..), DefaultDecl (..),
                                          DerivDecl (..), DerivStrategy (..),
@@ -964,10 +964,6 @@ b_docNamed form@(LForm (L l body))
 tyClD :: TyClDecl PARSED -> HsDecl PARSED
 tyClD = TyClD unused
 {-# INLINABLE tyClD #-}
-
-valD :: HsBind PARSED -> HsDecl PARSED
-valD = ValD unused
-{-# INLINABLE valD #-}
 
 sigD :: Sig PARSED -> HsDecl PARSED
 sigD = SigD unused
