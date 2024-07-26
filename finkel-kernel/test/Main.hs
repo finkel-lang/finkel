@@ -24,8 +24,8 @@ import PreprocessTest
 import SyntaxTest
 import TestAux
 
--- The test executable is acting as preprocessor if specific three file paths
--- were given to support plugin test. Otherwise, run the hspec tests.
+-- To support plugin tests, the test executable is acting as a preprocessor if
+-- specific three file paths were given. Otherwise, run the hspec tests.
 main :: IO ()
 main = do
   args <- getArgs
