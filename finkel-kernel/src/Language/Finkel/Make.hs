@@ -769,7 +769,7 @@ makeNewSummary fnk_env hsc_env tu = toMakeM $ do
   tsum <- summariseTargetUnit tu
   case tsum of
     LdInput _option -> return tsum
-    EMS ms0 _mb_sp reqs -> do
+    EMS ms0 mb_sp reqs -> do
       dumpDynFlags fnk_env "makeNewSummary" (ms_hspp_opts ms0)
       -- Since the entire compilation work does not use DriverPipeline,
       -- setting the dumpPrefix at this point.
@@ -797,7 +797,7 @@ makeNewSummary fnk_env hsc_env tu = toMakeM $ do
 #endif
           parsed_mod <- liftIO (runHsc hsc_env' act)
           return $! ms0 {ms_parsed_mod = Just parsed_mod}
-      return $! EMS ms1 Nothing reqs
+      return $! EMS ms1 mb_sp reqs
 
 #if MIN_VERSION_ghc(9,4,0)
 -- XXX: Always using empty messages
