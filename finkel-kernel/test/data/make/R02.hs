@@ -1,3 +1,5 @@
+;;; -*- mode: finkel -*-
+
 (module R02)
 
 (import R01)
