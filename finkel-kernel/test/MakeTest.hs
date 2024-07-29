@@ -15,7 +15,7 @@ import Control.Monad.IO.Class  (MonadIO (..))
 import Data.List               (isPrefixOf, tails)
 import Data.Maybe              (isJust)
 import GHC.Exts                (unsafeCoerce#)
-import System.Environment      (lookupEnv)
+import System.Environment      (getExecutablePath, lookupEnv)
 import System.Info             (os)
 
 -- directory
@@ -33,19 +33,17 @@ import System.FilePath         (takeExtension)
 #endif
 
 -- ghc
-import GHC                     (setTargets)
 import GHC_Data_FastString     (fsLit)
 import GHC_Driver_Monad        (GhcMonad (..))
 import GHC_Driver_Ppr          (showPpr)
 import GHC_Driver_Session      (HasDynFlags (..))
 import GHC_Types_SrcLoc        (noLoc)
-import GHC_Types_Target        (Target (..), TargetId (..))
 import GHC_Unit_Module         (mkModuleName)
 import GHC_Unit_State          (PackageName (..))
 import GHC_Utils_Outputable    (Outputable (..))
 
 #if MIN_VERSION_ghc(9,4,0)
-import GHC.Driver.Env          (hscActiveUnitId, hscInterp)
+import GHC.Driver.Env          (hscInterp)
 import GHC.Linker.Loader       (unload)
 #elif MIN_VERSION_ghc(9,2,0)
 import GHC.Linker.Loader       (unload)
@@ -79,7 +77,9 @@ import Test.Hspec
 import Language.Finkel.Eval
 import Language.Finkel.Fnk
 import Language.Finkel.Form
-import Language.Finkel.Make
+import Language.Finkel.Make    (TargetSource (..), asModuleName, buildHsSyn,
+                                setContextModules, simpleMake)
+import Language.Finkel.Plugin  (plugin, setFinkelPluginWithArgs)
 import Language.Finkel.Syntax
 
 -- Internal
@@ -161,23 +161,19 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
     buildObj' ["-O","-prof", "-osuf", "p_o", "-hisuf", "p_hi"] ["P1", "P2"]
 
   -- Reload tests
-  let reload_simple t =
+  let reload_simple t after_files after_output =
         buildReload t
                     "foo"
-                    [("R01.fnk.1", "R01.fnk"), (t, t)]
-                    [("R01.fnk.2", "R01.fnk")]
+                    [("R01.fnk.1", "R01.hs"), (t, t)]
+                    after_files
                     "foo: before"
-                    "foo: after"
+                    after_output
 
   -- Reloading without modifications.
-  buildReload "R02.fnk"
-              "foo"
-              [("R01.fnk.1","R01.fnk"), ("R02.fnk","R02.fnk")]
-              []
-              "foo: before"
-              "foo: before"
+  reload_simple "R02.hs" [] "foo: before"
 
-  reload_simple "R02.fnk"
+  -- Reloading with modifications.
+  reload_simple "R02.hs" [("R01.fnk.2", "R01.hs")] "foo: after"
 
   -- Reloading test for modules containing `:require' of home package modules
   -- not working well with ghc >= 8.10.
@@ -188,7 +184,7 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
   -- Recompile tests
   let recompile_simple t extras =
         buildRecompile t
-                       ([ ("R01.fnk.1", "R01.fnk") , dot_fnk t] ++
+                       ([("R01.fnk.1", "R01.fnk"), dot_fnk t] ++
                         map dot_fnk extras)
                        [("R01.fnk.2", "R01.fnk")]
                        "foo: before\n"
@@ -392,7 +388,7 @@ buildReload
   -> FnkSpec
 buildReload the_file fname files1 files2 before_str after_str =
   beforeAllWith (\ftr -> do
-                    dir <- mk_tmp_dir ("reload" ++ the_file)
+                    dir <- mk_tmp_dir ("reload_" ++ the_file)
                     return (dir, ftr))
                 (afterAll (rmdir . fst) work)
   where
@@ -423,35 +419,25 @@ buildReload the_file fname files1 files2 before_str after_str =
     fnk_work use_obj tmpdir ftr = do
       setup_reload_env use_obj tmpdir ftr
       copy_files tmpdir files1
-      str1 <- make_and_eval
+      str1 <- make_and_eval tmpdir
       reset_env
       copy_files tmpdir files2
-      str2 <- make_and_eval
+      str2 <- make_and_eval tmpdir
       return (str1, str2)
 
     setup_reload_env :: Bool -> FilePath -> FnkTestResource -> Fnk ()
     setup_reload_env use_obj tmpdir ftr = do
+      me <- liftIO getExecutablePath
       let args0 = ("-i" ++ tmpdir) : ["-fobject-code" | use_obj]
-          args1 = ["-v0"]
-          tfile = TargetFile the_file Nothing
-      parseAndSetDynFlags args0
+          args1 = ["-v0", "-F", "-pgmF", me, "-optF", "--no-warn-interp"]
+      parseAndSetDynFlags (args0 <> args1)
       ftr_init ftr
       prepareInterpreter
-      parseAndSetDynFlags args1
-#if MIN_VERSION_ghc(9,4,0)
-      _hsc_env <- getSession
-      let target = Target { targetId = tfile
-                          , targetAllowObjCode = use_obj
-                          , targetUnitId = hscActiveUnitId _hsc_env
-                          , targetContents = Nothing }
-#else
-      let target = Target tfile use_obj Nothing
-#endif
-      setTargets [target]
+      setFinkelPluginWithArgs plugin []
 
-    make_and_eval :: Fnk String
-    make_and_eval = do
-      _ <- make [(noLoc the_file, Nothing)] False Nothing
+    make_and_eval :: FilePath -> Fnk String
+    make_and_eval tmpdir = do
+      _ <- simpleMake [(noLoc (tmpdir </> the_file), Nothing)] False Nothing
       setContextModules [asModuleName the_file]
       hexpr <- buildHsSyn parseExpr [qSymbol fname fname 0 0 0 0]
       unsafeCoerce# <$> evalExpr hexpr
