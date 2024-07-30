@@ -1,4 +1,2 @@
-module Main where
-import Distribution.Simple.Finkel
-main :: IO ()
-main = finkelMakeMain
+import Distribution.Simple (defaultMain)
+main = defaultMain
