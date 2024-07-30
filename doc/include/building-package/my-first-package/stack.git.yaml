@@ -1,9 +1,9 @@
-resolver: lts-16.4
+resolver: lts-22.31
 packages:
   - .
 extra-deps:
   - git: https://github.com/finkel-lang/finkel
-    commit: c0ce56cc220d533dc2e46e0bcf6387fed238abc7
+    commit: f7913be75db03beec66b9a029c538c95cdbb05a8
     subdirs:
       - finkel-kernel
       - fkc

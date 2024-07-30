@@ -1,4 +1,4 @@
-;;;; File: my-second-package/src/FnkCodes.fnk
+;;;; File: my-second-package/src/FnkCodes.hs
 
 (defmodule FnkCodes
   (export fnkfactorial))

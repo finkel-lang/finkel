@@ -1,31 +1,31 @@
-cabal-version:       2.0
+cabal-version:       3.0
 name:                my-second-package
 version:             0.1.0.0
 -- synopsis:
 -- description:
 homepage:            http://www.example.org
-license:             BSD3
+license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Author name here
 maintainer:          example@example.com
 copyright:           2019 Author name here
 category:            Data
-build-type:          Custom
+build-type:          Simple
 extra-source-files:  README.md
-                     src/*.fnk
 
-custom-setup
-  setup-depends:       base >= 4.7
-                     , Cabal >= 2.0
-                     , finkel-setup >= 0.0 && < 1
+common finkel
+  build-depends:       finkel-core
+  build-tool-depends:  fnkpp:fnkpp
+  ghc-options:         -F -pgmF fnkpp -optF --no-warn-interp
+                       -fplugin Finkel.Core.Plugin
 
 library
+  import:              finkel
   hs-source-dirs:      src
   exposed-modules:     Lib
                        HsCodes
                        FnkCodes
   build-depends:       base >= 4.7 && < 5
-  build-tool-depends:  finkel:finkel >= 0.0 && < 1
   default-language:    Haskell2010
 
 executable my-second-package
@@ -37,13 +37,14 @@ executable my-second-package
   default-language:    Haskell2010
 
 test-suite my-second-package-test
+  import:              finkel
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
   other-modules:       FactorialTest
   build-depends:       base
-                     , finkel-core
                      , my-second-package
+  build-tool-depends:  fnkpp:fnkpp
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

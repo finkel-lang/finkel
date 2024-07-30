@@ -1,4 +1,4 @@
-;;;; File: my-first-package/src/MyFirstPackage.fnk
+;;;; File: my-first-package/src/MyFirstPackage.hs
 
 (defmodule MyFirstPackage
   (export factorial))

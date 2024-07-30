@@ -1,29 +1,29 @@
+cabal-version:       3.0
 name:                my-new-package
 version:             0.1.0.0
 -- synopsis:
 -- description:
 homepage:            http://www.example.org
-license:             BSD3
+license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Author name here
 maintainer:          example@example.com
 copyright:           2024 Author name here
 category:            Data
-build-type:          Custom
+build-type:          Simple
 extra-source-files:  README.md
-                     src/*.fnk
-cabal-version:       2.0
 
-custom-setup
-  setup-depends:       base >= 4.7 && < 5
-                     , Cabal >= 2.0
-                     , finkel-setup
+common finkel
+  build-depends:       finkel-core
+  build-tool-depends:  fnkpp:fnkpp
+  ghc-options:         -F -pgmF fnkpp -optF --no-warn-interp
+                       -fplugin Finkel.Core.Plugin
 
 library
+  import:              finkel
   hs-source-dirs:      src
   exposed-modules:     Lib
   build-depends:       base >= 4.7 && < 5
-  build-tool-depends:  finkel:finkel
   default-language:    Haskell2010
 
 executable my-new-package
@@ -35,12 +35,12 @@ executable my-new-package
   default-language:    Haskell2010
 
 test-suite my-new-package-test
+  import:              finkel
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
                      , my-new-package
-  build-tool-depends:  finkel:finkel
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

@@ -3,19 +3,14 @@
 name: my-first-package
 version: 0.1.0.0
 
-extra-source-files:
-  - src/**.fnk
-
-custom-setup:
-  dependencies:
-    - base
-    - Cabal
-    - finkel-setup
-
 library:
   source-dirs: src
   exposed-modules: MyFirstPackage
+  ghc-options:
+    - -F -pgmF fnkpp -optF --no-warn-interp
+    - -fplugin Finkel.Core.Plugin
   build-tools:
-    - finkel:finkel
+    - fnkpp:fnkpp
   dependencies:
     - base
+    - finkel-core

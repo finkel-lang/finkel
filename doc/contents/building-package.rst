@@ -1,9 +1,8 @@
 Building Cabal Package
 ======================
 
-To build a cabal package with Finkel, make a cabal configuration file
-as in the Haskell cabal package, but with custom setup script and some
-build tool and package dependencies.
+To build a cabal package with Finkel, make a cabal configuration file as in the
+Haskell cabal package, but with some build tool and package dependencies.
 
 .. note::
 
@@ -25,15 +24,15 @@ contents:
 .. literalinclude:: ../include/building-package/my-first-package/package.yaml
    :language: yaml
 
-And a custom ``Setup.hs`` script:
+And a simple ``Setup.hs`` script:
 
 .. literalinclude:: ../include/building-package/my-first-package/Setup.hs
    :language: haskell
 
-And a Finkel source code ``src/MyFirstPackage.fnk`` for exposed
+And a Finkel source code ``src/MyFirstPackage.hs`` for exposed
 module:
 
-.. literalinclude:: ../include/building-package/my-first-package/src/MyFirstPackage.fnk
+.. literalinclude:: ../include/building-package/my-first-package/src/MyFirstPackage.hs
    :language: finkel
 
 And a ``stack.yaml``:
@@ -50,7 +49,7 @@ should look like below:
    ├── package.yaml
    ├── Setup.hs
    ├── src
-   │   └── MyFirstPackage.fnk
+   │   └── MyFirstPackage.hs
    └── stack.yaml
 
 Now one can build the ``my-first-package`` package with ``stack``:
@@ -63,14 +62,6 @@ Now one can build the ``my-first-package`` package with ``stack``:
    [2 of 2] Compiling StacksetupShim
    ... More output messages ...
    [1 of 1] Compiling MyFirstPackage
-
-.. note::
-
-   While building packages with ``stack``, one may see a warning
-   message saying "Unable to find a known candidate for the Cabal
-   entry". Although the message says it cannot find the candidate, the
-   compilation process does work. This is a known issue, and hoping to
-   fix in not so far future.
 
 .. tip::
 
@@ -97,8 +88,8 @@ Mixing Finkel And Haskell Source Codes
 --------------------------------------
 
 One can mix Finkel source codes and Haskell source codes in a package.
-This time, making a package ``my-second-package`` from Finkel specific
-template:
+This time, making a package ``my-second-package`` with ``stack new``
+command using Finkel specific template:
 
 .. code-block:: console
 
@@ -155,24 +146,15 @@ should look like below:
    ├── README.md
    ├── Setup.hs
    ├── src
-   │  └── Lib.fnk
+   │  └── Lib.hs
    └── test
       └── Spec.hs
 
-.. note::
 
-   As of cabal version 3.0.0, the file extension of an executable in a
-   cabal package needs to end with ``.hs`` or ``.c`` file
-   extension. From this restriction, one needs to make a wrapper file
-   to run an executable written in Finkel. This is why the executable
-   and test stanzas in cabal configuration file generated from
-   template contains dummy ``Main.hs`` and ``Spec.hs`` files instead
-   of ``.fnk`` files.
-
-Add a new file named ``my-second-package/src/FnkCodes.fnk``, with
+Add a new file named ``my-second-package/src/FnkCodes.hs``, with
 Finkel source codes:
 
-.. literalinclude:: ../include/building-package/my-second-package/src/FnkCodes.fnk
+.. literalinclude:: ../include/building-package/my-second-package/src/FnkCodes.hs
    :language: finkel
 
 And another new file named ``my-second-package/src/HsCodes.hs``, with
@@ -189,10 +171,10 @@ and add ``HsCodes`` and ``FnkCodes`` modules as shown below:
 
 The functions exported from ``HsCodes`` module could be used from
 ``Lib`` module, as in compilation of cabal package without Finkel
-codes. Modify the file ``my-second-package/src/Lib.fnk`` to import
+codes. Modify the file ``my-second-package/src/Lib.hs`` to import
 ``hsfactorial`` and ``fnkfactorial`` functions from ``HsCodes``:
 
-.. literalinclude:: ../include/building-package/my-second-package/src/Lib.fnk
+.. literalinclude:: ../include/building-package/my-second-package/src/Lib.hs
   :language: finkel
 
 One can build the ``my-second-package`` with ``stack build`` command, as

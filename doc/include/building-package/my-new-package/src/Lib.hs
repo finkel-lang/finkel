@@ -1,3 +1,4 @@
+;;; -*- mode: finkel -*-
 (defmodule Lib
   (export someFunc))
 
