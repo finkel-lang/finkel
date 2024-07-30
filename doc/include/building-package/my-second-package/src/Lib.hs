@@ -1,4 +1,4 @@
-;;;; File: my-second-package/src/Lib.fnk
+;;;; File: my-second-package/src/Lib.hs
 
 (defmodule Lib
   (export someFunc)
