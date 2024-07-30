@@ -39,6 +39,7 @@ test-suite test
                      , finkel-core   == 0.0.0
                      , finkel-kernel == 0.0.0
   build-tool-depends:  finkel:finkel == 0.0.0
+                     , fnkpp:fnkpp   == 0.0.0
   default-language:    Haskell2010
 
   ghc-options:         -Wall -threaded -rtsopts
