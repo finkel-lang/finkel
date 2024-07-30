@@ -1,24 +1,26 @@
-module Main where
+;;; -*- mode: finkel -*-
 
--- Internal
-import CLITest
-import GhcTest
-import MainTest
-import ReplMacroTest
-import ReplTest
-import TestAux
+(defmodule Main
+  (import
+   ;; hspec
+   (Test.Hspec)
 
--- hspec
-import Test.Hspec
+   ;; Internal
+   (CLITest)
+   (GhcTest)
+   (MainTest)
+   (ReplMacroTest)
+   (ReplTest)
+   (TestAux)))
 
-main :: IO ()
-main = do
-  etf <- makeEvalTestFns
-  hspec $
-    do afterAll_ (etf_cleanup etf)
-                 (do describe "CLITest" cliTests
-                     describe "GhcTest" ghcTests
-                     describe "MainTest" mainTests
-                     describe "ReplTest" (replTests etf)
-                     describe "ReplMacroTest" (replMacroTests etf))
-       listenTests etf
+(defn (:: main (IO ()))
+  (do (<- etf makeEvalTestFns)
+      (hspec (do (afterAll-
+                  (etf-cleanup etf)
+                  (do (describe "CLITest" cliTests)
+                      (describe "GhcTest" ghcTests)
+                      (describe "MainTest" mainTests)
+                      (describe "ReplTest" (replTests etf))
+                      (describe "ReplMacroTest" (replMacroTests etf))))
+                 (listenTests etf)))))
+

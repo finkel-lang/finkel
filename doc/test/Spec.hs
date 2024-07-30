@@ -1,4 +1,8 @@
-import qualified Doc
+;;; -*- mode: finkel -*-
 
-main :: IO ()
-main = Doc.main
+(defmodule Main
+  (import
+   (qualified Doc)))
+
+(defn (:: main (IO ()))
+  Doc.main)
