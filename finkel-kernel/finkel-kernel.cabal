@@ -19,18 +19,14 @@ extra-source-files:  README.md
                      include/*.h
                      --
                      test/data/eval/*.fnk
-                     test/data/exception/*.fnk
                      test/data/syntax/*.hs
                      test/data/main/*.c
                      test/data/main/*.hs
-                     test/data/main/*.fnk
                      test/data/make/*.c
                      test/data/make/*.hs
-                     test/data/make/*.fnk
-                     test/data/make/*.fnk.1
-                     test/data/make/*.fnk.2
-                     test/data/make/M4/*.fnk
-                     test/data/make/M6/*.fnk
+                     test/data/make/*.hs.2
+                     test/data/make/M4/*.hs
+                     test/data/make/M6/*.hs
 
 tested-with:           GHC == 8.10.7
                      , GHC == 9.0.2
