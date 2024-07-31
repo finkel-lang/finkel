@@ -20,10 +20,10 @@ mainFnkTests :: FnkSpec
 mainFnkTests =
   beforeAll_ (removeArtifacts odir) $ do
     let common_flags = ["-v0", "-fno-code"]
-    compileFile common_flags "m001.fnk"
+    compileFile common_flags "m001.hs"
     compileFile common_flags "m002.hs"
     compileFile ("-c" : common_flags) "m003.c"
-    compileFile ("-main-is" : "MyMain.my-main" : common_flags) "MyMain.fnk"
+    compileFile ("-main-is" : "MyMain.my-main" : common_flags) "MyMain.hs"
     rawGhcTest
     finkelHelpTest
     finkelVersionTest

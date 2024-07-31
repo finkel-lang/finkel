@@ -75,6 +75,7 @@ import Test.Hspec
 
 -- finkel-kernel
 import Language.Finkel.Eval
+import Language.Finkel.Expand  (withExpanderSettings)
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Make    (TargetSource (..), asModuleName, buildHsSyn,
@@ -91,34 +92,35 @@ makeTests = beforeAll getFnkTestResource makeFnkTests
 makeFnkTests :: FnkSpec
 makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
   targetSourceTests
+  let in_odir file = odir </> file
 
   -- Build bytecode
-  buildByteCode "main1.fnk"
-  buildByteCode "main2.fnk"
-  buildByteCode "main3.fnk"
-  buildByteCodeWith ["--fnk-verbose=2", "-v2"] "main4.fnk"
-  buildByteCode "main5.fnk"
+  buildByteCode (in_odir "main1.hs")
+  buildByteCode (in_odir "main2.hs")
+  buildByteCode (in_odir "main3.hs")
+  buildByteCodeWith ["--fnk-verbose=2", "-v2"] (in_odir "main4.hs")
+  buildByteCode (in_odir "main5.hs")
   buildByteCodeWith [ "--fnk-dump-dflags"
                     , "--fnk-dump-expand"
                     , "--fnk-dump-hs"
                     , "--fnk-trace-expand"
                     , "--fnk-trace-make"
                     , "--fnk-trace-spf" ]
-                    "main9.fnk"
+                    (in_odir "main9.hs")
 
   -- Build object codes
   buildC (odir </> "cbits1.c")
   buildObj ["-fforce-recomp", "-ddump-parsed", "-ddump-parsed-ast"
            ,"-dsource-stats"]
-           ["main5.fnk"]
-  buildObj [] ["cbits1.c", "cbits2.c", "cbits3.c", "main6.fnk"]
+           [in_odir "main5.hs"]
+  buildObj [] (map in_odir ["cbits1.c", "cbits2.c", "cbits3.c", "main6.hs"])
   buildObj [] (map (odir </>) ["cbits1.o","cbits2.o","cbits3.o"] ++
-               ["main6.fnk"])
-  buildObj [] ["main6.fnk", "cbits1.c", "cbits2.c", "cbits3.c"]
+               [in_odir "main6.hs"])
+  buildObj [] (map in_odir ["main6.hs", "cbits1.c", "cbits2.c", "cbits3.c"])
   buildObj [] ["M4.A"]
-  buildObj ["--fnk-dump-hs", "--fnk-hsdir=" ++ (odir </> "gen")]
-           ["M5", "M4" </> "A.fnk", "M4" </> "B.fnk", "M4", "main7.fnk"]
-  buildObj ["-O2"] ["main8.fnk"]
+  buildObj ["--fnk-dump-hs", "--fnk-hsdir=" ++ (in_odir "gen")]
+           ["M5", "M4.A", "M4.B", "M4", in_odir "main7.hs"]
+  buildObj ["-O2"] [in_odir "main8.hs"]
 
   let buildObj' flags inputs =
         before_  prepare_obj (buildObj flags inputs)
@@ -127,7 +129,7 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
                    (let outputs = map (<.> "o") inputs
                     in  buildObjAndExist flags inputs outputs)
       prepare_obj = do
-        mapM_ removeArtifacts [odir, odir </> "M4", odir </> "M6"]
+        mapM_ removeArtifacts [odir, in_odir "M4", in_odir "M6"]
 
   -- Compile object codes with and without optimization option
   buildObjAndExist' [] ["P1", "P2"]
@@ -164,7 +166,7 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
   let reload_simple t after_files after_output =
         buildReload t
                     "foo"
-                    [("R01.fnk.1", "R01.hs"), (t, t)]
+                    [("R01.hs.1", "R01.hs"), (t, t)]
                     after_files
                     "foo: before"
                     after_output
@@ -173,7 +175,7 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
   reload_simple "R02.hs" [] "foo: before"
 
   -- Reloading with modifications.
-  reload_simple "R02.hs" [("R01.fnk.2", "R01.hs")] "foo: after"
+  reload_simple "R02.hs" [("R01.hs.2", "R01.hs")] "foo: after"
 
   -- Reloading test for modules containing `:require' of home package modules
   -- not working well with ghc >= 8.10.
@@ -184,18 +186,21 @@ makeFnkTests = beforeAll_ (removeArtifacts odir) $ do
   -- Recompile tests
   let recompile_simple t extras =
         buildRecompile t
-                       ([("R01.fnk.1", "R01.fnk"), dot_fnk t] ++
-                        map dot_fnk extras)
-                       [("R01.fnk.2", "R01.fnk")]
+                       ([("R01.hs.1", "R01.hs"), dot_hs t] ++ map dot_hs extras)
+                       [("R01.hs.2", "R01.hs")]
                        "foo: before\n"
                        "foo: after\n"
-      dot_fnk x = let y = x <.> "fnk" in (y,y)
+      dot_hs x = let y = x <.> "hs" in (y,y)
 
   recompile_simple "R04" []
   recompile_simple "R05" ["R05a"]
   recompile_simple "R06" ["R06a"]
+
+  -- XXX: R07 and R08 contains nested require of home modules. When compiling
+  -- with plugin, recompilation is not working with modification of R01.hs.
   recompile_simple "R07" ["R07a", "R07b"]
   recompile_simple "R08" ["R08a", "R08b"]
+
   recompile_simple "R09" ["R09a", "R09b"]
   recompile_simple "R10" ["R10a", "R10b"]
   recompile_simple "R11" ["R11a", "R11b"]
@@ -361,7 +366,7 @@ buildWork ftr pre inputs = do_work
     do_work_with extra =
       ftr_main ftr (extra ++ common_args ++ pre)
     common_args =
-      ["-i.", "-i" ++ odir, "-v0"] ++ inputs
+      ["-i.", "-i" ++ odir, "-v1"] ++ inputs
 #if MIN_VERSION_ghc(9,0,0)
     isProfWay = hostIsProfiled
 #else
@@ -464,7 +469,7 @@ buildRecompile
   -> FnkSpec
 buildRecompile main_mod files1 files2 before_str after_str =
   beforeAllWith (\ftr -> do
-                    dir <- mk_tmp_dir ("recompile" ++ main_mod)
+                    dir <- mk_tmp_dir ("recompile_" ++ main_mod)
                     return (dir, ftr))
                 (afterAll (rmdir . fst) work)
     where
@@ -484,6 +489,12 @@ buildRecompile main_mod files1 files2 before_str after_str =
         -- Running with files1 twice to see compilation avoidance.
         compile_and_run tmpdir ftr False files1 before_str
         compile_and_run tmpdir ftr True files1 before_str
+
+        -- When compiling with plugin, need to unload home unit modules from the
+        -- global HscEnv used during macro expansion. Otherwise the required R01
+        -- module won't recompiled.
+        clearGlobalSession
+
         compile_and_run tmpdir ftr False files2 after_str
 
       compile_and_run tmpdir ftr skip_copy files expected_str = do
@@ -499,10 +510,22 @@ buildRecompile main_mod files1 files2 before_str after_str =
         output1 <- readProcess a_dot_out [] ""
         output1 `shouldBe` expected_str
 
+clearGlobalSession :: IO ()
+clearGlobalSession = runFnk clear (fnkTestEnv {envVerbosity = 1
+                                              ,envInvokedMode = GhcPluginMode})
+  where
+    clear = withExpanderSettings $ do
+      -- See also 'clearHPTs' in "ghc/GHCi/UI.hs".
+      _ <- simpleMake [] False Nothing
+      pure ()
+
 copy_files :: MonadIO m => FilePath -> [(FilePath, FilePath)] -> m ()
 copy_files dir fs = liftIO (mapM_ copy fs)
   where
-    copy (i,o) = copyFile (odir </> i) (dir </> o)
+    copy (i,o) =
+      let src = odir </> i
+          dst = dir </> o
+      in  copyFile src dst
 
 -- | Create temporary directory with given name.
 mk_tmp_dir :: String -> IO FilePath
