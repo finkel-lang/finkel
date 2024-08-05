@@ -123,7 +123,6 @@ import           GHC.Driver.Backend                (backendProducesObject)
 import           GHC_Driver_Session                (isObjectTarget)
 #endif
 
-
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Finder          (initFinderOpts)
 import           GHC.Driver.Env                    (hscSetFlags, hsc_HPT)
