@@ -22,6 +22,7 @@ import           Control.Monad.IO.Class          (MonadIO (..))
 import           Data.Char                       (isLower)
 import           Data.Foldable                   (foldlM, for_)
 import           Data.IORef                      (atomicModifyIORef', newIORef)
+import           Data.List                       (intercalate)
 import           Data.Maybe                      (isJust)
 import           System.IO.Unsafe                (unsafePerformIO)
 
@@ -40,7 +41,7 @@ import           GHC_Driver_Env_Types            (HscEnv (..))
 import           GHC_Driver_Main                 (newHscEnv)
 import           GHC_Driver_Monad                (Ghc (..), GhcMonad (..),
                                                   Session (..), getSession,
-                                                  setSession, withTempSession)
+                                                  setSession)
 import           GHC_Driver_Session              (DynFlags (..),
                                                   GeneralFlag (..),
                                                   GhcLink (..),
@@ -50,7 +51,7 @@ import           GHC_Driver_Session              (DynFlags (..),
                                                   wopt_unset)
 import           GHC_Types_SrcLoc                (GenLocated (..))
 import           GHC_Utils_Outputable            (Outputable (..), SDoc, cat,
-                                                  fsep, nest, vcat, (<+>))
+                                                  fsep, nest, text, vcat, (<+>))
 
 #if MIN_VERSION_ghc(9,8,0)
 import           GHC.Driver.DynFlags             (ParMakeCount (..))
@@ -216,17 +217,35 @@ withExpanderSettingsG :: Fnk a -> Fnk a
 withExpanderSettingsG act = do
   dflags <- getDynFlags
   fnk_env <- getFnkEnv
-  let tr = debugWhen' dflags fnk_env Fnk_trace_expand
+  let tr = debugWhen' dflags fnk_env Fnk_trace_session
   if isExpanding dflags
     then do
       -- Clearning the current target, but not using 'withGlobalSession'. The
       -- 'withGlobalSesion' function locks the top level MVar, using it will
       -- cause a dead lock.
       tr ["withExpanderSettingsG: clearing hsc_targets for nested call"]
-      withTempSession (\h -> h {hsc_targets = []}) act
+      tr ["withExpanderSettingsG: keys" <+> text (showExpanding dflags)]
+      withEmptyTargets act
     else do
       tr ["withExpanderSettingsG: withGlobalSession"]
       withGlobalSession act
+
+-- Run given action with empty 'hsc_targets', restores the original target after
+-- running.
+withEmptyTargets :: Fnk a -> Fnk a
+withEmptyTargets act0 = bracket prepare restore act1
+  where
+    prepare = do
+      hsc_env <-  getSession
+      let orig_targets = hsc_targets hsc_env
+      setSession (hsc_env {hsc_targets = []})
+      pure orig_targets
+
+    restore orig_targets = do
+      hsc_env <- getSession
+      setSession (hsc_env {hsc_targets = orig_targets})
+
+    act1 _ = act0
 
 -- Note: [Global HscEnv for plugin]
 -- --------------------------------
@@ -262,10 +281,10 @@ withGlobalSession act0 = do
     modifyMVar globalSessionVar $ \mb_s0 -> do
       s1@(Session r1) <- case mb_s0 of
         Just s0 -> do
-          tr ["withGlobalsession: global session already initialized"]
+          tr ["withGlobalSession: global session already initialized"]
           pure s0
         Nothing -> do
-          tr ["withGlobalsession: invoking newHscEnvForExpand"]
+          tr ["withGlobalSession: invoking newHscEnvForExpand"]
           new_hsc_env <- newHscEnvForExpand fenv0 orig_hsc_env
           r0 <- newIORef new_hsc_env
           pure (Session r0)
@@ -351,6 +370,14 @@ isExpanding = isJust . lookup (fst expandingKey) . rawSettings
 expandingKey :: (String, String)
 expandingKey = ("FNK_MEX", "1")
 {-# INLINABLE expandingKey #-}
+
+-- | Show expanding key.
+showExpanding :: DynFlags -> String
+showExpanding dflags =
+  let keys = [ k <> "=" <> v
+             | kv@(k, v) <- rawSettings dflags, kv == expandingKey]
+  in  intercalate " " keys
+{-# INLINABLE showExpanding #-}
 
 removeWayDyn :: DynFlags -> DynFlags
 #if MIN_VERSION_ghc(9,2,0)
@@ -650,7 +677,7 @@ expand form =
 
     do_expand k f =
       do fnk_env <- getFnkEnv
-         debug fnk_env (Just "") [vcat ["Expanding:", nest 2 (ppr form)]]
+         debug fnk_env Nothing [vcat ["Expanding:", nest 2 (ppr form)]]
          ret0 <- f form
          debug fnk_env Nothing [cat [ppr k, " ==>"], nest 2 (ppr ret0)]
          return ret0
