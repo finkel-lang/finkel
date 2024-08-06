@@ -46,6 +46,7 @@ module Language.Finkel.Fnk
   , debugWhen
   , debugWhen'
   , dumpDynFlags
+  , dumpHscEnv
   , getFnkDebug
 
   -- * Macro related functions
@@ -119,6 +120,7 @@ import           GHC                       (ModSummary (..), runGhc)
 import qualified GHC_Data_EnumSet          as EnumSet
 import           GHC_Data_FastString       (FastString, fsLit, uniqueOfFS,
                                             unpackFS)
+import           GHC_Driver_Env            (hsc_HPT)
 import           GHC_Driver_Env_Types      (HscEnv (..))
 import           GHC_Driver_Main           (Messager, batchMsg)
 import           GHC_Driver_Monad          (Ghc (..), GhcMonad (..),
@@ -138,10 +140,12 @@ import           GHC_Types_Unique_Supply   (MonadUnique (..), UniqSupply,
                                             initUniqSupply, mkSplitUniqSupply,
                                             splitUniqSupply, takeUniqFromSupply)
 import           GHC_Types_Var             (varType)
+import           GHC_Unit_Home_ModInfo     (pprHPT)
 import           GHC_Utils_CliOption       (showOpt)
 import           GHC_Utils_Outputable      (Outputable (..), SDoc,
-                                            alwaysQualify, defaultErrStyle, ppr,
-                                            printSDocLn, sep, text, vcat, (<+>))
+                                            alwaysQualify, defaultErrStyle,
+                                            nest, ppr, printSDocLn, sep, text,
+                                            vcat, (<+>))
 import qualified GHC_Utils_Ppr             as Pretty
 
 #if MIN_VERSION_ghc(9,6,0)
@@ -151,7 +155,8 @@ import           GHC.Driver.Backend        (Backend (..))
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
-import           GHC.Driver.Env            (hscSetFlags)
+import           GHC.Driver.Env            (hscSetFlags, hsc_HUG)
+import           GHC.Driver.Hooks          (Hooks (..))
 import           GHC.Driver.Make           (ModIfaceCache, newIfaceCache)
 import           GHC.Settings              (ToolSettings (..))
 #endif
@@ -214,6 +219,7 @@ data FnkDebugFlag
   = Fnk_dump_dflags
   | Fnk_dump_expand
   | Fnk_dump_hs
+  | Fnk_dump_session
   | Fnk_trace_expand
   | Fnk_trace_session
   | Fnk_trace_make
@@ -818,12 +824,15 @@ fopt flag fnk_env =
   where
     verbosity_to_enable =
       case flag of
+        -- Dump options
         Fnk_dump_dflags   -> 2
         Fnk_dump_expand   -> 2
         Fnk_dump_hs       -> 2
+        Fnk_dump_session  -> 2
+        -- Trace options
         Fnk_trace_expand  -> 3
-        Fnk_trace_session -> 3
         Fnk_trace_make    -> 3
+        Fnk_trace_session -> 3
         Fnk_trace_spf     -> 3
 {-# INLINABLE fopt #-}
 
@@ -953,6 +962,25 @@ dumpDynFlags fnk_env label dflags =
                                                 , Opt_Ticky_LNE
                                                 , Opt_Ticky_Dyn_Thunk ])
       , "  debugLevel:" <+> ppr (debugLevel dflags)
+      ]
+
+-- | Show 'HomeModInfo' in 'HomePackageTable' (and 'HomeUnitGraph' in ghc >=
+-- 9.4).
+dumpHscEnv :: MonadIO m => FnkEnv -> SDoc -> HscEnv -> m ()
+dumpHscEnv fnk_env label hsc_env =
+  debugWhen' (hsc_dflags hsc_env) fnk_env Fnk_dump_session msgs
+  where
+    msgs =
+      label : map (nest 2)
+      [ "hsc_targets:" <+> ppr (hsc_targets hsc_env)
+      , "hsc_hpt:" <+> pprHPT (hsc_HPT hsc_env)
+#if MIN_VERSION_ghc(9,4,0)
+      , "home_unit_graph:" <+> ppr (hsc_HUG hsc_env)
+      , "hsc_type_env_vars:" <+> ppr (hsc_type_env_vars hsc_env)
+      , "hsc_hooks (runPhaseHook):" <+>
+        ppr (fmap (const ("<hook>" :: SDoc))
+             (runPhaseHook (hsc_hooks hsc_env)))
+#endif
       ]
 
 -- XXX: Unsafe global lock to avoid mixing up messages in concurrent settings.

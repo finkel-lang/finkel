@@ -14,6 +14,7 @@ DEBUG OPTIONS:
     --fnk-dump-dflags    Dump DynFlags settings.
     --fnk-dump-expand    Dump expanded code.
     --fnk-dump-hs        Dump Haskell source code.
+    --fnk-dump-session   Dump session information.
     --fnk-trace-expand   Trace macro expansion.
     --fnk-trace-session  Trace session env.
     --fnk-trace-make     Trace make function.

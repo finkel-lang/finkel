@@ -82,7 +82,6 @@ import           GHC_Types_SrcLoc                  (GenLocated (..), Located,
                                                     getLoc, unLoc)
 import           GHC_Unit_Finder                   (FindResult (..),
                                                     findExposedPackageModule)
-import           GHC_Unit_Home_ModInfo             (pprHPT)
 import           GHC_Unit_Module                   (ModuleName, mkModuleName)
 import           GHC_Unit_Module_Graph             (ModuleGraph)
 import           GHC_Unit_Module_ModSummary        (ModSummary (..),
@@ -100,17 +99,15 @@ import           GHC.Types.Error                   (mkUnknownDiagnostic)
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Driver.Config.Finder          (initFinderOpts)
 import           GHC.Driver.Env                    (hscActiveUnitId,
-                                                    hscSetFlags, hsc_HPT,
-                                                    hsc_HUG, hsc_units)
-import           GHC.Driver.Hooks                  (Hooks (..))
+                                                    hscSetFlags, hsc_HUG,
+                                                    hsc_units)
 import           GHC.Driver.Plugins                (ParsedResult (..),
                                                     PsMessages (..))
 import           GHC.Driver.Session                (GhcLink (..))
 import           GHC.Hs                            (HsParsedModule)
 import           GHC.Types.Error                   (emptyMessages)
 import           GHC.Types.PkgQual                 (PkgQual (..))
-import           GHC.Unit.Env                      (UnitEnv (..),
-                                                    homeUnitEnv_dflags,
+import           GHC.Unit.Env                      (homeUnitEnv_dflags,
                                                     unitEnv_foldWithKey)
 import           GHC.Unit.Module.Graph             (ModNodeKeyWithUid (..),
                                                     ModuleGraphNode (..),
@@ -372,6 +369,7 @@ makeFromRequirePlugin lmname = do
       messager = envMessager fnk_env
       tr = traceMake fnk_env "makeFromRequirePlugin"
       new_targets = target : old_targets
+      hsc_env_new = hsc_env {hsc_targets = new_targets}
 
 #if MIN_VERSION_ghc(9,2,0)
   let extra_dump =
@@ -389,19 +387,10 @@ makeFromRequirePlugin lmname = do
   tr ([ "target:" <+> ppr target
       , "old_targets:" <+> nvcOrNone old_targets
       , "new_targets:" <+> nvcOrNone new_targets
-      , "hsc_hpt:" <+> pprHPT (hsc_HPT hsc_env)
       , "allowObjCode:" <+> text (show (allow_obj_code))
-#if MIN_VERSION_ghc(9,4,0)
-      , "has_phase_hook:" <+> case runPhaseHook (hsc_hooks hsc_env) of
-          Just _  -> "yes"
-          Nothing -> "no"
-      , "knot_vars:" <+> ppr (hsc_type_env_vars hsc_env)
-      , "home_unit_graph:" <+> ppr (ue_home_unit_graph (hsc_unit_env hsc_env))
-#endif
       ] <> extra_dump)
 
-  setSession (hsc_env {hsc_targets = new_targets})
-  -- withTmpDynFlags (setExpanding dflags) $ do
+  setSession hsc_env_new
 
   -- XXX: Using hardcoded additional import paths `src'
   --
@@ -417,15 +406,21 @@ makeFromRequirePlugin lmname = do
 
   -- let adjust_dynflags df =
   --       (setExpanding df) {importPaths = "src" : importPaths df}
-
   let adjust_dynflags = setExpanding
 
-  withTmpDynFlags (adjust_dynflags dflags) $ do
+  dumpHscEnv fnk_env "makeFromRequirePlugin (before load):" hsc_env_new
+
+  success_flag <- withTmpDynFlags (adjust_dynflags dflags) $ do
     tmp_dflags <- fmap hsc_dflags getSession
     dumpDynFlags fnk_env "makeFromRequirePlugin (withTmpDynFlags)" tmp_dflags
-
     mg <- depanal [] False
     doLoad LoadAllTargets (Just messager) mg
+
+  hsc_env_after <- getSession
+  dumpHscEnv fnk_env "makeFromRequirePlugin (after load):" hsc_env_after
+  tr ["isExpanding:" <+> ppr (isExpanding (hsc_dflags hsc_env_after))]
+
+  pure success_flag
 
 -- | Make new 'TargetSummary' from given 'TargetUnit'.
 fnkSourceToSummary :: TargetSource -> Fnk TargetSummary
