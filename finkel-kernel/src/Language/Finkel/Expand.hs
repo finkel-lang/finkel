@@ -118,8 +118,9 @@ import           Language.Finkel.Form
 withExpanderSettings :: Fnk a -> Fnk a
 withExpanderSettings act = do
   fnk_env <- getFnkEnv
+  dflags <- getDynFlags
 
-  debugSession fnk_env Nothing
+  debugWhen' dflags fnk_env Fnk_trace_session
     ["withExpanderSettings: envInvokedMode:" <+> ppr (envInvokedMode fnk_env)]
 
   case envInvokedMode fnk_env of
@@ -492,10 +493,6 @@ isInterpreted dflags = backend dflags == Interpreter
 isInterpreted dflags = hscTarget dflags == HscInterpreted
 #endif
 {-# INLINABLE isInterpreted #-}
-
-debugSession :: FnkEnv -> Maybe SDoc -> [SDoc] -> Fnk ()
-debugSession = debugWith Fnk_trace_session
-{-# INLINABLE debugSession #-}
 
 
 -- ---------------------------------------------------------------------
