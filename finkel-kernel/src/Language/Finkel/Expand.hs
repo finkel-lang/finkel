@@ -266,8 +266,16 @@ withGlobalSession act0 = do
   orig_hsc_env <- getSession
 
   let tr = debugWhen' (hsc_dflags orig_hsc_env) fenv0 Fnk_trace_session
-      prepare = initializeGlobalSession
-      restore = setSession
+      prepare = do
+        hsc_env <- initializeGlobalSession
+        dumpHscEnv fenv0 "withGlobalSession (prepare)" hsc_env
+        pure hsc_env
+
+      restore hsc_env_orig = do
+        hsc_env <- getSession
+        dumpHscEnv fenv0 "withGlobalSession (restore):" hsc_env
+        setSession hsc_env_orig
+
       act1 = bracket prepare restore $ \mex0 -> do
         let mex1 = discardInteractiveContext mex0
         setSession mex1
