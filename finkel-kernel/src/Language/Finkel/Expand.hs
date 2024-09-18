@@ -105,6 +105,7 @@ import           DynamicLoading                  (initializePlugins)
 import           Language.Finkel.Data.FastString (FastString, unconsFS)
 import           Language.Finkel.Fnk
 import           Language.Finkel.Form
+import           Language.Finkel.Make.Cache
 
 
 -- ---------------------------------------------------------------------
@@ -221,7 +222,7 @@ withExpanderSettingsG act = do
   let tr = debugWhen' dflags fnk_env Fnk_trace_session
   if isExpanding dflags
     then do
-      -- Clearning the current target, but not using 'withGlobalSession'. The
+      -- Clearing the current target, but not using 'withGlobalSession'. The
       -- 'withGlobalSesion' function locks the top level MVar, using it will
       -- cause a dead lock.
       tr ["withExpanderSettingsG: clearing hsc_targets for nested call"]
@@ -240,9 +241,11 @@ withEmptyTargets act0 = bracket prepare restore act1
       hsc_env <-  getSession
       let orig_targets = hsc_targets hsc_env
       setSession (hsc_env {hsc_targets = []})
+      updateHomeModCache
       pure orig_targets
 
     restore orig_targets = do
+      storeHomeModCache
       hsc_env <- getSession
       setSession (hsc_env {hsc_targets = orig_targets})
 
@@ -303,6 +306,7 @@ withGlobalSession act0 = do
       pure (Just s1, (retval, fnk_env))
 
   putFnkEnv fnk_env
+  clearHomeModCache
   pure retval
 
 initializeGlobalSession :: GhcMonad m => m HscEnv

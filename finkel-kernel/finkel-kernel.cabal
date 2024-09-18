@@ -72,6 +72,7 @@ library
   other-modules:       Language.Finkel.Data.Fractional
                        Language.Finkel.Data.FastString
                        Language.Finkel.Data.SourceText
+                       Language.Finkel.Make.Cache
                        Language.Finkel.Make.Recompile
                        Language.Finkel.Make.Summary
                        Language.Finkel.Make.TargetSource
