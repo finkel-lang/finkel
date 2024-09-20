@@ -12,6 +12,7 @@ module Language.Finkel.Expand
   , bcoDynFlags
   , isInterpreted
   , discardInteractiveContext
+  , clearGlobalSession
   ) where
 
 #include "ghc_modules.h"
@@ -308,6 +309,14 @@ withGlobalSession act0 = do
   putFnkEnv fnk_env
   clearHomeModCache
   pure retval
+
+-- | Clear the contents of global 'MVar' containing 'HscEnv' for macro
+-- expansion.
+clearGlobalSession :: IO ()
+clearGlobalSession = do
+  modifyMVar globalSessionVar $ const $ pure (Nothing, ())
+  modifyMVar globalSessionInitializedVar $ const $ pure (False, ())
+{-# INLINABLE clearGlobalSession #-}
 
 initializeGlobalSession :: GhcMonad m => m HscEnv
 initializeGlobalSession = do

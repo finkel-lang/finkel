@@ -24,7 +24,7 @@ finkel-kernel/include/finkel_kernel_config.h
 finkel-kernel/test/data/main/m00?
 finkel-kernel/test/data/make/main?
 finkel-kernel/test/data/make/gen
-finkel-kernel/test/data/plugin/p0?
+finkel-kernel/test/data/plugin/p??
 finkel-kernel/test/data/syntax/*.h
 
 .stack-work/
