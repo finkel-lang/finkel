@@ -120,7 +120,6 @@ import           GHC                       (ModSummary (..), runGhc)
 import qualified GHC_Data_EnumSet          as EnumSet
 import           GHC_Data_FastString       (FastString, fsLit, uniqueOfFS,
                                             unpackFS)
-import           GHC_Driver_Env            (hsc_HPT)
 import           GHC_Driver_Env_Types      (HscEnv (..))
 import           GHC_Driver_Main           (Messager, batchMsg)
 import           GHC_Driver_Monad          (Ghc (..), GhcMonad (..),
@@ -155,7 +154,7 @@ import           GHC.Driver.Backend        (Backend (..))
 #endif
 
 #if MIN_VERSION_ghc(9,4,0)
-import           GHC.Driver.Env            (hscSetFlags, hsc_HUG)
+import           GHC.Driver.Env            (hscSetFlags, hsc_HPT, hsc_HUG)
 import           GHC.Driver.Hooks          (Hooks (..))
 import           GHC.Driver.Make           (ModIfaceCache, newIfaceCache)
 import           GHC.Settings              (ToolSettings (..))
