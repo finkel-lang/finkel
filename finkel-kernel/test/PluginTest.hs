@@ -26,6 +26,7 @@ import GHC_Driver_Env         (HscEnv (..))
 import Test.Hspec
 
 -- finkel-kernel
+import Language.Finkel.Expand (clearGlobalSession)
 import Language.Finkel.Fnk    (getLibDirFromGhc)
 import Language.Finkel.Plugin (plugin, setFinkelPluginWithArgs)
 
@@ -41,7 +42,10 @@ import TestAux
 
 pluginTests :: FnkSpec
 pluginTests =
-  beforeAll_ (removeArtifacts pdir) $
+  -- Clearing global session for macro expansion with `clearGlobalSession'. If
+  -- not cleared, when this Plugin tests were ran after Make tests, nested
+  -- required home modules (the test with p11.hs) will show a compilation error.
+  beforeAll_ (removeArtifacts pdir >> clearGlobalSession) $
     describe "run compiler as ghc plugin" $ do
       compile [] ["--verbose=3"] "p01.hs"
       compile [] [] "p02.hs"
@@ -56,6 +60,7 @@ pluginTests =
       compile ["-v", "-optF", "--warn-interp=False"] ["--verbose=0"] "p09.hs"
       compile ["-v", "-optF", "--warn-interp=False"] ["--verbose=3"] "p09.hs"
       compile ["-v", "-optF", "--warn-interp=False"] ["--verbose=3"] "p10.hs"
+      compile ["-v", "-optF", "--warn-interp=False"] ["--verbose=3"] "p11.hs"
 
       -- Failures
       compileWithFailedFlag [] [] "p07.hs"
@@ -67,7 +72,7 @@ compile ghc_args plugin_args basename = do
   let act io = do
         success_flag <- io
         succeeded success_flag `shouldBe` True
-      pending_in_win = ["p03.hs", "p06.hs", "p09.hs", "p10.hs"]
+      pending_in_win = ["p03.hs", "p06.hs", "p09.hs", "p10.hs", "p11.hs"]
   if os == "mingw32" && basename `elem` pending_in_win
     then it ("should compile " ++ basename) $ \_ ->
            pendingWith "Windows not supported yet"
