@@ -270,8 +270,10 @@ withGlobalSession act0 = do
   orig_hsc_env <- getSession
 
   let tr = debugWhen' (hsc_dflags orig_hsc_env) fenv0 Fnk_trace_session
-      prepare = do
-        hsc_env <- initializeGlobalSession
+      prepare do_init = do
+        hsc_env <- if do_init
+          then initializeGlobalSession
+          else getSession
         dumpHscEnv fenv0 "withGlobalSession (prepare)" hsc_env
         pure hsc_env
 
@@ -280,7 +282,7 @@ withGlobalSession act0 = do
         dumpHscEnv fenv0 "withGlobalSession (restore):" hsc_env
         setSession hsc_env_orig
 
-      act1 = bracket prepare restore $ \mex0 -> do
+      act1 do_init = bracket (prepare do_init) restore $ \mex0 -> do
         let mex1 = discardInteractiveContext mex0
         setSession mex1
         modifyFnkEnv (\e -> e {envSessionForExpand = Just mex1})
@@ -292,16 +294,16 @@ withGlobalSession act0 = do
 
   (retval, fnk_env) <- liftIO $ do
     modifyMVar globalSessionVar $ \mb_s0 -> do
-      s1@(Session r1) <- case mb_s0 of
+      (do_init, s1@(Session r1)) <- case mb_s0 of
         Just s0 -> do
           tr ["withGlobalSession: global session already initialized"]
-          pure s0
+          pure (False, s0)
         Nothing -> do
           tr ["withGlobalSession: invoking newHscEnvForExpand"]
           new_hsc_env <- newHscEnvForExpand fenv0 orig_hsc_env
           r0 <- newIORef new_hsc_env
-          pure (Session r0)
-      (retval, fnk_env) <- unGhc (toGhc act1 fer) s1
+          pure (True, Session r0)
+      (retval, fnk_env) <- unGhc (toGhc (act1 do_init) fer) s1
       for_ (envSessionForExpand fnk_env) $ \he ->
         atomicModifyIORef' r1 (const (he, ()))
       pure (Just s1, (retval, fnk_env))
@@ -313,30 +315,16 @@ withGlobalSession act0 = do
 -- | Clear the contents of global 'MVar' containing 'HscEnv' for macro
 -- expansion.
 clearGlobalSession :: IO ()
-clearGlobalSession = do
-  modifyMVar globalSessionVar $ const $ pure (Nothing, ())
-  modifyMVar globalSessionInitializedVar $ const $ pure (False, ())
+clearGlobalSession = modifyMVar globalSessionVar $ const $ pure (Nothing, ())
 {-# INLINABLE clearGlobalSession #-}
 
 initializeGlobalSession :: GhcMonad m => m HscEnv
 initializeGlobalSession = do
-  -- Avoid 'setSessionDynFlags' in ghc < 9.0, since it redundantly loads package
-  -- environment.
-  --
-  -- In ghc >= 9.0, 'setSessionDynFlags' is initializing the interpreter, and
-  -- seems like 'setSessionDynFlags' need to be called before initializing
-  -- plugins, so calling at the time of session initialization, from GhcMonad.
-  initialized <- liftIO $ modifyMVar globalSessionInitializedVar $
-    \initialized -> pure (True, initialized)
-
-  if initialized
-    then getSession
-    else do
 #if MIN_VERSION_ghc(9,0,0)
-      -- To set the "hsc_interp" field in the new session.
-      _ <- getDynFlags >>= setSessionDynFlags
+  -- To set the "hsc_interp" field in the new session.
+  _ <- getDynFlags >>= setSessionDynFlags
 #endif
-      getSession >>= initializePlugin'
+  getSession >>= initializePlugin'
 {-# INLINABLE initializeGlobalSession #-}
 
 -- Version compatible variant of 'initializePlugins'.
@@ -349,11 +337,6 @@ initializePlugin' hsc_env = do
   return (updateDynFlags plugin_dflags hsc_env)
 #endif
 {-# INLINABLE initializePlugin' #-}
-
--- | Unsafe global 'Mvar' to track initialization of 'globalSessionVar'.
-globalSessionInitializedVar :: MVar Bool
-globalSessionInitializedVar = unsafePerformIO (newMVar False)
-{-# NOINLINE globalSessionInitializedVar #-}
 
 -- | Unsafe global 'MVar' to share the 'HscEnv' when compiling as plugin.
 globalSessionVar :: MVar (Maybe Session)
