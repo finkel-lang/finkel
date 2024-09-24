@@ -98,13 +98,14 @@ import Language.Finkel.Builder
 import Language.Finkel.Data.SourceText
 import Language.Finkel.Eval
 import Language.Finkel.Exception
-import Language.Finkel.Expand            (bcoDynFlags, expand, expands')
+import Language.Finkel.Expand            (expand, expands')
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Homoiconic
 import Language.Finkel.Make              (findTargetModuleNameMaybe,
                                           makeFromRequire,
                                           makeFromRequirePlugin)
+import Language.Finkel.Make.Session      (bcoDynFlags)
 import Language.Finkel.Make.TargetSource (targetSourcePath)
 import Language.Finkel.Syntax            (parseExpr, parseLImport,
                                           parseModuleNoHeader)

@@ -100,7 +100,7 @@ printExpandedForms path = Fnk.runFnk go SpecialForms.defaultFnkEnv
       Make.initSessionForMake
       contents <- liftIO (hGetStringBuffer path)
       (forms, _) <- Reader.parseSexprs (Just path) contents
-      forms' <- Expand.withExpanderSettings (Expand.expands forms)
+      forms' <- Make.withExpanderSettings (Expand.expands forms)
       liftIO (mapM_ print forms')
 
 printForms :: FilePath -> IO ()
@@ -178,7 +178,7 @@ parseFnkModuleWith act path = Fnk.runFnk go SpecialForms.defaultFnkEnv
         contents <- liftIO (hGetStringBuffer path)
         case Lexer.runSP Reader.sexprs (Just path) contents of
           Right (forms, sp) -> do
-            forms' <- Expand.withExpanderSettings (Expand.expands forms)
+            forms' <- Make.withExpanderSettings (Expand.expands forms)
             dflags <- getDynFlags
             case Builder.evalBuilder dflags False Syntax.parseModule forms' of
               Right mdl -> act mdl sp

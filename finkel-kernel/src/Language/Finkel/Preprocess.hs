@@ -73,7 +73,7 @@ import Language.Finkel.Exception         (FinkelException (..),
                                           handleFinkelException,
                                           printFinkelException,
                                           readOrFinkelException)
-import Language.Finkel.Expand            (expands, withExpanderSettings)
+import Language.Finkel.Expand            (expands)
 import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
                                           Macro (..), addMacro, lookupMacro,
                                           macroFunction, makeEnvMacros,
@@ -81,6 +81,7 @@ import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
                                           runFnk')
 import Language.Finkel.Form              (Form (..), LForm (..), aSymbol,
                                           unCode)
+import Language.Finkel.Make.Session      (withExpanderSettings)
 import Language.Finkel.Make.Summary      (buildHsSyn, withTiming')
 import Language.Finkel.Make.TargetSource (findPragmaString)
 import Language.Finkel.Reader            (parseSexprs)

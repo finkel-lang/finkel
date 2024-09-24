@@ -44,10 +44,9 @@
 
    ;; finkel-kernel
    (Language.Finkel)
-   (Language.Finkel.Expand [discardInteractiveContext])
    (Language.Finkel.Eval [evalExprType evalTypeKind])
    (Language.Finkel.Form [mkLocatedForm])
-   (Language.Finkel.Make [buildHsSyn simpleMake])
+   (Language.Finkel.Make [buildHsSyn discardInteractiveContext simpleMake])
    (Language.Finkel.Fnk [(FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv
                          setDynFlags setFnkVerbosity updateDynFlags])
    (Language.Finkel.Options [fnkEnvOptions partitionFnkEnvOptions])
