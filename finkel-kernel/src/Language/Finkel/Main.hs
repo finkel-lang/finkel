@@ -381,7 +381,7 @@ rawGhcOptions =
   , "--frontend"
   ]
 
--- | THrow 'UsageError' when unknown flag were found.
+-- | Throw 'UsageError' when unknown flag were found.
 checkUnknownFlags :: [String] -> IO ()
 checkUnknownFlags fileish = do
   let unknowns = [f | f@('-':_) <- fileish]

@@ -76,12 +76,12 @@ import           System.IO.Silently      (hSilence)
 -- fnk-kernel
 import           Language.Finkel         (defaultFnkEnv)
 import           Language.Finkel.Builder (Builder)
-import           Language.Finkel.Expand  (expands, withExpanderSettings)
+import           Language.Finkel.Expand  (expands)
 import           Language.Finkel.Fnk     (Fnk, FnkEnv (..), setDynFlags)
 import           Language.Finkel.Lexer   (evalSP)
 import           Language.Finkel.Main    (defaultMain)
 import           Language.Finkel.Make    (buildHsSyn, initSessionForMake,
-                                          simpleMake)
+                                          simpleMake, withExpanderSettings)
 import           Language.Finkel.Reader  (sexprs)
 import qualified Paths_finkel_kernel
 

@@ -214,6 +214,7 @@ import           Language.Finkel.Expand
 import           Language.Finkel.Fnk
 import           Language.Finkel.Form
 import           Language.Finkel.Lexer
+import           Language.Finkel.Make.Session
 import           Language.Finkel.Make.TargetSource
 import           Language.Finkel.Reader
 import           Language.Finkel.Syntax

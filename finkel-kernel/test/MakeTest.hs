@@ -75,11 +75,11 @@ import Test.Hspec
 
 -- finkel-kernel
 import Language.Finkel.Eval
-import Language.Finkel.Expand  (withExpanderSettings)
 import Language.Finkel.Fnk
 import Language.Finkel.Form
 import Language.Finkel.Make    (TargetSource (..), asModuleName, buildHsSyn,
-                                setContextModules, simpleMake)
+                                setContextModules, simpleMake,
+                                withExpanderSettings)
 import Language.Finkel.Plugin  (plugin, setFinkelPluginWithArgs)
 import Language.Finkel.Syntax
 

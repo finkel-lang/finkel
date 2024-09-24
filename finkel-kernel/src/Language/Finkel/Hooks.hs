@@ -52,10 +52,10 @@ import GHC.Tc.Types                      (FrontendResult (..))
 import Language.Finkel.Error             (mkPlainWrappedMsg)
 import Language.Finkel.Exception         (finkelExceptionLoc,
                                           handleFinkelException)
-import Language.Finkel.Expand            (bcoDynFlags)
 import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
                                           initFnkEnv, runFnk')
 import Language.Finkel.Make              (fnkSourceToSummary)
+import Language.Finkel.Make.Session      (bcoDynFlags)
 import Language.Finkel.Make.Summary      (TargetSummary (..))
 import Language.Finkel.Make.TargetSource (TargetSource (..),
                                           findTargetSourceWithPragma)
@@ -77,7 +77,7 @@ finkelHooks mod_name fnk_env0 cmd_line_opts hsc_env0 = do
   -- Always setting the Opt_Pp flag on for dflags_from_ic1 and dflags1,
   -- otherwise the hook for T_HsPp will not run.
   let dflags_from_ic = bcoDynFlags (ic_dflags (hsc_IC hsc_env0))
-      -- XXX: Update targets in expanding seession?
+      -- XXX: Update targets in expanding session?
       -- enable_pp_phase =
       --   setGeneralFlag' Opt_Pp .
       --   setGeneralFlag' Opt_UseBytecodeRatherThanObjects .

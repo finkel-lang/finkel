@@ -15,6 +15,11 @@ module Language.Finkel.Make
     -- * Session related functions
   , initSessionForMake
   , setContextModules
+  , discardInteractiveContext
+
+    -- * Macro expander session related functions
+  , withExpanderSettings
+  , clearGlobalSession
 
     -- * Syntax builder utility
   , buildHsSyn
@@ -144,9 +149,9 @@ import           GHC_Types_Target                  (Target (..), TargetId (..))
 
 -- internal
 import           Language.Finkel.Error
-import           Language.Finkel.Expand
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make.Recompile
+import           Language.Finkel.Make.Session
 import           Language.Finkel.Make.Summary
 import           Language.Finkel.Make.TargetSource
 import           Language.Finkel.Make.Trace

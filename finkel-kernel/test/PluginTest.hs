@@ -26,8 +26,8 @@ import GHC_Driver_Env         (HscEnv (..))
 import Test.Hspec
 
 -- finkel-kernel
-import Language.Finkel.Expand (clearGlobalSession)
 import Language.Finkel.Fnk    (getLibDirFromGhc)
+import Language.Finkel.Make   (clearGlobalSession)
 import Language.Finkel.Plugin (plugin, setFinkelPluginWithArgs)
 
 -- Internal

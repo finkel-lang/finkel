@@ -75,7 +75,7 @@ setFinkelPluginWithArgs plgn args = do
 #if MIN_VERSION_ghc(9,6,0)
   -- In ghc >= 9.6, updating current session with driverPlugin, because
   -- `GHC.Loader.initializePlugins' does not check the addition of static
-  -- plusing, according to the comment in the function.
+  -- plugins, according to the comment in the function.
   hsc_env' <- liftIO $ driverPlugin plgn args hsc_env
   let sp = StaticPlugin (PluginWithArgs plgn args)
       old_plugins = hsc_plugins hsc_env'
@@ -91,7 +91,7 @@ setFinkelPluginWithArgs plgn args = do
       new_plugins = old_plugins {staticPlugins = new_static_plugins}
   setSession (hsc_env {hsc_plugins = new_plugins})
 #elif MIN_VERSION_ghc(9,2,0)
-  -- In ghc < 9.6, ading static plugin. From ghc 9.2, plugins are stored in
+  -- In ghc < 9.6, adding static plugin. From ghc 9.2, plugins are stored in
   -- HscEnv. Before 9.2, plugins are stored in DynFlags.
   let sp = StaticPlugin (PluginWithArgs plgn args)
       old_static_plugins = hsc_static_plugins hsc_env
