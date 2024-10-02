@@ -44,7 +44,7 @@ import System.Directory                  (copyFile)
 -- ghc
 import GHC_Data_Bag                      (unitBag)
 import GHC_Data_FastString               (fsLit)
-import GHC_Data_StringBuffer             (StringBuffer, hGetStringBuffer)
+import GHC_Data_StringBuffer             (hGetStringBuffer)
 import GHC_Driver_Env                    (HscEnv (..))
 import GHC_Types_SrcLoc                  (GenLocated (..))
 import GHC_Utils_Outputable              (text, ($$), (<>))
@@ -73,18 +73,16 @@ import Language.Finkel.Exception         (FinkelException (..),
                                           handleFinkelException,
                                           printFinkelException,
                                           readOrFinkelException)
-import Language.Finkel.Expand            (expands)
-import Language.Finkel.Fnk               (FnkEnv (..), FnkInvokedMode (..),
-                                          Macro (..), addMacro, lookupMacro,
-                                          macroFunction, makeEnvMacros,
-                                          mergeMacros, modifyFnkEnv, runFnk,
-                                          runFnk')
+import Language.Finkel.Fnk               (FnkEnv (..), Macro (..), addMacro,
+                                          lookupMacro, macroFunction,
+                                          makeEnvMacros, mergeMacros,
+                                          modifyFnkEnv, runFnk, runFnk')
 import Language.Finkel.Form              (Form (..), LForm (..), aSymbol,
                                           unCode)
-import Language.Finkel.Make.Session      (withExpanderSettings)
+import Language.Finkel.Make.Cache
+import Language.Finkel.Make.Session      (expandContents)
 import Language.Finkel.Make.Summary      (buildHsSyn, withTiming')
 import Language.Finkel.Make.TargetSource (findPragmaString)
-import Language.Finkel.Reader            (parseSexprs)
 import Language.Finkel.SpecialForms      (defaultFnkEnv, emptyForm,
                                           specialForms)
 import Language.Finkel.Syntax            (parseHeader, parseModule)
@@ -173,7 +171,7 @@ preprocessOrCopy mb_hsc_env ppo isrc mb_opath = do
     then do
       let opath = fromMaybe "stdout" mb_opath
       debug ppo 2 ("Preprocessing " ++ isrc ++ " to " ++ opath)
-      writeModule mb_hsc_env ppo buf isrc mb_opath
+      writeModule mb_hsc_env ppo isrc mb_opath
       debug ppo 2 ("Finished wriitng " ++ isrc ++ " to " ++ opath)
     else do
       debug ppo 2 ("Skipping " ++ isrc)
@@ -202,9 +200,8 @@ printUsage = do
   putStrLn (usageInfo header ppOptions)
 
 writeModule
-  :: Maybe HscEnv -> PpOptions -> StringBuffer -> FilePath -> Maybe FilePath
-  -> IO ()
-writeModule mb_hsc_env ppo buf0 ipath mb_opath =
+  :: Maybe HscEnv -> PpOptions -> FilePath -> Maybe FilePath -> IO ()
+writeModule mb_hsc_env ppo ipath mb_opath =
   case mb_opath of
     Nothing    -> run stdout
     Just opath -> withFile opath WriteMode run
@@ -223,11 +220,7 @@ writeModule mb_hsc_env ppo buf0 ipath mb_opath =
     go hdl = withTiming' "writeModule" $ handleFinkelException handler $ do
       when warn_interp_macros $
         modifyFnkEnv (replaceWithWarnings interpMacros)
-      (forms0, sp) <- parseSexprs (Just ipath) buf0
-      let wrap = case envInvokedMode fnk_env of
-            ExecMode      -> id
-            GhcPluginMode -> withExpanderSettings
-      forms1 <- wrap $ expands forms0
+      ExpandedCode {ec_sp=sp,ec_forms=forms1} <- expandContents ipath
       mdl <- buildHsSyn parser forms1
       putHsSrc hdl sp (Hsrc mdl)
     handler e = do
