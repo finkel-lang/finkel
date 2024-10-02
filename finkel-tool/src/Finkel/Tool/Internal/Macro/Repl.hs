@@ -46,7 +46,8 @@
    (Language.Finkel)
    (Language.Finkel.Eval [evalExprType evalTypeKind])
    (Language.Finkel.Form [mkLocatedForm])
-   (Language.Finkel.Make [buildHsSyn discardInteractiveContext simpleMake])
+   (Language.Finkel.Make [buildHsSyn discardInteractiveContext simpleMake
+                          clearExpandedCodeCache])
    (Language.Finkel.Fnk [(FnkEnv ..) getFnkEnv macroNames modifyFnkEnv putFnkEnv
                          setDynFlags setFnkVerbosity updateDynFlags])
    (Language.Finkel.Options [fnkEnvOptions partitionFnkEnvOptions])
@@ -309,6 +310,7 @@
 (defn (:: compile-and-import (-> [(Located FilePath)] (Fnk SuccessFlag)))
   [lpaths]
   (do (<- fnk-env getFnkEnv)
+      clearExpandedCodeCache
       (lefn [(imps0 (map mk-ii-str (envContextModules fnk-env)))
              (:: adjust-module (-> (Located String) (Fnk InteractiveImport)))
              (adjust-module [lpath]

@@ -9,6 +9,7 @@ module Language.Finkel.Make.Session
   , isInterpreted
   , discardInteractiveContext
   , clearGlobalSession
+  , expandContents
   ) where
 
 #include "ghc_modules.h"
@@ -30,6 +31,7 @@ import qualified Data.Set                   as Set
 import           Control.Monad.Catch        (bracket)
 
 -- ghc
+import           GHC_Data_StringBuffer      (hGetStringBuffer)
 import           GHC_Driver_Env_Types       (HscEnv (..))
 import           GHC_Driver_Main            (newHscEnv)
 import           GHC_Driver_Monad           (Ghc (..), GhcMonad (..),
@@ -90,8 +92,53 @@ import           DynamicLoading             (initializePlugins)
 #endif
 
 -- Internal
+import           Language.Finkel.Expand     (expands)
 import           Language.Finkel.Fnk
 import           Language.Finkel.Make.Cache
+import           Language.Finkel.Reader     (parseSexprs)
+
+-- ---------------------------------------------------------------------
+--
+-- Expanded home module form
+--
+-- ---------------------------------------------------------------------
+
+-- | Get expanded module form of given file path.
+--
+-- This function first lookup the global cache with using the file path as the
+-- key of the cache. If not found in cache, read the file, expand macros, and
+-- cache the result.
+expandContents :: FilePath -> Fnk ExpandedCode
+expandContents path = do
+  fnk_env <- getFnkEnv
+  dflags <- getDynFlags
+
+  let tr = debugWhen' dflags fnk_env Fnk_trace_session
+      path_text = text path
+
+  mb_ec <- lookupExpandedCodeCache path
+  case mb_ec of
+    Just ec -> do
+      tr ["expandContents: reusing expanded code in" <+> path_text]
+      pure ec
+    _other -> do
+      -- XXX: When to reset macros to envDefaultMacros? Or, no need for
+      -- resetting since the expansion happens in pre-processing phase?
+      tr ["expandContents: expanding" <+> path_text <+> "..."]
+      buf <- liftIO $ hGetStringBuffer path
+      (forms0, sp) <- parseSexprs (Just path) buf
+      forms1 <- withExpanderSettings $ expands forms0
+      reqs <- envRequiredHomeModules <$> getFnkEnv
+      resetRequiredHomeModules
+      let ec = ExpandedCode sp forms1 reqs
+      tr ["expandContents: adding cache for" <+> path_text]
+      addToExpandedCodeCache path ec
+      pure ec
+
+resetRequiredHomeModules :: Fnk ()
+resetRequiredHomeModules = modifyFnkEnv $ \fnk_env ->
+  fnk_env {envRequiredHomeModules = []}
+{-# INLINABLE resetRequiredHomeModules #-}
 
 
 -- ---------------------------------------------------------------------
@@ -227,11 +274,9 @@ withEmptyTargets act0 = bracket prepare restore act1
       hsc_env <-  getSession
       let orig_targets = hsc_targets hsc_env
       setSession (hsc_env {hsc_targets = []})
-      updateHomeModCache
       pure orig_targets
 
     restore orig_targets = do
-      storeHomeModCache
       hsc_env <- getSession
       setSession (hsc_env {hsc_targets = orig_targets})
 
@@ -294,7 +339,8 @@ withGlobalSession act0 = do
       pure (Just s1, (retval, fnk_env))
 
   putFnkEnv fnk_env
-  clearHomeModCache
+  liftIO $ tr ["withGlobalSession: clearing expanded code cache"]
+  clearExpandedCodeCache
   pure retval
 
 -- | Clear the contents of global 'MVar' containing 'HscEnv' for macro

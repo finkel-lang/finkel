@@ -7,30 +7,85 @@
 -- redundant recompilation.
 
 module Language.Finkel.Make.Cache
-  ( storeHomeModCache
+  ( ExpandedCode(..)
+  , lookupExpandedCodeCache
+  , addToExpandedCodeCache
+  , clearExpandedCodeCache
+
+  , storeHomeModCache
   , updateHomeModCache
   , clearHomeModCache
   ) where
 
-#if MIN_VERSION_ghc(9,4,0)
-
 #include "ghc_modules.h"
 
 -- base
-import Control.Monad.IO.Class (MonadIO (..))
-import Data.IORef             (IORef, atomicModifyIORef', newIORef, readIORef)
-import System.IO.Unsafe       (unsafePerformIO)
+import           Control.Monad.IO.Class     (MonadIO (..))
+import           Data.IORef                 (IORef, atomicModifyIORef',
+                                             newIORef, readIORef)
+import           System.IO.Unsafe           (unsafePerformIO)
+
+-- containers
+import           Data.Map                   (Map)
+import qualified Data.Map                   as Map
 
 -- ghc
-import GHC_Driver_Make        (ModIfaceCache (..), newIfaceCache)
+import           GHC_Unit_Module_ModSummary (ModSummary (..))
 
 -- Internal
-import Language.Finkel.Fnk    (Fnk (..), FnkEnv (..), getFnkEnv, modifyFnkEnv)
+import           Language.Finkel.Form       (Code)
+import           Language.Finkel.Lexer      (SPState (..))
+
+#if MIN_VERSION_ghc(9,4,0)
+import           GHC_Driver_Make            (ModIfaceCache (..), newIfaceCache)
+import           Language.Finkel.Fnk        (Fnk (..), FnkEnv (..), getFnkEnv,
+                                             modifyFnkEnv)
+#endif
+
+-- ------------------------------------------------------------------------
+-- ExpandedCode cache
+-- ------------------------------------------------------------------------
+
+-- | Data type to represent parsed module from source code.
+data ExpandedCode = ExpandedCode
+  { ec_sp       :: !SPState
+  -- ^ Header information of expanded code.
+  , ec_forms    :: ![Code]
+  -- ^ Parsed module compiled from expanded code.
+  , ec_required :: [ModSummary]
+  -- ^ Required home module during expansion.
+  }
+
+-- | Lookup 'ExpandedCode' in cache.
+lookupExpandedCodeCache :: MonadIO m => FilePath -> m (Maybe ExpandedCode)
+lookupExpandedCodeCache path =
+  liftIO $ Map.lookup path <$> readIORef unsafeExpandedCodeCacheRef
+{-# INLINABLE lookupExpandedCodeCache #-}
+
+-- | Add 'ExpandedCode' to cache with 'FilePath' key.
+addToExpandedCodeCache :: MonadIO m => FilePath -> ExpandedCode -> m ()
+addToExpandedCodeCache path ec = liftIO $ do
+  atomicModifyIORef' unsafeExpandedCodeCacheRef $ \ec_map ->
+    (Map.insert path ec ec_map, ())
+{-# INLINABLE addToExpandedCodeCache #-}
+
+-- | Update the whole cache with empty 'Map.Map'.
+clearExpandedCodeCache :: MonadIO m => m ()
+clearExpandedCodeCache = liftIO $ do
+  atomicModifyIORef' unsafeExpandedCodeCacheRef $ \_ -> (Map.empty, ())
+{-# INLINABLE clearExpandedCodeCache #-}
+
+-- A global ref, IORef with unsafePerformIO.
+unsafeExpandedCodeCacheRef :: IORef (Map FilePath ExpandedCode)
+unsafeExpandedCodeCacheRef = unsafePerformIO $ newIORef Map.empty
+{-# NOINLINE unsafeExpandedCodeCacheRef #-}
 
 
 -- ------------------------------------------------------------------------
--- Exported
+-- Home ModIface cache
 -- ------------------------------------------------------------------------
+
+#if MIN_VERSION_ghc(9,4,0)
 
 -- XXX: Unfortunately, home module caching is not working when compiled without
 -- @-dynamic@ or @-dynamic-too@ option.
@@ -63,11 +118,6 @@ clearHomeModCache = liftIO $ do
   mic <- newIfaceCache
   atomicModifyIORef' unsafeHomeModCacheRef $ \ifc -> (ifc {ifc_mic = mic}, ())
 {-# INLINABLE clearHomeModCache #-}
-
-
--- ------------------------------------------------------------------------
--- Internal
--- ------------------------------------------------------------------------
 
 -- | Data type to store home module cache passed from pre-process phase.
 newtype HomeModCache = HomeModCache { ifc_mic :: ModIfaceCache }

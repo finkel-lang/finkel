@@ -20,6 +20,7 @@ module Language.Finkel.Make
     -- * Macro expander session related functions
   , withExpanderSettings
   , clearGlobalSession
+  , clearExpandedCodeCache
 
     -- * Syntax builder utility
   , buildHsSyn
@@ -150,6 +151,7 @@ import           GHC_Types_Target                  (Target (..), TargetId (..))
 -- internal
 import           Language.Finkel.Error
 import           Language.Finkel.Fnk
+import           Language.Finkel.Make.Cache
 import           Language.Finkel.Make.Recompile
 import           Language.Finkel.Make.Session
 import           Language.Finkel.Make.Summary

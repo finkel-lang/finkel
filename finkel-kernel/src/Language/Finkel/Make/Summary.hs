@@ -210,10 +210,10 @@ import           GHC_Utils_Outputable              (Depth (..))
 import           Language.Finkel.Builder
 import           Language.Finkel.Emit
 import           Language.Finkel.Error
-import           Language.Finkel.Expand
 import           Language.Finkel.Fnk
 import           Language.Finkel.Form
 import           Language.Finkel.Lexer
+import           Language.Finkel.Make.Cache
 import           Language.Finkel.Make.Session
 import           Language.Finkel.Make.TargetSource
 import           Language.Finkel.Reader
@@ -256,8 +256,9 @@ compileFnkFile path modname = do
   fnk_env0 <- getFnkEnv
   hsc_env <- getSession
 
-  contents <- liftIO (hGetStringBuffer path)
-  (forms, sp) <- parseSexprs (Just path) contents
+  ExpandedCode {ec_sp=sp, ec_forms=forms, ec_required=reqs} <-
+    expandContents path
+
   dflags1 <- getDynFlagsFromSPState hsc_env sp
 
   let tr = traceSummary fnk_env0 "compileFnkFile"
@@ -267,14 +268,12 @@ compileFnkFile path modname = do
   tr ["path:" <+> text path]
 
   -- Compile the form with local DynFlags to support file local pragmas.
-  (mdl, reqs) <- withTmpDynFlags dflags1 $
+  mdl <- withTmpDynFlags dflags1 $
     withTiming' ("FinkelModule [" ++ mname_str ++ "]") $ do
       -- Reset current FnkEnv. No need to worry about managing DynFlags, this
       -- action is wrapped with 'withTmpDynFlags' above.
-      resetFnkEnv
-      mdl <- compileFnkModuleForm forms
-      reqs <- envRequiredHomeModules <$> getFnkEnv
-      return (mdl, reqs)
+      resetEnvMacros
+      compileFnkModuleForm forms
 
   tr ["reqs in" <+> mname_sdoc <+> ppr (map ms_mod_name reqs)]
 
@@ -303,16 +302,15 @@ parseFnkFileHeader hsc_env path = do
 -- | Compile 'HModule' from given list of 'Code'.
 compileFnkModuleForm :: [Code] -> Fnk HModule
 compileFnkModuleForm form = do
-  expanded <- withExpanderSettings (expands form)
-  let colons = replicate 19 ';'
   fnk_env <- getFnkEnv
+  let colons = replicate 19 ';'
   debugWhen fnk_env
             Fnk_dump_expand
             [ text ""
             , text colons <+> text "Expanded" <+> text colons
-            , vcat (map ppr expanded)
+            , vcat (map ppr form)
             , text ""]
-  buildHsSyn parseModule expanded
+  buildHsSyn parseModule form
 
 -- | Get language extensions in current 'Fnk' from given 'SPState'.
 getDynFlagsFromSPState :: (HasLogger m, MonadIO m) => HscEnv -> SPState -> m DynFlags
@@ -329,11 +327,11 @@ getDynFlagsFromSPState hsc_env sp = do
   printOrThrowDiagnostics' logger dflags2 warns2
   return dflags2
 
-resetFnkEnv :: Fnk ()
-resetFnkEnv =
+resetEnvMacros :: Fnk ()
+resetEnvMacros =
   modifyFnkEnv (\fnk_env ->
-                   fnk_env { envMacros = envDefaultMacros fnk_env
-                           , envRequiredHomeModules = [] })
+                   fnk_env {envMacros = envDefaultMacros fnk_env})
+{-# INLINABLE resetEnvMacros #-}
 
 compileHsFile :: FilePath -> Maybe Phase -> Fnk TargetSummary
 compileHsFile path mb_phase = do
@@ -707,7 +705,7 @@ requiredDependencies mss = do
       mb_hsc_env <- envSessionForExpand <$> getFnkEnv
       case mb_hsc_env of
         Just hsc_env -> getDeps hsc_env
-        Nothing      -> pure []
+        Nothing      -> getDeps hsc_env0
 
 requiredDependency :: HscEnv -> [FilePath] -> ModSummary -> [FilePath]
 requiredDependency hsc_env = go
